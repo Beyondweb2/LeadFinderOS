@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   LayoutDashboard, CalendarDays, Pencil, Settings as SettingsIcon, LogOut, Menu, X,
-  ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft, ArrowRight, Smartphone, Monitor, Share, Download,
+  ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft, ArrowRight, Smartphone, Monitor, Share, Download, Copy, Megaphone,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SiteEditor } from "@/components/SiteEditor";
@@ -43,16 +43,17 @@ const SHELL_BG =
   "radial-gradient(1100px 600px at 85% -8%, rgba(230,162,75,0.10), transparent 60%)," +
   "radial-gradient(800px 500px at -10% 8%, rgba(230,162,75,0.05), transparent 55%)";
 
-type PageKey = "dashboard" | "calendar" | "edit" | "install" | "settings";
+type PageKey = "dashboard" | "calendar" | "edit" | "install" | "get-bookings" | "settings";
 const NAV: { key: PageKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "calendar", label: "Calendar", icon: CalendarDays },
   { key: "edit", label: "Edit Site", icon: Pencil },
   { key: "install", label: "Install", icon: Download },
+  { key: "get-bookings", label: "Get bookings", icon: Megaphone },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 const PAGE_TITLE: Record<PageKey, string> = {
-  dashboard: "Dashboard", calendar: "Calendar", edit: "Edit Site", install: "Install", settings: "Settings",
+  dashboard: "Dashboard", calendar: "Calendar", edit: "Edit Site", install: "Install", "get-bookings": "Get bookings", settings: "Settings",
 };
 
 const statusBadge = (status: string) =>
@@ -82,6 +83,7 @@ export function BarberShell({
   const [showAddonConfirm, setShowAddonConfirm] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const shopName = site.content?.businessName || site.site_name;
   // Sidebar avatar = the site's hero photo (square crop), so it feels like theirs;
@@ -168,6 +170,16 @@ export function BarberShell({
   };
 
   const go = (k: PageKey) => { setPage(k); setNavOpen(false); };
+
+  // Copy the barber's live link (booking page or full site) — mirrors WebAddressCard.
+  const copyLiveLink = async () => {
+    try {
+      await navigator.clipboard.writeText(liveSiteUrl(site.site_name, site.booking_only));
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+      toast({ title: "Copied", description: liveSiteLabel(site.site_name, site.booking_only) });
+    } catch { /* clipboard blocked — non-fatal */ }
+  };
 
   const SidebarBody = (
     <div className="flex h-full flex-col">
@@ -356,6 +368,74 @@ export function BarberShell({
             </div>
           )}
 
+          {page === "get-bookings" && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Get bookings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {/* The barber's real live link + a one-tap Copy (mirrors WebAddressCard). */}
+                  <div className="rounded-xl border border-line bg-white/[0.03] p-3.5">
+                    <div className="text-xs uppercase tracking-wider text-zinc-500">
+                      {site.booking_only ? "Your booking link" : "Your website link"}
+                    </div>
+                    <a
+                      href={liveSiteUrl(site.site_name, site.booking_only)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-flex items-center gap-2 break-all font-mono text-sm text-amber-soft hover:text-amber"
+                    >
+                      {liveSiteLabel(site.site_name, site.booking_only)} <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                    </a>
+                    <div className="mt-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={copyLiveLink}
+                        className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white"
+                      >
+                        {linkCopied ? <Check className="h-4 w-4 mr-2 text-green-500" /> : <Copy className="h-4 w-4 mr-2" />}
+                        {linkCopied ? "Copied" : "Copy link"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    {site.booking_only
+                      ? "Add this booking link anywhere customers find you:"
+                      : "This is your website — here’s how to send customers to it:"}
+                  </p>
+
+                  {/* Section list — branches on booking_only. Full site: 3 sections led
+                      by Google. Booking-only: 4 sections led by your own website. */}
+                  <div className="space-y-4">
+                    {site.booking_only ? (
+                      <>
+                        <GuideSection title="Your website (most important)" body="Add a “Book now” button or link on your existing website pointing to your booking page. Not sure how? Send this link to whoever manages your site and ask them to add a Book now button." />
+                        <GuideSection title="Google" body="Add your booking link to your Google Business Profile so customers can book straight from Google Search and Maps. Go to your Google Business Profile, Edit profile, and add it as your Appointment link." />
+                        <GuideSection title="Instagram & Facebook" body="Put the booking link in your Instagram bio and on your Facebook page. When you post a fresh cut, remind people they can book through the link in your bio." />
+                        <GuideSection title="Share it directly" body="Text or WhatsApp the link to your regulars so they can book themselves next time." />
+                      </>
+                    ) : (
+                      <>
+                        <GuideSection title="Google (most important)" body="Most people find barbers on Google. Add your website to your Google Business Profile so customers can find and book you straight from Google Search and Maps. Go to your Google Business Profile, Edit profile, and set this as your website link." />
+                        <GuideSection title="Instagram & Facebook" body="Put your website link in your Instagram bio and on your Facebook page. When you post a fresh cut, remind people they can book through the link in your bio." />
+                        <GuideSection title="Share it directly" body="Text or WhatsApp your website link to your regulars so they can book themselves next time." />
+                      </>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-muted-foreground/70">
+                    {site.booking_only
+                      ? "The more places your booking link is, the more bookings come in — and none of them cost you commission."
+                      : "The more places your link is, the more bookings come in — and none of them cost you commission."}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {page === "settings" && (
             <div className="space-y-6">
               {/* Upsell card - unpaid barbers only; kept HIDDEN for now (the
@@ -426,7 +506,7 @@ export function BarberShell({
       )}
 
       {/* One-time welcome (first visit after claiming) - a short orientation guide. */}
-      {showWelcome && <WelcomeOverlay site={site} onClose={dismissWelcome} />}
+      {showWelcome && <WelcomeOverlay site={site} onClose={dismissWelcome} onGetBookings={() => { setPage("get-bookings"); dismissWelcome(); }} />}
 
       {/* Add-on interest confirmation (24h message) - shown after any upsell CTA. */}
       <Dialog open={showAddonConfirm} onOpenChange={setShowAddonConfirm}>
@@ -568,10 +648,19 @@ function StatCard({ label, value }: { label: string; value: number | null }) {
   );
 }
 
-/** One-time first-visit guide after claiming. A short, warm orientation: what the
- *  dashboard sections are, where to edit, the barber's real live address, and
- *  where to get the add-ons (the announcement bar). No pricing. Single dismiss. */
-function WelcomeOverlay({ site, onClose }: { site: OwnedSite; onClose: () => void }) {
+/** A titled how-to block in the "Get bookings" guide — bold heading + muted body. */
+function GuideSection({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-lg border border-line bg-white/[0.02] p-3">
+      <div className="text-sm font-semibold text-white">{title}</div>
+      <p className="mt-1 text-sm text-zinc-400">{body}</p>
+    </div>
+  );
+}
+
+/** One-time first-visit guide after claiming. A short, warm orientation pointing to
+ *  the "Get bookings" guide + the barber's real live address. Single dismiss. */
+function WelcomeOverlay({ site, onClose, onGetBookings }: { site: OwnedSite; onClose: () => void; onGetBookings: () => void }) {
   // Booking-only sites ARE the online-booking product and have no marketing site,
   // so the live link is bookmybarber.uk and the copy drops the marketing-site /
   // "get online booking" framing.
@@ -586,25 +675,9 @@ function WelcomeOverlay({ site, onClose }: { site: OwnedSite; onClose: () => voi
         <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">Welcome — it's all yours</h2>
         <p className="mt-2 text-sm text-zinc-300">
           {bookingOnly
-            ? "This is your dashboard for your online booking page. Have a look around — everything here is yours to manage, any time."
-            : "This is your dashboard. Have a look around — everything here is yours to manage, any time."}
+            ? "This is your dashboard for your online booking page — everything here is yours to manage, any time."
+            : "This is your dashboard — everything here is yours to manage, any time."}
         </p>
-
-        {/* Quick orientation — what the main sections do. */}
-        <ul className="mt-5 space-y-3 text-sm text-zinc-300">
-          <li className="flex gap-3">
-            <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
-            <span><span className="font-semibold text-white">Edit Site</span> is where you change {bookingOnly ? "your services, prices, opening hours and colours" : "everything — your text, photos, services and colours"}.</span>
-          </li>
-          <li className="flex gap-3">
-            <LayoutDashboard className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
-            <span><span className="font-semibold text-white">Dashboard &amp; Calendar</span> show your bookings as they come in.</span>
-          </li>
-          <li className="flex gap-3">
-            <SettingsIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
-            <span><span className="font-semibold text-white">Settings</span> has your {bookingOnly ? "booking page link" : "site link"}, your account and how to install this as an app.</span>
-          </li>
-        </ul>
 
         {/* The barber's REAL live address, so they know it. */}
         <div className="mt-5 rounded-xl border border-line bg-white/[0.03] p-3.5">
@@ -619,21 +692,12 @@ function WelcomeOverlay({ site, onClose }: { site: OwnedSite; onClose: () => voi
           </a>
         </div>
 
-        {/* Where to get the add-ons — points to the announcement bar. No pricing.
-            Booking-only sites already HAVE online booking, so no "get booking" upsell. */}
-        <p className="mt-4 text-sm text-zinc-300">
-          {bookingOnly ? (
-            <>Want <span className="font-medium text-white">SMS reminders</span> for your customers? Tap the orange bar at the top to get access.</>
-          ) : (
-            <>Want <span className="font-medium text-white">online booking</span>,{" "}
-              <span className="font-medium text-white">SMS reminders</span> or your{" "}
-              <span className="font-medium text-white">own domain</span>? Tap the orange bar at the top to get access.</>
-          )}
-        </p>
-
-        <Button onClick={onClose} className="mt-6 w-full rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">
-          Got it — explore my dashboard
+        <Button onClick={onGetBookings} className="mt-6 w-full rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">
+          Set up bookings
         </Button>
+        <button onClick={onClose} className="mt-3 w-full text-center text-sm text-zinc-400 hover:text-white">
+          Explore dashboard
+        </button>
       </div>
     </div>
   );
