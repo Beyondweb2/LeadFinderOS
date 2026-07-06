@@ -14,7 +14,7 @@ import { renderTemplateBody } from "../_shared/whatsapp-send.ts";
 // when live, force is ignored and the window/cap/spacing are always enforced.
 //
 // Guards (server-side, never UI-only):
-//   • 7am–7pm Europe/London window (DST-correct via Intl, not the cron schedule)
+//   • 7am–9:30pm Europe/London window (DST-correct via Intl, not the cron schedule)
 //   • 20 sends/day GLOBAL cap (one WABA number) — counted from whatsapp_sends
 //   • randomised spacing via whatsapp_outreach_state.next_send_at
 //   • only status='queued' leads; never re-messages contacted/replied
@@ -29,8 +29,8 @@ const corsHeaders = {
 
 const GRAPH_VERSION = "v21.0";
 const DAILY_CAP = 20;
-const WINDOW_START = 7;   // 07:00 Europe/London (inclusive)
-const WINDOW_END = 19;    // 19:00 Europe/London (exclusive)
+const WINDOW_START = 7;              // 07:00 Europe/London (inclusive)
+const WINDOW_END_MIN = 21 * 60 + 30; // 21:30 Europe/London (exclusive) — minutes-from-midnight so the :30 is honoured
 const CLAIM_ORIGIN = "https://yoursites.uk"; // claim links live at /s/<share_token>
 const TZ = "Europe/London";
 
@@ -84,7 +84,7 @@ function londonDayStartUtcIso(): string {
 }
 function minutesUntilWindowEnd(): number {
   const n = londonNow();
-  return Math.max(0, WINDOW_END * 60 - (n.hour * 60 + n.minute));
+  return Math.max(0, WINDOW_END_MIN - (n.hour * 60 + n.minute));
 }
 
 /** UK phone → E.164 digits (no '+', as Meta wants). Mirrors send-reminders. */
@@ -164,7 +164,9 @@ Deno.serve(async (req) => {
       .from("whatsapp_outreach_state").select("next_send_at").eq("id", 1).maybeSingle();
     const nextSendAt: string | null = stateRow?.next_send_at ?? null;
     const uk = londonNow();
-    const windowOpen = uk.hour >= WINDOW_START && uk.hour < WINDOW_END;
+    // Minute-granular so the 21:30 end is honoured (a whole-hour compare would run to 21:59).
+    const nowMin = uk.hour * 60 + uk.minute;
+    const windowOpen = nowMin >= WINDOW_START * 60 && nowMin < WINDOW_END_MIN;
 
     const statusPayload = {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
