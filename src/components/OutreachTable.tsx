@@ -508,8 +508,10 @@ export function OutreachTable({
     }
 
     if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery);
+    if (typeof parsed.locationFilter === 'string') setLocationFilter(parsed.locationFilter);
     if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
     if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
+    if (typeof parsed.trackedOnly === 'boolean') setTrackedOnly(parsed.trackedOnly);
     if (typeof parsed.hideNoWhatsApp === 'boolean') setHideNoWhatsApp(parsed.hideNoWhatsApp);
     if (parsed.sortField) setSortField(parsed.sortField);
     if (parsed.sortDirection) setSortDirection(parsed.sortDirection);
@@ -534,14 +536,16 @@ export function OutreachTable({
   useEffect(() => {
     writeStoredState({
       searchQuery,
+      locationFilter,
       statusFilter,
       countryFilter,
+      trackedOnly,
       hideNoWhatsApp,
       sortField,
       sortDirection,
       currentPage,
     });
-  }, [tableStateKey, searchQuery, statusFilter, countryFilter, hideNoWhatsApp, sortField, sortDirection, currentPage]);
+  }, [tableStateKey, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hideNoWhatsApp, sortField, sortDirection, currentPage]);
 
   // Apply optimistic updates to leads for rendering
   const leadsWithOptimistic = useMemo(() => {
