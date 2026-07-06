@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type MouseEvent } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarClock, AlertTriangle, Clock, CheckCircle } from 'lucide-react';
+import { CalendarClock, AlertTriangle, Clock, CheckCircle, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NEXT_ACTION_OPTIONS, type OutreachLead, type NextActionType } from '@/types/outreach';
 import { getLeadCustomAction } from '@/hooks/useCustomNextActions';
@@ -10,6 +10,9 @@ import { cn } from '@/lib/utils';
 
 interface NextActionsCardProps {
   trackedLeads: OutreachLead[];
+  /** Clear a lead's next_action (task) so it drops off the list. The parent does the
+   *  DB update + refetch; the card removes the row optimistically in the meantime. */
+  onClearTask?: (leadId: string) => void;
 }
 
 // Action labels sourced from NEXT_ACTION_OPTIONS so the wording matches the Outreach
@@ -38,10 +41,12 @@ function jumpChannel(lead: OutreachLead): 'sms' | 'whatsapp' | 'call' | 'open' {
   return 'open';
 }
 
-export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
+export function NextActionsCard({ trackedLeads, onClearTask }: NextActionsCardProps) {
   const { campaigns } = useCampaigns();
   const navigate = useNavigate();
   const [sortBy, setSortBy] = useState<'due' | 'name' | 'action'>('due');
+  // Optimistically hide tasks the user just cleared (before the parent's refetch lands).
+  const [clearedIds, setClearedIds] = useState<Set<string>>(new Set());
 
   const campaignById = useMemo(
     () => Object.fromEntries(campaigns.map((c) => [c.id, c.name])) as Record<string, string>,
@@ -51,7 +56,7 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const withActions = trackedLeads.filter((l) => l.next_action && l.next_action !== 'none');
+  const withActions = trackedLeads.filter((l) => l.next_action && l.next_action !== 'none' && !clearedIds.has(l.id));
   const overdue = withActions.filter((l) => l.next_action_date && new Date(l.next_action_date) < today);
   const dueToday = withActions.filter((l) => {
     if (!l.next_action_date) return false;
@@ -97,6 +102,15 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
     navigate('/outreach', { state: { launch: { leadId: lead.id, channel } } });
   };
 
+  // Clear this lead's task: hide the row immediately, then let the parent do the DB
+  // update + refetch. stopPropagation on the X keeps the row's jump from firing.
+  const handleClear = (e: MouseEvent, leadId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setClearedIds((prev) => new Set(prev).add(leadId));
+    onClearTask?.(leadId);
+  };
+
   return (
     <Card className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border-amber-500/20">
       <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
@@ -135,39 +149,54 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
               const actionLabel = getLeadCustomAction(lead.id) || ACTION_LABELS[lead.next_action || 'none'] || '—';
               const dueLabel = lead.next_action_date ? formatDate(lead.next_action_date) : null;
               const campaignName = lead.campaign_id ? campaignById[lead.campaign_id] : undefined;
+              // Row = flex container; jump area and the X are SIBLINGS (no nested
+              // buttons). The whole container highlights on hover.
               return (
-                <button
+                <div
                   key={lead.id}
-                  type="button"
-                  onClick={() => handleJump(lead)}
-                  className="w-full rounded-md p-1.5 text-left transition-colors hover:bg-muted/50"
+                  className="group flex items-center gap-1 rounded-md transition-colors hover:bg-muted/50"
                 >
-                  {/* Single compact line: business name (main) + action · due (right). */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      {isOver ? (
-                        <AlertTriangle className="h-3 w-3 shrink-0 text-red-500" />
-                      ) : (
-                        <Clock className="h-3 w-3 shrink-0 text-amber-500" />
-                      )}
-                      <span className="truncate text-sm font-medium">{lead.business_name}</span>
-                      {campaignName && (
-                        <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] text-muted-foreground/70">{campaignName}</span>
-                      )}
-                    </span>
-                    <span className="shrink-0 text-[11px]">
-                      <span className="text-muted-foreground">{actionLabel}</span>
-                      {dueLabel && (
-                        <>
-                          {' · '}
-                          <span className={cn('font-medium', isOver ? 'text-red-500' : dueLabel === 'Today' ? 'text-amber-500' : 'text-muted-foreground')}>
-                            {dueLabel}
-                          </span>
-                        </>
-                      )}
-                    </span>
-                  </div>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => handleJump(lead)}
+                    className="flex-1 min-w-0 rounded-md p-1.5 text-left"
+                  >
+                    {/* Single compact line: business name (main) + action · due (right). */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        {isOver ? (
+                          <AlertTriangle className="h-3 w-3 shrink-0 text-red-500" />
+                        ) : (
+                          <Clock className="h-3 w-3 shrink-0 text-amber-500" />
+                        )}
+                        <span className="truncate text-sm font-medium">{lead.business_name}</span>
+                        {campaignName && (
+                          <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] text-muted-foreground/70">{campaignName}</span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-[11px]">
+                        <span className="text-muted-foreground">{actionLabel}</span>
+                        {dueLabel && (
+                          <>
+                            {' · '}
+                            <span className={cn('font-medium', isOver ? 'text-red-500' : dueLabel === 'Today' ? 'text-amber-500' : 'text-muted-foreground')}>
+                              {dueLabel}
+                            </span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleClear(e, lead.id)}
+                    title="Clear task"
+                    aria-label="Clear task"
+                    className="shrink-0 mr-1 rounded p-1 text-muted-foreground/40 transition-colors hover:text-red-500 hover:bg-red-500/10"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               );
             })}
           </div>
