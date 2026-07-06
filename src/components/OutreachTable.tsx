@@ -42,6 +42,7 @@ import {
   Smartphone,
   Globe,
   RefreshCw,
+  DatabaseZap,
   Loader2,
   MessageSquare,
   MessageCircle,
@@ -116,6 +117,9 @@ interface OutreachTableProps {
   /** Reset = fully wipe (outreach_leads + outreach_history) so the lead is re-addable.
    *  Distinct from onDeleteSelected, which keeps the added-history ledger. */
   onResetSelected?: (leadIds: string[]) => Promise<unknown> | void;
+  /** Clear cache = delete the businesses' enrichment_cache rows (server-side) so the
+   *  next Enrich/regeneration re-fetches fresh. Does NOT remove the lead. */
+  onClearCacheSelected?: (leadIds: string[]) => Promise<unknown> | void;
   onBulkStatusChange?: (leadIds: string[], status: LeadStatus) => void;
   onMarkAsInterested?: (leadIds: string[]) => void;
   onRefreshLeads?: () => void;
@@ -216,6 +220,7 @@ export function OutreachTable({
   onDelete,
   onDeleteSelected,
   onResetSelected,
+  onClearCacheSelected,
   onBulkStatusChange,
   onMarkAsInterested,
   onRefreshLeads,
@@ -914,6 +919,14 @@ export function OutreachTable({
     setSelectedIds(new Set());
   };
 
+  // Clear enrichment cache for selected businesses (photos/socials/etc.) so the next
+  // Enrich or regeneration re-fetches fresh. Does NOT remove the lead or its history.
+  const handleClearCacheSelected = () => {
+    if (selectedIds.size === 0 || !onClearCacheSelected) return;
+    onClearCacheSelected(Array.from(selectedIds));
+    setSelectedIds(new Set());
+  };
+
   const exportToCsv = (mode: 'crm' | 'import' = 'crm') => {
     const leadsToExport = selectedIds.size > 0 
       ? filteredAndSortedLeads.filter(l => selectedIds.has(l.id))
@@ -1294,6 +1307,7 @@ export function OutreachTable({
                     size="sm"
                     onClick={handleDeleteSelected}
                     className="bg-background text-xs h-8 text-destructive hover:text-destructive"
+                    title="Removes these leads but keeps their history, so they won't be re-added or re-contacted on Find Leads. (Use Reset to fully clear and allow re-adding.)"
                   >
                     <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                     Remove
@@ -1309,6 +1323,18 @@ export function OutreachTable({
                   >
                     <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
                     Reset (re-addable)
+                  </Button>
+                )}
+                {onClearCacheSelected && !readOnly && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearCacheSelected}
+                    className="bg-background text-xs h-8 text-sky-700 hover:text-sky-700"
+                    title="Clears saved enrichment data (photos, socials) for these businesses so the next Enrich or site regeneration fetches fresh. Use this if a site has no photos."
+                  >
+                    <DatabaseZap className="h-3.5 w-3.5 mr-1.5" />
+                    Clear cache
                   </Button>
                 )}
                 {!readOnly && (

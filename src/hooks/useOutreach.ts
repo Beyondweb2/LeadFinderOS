@@ -931,6 +931,33 @@ export function useOutreach() {
     return true;
   }, [leads, archivedLeads]);
 
+  // Clear cached enrichment data (photos, socials, services, website-check) for the
+  // selected businesses so the next Enrich or site regeneration re-fetches FRESH.
+  // enrichment_cache is RLS service-role-only, so the actual delete runs in the
+  // clear-enrichment-cache edge function (by business key-prefix). Does NOT delete the
+  // lead or its history — deleteMultiple/resetMultiple stay the removal actions.
+  const clearCacheMultiple = useCallback(async (leadIds: string[]) => {
+    if (leadIds.length === 0) return false;
+    const sel = [...leads, ...archivedLeads].filter((l) => leadIds.includes(l.id));
+    const businesses = sel.map((l) => ({
+      placeId: l.place_id ?? null,
+      googleMapsUrl: l.google_maps_url ?? null,
+      leadId: l.id,
+    }));
+    const { error } = await supabase.functions.invoke('clear-enrichment-cache', {
+      body: { businesses },
+    });
+    if (error) {
+      toast({ title: 'Error clearing cache', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    toast({
+      title: `Cache cleared for ${businesses.length} business${businesses.length === 1 ? '' : 'es'}`,
+      description: 'Enrich or regenerate the site to refresh the photos and socials.',
+    });
+    return true;
+  }, [leads, archivedLeads]);
+
   // Unarchive multiple leads
   const unarchiveMultiple = useCallback(async (leadIds: string[]) => {
     if (leadIds.length === 0) return false;
@@ -1260,6 +1287,7 @@ export function useOutreach() {
     removeFreshLead,
     deleteMultiple,
     resetMultiple,
+    clearCacheMultiple,
     deleteAllLeads,
     archiveLead,
     unarchiveLead,
