@@ -5,6 +5,16 @@ import { socialKindOf } from '@/lib/socialUrl';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { OutreachLead } from '@/types/outreach';
 
+/** Ensure an absolute https:// href so a scheme-less stored value (e.g.
+ *  "instagram.com/x" or protocol-relative "//instagram.com/x") opens the profile in a
+ *  new tab instead of being treated as an in-app RELATIVE link. Leaves http(s) URLs
+ *  untouched. (Mirrors the site editor's normalizeSocialUrl, applied here at render.) */
+function absoluteHref(url: string): string {
+  const t = url.trim();
+  if (/^https?:\/\//i.test(t)) return t;
+  return `https://${t.replace(/^\/+/, '')}`;
+}
+
 interface LeadEnrichButtonsProps {
   /**
    * Any OutreachLead-shaped object. On the Outreach row this is the real lead;
@@ -67,8 +77,8 @@ export function LeadEnrichButtons({
   // Real, stored contacts only — no constructed URLs.
   const contacts = [
     lead.email ? { key: 'email', Icon: Mail, href: `mailto:${lead.email}`, color: 'text-blue-500 hover:text-blue-400', title: `Email: ${lead.email}`, external: false } : null,
-    lead.facebook_url ? { key: 'facebook', Icon: Facebook, href: lead.facebook_url, color: 'text-blue-600 hover:text-blue-500', title: `Facebook: ${lead.facebook_url}`, external: true } : null,
-    lead.instagram_url ? { key: 'instagram', Icon: Instagram, href: lead.instagram_url, color: 'text-pink-500 hover:text-pink-400', title: `Instagram: ${lead.instagram_url}`, external: true } : null,
+    lead.facebook_url ? { key: 'facebook', Icon: Facebook, href: absoluteHref(lead.facebook_url), color: 'text-blue-600 hover:text-blue-500', title: `Facebook: ${lead.facebook_url}`, external: true } : null,
+    lead.instagram_url ? { key: 'instagram', Icon: Instagram, href: absoluteHref(lead.instagram_url), color: 'text-pink-500 hover:text-pink-400', title: `Instagram: ${lead.instagram_url}`, external: true } : null,
     websiteItem,
   ].filter(Boolean) as { key: string; Icon: typeof Mail; href: string; color: string; title: string; external: boolean }[];
 
