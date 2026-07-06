@@ -114,9 +114,13 @@ interface LeadsTableProps {
   addAllWithEmailsCount?: number;
   /** Export CSV including any emails found this session. */
   onExportWithEmails?: () => void;
+  /** Precomputed hover-tooltip text for the Add-to-CRM buttons (per-row + bulk).
+   *  Index decides the wording: "Add to {campaign}" when adding silently, or
+   *  "Choose a campaign…" when the ask-each-time toggle is on. */
+  addCampaignTooltip?: string;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM' }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
@@ -412,22 +416,32 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     if (!bulkAllowed || !onBulkAdd) return null;
     if (selectedLeads.length > 0) {
       return (
-        <Button size="sm" onClick={() => runBulkAdd(selectedLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs">
-          {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
-          Add to CRM ({selectedLeads.length})
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="sm" onClick={() => runBulkAdd(selectedLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs">
+              {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
+              Add to CRM ({selectedLeads.length})
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{addCampaignTooltip}</TooltipContent>
+        </Tooltip>
       );
     }
     if (selectableLeads.length > 0) {
       return (
-        <Button size="sm" variant="outline" onClick={() => runBulkAdd(selectableLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs border-border" title="Add every filtered result not already in your list">
-          {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
-          Add all shown ({selectableLeads.length})
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="sm" variant="outline" onClick={() => runBulkAdd(selectableLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs border-border">
+              {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
+              Add all shown ({selectableLeads.length})
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{addCampaignTooltip}</TooltipContent>
+        </Tooltip>
       );
     }
     return null;
-  }, [bulkAllowed, onBulkAdd, selectedLeads, selectableLeads, bulkAdding, runBulkAdd]);
+  }, [bulkAllowed, onBulkAdd, selectedLeads, selectableLeads, bulkAdding, runBulkAdd, addCampaignTooltip]);
 
   // Secondary bulk/scan actions, grouped under one "Bulk ▾" menu:
   //   Enrich selected · Check for websites · Find emails · Add all with emails.
@@ -830,17 +844,22 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             )}
                           </div>
                         ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className={`h-8 px-3 text-xs gap-1.5 text-green-600 dark:text-green-500 border-green-600/30 hover:bg-green-500/10 hover:text-green-500 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
-                            onClick={() => handleAddToOutreach(lead)}
-                            data-walkthrough-step="add-to-crm"
-                            data-walkthrough="add-crm"
-                          >
-                            <ClipboardList className="h-3.5 w-3.5" />
-                            Add to CRM
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={`h-8 px-3 text-xs gap-1.5 text-green-600 dark:text-green-500 border-green-600/30 hover:bg-green-500/10 hover:text-green-500 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
+                                onClick={() => handleAddToOutreach(lead)}
+                                data-walkthrough-step="add-to-crm"
+                                data-walkthrough="add-crm"
+                              >
+                                <ClipboardList className="h-3.5 w-3.5" />
+                                Add to CRM
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{addCampaignTooltip}</TooltipContent>
+                          </Tooltip>
                         )
                       )}
                     </div>

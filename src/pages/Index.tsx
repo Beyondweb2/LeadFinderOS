@@ -1,9 +1,12 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 // EmailListBuilder kept in the repo for the future bulk-add flow; no longer rendered
 // here (email finding is now an in-place scan on the results).
 import { CampaignPicker } from '@/components/CampaignPicker';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
@@ -20,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Country, Lead } from '@/types/lead';
 
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
+const ASK_CAMPAIGN_KEY = 'lf_ask_campaign_each_time';
 
 const Index = () => {
   const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded } = useLeadSearchContext();
@@ -44,6 +48,32 @@ const Index = () => {
       else localStorage.removeItem(ACTIVE_CAMPAIGN_KEY);
     } catch {}
   }, []);
+
+  // "Ask which campaign each time" toggle — when ON, an Add-to-CRM action prompts
+  // for a campaign instead of silently using activeCampaign. Persisted like the
+  // active campaign so the preference sticks.
+  const [askCampaignEachTime, setAskCampaignEachTime] = useState<boolean>(() => {
+    try { return localStorage.getItem(ASK_CAMPAIGN_KEY) === '1'; } catch { return false; }
+  });
+  const handleAskToggle = useCallback((on: boolean) => {
+    setAskCampaignEachTime(on);
+    try {
+      if (on) localStorage.setItem(ASK_CAMPAIGN_KEY, '1');
+      else localStorage.removeItem(ASK_CAMPAIGN_KEY);
+    } catch {}
+  }, []);
+
+  // Campaign-choice dialog (only used when askCampaignEachTime is ON). Holds the
+  // pending add — a single row lead, or the bulk batch — plus the chosen campaign.
+  // For bulk, LeadsTable awaits onBulkAdd's result for its summary toast, so we
+  // resolve that promise once the dialog is confirmed/cancelled.
+  const [pendingAdd, setPendingAdd] = useState<
+    | { kind: 'row'; lead: Lead }
+    | { kind: 'bulk'; leads: Lead[] }
+    | null
+  >(null);
+  const [chosenCampaign, setChosenCampaign] = useState<string | null>(null);
+  const bulkResolverRef = useRef<((r: { added: number; skipped: number }) => void) | null>(null);
 
   // Self-heal a stale active campaign: if the persisted id no longer exists
   // (campaign deleted by anyone, or the whole account was wiped), fall back to
@@ -90,14 +120,67 @@ const Index = () => {
 
   // Bulk add (list-builder): add each selected lead, deduped + silent (one summary
   // toast from the component). addToOutreach returns null on dupe/failure.
-  const handleBulkAdd = useCallback(async (sel: Lead[]) => {
+  // campaignId defaults to the active campaign (toggle OFF); the ask-each-time flow
+  // passes the chosen campaign instead.
+  const handleBulkAdd = useCallback(async (sel: Lead[], campaignId: string | null = activeCampaign) => {
     let added = 0, skipped = 0;
     for (const lead of sel) {
-      const res = await addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id), true);
+      const res = await addToOutreach(lead, lastSearchCountry, 'no_website', campaignId, getEnrichment(lead.id), true);
       if (res) added++; else skipped++;
     }
     return { added, skipped };
   }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
+
+  // ── Add-to-CRM entry points (Index decides whether to prompt) ───────────────
+  const activeCampaignName = useMemo(
+    () => campaigns.find((c) => c.id === activeCampaign)?.name ?? null,
+    [campaigns, activeCampaign],
+  );
+  // Tooltip text for the Add buttons: names the silent target, or signals a prompt.
+  const addCampaignTooltip = askCampaignEachTime
+    ? 'Choose a campaign…'
+    : (activeCampaignName ? `Add to ${activeCampaignName}` : 'Add to Outreach (no campaign)');
+
+  // Per-row Add: prompt when the toggle is ON, else add to the active campaign as today.
+  const handleRowAdd = useCallback((lead: Lead) => {
+    if (askCampaignEachTime) {
+      setChosenCampaign(activeCampaign);
+      setPendingAdd({ kind: 'row', lead });
+      return Promise.resolve(null);
+    }
+    return addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id));
+  }, [askCampaignEachTime, activeCampaign, addToOutreach, lastSearchCountry, getEnrichment]);
+
+  // Bulk Add: prompt ONCE for the batch when ON, else run as today. When prompting,
+  // return a promise that resolves after the dialog so LeadsTable's summary toast is accurate.
+  const handleBulkAddEntry = useCallback((sel: Lead[]) => {
+    if (askCampaignEachTime) {
+      setChosenCampaign(activeCampaign);
+      setPendingAdd({ kind: 'bulk', leads: sel });
+      return new Promise<{ added: number; skipped: number }>((resolve) => { bulkResolverRef.current = resolve; });
+    }
+    return handleBulkAdd(sel, activeCampaign);
+  }, [askCampaignEachTime, activeCampaign, handleBulkAdd]);
+
+  // Dialog confirm: run the pending add against the chosen campaign.
+  const handleConfirmCampaign = useCallback(async () => {
+    const p = pendingAdd;
+    setPendingAdd(null);
+    if (!p) return;
+    if (p.kind === 'row') {
+      await addToOutreach(p.lead, lastSearchCountry, 'no_website', chosenCampaign, getEnrichment(p.lead.id));
+    } else {
+      const res = await handleBulkAdd(p.leads, chosenCampaign);
+      bulkResolverRef.current?.(res);
+      bulkResolverRef.current = null;
+    }
+  }, [pendingAdd, chosenCampaign, addToOutreach, lastSearchCountry, getEnrichment, handleBulkAdd]);
+
+  // Dialog cancel/close: nothing added; resolve a pending bulk promise so the caller unblocks.
+  const handleCancelCampaign = useCallback(() => {
+    if (pendingAdd?.kind === 'bulk') { bulkResolverRef.current?.({ added: 0, skipped: 0 }); bulkResolverRef.current = null; }
+    setPendingAdd(null);
+  }, [pendingAdd]);
 
   // Bulk "Add all with emails": the Targeted results that have a found email AND
   // aren't already in Outreach. Recomputes as emails are found / leads are added, so
@@ -227,6 +310,10 @@ const Index = () => {
             <span className="text-[10px] sm:text-xs text-muted-foreground">Adding to</span>
             <CampaignPicker mode="assign" value={activeCampaign} onChange={handleCampaignChange} className="h-8 w-[180px]" />
           </div>
+          <div className="flex items-center gap-2">
+            <Switch id="ask-campaign" checked={askCampaignEachTime} onCheckedChange={handleAskToggle} />
+            <Label htmlFor="ask-campaign" className="text-[10px] sm:text-xs text-muted-foreground cursor-pointer">Ask campaign each time</Label>
+          </div>
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
             <div className="flex items-center gap-1 sm:gap-2">
               <Flame className="h-3 w-3 sm:h-4 sm:w-4 text-status-hot" />
@@ -336,7 +423,8 @@ const Index = () => {
               <LeadsTable
                 leads={leads}
                 onExport={exportToCsv}
-                onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id))}
+                onAddToOutreach={handleRowAdd}
+                addCampaignTooltip={addCampaignTooltip}
                 isInOutreach={isInOutreach}
                 searchEnrichment={searchEnrichment}
                 onEnrichPatch={patchEnrichment}
@@ -346,7 +434,7 @@ const Index = () => {
                 isChecked={isChecked}
                 getTeamClaim={getTeamClaim}
                 onSetWebsiteStatus={setWebsiteOverride}
-                onBulkAdd={handleBulkAdd}
+                onBulkAdd={handleBulkAddEntry}
                 onBulkEnrich={handleBulkEnrich}
                 isLeadEnriched={isLeadEnriched}
                 onFindEmails={findEmails}
@@ -376,6 +464,26 @@ const Index = () => {
           </h2>
         </section>
       )}
+
+      {/* Campaign-choice dialog — only shown when "Ask campaign each time" is on and
+          the user triggers an Add (per-row or bulk). Seeds to the active campaign. */}
+      <Dialog open={!!pendingAdd} onOpenChange={(open) => { if (!open) handleCancelCampaign(); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add to which campaign?</DialogTitle>
+            <DialogDescription>
+              {pendingAdd?.kind === 'bulk'
+                ? `Choose the campaign for these ${pendingAdd.leads.length} lead${pendingAdd.leads.length === 1 ? '' : 's'}.`
+                : 'Choose the campaign for this lead.'}
+            </DialogDescription>
+          </DialogHeader>
+          <CampaignPicker mode="assign" value={chosenCampaign} onChange={setChosenCampaign} className="h-9 w-full" />
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={handleCancelCampaign}>Cancel</Button>
+            <Button onClick={handleConfirmCampaign}>Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
