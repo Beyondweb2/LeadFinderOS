@@ -226,6 +226,13 @@ Deno.serve(async (req) => {
     // FULL web-results social discovery (see the two `force` guards below). Default
     // off → normal cached behaviour is unchanged for every existing caller.
     const force: boolean = body.force === true || body.refresh === true || socialImagesOnly;
+    // Path-specific Maps-enrich budget. Standalone Enrich (Outreach button, socials pull,
+    // etc.) omits this → keeps the generous 75s off-budget scrape. generate-barber-site's
+    // 9b passes a SHORTER budget (40s) because that call is awaited inside the synchronous
+    // ~150s generate request; when a short budget is set we also DROP the abort retry so a
+    // timeout can't stack a second full attempt toward a 504.
+    const fromGenerate: boolean = typeof body.maps_enrich_ms === "number" && body.maps_enrich_ms > 0;
+    const mapsEnrichMs: number = fromGenerate ? (body.maps_enrich_ms as number) : 75_000;
     if (!leadId) return json({ error: "lead_id required" }, 400);
 
     const service = createClient(
@@ -301,14 +308,16 @@ Deno.serve(async (req) => {
                 token: apifyToken,
                 maxReviews: 0, // contacts/images only here; reviews handled at generate
                 maxImages: 12,
-                // 75s: on-demand enrich is OFF the synchronous generate path, so it can
-                // afford to wait for a slow, photo-heavy Maps scrape. The old 25s aborted
-                // photo-heavy places before they returned → place=null → no Maps photos.
-                timeoutMs: 75_000,
-                // Off the synchronous critical path → safe to retry a timeout too.
+                // Standalone Enrich: 75s (off-budget, can wait for a slow photo-heavy
+                // scrape). Called FROM generate (9b): a shorter budget (mapsEnrichMs=40s)
+                // since it's awaited inside the ~150s generate request.
+                timeoutMs: mapsEnrichMs,
+                // Off the synchronous critical path → safe to retry a timeout too. But
+                // when called from generate (fromGenerate), DROP the abort retry so a
+                // timeout can't stack a second full attempt toward a 504.
                 // NO photosOnly here: 9b needs the full add-ons (contacts / FB+IG
                 // social profiles / web results) for social discovery.
-                retry: { on429: true, onAbort: true },
+                retry: { on429: true, onAbort: !fromGenerate },
               });
               place = r.place;
               // ── TEMP DIAGNOSTIC (remove after) — raw vs normalized web-results to tell
