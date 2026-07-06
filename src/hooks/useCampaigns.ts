@@ -17,6 +17,7 @@ export interface Campaign {
   default_sale_type: string | null;
   description: string | null;
   method: string | null;
+  default_template: string | null;
 }
 
 export interface CampaignInput {
@@ -24,9 +25,10 @@ export interface CampaignInput {
   description?: string | null;
   method?: string | null;
   default_sale_type?: string | null;
+  default_template?: string | null;
 }
 
-const CAMPAIGN_COLS = 'id, name, created_by, created_at, default_sale_type, description, method';
+const CAMPAIGN_COLS = 'id, name, created_by, created_at, default_sale_type, description, method, default_template';
 
 /**
  * Thin campaigns hook. Campaigns are a team-readable grouping concept:
@@ -90,6 +92,7 @@ export function useCampaigns() {
         default_sale_type: input.default_sale_type ?? null,
         description: input.description?.trim() || null,
         method: input.method || null,
+        default_template: input.default_template ?? null,
       })
       .select(CAMPAIGN_COLS)
       .single();
@@ -118,6 +121,7 @@ export function useCampaigns() {
         default_sale_type: patch.default_sale_type ?? null,
         description: patch.description?.trim() || null,
         method: patch.method || null,
+        default_template: patch.default_template ?? null,
       })
       .eq('id', id)
       .select(CAMPAIGN_COLS)

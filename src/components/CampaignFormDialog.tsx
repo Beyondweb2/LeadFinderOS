@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { SALE_TYPES, type SaleType } from '@/lib/saleType';
 import { CAMPAIGN_METHOD_OPTIONS } from '@/lib/campaign';
+import { WHATSAPP_TEMPLATES } from '@/types/outreach';
 import type { Campaign, CampaignInput } from '@/hooks/useCampaigns';
 
 interface CampaignFormDialogProps {
@@ -29,33 +30,43 @@ interface CampaignFormDialogProps {
 }
 
 const NO_METHOD = '__none__';
+const NO_TEMPLATE = '__none__';
 
-/** Shared create/edit form for a campaign: name, description, method, default sale type. */
+/** Shared create/edit form for a campaign: name, description, method, default sale type,
+ *  default WhatsApp template. */
 export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: CampaignFormDialogProps) {
   const isEdit = !!campaign;
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [method, setMethod] = useState<string>(NO_METHOD);
   const [saleType, setSaleType] = useState<SaleType>('website');
+  const [defaultTemplate, setDefaultTemplate] = useState<string>(NO_TEMPLATE);
   const [saving, setSaving] = useState(false);
 
-  // Re-seed the form whenever it opens (with the campaign's values in edit mode).
+  // Re-seed the form whenever it opens (with the campaign's values in edit mode). A
+  // stored default_template that isn't a current allowlist key falls back to "Not set".
   useEffect(() => {
     if (!open) return;
     setName(campaign?.name ?? '');
     setDescription(campaign?.description ?? '');
     setMethod(campaign?.method ?? NO_METHOD);
     setSaleType((campaign?.default_sale_type as SaleType) ?? 'website');
+    const t = campaign?.default_template;
+    setDefaultTemplate(t && WHATSAPP_TEMPLATES.some((o) => o.value === t) ? t : NO_TEMPLATE);
   }, [open, campaign]);
 
   const handleSave = async () => {
     if (!name.trim()) return;
     setSaving(true);
+    // Constrain to a WHATSAPP_TEMPLATES key or null (matches the edge allowlist), same
+    // as method / sale type are constrained to their option sets.
+    const templateValid = defaultTemplate !== NO_TEMPLATE && WHATSAPP_TEMPLATES.some((o) => o.value === defaultTemplate);
     const result = await onSubmit({
       name,
       description,
       method: method === NO_METHOD ? null : method,
       default_sale_type: saleType,
+      default_template: templateValid ? defaultTemplate : null,
     });
     setSaving(false);
     if (result) onOpenChange(false);
@@ -120,6 +131,22 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground/60 mt-1">Leads in this campaign default to this; each lead can override.</p>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Default WhatsApp template for this campaign</label>
+            <Select value={defaultTemplate} onValueChange={setDefaultTemplate}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_TEMPLATE}>Not set</SelectItem>
+                {WHATSAPP_TEMPLATES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground/60 mt-1">Leads in this campaign default to this template in manage-sites; you can still change it per send.</p>
           </div>
         </div>
 
