@@ -30,6 +30,9 @@ import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTION
 
 interface OutreachMobileCardProps {
   lead: OutreachLead;
+  /** Muted campaign-name sub-line under the business name — passed only in the
+   *  "All campaigns" view when the lead has a campaign; null/undefined hides it. */
+  campaignName?: string | null;
   isSelected: boolean;
   onSelect: (checked: boolean) => void;
   onLeadClick: () => void;
@@ -59,6 +62,7 @@ interface OutreachMobileCardProps {
 
 export const OutreachMobileCard = memo(function OutreachMobileCard({
   lead,
+  campaignName,
   isSelected,
   onSelect,
   onLeadClick,
@@ -137,6 +141,9 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
             )}
             <WhatsAppStatusBadge status={lead.whatsapp_status} compact />
           </div>
+          {campaignName && (
+            <div className="text-[11px] text-muted-foreground leading-none truncate">{campaignName}</div>
+          )}
           {hasPhone && (
             <a href={`tel:${lead.phone}`} className="text-[11px] text-muted-foreground leading-none truncate">
               {lead.phone}

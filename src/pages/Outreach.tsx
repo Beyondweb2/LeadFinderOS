@@ -138,6 +138,19 @@ const Outreach = () => {
     return map;
   }, [campaigns, allLeads]);
 
+  // Per-lead campaign NAME (mirrors campaignDefaultSaleTypeByLead) — for the muted
+  // sub-line under a lead's business name in the "All campaigns" view, so each row
+  // shows which campaign it belongs to. Built once from the campaigns list.
+  const campaignNameByLead = useMemo(() => {
+    const byCampaign: Record<string, string> = {};
+    for (const c of campaigns) byCampaign[c.id] = c.name;
+    const map: Record<string, string | null> = {};
+    for (const l of allLeads) {
+      map[l.id] = l.campaign_id ? byCampaign[l.campaign_id] ?? null : null;
+    }
+    return map;
+  }, [campaigns, allLeads]);
+
   // Listen for WhatsApp status updates from the prompt dialog
   useEffect(() => {
     const handler = (e: Event) => {
@@ -291,6 +304,8 @@ const Outreach = () => {
         }}
         fetchActivities={fetchActivities}
         campaignDefaultSaleTypeByLead={campaignDefaultSaleTypeByLead}
+        campaignNameByLead={campaignNameByLead}
+        showCampaignName={campaignFilter === null}
         launchIntent={launchIntent}
         onLaunchConsumed={() => setLaunchIntent(null)}
         onBulkJob={createJob}
