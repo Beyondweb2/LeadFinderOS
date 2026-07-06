@@ -409,9 +409,16 @@ Deno.serve(async (req) => {
         //     companies). Match → attach ('websearch'); mismatch/unconfirmed →
         //     surfaced as a suggestion to verify, never auto-attached.
         if (webResults.length && (!fbUrl || !igUrl)) {
+          // A Google web-results breadcrumb can be a DISPLAY-truncated link — long
+          // handles get an ellipsis (e.g. "instagram.com/turkish_barbers_club_five…").
+          // Storing that yields a broken/404 profile, and guessing the full handle would
+          // be wrong — so treat any ellipsis'd candidate as NOT FOUND. Reject "…", "..."
+          // (3+ dots), or a trailing dot/ellipsis. (Single dots stay valid: gfm.barbers.)
+          const isTruncatedUrl = (u: string): boolean => /…|\.{3,}/.test(u) || /[.…]$/.test(u.trim());
           const fromWeb = (domainRe: RegExp): { url: string; matched: boolean } | null => {
-            // Skip a platform's own social account (facebook.com/fresha etc.).
-            const entry = webResults.find((w) => domainRe.test(w.url) && !isPlatformSocialUrl(w.url));
+            // Skip a platform's own social account (facebook.com/fresha etc.) and any
+            // display-truncated (ellipsis'd) link.
+            const entry = webResults.find((w) => domainRe.test(w.url) && !isPlatformSocialUrl(w.url) && !isTruncatedUrl(w.url));
             return entry ? { url: entry.url, matched: !!locationMatch(entry.text, place) } : null;
           };
           if (!fbUrl) {

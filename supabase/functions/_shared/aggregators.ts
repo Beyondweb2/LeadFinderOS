@@ -175,7 +175,13 @@ export function canonicalSocialUrl(url: string): string {
     if (isFb && first === "pages" && segs[1] && segs[2]) {
       return `https://${host}/pages/${segs[1]}/${segs[2]}`;
     }
-    return `https://${host}/${segs[0].replace(/^@/, "")}`;
+    // Guard: a DISPLAY-truncated handle (Google breadcrumb ellipsis) is a broken
+    // profile — never store or "repair" it. Reject an ellipsis "…", consecutive dots
+    // "..", or a trailing dot; a SINGLE dot is legal (gfm.barbers). Empty return =
+    // "not a usable social URL", which callers already treat as not-found.
+    const handle = segs[0].replace(/^@/, "");
+    if (/…|\.\.|\.$/.test(handle)) return "";
+    return `https://${host}/${handle}`;
   } catch {
     return url;
   }
