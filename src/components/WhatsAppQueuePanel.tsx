@@ -111,7 +111,7 @@ export function WhatsAppQueuePanel({
             disabled={ticking}
             title={status.testMode
               ? 'Force one simulated processor pass (TEST_MODE — nothing is sent)'
-              : 'Run one processor pass now — a REAL send, subject to the 7am–7pm window, daily cap and pacing'}
+              : 'Run one processor pass now — a REAL send, subject to the 7am–9:30pm window, daily cap and pacing'}
           >
             {ticking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
             {status.testMode ? 'Run test tick' : 'Run tick'}

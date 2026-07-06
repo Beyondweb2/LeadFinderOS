@@ -878,7 +878,7 @@ export function OutreachTable({
     const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
     toast({
       title: `Queued ${queueable.length} for WhatsApp`,
-      description: `Template: ${tmplLabel}. ${skipped ? `${skipped} skipped (not on WhatsApp). ` : ''}Sends within the daily 7am–7pm UK window, capped at 20/day.`,
+      description: `Template: ${tmplLabel}. ${skipped ? `${skipped} skipped (not on WhatsApp). ` : ''}Sends within the daily 7am–9:30pm UK window, capped at 20/day.`,
     });
   };
 
