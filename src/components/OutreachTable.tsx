@@ -1206,22 +1206,23 @@ export function OutreachTable({
             </CardTitle>
           </div>
           
-          {/* Actions row */}
-          <div className="flex flex-wrap gap-2">
+          {/* Actions rows — all buttons equal-weight outline; two tidy rows. */}
+          <div className="flex flex-col gap-2">
+            {/* Row 1 — primary actions (selection-only) */}
             {selectedIds.size > 0 && (
-              <>
+              <div className="flex flex-wrap gap-2">
                 <Button
-                  variant="default"
+                  variant="outline"
                   size="sm"
                   onClick={copySelectedPhones}
-                  className="bg-primary text-xs h-8"
+                  className="bg-background text-xs h-8"
                 >
                   <Copy className="h-3.5 w-3.5 mr-1.5" />
                   Copy Numbers ({selectedIds.size})
                 </Button>
                 {!readOnly && onUpdateLead && (
-                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setQueueDialogOpen(true)}>
-                    <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                  <Button variant="outline" size="sm" className="bg-background text-xs h-8" onClick={() => setQueueDialogOpen(true)}>
+                    <MessageSquare className="h-3.5 w-3.5 mr-1.5 text-green-500" />
                     Queue WhatsApp ({selectedIds.size})
                   </Button>
                 )}
@@ -1229,7 +1230,7 @@ export function OutreachTable({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 text-xs"
+                    className="bg-background text-xs h-8"
                     disabled={bulkJobActive}
                     title={bulkJobActive ? 'A bulk job is already running' : 'Find email / Facebook / Instagram / WhatsApp signal for the selected leads — runs server-side, safe to leave the page'}
                     onClick={handleBulkEnrichJob}
@@ -1242,7 +1243,7 @@ export function OutreachTable({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 text-xs"
+                    className="bg-background text-xs h-8"
                     disabled={bulkJobActive}
                     title={bulkJobActive ? 'A bulk job is already running' : 'Generate a website for each selected lead — runs server-side, safe to leave the page'}
                     onClick={handleBulkSiteGenJob}
@@ -1251,144 +1252,138 @@ export function OutreachTable({
                     Generate sites ({selectedIds.size})
                   </Button>
                 )}
-                {!readOnly && (
-                  <>
-                    {/* Bulk Status Dropdown */}
-                    <Select
-                      onValueChange={(v) => {
-                        const ids = Array.from(selectedIds);
-                        ids.forEach(id => onStatusChange(id, v as LeadStatus));
-                        // Auto-track when setting to interested
-                        if (v === 'interested' && onMarkAsInterested) {
-                          const untracked = ids.filter(id => !leads.find(l => l.id === id)?.is_potential_work);
-                          if (untracked.length > 0) onMarkAsInterested(untracked);
-                        }
-                        setSelectedIds(new Set());
-                        // Status updated — no toast
-                      }}
-                    >
-                      <SelectTrigger className="w-[130px] h-8 text-xs bg-background">
-                        <SelectValue placeholder="Set Status..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {OUTREACH_STATUS_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+              </div>
+            )}
+            {/* Row 2 — edit | destructive | data (Export/Import always visible) */}
+            <div className="flex flex-wrap gap-2">
+              {selectedIds.size > 0 && (
+                <>
+                  {!readOnly && (
+                    <>
+                      {/* Bulk Status Dropdown */}
+                      <Select
+                        onValueChange={(v) => {
+                          const ids = Array.from(selectedIds);
+                          ids.forEach(id => onStatusChange(id, v as LeadStatus));
+                          // Auto-track when setting to interested
+                          if (v === 'interested' && onMarkAsInterested) {
+                            const untracked = ids.filter(id => !leads.find(l => l.id === id)?.is_potential_work);
+                            if (untracked.length > 0) onMarkAsInterested(untracked);
+                          }
+                          setSelectedIds(new Set());
+                          // Status updated — no toast
+                        }}
+                      >
+                        <SelectTrigger className="w-[130px] h-8 text-xs bg-background">
+                          <SelectValue placeholder="Set Status..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {OUTREACH_STATUS_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
-                    {/* Bulk Next Action Dropdown */}
-                    <Select
-                      onValueChange={(v) => {
-                        const ids = Array.from(selectedIds);
-                        ids.forEach(id => onNextActionChange(id, v as NextActionType));
-                        setSelectedIds(new Set());
-                        // Next action updated — no toast
-                      }}
+                      {/* Bulk Next Action Dropdown */}
+                      <Select
+                        onValueChange={(v) => {
+                          const ids = Array.from(selectedIds);
+                          ids.forEach(id => onNextActionChange(id, v as NextActionType));
+                          setSelectedIds(new Set());
+                          // Next action updated — no toast
+                        }}
+                      >
+                        <SelectTrigger className="w-[140px] h-8 text-xs bg-background">
+                          <SelectValue placeholder="Set Action..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {NEXT_ACTION_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </>
+                  )}
+                  {/* Visual divider before the destructive cluster */}
+                  {!readOnly && (onDeleteSelected || onResetSelected || onClearCacheSelected) && (
+                    <div className="w-px h-6 bg-border mx-1 self-center" />
+                  )}
+                  {onDeleteSelected && !readOnly && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDeleteSelected}
+                      className="bg-background text-xs h-8 text-destructive hover:text-destructive"
+                      title="Removes these leads but keeps their history, so they won't be re-added or re-contacted on Find Leads. (Use Reset to fully clear and allow re-adding.)"
                     >
-                      <SelectTrigger className="w-[140px] h-8 text-xs bg-background">
-                        <SelectValue placeholder="Set Action..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {NEXT_ACTION_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </>
-                )}
-                {onDeleteSelected && !readOnly && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDeleteSelected}
-                    className="bg-background text-xs h-8 text-destructive hover:text-destructive"
-                    title="Removes these leads but keeps their history, so they won't be re-added or re-contacted on Find Leads. (Use Reset to fully clear and allow re-adding.)"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                    Remove
-                  </Button>
-                )}
-                {onResetSelected && !readOnly && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleResetSelected}
-                    className="bg-background text-xs h-8 text-amber-600 hover:text-amber-600"
-                    title="Fully clears the lead — removes it AND its added-history — so it can be added again on Find Leads. For test leads or starting over. (Unlike Remove, which keeps the history so you don't re-contact.)"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                    Reset (re-addable)
-                  </Button>
-                )}
-                {onClearCacheSelected && !readOnly && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleClearCacheSelected}
-                    className="bg-background text-xs h-8 text-sky-700 hover:text-sky-700"
-                    title="Clears saved enrichment data (photos, socials) for these businesses so the next Enrich or site regeneration fetches fresh. Use this if a site has no photos."
-                  >
-                    <DatabaseZap className="h-3.5 w-3.5 mr-1.5" />
-                    Clear cache
-                  </Button>
-                )}
-                {!readOnly && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPushInstantlyOpen(true)}
-                    className="bg-background text-xs h-8 text-sky-600 hover:text-sky-600"
-                    title="Push the selected leads (those with an email) into an Instantly.ai email campaign."
-                  >
-                    <Send className="h-3.5 w-3.5 mr-1.5" />
-                    Push to Instantly
-                  </Button>
-                )}
-              </>
-            )}
-            {/* WhatsApp button - only show for single selection */}
-            {selectedIds.size === 1 && (
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      Remove
+                    </Button>
+                  )}
+                  {onResetSelected && !readOnly && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleResetSelected}
+                      className="bg-background text-xs h-8 text-amber-600 hover:text-amber-600"
+                      title="Fully clears the lead — removes it AND its added-history — so it can be added again on Find Leads. For test leads or starting over. (Unlike Remove, which keeps the history so you don't re-contact.)"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                      Reset (re-addable)
+                    </Button>
+                  )}
+                  {onClearCacheSelected && !readOnly && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearCacheSelected}
+                      className="bg-background text-xs h-8 text-sky-700 hover:text-sky-700"
+                      title="Clears saved enrichment data (photos, socials) for these businesses so the next Enrich or site regeneration fetches fresh. Use this if a site has no photos."
+                    >
+                      <DatabaseZap className="h-3.5 w-3.5 mr-1.5" />
+                      Clear cache
+                    </Button>
+                  )}
+                  {!readOnly && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPushInstantlyOpen(true)}
+                      className="bg-background text-xs h-8 text-sky-600 hover:text-sky-600"
+                      title="Push the selected leads (those with an email) into an Instantly.ai email campaign."
+                    >
+                      <Send className="h-3.5 w-3.5 mr-1.5" />
+                      Push to Instantly
+                    </Button>
+                  )}
+                </>
+              )}
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  const selectedLead = filteredAndSortedLeads.find(l => selectedIds.has(l.id));
-                  if (selectedLead) {
-                    handleWhatsAppClick(selectedLead);
-                  }
-                }}
+                onClick={() => exportToCsv('crm')}
                 className="bg-background text-xs h-8"
               >
-                <MessageSquare className="h-3.5 w-3.5 mr-1.5 text-green-500" />
-                WhatsApp
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+                <span className="hidden sm:inline">Export </span>CSV
               </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportToCsv('crm')}
-              className="bg-background text-xs h-8"
-            >
-              <Download className="h-3.5 w-3.5 mr-1.5" />
-              <span className="hidden sm:inline">Export </span>CSV
-            </Button>
-            {/* Import button */}
-            {!readOnly && onImportLeads && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowImportDialog(true)}
-                className="bg-background text-xs h-8"
-              >
-                <Upload className="h-3.5 w-3.5 mr-1.5" />
-                <span className="hidden sm:inline">Import</span>
-              </Button>
-            )}
+              {/* Import button */}
+              {!readOnly && onImportLeads && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowImportDialog(true)}
+                  className="bg-background text-xs h-8"
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  <span className="hidden sm:inline">Import</span>
+                </Button>
+              )}
+            </div>
           </div>
           
           {/* Filters row */}
