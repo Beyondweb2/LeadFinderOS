@@ -12,6 +12,7 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
 export const WA_REPLY_TEMPLATES = [
   { name: 'booking_page_intro', label: 'Booking page intro (claim link)' },
   { name: 'no_website_barbers', label: 'Free website intro (claim link)' },
+  { name: 'barber_poor_website', label: 'Updated website intro (claim link)' },
 ];
 
 export interface WaMessage {
