@@ -415,20 +415,30 @@ Deno.serve(async (req) => {
           // be wrong — so treat any ellipsis'd candidate as NOT FOUND. Reject "…", "..."
           // (3+ dots), or a trailing dot/ellipsis. (Single dots stay valid: gfm.barbers.)
           const isTruncatedUrl = (u: string): boolean => /…|\.{3,}/.test(u) || /[.…]$/.test(u.trim());
-          const fromWeb = (domainRe: RegExp): { url: string; matched: boolean } | null => {
+          const fromWeb = (domainRe: RegExp): { url: string; matched: boolean; nameMatched: boolean } | null => {
             // Skip a platform's own social account (facebook.com/fresha etc.) and any
             // display-truncated (ellipsis'd) link.
             const entry = webResults.find((w) => domainRe.test(w.url) && !isPlatformSocialUrl(w.url) && !isTruncatedUrl(w.url));
-            return entry ? { url: entry.url, matched: !!locationMatch(entry.text, place) } : null;
+            // Web results mix companies, so LOCATION alone is too weak: a same-town
+            // DIFFERENT business (kuttabarbershop for "Volt Barbershop") passes it. Also
+            // require the handle to match the business name (same gate the website-crawl
+            // branch uses via acceptWebsiteSocial → socialHandleMatchesName).
+            return entry
+              ? { url: entry.url, matched: !!locationMatch(entry.text, place), nameMatched: socialHandleMatchesName(socialHandle(entry.url), businessName) }
+              : null;
           };
           if (!fbUrl) {
             const r = fromWeb(/(?:^|\.)facebook\.com\//i);
-            if (r?.matched) { fbUrl = r.url; fbMethod = "websearch"; fbSource = "web-results"; fbLoc = "matched"; }
+            // Auto-store only when location AND name/handle match; a location-only hit is
+            // downgraded to a name_mismatch suggestion (mirrors the website-crawl branch).
+            if (r?.matched && r.nameMatched) { fbUrl = r.url; fbMethod = "websearch"; fbSource = "web-results"; fbLoc = "matched"; }
+            else if (r?.matched) { fbSuggestion = { url: r.url, reason: "name_mismatch" }; fbSource = "web-results"; fbLoc = "unconfirmed"; }
             else if (r) { fbSuggestion = { url: r.url, reason: "location_mismatch" }; fbSource = "web-results"; fbLoc = "unconfirmed"; }
           }
           if (!igUrl) {
             const r = fromWeb(/(?:^|\.)instagram\.com\//i);
-            if (r?.matched) { igUrl = r.url; igMethod = "websearch"; igSource = "web-results"; igLoc = "matched"; }
+            if (r?.matched && r.nameMatched) { igUrl = r.url; igMethod = "websearch"; igSource = "web-results"; igLoc = "matched"; }
+            else if (r?.matched) { igSuggestion = { url: r.url, reason: "name_mismatch" }; igSource = "web-results"; igLoc = "unconfirmed"; }
             else if (r) { igSuggestion = { url: r.url, reason: "location_mismatch" }; igSource = "web-results"; igLoc = "unconfirmed"; }
           }
         }
