@@ -152,6 +152,11 @@ interface OutreachTableProps {
   onImageChange?: (leadId: string, imageUrl: string | null) => Promise<any> | void;
   fetchActivities?: (leadId: string) => Promise<any[]>;
   campaignDefaultSaleTypeByLead?: Record<string, string | null>;
+  /** Per-lead campaign NAME (built once by the parent). Rendered as a muted sub-line
+   *  under the business name — only when showCampaignName is true. */
+  campaignNameByLead?: Record<string, string | null>;
+  /** Show the campaign sub-line (true only in the "All campaigns" view). */
+  showCampaignName?: boolean;
   /** Launch-pad intent (e.g. from the Manage page): open a specific lead's composer
    *  fresh with a chosen template + that barber's /s/ link. */
   launchIntent?: {
@@ -249,6 +254,8 @@ export function OutreachTable({
   onImageChange,
   fetchActivities,
   campaignDefaultSaleTypeByLead,
+  campaignNameByLead,
+  showCampaignName,
   launchIntent,
   onLaunchConsumed,
   onBulkJob,
@@ -1684,6 +1691,7 @@ export function OutreachTable({
                 <OutreachMobileCard
                   key={lead.id}
                   lead={lead}
+                  campaignName={showCampaignName && lead.campaign_id ? (campaignNameByLead?.[lead.id] ?? null) : null}
                   isSelected={selectedIds.has(lead.id)}
                   onSelect={(checked) => handleSelectOne(lead.id, checked as boolean)}
                   onLeadClick={() => { onLeadClick(lead); setDetailLead(lead); }}
@@ -1812,6 +1820,13 @@ export function OutreachTable({
                             );
                           })()}
                         </div>
+                        {/* Muted campaign sub-line — only in the All-campaigns view when
+                            the lead belongs to a campaign (parent gates via showCampaignName). */}
+                        {showCampaignName && lead.campaign_id && campaignNameByLead?.[lead.id] && (
+                          <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                            {campaignNameByLead[lead.id]}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         {lead.phone ? (
