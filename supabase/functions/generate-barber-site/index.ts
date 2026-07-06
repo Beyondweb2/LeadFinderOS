@@ -593,11 +593,13 @@ serve(async (req) => {
               token: apifyToken,
               maxReviews: 4,
               maxImages: 10,
-              // 45s: moderate bump from 30s so more photo-heavy scrapes finish (30s was
-              // aborting them → place=null → no Maps photos), while staying well under the
-              // synchronous 504 gateway budget. Do NOT raise to 90s here (that's the
-              // on-demand enrich path's job) — this call blocks the generate response.
-              timeoutMs: 45_000,
+              // 30s (interim): pulled back from 45s. Generate runs this 9a scrape + a
+              // synchronous 9b enrich + OpenAI additively; at 45s (+ 9b's 75s) the total
+              // was exceeding the ~150s edge budget → 504. 30s keeps a single generate
+              // under budget; slightly shorter scrapes are the accepted tradeoff. The
+              // noCacheWrite guard means an empty result isn't cached, so 9b / a re-run
+              // can still fill photos. (Proper async rework is parked separately.)
+              timeoutMs: 30_000,
               // Synchronous path: photos-focused (drop heavy add-ons) + retry on
               // 429/5xx only. onAbort MUST stay false here — a second attempt
               // would stack toward the original 504.
@@ -654,6 +656,11 @@ serve(async (req) => {
               facebook_url: lead.facebook_url ?? null,
               instagram_url: lead.instagram_url ?? null,
               website: (lead.website as string) ?? null,
+              // Path-specific budget: this 9b enrich is AWAITED inside the synchronous
+              // generate request, so cap its Maps scrape at 40s (vs the 75s standalone
+              // Enrich uses off-budget). Also signals enrich-business to drop the abort
+              // retry on this path so a timeout can't stack toward the ~150s 504 budget.
+              maps_enrich_ms: 40_000,
             }),
           });
           // Refresh stored socials/website so the freshly-enriched values flow into
