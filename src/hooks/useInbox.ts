@@ -49,8 +49,9 @@ export interface WaConversation {
 
 export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null }
 
-/** Most-recent generated site for a lead — powers the thread's "View site" link. */
-export interface SiteLite { id: string; siteName: string; shareToken: string | null; bookingOnly: boolean }
+/** Most-recent generated site for a lead — powers the thread's "View site" link and
+ *  the engagement pill (opened/claimed/upsell milestones from generated_sites). */
+export interface SiteLite { id: string; siteName: string; shareToken: string | null; bookingOnly: boolean; firstOpenedAt: string | null; claimedAt: string | null; addonInterestAt: string | null }
 
 const convKey = (userId: string | null, phone: string) => `${userId ?? 'unassigned'}::${phone}`;
 
@@ -80,7 +81,7 @@ export function useInbox() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<WaMessage[]>([]);
   const [leads, setLeads] = useState<LeadLite[]>([]);
-  const [sites, setSites] = useState<Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null }>>([]);
+  const [sites, setSites] = useState<Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
@@ -91,11 +92,11 @@ export function useInbox() {
       // share_token / booking_only aren't in the generated types yet — untyped sb. RLS
       // scopes rows to the operator's own sites (admins see all). Ordered newest-first
       // so the per-lead pick below takes the most recent site.
-      sb.from('generated_sites').select('id, site_name, lead_id, share_token, booking_only').order('created_at', { ascending: false }),
+      sb.from('generated_sites').select('id, site_name, lead_id, share_token, booking_only, first_opened_at, claimed_at, addon_interest_at').order('created_at', { ascending: false }),
     ]);
     setMessages(((msgRes.data ?? []) as WaMessage[]));
     setLeads(((leadRes.data ?? []) as LeadLite[]).filter((l) => (l.phone ?? '').trim()));
-    setSites((siteRes.data ?? []) as Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null }>);
+    setSites((siteRes.data ?? []) as Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>);
     setIsLoading(false);
   }, []);
 
@@ -130,7 +131,7 @@ export function useInbox() {
     const m: Record<string, SiteLite> = {};
     for (const s of sites) {
       if (s.lead_id && !m[s.lead_id]) {
-        m[s.lead_id] = { id: s.id, siteName: s.site_name, shareToken: s.share_token ?? null, bookingOnly: !!s.booking_only };
+        m[s.lead_id] = { id: s.id, siteName: s.site_name, shareToken: s.share_token ?? null, bookingOnly: !!s.booking_only, firstOpenedAt: s.first_opened_at ?? null, claimedAt: s.claimed_at ?? null, addonInterestAt: s.addon_interest_at ?? null };
       }
     }
     return m;

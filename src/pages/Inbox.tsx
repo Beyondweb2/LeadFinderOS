@@ -331,12 +331,23 @@ const Inbox = () => {
                 </span>
               )}
               {/* Editable status pill — only for conversations linked to a lead
-                  (Unassigned has none). Two-way synced with Outreach. */}
+                  (Unassigned has none). Two-way synced with Outreach. Beside it, ONE
+                  engagement pill for the furthest milestone the lead reached
+                  (Upsell > Claimed > Opened; nothing if none) — from generated_sites. */}
               {c.leadId && (
-                <div className="mt-0.5">
+                <div className="mt-0.5 flex items-center gap-1">
                   {savingStatusKey === c.key
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                     : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} />}
+                  {(() => {
+                    const s = sitesByLeadId[c.leadId];
+                    if (!s) return null;
+                    const pill = 'inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border-transparent';
+                    if (s.addonInterestAt) return <span className={`${pill} bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))]`} title="Requested the booking + SMS add-on">Upsell</span>;
+                    if (s.claimedAt) return <span className={`${pill} bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))]`} title="Claimed the free site">Claimed</span>;
+                    if (s.firstOpenedAt) return <span className={`${pill} bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))]`} title="Opened the site link">Opened</span>;
+                    return null;
+                  })()}
                 </div>
               )}
             </div>
