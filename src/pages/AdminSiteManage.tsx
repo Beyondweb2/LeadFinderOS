@@ -296,7 +296,7 @@ export default function AdminSiteManage() {
         const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === waTemplate)?.label ?? waTemplate;
         toast({
           title: "Added to WhatsApp queue",
-          description: `Template: ${tmplLabel}. Sends within the daily 7am–9:30pm UK window (max 20/day).`,
+          description: `Template: ${tmplLabel}. Sends within the daily 7am–9:30pm UK window (max 40/day).`,
         });
       }
     } catch (e) {

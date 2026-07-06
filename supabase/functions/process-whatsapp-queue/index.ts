@@ -15,7 +15,7 @@ import { renderTemplateBody } from "../_shared/whatsapp-send.ts";
 //
 // Guards (server-side, never UI-only):
 //   • 7am–9:30pm Europe/London window (DST-correct via Intl, not the cron schedule)
-//   • 20 sends/day GLOBAL cap (one WABA number) — counted from whatsapp_sends
+//   • 40 sends/day GLOBAL cap (one WABA number) — counted from whatsapp_sends
 //   • randomised spacing via whatsapp_outreach_state.next_send_at
 //   • only status='queued' leads; never re-messages contacted/replied
 //
@@ -28,7 +28,7 @@ const corsHeaders = {
 };
 
 const GRAPH_VERSION = "v21.0";
-const DAILY_CAP = 20;
+const DAILY_CAP = 40;
 const WINDOW_START = 7;              // 07:00 Europe/London (inclusive)
 const WINDOW_END_MIN = 21 * 60 + 30; // 21:30 Europe/London (exclusive) — minutes-from-midnight so the :30 is honoured
 const CLAIM_ORIGIN = "https://yoursites.uk"; // claim links live at /s/<share_token>
