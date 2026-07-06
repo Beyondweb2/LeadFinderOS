@@ -267,7 +267,10 @@ export function OutreachTable({
   // of in-flight lead ids (a single id cleared earlier rows' spinners on the next
   // click). CONCURRENCY_CAP bounds simultaneous builds; extra clicks queue and
   // auto-start as slots free (see the pump effect near handleGenerateSite).
-  const CONCURRENCY_CAP = 5;
+  // Capped at 3 (not 5): each build is a heavy Apify Maps scrape (+ 9b FB/IG) on ONE
+  // shared Apify account — 5 at once overloaded it (429/45s-timeout under contention),
+  // so some builds' Maps scrapes failed and baked empty photo pools.
+  const CONCURRENCY_CAP = 3;
   const [generatingSiteIds, setGeneratingSiteIds] = useState<Set<string>>(new Set());
   const [queuedSiteGen, setQueuedSiteGen] = useState<
     Array<{ lead: OutreachLead; template: 'barber' | 'salon' | 'plumber'; mode?: 'booking_only' }>

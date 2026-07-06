@@ -578,6 +578,14 @@ serve(async (req) => {
           // rather than caching empty for 30 days. Null-safe.
           isEmpty: (p) => !p || !Array.isArray(p.imageUrls) || p.imageUrls.length === 0,
           emptyTtlMs: 24 * 60 * 60 * 1000,
+          // Concurrency guard (mirrors the enrich-business noCacheWrite fix): NEVER cache
+          // an EMPTY Maps result at 9a. Under concurrent load a 429/timeout/contended
+          // scrape can come back empty; caching it (even 24h) poisons :maps_enrich so 9b
+          // and later generate/enrich reuse the empty pool. A THROW (abort/HTTP after the
+          // one 429 retry) already skips the cache — run() throws before the upsert — so
+          // this closes the RESOLVED-EMPTY case: an empty result is simply re-scraped next
+          // time (cheap; worst case a genuinely photoless business re-scrapes).
+          noCacheWrite: (p) => !p || !Array.isArray(p.imageUrls) || p.imageUrls.length === 0,
           run: async () => {
             const { place } = await mapsEnrich({
               googleMapsUrl: leadMapsUrlForEnrich || undefined,
