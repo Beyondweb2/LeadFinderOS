@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback, memo } from 'react';
 import type { PhoneFetchStatus } from '@/hooks/useOutreach';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -263,12 +263,25 @@ export function OutreachTable({
   const { user } = useAuth();
   const { isAdmin } = useSubscription();
   const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
-  const [generatingSiteId, setGeneratingSiteId] = useState<string | null>(null);
-  // A row shows the generating spinner if it's the single site-gen in flight, OR it's
-  // an in-progress item of an active bulk site-gen job.
+  // Per-row site-gen concurrency: builds run concurrently server-side, so track a SET
+  // of in-flight lead ids (a single id cleared earlier rows' spinners on the next
+  // click). CONCURRENCY_CAP bounds simultaneous builds; extra clicks queue and
+  // auto-start as slots free (see the pump effect near handleGenerateSite).
+  const CONCURRENCY_CAP = 5;
+  const [generatingSiteIds, setGeneratingSiteIds] = useState<Set<string>>(new Set());
+  const [queuedSiteGen, setQueuedSiteGen] = useState<
+    Array<{ lead: OutreachLead; template: 'barber' | 'salon' | 'plumber'; mode?: 'booking_only' }>
+  >([]);
+  // A row shows the BUILDING spinner if it's an in-flight per-row site-gen, OR it's an
+  // in-progress item of an active bulk site-gen job (bulk behaviour unchanged).
   const isRowGenerating = useCallback(
-    (id: string) => generatingSiteId === id || !!bulkGeneratingIds?.has(id),
-    [generatingSiteId, bulkGeneratingIds],
+    (id: string) => generatingSiteIds.has(id) || !!bulkGeneratingIds?.has(id),
+    [generatingSiteIds, bulkGeneratingIds],
+  );
+  // A row is QUEUED (waiting for a free build slot) when it's in the pending queue.
+  const isRowQueued = useCallback(
+    (id: string) => queuedSiteGen.some((q) => q.lead.id === id),
+    [queuedSiteGen],
   );
   // Bulk site-gen template picker dialog.
   const [siteGenDialogOpen, setSiteGenDialogOpen] = useState(false);
@@ -605,9 +618,17 @@ export function OutreachTable({
   // Handle Call button click - direct open + count walkthrough contact
   // Admin-only: generate a barber site for this lead via the (admin-gated)
   // generate-barber-site edge function, then surface links to view / add images.
-  const handleGenerateSite = useCallback(async (lead: OutreachLead, template: 'barber' | 'salon' | 'plumber' = 'barber', mode?: 'booking_only') => {
+  //
+  // Concurrency model: the CLICK (`handleGenerateSite`) only enqueues the build; a pump
+  // effect starts up to CONCURRENCY_CAP at once and auto-starts the next as slots free.
+  // The actual build is `runSiteGen`; its per-lead result handling (setSitesByLead keyed
+  // by lead.id, the per-lead toast, the existing:true navigate) is unchanged and already
+  // concurrency-safe, so builds in flight never clobber each other.
+  const runSiteGen = useCallback(async (
+    item: { lead: OutreachLead; template: 'barber' | 'salon' | 'plumber'; mode?: 'booking_only' },
+  ) => {
+    const { lead, template, mode } = item;
     const isBooking = mode === 'booking_only';
-    setGeneratingSiteId(lead.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
@@ -653,15 +674,56 @@ export function OutreachTable({
         ),
       });
     } catch (e) {
-      toast({
-        title: 'Site generation failed',
-        description: (e as Error).message || 'Please try again',
-        variant: 'destructive',
-      });
+      // The edge enforces 10/min per user → 429 "Rate limit exceeded". With cap=5 this
+      // is unlikely, but surface a friendlier nudge instead of the generic failure.
+      const msg = (e as Error).message || '';
+      const isRateLimited = /rate limit|\b429\b|too many/i.test(msg);
+      toast(
+        isRateLimited
+          ? { title: 'Too many sites building right now', description: 'Wait a moment and try again.', variant: 'destructive' }
+          : { title: 'Site generation failed', description: msg || 'Please try again', variant: 'destructive' },
+      );
     } finally {
-      setGeneratingSiteId(null);
+      // Free this lead's slot; the pump effect below auto-starts the next queued build.
+      setGeneratingSiteIds((prev) => {
+        const next = new Set(prev);
+        next.delete(lead.id);
+        return next;
+      });
     }
-  }, [toast]);
+  }, [toast, navigate, isAdmin]);
+
+  // Click → enqueue this build. Ignored if the SAME lead is already building or queued
+  // (the disabled trigger also prevents this, but guard anyway). The pump effect starts
+  // it immediately when a slot is free (< CONCURRENCY_CAP), else it waits in the queue.
+  const handleGenerateSite = useCallback((
+    lead: OutreachLead,
+    template: 'barber' | 'salon' | 'plumber' = 'barber',
+    mode?: 'booking_only',
+  ) => {
+    setQueuedSiteGen((prev) => {
+      if (generatingSiteIds.has(lead.id) || prev.some((q) => q.lead.id === lead.id)) return prev;
+      return [...prev, { lead, template, mode }];
+    });
+  }, [generatingSiteIds]);
+
+  // Pump: fill free build slots from the queue (respecting CONCURRENCY_CAP), mark them
+  // in-flight, and start them. Runs pre-paint (useLayoutEffect) so an immediately-
+  // startable click never flashes the "queued" indicator before it starts building.
+  useLayoutEffect(() => {
+    if (queuedSiteGen.length === 0) return;
+    const free = CONCURRENCY_CAP - generatingSiteIds.size;
+    if (free <= 0) return;
+    const toStart = queuedSiteGen.slice(0, free);
+    if (toStart.length === 0) return;
+    setGeneratingSiteIds((prev) => {
+      const next = new Set(prev);
+      toStart.forEach((i) => next.add(i.lead.id));
+      return next;
+    });
+    setQueuedSiteGen((prev) => prev.slice(toStart.length));
+    toStart.forEach((item) => { void runSiteGen(item); });
+  }, [queuedSiteGen, generatingSiteIds, runSiteGen]);
 
   const handleCallClick = useCallback((lead: OutreachLead) => {
     if (onContactGated && !onContactGated('call', lead.id)) return;
@@ -1941,12 +2003,14 @@ export function OutreachTable({
                                 <DropdownMenuTrigger asChild>
                                   <button
                                     className="p-1.5 rounded-md text-violet-400 hover:bg-violet-500/10 hover:text-violet-300 transition-colors disabled:opacity-50"
-                                    title="Generate site"
-                                    disabled={isRowGenerating(lead.id)}
+                                    title={isRowQueued(lead.id) ? 'Queued — waiting for a free build slot' : 'Generate site'}
+                                    disabled={isRowGenerating(lead.id) || isRowQueued(lead.id)}
                                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                   >
                                     {isRowGenerating(lead.id) ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : isRowQueued(lead.id) ? (
+                                      <Loader2 className="h-4 w-4 opacity-40 animate-pulse" />
                                     ) : (
                                       <Wand2 className="h-4 w-4" />
                                     )}
