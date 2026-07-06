@@ -32,6 +32,12 @@ export interface RunEnrichArgs<T> {
   isEmpty?: (result: T) => boolean;
   /** TTL for an empty result (default 24h). Ignored unless isEmpty returns true. */
   emptyTtlMs?: number;
+  /** Optional: skip the cache write ENTIRELY for this result — e.g. the source
+   *  ERRORED/timed out, so an empty result must not be cached (not even for the short
+   *  emptyTtlMs), otherwise a transient timeout poisons the cache and blocks retries.
+   *  Usage + audit are still recorded (we did spend). Must be null-safe. When omitted,
+   *  behaviour is unchanged (always cache). */
+  noCacheWrite?: (result: T) => boolean;
 }
 
 export interface RunEnrichOutcome<T> {
@@ -86,12 +92,17 @@ export async function runEnrichSource<T>(args: RunEnrichArgs<T>): Promise<RunEnr
   const empty = args.isEmpty ? args.isEmpty(result) : false;
   const ttlMs = empty ? (args.emptyTtlMs ?? 24 * 60 * 60 * 1000) : CACHE_TTL_MS;
   const expires = new Date(Date.now() + ttlMs).toISOString();
-  try {
-    await service.from("enrichment_cache").upsert(
-      { cache_key: cacheKey, enrichment_type: type, result, expires_at: expires },
-      { onConflict: "cache_key" },
-    );
-  } catch (_e) { /* ignore */ }
+  // Skip the cache write when the source signalled an error (e.g. a maps timeout) so a
+  // transient failure doesn't get cached as an empty result and block re-enrichment.
+  const skipCacheWrite = args.noCacheWrite ? args.noCacheWrite(result) : false;
+  if (!skipCacheWrite) {
+    try {
+      await service.from("enrichment_cache").upsert(
+        { cache_key: cacheKey, enrichment_type: type, result, expires_at: expires },
+        { onConflict: "cache_key" },
+      );
+    } catch (_e) { /* ignore */ }
+  }
   if (userId) {
     try {
       await service.from("enrichment_usage").insert({

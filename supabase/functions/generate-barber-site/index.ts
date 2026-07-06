@@ -585,9 +585,13 @@ serve(async (req) => {
               token: apifyToken,
               maxReviews: 4,
               maxImages: 10,
-              timeoutMs: 30_000,
+              // 45s: moderate bump from 30s so more photo-heavy scrapes finish (30s was
+              // aborting them → place=null → no Maps photos), while staying well under the
+              // synchronous 504 gateway budget. Do NOT raise to 90s here (that's the
+              // on-demand enrich path's job) — this call blocks the generate response.
+              timeoutMs: 45_000,
               // Synchronous path: photos-focused (drop heavy add-ons) + retry on
-              // 429/5xx only. onAbort MUST stay false here — a second 30s attempt
+              // 429/5xx only. onAbort MUST stay false here — a second attempt
               // would stack toward the original 504.
               photosOnly: true,
               retry: { on429: true, onAbort: false },
