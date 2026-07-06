@@ -31,7 +31,7 @@ const Outreach = () => {
     fetchActivities,
     deleteMultiple,
     resetMultiple,
-    clearCacheMultiple,
+    resetToFreshMultiple,
     deleteAllLeads,
     archiveLead,
     archiveMultiple,
@@ -261,7 +261,7 @@ const Outreach = () => {
         onArchiveSelected={archiveMultiple}
         onDeleteSelected={deleteMultiple}
         onResetSelected={resetMultiple}
-        onClearCacheSelected={clearCacheMultiple}
+        onResetToFreshSelected={resetToFreshMultiple}
         onMarkAsInterested={markMultipleAsInterested}
         onRefreshLeads={fetchLeads}
         onImportLeads={async (leadsToImport) => {
