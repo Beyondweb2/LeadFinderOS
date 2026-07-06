@@ -17,6 +17,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -117,9 +127,10 @@ interface OutreachTableProps {
   /** Reset = fully wipe (outreach_leads + outreach_history) so the lead is re-addable.
    *  Distinct from onDeleteSelected, which keeps the added-history ledger. */
   onResetSelected?: (leadIds: string[]) => Promise<unknown> | void;
-  /** Clear cache = delete the businesses' enrichment_cache rows (server-side) so the
-   *  next Enrich/regeneration re-fetches fresh. Does NOT remove the lead. */
-  onClearCacheSelected?: (leadIds: string[]) => Promise<unknown> | void;
+  /** Reset to fresh = server-side delete the lead's generated site + null its enrichment
+   *  fields + clear its enrichment_cache. KEEPS the lead, its identity, notes, status,
+   *  tracking and history. Ownership-guarded server-side. */
+  onResetToFreshSelected?: (leadIds: string[]) => Promise<unknown> | void;
   onBulkStatusChange?: (leadIds: string[], status: LeadStatus) => void;
   onMarkAsInterested?: (leadIds: string[]) => void;
   onRefreshLeads?: () => void;
@@ -220,7 +231,7 @@ export function OutreachTable({
   onDelete,
   onDeleteSelected,
   onResetSelected,
-  onClearCacheSelected,
+  onResetToFreshSelected,
   onBulkStatusChange,
   onMarkAsInterested,
   onRefreshLeads,
@@ -352,6 +363,8 @@ export function OutreachTable({
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
   const { logAttempt } = useOutreachAttempt();
   const [showImportDialog, setShowImportDialog] = useState(false);
+  // "Reset to fresh" confirm (destructive — deletes the site + wipes enrichment).
+  const [resetFreshOpen, setResetFreshOpen] = useState(false);
   // Bulk WhatsApp-queue template picker (chosen at queue-time).
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
   const [queueTemplate, setQueueTemplate] = useState<string>(WHATSAPP_TEMPLATES[0].value);
@@ -919,12 +932,14 @@ export function OutreachTable({
     setSelectedIds(new Set());
   };
 
-  // Clear enrichment cache for selected businesses (photos/socials/etc.) so the next
-  // Enrich or regeneration re-fetches fresh. Does NOT remove the lead or its history.
-  const handleClearCacheSelected = () => {
-    if (selectedIds.size === 0 || !onClearCacheSelected) return;
-    onClearCacheSelected(Array.from(selectedIds));
+  // Reset selected leads "to fresh" (confirmed via AlertDialog): server-side deletes
+  // the site + nulls enrichment + clears cache; keeps the lead/identity/notes/status/
+  // history. Runs only after the dialog's action is clicked.
+  const handleResetToFreshSelected = () => {
+    if (selectedIds.size === 0 || !onResetToFreshSelected) return;
+    onResetToFreshSelected(Array.from(selectedIds));
     setSelectedIds(new Set());
+    setResetFreshOpen(false);
   };
 
   const exportToCsv = (mode: 'crm' | 'import' = 'crm') => {
@@ -1309,7 +1324,7 @@ export function OutreachTable({
                     </>
                   )}
                   {/* Visual divider before the destructive cluster */}
-                  {!readOnly && (onDeleteSelected || onResetSelected || onClearCacheSelected) && (
+                  {!readOnly && (onDeleteSelected || onResetSelected || onResetToFreshSelected) && (
                     <div className="w-px h-6 bg-border mx-1 self-center" />
                   )}
                   {onDeleteSelected && !readOnly && (
@@ -1336,17 +1351,36 @@ export function OutreachTable({
                       Reset (re-addable)
                     </Button>
                   )}
-                  {onClearCacheSelected && !readOnly && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleClearCacheSelected}
-                      className="bg-background text-xs h-8 text-sky-700 hover:text-sky-700"
-                      title="Clears saved enrichment data (photos, socials) for these businesses so the next Enrich or site regeneration fetches fresh. Use this if a site has no photos."
-                    >
-                      <DatabaseZap className="h-3.5 w-3.5 mr-1.5" />
-                      Clear cache
-                    </Button>
+                  {onResetToFreshSelected && !readOnly && (
+                    <AlertDialog open={resetFreshOpen} onOpenChange={setResetFreshOpen}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setResetFreshOpen(true)}
+                        className="bg-background text-xs h-8 text-sky-700 hover:text-sky-700"
+                        title="Deletes the generated website and its live/claim link, and wipes all enriched data (Facebook, Instagram, email, line-type) so the enrichment icons return to default. Keeps the lead, its name, phone, notes, status, tracking and history."
+                      >
+                        <DatabaseZap className="h-3.5 w-3.5 mr-1.5" />
+                        Reset to fresh
+                      </Button>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Reset {selectedIds.size} lead{selectedIds.size === 1 ? '' : 's'} to fresh?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This permanently deletes their generated website and its live/claim link, and wipes all enriched data — Facebook, Instagram, email, and phone line-type — so the enrichment icons return to default. The lead stays in your list; its name, phone, notes, status, tracking and history are kept. This can't be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleResetToFreshSelected}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Reset to fresh
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   )}
                   {!readOnly && (
                     <Button

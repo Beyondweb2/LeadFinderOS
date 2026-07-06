@@ -931,12 +931,13 @@ export function useOutreach() {
     return true;
   }, [leads, archivedLeads]);
 
-  // Clear cached enrichment data (photos, socials, services, website-check) for the
-  // selected businesses so the next Enrich or site regeneration re-fetches FRESH.
-  // enrichment_cache is RLS service-role-only, so the actual delete runs in the
-  // clear-enrichment-cache edge function (by business key-prefix). Does NOT delete the
-  // lead or its history — deleteMultiple/resetMultiple stay the removal actions.
-  const clearCacheMultiple = useCallback(async (leadIds: string[]) => {
+  // Reset the selected leads "to fresh": server-side (clear-enrichment-cache edge fn,
+  // now extended) it DELETES each lead's generated site, NULLs only their enrichment
+  // fields (FB/IG/email/line-type/etc.), and clears the enrichment_cache — while KEEPING
+  // identity, notes, status, tracking (is_potential_work) and history. All service-role
+  // (enrichment_cache + site delete need it) and ownership-guarded server-side. Distinct
+  // from deleteMultiple/resetMultiple (which remove the lead) — those stay untouched.
+  const resetToFreshMultiple = useCallback(async (leadIds: string[]) => {
     if (leadIds.length === 0) return false;
     const sel = [...leads, ...archivedLeads].filter((l) => leadIds.includes(l.id));
     const businesses = sel.map((l) => ({
@@ -948,15 +949,17 @@ export function useOutreach() {
       body: { businesses },
     });
     if (error) {
-      toast({ title: 'Error clearing cache', description: error.message, variant: 'destructive' });
+      toast({ title: 'Error resetting leads', description: error.message, variant: 'destructive' });
       return false;
     }
+    // Re-fetch so the wiped enrichment fields + removed site reflect immediately.
+    await fetchLeads();
     toast({
-      title: `Cache cleared for ${businesses.length} business${businesses.length === 1 ? '' : 'es'}`,
-      description: 'Enrich or regenerate the site to refresh the photos and socials.',
+      title: `Reset ${businesses.length} lead${businesses.length === 1 ? '' : 's'} to fresh`,
+      description: 'Site deleted, enrichment cleared. Identity, notes, status and history kept.',
     });
     return true;
-  }, [leads, archivedLeads]);
+  }, [leads, archivedLeads, fetchLeads]);
 
   // Unarchive multiple leads
   const unarchiveMultiple = useCallback(async (leadIds: string[]) => {
@@ -1287,7 +1290,7 @@ export function useOutreach() {
     removeFreshLead,
     deleteMultiple,
     resetMultiple,
-    clearCacheMultiple,
+    resetToFreshMultiple,
     deleteAllLeads,
     archiveLead,
     unarchiveLead,
