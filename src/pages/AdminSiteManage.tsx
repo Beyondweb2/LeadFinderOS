@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -15,6 +15,7 @@ import { PushToInstantlyDialog } from "@/components/PushToInstantlyDialog";
 import { publicSiteUrl, barberSiteUrl } from "@/config/publicSite";
 import { bookingUrl } from "@/lib/subdomain";
 import { useTemplates } from "@/hooks/useTemplates";
+import { useCampaigns } from "@/hooks/useCampaigns";
 import { WHATSAPP_TEMPLATES } from "@/types/outreach";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
@@ -39,7 +40,7 @@ type SiteRow = {
   template?: string | null;
 };
 
-type LeadInfo = { id: string; phone: string | null; business_name: string; website: string | null; place_id: string | null; status: string | null; previous_status: string | null; whatsapp_sent_at: string | null };
+type LeadInfo = { id: string; phone: string | null; business_name: string; website: string | null; place_id: string | null; status: string | null; previous_status: string | null; whatsapp_sent_at: string | null; campaign_id: string | null };
 
 export default function AdminSiteManage() {
   const { id } = useParams();
@@ -65,6 +66,10 @@ export default function AdminSiteManage() {
   // from the free-text saved templates above (those drive the SMS/Call composer).
   const [waTemplate, setWaTemplate] = useState<string>(WHATSAPP_TEMPLATES[0].value);
   const [queuingWhatsApp, setQueuingWhatsApp] = useState(false);
+  // Campaigns (for the per-campaign default WhatsApp template) + a guard so the
+  // template selector is seeded ONCE per lead load and never fights a manual change.
+  const { campaigns, isLoading: campaignsLoading } = useCampaigns();
+  const seededTemplateForLeadRef = useRef<string | null>(null);
   // Push-to-Instantly dialog (campaign picker) — mirrors the Outreach feature.
   const [pushInstantlyOpen, setPushInstantlyOpen] = useState(false);
 
@@ -100,7 +105,7 @@ export default function AdminSiteManage() {
       if (row?.lead_id) {
         const { data: lead } = await sb
           .from("outreach_leads")
-          .select("id, phone, business_name, website, place_id, status, previous_status, whatsapp_sent_at")
+          .select("id, phone, business_name, website, place_id, status, previous_status, whatsapp_sent_at, campaign_id")
           .eq("id", row.lead_id)
           .maybeSingle();
         if (lead) setLeadInfo(lead as unknown as LeadInfo);
@@ -114,6 +119,23 @@ export default function AdminSiteManage() {
       setSelectedTemplateId(textTemplates[0].id);
     }
   }, [textTemplates, selectedTemplateId]);
+
+  // Seed the WhatsApp template ONCE per lead load: the lead's campaign default (when
+  // it's a valid allowlist key) else the current first-in-list default. Wait for
+  // campaigns to finish loading so we don't seed the fallback prematurely. Guarded by
+  // a ref keyed on the lead id → a manual dropdown change afterwards is never overwritten.
+  useEffect(() => {
+    if (campaignsLoading) return;
+    const leadId = leadInfo?.id ?? null;
+    if (!leadId || seededTemplateForLeadRef.current === leadId) return;
+    const campaign = leadInfo?.campaign_id
+      ? campaigns.find((c) => c.id === leadInfo.campaign_id)
+      : undefined;
+    const campaignDefault = campaign?.default_template;
+    const valid = !!campaignDefault && WHATSAPP_TEMPLATES.some((t) => t.value === campaignDefault);
+    setWaTemplate(valid ? (campaignDefault as string) : WHATSAPP_TEMPLATES[0].value);
+    seededTemplateForLeadRef.current = leadId;
+  }, [leadInfo, campaigns, campaignsLoading]);
 
   if (roleLoading) {
     return (
@@ -494,7 +516,7 @@ export default function AdminSiteManage() {
           if (!leadInfo) return;
           const { data: lead } = await sb
             .from("outreach_leads")
-            .select("id, phone, business_name, website, place_id, status, previous_status, whatsapp_sent_at")
+            .select("id, phone, business_name, website, place_id, status, previous_status, whatsapp_sent_at, campaign_id")
             .eq("id", leadInfo.id)
             .maybeSingle();
           if (lead) setLeadInfo(lead as unknown as LeadInfo);
