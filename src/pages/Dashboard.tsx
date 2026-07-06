@@ -44,6 +44,22 @@ const Dashboard = () => {
   const { toast } = useToast();
   const [isFullResetting, setIsFullResetting] = useState(false);
 
+  // Clear a lead's task from the Next Actions card: set next_action='none' +
+  // next_action_date=null (owner-RLS update, same shape as updateNextAction's clear).
+  // Only the task fields change — the lead is otherwise untouched. Refetch so metrics
+  // reflect it permanently; the card already removed the row optimistically.
+  const handleClearTask = async (leadId: string) => {
+    const { error } = await supabase
+      .from('outreach_leads')
+      .update({ next_action: 'none', next_action_date: null })
+      .eq('id', leadId);
+    if (error) {
+      toast({ title: 'Could not clear task', description: error.message, variant: 'destructive' });
+      return;
+    }
+    refetch();
+  };
+
   if (isLoading || isSubscriptionLoading) {
     return (
       <div className="flex items-center justify-center h-full py-16">
@@ -107,7 +123,7 @@ const Dashboard = () => {
             scoped per-rep for non-admins (admins see the global funnel). */}
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <AlertsCard alerts={metrics.recentAlerts} />
-          <NextActionsCard trackedLeads={metrics.nextActionLeads} />
+          <NextActionsCard trackedLeads={metrics.nextActionLeads} onClearTask={handleClearTask} />
           <SiteFunnelCard
             sent={metrics.siteFunnel.sent}
             opened={metrics.siteFunnel.opened}
