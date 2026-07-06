@@ -8,7 +8,7 @@ import { StatusBadge } from './StatusBadge';
 import { WebsiteStatusToggle } from './WebsiteStatusToggle';
 import {
   Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock, MapPin, ExternalLink, Globe, Loader2,
-  Instagram, Facebook, Sparkles, Mail, UserPlus, ChevronDown, MoreHorizontal, X,
+  Instagram, Facebook, Sparkles, Mail, UserPlus, ChevronDown, MoreHorizontal, X, Trash2,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
@@ -114,9 +114,21 @@ interface LeadsTableProps {
   addAllWithEmailsCount?: number;
   /** Export CSV including any emails found this session. */
   onExportWithEmails?: () => void;
+  /** Precomputed hover-tooltip text for the Add-to-CRM buttons (per-row + bulk).
+   *  Index decides the wording: "Add to {campaign}" when adding silently, or
+   *  "Choose a campaign…" when the ask-each-time toggle is on. */
+  addCampaignTooltip?: string;
+  /** Per-result CRM state (from Index's matcher): whether the business is in the
+   *  ACTIVE CRM, and if so whether it's still fresh/removable + the row id. When
+   *  provided, the action cell shows a three-state Add / Remove / In-CRM toggle;
+   *  when absent, falls back to the legacy "ever added" indicator. */
+  getCrmState?: (lead: Lead) => { inCrm: boolean; isFresh: boolean; crmLeadId: string | null };
+  /** Remove a FRESH lead from the CRM (Index opens a confirm, then deletes with a
+   *  live freshness re-check). */
+  onRemoveFromCrm?: (leadId: string, businessName: string) => void;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
@@ -412,22 +424,32 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     if (!bulkAllowed || !onBulkAdd) return null;
     if (selectedLeads.length > 0) {
       return (
-        <Button size="sm" onClick={() => runBulkAdd(selectedLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs">
-          {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
-          Add to CRM ({selectedLeads.length})
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="sm" onClick={() => runBulkAdd(selectedLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs">
+              {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
+              Add to CRM ({selectedLeads.length})
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{addCampaignTooltip}</TooltipContent>
+        </Tooltip>
       );
     }
     if (selectableLeads.length > 0) {
       return (
-        <Button size="sm" variant="outline" onClick={() => runBulkAdd(selectableLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs border-border" title="Add every filtered result not already in your list">
-          {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
-          Add all shown ({selectableLeads.length})
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="sm" variant="outline" onClick={() => runBulkAdd(selectableLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs border-border">
+              {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
+              Add all shown ({selectableLeads.length})
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{addCampaignTooltip}</TooltipContent>
+        </Tooltip>
       );
     }
     return null;
-  }, [bulkAllowed, onBulkAdd, selectedLeads, selectableLeads, bulkAdding, runBulkAdd]);
+  }, [bulkAllowed, onBulkAdd, selectedLeads, selectableLeads, bulkAdding, runBulkAdd, addCampaignTooltip]);
 
   // Secondary bulk/scan actions, grouped under one "Bulk ▾" menu:
   //   Enrich selected · Check for websites · Find emails · Add all with emails.
@@ -805,44 +827,94 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center">
-                      {onAddToOutreach && (
-                        inOutreach ? (
-                          <span className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium whitespace-nowrap">
-                            <Check className="h-3.5 w-3.5" />
-                            In your list
-                          </span>
-                        ) : gated && !canSave ? (
-                          <div className="relative">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 bg-primary/15 text-primary hover:bg-primary/25"
-                              onClick={() => onGatedAction?.()}
-                              data-walkthrough-step="add-to-crm"
-                              data-walkthrough="add-crm"
-                            >
-                              <Lock className="h-4 w-4" />
-                            </Button>
-                            {index === 0 && safePage === 1 && (
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 overflow-hidden rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md whitespace-nowrap pointer-events-none">
-                                🔒 Start trial to save this lead
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className={`h-8 px-3 text-xs gap-1.5 text-green-600 dark:text-green-500 border-green-600/30 hover:bg-green-500/10 hover:text-green-500 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
-                            onClick={() => handleAddToOutreach(lead)}
-                            data-walkthrough-step="add-to-crm"
-                            data-walkthrough="add-crm"
-                          >
-                            <ClipboardList className="h-3.5 w-3.5" />
-                            Add to CRM
-                          </Button>
-                        )
-                      )}
+                      {onAddToOutreach && (() => {
+                        // Three-state action when Index supplies live CRM state:
+                        //   in CRM + fresh   → Remove (destructive; deletes after a live re-check)
+                        //   in CRM + actioned → "In CRM" (disabled, protected)
+                        //   not in CRM       → Add to CRM (with the campaign tooltip)
+                        // Without getCrmState (other callers), keep the legacy
+                        // "In your list" indicator for the ever-added case.
+                        const crm = getCrmState?.(lead);
+                        if (crm?.inCrm) {
+                          if (crm.isFresh && crm.crmLeadId && onRemoveFromCrm) {
+                            return (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 px-3 text-xs gap-1.5 text-red-600 dark:text-red-500 border-red-600/30 hover:bg-red-500/10 hover:text-red-600"
+                                    onClick={() => onRemoveFromCrm(crm.crmLeadId!, lead.name)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Remove
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Remove from CRM (only while untouched)</TooltipContent>
+                              </Tooltip>
+                            );
+                          }
+                          return (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium whitespace-nowrap cursor-default">
+                                  <Check className="h-3.5 w-3.5" />
+                                  In CRM
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>Already contacted — manage on the Outreach page</TooltipContent>
+                            </Tooltip>
+                          );
+                        }
+                        // Legacy indicator when no live CRM state is provided.
+                        if (!crm && inOutreach) {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium whitespace-nowrap">
+                              <Check className="h-3.5 w-3.5" />
+                              In your list
+                            </span>
+                          );
+                        }
+                        if (gated && !canSave) {
+                          return (
+                            <div className="relative">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 bg-primary/15 text-primary hover:bg-primary/25"
+                                onClick={() => onGatedAction?.()}
+                                data-walkthrough-step="add-to-crm"
+                                data-walkthrough="add-crm"
+                              >
+                                <Lock className="h-4 w-4" />
+                              </Button>
+                              {index === 0 && safePage === 1 && (
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 overflow-hidden rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md whitespace-nowrap pointer-events-none">
+                                  🔒 Start trial to save this lead
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        return (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={`h-8 px-3 text-xs gap-1.5 text-green-600 dark:text-green-500 border-green-600/30 hover:bg-green-500/10 hover:text-green-500 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
+                                onClick={() => handleAddToOutreach(lead)}
+                                data-walkthrough-step="add-to-crm"
+                                data-walkthrough="add-crm"
+                              >
+                                <ClipboardList className="h-3.5 w-3.5" />
+                                Add to CRM
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{addCampaignTooltip}</TooltipContent>
+                          </Tooltip>
+                        );
+                      })()}
                     </div>
                   </TableCell>
                 </TableRow>

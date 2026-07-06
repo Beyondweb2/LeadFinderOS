@@ -37,6 +37,21 @@ export async function recordClaimOnAdd(k: ClaimKey): Promise<void> {
   }
 }
 
+/** Release a claim — the exact reverse of recordClaimOnAdd (same unique key:
+ *  user_id + campaign_id + place_id, null-safe). Used when a FRESH lead is removed
+ *  from the CRM so the business isn't left showing as claimed. Best-effort. */
+export async function releaseClaim(k: ClaimKey): Promise<void> {
+  if (!k.userId) return;
+  try {
+    let q = supabase.from('lead_claims').delete().eq('user_id', k.userId);
+    q = k.campaignId ? q.eq('campaign_id', k.campaignId) : q.is('campaign_id', null);
+    q = k.placeId ? q.eq('place_id', k.placeId) : q.is('place_id', null);
+    await q;
+  } catch (e) {
+    console.warn('[claims] releaseClaim failed (non-blocking):', e);
+  }
+}
+
 /** Mark the claim contacted (creates one if missing). Idempotent. */
 export async function markClaimContacted(k: ClaimKey): Promise<void> {
   if (!k.userId) return;

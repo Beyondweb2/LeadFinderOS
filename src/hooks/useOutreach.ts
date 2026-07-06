@@ -4,8 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
-import { recordClaimOnAdd, markClaimContacted } from '@/lib/claims';
-import { statusUpdatePatch } from '@/lib/leadStatus';
+import { recordClaimOnAdd, markClaimContacted, releaseClaim } from '@/lib/claims';
+import { statusUpdatePatch, isFreshLead } from '@/lib/leadStatus';
 
 // Statuses that represent an outreach attempt (message/call sent)
 const OUTREACH_STATUSES: LeadStatus[] = [
@@ -518,11 +518,76 @@ export function useOutreach() {
 
     setLeads((prev) => prev.filter((l) => l.id !== leadId));
     setArchivedLeads((prev) => prev.filter((l) => l.id !== leadId));
-    
+
     // Lead removed — no toast
 
     return true;
   }, [leads, archivedLeads]);
+
+  // Remove a FRESH/untouched lead (Find Leads "Remove" toggle). ADDITIVE — separate
+  // from deleteLead (which other callers rely on and which doesn't clear history).
+  // The DELETE only happens after a LIVE re-fetch confirms the lead is still fresh,
+  // so a lead messaged/queued since page load can never be deleted here. On success
+  // it also clears the outreach_history ledger + local cache + the team claim that
+  // addLead created, so the business becomes re-addable.
+  const removeFreshLead = useCallback(async (leadId: string): Promise<{ ok: boolean; reason?: string }> => {
+    if (!user) return { ok: false, reason: 'no_user' };
+
+    // a) LIVE re-fetch of the freshness-relevant columns — never trust a stale flag.
+    const { data: row, error: fErr } = await supabase
+      .from('outreach_leads')
+      .select('id, business_name, google_maps_url, place_id, campaign_id, status, next_action, whatsapp_sent_at, whatsapp_delivery_status, whatsapp_message_id, contact_method, notes, queued_at, last_outreach_attempt_at, outreach_attempts, is_potential_work')
+      .eq('id', leadId)
+      .maybeSingle();
+
+    if (fErr) return { ok: false, reason: 'lookup_failed' };
+    if (!row) {
+      // Already gone — reconcile local state, report not_found.
+      setLeads((prev) => prev.filter((l) => l.id !== leadId));
+      setArchivedLeads((prev) => prev.filter((l) => l.id !== leadId));
+      return { ok: false, reason: 'not_found' };
+    }
+    // Click-time guard: abort if it's been actioned since page load.
+    if (!isFreshLead(row as Partial<OutreachLead>)) {
+      return { ok: false, reason: 'not_fresh' };
+    }
+
+    // b) Delete the (still-fresh) lead row.
+    const { error: dErr } = await supabase.from('outreach_leads').delete().eq('id', leadId);
+    if (dErr) {
+      toast({ title: 'Error removing lead', description: dErr.message, variant: 'destructive' });
+      return { ok: false, reason: 'delete_failed' };
+    }
+
+    const name = (row as { business_name: string }).business_name;
+    const mapsUrl = (row as { google_maps_url: string | null }).google_maps_url ?? null;
+
+    // Clear the outreach_history ledger (by the same keys addLead wrote) so the
+    // business can be re-added, then the local cache — mirrors removeLeadNoPhone.
+    try {
+      if (name) await supabase.from('outreach_history').delete().eq('business_name', name);
+      if (mapsUrl) await supabase.from('outreach_history').delete().eq('google_maps_url', mapsUrl);
+    } catch { /* best-effort */ }
+    setOutreachHistory((prev) => prev.filter(
+      (h) => h.business_name !== name && !(mapsUrl && h.google_maps_url === mapsUrl),
+    ));
+
+    // Release the team claim addLead created (reverse of recordClaimOnAdd).
+    releaseClaim({
+      userId: user.id,
+      campaignId: (row as { campaign_id: string | null }).campaign_id ?? null,
+      placeId: (row as { place_id: string | null }).place_id ?? null,
+      googleMapsUrl: mapsUrl,
+      businessName: name,
+    });
+
+    // Local state — drop from active/archived.
+    setLeads((prev) => prev.filter((l) => l.id !== leadId));
+    setArchivedLeads((prev) => prev.filter((l) => l.id !== leadId));
+    window.dispatchEvent(new CustomEvent('crm-lead-added')); // nudge the bottom-nav count to refresh
+
+    return { ok: true };
+  }, [user]);
 
   const updateStatus = useCallback(async (leadId: string, status: LeadStatus) => {
     const lead = leads.find((l) => l.id === leadId);
@@ -1192,6 +1257,7 @@ export function useOutreach() {
     updateBusinessName,
     updateClientDetails,
     deleteLead,
+    removeFreshLead,
     deleteMultiple,
     resetMultiple,
     deleteAllLeads,
