@@ -246,6 +246,11 @@ Deno.serve(async (req) => {
       try { await service.from("enrichment_cache").delete().eq("cache_key", cacheKey); } catch { /* best-effort */ }
     }
 
+    // Set true if the Maps fetch aborted/timed out/errored (vs a genuine "no photos",
+    // which resolves without throwing). Used to skip the empty-cache write so one
+    // transient Maps timeout doesn't poison the pool cache for 24h (both this path and
+    // generate, which reuses the :business_enrich pool, would otherwise stay empty).
+    let mapsErrored = false;
     const outcome = await runEnrichSource<EnrichResult>({
       service,
       userId,
@@ -256,6 +261,10 @@ Deno.serve(async (req) => {
       // rather than caching an empty pool for 30 days. Null-safe.
       isEmpty: (r) => !r || !Array.isArray(r.imagePool) || r.imagePool.length === 0,
       emptyTtlMs: 24 * 60 * 60 * 1000,
+      // A Maps TIMEOUT/ERROR that left the pool empty must NOT be cached (not even for
+      // 24h) — the emptiness is a transient failure, not a real "no photos". Skip the
+      // write so the very next enrich retries the Maps scrape immediately.
+      noCacheWrite: (r) => mapsErrored && (!r || !Array.isArray(r.imagePool) || r.imagePool.length === 0),
       run: async () => {
         // 1) Maps enrich (contacts + Maps photos + the matched business identity).
         // DEDUP: when generate step 9a already ran the Maps actor THIS generate, it
@@ -292,7 +301,10 @@ Deno.serve(async (req) => {
                 token: apifyToken,
                 maxReviews: 0, // contacts/images only here; reviews handled at generate
                 maxImages: 12,
-                timeoutMs: 25_000,
+                // 75s: on-demand enrich is OFF the synchronous generate path, so it can
+                // afford to wait for a slow, photo-heavy Maps scrape. The old 25s aborted
+                // photo-heavy places before they returned → place=null → no Maps photos.
+                timeoutMs: 75_000,
                 // Off the synchronous critical path → safe to retry a timeout too.
                 // NO photosOnly here: 9b needs the full add-ons (contacts / FB+IG
                 // social profiles / web results) for social discovery.
@@ -308,6 +320,9 @@ Deno.serve(async (req) => {
                 console.log(`[enrich-DIAG] NORMALIZED webResults=${JSON.stringify(place?.webResults ?? [])}`);
               } catch (de) { console.log(`[enrich-DIAG] log err: ${(de as Error).message}`); }
             } catch (e) {
+              // Aborted/timed out/HTTP error — distinguishable from a genuine empty (which
+              // resolves without throwing). Flag it so an error-empty pool isn't cached.
+              mapsErrored = true;
               console.error("[enrich-business] mapsEnrich error:", (e as Error).message);
             }
           }
