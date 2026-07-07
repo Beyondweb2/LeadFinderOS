@@ -709,13 +709,13 @@ export function OutreachTable({
       // `msg` is now the REAL edge message (read from error.context above), so these
       // pattern checks actually fire — and timeouts/502s show their true message.
       const msg = (e as Error).message || '';
-      // 20/24h generation cap → 403 "Daily generation limit reached (20 per 24h)."
-      const isDailyCap = /daily.*limit|generation limit|20 per 24h/i.test(msg);
+      // 40/24h generation cap → 403 "Daily generation limit reached (40 per 24h)."
+      const isDailyCap = /daily.*limit|generation limit|40 per 24h/i.test(msg);
       // 10/min per-user rate limit → 429 "Rate limit exceeded".
       const isRateLimited = /rate limit|\b429\b|too many/i.test(msg);
       toast(
         isDailyCap
-          ? { title: 'Daily site limit reached', description: "You've hit the 20-per-24h generation limit — try again later.", variant: 'destructive' }
+          ? { title: 'Daily site limit reached', description: "You've hit the 40-per-24h generation limit — try again later.", variant: 'destructive' }
           : isRateLimited
             ? { title: 'Too many sites building right now', description: 'Wait a moment and try again.', variant: 'destructive' }
             : { title: 'Site generation failed', description: msg || 'Please try again', variant: 'destructive' },
@@ -2172,7 +2172,7 @@ export function OutreachTable({
               Choose the template — it’s applied to every selected lead. ~$0.03 each
               (~${(siteGenEligibleIds.length * 0.03).toFixed(2)} total)
               {selectedIds.size - siteGenEligibleIds.length > 0 && ` · ${selectedIds.size - siteGenEligibleIds.length} skipped (already have a site)`}.
-              Capped at 20 sites/24h + $10/day. Runs server-side — safe to leave this page.
+              Capped at 40 sites/24h + $10/day. Runs server-side — safe to leave this page.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">

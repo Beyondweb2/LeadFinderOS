@@ -18,7 +18,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // generate-barber-site) via their additive internal-call branches (service key +
 // x-internal-job header) — no logic duplication; their caps/caches/guards apply:
 //   * enrich: $2/day cap (limit_reached → remaining items skipped_cap) + 30d cache.
-//   * site-gen: 20 sites/24h per-operator cap (403 → skipped_cap) + duplicate-site
+//   * site-gen: 40 sites/24h per-operator cap (403 → skipped_cap) + duplicate-site
 //     guard (existing:true → skipped_existing) + the NEW $10/day global spend cap
 //     enforced HERE from api_usage_log before each item.
 
@@ -197,7 +197,7 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
   });
   const data = await res.json().catch(() => ({}));
   if (res.status === 403 && /limit/i.test(String(data?.error ?? ""))) {
-    // Per-operator 20 sites / 24h cap — same treatment as a spend cap.
+    // Per-operator 40 sites / 24h cap — same treatment as a spend cap.
     return { status: "skipped_cap", capHit: true };
   }
   if (data?.existing) return { status: "skipped_existing" };
