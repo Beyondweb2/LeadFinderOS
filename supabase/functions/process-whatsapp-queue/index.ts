@@ -162,8 +162,9 @@ Deno.serve(async (req) => {
     const { count: queuedCount } = await service
       .from("outreach_leads").select("id", { count: "exact", head: true }).eq("status", "queued");
     const { data: stateRow } = await service
-      .from("whatsapp_outreach_state").select("next_send_at").eq("id", 1).maybeSingle();
+      .from("whatsapp_outreach_state").select("next_send_at, paused").eq("id", 1).maybeSingle();
     const nextSendAt: string | null = stateRow?.next_send_at ?? null;
+    const paused: boolean = stateRow?.paused === true;
     const uk = londonNow();
     // Minute-granular so the 21:30 end is honoured (a whole-hour compare would run to 21:59).
     const nowMin = uk.hour * 60 + uk.minute;
@@ -171,14 +172,27 @@ Deno.serve(async (req) => {
 
     const statusPayload = {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
-      queuedCount: queuedCount ?? 0, nextSendAt, windowOpen,
+      queuedCount: queuedCount ?? 0, nextSendAt, windowOpen, paused,
       ukTime: `${String(uk.hour).padStart(2, "0")}:${String(uk.minute).padStart(2, "0")}`,
     };
 
     // Status-only probe (the dashboard panel).
     if (mode === "status") return json({ ok: true, ...statusPayload });
 
+    // Pause / resume (admin-gated, same as this whole handler). Flip the shared flag via
+    // the service client (whatsapp_outreach_state is service-role-only RLS). Return the
+    // refreshed status with the NEW paused value so the panel reflects it immediately.
+    if (mode === "pause" || mode === "resume") {
+      const nextPaused = mode === "pause";
+      await service.from("whatsapp_outreach_state")
+        .update({ paused: nextPaused, updated_at: new Date().toISOString() })
+        .eq("id", 1);
+      return json({ ok: true, ...statusPayload, paused: nextPaused });
+    }
+
     // --- Tick: decide whether to send one ---
+    // Pause guard FIRST — a paused queue sends nothing, even on a forced manual tick.
+    if (paused) return json({ ok: true, skipped: "paused", ...statusPayload });
     if (!windowOpen && !force) return json({ ok: true, skipped: "outside_window", ...statusPayload });
     if ((sentToday ?? 0) >= DAILY_CAP) return json({ ok: true, skipped: "cap_reached", ...statusPayload });
     if (nextSendAt && new Date(nextSendAt) > new Date() && !force) {
