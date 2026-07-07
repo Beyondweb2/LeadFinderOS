@@ -96,9 +96,18 @@ const Inbox = () => {
     const byCampaign = !campaignFilter
       ? base
       : base.filter((c) => c.campaignId === campaignFilter || c.unassigned);
+    // Site-milestone sentinels filter on generated_sites data (already loaded in
+    // sitesByLeadId), NOT lead status. Presence-based/cumulative: a claimed lead also
+    // matches Opened, etc. Unassigned stays visible, matching the status-filter convention.
     const byStatus = !statusFilter
       ? byCampaign
-      : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned);
+      : statusFilter === '__opened__'
+        ? byCampaign.filter((c) => (c.leadId && sitesByLeadId[c.leadId]?.firstOpenedAt != null) || c.unassigned)
+        : statusFilter === '__claimed__'
+          ? byCampaign.filter((c) => (c.leadId && sitesByLeadId[c.leadId]?.claimedAt != null) || c.unassigned)
+          : statusFilter === '__upsell__'
+            ? byCampaign.filter((c) => (c.leadId && sitesByLeadId[c.leadId]?.addonInterestAt != null) || c.unassigned)
+            : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned);
     // Hide dead-state convos (not_interested / closed) unless "Show hidden" is on OR
     // the user has explicitly filtered TO that status. `removedKeys` gives an instant
     // optimistic drop right after "Remove from inbox" (before the refetch lands).
@@ -107,7 +116,7 @@ const Inbox = () => {
       ? byStatus
       : byStatus.filter((c) => c.leadStatus !== 'not_interested' && c.leadStatus !== 'closed');
     return visible.filter((c) => !removedKeys.has(c.key));
-  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys]);
+  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, sitesByLeadId]);
 
   // How many not_interested conversations the current view is hiding (for the toggle).
   const hiddenCount = useMemo(() => {
@@ -264,6 +273,11 @@ const Inbox = () => {
               {PIPELINE_STATUS_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
               ))}
+              {/* Site-milestone filters (not lead statuses) — from generated_sites,
+                  presence-based via sitesByLeadId. Distinct sentinel values. */}
+              <SelectItem value="__opened__">Opened</SelectItem>
+              <SelectItem value="__claimed__">Claimed</SelectItem>
+              <SelectItem value="__upsell__">Upsell</SelectItem>
             </SelectContent>
           </Select>
           <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
