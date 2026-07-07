@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConversation, type LeadLite } from '@/hooks/useInbox';
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
+import { useSubscription } from '@/hooks/useSubscription';
+import { supabase } from '@/integrations/supabase/client';
 import { fillTemplate } from '@/lib/leadUtils';
 import { barberSitePreviewUrl } from '@/config/publicSite';
 import { Button } from '@/components/ui/button';
@@ -61,7 +63,36 @@ const Inbox = () => {
   const { user, conversations, messagesForKey, leads, sitesByLeadId, isLoading, send, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
+  const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
   const navigate = useNavigate();
+  const [sendingNow, setSendingNow] = useState(false);
+
+  // Admin "Send now": force the next queued WhatsApp message to send immediately,
+  // SKIPPING ONLY the pacing wait (send_now). It still respects pause, the daily cap
+  // and the sending window (the edge guards those). Admin-gated server-side too (403
+  // for non-admins) — the button is also hidden below unless isAdmin.
+  const handleSendNow = async () => {
+    setSendingNow(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'tick', send_now: true } });
+      if (error) throw error;
+      if (data?.sent) {
+        toast({ title: 'Sent next message', description: `${data.business ?? ''}${data.simulated ? ' — TEST_MODE, nothing real sent' : ''}`.trim() || undefined });
+      } else {
+        const reason: Record<string, string> = {
+          paused: 'Queue is paused',
+          cap_reached: 'Daily cap reached',
+          outside_window: 'Outside sending hours',
+          empty_queue: 'Nothing queued to send',
+        };
+        toast({ title: reason[data?.skipped as string] ?? `No send (${data?.skipped ?? 'unknown'})` });
+      }
+    } catch (e) {
+      toast({ title: "Couldn't send now", description: (e as Error)?.message ?? 'Failed', variant: 'destructive' });
+    } finally {
+      setSendingNow(false);
+    }
+  };
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [synthetic, setSynthetic] = useState<WaConversation | null>(null);
@@ -281,6 +312,17 @@ const Inbox = () => {
               <SelectItem value="__upsell__">Upsell</SelectItem>
             </SelectContent>
           </Select>
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSendNow}
+              disabled={sendingNow}
+              title="Send the next queued WhatsApp message now — skips only the pacing wait; still respects pause, the daily cap and the 7am–9:30pm window"
+            >
+              {sendingNow ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} Send now
+            </Button>
+          )}
           <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
         </div>
       </div>
