@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { MessageSquare, Loader2, Play, RefreshCw, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { MessageSquare, Loader2, Play, Pause, RefreshCw, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -13,6 +13,7 @@ interface QueueStatus {
   queuedCount: number;
   nextSendAt: string | null;
   windowOpen: boolean;
+  paused: boolean;
   ukTime: string;
 }
 
@@ -34,6 +35,7 @@ export function WhatsAppQueuePanel({
   const [status, setStatus] = useState<QueueStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [ticking, setTicking] = useState(false);
+  const [pausing, setPausing] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   // Send order = oldest queued first (matches the processor's `order by queued_at`).
@@ -80,6 +82,25 @@ export function WhatsAppQueuePanel({
     }
   };
 
+  // Pause/resume the whole queue (global). Server flips the shared flag via the
+  // service client; the tick then skips all sending while paused. Admin-gated server-side.
+  const togglePause = async () => {
+    const nextPaused = !status?.paused;
+    setPausing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', {
+        body: { mode: nextPaused ? 'pause' : 'resume' },
+      });
+      if (error) throw error;
+      if (data?.ok) setStatus(data as QueueStatus);
+      toast({ title: nextPaused ? 'Queue paused' : 'Queue resumed', description: nextPaused ? 'No WhatsApp messages will send until you resume.' : 'Sending continues on the next tick.' });
+    } catch (e) {
+      toast({ title: "Couldn't change pause state", description: (e as Error)?.message ?? 'Failed', variant: 'destructive' });
+    } finally {
+      setPausing(false);
+    }
+  };
+
   const removeFromQueue = (id: string) => {
     // Restore the pre-queue status (fallback not_contacted); clear the capture + queued_at.
     const prev = leads.find((l) => l.id === id)?.previous_status;
@@ -99,6 +120,9 @@ export function WhatsAppQueuePanel({
           ) : (
             <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-bold text-red-500">LIVE — real sends</span>
           )}
+          {status.paused && (
+            <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-bold text-orange-500">PAUSED — no sends</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={refresh} disabled={loading}>
@@ -106,12 +130,27 @@ export function WhatsAppQueuePanel({
           </Button>
           <Button
             size="sm"
+            variant={status.paused ? 'default' : 'outline'}
+            className="h-8 gap-1.5 text-xs"
+            onClick={togglePause}
+            disabled={pausing}
+            title={status.paused
+              ? 'Resume the queue — sending continues on the next tick'
+              : 'Pause the queue — no WhatsApp messages send (cron ticks AND manual Run tick) until you resume'}
+          >
+            {pausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : status.paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+            {status.paused ? 'Resume' : 'Pause'}
+          </Button>
+          <Button
+            size="sm"
             className="h-8 gap-1.5 text-xs"
             onClick={runTick}
-            disabled={ticking}
-            title={status.testMode
-              ? 'Force one simulated processor pass (TEST_MODE — nothing is sent)'
-              : 'Run one processor pass now — a REAL send, subject to the 7am–9:30pm window, daily cap and pacing'}
+            disabled={ticking || status.paused}
+            title={status.paused
+              ? 'Queue is paused — resume to send. A tick sends nothing while paused.'
+              : status.testMode
+                ? 'Force one simulated processor pass (TEST_MODE — nothing is sent)'
+                : 'Run one processor pass now — a REAL send, subject to the 7am–9:30pm window, daily cap and pacing'}
           >
             {ticking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
             {status.testMode ? 'Run test tick' : 'Run tick'}
