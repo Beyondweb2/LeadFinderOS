@@ -458,7 +458,7 @@ serve(async (req) => {
 
     // --- Step 5: Per-operator generation cap (replaces the old admin-only gate).
     // Site generation is open to ANY authenticated operator (admin or rep); to
-    // contain Google Maps + OpenAI cost we cap each operator at 20 generations per
+    // contain Google Maps + OpenAI cost we cap each operator at 40 generations per
     // rolling 24h. Count this operator's own generations (their leads' sites) in the
     // last 24h via the lead_id → outreach_leads FK. The 10/min rate-limit above still
     // applies. (adminUserId here is just the authenticated user id — name kept for a
@@ -469,9 +469,9 @@ serve(async (req) => {
       .select("id, outreach_leads!inner(user_id)", { count: "exact", head: true })
       .eq("outreach_leads.user_id", adminUserId)
       .gte("created_at", since24h);
-    if ((genCount ?? 0) >= 20) {
+    if ((genCount ?? 0) >= 40) {
       console.warn("[GENERATE-BARBER-SITE] 24h generation cap reached for", adminUserId);
-      return jsonResponse({ error: "Daily generation limit reached (20 per 24h)." }, 403, corsHeaders, rlHeaders);
+      return jsonResponse({ error: "Daily generation limit reached (40 per 24h)." }, 403, corsHeaders, rlHeaders);
     }
 
     // --- Step 6: Parse body (already parsed for internal calls) ---
