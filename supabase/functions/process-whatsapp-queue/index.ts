@@ -146,6 +146,10 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const mode: string = typeof body.mode === "string" ? body.mode : "tick";
     const forceReq = body.force === true;
+    // send_now: admin "Send now" from the Inbox. Skips ONLY the pacing (not_due) wait and
+    // works in LIVE (unlike `force`, which is test-mode-only). It deliberately does NOT
+    // bypass pause, the daily cap, or the sending window — those guards get no !sendNow.
+    const sendNowReq = body.send_now === true;
 
     // TEST_MODE: ON unless WHATSAPP_TEST_MODE is exactly "off" AND a token exists.
     const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
@@ -154,6 +158,8 @@ Deno.serve(async (req) => {
     const live = !testMode && !!accessToken && !!phoneNumberId;
     // force only ever bypasses window/spacing for ADMIN observation while in TEST_MODE.
     const force = forceReq && testMode && isAdmin;
+    // send_now works in LIVE too (admin-gated), but skips ONLY pacing (see the not_due guard).
+    const sendNow = sendNowReq && isAdmin;
 
     // --- Shared status numbers ---
     const dayStart = londonDayStartUtcIso();
@@ -195,7 +201,7 @@ Deno.serve(async (req) => {
     if (paused) return json({ ok: true, skipped: "paused", ...statusPayload });
     if (!windowOpen && !force) return json({ ok: true, skipped: "outside_window", ...statusPayload });
     if ((sentToday ?? 0) >= DAILY_CAP) return json({ ok: true, skipped: "cap_reached", ...statusPayload });
-    if (nextSendAt && new Date(nextSendAt) > new Date() && !force) {
+    if (nextSendAt && new Date(nextSendAt) > new Date() && !force && !sendNow) {
       return json({ ok: true, skipped: "not_due", ...statusPayload });
     }
 
