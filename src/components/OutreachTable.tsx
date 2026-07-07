@@ -646,7 +646,29 @@ export function OutreachTable({
         body: { lead_id: lead.id, template, ...(mode ? { mode } : {}) },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      if (error) throw error;
+      if (error) {
+        // supabase-js sets `error` to a FunctionsHttpError whose .message is the fixed
+        // "Edge Function returned a non-2xx status code" and leaves data=null on non-2xx.
+        // The REAL body ({ error: "Daily generation limit reached…" / "Rate limit exceeded"
+        // / an OpenAI 502 message }) lives on error.context (the raw Response). Read it
+        // first so the toast can show the real cause — mirrors LeadSearchContext.tsx's
+        // error.context .json()/.text() parse. Falls back to the generic message only if
+        // the body can't be read.
+        let realMsg = '';
+        try {
+          const ctx = (error as any)?.context;
+          if (ctx && typeof ctx === 'object') {
+            let body: any = null;
+            if (typeof ctx.json === 'function') body = await ctx.json().catch(() => null);
+            if (!body && typeof ctx.text === 'function') {
+              const txt = await ctx.text().catch(() => '');
+              try { body = JSON.parse(txt); } catch {}
+            }
+            realMsg = body?.error || body?.notice || '';
+          }
+        } catch { /* body unreadable → fall back to the generic message below */ }
+        throw new Error(realMsg || (error as Error).message);
+      }
       if ((data as any)?.error) throw new Error((data as any).error);
       const slug = (data as any)?.site?.slug as string | undefined;
       const newSiteId = (data as any)?.site?.id as string | undefined;
@@ -684,14 +706,19 @@ export function OutreachTable({
         ),
       });
     } catch (e) {
-      // The edge enforces 10/min per user → 429 "Rate limit exceeded". With cap=5 this
-      // is unlikely, but surface a friendlier nudge instead of the generic failure.
+      // `msg` is now the REAL edge message (read from error.context above), so these
+      // pattern checks actually fire — and timeouts/502s show their true message.
       const msg = (e as Error).message || '';
+      // 20/24h generation cap → 403 "Daily generation limit reached (20 per 24h)."
+      const isDailyCap = /daily.*limit|generation limit|20 per 24h/i.test(msg);
+      // 10/min per-user rate limit → 429 "Rate limit exceeded".
       const isRateLimited = /rate limit|\b429\b|too many/i.test(msg);
       toast(
-        isRateLimited
-          ? { title: 'Too many sites building right now', description: 'Wait a moment and try again.', variant: 'destructive' }
-          : { title: 'Site generation failed', description: msg || 'Please try again', variant: 'destructive' },
+        isDailyCap
+          ? { title: 'Daily site limit reached', description: "You've hit the 20-per-24h generation limit — try again later.", variant: 'destructive' }
+          : isRateLimited
+            ? { title: 'Too many sites building right now', description: 'Wait a moment and try again.', variant: 'destructive' }
+            : { title: 'Site generation failed', description: msg || 'Please try again', variant: 'destructive' },
       );
     } finally {
       // Free this lead's slot; the pump effect below auto-starts the next queued build.
