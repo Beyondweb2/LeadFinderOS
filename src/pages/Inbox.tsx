@@ -42,6 +42,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   no_website_barbers: 'Free website intro',
   free_website_intro: 'Free website intro', // legacy name (pre-rename)
   barber_poor_website: 'Updated website intro',
+  booking_switch_barbers: 'Booking switch (no commission)',
 };
 function friendlyTemplate(name: string | null | undefined): string {
   return (name && TEMPLATE_DISPLAY[name]) || 'Template';
