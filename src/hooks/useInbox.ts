@@ -13,6 +13,7 @@ export const WA_REPLY_TEMPLATES = [
   { name: 'booking_page_intro', label: 'Booking page intro (claim link)' },
   { name: 'no_website_barbers', label: 'Free website intro (claim link)' },
   { name: 'barber_poor_website', label: 'Updated website intro (claim link)' },
+  { name: 'booking_switch_barbers', label: 'Booking switch (no commission) (claim link)' },
 ];
 
 export interface WaMessage {

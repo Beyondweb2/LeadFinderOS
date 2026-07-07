@@ -37,6 +37,7 @@ export const WA_TEMPLATES: Record<string, { lang: string }> = {
   booking_page_intro: { lang: "en" },
   no_website_barbers: { lang: "en" },
   barber_poor_website: { lang: "en" },
+  booking_switch_barbers: { lang: "en" },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -64,12 +65,17 @@ It's yours to keep, free - let me know what you think.`;
 const poorWebsiteBody = (b: string, u: string) =>
   `Hi ${b || "your business"}, here's an updated version of your website - it's free 🙂\n\n${u}\n\nIt's fresh, mobile-friendly and easy to customise yourself - photos, text and colours in a couple of taps.\n\nHave a look and let me know what you think.`;
 
+const bookingSwitchBarbersBody = (b: string, u: string) =>
+  `Hi ${b || "your business"}, tired of paying commission on your own clients? I've set you up with online booking and your own website - no commission, keep more of what you earn:\n\n${u}\n\nSMS reminders and your own domain included, flat £29.99 a month. Have a look and let me know what you think.`;
+
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string) => string> = {
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).
   no_website_barbers: noWebsiteBody,
   // The "you have a website but here's an updated free version" angle.
   barber_poor_website: poorWebsiteBody,
+  // The "switch from Booksy — no commission, £29.99/mo" angle.
+  booking_switch_barbers: bookingSwitchBarbersBody,
 };
 
 /** Render the display copy of a template body with its variables filled. */

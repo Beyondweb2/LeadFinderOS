@@ -42,6 +42,7 @@ const TEMPLATES: Record<string, { lang: string }> = {
   booking_page_intro: { lang: "en" },
   no_website_barbers: { lang: "en" }, // renamed from free_website_intro to match Meta
   barber_poor_website: { lang: "en" },
+  booking_switch_barbers: { lang: "en" }, // "switch from Booksy" — no-commission angle
 };
 const DEFAULT_TEMPLATE = "booking_page_intro";
 
