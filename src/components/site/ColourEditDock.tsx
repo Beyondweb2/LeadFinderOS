@@ -29,8 +29,8 @@ export function ColourEditDock({ value, onChange, onKeep, keeping = false }: Col
       <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
         <div className="min-w-0 flex-1">
           <div className="mb-2 leading-tight">
-            <div className="text-sm font-semibold text-white">Change the colour theme</div>
-            <div className="text-sm font-medium text-zinc-200">Tap any photo to add your own</div>
+            <div className="text-sm font-semibold text-white">Tap to change colours and photos</div>
+            <div className="text-sm font-medium text-zinc-200">Everything's editable after you sign up</div>
           </div>
           {/* px/py give the scaled + ringed SELECTED swatch room — overflow-x-auto
               forces overflow-y to clip, so without padding the ring is cropped. */}

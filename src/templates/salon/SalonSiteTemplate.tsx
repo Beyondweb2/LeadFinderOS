@@ -143,7 +143,7 @@ export function SalonSiteTemplate({
             onBook={openBooking}
           />
           <About about={about} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} />
-          <Services services={services} showExamplePrices={showExamplePrices} />
+          <Services services={services} showExamplePrices={showExamplePrices} claimPreview={!!onClaim} />
           <Gallery images={gallery} businessName={businessName} />
           <Hours hours={hours} />
           <Contact
@@ -706,9 +706,14 @@ function GoogleReviewsLink({ url, className = "" }: { url?: string; className?: 
 function Services({
   services,
   showExamplePrices,
+  claimPreview = false,
 }: {
   services: SiteContent["services"];
   showExamplePrices?: boolean;
+  // Pre-claim preview (/s/): the example-prices note nudges that prices are editable
+  // after sign-up. False on the live /p/ site (which never sets onClaim), keeping the
+  // neutral "for illustration" wording. Derived from !!onClaim.
+  claimPreview?: boolean;
 }) {
   // Any service without a confirmed price shows an example only when the toggle
   // is on — which is also what triggers the bottom-of-section disclaimer.
@@ -771,7 +776,7 @@ function Services({
               <circle cx="12" cy="12" r="9" />
               <path d="M12 11v5M12 7.5h.01" strokeLinecap="round" />
             </svg>
-            <p className="text-center text-sm">Example prices shown for illustration.</p>
+            <p className="text-center text-sm">{claimPreview ? "Example prices shown - fully customisable after sign up" : "Example prices shown for illustration."}</p>
           </div>
         )}
       </div>
