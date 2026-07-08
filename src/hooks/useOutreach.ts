@@ -486,7 +486,7 @@ export function useOutreach() {
     }
 
     const updatedLead = data as OutreachLead;
-    
+
     // Update in correct list based on archived status
     if (updatedLead.is_archived) {
       setArchivedLeads((prev) => prev.map((l) => (l.id === leadId ? updatedLead : l)));
@@ -495,6 +495,27 @@ export function useOutreach() {
     }
 
     return updatedLead;
+  }, []);
+
+  // Bulk-move selected leads to a campaign (or null = "No campaign"). ONE batched
+  // write, owner-RLS scoped (only the caller's own rows are touched). Optimistically
+  // patches both leads + archivedLeads lists so the move shows instantly (and leads
+  // re-bucket under the page's campaign filter without a refetch).
+  const assignCampaign = useCallback(async (leadIds: string[], campaignId: string | null): Promise<boolean> => {
+    if (leadIds.length === 0) return false;
+    const { error } = await supabase
+      .from('outreach_leads')
+      .update({ campaign_id: campaignId })
+      .in('id', leadIds);
+    if (error) {
+      toast({ title: 'Could not move leads', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    const idSet = new Set(leadIds);
+    const patch = (l: OutreachLead): OutreachLead => (idSet.has(l.id) ? { ...l, campaign_id: campaignId } : l);
+    setLeads((prev) => prev.map(patch));
+    setArchivedLeads((prev) => prev.map(patch));
+    return true;
   }, []);
 
   const deleteLead = useCallback(async (leadId: string, silent = false) => {
@@ -1281,6 +1302,7 @@ export function useOutreach() {
     isLoading,
     addLead,
     updateLead,
+    assignCampaign,
     updateStatus,
     updateNextAction,
     updateNotes,

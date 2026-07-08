@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Send, Eye, CheckCircle2, Sparkles, Reply, Pencil, Target } from 'lucide-react';
 import { CAMPAIGN_METHOD_LABELS } from '@/lib/campaign';
+import { WHATSAPP_TEMPLATES } from '@/types/outreach';
 import type { CampaignStats } from '@/hooks/useCampaignStats';
 
 const METHOD_PILL: { key: keyof CampaignStats['methods']; label: string }[] = [
@@ -11,6 +12,12 @@ const METHOD_PILL: { key: keyof CampaignStats['methods']; label: string }[] = [
   { key: 'whatsapp', label: 'WhatsApp' },
   { key: 'facebook_msg', label: 'Messenger' },
 ];
+
+// Pretty template names for the "Automated templates used" pills. Falls back to the
+// raw whatsapp_template key if it isn't in the allowlist (e.g. a renamed/legacy template).
+const TEMPLATE_LABEL: Record<string, string> = Object.fromEntries(
+  WHATSAPP_TEMPLATES.map((t) => [t.value, t.label]),
+);
 
 function Count({ icon: Icon, value, label, color }: { icon: typeof Send; value: number; label: string; color: string }) {
   return (
@@ -39,6 +46,8 @@ export function CampaignStatsCard({ stat, onEdit }: { stat: CampaignStats; onEdi
   const name = campaign?.name ?? 'Unassigned';
   const method = campaign?.method ? CAMPAIGN_METHOD_LABELS[campaign.method] ?? campaign.method : null;
   const methodTotal = METHOD_PILL.reduce((n, m) => n + methods[m.key], 0);
+  // Templates used, most-used first. Only queue-sent leads populate this (see the hook).
+  const templateEntries = Object.entries(stat.templates).sort((a, b) => b[1] - a[1]);
 
   return (
     <Card className="bg-gradient-to-br from-primary/5 to-transparent border-border/60">
@@ -93,6 +102,23 @@ export function CampaignStatsCard({ stat, onEdit }: { stat: CampaignStats; onEdi
               {METHOD_PILL.filter((m) => methods[m.key] > 0).map((m) => (
                 <Badge key={m.key} variant="outline" className="text-[11px] font-medium">
                   {m.label}: <span className="ml-1 tabular-nums font-bold">{methods[m.key]}</span>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Automated templates used — counts queue-sent leads only (old-method /
+            personal leads have no template, so an empty list = no automated sends). */}
+        <div className="border-t border-border/50 pt-2.5">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Automated templates used</p>
+          {templateEntries.length === 0 ? (
+            <p className="text-xs text-muted-foreground/60">No automated sends yet</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {templateEntries.map(([key, count]) => (
+                <Badge key={key} variant="outline" className="text-[11px] font-medium">
+                  {TEMPLATE_LABEL[key] ?? key}: <span className="ml-1 tabular-nums font-bold">{count}</span>
                 </Badge>
               ))}
             </div>

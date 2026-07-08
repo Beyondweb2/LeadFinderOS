@@ -28,6 +28,7 @@ const Outreach = () => {
     updateLead,
     updateNotes,
     updateBusinessName,
+    assignCampaign,
     fetchActivities,
     deleteMultiple,
     resetMultiple,
@@ -302,6 +303,9 @@ const Outreach = () => {
           if (isDemoLead(leadId)) return Promise.resolve(null);
           return updateLead(leadId, { image_url: imageUrl });
         }}
+        onAssignCampaign={(leadIds, campaignId) =>
+          assignCampaign(leadIds.filter((id) => !isDemoLead(id)), campaignId)
+        }
         fetchActivities={fetchActivities}
         campaignDefaultSaleTypeByLead={campaignDefaultSaleTypeByLead}
         campaignNameByLead={campaignNameByLead}

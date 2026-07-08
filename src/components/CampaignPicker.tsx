@@ -26,13 +26,17 @@ interface CampaignPickerProps {
   /** Hide the inline "New campaign…" / "Manage campaigns…" actions — for places
    *  that only filter and never create (e.g. the Inbox). */
   hideCreate?: boolean;
+  /** Fixed trigger text shown INSTEAD of the selected value — for action-style use
+   *  (e.g. bulk "Move to campaign (3)") where each pick fires onChange but the
+   *  control isn't meant to display a persistent selection. Omit for normal use. */
+  triggerLabel?: string;
 }
 
 /**
  * Thin campaign dropdown shared by Outreach (filter) and Find Leads (assign).
  * Includes an inline "New campaign…" action that opens the shared create dialog.
  */
-export function CampaignPicker({ value, onChange, mode, className, hideCreate = false }: CampaignPickerProps) {
+export function CampaignPicker({ value, onChange, mode, className, hideCreate = false, triggerLabel }: CampaignPickerProps) {
   const { campaigns, createCampaign, refetch } = useCampaigns();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
@@ -81,7 +85,7 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
         onOpenChange={(open) => { if (open) refetch(); }}
       >
         <SelectTrigger className={className ?? 'h-9 w-[200px]'}>
-          <SelectValue />
+          {triggerLabel ? <span className="truncate">{triggerLabel}</span> : <SelectValue />}
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={sentinel}>
