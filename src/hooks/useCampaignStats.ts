@@ -18,9 +18,13 @@ export interface CampaignStats {
   replyRatePct: number | null;         // null when sent = 0
   // Contact-method breakdown from the leads' own pill value (call/sms/whatsapp/facebook_msg).
   methods: Record<ContactMethod, number>;
+  // Per-template lead counts, keyed by whatsapp_template. Populated ONLY for
+  // queue-sent (automated) leads — old-method/personal leads have a null template
+  // and are not counted here (so this is an "automated sends" breakdown).
+  templates: Record<string, number>;
 }
 
-interface LeadRow { id: string; campaign_id: string | null; contact_method: string | null; status: string | null }
+interface LeadRow { id: string; campaign_id: string | null; contact_method: string | null; status: string | null; whatsapp_template: string | null }
 interface SiteRow {
   lead_id: string | null;
   first_opened_at: string | null;
@@ -52,7 +56,7 @@ export function useCampaignStats() {
     try {
       const client = supabase as unknown as SupabaseClient;
       const [leadsRes, sitesRes] = await Promise.all([
-        client.from('outreach_leads').select('id, campaign_id, contact_method, status'),
+        client.from('outreach_leads').select('id, campaign_id, contact_method, status, whatsapp_template'),
         client.from('generated_sites')
           .select('lead_id, first_opened_at, claimed_at, addon_interest_at'),
       ]);
@@ -81,6 +85,7 @@ export function useCampaignStats() {
     claimedPerSentPct: null,
     replyRatePct: null,
     methods: emptyMethods(),
+    templates: {},
   });
   for (const c of campaigns) buckets.set(c.id, seed(c));
 
@@ -97,6 +102,10 @@ export function useCampaignStats() {
     b.leadCount += 1;
     const m = l.contact_method as ContactMethod | null;
     if (m && m in b.methods) b.methods[m] += 1;
+    // Per-template tally — only queue-sent leads carry a whatsapp_template (null for
+    // old-method/personal), so this counts automated sends only.
+    const t = l.whatsapp_template;
+    if (t) b.templates[t] = (b.templates[t] ?? 0) + 1;
     if (isSentStatus(l.status)) b.funnel.sent += 1;
     if (isRepliedStatus(l.status)) b.funnel.replied += 1;
   }
