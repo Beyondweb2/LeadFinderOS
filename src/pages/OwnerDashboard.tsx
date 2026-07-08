@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useBarberBranding } from "@/hooks/useBarberBranding";
+import { useBarberBranding, NEUTRAL_FAVICON } from "@/hooks/useBarberBranding";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -38,12 +38,12 @@ export default function OwnerDashboard() {
   const [selected, setSelected] = useState<OwnedSiteT | null>(null);
   const checkoutHandled = useRef(false);
 
-  // Per-barber tab branding: "<business name> — Bookings" + the barber favicon
-  // (was a generic "Your website" + LeadFinder's icon). Falls back before a site
-  // loads / if the business name is blank.
+  // Per-site tab branding: "<business name> — Dashboard" + a neutral (trade-agnostic)
+  // favicon — this dashboard serves every trade, not just barbers. Falls back before
+  // a site loads / if the business name is blank.
   const brandSite = selected ?? sites[0] ?? null;
   const brandName = brandSite?.content?.businessName?.trim();
-  useBarberBranding(brandName ? `${brandName} — Bookings` : "Barber dashboard");
+  useBarberBranding(brandName ? `${brandName} — Dashboard` : "Your dashboard", NEUTRAL_FAVICON);
 
   const loadSites = useCallback(async (silent = false) => {
     if (!user) return;
@@ -80,18 +80,18 @@ export default function OwnerDashboard() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = "/barber-login";
+    window.location.href = "/login";
   };
 
   // Orphaned-account guard: an authenticated user who owns NO site and isn't an
   // admin has nowhere valid to land. Sign them out to a clean terminal so the
   // operator gate (RequireAdmin) can never bounce them in a redirect loop
-  // (/barber → / → /barber-login → /barber …).
+  // (/barber → / → /login → /barber …).
   useEffect(() => {
     if (loading || !user || isAdmin || sites.length > 0) return;
     (async () => {
       await supabase.auth.signOut();
-      window.location.href = "/barber-login";
+      window.location.href = "/login";
     })();
   }, [loading, user, isAdmin, sites.length]);
 
@@ -117,7 +117,7 @@ export default function OwnerDashboard() {
   }
 
   // No sites: an admin goes to the admin hub; a non-admin orphan sees a spinner
-  // while the effect above signs them out + redirects to /barber-login (no loop).
+  // while the effect above signs them out + redirects to /login (no loop).
   if (sites.length === 0) {
     return isAdmin ? (
       <Navigate to="/admin" replace />
@@ -154,7 +154,7 @@ export default function OwnerDashboard() {
               <div className="flex items-center gap-2">
                 <span className="truncate text-lg font-bold">{s.content?.businessName || s.site_name}</span>
                 <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{s.status}</span>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{isSalon(s) ? "Salon" : "Barber"}</span>
+                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{(() => { const t = s.template ?? "barber"; return t.charAt(0).toUpperCase() + t.slice(1); })()}</span>
               </div>
               <span className="font-mono text-xs text-muted-foreground">{liveSiteLabel(s.site_name, s.booking_only)}</span>
             </div>

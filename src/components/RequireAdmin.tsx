@@ -34,7 +34,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   }
 
   if (!isAdmin) {
-    return <Navigate to={isOwner ? '/barber' : '/barber-login'} replace />;
+    return <Navigate to={isOwner ? '/barber' : '/login'} replace />;
   }
 
   return <>{children}</>;

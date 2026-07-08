@@ -147,6 +147,23 @@ export const onRequest = async (context: {
     return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=0, must-revalidate" } });
   }
 
+  // Apex customer domain (yoursites.uk / www.yoursites.uk): this domain is
+  // CUSTOMER-facing, so the operator marketing/app + operator login must never show
+  // here. Redirect ONLY the operator entry paths — '/', '/landing' and '/auth' — to
+  // the clean customer login (/login). Everything else on the apex is left EXACTLY
+  // as-is and falls through below: /s/<token> and /p/<slug> (→ their own Pages
+  // Functions via next()), static assets, /login + /barber-login themselves, etc. Operators use
+  // https://leadfinderos.pages.dev/, which never matches this host, so the operator
+  // app is unaffected. Scoped like the bookmybarber/subdomain branches above:
+  // GET page navigations only (isAssetPath guard), and only the exact paths.
+  if (hostLc === ROOT_DOMAIN || hostLc === `www.${ROOT_DOMAIN}`) {
+    const { pathname } = new URL(request.url);
+    if (request.method === "GET" && !isAssetPath(pathname) && (pathname === "/" || pathname === "/landing" || pathname === "/auth")) {
+      return Response.redirect(`https://${ROOT_DOMAIN}/login`, 302);
+    }
+    // Any other apex path (/s, /p, assets, /login, /barber-login, …) → unchanged.
+  }
+
   const label = barberLabel(host);
 
   // Apex / reserved / pages.dev / localhost → operator app, unchanged.
