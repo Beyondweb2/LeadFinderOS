@@ -483,7 +483,7 @@ export function BarberShell({
             back to log in + manage their site (they won't have bookmarked it). */}
         <footer className="border-t border-line px-4 py-3 text-center text-[11px] leading-relaxed text-zinc-500">
           Bookmark this page to manage your site:{" "}
-          <a href="https://yoursites.uk/barber" className="text-amber-soft hover:text-amber">yoursites.uk/barber</a>
+          <a href="https://yoursites.uk/login" className="text-amber-soft hover:text-amber">yoursites.uk/login</a>
           {" "}— log in anytime with your mobile number.
         </footer>
       </div>
@@ -539,12 +539,12 @@ export function BarberShell({
           <div className="mt-4 rounded-xl border border-line bg-white/[0.03] p-3.5 text-sm">
             <div className="text-xs uppercase tracking-wider text-zinc-500">Log back in here</div>
             <a
-              href="https://yoursites.uk/barber"
+              href="https://yoursites.uk/login"
               target="_blank"
               rel="noreferrer"
               className="mt-1 inline-flex items-center gap-2 font-mono text-amber-soft hover:text-amber"
             >
-              yoursites.uk/barber <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              yoursites.uk/login <ExternalLink className="h-3.5 w-3.5 shrink-0" />
             </a>
             <p className="mt-2 text-zinc-300">
               Log in with your <span className="font-semibold text-white">mobile number</span> and password.

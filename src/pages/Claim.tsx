@@ -146,7 +146,7 @@ export default function Claim() {
     });
     if (signInError) {
       // Claim succeeded but auto-login failed - send them to log in manually.
-      navigate("/barber-login", { replace: true });
+      navigate("/login", { replace: true });
       return;
     }
     await applyPendingBarberEdits(supabase); // apply pre-sign-in colour choice (best-effort)
@@ -220,7 +220,7 @@ export default function Claim() {
           {phase === "claimed" && (
             <div className="space-y-4 text-center">
               <p className="text-sm text-zinc-400">This website has already been set up.</p>
-              <Link to="/barber-login">
+              <Link to="/login">
                 <Button
                   variant="outline"
                   className="w-full rounded-full border-line bg-white/[0.03] text-zinc-100 hover:border-amber/50 hover:text-white"
@@ -305,7 +305,7 @@ export default function Claim() {
                       {error}{" "}
                       {existingAccount && (
                         <Link
-                          to={`/barber-login?next=${encodeURIComponent(`/claim/${token}`)}`}
+                          to={`/login?next=${encodeURIComponent(`/claim/${token}`)}`}
                           className="font-medium text-amber underline hover:text-amber-soft"
                         >
                           Log in instead
@@ -320,7 +320,7 @@ export default function Claim() {
                   <p className="text-center text-xs text-zinc-500">
                     Already have an account?{" "}
                     <Link
-                      to={`/barber-login?next=${encodeURIComponent(`/claim/${token}`)}`}
+                      to={`/login?next=${encodeURIComponent(`/claim/${token}`)}`}
                       className="text-amber underline hover:text-amber-soft"
                     >
                       Log in

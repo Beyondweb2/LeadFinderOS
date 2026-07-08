@@ -5,10 +5,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Scissors } from "lucide-react";
-import { useBarberBranding } from "@/hooks/useBarberBranding";
+import { Loader2, Globe } from "lucide-react";
+import { useBarberBranding, NEUTRAL_FAVICON } from "@/hooks/useBarberBranding";
 import { phoneToSyntheticEmail } from "@/lib/phoneAuth";
-import "@/templates/barber/fonts.css";
 
 /**
  * /barber-login — dedicated barber sign-in. Same Supabase Auth as everyone else
@@ -19,17 +18,19 @@ import "@/templates/barber/fonts.css";
  * Invite-only: there is deliberately no sign-up here — accounts are created only
  * by redeeming a claim link.
  */
+// Neutral, trade-agnostic styling built on the app's own design tokens (matches the
+// owner-dashboard picker) — no barber ink/amber palette, no display font.
 const SHELL =
-  "min-h-screen flex items-center justify-center bg-ink font-body text-zinc-300 antialiased p-4";
+  "min-h-screen flex items-center justify-center bg-background text-foreground antialiased p-4";
 const SHELL_BG =
-  "radial-gradient(1100px 600px at 85% -8%, rgba(230,162,75,0.10), transparent 60%)," +
-  "radial-gradient(800px 500px at -10% 8%, rgba(230,162,75,0.05), transparent 55%)";
+  "radial-gradient(1100px 600px at 85% -8%, hsl(var(--primary) / 0.06), transparent 60%)," +
+  "radial-gradient(800px 500px at -10% 8%, hsl(var(--primary) / 0.04), transparent 55%)";
 const CARD =
-  "w-full max-w-md rounded-2xl border border-line bg-ink-card p-7 sm:p-8 shadow-[0_24px_70px_-24px_rgba(0,0,0,0.75)]";
+  "w-full max-w-md rounded-2xl border border-border bg-card p-7 sm:p-8 shadow-xl";
 const INPUT =
-  "bg-ink-soft border-line text-white placeholder:text-zinc-500 focus-visible:ring-amber/60";
+  "bg-background border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-ring";
 const PRIMARY_BTN =
-  "w-full rounded-full bg-amber font-bold text-ink shadow-[0_8px_30px_-6px_rgba(230,162,75,0.5)] transition-all hover:-translate-y-0.5 hover:bg-amber-soft";
+  "w-full rounded-full font-semibold transition-all hover:-translate-y-0.5";
 
 export default function BarberLogin() {
   const { user, isLoading } = useAuth();
@@ -42,7 +43,7 @@ export default function BarberLogin() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useBarberBranding("Log in to manage your bookings");
+  useBarberBranding("Log in to manage your site", NEUTRAL_FAVICON);
 
   // Already signed in → straight through (e.g. opened a claim link while logged in).
   if (!isLoading && user) {
@@ -79,10 +80,10 @@ export default function BarberLogin() {
     <div className={SHELL} style={{ backgroundImage: SHELL_BG }}>
       <div className={CARD}>
         <div className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-amber/30 bg-amber/10">
-            <Scissors className="h-5 w-5 text-amber" />
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-primary/30 bg-primary/10">
+            <Globe className="h-5 w-5 text-primary" />
           </div>
-          <h1 className="mt-4 font-display text-3xl uppercase tracking-wide text-white">
+          <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground">
             Log in to manage your website
           </h1>
         </div>
@@ -95,7 +96,7 @@ export default function BarberLogin() {
           }}
         >
           <div className="space-y-1.5">
-            <Label htmlFor="barber-phone" className="text-zinc-300">Mobile number</Label>
+            <Label htmlFor="barber-phone" className="text-foreground">Mobile number</Label>
             <Input
               id="barber-phone"
               type="tel"
@@ -108,7 +109,7 @@ export default function BarberLogin() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="barber-password" className="text-zinc-300">Password</Label>
+            <Label htmlFor="barber-password" className="text-foreground">Password</Label>
             <Input
               id="barber-password"
               type="password"
@@ -119,13 +120,13 @@ export default function BarberLogin() {
               placeholder="Your password"
             />
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" className={PRIMARY_BTN} disabled={submitting}>
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Log in
           </Button>
         </form>
-        <p className="mt-5 text-center text-xs text-zinc-500">
+        <p className="mt-5 text-center text-xs text-muted-foreground">
           New here? Open the claim link we sent you to get started.
         </p>
       </div>

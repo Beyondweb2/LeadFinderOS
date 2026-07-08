@@ -236,6 +236,9 @@ const App = () => {
               <Route path="/s/:token" element={<SiteByToken />} />
               {/* Barber front doors — PUBLIC, neutral-branded, never LeadFinder chrome. */}
               <Route path="/claim/:token" element={<Claim />} />
+              {/* Clean, trade-neutral customer login (canonical). */}
+              <Route path="/login" element={<BarberLogin />} />
+              {/* Legacy alias — kept so old links / bookmarks / in-flight ?next= links don't 404. */}
               <Route path="/barber-login" element={<BarberLogin />} />
              <Route path="/guide" element={<HowToUse />} />
             <Route
@@ -255,7 +258,7 @@ const App = () => {
             <Route
               path="/barber"
               element={
-                <ProtectedRoute redirectTo="/barber-login">
+                <ProtectedRoute redirectTo="/login">
                   <OwnerDashboard />
                 </ProtectedRoute>
               }

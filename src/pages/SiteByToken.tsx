@@ -225,7 +225,7 @@ export default function SiteByToken() {
       if (error) throw error;
       if (data?.already_claimed) {
         toast({ title: "Already set up", description: "This website has already been set up - log in to manage it." });
-        navigate("/barber-login");
+        navigate("/login");
         return;
       }
       if (data?.ok && data?.claim_path) {
