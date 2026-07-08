@@ -231,7 +231,7 @@ export function BarberSiteTemplate({
           {!bookingOnly && (
             <About about={about} aboutHeading={aboutHeading} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} editable={editable} onEditElement={onEditElement} />
           )}
-          <Services services={services} showExamplePrices={showExamplePrices} editable={editable} bookingOnly={bookingOnly} onEditService={onEditService} onAddService={onAddService} />
+          <Services services={services} showExamplePrices={showExamplePrices} editable={editable} bookingOnly={bookingOnly} onEditService={onEditService} onAddService={onAddService} claimPreview={!!onClaim} />
           {!bookingOnly && (
             <Gallery
               images={gallery}
@@ -991,6 +991,7 @@ function Services({
   bookingOnly = false,
   onEditService,
   onAddService,
+  claimPreview = false,
 }: {
   services: BarberSiteContent["services"];
   showExamplePrices?: boolean;
@@ -1000,6 +1001,10 @@ function Services({
   bookingOnly?: boolean;
   onEditService?: (index: number) => void;
   onAddService?: () => void;
+  // Pre-claim preview (/s/ + Claim.tsx): the example-prices note nudges that prices
+  // are editable after sign-up. False on the live /p/ site and the owner editor, where
+  // the neutral "for illustration" wording is kept. Derived from !!onClaim.
+  claimPreview?: boolean;
 }) {
   if (editable) {
     return <OwnerServices services={services} bookingOnly={bookingOnly} onEditService={onEditService} onAddService={onAddService} />;
@@ -1076,7 +1081,7 @@ function Services({
               <circle cx="12" cy="12" r="9" />
               <path d="M12 11v5M12 7.5h.01" strokeLinecap="round" />
             </svg>
-            <p className="text-center text-sm">Example prices shown for illustration.</p>
+            <p className="text-center text-sm">{claimPreview ? "Example prices shown - fully customisable after sign up" : "Example prices shown for illustration."}</p>
           </div>
         )}
       </div>
