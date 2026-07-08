@@ -46,8 +46,9 @@ export function CampaignStatsCard({ stat, onEdit }: { stat: CampaignStats; onEdi
   const name = campaign?.name ?? 'Unassigned';
   const method = campaign?.method ? CAMPAIGN_METHOD_LABELS[campaign.method] ?? campaign.method : null;
   const methodTotal = METHOD_PILL.reduce((n, m) => n + methods[m.key], 0);
-  // Templates used, most-used first. Only queue-sent leads populate this (see the hook).
-  const templateEntries = Object.entries(stat.templates).sort((a, b) => b[1] - a[1]);
+  // Per-template mini-funnels, most-sent first. Only queue-sent leads populate this
+  // (see the hook). sent=0 → reply rate shows '—'.
+  const templateFunnels = Object.entries(stat.byTemplate).sort((a, b) => b[1].sent - a[1].sent);
 
   return (
     <Card className="bg-gradient-to-br from-primary/5 to-transparent border-border/60">
@@ -108,19 +109,29 @@ export function CampaignStatsCard({ stat, onEdit }: { stat: CampaignStats; onEdi
           )}
         </div>
 
-        {/* Automated templates used — counts queue-sent leads only (old-method /
-            personal leads have no template, so an empty list = no automated sends). */}
+        {/* Automated templates used — per-template mini-funnel (queue-sent leads only;
+            old-method / personal leads have no template, so an empty list = no automated
+            sends). One template per lead, so sent/opened/replied attribution is accurate. */}
         <div className="border-t border-border/50 pt-2.5">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Automated templates used</p>
-          {templateEntries.length === 0 ? (
+          {templateFunnels.length === 0 ? (
             <p className="text-xs text-muted-foreground/60">No automated sends yet</p>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {templateEntries.map(([key, count]) => (
-                <Badge key={key} variant="outline" className="text-[11px] font-medium">
-                  {TEMPLATE_LABEL[key] ?? key}: <span className="ml-1 tabular-nums font-bold">{count}</span>
-                </Badge>
-              ))}
+            <div className="space-y-1.5">
+              {templateFunnels.map(([key, f]) => {
+                const replyRate = f.sent > 0 ? Math.round((f.replied / f.sent) * 100) : null;
+                return (
+                  <div key={key} className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                    <span className="text-[11px] font-medium text-foreground/90 truncate">{TEMPLATE_LABEL[key] ?? key}</span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      Sent <span className="font-bold text-foreground/90">{f.sent}</span>
+                      {' · '}Opened <span className="font-bold text-foreground/90">{f.opened}</span>
+                      {' · '}Replied <span className="font-bold text-foreground/90">{f.replied}</span>
+                      {' · '}<span className="font-bold text-foreground/90">{replyRate === null ? '—' : `${replyRate}%`}</span> reply
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

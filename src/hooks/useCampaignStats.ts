@@ -22,6 +22,11 @@ export interface CampaignStats {
   // queue-sent (automated) leads — old-method/personal leads have a null template
   // and are not counted here (so this is an "automated sends" breakdown).
   templates: Record<string, number>;
+  // Per-template MINI-FUNNEL, keyed by whatsapp_template. sent/replied come from the
+  // lead's status; opened/claimed from its generated_sites, attributed to the lead's
+  // template via lead_id. Automated (queue-sent) leads only — one template per lead,
+  // so attribution is accurate.
+  byTemplate: Record<string, { sent: number; opened: number; replied: number; claimed: number }>;
 }
 
 interface LeadRow { id: string; campaign_id: string | null; contact_method: string | null; status: string | null; whatsapp_template: string | null }
@@ -71,9 +76,14 @@ export function useCampaignStats() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Resolve a lead → its campaign id.
+  // Resolve a lead → its campaign id, and a lead → its whatsapp_template (so a
+  // site's open/claim can be attributed to the lead's template in the per-site loop).
   const leadToCampaign = new Map<string, string | null>();
-  for (const l of leads) leadToCampaign.set(l.id, l.campaign_id ?? null);
+  const leadToTemplate = new Map<string, string | null>();
+  for (const l of leads) {
+    leadToCampaign.set(l.id, l.campaign_id ?? null);
+    leadToTemplate.set(l.id, l.whatsapp_template ?? null);
+  }
 
   // Seed one bucket per campaign, plus an Unassigned bucket.
   const buckets = new Map<string | null, CampaignStats>();
@@ -86,6 +96,7 @@ export function useCampaignStats() {
     replyRatePct: null,
     methods: emptyMethods(),
     templates: {},
+    byTemplate: {},
   });
   for (const c of campaigns) buckets.set(c.id, seed(c));
 
@@ -105,7 +116,14 @@ export function useCampaignStats() {
     // Per-template tally — only queue-sent leads carry a whatsapp_template (null for
     // old-method/personal), so this counts automated sends only.
     const t = l.whatsapp_template;
-    if (t) b.templates[t] = (b.templates[t] ?? 0) + 1;
+    if (t) {
+      b.templates[t] = (b.templates[t] ?? 0) + 1;
+      // Per-template mini-funnel: sent/replied from the lead's status (opened/claimed
+      // are added in the per-site loop below).
+      const bt = (b.byTemplate[t] ??= { sent: 0, opened: 0, replied: 0, claimed: 0 });
+      if (isSentStatus(l.status)) bt.sent += 1;
+      if (isRepliedStatus(l.status)) bt.replied += 1;
+    }
     if (isSentStatus(l.status)) b.funnel.sent += 1;
     if (isRepliedStatus(l.status)) b.funnel.replied += 1;
   }
@@ -117,6 +135,14 @@ export function useCampaignStats() {
     if (s.first_opened_at) b.funnel.opened += 1;
     if (s.claimed_at) b.funnel.claimed += 1;
     if (s.addon_interest_at) b.funnel.addon += 1;
+    // Attribute this site's open/claim to the lead's template (mini-funnel). Only
+    // leads with a whatsapp_template (automated) contribute.
+    const tmpl = s.lead_id ? leadToTemplate.get(s.lead_id) : null;
+    if (tmpl) {
+      const bt = (b.byTemplate[tmpl] ??= { sent: 0, opened: 0, replied: 0, claimed: 0 });
+      if (s.first_opened_at) bt.opened += 1;
+      if (s.claimed_at) bt.claimed += 1;
+    }
   }
 
   // Derived rates.
