@@ -55,12 +55,15 @@ const Outreach = () => {
     if (job.job_type === 'site_gen') setSitesRefreshToken((t) => t + 1);
   });
 
-  // Lead ids of the site-gen items currently in flight → per-row spinner (matches
-  // single site-gen). Only 'running' items so we don't spin every queued row.
+  // Lead ids of the site-gen items still to finish → per-row spinner. Includes both
+  // 'running' AND 'pending' (queued in the job, not yet started) so a row spins the
+  // MOMENT a build is enqueued and keeps spinning until that item is done/failed —
+  // and, because the job is server-tracked, the spinner survives leaving/returning to
+  // the page. (The build itself starts within ~1 min when the queue sweep picks it up.)
   const bulkGeneratingIds = useMemo(
     () => new Set(
       (activeJob?.job_type === 'site_gen' ? activeJob.items ?? [] : [])
-        .filter((i) => i.status === 'running')
+        .filter((i) => i.status === 'running' || i.status === 'pending')
         .map((i) => i.lead_id),
     ),
     [activeJob],
