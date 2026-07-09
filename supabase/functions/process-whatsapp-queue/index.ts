@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
-import { renderTemplateBody } from "../_shared/whatsapp-send.ts";
+import { renderTemplateBody, templateBodyParams, type TemplateVar } from "../_shared/whatsapp-send.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -34,15 +34,21 @@ const WINDOW_END_MIN = 21 * 60 + 30; // 21:30 Europe/London (exclusive) — minu
 const CLAIM_ORIGIN = "https://yoursites.uk"; // claim links live at /s/<share_token>
 const TZ = "Europe/London";
 
-// Approved templates allowlist. Both carry {{1}}=business name, {{2}}=claim URL in
-// the BODY. lang MUST match the template's registered language in Meta exactly —
-// VERIFY before the live cutover (TEST_MODE protects you until then). If a template
-// is later changed to put the claim URL in a URL BUTTON, adjust templateComponents.
-const TEMPLATES: Record<string, { lang: string }> = {
-  booking_page_intro: { lang: "en" },
-  no_website_barbers: { lang: "en" }, // renamed from free_website_intro to match Meta
-  barber_poor_website: { lang: "en" },
-  booking_switch_barbers: { lang: "en" }, // "switch from Booksy" — no-commission angle
+// Approved templates allowlist. `vars` is the BODY variable order for THIS template
+// ({{1}} = vars[0], {{2}} = vars[1]); the send fills them strictly in that order, so a
+// template with a different layout (e.g. URL first) is never sent with the values
+// swapped. The four original templates are {{1}}=name, {{2}}=url — keep that order
+// (they're live). `lang` MUST match the template's registered language in Meta exactly.
+// A name missing from this list SILENTLY falls back to DEFAULT_TEMPLATE — so every new
+// template MUST be added here (and to _shared/whatsapp-send.ts's WA_TEMPLATES).
+const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
+  booking_page_intro: { lang: "en", vars: ["name", "url"] },
+  no_website_barbers: { lang: "en", vars: ["name", "url"] }, // renamed from free_website_intro to match Meta
+  barber_poor_website: { lang: "en", vars: ["name", "url"] },
+  booking_switch_barbers: { lang: "en", vars: ["name", "url"] }, // "switch from Booksy" — no-commission angle
+  // NEW: {{1}} = site URL, {{2}} = business name (REVERSE of the others). "In review"
+  // at Meta — sends fail until approved; the code is correct on approval.
+  barber_fresha_booksy: { lang: "en", vars: ["url", "name"] },
 };
 const DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -103,16 +109,8 @@ function toWhatsAppNumber(raw: string, country?: string | null): string | null {
   return s.replace(/\D/g, "") || null;
 }
 
-/** Body params for a template: {{1}} business name, {{2}} claim URL. */
-function templateComponents(businessName: string, claimUrl: string) {
-  return [{
-    type: "body",
-    parameters: [
-      { type: "text", text: businessName || "your business" },
-      { type: "text", text: claimUrl },
-    ],
-  }];
-}
+// Body params come from the shared, vars-aware builder (templateBodyParams), filled in
+// each template's declared order. See TEMPLATES above + _shared/whatsapp-send.ts.
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -264,7 +262,7 @@ Deno.serve(async (req) => {
             messaging_product: "whatsapp",
             to: toNumber,
             type: "template",
-            template: { name: templateName, language: { code: lang }, components: templateComponents(lead.business_name as string, claimUrl) },
+            template: { name: templateName, language: { code: lang }, components: templateBodyParams(TEMPLATES[templateName].vars, lead.business_name as string, claimUrl) },
           }),
         });
         const data = await res.json().catch(() => ({}));
