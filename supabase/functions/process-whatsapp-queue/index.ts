@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { renderTemplateBody, templateBodyParams, type TemplateVar } from "../_shared/whatsapp-send.ts";
+import { classifyLineType } from "../_shared/line-type.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -242,6 +243,22 @@ Deno.serve(async (req) => {
         status: "not_contacted", whatsapp_delivery_status: "bad_number", contact_method: null,
       }).eq("id", lead.id);
       return json({ ok: true, skipped: "bad_number", lead_id: lead.id, business: lead.business_name, ...statusPayload });
+    }
+
+    // Tier-1 offline line-type backstop: the enqueue UI already blocks non-mobiles,
+    // but a number could have been queued before this shipped, or via a bypassed path.
+    // Re-check here so we NEVER spend a send at a landline/VoIP — flag it for SMS and
+    // pull it from the queue instead. Offline + free, no Meta call, no cap usage.
+    const lineType = classifyLineType(lead.phone as string, lead.country as string | null);
+    if (!lineType.whatsappEligible) {
+      await service.from("outreach_leads").update({
+        status: "no_whatsapp_needs_sms",
+        whatsapp_delivery_status: "non_mobile",
+        line_type: lineType.lineType,
+        line_type_checked_at: new Date().toISOString(),
+        contact_method: null,
+      }).eq("id", lead.id);
+      return json({ ok: true, skipped: "non_mobile", line_type: lineType.lineType, lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }
 
     // --- Send (or simulate) ---

@@ -33,6 +33,11 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'No WA',
     className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
   },
+  no_whatsapp_needs_sms: {
+    label: 'Not Mobile — Needs SMS',
+    shortLabel: 'Needs SMS',
+    className: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent font-semibold',
+  },
   whatsapp_failed: {
     label: 'WhatsApp Failed',
     shortLabel: 'WA Failed',

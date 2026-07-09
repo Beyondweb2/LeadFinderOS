@@ -37,7 +37,8 @@
     "https://deno.land/std@0.224.0/internal/diff.ts": "6234a4b493ebe65dc67a18a0eb97ef683626a1166a1906232ce186ae9f65f4e6",
     "https://deno.land/std@0.224.0/internal/format.ts": "0a98ee226fd3d43450245b1844b47003419d34d210fa989900861c79820d21c2",
     "https://deno.land/std@0.224.0/internal/mod.ts": "534125398c8e7426183e12dc255bb635d94e06d0f93c60a297723abe69d3b22e",
-    "https://esm.sh/@supabase/supabase-js@2.109.0": "52f53c2115605b17cc2d286dfa3f2863c9b78f90433a47e536449e01aea10074"
+    "https://esm.sh/@supabase/supabase-js@2.109.0": "52f53c2115605b17cc2d286dfa3f2863c9b78f90433a47e536449e01aea10074",
+    "https://esm.sh/libphonenumber-js@1.13.8/max": "461a1381bcc228b6974cd3124ace04781ce1daf06b2799d808bb166e3f5ba37c"
   },
   "workspace": {
     "packageJson": {
@@ -92,6 +93,7 @@
         "npm:globals@^15.15.0",
         "npm:i18next@^25.8.13",
         "npm:input-otp@^1.4.2",
+        "npm:libphonenumber-js@^1.13.8",
         "npm:lovable-tagger@^1.1.13",
         "npm:lucide-react@0.462",
         "npm:next-themes@0.3",

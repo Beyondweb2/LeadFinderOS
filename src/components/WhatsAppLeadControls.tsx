@@ -3,6 +3,7 @@ import { MessageSquare, Check, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WHATSAPP_TEMPLATES, type OutreachLead } from '@/types/outreach';
+import { classifyLineType } from '@/lib/lineType';
 
 /**
  * Per-lead WhatsApp outreach controls (lead detail dialog): pick the approved
@@ -33,12 +34,25 @@ export function WhatsAppLeadControls({
           contact_method: null, // clear the WhatsApp tag set at queue-time
         });
       } else {
+        // Tier-1 offline line-type gate: only mobiles may be queued. A non-mobile
+        // (landline/VoIP/etc.) is flagged 'no_whatsapp_needs_sms' instead of queued,
+        // so it's easy to find for SMS later and no send is ever attempted at it.
+        const { lineType, whatsappEligible } = classifyLineType(lead.phone, lead.country);
+        if (!whatsappEligible) {
+          await onUpdate(lead.id, {
+            status: 'no_whatsapp_needs_sms',
+            line_type: lineType,
+            line_type_checked_at: new Date().toISOString(),
+          });
+          return;
+        }
         await onUpdate(lead.id, {
           status: 'queued',
           previous_status: lead.status, // capture pre-queue status for restore-on-cancel
           queued_at: new Date().toISOString(),
           whatsapp_template: template || 'booking_page_intro',
           whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)
+          line_type: lineType, // cache the offline result
           contact_method: 'whatsapp', // attribute to WhatsApp immediately
         });
       }
@@ -57,6 +71,10 @@ export function WhatsAppLeadControls({
       {lead.status === 'no_whatsapp' ? (
         <p className="text-xs leading-relaxed text-amber-500">
           Not on WhatsApp — this number can't receive WhatsApp. Reach them by SMS, call or email instead.
+        </p>
+      ) : lead.status === 'no_whatsapp_needs_sms' ? (
+        <p className="text-xs leading-relaxed text-cyan-500">
+          Not a mobile number{lead.line_type ? ` (${lead.line_type})` : ''} — can't receive WhatsApp, so it wasn't queued. Flagged for SMS instead.
         </p>
       ) : lead.whatsapp_sent_at ? (
         <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
