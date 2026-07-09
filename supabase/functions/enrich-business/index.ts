@@ -20,6 +20,7 @@ import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { fetchFacebookContacts, fetchFacebookPhotos, fetchInstagramPhotos } from "../_shared/enrichment/socialImages.ts";
 import { isAggregatorUrl, isPlatformSocialUrl, isSiteBuilderSocialUrl, socialHandle, canonicalSocialUrl, isUsableMapsListingSocial } from "../_shared/aggregators.ts";
+import { classifyLineType } from "../_shared/line-type.ts";
 
 /** Last-resort social discovery: crawl the business website for FB + IG links via
  *  the extract-facebook function (one fetch returns both). Graceful — empty on
@@ -510,11 +511,12 @@ Deno.serve(async (req) => {
         ).slice(0, 40);
         const poolBreakdown = { maps: mapsPhotos.length, facebook: fbPhotos.length, instagram: igPhotos.length };
 
-        // 4) Line-type: the Twilio HLR lookup was removed (extra latency + could hang
-        //    a synchronous generate). Default to 'mobile' so downstream WhatsApp-
-        //    eligibility checks still see a valid mobile value; persisted with
-        //    line_type_checked_at below (the existing update writes both when truthy).
-        const lineType = "mobile";
+        // 4) Line-type: the paid Twilio HLR lookup was removed (extra latency + could
+        //    hang a synchronous generate). Use the FREE offline classifier instead —
+        //    real mobile/landline/voip from the number itself, no network call. This is
+        //    the same signal the WhatsApp enqueue gate uses; caching it here means the
+        //    gate has a real value on hand. Persisted with line_type_checked_at below.
+        const lineType = classifyLineType(phone, country).lineType;
 
         // 5) Match confidence — high when we enriched a real place whose name
         //    matches; low when there's no place ref or the name differs.

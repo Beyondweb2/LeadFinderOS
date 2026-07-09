@@ -21,6 +21,7 @@ export type LeadStatus =
   | 'payment_received'  // "Paid" — Outreach pipeline terminal (also Track Leads marker)
   | 'completed'
   | 'no_whatsapp'        // number isn't on WhatsApp (permanent — reach via SMS/call/email)
+  | 'no_whatsapp_needs_sms' // offline line-type gate: not a mobile → never queued; pick up for SMS
   | 'whatsapp_failed'    // WhatsApp send failed after retries (temporary — re-queueable)
   | 'email_sent'         // pushed to an Instantly.ai email campaign
   | 'bounced'            // Instantly reported the email bounced
@@ -192,6 +193,7 @@ export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'interested', label: 'Interested' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'no_whatsapp', label: 'No WhatsApp' },
+  { value: 'no_whatsapp_needs_sms', label: 'Not Mobile — Needs SMS' },
   { value: 'email_sent', label: 'Email Sent' },
   { value: 'bounced', label: 'Bounced' },
   { value: 'waiting', label: 'Waiting' },
@@ -212,6 +214,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'no_whatsapp', label: 'No WhatsApp' },
+  { value: 'no_whatsapp_needs_sms', label: 'Not Mobile — Needs SMS' },
   { value: 'whatsapp_failed', label: 'WhatsApp Failed' },
   { value: 'bounced', label: 'Bounced' },
   { value: 'payment_received', label: 'Paid' },
@@ -252,6 +255,7 @@ export type PipelineStatus =
   | 'interested'
   | 'not_interested'
   | 'no_whatsapp'
+  | 'no_whatsapp_needs_sms'
   | 'whatsapp_failed'
   | 'payment_received';
 

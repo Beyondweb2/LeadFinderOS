@@ -80,6 +80,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
+import { classifyLineType } from '@/lib/lineType';
 import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
 import { useContactAction } from '@/hooks/useContactAction';
 import { useDebouncedCallback } from 'use-debounce';
@@ -876,23 +877,43 @@ export function OutreachTable({
     // Don't re-queue leads already flagged not-on-WhatsApp (permanent skip).
     const queueable = ids.filter((id) => leads.find((l) => l.id === id)?.status !== 'no_whatsapp');
     const skipped = ids.length - queueable.length;
+    // Tier-1 offline line-type gate: only mobiles may be queued. Landline/VoIP/etc.
+    // never enter the queue — they're flagged 'no_whatsapp_needs_sms' so they're easy
+    // to find for SMS later (no send is ever attempted at a non-mobile number).
+    let blockedNonMobile = 0;
     queueable.forEach((id) => {
       const lead = leads.find((l) => l.id === id);
+      const { lineType, whatsappEligible } = classifyLineType(lead?.phone, lead?.country);
+      if (!whatsappEligible) {
+        blockedNonMobile++;
+        onUpdateLead(id, {
+          status: 'no_whatsapp_needs_sms',
+          line_type: lineType,
+          line_type_checked_at: now,
+        });
+        return;
+      }
       // Reset whatsapp_attempts so a re-queued (whatsapp_failed) lead gets fresh retries.
       // Capture the pre-queue status so cancelling restores it (not a wipe to not_contacted).
       const patch: Partial<OutreachLead> = {
         status: 'queued', queued_at: now, whatsapp_attempts: 0, whatsapp_template: template,
         previous_status: lead?.status ?? null,
+        line_type: lineType, // cache the offline result
         contact_method: 'whatsapp', // attribute to WhatsApp immediately (cleared on cancel / permanent fail)
       };
       onUpdateLead(id, patch);
     });
+    const queuedCount = queueable.length - blockedNonMobile;
     setSelectedIds(new Set());
     setQueueDialogOpen(false);
     const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
+    const notes = [
+      skipped ? `${skipped} skipped (not on WhatsApp).` : '',
+      blockedNonMobile ? `${blockedNonMobile} not a mobile → flagged for SMS.` : '',
+    ].filter(Boolean).join(' ');
     toast({
-      title: `Queued ${queueable.length} for WhatsApp`,
-      description: `Template: ${tmplLabel}. ${skipped ? `${skipped} skipped (not on WhatsApp). ` : ''}Sends within the daily 7am–9:30pm UK window, capped at 40/day.`,
+      title: `Queued ${queuedCount} for WhatsApp`,
+      description: `Template: ${tmplLabel}. ${notes ? notes + ' ' : ''}Sends within the daily 7am–9:30pm UK window, capped at 40/day.`,
     });
   };
 

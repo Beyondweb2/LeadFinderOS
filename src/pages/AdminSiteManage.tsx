@@ -17,6 +17,7 @@ import { bookingUrl } from "@/lib/subdomain";
 import { useTemplates } from "@/hooks/useTemplates";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { WHATSAPP_TEMPLATES } from "@/types/outreach";
+import { classifyLineType } from "@/lib/lineType";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
 /**
@@ -40,7 +41,7 @@ type SiteRow = {
   template?: string | null;
 };
 
-type LeadInfo = { id: string; phone: string | null; business_name: string; website: string | null; place_id: string | null; status: string | null; previous_status: string | null; whatsapp_sent_at: string | null; campaign_id: string | null };
+type LeadInfo = { id: string; phone: string | null; country: string | null; line_type: string | null; business_name: string; website: string | null; place_id: string | null; status: string | null; previous_status: string | null; whatsapp_sent_at: string | null; campaign_id: string | null };
 
 export default function AdminSiteManage() {
   const { id } = useParams();
@@ -105,7 +106,7 @@ export default function AdminSiteManage() {
       if (row?.lead_id) {
         const { data: lead } = await sb
           .from("outreach_leads")
-          .select("id, phone, business_name, website, place_id, status, previous_status, whatsapp_sent_at, campaign_id")
+          .select("id, phone, country, line_type, business_name, website, place_id, status, previous_status, whatsapp_sent_at, campaign_id")
           .eq("id", row.lead_id)
           .maybeSingle();
         if (lead) setLeadInfo(lead as unknown as LeadInfo);
@@ -302,6 +303,21 @@ export default function AdminSiteManage() {
         setLeadInfo({ ...leadInfo, status: restored, previous_status: null });
         toast({ title: "Removed from WhatsApp queue" });
       } else {
+        // Tier-1 offline line-type gate: only mobiles may be queued. A non-mobile
+        // (landline/VoIP/etc.) is flagged 'no_whatsapp_needs_sms' instead of queued —
+        // easy to find for SMS later, and no send is ever attempted at it.
+        const { lineType, whatsappEligible } = classifyLineType(leadInfo.phone, leadInfo.country);
+        if (!whatsappEligible) {
+          const now = new Date().toISOString();
+          const { error } = await sb
+            .from("outreach_leads")
+            .update({ status: "no_whatsapp_needs_sms", line_type: lineType, line_type_checked_at: now })
+            .eq("id", leadInfo.id);
+          if (error) throw error;
+          setLeadInfo({ ...leadInfo, status: "no_whatsapp_needs_sms", line_type: lineType });
+          toast({ title: "Not a mobile number", description: `This ${lineType} number can't receive WhatsApp — flagged for SMS.`, variant: "destructive" });
+          return;
+        }
         const { error } = await sb
           .from("outreach_leads")
           .update({
@@ -310,6 +326,7 @@ export default function AdminSiteManage() {
             queued_at: new Date().toISOString(),
             whatsapp_template: waTemplate,
             whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)
+            line_type: lineType, // cache the offline result
             contact_method: "whatsapp", // attribute to WhatsApp immediately (cleared on cancel / permanent fail)
           })
           .eq("id", leadInfo.id);
@@ -478,8 +495,8 @@ export default function AdminSiteManage() {
                   size="sm"
                   variant={leadInfo?.status === "queued" ? "outline" : "default"}
                   onClick={toggleWhatsAppQueue}
-                  disabled={!leadInfo || queuingWhatsApp || leadInfo.status === "no_whatsapp"}
-                  title={leadInfo?.status === "no_whatsapp" ? "This number isn't on WhatsApp" : leadInfo?.status === "queued" ? "Remove from the WhatsApp queue" : "Add to the live WhatsApp queue"}
+                  disabled={!leadInfo || queuingWhatsApp || leadInfo.status === "no_whatsapp" || leadInfo.status === "no_whatsapp_needs_sms"}
+                  title={leadInfo?.status === "no_whatsapp" ? "This number isn't on WhatsApp" : leadInfo?.status === "no_whatsapp_needs_sms" ? "Not a mobile number — flagged for SMS" : leadInfo?.status === "queued" ? "Remove from the WhatsApp queue" : "Add to the live WhatsApp queue"}
                 >
                   {queuingWhatsApp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : leadInfo?.status === "queued" ? <X className="h-4 w-4 mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
                   {leadInfo?.status === "queued" ? "Remove from queue" : "Queue WhatsApp"}
@@ -516,7 +533,7 @@ export default function AdminSiteManage() {
           if (!leadInfo) return;
           const { data: lead } = await sb
             .from("outreach_leads")
-            .select("id, phone, business_name, website, place_id, status, previous_status, whatsapp_sent_at, campaign_id")
+            .select("id, phone, country, line_type, business_name, website, place_id, status, previous_status, whatsapp_sent_at, campaign_id")
             .eq("id", leadInfo.id)
             .maybeSingle();
           if (lead) setLeadInfo(lead as unknown as LeadInfo);
