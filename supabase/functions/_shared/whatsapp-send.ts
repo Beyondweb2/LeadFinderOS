@@ -31,13 +31,24 @@ export function resolveWhatsAppEnv() {
   return { accessToken, phoneNumberId, testMode, live };
 }
 
-/** Approved template allowlist — mirrors process-whatsapp-queue. Both carry
- *  {{1}}=business name, {{2}}=claim URL in the BODY. */
-export const WA_TEMPLATES: Record<string, { lang: string }> = {
-  booking_page_intro: { lang: "en" },
-  no_website_barbers: { lang: "en" },
-  barber_poor_website: { lang: "en" },
-  booking_switch_barbers: { lang: "en" },
+// A template's body variables, IN ORDER. 'name' = the business/barber name, 'url' =
+// the claim/site link. Each template declares its own order so a new template with a
+// different variable layout (e.g. URL first) can't be silently sent with the values
+// swapped — the builder fills {{1}},{{2}},… strictly in this order.
+export type TemplateVar = "name" | "url";
+
+/** Approved template allowlist — mirrors process-whatsapp-queue. `vars` is the BODY
+ *  variable order for THIS template ({{1}} = vars[0], {{2}} = vars[1], …). The four
+ *  original templates are {{1}}=name, {{2}}=url; keep that order for them (they're
+ *  live). `lang` MUST match the template's registered language in Meta exactly. */
+export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
+  booking_page_intro: { lang: "en", vars: ["name", "url"] },
+  no_website_barbers: { lang: "en", vars: ["name", "url"] },
+  barber_poor_website: { lang: "en", vars: ["name", "url"] },
+  booking_switch_barbers: { lang: "en", vars: ["name", "url"] },
+  // NEW: {{1}} = site URL, {{2}} = business name (the REVERSE of the others). "In
+  // review" at Meta — sends fail until approved; the code is correct on approval.
+  barber_fresha_booksy: { lang: "en", vars: ["url", "name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -68,6 +79,12 @@ const poorWebsiteBody = (b: string, u: string) =>
 const bookingSwitchBarbersBody = (b: string, u: string) =>
   `Hi ${b || "your business"}, tired of paying commission on your own clients? I've set you up with online booking and your own website - no commission, keep more of what you earn:\n\n${u}\n\nSMS reminders and your own domain included, flat £29.99 a month. Have a look and let me know what you think.`;
 
+// NOTE: this template's body leads with the URL (its {{1}}), then the name ({{2}}) —
+// matching its reversed `vars: ["url", "name"]`. The (b, u) arg order of the render
+// fn is unchanged; only where they appear in the copy differs.
+const barberFreshaBooksyBody = (b: string, u: string) =>
+  `made you this 👇\n${u}\n\nHey ${b || "your business"}, right now people can only book you through fresha/booksy - who take a cut of every booking and keep your customers on their app, not yours (bit cheeky). That's your shops own booking site up there - fully yours to customize too - colours, photos, prices, whatever you fancy. free if you want it, no stress if not`;
+
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string) => string> = {
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).
@@ -76,6 +93,8 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   barber_poor_website: poorWebsiteBody,
   // The "switch from Booksy — no commission, £29.99/mo" angle.
   booking_switch_barbers: bookingSwitchBarbersBody,
+  // The "fresha/booksy take a cut" angle — URL-first body.
+  barber_fresha_booksy: barberFreshaBooksyBody,
 };
 
 /** Render the display copy of a template body with its variables filled. */
@@ -84,14 +103,16 @@ export function renderTemplateBody(templateName: string, businessName: string, c
   return fn ? fn(businessName, claimUrl) : `[${templateName}]`;
 }
 
-/** Body params for a claim template: {{1}} business name, {{2}} claim URL. */
-export function claimTemplateComponents(businessName: string, claimUrl: string) {
+/** Body params for a template, filled STRICTLY in the template's declared `vars`
+ *  order: parameters[i] = the value for {{i+1}}. 'url' → the claim/site link (raw);
+ *  'name' → the business name (with the "your business" fallback). For the original
+ *  templates (vars ["name","url"]) this returns EXACTLY the previous shape — {{1}}=name,
+ *  {{2}}=url — so their live sends are unchanged. */
+export function templateBodyParams(vars: TemplateVar[], businessName: string, claimUrl: string) {
+  const resolve = (v: TemplateVar) => (v === "url" ? claimUrl : (businessName || "your business"));
   return [{
     type: "body",
-    parameters: [
-      { type: "text", text: businessName || "your business" },
-      { type: "text", text: claimUrl },
-    ],
+    parameters: vars.map((v) => ({ type: "text", text: resolve(v) })),
   }];
 }
 
@@ -100,11 +121,14 @@ export function textPayload(body: string) {
   return { type: "text", text: { body, preview_url: false } };
 }
 
-/** A claim-template payload (deliverable any time). */
+/** A claim-template payload (deliverable any time). Variable order comes from the
+ *  template's own `vars` in WA_TEMPLATES (falls back to the original name→url order
+ *  for any unknown template, so nothing regresses). */
 export function claimTemplatePayload(templateName: string, lang: string, businessName: string, claimUrl: string) {
+  const vars = WA_TEMPLATES[templateName]?.vars ?? ["name", "url"];
   return {
     type: "template",
-    template: { name: templateName, language: { code: lang }, components: claimTemplateComponents(businessName, claimUrl) },
+    template: { name: templateName, language: { code: lang }, components: templateBodyParams(vars, businessName, claimUrl) },
   };
 }
 
