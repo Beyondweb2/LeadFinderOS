@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback, memo } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
 import type { PhoneFetchStatus } from '@/hooks/useOutreach';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -275,28 +275,15 @@ export function OutreachTable({
   const { user } = useAuth();
   const { isAdmin } = useSubscription();
   const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
-  // Per-row site-gen concurrency: builds run concurrently server-side, so track a SET
-  // of in-flight lead ids (a single id cleared earlier rows' spinners on the next
-  // click). CONCURRENCY_CAP bounds simultaneous builds; extra clicks queue and
-  // auto-start as slots free (see the pump effect near handleGenerateSite).
-  // Capped at 3 (not 5): each build is a heavy Apify Maps scrape (+ 9b FB/IG) on ONE
-  // shared Apify account — 5 at once overloaded it (429/45s-timeout under contention),
-  // so some builds' Maps scrapes failed and baked empty photo pools.
-  const CONCURRENCY_CAP = 3;
-  const [generatingSiteIds, setGeneratingSiteIds] = useState<Set<string>>(new Set());
-  const [queuedSiteGen, setQueuedSiteGen] = useState<
-    Array<{ lead: OutreachLead; template: 'barber' | 'salon' | 'plumber'; mode?: 'booking_only' }>
-  >([]);
-  // A row shows the BUILDING spinner if it's an in-flight per-row site-gen, OR it's an
-  // in-progress item of an active bulk site-gen job (bulk behaviour unchanged).
+  // Site-gen "building" state is SERVER-DRIVEN (no in-memory Set). Every single-row
+  // build now runs as a durable server-side site-gen job (see handleGenerateSite),
+  // exactly like the bulk "Generate sites" button, so the spinner is read from the
+  // job's per-item status (bulkGeneratingIds). That means it survives leaving/
+  // returning to the page and clears itself the moment a build finishes or fails —
+  // no state is lost on re-mount.
   const isRowGenerating = useCallback(
-    (id: string) => generatingSiteIds.has(id) || !!bulkGeneratingIds?.has(id),
-    [generatingSiteIds, bulkGeneratingIds],
-  );
-  // A row is QUEUED (waiting for a free build slot) when it's in the pending queue.
-  const isRowQueued = useCallback(
-    (id: string) => queuedSiteGen.some((q) => q.lead.id === id),
-    [queuedSiteGen],
+    (id: string) => !!bulkGeneratingIds?.has(id),
+    [bulkGeneratingIds],
   );
   // Bulk site-gen template picker dialog.
   const [siteGenDialogOpen, setSiteGenDialogOpen] = useState(false);
@@ -630,142 +617,43 @@ export function OutreachTable({
     setSmsDialogLead(lead);
   }, [onContactGated, onContactMethodChange]);
 
-  // Handle Call button click - direct open + count walkthrough contact
-  // Admin-only: generate a barber site for this lead via the (admin-gated)
-  // generate-barber-site edge function, then surface links to view / add images.
-  //
-  // Concurrency model: the CLICK (`handleGenerateSite`) only enqueues the build; a pump
-  // effect starts up to CONCURRENCY_CAP at once and auto-starts the next as slots free.
-  // The actual build is `runSiteGen`; its per-lead result handling (setSitesByLead keyed
-  // by lead.id, the per-lead toast, the existing:true navigate) is unchanged and already
-  // concurrency-safe, so builds in flight never clobber each other.
-  const runSiteGen = useCallback(async (
-    item: { lead: OutreachLead; template: 'barber' | 'salon' | 'plumber'; mode?: 'booking_only' },
-  ) => {
-    const { lead, template, mode } = item;
-    const isBooking = mode === 'booking_only';
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      const { data, error } = await supabase.functions.invoke('generate-barber-site', {
-        body: { lead_id: lead.id, template, ...(mode ? { mode } : {}) },
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (error) {
-        // supabase-js sets `error` to a FunctionsHttpError whose .message is the fixed
-        // "Edge Function returned a non-2xx status code" and leaves data=null on non-2xx.
-        // The REAL body ({ error: "Daily generation limit reached…" / "Rate limit exceeded"
-        // / an OpenAI 502 message }) lives on error.context (the raw Response). Read it
-        // first so the toast can show the real cause — mirrors LeadSearchContext.tsx's
-        // error.context .json()/.text() parse. Falls back to the generic message only if
-        // the body can't be read.
-        let realMsg = '';
-        try {
-          const ctx = (error as any)?.context;
-          if (ctx && typeof ctx === 'object') {
-            let body: any = null;
-            if (typeof ctx.json === 'function') body = await ctx.json().catch(() => null);
-            if (!body && typeof ctx.text === 'function') {
-              const txt = await ctx.text().catch(() => '');
-              try { body = JSON.parse(txt); } catch {}
-            }
-            realMsg = body?.error || body?.notice || '';
-          }
-        } catch { /* body unreadable → fall back to the generic message below */ }
-        throw new Error(realMsg || (error as Error).message);
-      }
-      if ((data as any)?.error) throw new Error((data as any).error);
-      const slug = (data as any)?.site?.slug as string | undefined;
-      const newSiteId = (data as any)?.site?.id as string | undefined;
-      if (newSiteId && slug) {
-        setSitesByLead((prev) => ({ ...prev, [lead.id]: { id: newSiteId, slug } }));
-      }
-      // The function returns existing:true when a site already exists for the lead
-      // (no duplicate created) — take the admin straight to its Manage page.
-      if ((data as any)?.existing && newSiteId) {
-        toast({
-          title: `${lead.business_name} already has a site`,
-          description: 'Opening its Manage page — no duplicate was created.',
-        });
-        navigate(isAdmin ? `/admin/sites/${newSiteId}` : `/sites/${newSiteId}`);
-        return;
-      }
-      toast({
-        title: `${isBooking ? 'Booking page' : 'Site'} generated for ${lead.business_name}`,
-        description: (
-          <span className="flex flex-col gap-1 mt-1">
-            {newSiteId && (
-              <a href={`/admin/sites/${newSiteId}`} className="underline font-medium">
-                Manage
-              </a>
-            )}
-            {slug && isBooking && (
-              <span className="text-xs text-muted-foreground">Booking page: bookmybarber.uk/{slug} (live once published)</span>
-            )}
-            {slug && !isBooking && (
-              <a href={`/p/${slug}`} target="_blank" rel="noreferrer" className="underline font-medium">
-                View site
-              </a>
-            )}
-          </span>
-        ),
-      });
-    } catch (e) {
-      // `msg` is now the REAL edge message (read from error.context above), so these
-      // pattern checks actually fire — and timeouts/502s show their true message.
-      const msg = (e as Error).message || '';
-      // 40/24h generation cap → 403 "Daily generation limit reached (40 per 24h)."
-      const isDailyCap = /daily.*limit|generation limit|40 per 24h/i.test(msg);
-      // 10/min per-user rate limit → 429 "Rate limit exceeded".
-      const isRateLimited = /rate limit|\b429\b|too many/i.test(msg);
-      toast(
-        isDailyCap
-          ? { title: 'Daily site limit reached', description: "You've hit the 40-per-24h generation limit — try again later.", variant: 'destructive' }
-          : isRateLimited
-            ? { title: 'Too many sites building right now', description: 'Wait a moment and try again.', variant: 'destructive' }
-            : { title: 'Site generation failed', description: msg || 'Please try again', variant: 'destructive' },
-      );
-    } finally {
-      // Free this lead's slot; the pump effect below auto-starts the next queued build.
-      setGeneratingSiteIds((prev) => {
-        const next = new Set(prev);
-        next.delete(lead.id);
-        return next;
-      });
-    }
-  }, [toast, navigate, isAdmin]);
-
-  // Click → enqueue this build. Ignored if the SAME lead is already building or queued
-  // (the disabled trigger also prevents this, but guard anyway). The pump effect starts
-  // it immediately when a slot is free (< CONCURRENCY_CAP), else it waits in the queue.
-  const handleGenerateSite = useCallback((
+  // Single-row "Generate site": enqueue a DURABLE, server-side site-gen job — the same
+  // bulk-jobs pipeline the "Generate sites" button uses — instead of an in-memory build.
+  // The job lives in bulk_jobs, so its spinner (bulkGeneratingIds) survives leaving and
+  // returning to the page and clears itself the moment the build finishes or fails; on
+  // completion the parent refetches generated_sites (sitesRefreshToken) so the View
+  // site / Manage link appears. One build at a time (the server allows one active job
+  // per user) — to build several at once, use the "Generate sites" button up top.
+  const handleGenerateSite = useCallback(async (
     lead: OutreachLead,
     template: 'barber' | 'salon' | 'plumber' = 'barber',
     mode?: 'booking_only',
   ) => {
-    setQueuedSiteGen((prev) => {
-      if (generatingSiteIds.has(lead.id) || prev.some((q) => q.lead.id === lead.id)) return prev;
-      return [...prev, { lead, template, mode }];
-    });
-  }, [generatingSiteIds]);
-
-  // Pump: fill free build slots from the queue (respecting CONCURRENCY_CAP), mark them
-  // in-flight, and start them. Runs pre-paint (useLayoutEffect) so an immediately-
-  // startable click never flashes the "queued" indicator before it starts building.
-  useLayoutEffect(() => {
-    if (queuedSiteGen.length === 0) return;
-    const free = CONCURRENCY_CAP - generatingSiteIds.size;
-    if (free <= 0) return;
-    const toStart = queuedSiteGen.slice(0, free);
-    if (toStart.length === 0) return;
-    setGeneratingSiteIds((prev) => {
-      const next = new Set(prev);
-      toStart.forEach((i) => next.add(i.lead.id));
-      return next;
-    });
-    setQueuedSiteGen((prev) => prev.slice(toStart.length));
-    toStart.forEach((item) => { void runSiteGen(item); });
-  }, [queuedSiteGen, generatingSiteIds, runSiteGen]);
+    if (!onBulkJob) return;
+    if (isRowGenerating(lead.id)) return; // already building this row
+    // A build is already running (this row's, or a bulk run). Enforced server-side too;
+    // guard here to give a helpful message that points at the bulk button.
+    if (bulkJobActive) {
+      toast({
+        title: 'A build is already running',
+        description: 'Wait for it to finish — or use the “Generate sites” button at the top of the list to build several at once.',
+      });
+      return;
+    }
+    const res = await onBulkJob('site_gen', [lead.id], { template, ...(mode ? { mode } : {}) });
+    if (!res.ok) {
+      const busy = /already have a bulk job|running/i.test(res.error ?? '');
+      toast({
+        title: busy ? 'A build is already running' : "Couldn't start the build",
+        description: busy
+          ? 'Wait for it to finish — or use the “Generate sites” button to build several at once.'
+          : (res.error || 'Please try again.'),
+        variant: busy ? undefined : 'destructive',
+      });
+    }
+    // Success: the row spins as soon as the job's item appears (bulkGeneratingIds
+    // includes the pending item), and the parent's poll clears it on done/failed.
+  }, [onBulkJob, bulkJobActive, isRowGenerating, toast]);
 
   const handleCallClick = useCallback((lead: OutreachLead) => {
     if (onContactGated && !onContactGated('call', lead.id)) return;
@@ -2071,14 +1959,12 @@ export function OutreachTable({
                                 <DropdownMenuTrigger asChild>
                                   <button
                                     className="p-1.5 rounded-md text-violet-400 hover:bg-violet-500/10 hover:text-violet-300 transition-colors disabled:opacity-50"
-                                    title={isRowQueued(lead.id) ? 'Queued — waiting for a free build slot' : 'Generate site'}
-                                    disabled={isRowGenerating(lead.id) || isRowQueued(lead.id)}
+                                    title={isRowGenerating(lead.id) ? 'Building…' : 'Generate site'}
+                                    disabled={isRowGenerating(lead.id)}
                                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                   >
                                     {isRowGenerating(lead.id) ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : isRowQueued(lead.id) ? (
-                                      <Loader2 className="h-4 w-4 opacity-40 animate-pulse" />
                                     ) : (
                                       <Wand2 className="h-4 w-4" />
                                     )}
