@@ -46,21 +46,58 @@ interface LeadOption { id: string; business_name: string; category: string | nul
 
 const TERMINAL = new Set(['complete', 'capped', 'failed']);
 
+// Wizard state is persisted to sessionStorage so it survives leaving the page and
+// coming back (unmount/remount) and a tab refresh, but clears when the tab closes.
+// Only the WIZARD fields are persisted — never results/polling state.
+const WIZARD_KEY = 'leadfinder:ai-audit-wizard';
+interface PersistedWizard {
+  step: Step;
+  mode: 'new' | 'existing';
+  leadId: string | null;
+  businessName: string;
+  businessType: string;
+  locationText: string;
+  country: Country;
+  hasWebsite: boolean;
+  website: string;
+  questions: string[];
+  unitCost: number;
+  engineCount: number;
+}
+/** Read persisted wizard state (best-effort; null if absent/unavailable/invalid). */
+function loadWizard(): PersistedWizard | null {
+  try {
+    const raw = sessionStorage.getItem(WIZARD_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Partial<PersistedWizard>;
+    return p && typeof p === 'object' ? (p as PersistedWizard) : null;
+  } catch {
+    return null;
+  }
+}
+function clearWizard() {
+  try { sessionStorage.removeItem(WIZARD_KEY); } catch { /* storage unavailable */ }
+}
+
 const AiAudit = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [step, setStep] = useState<Step>('source');
+  // Rehydrate the wizard once from sessionStorage (else start fresh at step 1).
+  // 'results' is never persisted, but guard anyway so a stale value can't strand us
+  // on the results screen with no run to poll.
+  const [persisted] = useState<PersistedWizard | null>(() => loadWizard());
+  const [step, setStep] = useState<Step>(persisted?.step && persisted.step !== 'results' ? persisted.step : 'source');
 
   // Wizard form state
-  const [mode, setMode] = useState<'new' | 'existing'>('new');
-  const [leadId, setLeadId] = useState<string | null>(null);
-  const [businessName, setBusinessName] = useState('');
-  const [businessType, setBusinessType] = useState('');
-  const [locationText, setLocationText] = useState('');
-  const [country, setCountry] = useState<Country>('UK');
-  const [hasWebsite, setHasWebsite] = useState(false);
-  const [website, setWebsite] = useState('');
+  const [mode, setMode] = useState<'new' | 'existing'>(persisted?.mode ?? 'new');
+  const [leadId, setLeadId] = useState<string | null>(persisted?.leadId ?? null);
+  const [businessName, setBusinessName] = useState(persisted?.businessName ?? '');
+  const [businessType, setBusinessType] = useState(persisted?.businessType ?? '');
+  const [locationText, setLocationText] = useState(persisted?.locationText ?? '');
+  const [country, setCountry] = useState<Country>(persisted?.country ?? 'UK');
+  const [hasWebsite, setHasWebsite] = useState(persisted?.hasWebsite ?? false);
+  const [website, setWebsite] = useState(persisted?.website ?? '');
 
   // Existing-lead picker + saved audits
   const [leads, setLeads] = useState<LeadOption[]>([]);
@@ -68,9 +105,9 @@ const AiAudit = () => {
 
   // Review (questions) state
   const [previewing, setPreviewing] = useState(false);
-  const [questions, setQuestions] = useState<string[]>([]);
-  const [unitCost, setUnitCost] = useState(0);
-  const [engineCount, setEngineCount] = useState(SCORED_ENGINES.length);
+  const [questions, setQuestions] = useState<string[]>(persisted?.questions ?? []);
+  const [unitCost, setUnitCost] = useState(persisted?.unitCost ?? 0);
+  const [engineCount, setEngineCount] = useState(persisted?.engineCount ?? SCORED_ENGINES.length);
   const [running, setRunning] = useState(false);
 
   // Results state
@@ -81,6 +118,17 @@ const AiAudit = () => {
   const [resultsBusinessName, setResultsBusinessName] = useState('');
 
   const estimatedCost = Number((questions.length * engineCount * unitCost).toFixed(2));
+
+  // Persist wizard state on change so it survives unmount/remount + refresh. Once the
+  // audit is running (step 'results'), drop the key so the next visit starts clean.
+  useEffect(() => {
+    if (step === 'results') { clearWizard(); return; }
+    try {
+      sessionStorage.setItem(WIZARD_KEY, JSON.stringify({
+        step, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, questions, unitCost, engineCount,
+      }));
+    } catch { /* storage unavailable — persistence is best-effort */ }
+  }, [step, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, questions, unitCost, engineCount]);
 
   // ── Initial load: the user's leads (for the picker) + saved audits ──────────
   const loadSaved = useCallback(async () => {
@@ -224,6 +272,7 @@ const AiAudit = () => {
         },
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'run failed');
+      clearWizard(); // audit created successfully → next visit starts clean
       setAuditId(data.audit_id);
       setRunId(data.run_id);
       setResultsBusinessName(data.business_name ?? businessName);
