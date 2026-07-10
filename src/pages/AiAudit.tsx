@@ -10,18 +10,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
-  Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, ChevronRight, Check,
+  Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check,
 } from 'lucide-react';
 import type { Country } from '@/types/outreach';
 
-// AI Visibility Audit — a one-question-per-screen wizard (state-machine modelled on
-// BookingFlow.tsx) that generates search questions, runs them across AI engines via
-// create-ai-audit + the process-ai-audit-queue drain, and polls the run for results.
+// AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
+// and answering one reveals the next below it (no per-step Next). Generates search
+// questions, runs them across AI engines via create-ai-audit + the process-ai-audit-queue
+// drain, and polls the run for results.
 
 type Step = 'source' | 'name' | 'type' | 'location' | 'website' | 'review' | 'results';
-const STEP_ORDER: Step[] = ['source', 'name', 'type', 'location', 'website', 'review', 'results'];
+// The stacked wizard steps, in order. `revealed` is the furthest index shown; every
+// step 0..revealed is rendered at once. 'results' is a separate phase (step === 'results').
+const WIZARD_STEPS = ['source', 'name', 'type', 'location', 'website', 'review'] as const;
+const REVIEW_INDEX = WIZARD_STEPS.indexOf('review');
 
-const COUNTRIES: Country[] = ['UK', 'Ireland', 'USA', 'Canada', 'Australia', 'NewZealand'];
+// value = the Country name stored/passed to the audit; the edge toCountryCode /
+// COUNTRY_TO_ISO2 map converts every name to lowercase ISO-2 uniformly. label = display.
+const COUNTRIES: { value: string; label: string }[] = [
+  { value: 'UK', label: 'UK' },
+  { value: 'Ireland', label: 'Ireland' },
+  { value: 'USA', label: 'USA' },
+  { value: 'Canada', label: 'Canada' },
+  { value: 'Australia', label: 'Australia' },
+  { value: 'NewZealand', label: 'New Zealand' },
+  { value: 'Thailand', label: 'Thailand' },
+];
 
 // Engines shown in results (queue targets chatgpt+gemini; the actor also returns
 // AI Overview + Google organic, shown for context). mention_rate is over chatgpt+gemini.
@@ -48,17 +62,18 @@ const TERMINAL = new Set(['complete', 'capped', 'failed']);
 
 // Wizard state is persisted to sessionStorage so it survives leaving the page and
 // coming back (unmount/remount) and a tab refresh, but clears when the tab closes.
-// Only the WIZARD fields are persisted — never results/polling state.
+// Only the WIZARD fields are persisted — never results/polling state. `revealed` is
+// stored so a return shows ALL previously-answered steps stacked, not just a jump.
 const WIZARD_KEY = 'leadfinder:ai-audit-wizard';
 interface PersistedWizard {
-  step: Step;
-  mode: 'new' | 'existing';
+  revealed: number;
+  mode: 'new' | 'existing' | null;
   leadId: string | null;
   businessName: string;
   businessType: string;
   locationText: string;
-  country: Country;
-  hasWebsite: boolean;
+  country: Country | '';
+  hasWebsite: boolean | null;
   website: string;
   questions: string[];
   unitCost: number;
@@ -78,25 +93,34 @@ function loadWizard(): PersistedWizard | null {
 function clearWizard() {
   try { sessionStorage.removeItem(WIZARD_KEY); } catch { /* storage unavailable */ }
 }
+/** Furthest revealed index from persisted state (back-compat: old sessions stored a
+ *  `step` name instead of `revealed`). Clamped to the wizard range. */
+function initialRevealed(p: PersistedWizard | null): number {
+  if (!p) return 0;
+  const legacyStep = (p as unknown as { step?: string }).step;
+  const raw = typeof p.revealed === 'number' ? p.revealed
+    : legacyStep ? WIZARD_STEPS.indexOf(legacyStep as typeof WIZARD_STEPS[number]) : 0;
+  return Math.min(Math.max(raw, 0), WIZARD_STEPS.length - 1);
+}
 
 const AiAudit = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Rehydrate the wizard once from sessionStorage (else start fresh at step 1).
-  // 'results' is never persisted, but guard anyway so a stale value can't strand us
-  // on the results screen with no run to poll.
+  // Rehydrate the wizard once from sessionStorage. Nothing is pre-filled on a fresh
+  // start. `step` is only the wizard/results discriminator; results is never persisted.
   const [persisted] = useState<PersistedWizard | null>(() => loadWizard());
-  const [step, setStep] = useState<Step>(persisted?.step && persisted.step !== 'results' ? persisted.step : 'source');
+  const [step, setStep] = useState<Step>('source');
+  const [revealed, setRevealed] = useState<number>(() => initialRevealed(persisted));
 
-  // Wizard form state
-  const [mode, setMode] = useState<'new' | 'existing'>(persisted?.mode ?? 'new');
+  // Wizard form state — no defaults on a fresh start (mode/country unselected, website unknown).
+  const [mode, setMode] = useState<'new' | 'existing' | null>(persisted?.mode ?? null);
   const [leadId, setLeadId] = useState<string | null>(persisted?.leadId ?? null);
   const [businessName, setBusinessName] = useState(persisted?.businessName ?? '');
   const [businessType, setBusinessType] = useState(persisted?.businessType ?? '');
   const [locationText, setLocationText] = useState(persisted?.locationText ?? '');
-  const [country, setCountry] = useState<Country>(persisted?.country ?? 'UK');
-  const [hasWebsite, setHasWebsite] = useState(persisted?.hasWebsite ?? false);
+  const [country, setCountry] = useState<Country | ''>(persisted?.country ?? '');
+  const [hasWebsite, setHasWebsite] = useState<boolean | null>(persisted?.hasWebsite ?? null);
   const [website, setWebsite] = useState(persisted?.website ?? '');
 
   // Existing-lead picker + saved audits
@@ -117,7 +141,16 @@ const AiAudit = () => {
   const [queueRows, setQueueRows] = useState<QueueRow[]>([]);
   const [resultsBusinessName, setResultsBusinessName] = useState('');
 
+  // Refs to move focus to a newly-revealed step (accessibility).
+  const nameRef = useRef<HTMLInputElement>(null);
+  const typeRef = useRef<HTMLInputElement>(null);
+  const townRef = useRef<HTMLInputElement>(null);
+  const urlRef = useRef<HTMLInputElement>(null);
+
   const estimatedCost = Number((questions.length * engineCount * unitCost).toFixed(2));
+
+  // Reveal the next step (monotonic — earlier answers stay revealed/editable).
+  const reveal = (i: number) => setRevealed((r) => Math.max(r, i));
 
   // Persist wizard state on change so it survives unmount/remount + refresh. Once the
   // audit is running (step 'results'), drop the key so the next visit starts clean.
@@ -125,10 +158,10 @@ const AiAudit = () => {
     if (step === 'results') { clearWizard(); return; }
     try {
       sessionStorage.setItem(WIZARD_KEY, JSON.stringify({
-        step, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, questions, unitCost, engineCount,
+        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, questions, unitCost, engineCount,
       }));
     } catch { /* storage unavailable — persistence is best-effort */ }
-  }, [step, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, questions, unitCost, engineCount]);
+  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, questions, unitCost, engineCount]);
 
   // ── Initial load: the user's leads (for the picker) + saved audits ──────────
   const loadSaved = useCallback(async () => {
@@ -202,18 +235,12 @@ const AiAudit = () => {
     return () => { stop = true; if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   }, [step, runId, pollRun, loadSaved]);
 
-  // ── Navigation helpers (BookingFlow-style ordered array) ────────────────────
-  const go = (s: Step) => setStep(s);
-  const back = () => {
-    const i = STEP_ORDER.indexOf(step);
-    setStep(STEP_ORDER[Math.max(0, i - 1)]);
-  };
-
   const resetWizard = () => {
-    setMode('new'); setLeadId(null); setBusinessName(''); setBusinessType('');
-    setLocationText(''); setCountry('UK'); setHasWebsite(false); setWebsite('');
-    setQuestions([]); setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
-    setStep('source');
+    setMode(null); setLeadId(null); setBusinessName(''); setBusinessType('');
+    setLocationText(''); setCountry(''); setHasWebsite(null); setWebsite('');
+    setQuestions([]); setUnitCost(0); setEngineCount(SCORED_ENGINES.length);
+    setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
+    setRevealed(0); setStep('source');
   };
 
   const pickLead = (id: string) => {
@@ -227,9 +254,10 @@ const AiAudit = () => {
       setHasWebsite(!!lead.website);
       setWebsite(lead.website ?? '');
     }
+    reveal(WIZARD_STEPS.indexOf('name'));
   };
 
-  // ── Preview questions (entering the review step) ─────────────────────────────
+  // ── Preview questions (generate for the review step) ─────────────────────────
   const runPreview = useCallback(async () => {
     setPreviewing(true);
     try {
@@ -252,10 +280,18 @@ const AiAudit = () => {
     }
   }, [businessName, businessType, locationText, country, hasWebsite, website, toast]);
 
-  const goToReview = async () => {
-    setStep('review');
-    if (questions.length === 0) await runPreview();
-  };
+  // When the review step is first revealed with no questions yet, generate them.
+  // Editing type/location later does NOT auto-wipe/regenerate (only reveal-fresh or the
+  // explicit Regenerate button do). Focus moves to the newly-revealed step.
+  useEffect(() => {
+    const cur = WIZARD_STEPS[revealed];
+    if (cur === 'name') nameRef.current?.focus();
+    else if (cur === 'type') typeRef.current?.focus();
+    else if (cur === 'location') townRef.current?.focus();
+    else if (cur === 'review' && questions.length === 0 && !previewing) runPreview();
+    // Fire only on reveal changes — not on every keystroke/question edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealed]);
 
   // ── Confirm & run ───────────────────────────────────────────────────────────
   const confirmAndRun = async () => {
@@ -330,6 +366,14 @@ const AiAudit = () => {
   );
   const isDraining = !!runId && !(run && TERMINAL.has(run.status));
 
+  // Advance from a text field on Enter (if valid). Editing an earlier field re-fires
+  // reveal(), but reveal is monotonic so nothing below collapses.
+  const enterAdvance = (valid: boolean, nextIndex: number) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') { e.preventDefault(); if (valid) reveal(nextIndex); }
+  };
+
+  const shown = (name: typeof WIZARD_STEPS[number]) => revealed >= WIZARD_STEPS.indexOf(name);
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5 sm:space-y-7">
@@ -342,140 +386,158 @@ const AiAudit = () => {
         </p>
       </div>
 
-      {/* Wizard steps */}
-      {step === 'source' && (
-        <StepCard>
-          <StepHeader title="Audit a new business, or an existing lead?" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <ChoiceButton active={mode === 'new'} onClick={() => { setMode('new'); setLeadId(null); }} label="New business" hint="Enter the details yourself" />
-            <ChoiceButton active={mode === 'existing'} onClick={() => setMode('existing')} label="Existing lead" hint="Pick from your CRM" />
-          </div>
-          {mode === 'existing' && (
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Choose a lead</Label>
-              <Select value={leadId ?? undefined} onValueChange={pickLead}>
-                <SelectTrigger><SelectValue placeholder="Select a lead…" /></SelectTrigger>
-                <SelectContent>
-                  {leads.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>{l.business_name}{l.address ? ` — ${l.address}` : ''}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {/* Stacked wizard — answered steps stay visible; each answer reveals the next. */}
+      {step !== 'results' && (
+        <div className="space-y-4">
+          {/* Step 1 — source */}
+          <StepCard>
+            <StepHeader title="Audit a new business, or an existing lead?" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <ChoiceButton active={mode === 'new'} onClick={() => { setMode('new'); setLeadId(null); reveal(WIZARD_STEPS.indexOf('name')); }} label="New business" hint="Enter the details yourself" />
+              <ChoiceButton active={mode === 'existing'} onClick={() => setMode('existing')} label="Existing lead" hint="Pick from your CRM" />
             </div>
-          )}
-          <div className="flex justify-end">
-            <Button onClick={() => go('name')} disabled={mode === 'existing' && !leadId}>
-              Next <ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
-          </div>
-
-          {savedAudits.length > 0 && (
-            <div className="pt-4 mt-2 border-t border-border/60 space-y-2">
-              <Label className="text-xs text-muted-foreground">Past audits</Label>
+            {mode === 'existing' && (
               <div className="space-y-1.5">
-                {savedAudits.map((a) => (
-                  <button key={a.id} onClick={() => reopenAudit(a)}
-                    className="w-full flex items-center justify-between rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-left hover:bg-card transition-colors">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">{a.business_name}</div>
-                      <div className="text-[11px] text-muted-foreground truncate">{a.business_type || '—'}{a.location_text ? ` · ${a.location_text}` : ''}</div>
-                    </div>
-                    <MentionPill rate={a.latest_mention_rate} />
-                  </button>
-                ))}
+                <Label className="text-xs text-muted-foreground">Choose a lead</Label>
+                <Select value={leadId ?? undefined} onValueChange={pickLead}>
+                  <SelectTrigger><SelectValue placeholder="Select a lead…" /></SelectTrigger>
+                  <SelectContent>
+                    {leads.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.business_name}{l.address ? ` — ${l.address}` : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
+            )}
+
+            {savedAudits.length > 0 && (
+              <div className="pt-4 mt-2 border-t border-border/60 space-y-2">
+                <Label className="text-xs text-muted-foreground">Past audits</Label>
+                <div className="space-y-1.5">
+                  {savedAudits.map((a) => (
+                    <button key={a.id} onClick={() => reopenAudit(a)}
+                      className="w-full flex items-center justify-between rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-left hover:bg-card transition-colors">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{a.business_name}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">{a.business_type || '—'}{a.location_text ? ` · ${a.location_text}` : ''}</div>
+                      </div>
+                      <MentionPill rate={a.latest_mention_rate} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </StepCard>
+
+          {/* Step 2 — name */}
+          {shown('name') && (
+            <StepCard>
+              <StepHeader title="What's the business name?" />
+              <Input ref={nameRef} value={businessName} onChange={(e) => setBusinessName(e.target.value)}
+                onKeyDown={enterAdvance(!!businessName.trim(), WIZARD_STEPS.indexOf('type'))}
+                placeholder="e.g. Joe's Barbers" />
+              <p className="text-[11px] text-muted-foreground">Press Enter to continue</p>
+            </StepCard>
           )}
-        </StepCard>
-      )}
 
-      {step === 'name' && (
-        <StepCard>
-          <StepHeader title="What's the business name?" onBack={back} />
-          <Input autoFocus value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Joe's Barbers" />
-          <NextRow onNext={() => go('type')} disabled={!businessName.trim()} />
-        </StepCard>
-      )}
-
-      {step === 'type' && (
-        <StepCard>
-          <StepHeader title="What type of business is it?" onBack={back} />
-          <Input autoFocus value={businessType} onChange={(e) => setBusinessType(e.target.value)} placeholder="e.g. barber, plumber, dentist" />
-          <NextRow onNext={() => go('location')} disabled={!businessType.trim()} />
-        </StepCard>
-      )}
-
-      {step === 'location' && (
-        <StepCard>
-          <StepHeader title="Where is it based?" onBack={back} />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="sm:col-span-2 space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Town / city</Label>
-              <Input autoFocus value={locationText} onChange={(e) => setLocationText(e.target.value)} placeholder="e.g. Leeds" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Country</Label>
-              <Select value={country} onValueChange={(v) => setCountry(v as Country)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>
-          <NextRow onNext={() => go('website')} disabled={!locationText.trim()} />
-        </StepCard>
-      )}
-
-      {step === 'website' && (
-        <StepCard>
-          <StepHeader title="Does it have a website?" onBack={back} />
-          <div className="grid grid-cols-2 gap-3">
-            <ChoiceButton active={hasWebsite} onClick={() => setHasWebsite(true)} label="Yes" hint="Enter the URL" />
-            <ChoiceButton active={!hasWebsite} onClick={() => { setHasWebsite(false); setWebsite(''); }} label="No" hint="Presence-led audit" />
-          </div>
-          {hasWebsite && (
-            <Input autoFocus value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://…" />
+          {/* Step 3 — type */}
+          {shown('type') && (
+            <StepCard>
+              <StepHeader title="What type of business is it?" />
+              <Input ref={typeRef} value={businessType} onChange={(e) => setBusinessType(e.target.value)}
+                onKeyDown={enterAdvance(!!businessType.trim(), WIZARD_STEPS.indexOf('location'))}
+                placeholder="e.g. barber, plumber, dentist" />
+              <p className="text-[11px] text-muted-foreground">Press Enter to continue</p>
+            </StepCard>
           )}
-          <NextRow nextLabel="Generate questions" onNext={goToReview} disabled={hasWebsite && !website.trim()} />
-        </StepCard>
-      )}
 
-      {step === 'review' && (
-        <StepCard>
-          <StepHeader title="Review the questions" onBack={back} />
-          <p className="text-xs text-muted-foreground -mt-1">
-            These are the searches we'll run across {SCORED_ENGINES.map((e) => ENGINE_LABELS[e]).join(' + ')} (plus AI Overview & Google). Edit, add or remove any.
-          </p>
-          {previewing ? (
-            <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" /> Generating questions…
-            </div>
-          ) : (
-            <>
-              <div className="space-y-2">
-                {questions.map((q, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Input value={q} onChange={(e) => setQuestions((prev) => prev.map((x, xi) => xi === i ? e.target.value : x))} />
-                    <Button variant="ghost" size="icon" onClick={() => setQuestions((prev) => prev.filter((_, xi) => xi !== i))} title="Remove">
-                      <X className="h-4 w-4" />
+          {/* Step 4 — location + country */}
+          {shown('location') && (
+            <StepCard>
+              <StepHeader title="Where is it based?" />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2 space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Town / city</Label>
+                  <Input ref={townRef} value={locationText} onChange={(e) => setLocationText(e.target.value)}
+                    onKeyDown={enterAdvance(!!locationText.trim() && !!country, WIZARD_STEPS.indexOf('website'))}
+                    placeholder="e.g. Leeds" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Country</Label>
+                  <Select value={country || undefined} onValueChange={(v) => { setCountry(v as Country); if (locationText.trim()) reveal(WIZARD_STEPS.indexOf('website')); }}>
+                    <SelectTrigger><SelectValue placeholder="Country" /></SelectTrigger>
+                    <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Pick a country (or press Enter) to continue</p>
+            </StepCard>
+          )}
+
+          {/* Step 5 — website */}
+          {shown('website') && (
+            <StepCard>
+              <StepHeader title="Does it have a website?" />
+              <div className="grid grid-cols-2 gap-3">
+                <ChoiceButton active={hasWebsite === true} onClick={() => { setHasWebsite(true); setTimeout(() => urlRef.current?.focus(), 0); }} label="Yes" hint="Enter the URL" />
+                <ChoiceButton active={hasWebsite === false} onClick={() => { setHasWebsite(false); setWebsite(''); reveal(REVIEW_INDEX); }} label="No" hint="Presence-led audit" />
+              </div>
+              {hasWebsite === true && (
+                <>
+                  <Input ref={urlRef} value={website} onChange={(e) => setWebsite(e.target.value)}
+                    onKeyDown={enterAdvance(!!website.trim(), REVIEW_INDEX)}
+                    placeholder="https://…" />
+                  <p className="text-[11px] text-muted-foreground">Press Enter to continue</p>
+                </>
+              )}
+            </StepCard>
+          )}
+
+          {/* Step 6 — review questions + cost */}
+          {shown('review') && (
+            <StepCard>
+              <div className="flex items-center justify-between gap-2">
+                <StepHeader title="Review the questions" />
+                <Button variant="ghost" size="sm" onClick={runPreview} disabled={previewing} title="Regenerate questions">
+                  <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${previewing ? 'animate-spin' : ''}`} /> Regenerate
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">
+                These are the searches we'll run across {SCORED_ENGINES.map((e) => ENGINE_LABELS[e]).join(' + ')} (plus AI Overview & Google). Edit, add or remove any.
+              </p>
+              {previewing ? (
+                <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" /> Generating questions…
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    {questions.map((q, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Input value={q} onChange={(e) => setQuestions((prev) => prev.map((x, xi) => xi === i ? e.target.value : x))} />
+                        <Button variant="ghost" size="icon" onClick={() => setQuestions((prev) => prev.filter((_, xi) => xi !== i))} title="Remove">
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button variant="outline" size="sm" onClick={() => setQuestions((prev) => [...prev, ''])}>
+                      <Plus className="mr-1 h-4 w-4" /> Add question
                     </Button>
                   </div>
-                ))}
-                <Button variant="outline" size="sm" onClick={() => setQuestions((prev) => [...prev, ''])}>
-                  <Plus className="mr-1 h-4 w-4" /> Add question
-                </Button>
-              </div>
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-xs text-muted-foreground">
-                  {questions.length} question{questions.length === 1 ? '' : 's'} · est. cost ~${estimatedCost.toFixed(2)}
-                </span>
-                <Button onClick={confirmAndRun} disabled={running || questions.length === 0}>
-                  {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                  Confirm & run
-                </Button>
-              </div>
-            </>
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-xs text-muted-foreground">
+                      {questions.length} question{questions.length === 1 ? '' : 's'} · est. cost ~${estimatedCost.toFixed(2)}
+                    </span>
+                    <Button onClick={confirmAndRun} disabled={running || questions.length === 0}>
+                      {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                      Confirm & run
+                    </Button>
+                  </div>
+                </>
+              )}
+            </StepCard>
           )}
-        </StepCard>
+        </div>
       )}
 
       {step === 'results' && (
@@ -535,13 +597,6 @@ function StepHeader({ title, onBack }: { title: string; onBack?: () => void }) {
         </Button>
       )}
       <h2 className="text-base font-semibold">{title}</h2>
-    </div>
-  );
-}
-function NextRow({ onNext, disabled, nextLabel = 'Next' }: { onNext: () => void; disabled?: boolean; nextLabel?: string }) {
-  return (
-    <div className="flex justify-end">
-      <Button onClick={onNext} disabled={disabled}>{nextLabel} <ChevronRight className="ml-1 h-4 w-4" /></Button>
     </div>
   );
 }
