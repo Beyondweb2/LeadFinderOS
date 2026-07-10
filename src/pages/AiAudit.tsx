@@ -358,11 +358,14 @@ const AiAudit = () => {
   const liveTally = queueRows.reduce(
     (acc, r) => {
       if (r.status === 'done' && r.result) {
+        acc.done++;
         for (const e of SCORED_ENGINES) { acc.total++; if (r.result[e]?.named) acc.named++; }
+      } else if (r.status === 'failed') {
+        acc.failed++;
       }
       return acc;
     },
-    { named: 0, total: 0 },
+    { named: 0, total: 0, failed: 0, done: 0 },
   );
   const isDraining = !!runId && !(run && TERMINAL.has(run.status));
 
@@ -619,21 +622,34 @@ function MentionPill({ rate }: { rate: number | null }) {
     : 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))]';
   return <Badge className={`shrink-0 border-transparent ${cls}`}>{pct}% named</Badge>;
 }
-function ResultsHeadline({ run, live, draining }: { run: RunRow | null; live: { named: number; total: number }; draining: boolean }) {
+function ResultsHeadline({ run, live, draining }: { run: RunRow | null; live: { named: number; total: number; failed: number; done: number }; draining: boolean }) {
   // Prefer the folded summary once complete; otherwise the live tally as it drains.
-  const summary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number } } | null)?.summary;
+  const summary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number; failed_questions?: number; done_questions?: number } } | null)?.summary;
   const named = summary?.named_datapoints ?? live.named;
   const total = summary?.total_datapoints ?? live.total;
+  const failed = summary?.failed_questions ?? live.failed;
+  // Finished with zero completed searches → make "everything failed" explicit rather
+  // than a bare "Named in 0 of 0" (which reads like a real zero-visibility result).
+  if (!draining && total === 0) {
+    return (
+      <div className="text-lg font-bold tracking-tight">
+        {failed > 0 ? `All ${failed} ${failed === 1 ? 'search' : 'searches'} failed` : 'No searches completed'}
+      </div>
+    );
+  }
   return (
     <div className="text-lg font-bold tracking-tight">
       Named in {named} of {total} AI answers
       {!draining && total > 0 && <span className="text-muted-foreground font-normal text-sm"> ({Math.round((named / total) * 100)}%)</span>}
+      {failed > 0 && <span className="text-amber-500 font-normal text-sm"> · {failed} failed</span>}
     </div>
   );
 }
 
 function QuestionCard({ row, businessName }: { row: QueueRow; businessName: string }) {
   const pending = row.status === 'pending' || row.status === 'running';
+  // Failed rows store { error } (not an engine map); surface it instead of engines.
+  const failure = row.status === 'failed' ? (row.result as unknown as { error?: string } | null)?.error ?? null : null;
   return (
     <Card>
       <CardContent className="p-4 space-y-3">
@@ -643,7 +659,10 @@ function QuestionCard({ row, businessName }: { row: QueueRow; businessName: stri
             : row.status === 'failed' ? <Badge variant="secondary" className="shrink-0">failed</Badge>
             : null}
         </div>
-        {row.result && (
+        {row.status === 'failed' && (
+          <p className="text-[11px] text-amber-500">Search failed{failure ? ` — ${failure}` : ''}. It'll retry, or you can re-run the audit.</p>
+        )}
+        {row.status === 'done' && row.result && (
           <div className="space-y-2.5">
             {DISPLAY_ENGINES.map((e) => {
               const er = row.result?.[e];

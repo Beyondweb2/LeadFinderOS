@@ -18,11 +18,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const BATCH = 3;                 // queue rows processed per tick
+const BATCH = 1;                 // ONE row per tick → a tick can't exceed the edge wall-clock
 const CAP_USD = 3.0;             // per-RUN Apify cost ceiling (this audit run)
 const DAILY_CAP_USD = 15.0;      // per-USER rolling-24h ceiling (across audits) via the runner
 const MAX_ATTEMPTS = 3;          // per queue row before it's marked failed
-const RUN_TIMEOUT_MS = 80_000;   // per actor run (under the edge wall-clock)
+const RUN_TIMEOUT_MS = 110_000;  // per actor run — heavy multi-engine run often needs >80s; BATCH=1 keeps one attempt under the edge wall-clock
+const STALE_RUNNING_MS = 3 * 60 * 1000; // reclaim rows stuck 'running' longer than this
 // mention_rate is scored over the engines the audit targeted (the queue row's list).
 const DEFAULT_ENGINES = ["chatgpt", "gemini"];
 
@@ -64,6 +65,30 @@ Deno.serve(async (req) => {
     if (!apifyToken) return json({ ok: true, skipped: "no_apify_token", processed: 0 });
 
     const estCost = SOURCES.ai_search.estCostUsd;
+
+    // 0) Reclaim rows stranded in 'running' by a killed invocation. A row is flipped to
+    //    'running' before its Apify call; if the tick dies mid-run it never settles and the
+    //    pending-only query below never re-selects it, wedging the whole run. Reset any
+    //    'running' row untouched for > STALE_RUNNING_MS back to 'pending' (attempts+1, or
+    //    'failed' once exhausted). Needs ai_audit_queue.updated_at (manual-apply migration);
+    //    best-effort — if the column is missing this logs and the tick continues.
+    try {
+      const staleBefore = new Date(Date.now() - STALE_RUNNING_MS).toISOString();
+      const { data: stale } = await service
+        .from("ai_audit_queue").select("id, attempts")
+        .eq("status", "running").lt("updated_at", staleBefore);
+      for (const r of (stale ?? []) as Row[]) {
+        const attempts = (Number(r.attempts) || 0) + 1;
+        const failed = attempts >= MAX_ATTEMPTS;
+        await service.from("ai_audit_queue").update({
+          status: failed ? "failed" : "pending",
+          attempts,
+          ...(failed ? { result: { error: "stuck_running_reclaimed" } } : {}),
+        }).eq("id", r.id);
+      }
+    } catch (e) {
+      console.error("[process-ai-audit-queue] reclaim skipped (updated_at column missing?):", e instanceof Error ? e.message : e);
+    }
 
     // 1) Claim a batch of pending questions (oldest first — uses the status,created_at index).
     const { data: pending } = await service
@@ -137,6 +162,10 @@ Deno.serve(async (req) => {
           // per-RUN CAP_USD check above bounds this single audit run.
           capUsd: DAILY_CAP_USD,
           run: async () => {
+            // In-call retry is 429/5xx ONLY — deliberately NOT onAbort, so a single tick
+            // stays one ≤RUN_TIMEOUT_MS attempt (well under the edge wall-clock). A timeout/
+            // abort throws → the catch below bumps attempts and re-queues it as 'pending',
+            // so timeouts DO retry, just on the NEXT tick, up to MAX_ATTEMPTS.
             const { items } = await runAiSearch(String(row.question), audit.countryCode, {
               token: apifyToken,
               timeoutMs: RUN_TIMEOUT_MS,
@@ -159,13 +188,17 @@ Deno.serve(async (req) => {
         runCost.set(row.run_id, spent + (outcome.costUsd || estCost));
         processed++;
       } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
         const attempts = (Number(row.attempts) || 0) + 1;
         const failed = attempts >= MAX_ATTEMPTS;
+        // Persist the error onto the row so failures are visible in the DB (not just logs).
+        // A non-terminal error goes back to 'pending' and retries next tick; the last error
+        // is overwritten by the real result if a later attempt succeeds.
         await service.from("ai_audit_queue")
-          .update({ status: failed ? "failed" : "pending", attempts }).eq("id", row.id);
+          .update({ status: failed ? "failed" : "pending", attempts, result: { error: msg } }).eq("id", row.id);
         // A retry consumed a run too → count it toward the cap.
         runCost.set(row.run_id, spent + estCost);
-        console.error(`[process-ai-audit-queue] question failed (attempt ${attempts}${failed ? ", giving up" : ""}):`, e instanceof Error ? e.message : e);
+        console.error(`[process-ai-audit-queue] question failed (attempt ${attempts}${failed ? ", giving up" : ""}):`, msg);
       }
     }
 
@@ -220,13 +253,19 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       }
     }
 
-    // Fold per-question results + score mention_rate over the targeted engines.
+    // Fold per-question results + score mention_rate over the targeted engines. Track
+    // failed/done question counts so the UI can distinguish "everything failed" from
+    // "genuinely not named anywhere". mention_rate is computed ONLY over done rows.
     let named = 0;
     let total = 0;
+    let doneQuestions = 0;
+    let failedQuestions = 0;
     const questions = rows.map((r: Row) => {
       const engines: string[] = Array.isArray(r.engines) && r.engines.length ? r.engines : DEFAULT_ENGINES;
       const result = r.status === "done" ? (r.result ?? null) : null;
+      if (r.status === "failed") failedQuestions++;
       if (result) {
+        doneQuestions++;
         for (const e of engines) {
           total++;
           if (result?.[e]?.named === true) named++;
@@ -238,7 +277,14 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
 
     const results = {
       engines: DEFAULT_ENGINES,
-      summary: { named_datapoints: named, total_datapoints: total, mention_rate: mentionRate },
+      summary: {
+        named_datapoints: named,
+        total_datapoints: total,
+        mention_rate: mentionRate,
+        done_questions: doneQuestions,
+        failed_questions: failedQuestions,
+        total_questions: rows.length,
+      },
       questions,
     };
     const runStatus = isCapped ? "capped" : "complete";
