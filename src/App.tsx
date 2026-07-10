@@ -41,6 +41,7 @@ const Landing = lazy(() => import("./pages/Landing"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Feedback = lazy(() => import("./pages/Feedback"));
 const Inbox = lazy(() => import("./pages/Inbox"));
+const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
@@ -422,6 +423,18 @@ const App = () => {
                   <RequireAdmin>
                     <AdminSiteManage />
                   </RequireAdmin>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ai-audit"
+              element={
+                <ProtectedRoute>
+                  <SubscriptionGate>
+                    <AppLayout>
+                      <AiAudit />
+                    </AppLayout>
+                  </SubscriptionGate>
                 </ProtectedRoute>
               }
             />

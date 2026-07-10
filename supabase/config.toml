@@ -83,3 +83,9 @@ verify_jwt = false
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+[functions.create-ai-audit]
+verify_jwt = false
+
+[functions.process-ai-audit-queue]
+verify_jwt = false

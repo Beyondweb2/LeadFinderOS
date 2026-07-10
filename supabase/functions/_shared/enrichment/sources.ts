@@ -15,8 +15,9 @@ import {
   runApifyActor,
   type NormalizedPlace,
 } from "./apify.ts";
+import { AI_SEARCH_ACTOR } from "./ai-search.ts";
 
-export type SourceKey = "maps" | "contact_scraper" | "social_images" | "whatsapp";
+export type SourceKey = "maps" | "contact_scraper" | "social_images" | "whatsapp" | "ai_search";
 export type SourceStage = "discovery" | "enrich";
 
 export interface EnrichmentSourceDef {
@@ -65,6 +66,17 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
     stage: "enrich",
     estCostUsd: 0.005, // Twilio Lookup line_type_intelligence (HLR proxy)
     description: "HLR line-type (mobile/landline) via Twilio Lookup — WhatsApp-capable proxy",
+    enabled: true,
+  },
+  ai_search: {
+    key: "ai_search",
+    stage: "enrich",
+    actorId: AI_SEARCH_ACTOR,
+    // Per QUESTION (one actor run covers ChatGPT+Perplexity+Gemini+AI Overview+organic).
+    // ⚠️ ESTIMATE — verify against the actor's real per-run cost and tune here + the
+    // per-question estimate in create-ai-audit. Drives the runner cap pre-check.
+    estCostUsd: 0.05,
+    description: "AI Visibility Audit multi-engine SERP via apify/google-search-scraper",
     enabled: true,
   },
 };
