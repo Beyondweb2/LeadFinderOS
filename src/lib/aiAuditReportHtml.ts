@@ -18,6 +18,31 @@ export interface ReportEngineRow {
   total: number;   // questions tested on this engine
 }
 
+/* ── Website SEO section (results.seo) ─────────────────────────────────────────
+ * Populated manually for now (not yet from an actor). Renders a self-contained SVG
+ * block: overall grade + three category grades + a radar of the three scores + the
+ * lead findings. Grades are "A+".."F-" strings; scores 0–100. */
+export interface SeoCategoryGrade {
+  grade: string;   // "A+".."F-"
+  score: number;   // 0–100
+}
+export interface SeoFinding {
+  title: string;
+  detail: string;
+  severity: "high" | "med" | "low";
+}
+export interface AiAuditSeo {
+  overallGrade: string;                 // "A+".."F-"
+  categories: {
+    onPage: SeoCategoryGrade;
+    localPresence: SeoCategoryGrade;
+    contentTechnical: SeoCategoryGrade;
+  };
+  leadFindings: SeoFinding[];
+  // Stored before/after data — NEVER rendered to the client (grades/radar/findings only).
+  baseline?: Record<string, unknown>;
+}
+
 export interface AiAuditReportData {
   businessName: string;
   businessType: string;          // for copy; may be ""
@@ -32,6 +57,7 @@ export interface AiAuditReportData {
   gutPunch: { question: string; engineLabel: string; rivals: string[] } | null;
   generatedAtLabel: string;      // e.g. "11 Jul 2026"
   shareUrl?: string;             // reserved: future public link (not built yet)
+  seo?: AiAuditSeo;              // optional website-SEO section; slot renders only when present
 }
 
 function esc(s: string): string {
@@ -60,6 +86,111 @@ function dedupeNames(names: string[]): string[] {
     if (n && !out.some((u) => u.toLowerCase() === n.toLowerCase())) out.push(n);
   }
   return out;
+}
+
+/* ── SEO section rendering (pure SVG + CSS; no chart lib) ──────────────────────── */
+
+/** Grade → colour band. A/B green, C amber, D and below red (uses the report's tokens). */
+function gradeColour(grade: string): string {
+  const L = (grade || "").trim().charAt(0).toUpperCase();
+  if (L === "A" || L === "B") return "var(--green)";
+  if (L === "C") return "var(--amber)";
+  return "var(--red)"; // D, E, F, or anything unexpected
+}
+
+const clamp100 = (n: number) => Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
+
+/** A grade "circle": a ring (coloured arc = score, or full ring when no score) with the
+ *  letter grade in the middle, and a caption below. Pure SVG so it survives print/PDF. */
+function gradeCircle(grade: string, score: number | null, size: number, label: string): string {
+  const colour = gradeColour(grade);
+  const r = 44;
+  const circ = 2 * Math.PI * r;
+  const frac = score == null ? 1 : clamp100(score) / 100;
+  const dash = `${(frac * circ).toFixed(1)} ${circ.toFixed(1)}`;
+  const g = (grade || "").trim();
+  const fontSize = g.length > 1 ? 32 : 40; // "A+" vs "C"
+  return `
+        <figure class="gc">
+          <svg width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="${esc(label)}: grade ${esc(g)}">
+            <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--line)" stroke-width="8" />
+            <circle cx="50" cy="50" r="${r}" fill="none" stroke="${colour}" stroke-width="8" stroke-linecap="round"
+              stroke-dasharray="${dash}" transform="rotate(-90 50 50)" />
+            <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" font-weight="900" fill="${colour}">${esc(g)}</text>
+          </svg>
+          <figcaption class="gc-lbl">${esc(label)}</figcaption>
+        </figure>`;
+}
+
+/** Radar/spider chart of the three category scores (0–100) on three axes. Hand-drawn SVG. */
+function seoRadar(onPage: number, localPresence: number, contentTechnical: number): string {
+  const cx = 160, cy = 118, R = 82;
+  const rad = (deg: number) => (deg * Math.PI) / 180;
+  const pt = (deg: number, frac: number): [number, number] => [
+    cx + R * frac * Math.cos(rad(deg)),
+    cy + R * frac * Math.sin(rad(deg)),
+  ];
+  // Axis 0 top, then clockwise (+120°). Each carries a category + a 1–2 line label.
+  const axes = [
+    { deg: -90, val: clamp100(onPage), lx: cx, ly: cy - R - 18, lines: ["On-Page SEO"] },
+    { deg: 30, val: clamp100(contentTechnical), lx: cx + (R + 40) * Math.cos(rad(30)), ly: cy + (R + 26) * Math.sin(rad(30)), lines: ["Content &", "Technical"] },
+    { deg: 150, val: clamp100(localPresence), lx: cx + (R + 40) * Math.cos(rad(150)), ly: cy + (R + 26) * Math.sin(rad(150)), lines: ["Local", "Presence"] },
+  ];
+  const ring = (frac: number) =>
+    axes.map((a) => { const [x, y] = pt(a.deg, frac); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
+  const grid = [0.25, 0.5, 0.75, 1].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="var(--line)" stroke-width="1" />`).join("");
+  const spokes = axes.map((a) => { const [x, y] = pt(a.deg, 1); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1" />`; }).join("");
+  const dataPts = axes.map((a) => { const [x, y] = pt(a.deg, a.val / 100); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
+  const dots = axes.map((a) => { const [x, y] = pt(a.deg, a.val / 100); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--blue)" />`; }).join("");
+  const lineH = 11;
+  const labels = axes.map((a) => {
+    const startY = a.ly - ((a.lines.length - 1) * lineH) / 2;
+    const tspans = a.lines.map((ln, i) => `<tspan x="${a.lx.toFixed(1)}" dy="${i === 0 ? 0 : lineH}">${esc(ln)}</tspan>`).join("");
+    return `<text x="${a.lx.toFixed(1)}" y="${startY.toFixed(1)}" text-anchor="middle" class="seo-axis">${tspans}</text>`;
+  }).join("");
+  return `
+          <svg class="radar" width="320" height="212" viewBox="0 0 320 212" role="img" aria-label="SEO category scores radar chart">
+            ${grid}
+            ${spokes}
+            <polygon points="${dataPts}" fill="var(--blue)" fill-opacity="0.16" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" />
+            ${dots}
+            ${labels}
+          </svg>`;
+}
+
+const SEV_COLOUR: Record<SeoFinding["severity"], string> = { high: "var(--red)", med: "var(--amber)", low: "var(--faint)" };
+
+/** Build the whole SEO section, or "" when there's no seo data (slot renders nothing). */
+function seoSection(seo: AiAuditSeo | undefined): string {
+  if (!seo) return "";
+  const { overallGrade, categories: c, leadFindings } = seo;
+  const overallColour = gradeColour(overallGrade);
+  const findings = (leadFindings ?? []).map((f) => `
+          <li class="find">
+            <span class="find-dot" style="background:${SEV_COLOUR[f.severity] ?? "var(--faint)"}"></span>
+            <span class="find-body"><span class="find-title">${esc(f.title)}</span> <span class="find-detail">${esc(f.detail)}</span></span>
+          </li>`).join("");
+  return `
+    <!-- WEBSITE SEO — self-contained SVG grades + radar + findings; renders only when seo present -->
+    <section class="seo">
+      <h2>Your website’s SEO</h2>
+      <p class="seo-intro">Your site’s technical SEO grades <b style="color:${overallColour}">${esc(overallGrade)}</b> — but that’s separate from whether AI can find you. Here’s what’s holding the site back.</p>
+
+      <div class="seo-grades">
+        <div class="seo-overall">${gradeCircle(overallGrade, null, 124, "Overall")}</div>
+        <div class="seo-cats">
+          ${gradeCircle(c.onPage.grade, c.onPage.score, 84, "On-Page SEO")}
+          ${gradeCircle(c.localPresence.grade, c.localPresence.score, 84, "Local Presence")}
+          ${gradeCircle(c.contentTechnical.grade, c.contentTechnical.score, 84, "Content & Technical")}
+        </div>
+      </div>
+
+      <div class="seo-viz">
+        <div class="seo-radar">${seoRadar(c.onPage.score, c.localPresence.score, c.contentTechnical.score)}</div>
+        ${findings ? `<ul class="seo-findings">${findings}
+        </ul>` : ""}
+      </div>
+    </section>`;
 }
 
 /**
@@ -216,6 +347,27 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .res-note{ margin-top:16px; font-size:13px; line-height:1.5; color:var(--muted); max-width:70ch; }
   .res-note b{ color:var(--ink); font-weight:800; }
 
+  /* WEBSITE SEO — grade circles + radar + findings (all inline SVG, no chart lib) */
+  .seo{ padding:24px 40px 26px; border-top:1px solid var(--line); }
+  .seo-intro{ margin:-4px 0 20px; font-size:15px; line-height:1.5; color:var(--muted); font-weight:600; max-width:66ch; }
+  .seo-intro b{ font-weight:850; }
+  .seo-grades{ display:flex; align-items:center; gap:30px; flex-wrap:wrap; }
+  .seo-cats{ display:flex; gap:22px; flex-wrap:wrap; }
+  .gc{ margin:0; text-align:center; }
+  .gc svg{ display:block; margin:0 auto; }
+  .gc-lbl{ margin-top:7px; font-size:11px; font-weight:700; color:var(--muted); max-width:11ch; }
+  .seo-overall .gc-lbl{ font-size:12px; color:var(--ink); font-weight:800; }
+  .seo-viz{ display:flex; align-items:center; gap:30px; flex-wrap:wrap; margin-top:22px; }
+  .seo-radar{ flex:0 0 auto; }
+  .radar{ display:block; }
+  .seo-axis{ font-size:10px; font-weight:700; fill:var(--muted); }
+  .seo-findings{ list-style:none; margin:0; padding:0; flex:1; min-width:250px; }
+  .find{ display:flex; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .find:last-child{ border-bottom:0; }
+  .find-dot{ width:9px; height:9px; border-radius:50%; margin-top:5px; flex:0 0 auto; }
+  .find-title{ font-weight:800; font-size:13.5px; color:var(--ink); }
+  .find-detail{ font-size:12.5px; line-height:1.45; color:var(--muted); }
+
   /* CLOSING CTA — Findable blue band with a yellow highlight */
   .cta{ background:var(--blue); color:#fff; padding:28px 40px 26px; }
   .cta h3{ margin:0 0 8px; font-size:24px; font-weight:850; color:#fff; letter-spacing:-.01em; }
@@ -235,8 +387,8 @@ export function renderReportHtml(d: AiAuditReportData): string {
   @media print{
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
-    .band,.hero,.gutbox,.why,.dowe,.results,.cta,.site-foot{ break-inside:avoid; }
-    .steps,.res-grid,.stats{ break-inside:avoid; }
+    .band,.hero,.gutbox,.why,.dowe,.results,.cta,.site-foot,.seo{ break-inside:avoid; }
+    .steps,.res-grid,.stats,.seo-grades,.seo-viz{ break-inside:avoid; }
   }
 </style>
 </head>
@@ -314,10 +466,11 @@ ${gutbox}
     </section>
 
     <!-- ============================================================================
-         SEO SECTION SLOT — reserved. Render results.seo here once it's proven on a real
-         site: overall A–F grade + the three category grades (Local Presence / On-Page SEO
-         / Content & Technical) with their failed findings. Not built yet (data unproven).
+         SEO SECTION SLOT — renders results.seo when present (overall grade + three
+         category grades + a radar of the three scores + the lead findings). Renders
+         nothing when d.seo is absent, so AI-only audits (e.g. the bar) don't break.
          ============================================================================ -->
+${seoSection(d.seo)}
 
     <!-- PROOF -->
     <section class="results">

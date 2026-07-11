@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import type { Country } from '@/types/outreach';
 import { AiAuditReport } from '@/components/AiAuditReport';
-import { downloadReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtml';
+import { downloadReportHtml, type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
 // and answering one reveals the next below it (no per-step Next). Generates search
@@ -674,6 +674,9 @@ const AiAudit = () => {
     competitors: topCompetitors,
     gutPunch: pickGutPunch(queueRows, locationText, specialisms, businessType),
     generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    // Straight passthrough of the run's results.seo — no transformation; renders only when
+    // present, so AI-only audits (no SEO data) leave d.seo undefined and are unaffected.
+    seo: (run?.results as { seo?: AiAuditSeo } | null)?.seo,
   } : null;
 
   const shown = (name: typeof WIZARD_STEPS[number]) => revealed >= WIZARD_STEPS.indexOf(name);
