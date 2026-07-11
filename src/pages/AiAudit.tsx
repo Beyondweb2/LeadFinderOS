@@ -93,6 +93,25 @@ const PLURAL_CATEGORIES = new Set([
   'spots', 'places', 'joints', 'hangouts', 'houses', 'rooms', 'halls', 'gardens', 'kitchens', 'bistros',
   'taverns', 'breweries', 'diners',
 ]);
+// Cuisines, vibe/drink descriptors, singular venue-TYPE words, and area/place-type words —
+// none of these is a business NAME. A candidate whose words are ALL generic (e.g. "Thai
+// Food", "Cocktail Lounge", "Night Bazaar") is dropped; a plain single generic word ("Thai",
+// "Nimman" area, "Cocktail") is dropped. A name with a real proper token survives.
+const GENERIC_TERMS = new Set([
+  // cuisines / food
+  'thai', 'italian', 'mexican', 'japanese', 'indian', 'chinese', 'french', 'korean', 'vietnamese', 'american',
+  'spanish', 'greek', 'turkish', 'lebanese', 'mediterranean', 'fusion', 'asian', 'western', 'seafood', 'vegan',
+  'vegetarian', 'halal', 'bbq', 'sushi', 'pizza', 'burger', 'noodle', 'noodles', 'food', 'cuisine', 'eats', 'dining', 'tapas',
+  // drink / vibe descriptors
+  'cocktail', 'cocktails', 'craft', 'beer', 'wine', 'whisky', 'whiskey', 'gin', 'rooftop', 'sports', 'karaoke',
+  'live', 'music', 'dance', 'dancing', 'jazz', 'reggae', 'irish', 'tiki', 'speakeasy', 'gastropub', 'microbrewery', 'happy', 'hour',
+  // singular venue-type words (category, not a name)
+  'lounge', 'hall', 'room', 'house', 'kitchen', 'grill', 'tavern', 'bistro', 'brewery', 'taproom', 'den',
+  'saloon', 'cantina', 'parlour', 'parlor', 'garden', 'diner', 'pizzeria', 'trattoria', 'izakaya', 'eatery',
+  // area / place-type words (neighbourhoods, districts, landmarks)
+  'nimman', 'bazaar', 'market', 'plaza', 'mall', 'square', 'park', 'quarter', 'village', 'zone', 'riverside',
+  'beach', 'harbour', 'harbor', 'pier', 'walking', 'district',
+]);
 
 /** Niche keywords for the business — its real specialisms + the distinctive part of its
  *  type (drops the generic category word). Used to prefer WINNABLE, specialism-relevant
@@ -136,16 +155,22 @@ function isRealCompetitor(name: string, locationText: string): boolean {
   if (UI_PHRASES.some((p) => nl === p || nl.includes(p))) return false;          // "gemini apps activity" etc.
   const words = nl.split(/\s+/).map((w) => w.replace(/[^a-z0-9.&'-]/g, '')).filter(Boolean);
   if (!words.length) return false;
-  // All words generic/stopword or platform-UI → not a real venue ("the best", "Gemini Apps Activity").
-  if (words.every((w) => COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w))) return false;
-  // Ends in a PLURAL category word → a category/list, not a single venue ("Kava Bars", "Cocktail Bars").
+  const generic = (w: string) => COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || GENERIC_TERMS.has(w);
+  // Every word is generic (stopword / cuisine / descriptor / venue-type / area) → not a real
+  // name: "Thai Food", "Cocktail Lounge", "Night Bazaar", "Gemini Apps Activity".
+  if (words.every(generic)) return false;
+  // Ends in a PLURAL category word → a category/list, not a single venue ("Kava Bars").
   if (PLURAL_CATEGORIES.has(words[words.length - 1])) return false;
   const locTokens = locationText.toLowerCase().split(/[^a-z]+/).filter((tk) => tk.length > 2);
   if (locTokens.length && locTokens.every((tk) => nl.includes(tk)) && words.length <= locTokens.length + 1) return false; // basically the location
-  if (words.length === 1) {                              // single word must look like a real name
+  if (!/[A-Z0-9]/.test(n)) return false;                 // no capital/digit anywhere → a fragment, not a name
+  if (words.length === 1) {
+    // Single word: keep ONLY if it's a clear brand token (has . & digit or apostrophe, e.g.
+    // "Bar.San", "O'Malley's"). Plain single words — cuisines, neighbourhoods, cities — are
+    // dropped ("Thai", "Nimman", "Cocktail", "Leeds").
     const w = words[0];
-    if (COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || w.length < 4) return false;
-    if (!/[A-Z0-9.&]/.test(n)) return false;             // no capital/digit → likely a fragment
+    if (generic(w) || w.length < 4) return false;
+    if (!/[.&0-9']/.test(n)) return false;
   }
   return true;
 }
@@ -161,25 +186,30 @@ function trimToSentence(text: string, max: number): string {
 
 // Head words that signal a broad, unwinnable vanity term ("best bar in X").
 const HEAD_TERMS = /\b(best|top|good|great|recommended|popular|leading|favou?rite)\b/i;
+// "near me" questions resolve to whatever city the AI guesses (often the WRONG one) — they
+// undermine the report's credibility, so they're excluded from gut-punch selection entirely.
+const NEAR_ME = /\bnear\s*me\b/i;
 
-// The gut-punch to LEAD the report with: a completed question where an engine did NOT
-// name the business and gave clean, damning prose. Ranked by (1) RELEVANCE — a question
-// tied to the business's real niche (e.g. "kava", "pool") is a winnable, fixable search
-// and ranks far above a broad vanity head term ("best bar in X"), which is deprioritised;
-// then (2) whether the answer is damning (says it doesn't exist / names a real competitor);
-// then (3) clarity. Junk (map/image/URL) is only ever picked if nothing clean exists.
+// The gut-punch to LEAD the report with: a completed question where an engine did NOT name
+// the business and gave clean, damning prose. Ranked by (1) RELEVANCE — a question tied to
+// the business's real niche (e.g. "kava", "pool") is a winnable, fixable search and ranks
+// far above a broad vanity head term ("best bar in X"), which is deprioritised; then (2)
+// whether the answer is damning (doesn't exist / names a real competitor); then (3) clarity.
+// "near me" questions are skipped outright. Also returns the top REAL competitor named in the
+// chosen answer (for the report's "Instead, AI recommended X" line), if any.
 function pickGutPunch(
   rows: QueueRow[],
   locationText: string,
   specialisms: string,
   businessType: string,
-): { question: string; engineLabel: string; text: string } | null {
+): { question: string; engineLabel: string; text: string; competitor?: string } | null {
   const niche = nicheKeywordsFrom(specialisms, businessType);
-  let best: { question: string; engineLabel: string; text: string } | null = null;
+  let best: { question: string; engineLabel: string; text: string; competitor?: string } | null = null;
   let bestScore = -Infinity;
   for (const r of rows) {
     if (r.status !== 'done' || !r.result) continue;
     const q = r.question.toLowerCase();
+    if (NEAR_ME.test(q)) continue;                       // never lead with a wrong-city "near me" answer
     const hasNiche = niche.some((k) => q.includes(k));
     const isHead = HEAD_TERMS.test(q);
     for (const engine of DISPLAY_ENGINES) {
@@ -187,19 +217,20 @@ function pickGutPunch(
       if (!er || er.named) continue;
       const text = (er.answer_text || '').trim();
       if (!text) continue;
+      const rival = er.competitors.find((c) => isRealCompetitor(c, locationText));
       let score = 0;
       // (1) Relevance / winnability — dominant.
       if (hasNiche) score += 2_000_000;                  // specialism-relevant, winnable
       else if (isHead) score -= 1_500_000;               // broad vanity head term, unwinnable
       // (2) Damning answer.
       if (looksAbsent(text)) score += 400_000;
-      if (er.competitors.some((c) => isRealCompetitor(c, locationText))) score += 200_000;
+      if (rival) score += 200_000;                       // names a real competitor
       // (3) Clarity tiebreak + junk guard.
       score += Math.min(text.length, 400) / 100;
       if (isJunkAnswer(text)) score -= 10_000_000;       // last resort only
       if (score > bestScore) {
         bestScore = score;
-        best = { question: r.question, engineLabel: ENGINE_LABELS[engine] ?? engine, text: trimToSentence(text, 380) };
+        best = { question: r.question, engineLabel: ENGINE_LABELS[engine] ?? engine, text: trimToSentence(text, 380), competitor: rival };
       }
     }
   }
