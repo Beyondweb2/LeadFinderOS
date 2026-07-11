@@ -63,12 +63,79 @@ interface LeadOption { id: string; business_name: string; category: string | nul
 
 const TERMINAL = new Set(['complete', 'capped', 'failed']);
 
-// The single strongest "gut-punch" for the client report: a completed question where an
-// engine did NOT name the business but gave a real answer. Prefer answers that name
-// competitors, then the longest (most damning) answer. Returns null if there's none.
-function pickGutPunch(rows: QueueRow[]): { question: string; engineLabel: string; text: string } | null {
+/* ── Report data hygiene ─────────────────────────────────────────────────────
+ * The actor's answer_text and competitor lists are noisy (map/image junk leaks in,
+ * and competitor "names" are often generic words or the location). These helpers keep
+ * the client report clean: they feed BOTH the scorecard callout and the report. */
+
+// Generic words that are never a real competitor business name on their own.
+const COMPETITOR_STOPWORDS = new Set([
+  'the', 'best', 'top', 'good', 'great', 'nice', 'popular', 'recommended', 'famous', 'cheap', 'cool', 'fun',
+  'near', 'nearby', 'me', 'my', 'you', 'your', 'in', 'on', 'at', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'with', 'by', 'from',
+  'now', 'today', 'tonight', 'open', 'here', 'there', 'this', 'that', 'some', 'any', 'more', 'most',
+  'old', 'new', 'city', 'town', 'downtown', 'centre', 'center', 'central', 'district', 'area', 'quarter', 'zone',
+  'street', 'road', 'soi', 'lane', 'night', 'nightlife', 'local',
+  'bar', 'bars', 'pub', 'pubs', 'club', 'clubs', 'cafe', 'cafes', 'coffee', 'restaurant', 'restaurants', 'eatery',
+  'place', 'places', 'spot', 'spots', 'venue', 'venues', 'joint', 'hangout', 'option', 'options', 'list', 'guide',
+]);
+
+// Map/image/markup junk that sometimes leaks into an engine's answer_text.
+const JUNK_MARKERS = ['mapbox', 'openstreetmap', 'images.openai', 'oaidalleapi', 'staticmap', 'tile.', 'data:image', 'base64', 'googleusercontent', '�'];
+
+/** True when answer_text isn't clean human prose (map/image junk, mostly URLs/markup,
+ *  or too few real words) — such answers must never be shown as the gut-punch quote. */
+function isJunkAnswer(text: string): boolean {
+  const t = text.toLowerCase();
+  if (JUNK_MARKERS.some((m) => t.includes(m))) return true;
+  const stripped = text.replace(/https?:\/\/\S+/gi, ' ').replace(/\S+\.(png|jpe?g|svg|webp|gif|bmp)\S*/gi, ' ');
+  const words = stripped.trim().split(/\s+/).filter((w) => /[a-z]{2,}/i.test(w));
+  if (words.length < 10) return true;                    // too little real prose
+  const letters = (text.match(/[a-z]/gi) || []).length;
+  if (letters / text.length < 0.55) return true;         // mostly markup/symbols/urls
+  return false;
+}
+
+/** "There don't appear to be any kava bars…" style answers — the most damning. */
+function looksAbsent(text: string): boolean {
+  return /\b(no|not|none|couldn't|can't|cannot|unable|aren't|isn't|don't|doesn't)\b/i.test(text)
+    && /\b(appear|aware|find|identify|seem|exist|any|dedicated|specific|listing|results?)\b/i.test(text);
+}
+
+/** Keep only things that look like a real business name — drop stopwords, the audit's
+ *  location, and short fragments. Bias to precision (better fewer real than lots of noise). */
+function isRealCompetitor(name: string, locationText: string): boolean {
+  const n = name.trim();
+  if (n.length < 3 || n.length > 60) return false;
+  const words = n.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z0-9.&'-]/g, '')).filter(Boolean);
+  if (!words.length) return false;
+  if (words.every((w) => COMPETITOR_STOPWORDS.has(w))) return false;   // all-generic (e.g. "the best")
+  const nl = n.toLowerCase();
+  const locTokens = locationText.toLowerCase().split(/[^a-z]+/).filter((tk) => tk.length > 2);
+  if (locTokens.length && locTokens.every((tk) => nl.includes(tk)) && words.length <= locTokens.length + 1) return false; // basically the location
+  if (words.length === 1) {                              // single word must look like a real name
+    const w = words[0];
+    if (COMPETITOR_STOPWORDS.has(w) || w.length < 4) return false;
+    if (!/[A-Z0-9.&]/.test(n)) return false;             // no capital/digit → likely a fragment
+  }
+  return true;
+}
+
+/** Trim to a sentence boundary near `max` chars (avoid cutting mid-word). */
+function trimToSentence(text: string, max: number): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const stop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+  return stop > max * 0.5 ? cut.slice(0, stop + 1).trim() : cut.trim() + '…';
+}
+
+// The single strongest CLEAN "gut-punch": a completed question where an engine did NOT
+// name the business and gave real, human-readable prose. Strongly prefer "doesn't exist"
+// answers, then ones naming a real competitor, then longer. Junk (map/image/URL) is only
+// ever picked if literally nothing clean exists — never the URL junk over real prose.
+function pickGutPunch(rows: QueueRow[], locationText: string): { question: string; engineLabel: string; text: string } | null {
   let best: { question: string; engineLabel: string; text: string } | null = null;
-  let bestScore = -1;
+  let bestScore = -Infinity;
   for (const r of rows) {
     if (r.status !== 'done' || !r.result) continue;
     for (const engine of DISPLAY_ENGINES) {
@@ -76,10 +143,13 @@ function pickGutPunch(rows: QueueRow[]): { question: string; engineLabel: string
       if (!er || er.named) continue;
       const text = (er.answer_text || '').trim();
       if (!text) continue;
-      const score = (er.competitors.length > 0 ? 1_000_000 : 0) + text.length;
+      let score = Math.min(text.length, 600);
+      if (looksAbsent(text)) score += 500_000;
+      if (er.competitors.some((c) => isRealCompetitor(c, locationText))) score += 200_000;
+      if (isJunkAnswer(text)) score -= 10_000_000;       // last resort only
       if (score > bestScore) {
         bestScore = score;
-        best = { question: r.question, engineLabel: ENGINE_LABELS[engine] ?? engine, text: text.slice(0, 500) };
+        best = { question: r.question, engineLabel: ENGINE_LABELS[engine] ?? engine, text: trimToSentence(text, 380) };
       }
     }
   }
@@ -381,6 +451,7 @@ const AiAudit = () => {
     setAuditId(audit.id);
     setResultsBusinessName(audit.business_name);
     setBusinessType(audit.business_type ?? ''); // so the report's "what this means" line is populated for reopened audits
+    setLocationText(audit.location_text ?? ''); // so the competitor filter can drop the location for reopened audits
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
     setStep('results');
@@ -421,6 +492,7 @@ const AiAudit = () => {
         const er = r.result[engine];
         if (!er) continue;
         for (const c of er.competitors) {
+          if (!isRealCompetitor(c, locationText)) continue; // drop stopwords / location / fragments
           const key = c.trim().toLowerCase();
           if (!key) continue;
           const cur = counts.get(key);
@@ -428,7 +500,8 @@ const AiAudit = () => {
         }
       }
     }
-    return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 5).map((x) => x.name);
+    // Cap at the top 4 real names — better fewer real ones than lots of noise.
+    return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 4).map((x) => x.name);
   })();
 
   // Client report data (from the same saved run data). Headline totals prefer the folded
@@ -444,7 +517,7 @@ const AiAudit = () => {
     pct: reportTotal > 0 ? Math.round((reportNamed / reportTotal) * 100) : 0,
     perEngine: perEngineScore.filter((pe) => pe.total > 0).map((pe) => ({ label: ENGINE_LABELS[pe.engine] ?? pe.engine, named: pe.named, total: pe.total })),
     competitors: topCompetitors,
-    gutPunch: pickGutPunch(queueRows),
+    gutPunch: pickGutPunch(queueRows, locationText),
     generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
   } : null;
 
