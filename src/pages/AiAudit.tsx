@@ -254,15 +254,15 @@ const NEAR_ME = /\bnear\s*me\b/i;
 // far above a broad vanity head term ("best bar in X"), which is deprioritised; then (2)
 // whether the answer is damning (doesn't exist / names a real competitor); then (3) clarity.
 // "near me" questions are skipped outright. Also returns the top REAL competitor named in the
-// chosen answer (for the report's "Instead, AI recommended X" line), if any.
+// chosen answer (for the report's "AI recommended X, Y and others" summary), if any.
 function pickGutPunch(
   rows: QueueRow[],
   locationText: string,
   specialisms: string,
   businessType: string,
-): { question: string; engineLabel: string; text: string; competitor?: string } | null {
+): { question: string; engineLabel: string; rivals: string[] } | null {
   const niche = nicheKeywordsFrom(specialisms, businessType);
-  let best: { question: string; engineLabel: string; text: string; competitor?: string } | null = null;
+  let best: { question: string; engineLabel: string; rivals: string[] } | null = null;
   let bestScore = -Infinity;
   for (const r of rows) {
     if (r.status !== 'done' || !r.result) continue;
@@ -275,9 +275,11 @@ function pickGutPunch(
       if (!er || er.named) continue;
       const text = (er.answer_text || '').trim();
       if (!text || isJunkAnswer(text)) continue;         // skip map/image/URL junk outright
-      const rival = er.competitors.find((c) => isRealCompetitor(c, locationText));
-      // Extract the CLEAN, relevant sentence(s). If nothing clean+relevant → skip this
-      // candidate entirely and let a different question's answer win.
+      const rivals = er.competitors.filter((c) => isRealCompetitor(c, locationText));
+      const rival = rivals[0];
+      // Gate on extraction: only lead with an answer that is genuinely damning (competitor
+      // named / business or category absent / recommendations). The report writes its own
+      // clean SUMMARY of this answer — it never uses the extracted snippet verbatim.
       const snippet = extractGutPunch(text, rival);
       if (!snippet) continue;
       let score = 0;
@@ -291,7 +293,7 @@ function pickGutPunch(
       score += Math.min(snippet.length, 400) / 100;
       if (score > bestScore) {
         bestScore = score;
-        best = { question: r.question, engineLabel: ENGINE_LABELS[engine] ?? engine, text: snippet, competitor: rival };
+        best = { question: r.question, engineLabel: ENGINE_LABELS[engine] ?? engine, rivals };
       }
     }
   }
