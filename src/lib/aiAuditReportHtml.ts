@@ -7,6 +7,10 @@
 // source of the report design, used by the download AND the in-app preview (rendered
 // in an iframe). A future PUBLIC shareable link only has to serve this same function
 // with the same data (pass `shareUrl` to surface a "view online" footer) — no rewrite.
+//
+// Narrative flow is pain → solution → proof: hero verdict, a plain-English summary of
+// the worst answer (NOT the raw AI paragraph), why it matters, then WHAT WE DO to fix
+// it, then the per-engine proof + CTA.
 
 export interface ReportEngineRow {
   label: string;   // "ChatGPT", "Gemini", "AI Overview", "Google"
@@ -21,8 +25,11 @@ export interface AiAuditReportData {
   total: number;                 // AI answers tested
   pct: number;                   // 0–100
   perEngine: ReportEngineRow[];
-  competitors: string[];         // real brands AI named instead
-  gutPunch: { question: string; engineLabel: string; text: string; competitor?: string } | null;
+  competitors: string[];         // real brands AI named instead (aggregate)
+  // The single worst example to lead with: the question, the engine, and the REAL
+  // competitors AI recommended in that answer. The report writes a clean summary of
+  // this — it never dumps the raw AI paragraph.
+  gutPunch: { question: string; engineLabel: string; rivals: string[] } | null;
   generatedAtLabel: string;      // e.g. "11 Jul 2026"
   shareUrl?: string;             // reserved: future public link (not built yet)
 }
@@ -45,37 +52,74 @@ function heroVerdict(pct: number, named: number): { band: "crit" | "low" | "mid"
   return { band: "high", punch: "AI names you in most answers — let’s make it every time." };
 }
 
+/** De-duplicate competitor names (case-insensitive), preserving first-seen order. */
+function dedupeNames(names: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of names) {
+    const n = (raw || "").trim();
+    if (n && !out.some((u) => u.toLowerCase() === n.toLowerCase())) out.push(n);
+  }
+  return out;
+}
+
 /**
  * Build the full standalone one-page HTML document. Findable-branded (blue + yellow),
- * inverted pyramid, colour-disciplined: colour (blue / yellow / red) lands only on key
- * words + numbers so they pop; everything else stays muted with generous white space.
+ * pain → solution → proof, colour-disciplined: colour (blue / yellow / red) lands only
+ * on key words + numbers so they pop; everything else stays muted with generous white
+ * space. Purposeful graphics only — no decorative fills.
  */
 export function renderReportHtml(d: AiAuditReportData): string {
   const type = d.businessType.trim() || "business like yours";
   const v = heroVerdict(d.pct, d.named);
 
-  const engineRows = d.perEngine.map((pe) => {
+  // ── Gut-punch: a clean SUMMARY of the worst answer, with the competitors AI named
+  //    instead. Never the raw AI paragraph.
+  let gutbox = "";
+  if (d.gutPunch) {
+    const g = d.gutPunch;
+    const uniq = dedupeNames(g.rivals);
+    const shown = uniq.slice(0, 3);
+    const more = uniq.length - shown.length;
+    const chips = shown.map((c) => `<span class="rv">${esc(c)}</span>`);
+    let summary: string;
+    if (chips.length === 0) {
+      summary = `When someone searched “<span class="gb-q">${esc(g.question)}</span>”, AI didn’t mention <b>${esc(d.businessName)}</b> at all.`;
+    } else {
+      let list: string;
+      if (chips.length === 1) list = more > 0 ? `${chips[0]} and others` : chips[0];
+      else if (more > 0) list = `${chips.join(", ")} and others`;
+      else list = `${chips.slice(0, -1).join(", ")} and ${chips[chips.length - 1]}`;
+      summary = `When someone searched “<span class="gb-q">${esc(g.question)}</span>”, AI recommended ${list} — <b>${esc(d.businessName)}</b> wasn’t mentioned at all.`;
+    }
+    gutbox = `
+    <section class="gutbox">
+      <div class="gb-eyebrow">What AI actually said</div>
+      <p class="gb-sum">${summary}</p>
+      <div class="gb-attr">— ${esc(g.engineLabel)}. ${esc(d.businessName)} was never named.</div>
+    </section>`;
+  }
+
+  // ── Proof: one card per engine. Zeros + red crosses are the evidence, so they get weight.
+  const engineCards = d.perEngine.map((pe) => {
     const hit = pe.named > 0;
     return `
-          <tr>
-            <td class="eng">${esc(pe.label)}</td>
-            <td class="now"><span class="glyph ${hit ? "yes" : "no"}">${hit ? "✓" : "✕"}</span><span class="count">${pe.named} of ${pe.total}</span></td>
-            <td class="after"><span class="await">after re-run</span></td>
-          </tr>`;
+        <div class="res-card ${hit ? "hit" : "zero"}">
+          <div class="rc-top">
+            <span class="rc-eng">${esc(pe.label)}</span>
+            <span class="rc-glyph ${hit ? "yes" : "no"}">${hit ? "✓" : "✕"}</span>
+          </div>
+          <div class="rc-count"><span class="rc-n ${hit ? "yes" : "no"}">${pe.named}</span><span class="rc-of">of ${pe.total}</span></div>
+          <div class="rc-lbl">answers named you</div>
+          <div class="rc-after">after re-run</div>
+        </div>`;
   }).join("");
 
-  const exhibit = d.gutPunch ? `
-    <section class="exhibit">
-      <div class="ex-label">When someone searched “<span class="ex-q">${esc(d.gutPunch.question)}</span>”, here’s what AI told them:</div>
-      <blockquote class="ex-quote">“${esc(d.gutPunch.text)}”</blockquote>
-      ${d.gutPunch.competitor ? `<div class="ex-instead">Instead, AI recommended <span class="rival">${esc(d.gutPunch.competitor)}</span>.</div>` : ""}
-      <div class="ex-attr">— ${esc(d.gutPunch.engineLabel)}. ${esc(d.businessName)} was never mentioned.</div>
-    </section>` : "";
-
-  const comps = d.competitors.length ? `
-    <div class="comps"><span class="comps-l">AI pointed customers to these instead:</span> ${d.competitors.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>` : "";
-
   const shareFoot = d.shareUrl ? ` · <a href="${esc(d.shareUrl)}">View online</a>` : "";
+
+  // Purposeful inline icons for the "What we do" steps (stroke, currentColor — inherit blue).
+  const icListed = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
+  const icStruct = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+  const icNamed = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -88,6 +132,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     --blue:#1a3d7c; --blue-2:#2a5aa8; --yellow:#ffd23f;
     --ink:#0f172a; --muted:#5b6472; --faint:#9aa3b2; --line:#e9edf3;
     --red:#e11d2a; --amber:#c2820b; --green:#15a34a; --paper:#ffffff; --page:#eef1f6;
+    --foot:#102a58;
   }
   *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   html,body{ margin:0; padding:0; }
@@ -106,29 +151,29 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .wave{ position:absolute; left:0; right:0; bottom:-1px; width:100%; height:38px; display:block; }
 
   /* One-line explainer */
-  .explainer{ padding:24px 40px 8px; font-size:19px; line-height:1.42; color:#334155; font-weight:600; max-width:58ch; }
+  .explainer{ padding:24px 40px 6px; font-size:19px; line-height:1.42; color:#334155; font-weight:600; max-width:58ch; }
   .explainer b{ color:var(--blue); font-weight:800; }
 
-  /* HERO */
-  .hero{ padding:14px 40px 26px; }
-  .score{ display:flex; align-items:center; gap:20px; }
-  .num{ font-size:100px; line-height:.86; font-weight:900; letter-spacing:-.04em; }
+  /* HERO — balanced two-part: big number/label on the left, the verdict on the right */
+  .hero{ display:flex; align-items:stretch; gap:30px; padding:20px 40px 30px; }
+  .hero-num{ display:flex; align-items:center; gap:18px; flex:0 0 auto; }
+  .num{ font-size:104px; line-height:.82; font-weight:900; letter-spacing:-.04em; }
   .num.crit,.num.low{ color:var(--red); } .num.mid{ color:var(--amber); } .num.high{ color:var(--green); }
-  .score-txt .l1{ font-size:24px; font-weight:850; color:var(--ink); }
-  .score-txt .l2{ font-size:15px; color:var(--muted); }
-  .punch{ margin-top:14px; font-size:26px; line-height:1.22; font-weight:850; letter-spacing:-.01em; color:var(--ink); max-width:44ch; }
+  .num-cap .l1{ font-size:22px; font-weight:850; color:var(--ink); line-height:1.1; }
+  .num-cap .l2{ font-size:14px; color:var(--muted); max-width:20ch; margin-top:3px; }
+  .hero-rule{ width:1px; background:var(--line); align-self:stretch; }
+  .hero-verdict{ flex:1; display:flex; flex-direction:column; justify-content:center; }
+  .hero-verdict .vk{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin-bottom:8px; }
+  .punch{ font-size:27px; line-height:1.2; font-weight:850; letter-spacing:-.01em; color:var(--ink); }
 
-  /* Gut-punch exhibit */
-  .exhibit{ margin:0 40px 22px; padding:18px 20px; background:#fff1f1; border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
-  .ex-label{ font-size:13px; color:var(--muted); font-weight:600; margin-bottom:8px; }
-  .ex-q{ font-weight:800; color:var(--ink); }
-  .ex-quote{ margin:0 0 8px; font-size:22px; line-height:1.4; font-weight:700; color:#3d0f12; }
-  .ex-instead{ margin:0 0 8px; font-size:16px; font-weight:850; color:#3d0f12; }
-  .ex-instead .rival{ color:var(--red); }
-  .ex-attr{ font-size:12px; color:var(--muted); font-weight:600; }
-  .comps{ margin:0 40px 22px; font-size:13px; color:var(--muted); }
-  .comps-l{ font-weight:600; margin-right:4px; }
-  .chip{ display:inline-block; background:#f5f6f9; border:1px solid var(--line); border-radius:999px; padding:3px 11px; font-size:13px; font-weight:600; color:var(--ink); margin:2px 2px 0 0; }
+  /* GUT-PUNCH — a written summary of the worst answer (never the raw AI text) */
+  .gutbox{ margin:0 40px 24px; padding:18px 22px; background:#fff5f5; border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
+  .gb-eyebrow{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--red); font-weight:800; margin-bottom:9px; }
+  .gb-sum{ margin:0 0 9px; font-size:20px; line-height:1.42; font-weight:700; color:#3d0f12; }
+  .gb-sum .gb-q{ color:var(--ink); font-weight:800; }
+  .gb-sum .rv{ color:var(--red); font-weight:850; white-space:nowrap; }
+  .gb-sum b{ color:var(--ink); font-weight:850; }
+  .gb-attr{ font-size:12px; color:var(--muted); font-weight:600; }
 
   /* WHY THIS MATTERS — pain stats, big coloured numbers, muted supporting text */
   .why{ padding:22px 40px; border-top:1px solid var(--line); }
@@ -142,44 +187,56 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .why-frame .hl{ color:var(--blue); }
   .src{ margin-top:6px; font-size:11px; color:var(--faint); }
 
-  /* Engine table */
-  .block{ padding:20px 40px; border-top:1px solid var(--line); }
-  table{ width:100%; border-collapse:collapse; }
-  thead th{ text-align:left; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint);
-    padding:0 0 8px; border-bottom:1px solid var(--line); font-weight:800; }
-  tbody td{ padding:12px 0; border-bottom:1px solid var(--line); vertical-align:middle; }
-  tbody tr:last-child td{ border-bottom:0; }
-  td.eng{ font-weight:700; font-size:15px; width:40%; color:var(--ink); }
-  td.now{ display:flex; align-items:center; gap:12px; }
-  td.now .count{ font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
-  td.after{ width:30%; }
-  .glyph{ font-size:22px; font-weight:900; line-height:1; } .glyph.no{ color:var(--red); } .glyph.yes{ color:var(--green); }
-  .await{ display:inline-block; padding:2px 10px; border:1px dashed #cdd6e4; border-radius:6px; color:var(--faint); font-size:11px; font-weight:700; }
-  .after-note{ margin-top:12px; font-size:12px; color:var(--muted); max-width:64ch; }
-  .after-note b{ color:var(--ink); font-weight:800; }
+  /* WHAT WE DO — the solution reveal: a confident 3-step, icon-led */
+  .dowe{ padding:24px 40px 26px; border-top:1px solid var(--line); background:#fbfcfe; }
+  .dowe-lead{ font-size:16px; font-weight:800; color:var(--ink); margin:-4px 0 18px; max-width:60ch; }
+  .dowe-lead .hl{ color:var(--blue); }
+  .steps{ display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
+  .step .ic{ width:46px; height:46px; border-radius:13px; background:#eaf1fc; color:var(--blue);
+    display:flex; align-items:center; justify-content:center; margin-bottom:12px; }
+  .step .ic svg{ width:24px; height:24px; }
+  .step-n{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:800; }
+  .st{ font-size:16px; font-weight:850; color:var(--ink); margin:2px 0 5px; }
+  .step p{ margin:0; font-size:13px; line-height:1.45; color:var(--muted); }
 
-  /* HOW WE FIX IT — one confident bridge line into the CTA, Findable-branded */
-  .fix{ padding:18px 40px; border-top:1px solid var(--line); border-left:4px solid var(--yellow); background:#f3f7ff; }
-  .fix p{ margin:0; font-size:17px; line-height:1.4; font-weight:800; color:var(--ink); max-width:62ch; }
-  .fix p b{ color:var(--blue); }
-  .fix p .hl{ color:var(--blue); }
+  /* PROOF — "Where AI named you": per-engine evidence cards, zeros made to land */
+  .results{ padding:24px 40px 26px; border-top:1px solid var(--line); }
+  .res-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+  .res-card{ border:1px solid var(--line); border-left:5px solid var(--faint); border-radius:12px; padding:15px 18px; background:#fff; }
+  .res-card.zero{ border-left-color:var(--red); background:#fff7f7; }
+  .res-card.hit{ border-left-color:var(--green); background:#f4fdf8; }
+  .rc-top{ display:flex; align-items:center; justify-content:space-between; }
+  .rc-eng{ font-weight:800; font-size:16px; color:var(--ink); }
+  .rc-glyph{ font-size:20px; font-weight:900; line-height:1; } .rc-glyph.no{ color:var(--red); } .rc-glyph.yes{ color:var(--green); }
+  .rc-count{ margin-top:8px; display:flex; align-items:baseline; gap:7px; }
+  .rc-n{ font-size:42px; font-weight:900; letter-spacing:-.03em; line-height:.9; } .rc-n.no{ color:var(--red); } .rc-n.yes{ color:var(--green); }
+  .rc-of{ font-size:15px; color:var(--muted); font-weight:800; }
+  .rc-lbl{ margin-top:2px; font-size:12px; color:var(--muted); }
+  .rc-after{ margin-top:11px; display:inline-block; padding:2px 10px; border:1px dashed #cdd6e4; border-radius:6px; color:var(--faint); font-size:10.5px; font-weight:700; }
+  .res-note{ margin-top:16px; font-size:13px; line-height:1.5; color:var(--muted); max-width:70ch; }
+  .res-note b{ color:var(--ink); font-weight:800; }
 
-  /* CLOSING CTA — Findable blue band with a yellow highlight; the report ENDS on blue */
-  .cta{ background:var(--blue); color:#fff; padding:28px 40px 24px; }
+  /* CLOSING CTA — Findable blue band with a yellow highlight */
+  .cta{ background:var(--blue); color:#fff; padding:28px 40px 26px; }
   .cta h3{ margin:0 0 8px; font-size:24px; font-weight:850; color:#fff; letter-spacing:-.01em; }
   .cta h3 .y{ color:var(--yellow); }
   .cta p{ margin:0 0 6px; font-size:14px; color:#c7d3ea; max-width:60ch; }
   .cta .close{ margin-top:10px; font-size:15px; font-weight:800; color:#fff; }
-  .cta-foot{ margin-top:20px; padding-top:12px; border-top:1px solid rgba(255,255,255,.16);
-    display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:11px; color:#93a6c6; }
-  .cta-foot a{ color:var(--yellow); text-decoration:none; }
-  .cta-note{ margin-top:8px; font-size:11px; color:#7f93b5; }
+
+  /* FOOTER — a distinct darker navy bar so the text is clearly readable (no blue-on-blue) */
+  .site-foot{ background:var(--foot); padding:14px 40px 16px; }
+  .site-foot .row{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    font-size:11.5px; color:#c7d5ee; font-weight:600; }
+  .site-foot .row b{ color:#fff; }
+  .site-foot .row a{ color:var(--yellow); text-decoration:none; }
+  .site-foot .note{ margin-top:8px; font-size:11px; color:#8fa4c8; }
 
   @page{ size:A4; margin:11mm; }
   @media print{
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
-    .band,.hero,.exhibit,.why,.block,.cta{ break-inside:avoid; }
+    .band,.hero,.gutbox,.why,.dowe,.results,.cta,.site-foot{ break-inside:avoid; }
+    .steps,.res-grid,.stats{ break-inside:avoid; }
   }
 </style>
 </head>
@@ -197,17 +254,23 @@ export function renderReportHtml(d: AiAuditReportData): string {
 
     <div class="explainer">We asked AI the questions real customers ask when they’re looking for a <b>${esc(type)}</b>, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
 
+    <!-- HERO -->
     <div class="hero">
-      <div class="score">
+      <div class="hero-num">
         <span class="num ${v.band}">${d.named}</span>
-        <div class="score-txt">
+        <div class="num-cap">
           <div class="l1">times you showed up</div>
           <div class="l2">out of ${d.total} answers, when customers asked AI</div>
         </div>
       </div>
-      <div class="punch">${v.punch}</div>
+      <div class="hero-rule"></div>
+      <div class="hero-verdict">
+        <div class="vk">The verdict</div>
+        <div class="punch">${v.punch}</div>
+      </div>
     </div>
-${exhibit}${comps}
+${gutbox}
+    <!-- WHY THIS MATTERS (pain) -->
     <section class="why">
       <h2>Why this matters</h2>
       <div class="stats">
@@ -224,14 +287,30 @@ ${exhibit}${comps}
       <div class="src">Source: BrightLocal, 2026</div>
     </section>
 
-    <section class="block">
-      <h2>Where AI named you</h2>
-      <table>
-        <thead><tr><th>AI engine</th><th>Now</th><th>After changes</th></tr></thead>
-        <tbody>${engineRows}
-        </tbody>
-      </table>
-      <div class="after-note"><b>This is your starting point.</b> The “After” column fills in once we’ve made changes and re-run this exact audit — so you see the before &amp; after side by side.</div>
+    <!-- WHAT WE DO (solution) -->
+    <section class="dowe">
+      <h2>What we do about it</h2>
+      <p class="dowe-lead">We get you into the sources AI reads — and make sure it can understand and <span class="hl">name you</span>.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="ic">${icListed}</div>
+          <div class="step-n">Step 1</div>
+          <div class="st">Get you listed</div>
+          <p>We put you in the directories, maps and review sites AI pulls its answers from.</p>
+        </div>
+        <div class="step">
+          <div class="ic">${icStruct}</div>
+          <div class="step-n">Step 2</div>
+          <div class="st">Structure your info</div>
+          <p>We mark up your details so AI understands who you are, what you do and where.</p>
+        </div>
+        <div class="step">
+          <div class="ic">${icNamed}</div>
+          <div class="step-n">Step 3</div>
+          <div class="st">Get you named</div>
+          <p>So when your customers ask AI, your name is the one that comes up.</p>
+        </div>
+      </div>
     </section>
 
     <!-- ============================================================================
@@ -240,20 +319,28 @@ ${exhibit}${comps}
          / Content & Technical) with their failed findings. Not built yet (data unproven).
          ============================================================================ -->
 
-    <section class="fix">
-      <p>We get you <b>listed, structured, and named</b> in the sources AI actually reads — so when your customers ask, <span class="hl">your name comes up</span>.</p>
+    <!-- PROOF -->
+    <section class="results">
+      <h2>Where AI named you</h2>
+      <div class="res-grid">${engineCards}
+      </div>
+      <div class="res-note"><b>This is your starting point.</b> We re-run this exact audit after the fixes so you see the before &amp; after side by side — businesses we work with typically go from invisible to named across most engines.</div>
     </section>
 
+    <!-- CTA -->
     <section class="cta">
       <h3>Ready to get <span class="y">found</span>?</h3>
       <p>We fix what AI says about you — then re-run this exact audit so you can see the before/after in black and white.</p>
       <div class="close">Let’s get ${esc(d.businessName)} named when your customers ask.</div>
-      <div class="cta-foot">
-        <span>Prepared for ${esc(d.businessName)}</span>
+    </section>
+
+    <footer class="site-foot">
+      <div class="row">
+        <span>Prepared for <b>${esc(d.businessName)}</b></span>
         <span>Findable · AI Visibility Audit · ${esc(d.generatedAtLabel)}${shareFoot}</span>
       </div>
-      <div class="cta-note">Example report — a snapshot of where you stand today. We re-run it after we’ve made changes to show your before &amp; after.</div>
-    </section>
+      <div class="note">Example report — a snapshot of where you stand today. We re-run it after we’ve made changes to show your before &amp; after.</div>
+    </footer>
   </div>
 </body>
 </html>`;
