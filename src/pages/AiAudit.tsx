@@ -79,6 +79,32 @@ const COMPETITOR_STOPWORDS = new Set([
   'place', 'places', 'spot', 'spots', 'venue', 'venues', 'joint', 'hangout', 'option', 'options', 'list', 'guide',
 ]);
 
+// Assistant/platform UI strings that leak into "competitor" lists (Gemini/ChatGPT chrome).
+const PLATFORM_UI = new Set([
+  'apps', 'app', 'activity', 'gemini', 'chatgpt', 'copilot', 'openai', 'google', 'bing', 'ai', 'assistant',
+  'search', 'searches', 'result', 'results', 'overview', 'web', 'image', 'images', 'maps', 'map',
+  'related', 'questions', 'people', 'also', 'ask', 'history', 'settings', 'account', 'sources', 'source',
+]);
+// Multi-word UI phrases (belt-and-braces on top of the all-platform-words check).
+const UI_PHRASES = ['gemini apps activity', 'apps activity', 'search activity', 'web results', 'ai overview', 'people also ask', 'gemini apps'];
+// Plural venue categories → a category/list ("Kava Bars", "Cocktail Bars"), not a single named venue.
+const PLURAL_CATEGORIES = new Set([
+  'bars', 'pubs', 'clubs', 'cafes', 'restaurants', 'eateries', 'shops', 'stores', 'lounges', 'venues',
+  'spots', 'places', 'joints', 'hangouts', 'houses', 'rooms', 'halls', 'gardens', 'kitchens', 'bistros',
+  'taverns', 'breweries', 'diners',
+]);
+
+/** Niche keywords for the business — its real specialisms + the distinctive part of its
+ *  type (drops the generic category word). Used to prefer WINNABLE, specialism-relevant
+ *  searches for the gut-punch. "kava bar" → ["kava"]; "kava, pool tables" → ["kava","pool","tables"]. */
+function nicheKeywordsFrom(specialisms: string, businessType: string): string[] {
+  const out = new Set<string>();
+  for (const tok of `${specialisms} ${businessType}`.toLowerCase().split(/[^a-z0-9]+/)) {
+    if (tok.length >= 3 && !COMPETITOR_STOPWORDS.has(tok) && !PLATFORM_UI.has(tok)) out.add(tok);
+  }
+  return [...out];
+}
+
 // Map/image/markup junk that sometimes leaks into an engine's answer_text.
 const JUNK_MARKERS = ['mapbox', 'openstreetmap', 'images.openai', 'oaidalleapi', 'staticmap', 'tile.', 'data:image', 'base64', 'googleusercontent', '�'];
 
@@ -106,15 +132,19 @@ function looksAbsent(text: string): boolean {
 function isRealCompetitor(name: string, locationText: string): boolean {
   const n = name.trim();
   if (n.length < 3 || n.length > 60) return false;
-  const words = n.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z0-9.&'-]/g, '')).filter(Boolean);
-  if (!words.length) return false;
-  if (words.every((w) => COMPETITOR_STOPWORDS.has(w))) return false;   // all-generic (e.g. "the best")
   const nl = n.toLowerCase();
+  if (UI_PHRASES.some((p) => nl === p || nl.includes(p))) return false;          // "gemini apps activity" etc.
+  const words = nl.split(/\s+/).map((w) => w.replace(/[^a-z0-9.&'-]/g, '')).filter(Boolean);
+  if (!words.length) return false;
+  // All words generic/stopword or platform-UI → not a real venue ("the best", "Gemini Apps Activity").
+  if (words.every((w) => COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w))) return false;
+  // Ends in a PLURAL category word → a category/list, not a single venue ("Kava Bars", "Cocktail Bars").
+  if (PLURAL_CATEGORIES.has(words[words.length - 1])) return false;
   const locTokens = locationText.toLowerCase().split(/[^a-z]+/).filter((tk) => tk.length > 2);
   if (locTokens.length && locTokens.every((tk) => nl.includes(tk)) && words.length <= locTokens.length + 1) return false; // basically the location
   if (words.length === 1) {                              // single word must look like a real name
     const w = words[0];
-    if (COMPETITOR_STOPWORDS.has(w) || w.length < 4) return false;
+    if (COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || w.length < 4) return false;
     if (!/[A-Z0-9.&]/.test(n)) return false;             // no capital/digit → likely a fragment
   }
   return true;
@@ -129,23 +159,43 @@ function trimToSentence(text: string, max: number): string {
   return stop > max * 0.5 ? cut.slice(0, stop + 1).trim() : cut.trim() + '…';
 }
 
-// The single strongest CLEAN "gut-punch": a completed question where an engine did NOT
-// name the business and gave real, human-readable prose. Strongly prefer "doesn't exist"
-// answers, then ones naming a real competitor, then longer. Junk (map/image/URL) is only
-// ever picked if literally nothing clean exists — never the URL junk over real prose.
-function pickGutPunch(rows: QueueRow[], locationText: string): { question: string; engineLabel: string; text: string } | null {
+// Head words that signal a broad, unwinnable vanity term ("best bar in X").
+const HEAD_TERMS = /\b(best|top|good|great|recommended|popular|leading|favou?rite)\b/i;
+
+// The gut-punch to LEAD the report with: a completed question where an engine did NOT
+// name the business and gave clean, damning prose. Ranked by (1) RELEVANCE — a question
+// tied to the business's real niche (e.g. "kava", "pool") is a winnable, fixable search
+// and ranks far above a broad vanity head term ("best bar in X"), which is deprioritised;
+// then (2) whether the answer is damning (says it doesn't exist / names a real competitor);
+// then (3) clarity. Junk (map/image/URL) is only ever picked if nothing clean exists.
+function pickGutPunch(
+  rows: QueueRow[],
+  locationText: string,
+  specialisms: string,
+  businessType: string,
+): { question: string; engineLabel: string; text: string } | null {
+  const niche = nicheKeywordsFrom(specialisms, businessType);
   let best: { question: string; engineLabel: string; text: string } | null = null;
   let bestScore = -Infinity;
   for (const r of rows) {
     if (r.status !== 'done' || !r.result) continue;
+    const q = r.question.toLowerCase();
+    const hasNiche = niche.some((k) => q.includes(k));
+    const isHead = HEAD_TERMS.test(q);
     for (const engine of DISPLAY_ENGINES) {
       const er = r.result[engine];
       if (!er || er.named) continue;
       const text = (er.answer_text || '').trim();
       if (!text) continue;
-      let score = Math.min(text.length, 600);
-      if (looksAbsent(text)) score += 500_000;
+      let score = 0;
+      // (1) Relevance / winnability — dominant.
+      if (hasNiche) score += 2_000_000;                  // specialism-relevant, winnable
+      else if (isHead) score -= 1_500_000;               // broad vanity head term, unwinnable
+      // (2) Damning answer.
+      if (looksAbsent(text)) score += 400_000;
       if (er.competitors.some((c) => isRealCompetitor(c, locationText))) score += 200_000;
+      // (3) Clarity tiebreak + junk guard.
+      score += Math.min(text.length, 400) / 100;
       if (isJunkAnswer(text)) score -= 10_000_000;       // last resort only
       if (score > bestScore) {
         bestScore = score;
@@ -517,7 +567,7 @@ const AiAudit = () => {
     pct: reportTotal > 0 ? Math.round((reportNamed / reportTotal) * 100) : 0,
     perEngine: perEngineScore.filter((pe) => pe.total > 0).map((pe) => ({ label: ENGINE_LABELS[pe.engine] ?? pe.engine, named: pe.named, total: pe.total })),
     competitors: topCompetitors,
-    gutPunch: pickGutPunch(queueRows, locationText),
+    gutPunch: pickGutPunch(queueRows, locationText, specialisms, businessType),
     generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
   } : null;
 
