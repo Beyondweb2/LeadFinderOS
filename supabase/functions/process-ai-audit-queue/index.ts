@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { runAiSearch, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
+import { runSeoAudit, gradeSeo } from "../_shared/enrichment/seo-audit.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. Each tick claims a small batch of pending questions, runs
@@ -24,6 +25,7 @@ const DAILY_CAP_USD = 15.0;      // per-USER rolling-24h ceiling (across audits)
 const MAX_ATTEMPTS = 3;          // per queue row before it's marked failed
 const RUN_TIMEOUT_MS = 110_000;  // per actor run — heavy multi-engine run often needs >80s; BATCH=1 keeps one attempt under the edge wall-clock
 const STALE_RUNNING_MS = 3 * 60 * 1000; // reclaim rows stuck 'running' longer than this
+const SEO_TIMEOUT_MS = 60_000;   // single-page SEO audit — well under the wall-clock (its own tick)
 // mention_rate is scored over the engines the audit targeted (the queue row's list).
 const DEFAULT_ENGINES = ["chatgpt", "gemini"];
 
@@ -88,6 +90,15 @@ Deno.serve(async (req) => {
       }
     } catch (e) {
       console.error("[process-ai-audit-queue] reclaim skipped (updated_at column missing?):", e instanceof Error ? e.message : e);
+    }
+
+    // 0b) SEO step — website audits get one on-page SEO grade per run, stored at
+    //     results.seo. It gets its OWN tick (runs before question draining and returns)
+    //     so a second actor call never stacks into the same invocation and blows the
+    //     wall-clock. Runs once per run (results.seo is the done-marker), only when the
+    //     audit has a website.
+    if (await maybeRunSeoStep(service, apifyToken)) {
+      return json({ ok: true, seo: "ran" });
     }
 
     // 1) Claim a batch of pending questions (oldest first — uses the status,created_at index).
@@ -213,6 +224,59 @@ Deno.serve(async (req) => {
 });
 
 /**
+ * Run ONE on-page SEO audit per tick for a website audit that hasn't been graded yet.
+ * Returns true if it ran (the caller then ends the tick so a second actor call never
+ * stacks). Eligibility: an open run (pending/running) whose audit has a website and whose
+ * results.seo is not yet set. On success/failure it writes results.seo (a failure marker
+ * counts as "done" so it isn't retried). Cost flows through the runner cache/cap harness.
+ */
+// deno-lint-ignore no-explicit-any
+async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolean> {
+  const { data: openRuns } = await service
+    .from("ai_audit_runs").select("id, audit_id, results")
+    .in("status", ["pending", "running"]).order("created_at", { ascending: true }).limit(10);
+
+  for (const run of (openRuns ?? []) as Row[]) {
+    const results = run.results && typeof run.results === "object" ? run.results : {};
+    if (results.seo) continue; // already graded (success or failure marker)
+
+    const { data: audit } = await service
+      .from("ai_audits").select("user_id, has_website, website, location_text").eq("id", run.audit_id).maybeSingle();
+    if (!audit?.has_website || !audit?.website) continue; // no-website audits get no SEO section
+
+    const website = String(audit.website);
+    let seo: unknown;
+    try {
+      const outcome = await runEnrichSource({
+        service,
+        userId: audit.user_id ?? null,
+        type: "seo_audit",
+        cacheKey: `seo:${run.id}`,             // unique per run → re-runs fetch fresh
+        estCostUsd: SOURCES.seo_audit.estCostUsd,
+        capUsd: DAILY_CAP_USD,
+        run: async () => {
+          const { items } = await runSeoAudit(website, { token: apifyToken, timeoutMs: SEO_TIMEOUT_MS, retry: { on429: true } });
+          return { result: gradeSeo(items, { url: website, location: audit.location_text }), costUsd: SOURCES.seo_audit.estCostUsd };
+        },
+      });
+      seo = outcome.capReached
+        ? { error: "daily_cap", checked_at: new Date().toISOString() }
+        : (outcome.result ?? { error: "empty", checked_at: new Date().toISOString() });
+    } catch (e) {
+      seo = { error: e instanceof Error ? e.message : "seo_failed", checked_at: new Date().toISOString() };
+      console.error("[process-ai-audit-queue] SEO audit failed:", seo);
+    }
+
+    // Read-modify-write so the SEO block merges with whatever else is on results.
+    const { data: fresh } = await service.from("ai_audit_runs").select("results").eq("id", run.id).maybeSingle();
+    const cur = fresh?.results && typeof fresh.results === "object" ? fresh.results : {};
+    await service.from("ai_audit_runs").update({ results: { ...cur, seo } }).eq("id", run.id);
+    return true;
+  }
+  return false;
+}
+
+/**
  * For each candidate run, if all its queue rows are settled (done/failed) — or it hit
  * the cap — fold the per-question results into ai_audit_runs.results and compute
  * mention_rate = (named engine-datapoints) / (total engine-datapoints). Returns the
@@ -275,6 +339,11 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     });
     const mentionRate = total > 0 ? Number((named / total).toFixed(4)) : null;
 
+    // Preserve any SEO block the SEO step wrote (order-independent — either step may run
+    // first; both merge rather than overwrite).
+    const { data: runNow } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
+    const existingSeo = runNow?.results && typeof runNow.results === "object" ? (runNow.results as Row).seo : undefined;
+
     const results = {
       engines: DEFAULT_ENGINES,
       summary: {
@@ -286,6 +355,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         total_questions: rows.length,
       },
       questions,
+      ...(existingSeo ? { seo: existingSeo } : {}),
     };
     const runStatus = isCapped ? "capped" : "complete";
     await service.from("ai_audit_runs")
