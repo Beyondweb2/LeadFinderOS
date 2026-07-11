@@ -22,7 +22,7 @@ export interface AiAuditReportData {
   pct: number;                   // 0–100
   perEngine: ReportEngineRow[];
   competitors: string[];         // real brands AI named instead
-  gutPunch: { question: string; engineLabel: string; text: string } | null;
+  gutPunch: { question: string; engineLabel: string; text: string; competitor?: string } | null;
   generatedAtLabel: string;      // e.g. "11 Jul 2026"
   shareUrl?: string;             // reserved: future public link (not built yet)
 }
@@ -68,6 +68,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     <section class="exhibit">
       <div class="ex-label">When someone searched “${esc(d.gutPunch.question)}”, here’s what AI told them:</div>
       <blockquote class="ex-quote">“${esc(d.gutPunch.text)}”</blockquote>
+      ${d.gutPunch.competitor ? `<div class="ex-instead">Instead, AI recommended <span class="rival">${esc(d.gutPunch.competitor)}</span>.</div>` : ""}
       <div class="ex-attr">— ${esc(d.gutPunch.engineLabel)}. ${esc(d.businessName)} was never mentioned.</div>
     </section>` : "";
 
@@ -121,6 +122,8 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .exhibit{ margin:0 40px 22px; padding:18px 20px; background:#fff1f1; border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
   .ex-label{ font-size:13px; color:var(--muted); font-weight:600; margin-bottom:8px; }
   .ex-quote{ margin:0 0 8px; font-size:22px; line-height:1.4; font-weight:700; color:#3d0f12; }
+  .ex-instead{ margin:0 0 8px; font-size:16px; font-weight:850; color:#3d0f12; }
+  .ex-instead .rival{ color:var(--red); }
   .ex-attr{ font-size:12px; color:var(--muted); font-weight:600; }
   .comps{ margin:0 40px 22px; font-size:13px; color:var(--muted); }
   .comps-l{ font-weight:600; margin-right:4px; }
@@ -152,6 +155,12 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .glyph{ font-size:22px; font-weight:900; line-height:1; } .glyph.no{ color:var(--red); } .glyph.yes{ color:var(--green); }
   .await{ color:var(--faint); font-style:italic; font-size:12px; }
   .after-note{ margin-top:12px; font-size:12px; color:var(--faint); }
+
+  /* HOW WE FIX IT — one confident bridge line into the CTA, Findable-branded */
+  .fix{ padding:18px 40px; border-top:1px solid var(--line); border-left:4px solid var(--yellow); background:#f3f7ff; }
+  .fix p{ margin:0; font-size:17px; line-height:1.4; font-weight:800; color:var(--ink); max-width:62ch; }
+  .fix p b{ color:var(--blue); }
+  .fix p .hl{ color:var(--blue); }
 
   /* CLOSING CTA — Findable blue band with a yellow highlight */
   .cta{ background:var(--blue); color:#fff; padding:26px 40px; }
@@ -227,6 +236,10 @@ ${exhibit}${comps}
          site: overall A–F grade + the three category grades (Local Presence / On-Page SEO
          / Content & Technical) with their failed findings. Not built yet (data unproven).
          ============================================================================ -->
+
+    <section class="fix">
+      <p>We get you <b>listed, structured, and named</b> in the sources AI actually reads — so when your customers ask, <span class="hl">your name comes up</span>.</p>
+    </section>
 
     <section class="cta">
       <h3>Ready to get <span class="y">found</span>?</h3>
