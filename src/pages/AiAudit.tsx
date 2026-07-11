@@ -10,9 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
-  Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check,
+  Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
 } from 'lucide-react';
 import type { Country } from '@/types/outreach';
+import { AiAuditReport } from '@/components/AiAuditReport';
+import { downloadReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtml';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
 // and answering one reveals the next below it (no per-step Next). Generates search
@@ -60,6 +62,29 @@ interface AuditRow { id: string; business_name: string; business_type: string | 
 interface LeadOption { id: string; business_name: string; category: string | null; country: string | null; website: string | null; address: string | null }
 
 const TERMINAL = new Set(['complete', 'capped', 'failed']);
+
+// The single strongest "gut-punch" for the client report: a completed question where an
+// engine did NOT name the business but gave a real answer. Prefer answers that name
+// competitors, then the longest (most damning) answer. Returns null if there's none.
+function pickGutPunch(rows: QueueRow[]): { question: string; engineLabel: string; text: string } | null {
+  let best: { question: string; engineLabel: string; text: string } | null = null;
+  let bestScore = -1;
+  for (const r of rows) {
+    if (r.status !== 'done' || !r.result) continue;
+    for (const engine of DISPLAY_ENGINES) {
+      const er = r.result[engine];
+      if (!er || er.named) continue;
+      const text = (er.answer_text || '').trim();
+      if (!text) continue;
+      const score = (er.competitors.length > 0 ? 1_000_000 : 0) + text.length;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { question: r.question, engineLabel: ENGINE_LABELS[engine] ?? engine, text: text.slice(0, 500) };
+      }
+    }
+  }
+  return best;
+}
 
 // Wizard state is persisted to sessionStorage so it survives leaving the page and
 // coming back (unmount/remount) and a tab refresh, but clears when the tab closes.
@@ -143,6 +168,7 @@ const AiAudit = () => {
   const [run, setRun] = useState<RunRow | null>(null);
   const [queueRows, setQueueRows] = useState<QueueRow[]>([]);
   const [resultsBusinessName, setResultsBusinessName] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
 
   // Refs to move focus to a newly-revealed step (accessibility).
   const nameRef = useRef<HTMLInputElement>(null);
@@ -354,6 +380,7 @@ const AiAudit = () => {
     if (!latest) { toast({ title: 'No runs yet for this audit', variant: 'destructive' }); return; }
     setAuditId(audit.id);
     setResultsBusinessName(audit.business_name);
+    setBusinessType(audit.business_type ?? ''); // so the report's "what this means" line is populated for reopened audits
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
     setStep('results');
@@ -375,6 +402,52 @@ const AiAudit = () => {
   );
   const isDraining = !!runId && !(run && TERMINAL.has(run.status));
 
+  // Scorecard: per-engine hit-rate across the completed questions + the competitors AI
+  // named most often (from the per-engine "instead" lists). Cheap; recomputed from the
+  // live queue rows so it fills in as the run drains.
+  const perEngineScore = DISPLAY_ENGINES.map((engine) => {
+    let named = 0;
+    let total = 0;
+    for (const r of queueRows) {
+      if (r.status === 'done' && r.result?.[engine]) { total++; if (r.result[engine]!.named) named++; }
+    }
+    return { engine, named, total };
+  });
+  const topCompetitors = (() => {
+    const counts = new Map<string, { name: string; count: number }>();
+    for (const r of queueRows) {
+      if (r.status !== 'done' || !r.result) continue;
+      for (const engine of DISPLAY_ENGINES) {
+        const er = r.result[engine];
+        if (!er) continue;
+        for (const c of er.competitors) {
+          const key = c.trim().toLowerCase();
+          if (!key) continue;
+          const cur = counts.get(key);
+          if (cur) cur.count++; else counts.set(key, { name: c.trim(), count: 1 });
+        }
+      }
+    }
+    return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 5).map((x) => x.name);
+  })();
+
+  // Client report data (from the same saved run data). Headline totals prefer the folded
+  // summary; falls back to the live tally. Null until at least one question has completed.
+  const reportSummary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number } } | null)?.summary;
+  const reportNamed = reportSummary?.named_datapoints ?? liveTally.named;
+  const reportTotal = reportSummary?.total_datapoints ?? liveTally.total;
+  const reportData: AiAuditReportData | null = liveTally.done > 0 ? {
+    businessName: resultsBusinessName || businessName || 'This business',
+    businessType: businessType || '',
+    named: reportNamed,
+    total: reportTotal,
+    pct: reportTotal > 0 ? Math.round((reportNamed / reportTotal) * 100) : 0,
+    perEngine: perEngineScore.filter((pe) => pe.total > 0).map((pe) => ({ label: ENGINE_LABELS[pe.engine] ?? pe.engine, named: pe.named, total: pe.total })),
+    competitors: topCompetitors,
+    gutPunch: pickGutPunch(queueRows),
+    generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+  } : null;
+
   // Advance from a text field on Enter (if valid). Editing an earlier field re-fires
   // reveal(), but reveal is monotonic so nothing below collapses.
   const enterAdvance = (valid: boolean, nextIndex: number) => (e: React.KeyboardEvent) => {
@@ -382,6 +455,11 @@ const AiAudit = () => {
   };
 
   const shown = (name: typeof WIZARD_STEPS[number]) => revealed >= WIZARD_STEPS.indexOf(name);
+
+  // Client-facing report is a separate view (replaces results while open).
+  if (reportOpen && reportData) {
+    return <AiAuditReport data={reportData} onBack={() => setReportOpen(false)} onDownload={() => downloadReportHtml(reportData)} />;
+  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -567,15 +645,20 @@ const AiAudit = () => {
 
       {step === 'results' && (
         <div className="space-y-4">
-          {/* Headline */}
+          {/* Scorecard */}
           <Card>
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                  <div className="text-sm text-muted-foreground">{resultsBusinessName}</div>
-                  <ResultsHeadline run={run} live={liveTally} draining={isDraining} />
-                </div>
+            <CardContent className="p-4 sm:p-5 space-y-4">
+              {/* Back + actions */}
+              <div className="flex items-center justify-between gap-2">
+                <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setStep('source')}>
+                  <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
+                </Button>
                 <div className="flex items-center gap-2">
+                  {!isDraining && liveTally.done > 0 && (
+                    <Button variant="outline" size="sm" onClick={() => setReportOpen(true)}>
+                      <FileText className="mr-2 h-4 w-4" /> Create report
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={resetWizard}>New audit</Button>
                   <Button size="sm" onClick={reRun} disabled={running || isDraining}>
                     {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
@@ -583,12 +666,49 @@ const AiAudit = () => {
                   </Button>
                 </div>
               </div>
+
+              {/* Headline */}
+              <div>
+                <div className="text-sm text-muted-foreground">{resultsBusinessName}</div>
+                <ResultsHeadline run={run} live={liveTally} draining={isDraining} />
+              </div>
+
+              {/* Progress while draining */}
               {isDraining && (
-                <div className="mt-3 space-y-1.5">
+                <div className="space-y-1.5">
                   <Progress value={queueRows.length ? (doneCount / queueRows.length) * 100 : 0} />
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running searches… {doneCount}/{queueRows.length || '…'}
                     {run?.status === 'capped' && <span className="text-amber-500">· cost cap reached</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Per-engine breakdown — named vs not, as a tick/cross + simple bar */}
+              {!isDraining && liveTally.done > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Where AI named them</div>
+                  {perEngineScore.filter((pe) => pe.total > 0).map((pe) => (
+                    <div key={pe.engine} className="flex items-center gap-3">
+                      <span className="w-24 shrink-0 text-xs font-medium">{ENGINE_LABELS[pe.engine] ?? pe.engine}</span>
+                      {pe.named > 0
+                        ? <Check className="h-4 w-4 shrink-0 text-[hsl(var(--badge-interested))]" />
+                        : <X className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                      <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-[hsl(var(--badge-interested))]" style={{ width: `${Math.round((pe.named / pe.total) * 100)}%` }} />
+                      </div>
+                      <span className="w-16 shrink-0 text-right text-[11px] text-muted-foreground">{pe.named}/{pe.total}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Competitor callout */}
+              {!isDraining && topCompetitors.length > 0 && (
+                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
+                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">AI names these instead</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {topCompetitors.map((c) => <Badge key={c} variant="secondary">{c}</Badge>)}
                   </div>
                 </div>
               )}
