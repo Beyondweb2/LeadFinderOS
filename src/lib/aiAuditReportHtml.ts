@@ -37,47 +37,49 @@ function slug(s: string): string {
   return (s || "business").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "business";
 }
 
-/** Verdict + severity band from the visibility percentage. */
-function verdictOf(pct: number, named: number): { band: "crit" | "low" | "mid" | "high"; text: string } {
-  if (named === 0) return { band: "crit", text: "When customers ask AI, you’re invisible — it never names you." };
-  if (pct < 34) return { band: "low", text: "Low visibility — competitors are the default answer AI gives your customers." };
-  if (pct < 67) return { band: "mid", text: "Partial visibility — you’re named some of the time, but there’s a lot of room to grow." };
-  return { band: "high", text: "Strong visibility — AI names you in most answers." };
+/** Hero verdict: severity band (drives the big number's colour) + a one-line gut-punch. */
+function heroVerdict(pct: number, named: number): { band: "crit" | "low" | "mid" | "high"; punch: string } {
+  if (named === 0) return { band: "crit", punch: "AI doesn’t know you exist." };
+  if (pct < 34) return { band: "low", punch: "AI sends your customers straight to your competitors." };
+  if (pct < 67) return { band: "mid", punch: "AI mentions you sometimes — your competitors get the rest." };
+  return { band: "high", punch: "AI names you in most answers — let’s make it every time." };
 }
 
-/** Build the full standalone one-page HTML document (light, branded, print-ready). */
+/**
+ * Build the full standalone one-page HTML document. Inverted pyramid, colour-disciplined:
+ * the ONLY loud colour is red — the giant hero number, the gut-punch accent, and the
+ * engine ✕s. Everything else stays quiet/muted so the loud things actually pop.
+ */
 export function renderReportHtml(d: AiAuditReportData): string {
   const type = d.businessType.trim() || "business like yours";
-  const v = verdictOf(d.pct, d.named);
+  const v = heroVerdict(d.pct, d.named);
 
   const engineRows = d.perEngine.map((pe) => {
-    const w = pe.total ? Math.round((pe.named / pe.total) * 100) : 0;
     const hit = pe.named > 0;
     return `
           <tr>
             <td class="eng">${esc(pe.label)}</td>
             <td class="now">
               <span class="glyph ${hit ? "yes" : "no"}">${hit ? "✓" : "✕"}</span>
-              <span class="bar"><i style="width:${w}%"></i></span>
-              <b>${pe.named}/${pe.total}</b>
+              <span class="count">${pe.named} of ${pe.total}</span>
             </td>
-            <td class="after"><span class="await">—</span></td>
+            <td class="after"><span class="await">— re-run to compare</span></td>
           </tr>`;
   }).join("");
 
-  const gut = d.gutPunch ? `
-      <section class="block gut">
-        <div class="eyebrow">What AI is telling your customers</div>
-        <div class="q">Someone asked AI: “${esc(d.gutPunch.question)}”</div>
-        <blockquote>“${esc(d.gutPunch.text)}”</blockquote>
-        <div class="attr">${esc(d.gutPunch.engineLabel)} · ${esc(d.businessName)} wasn’t mentioned</div>
-      </section>` : "";
+  // The gut-punch is the hero exhibit — sits directly under the score, before the table.
+  const exhibit = d.gutPunch ? `
+    <section class="exhibit">
+      <div class="ex-label">When someone searched “${esc(d.gutPunch.question)}”, here’s what AI told them:</div>
+      <blockquote class="ex-quote">“${esc(d.gutPunch.text)}”</blockquote>
+      <div class="ex-attr">— ${esc(d.gutPunch.engineLabel)}. ${esc(d.businessName)} was never mentioned.</div>
+    </section>` : "";
 
   const comps = d.competitors.length ? `
-      <section class="block">
-        <div class="eyebrow">AI recommends these instead</div>
-        <div class="chips">${d.competitors.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>
-      </section>` : "";
+    <section class="block">
+      <h2>AI recommends these instead</h2>
+      <div class="chips">${d.competitors.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>
+    </section>` : "";
 
   const shareFoot = d.shareUrl ? ` · <a href="${esc(d.shareUrl)}">View online</a>` : "";
 
@@ -89,114 +91,122 @@ export function renderReportHtml(d: AiAuditReportData): string {
 <title>AI Visibility Report — ${esc(d.businessName)}</title>
 <style>
   :root{
-    --ink:#0f172a; --muted:#64748b; --faint:#94a3b8; --line:#e6eaf0;
-    --accent:#2563eb; --accent-soft:#eff6ff;
-    --green:#16a34a; --green-soft:#e9f8ee; --red:#dc2626; --red-soft:#fdecec; --amber:#d97706; --amber-soft:#fef6e7;
-    --paper:#ffffff; --page:#eef1f6;
+    --ink:#0f172a; --muted:#5b6472; --faint:#9aa3b2; --line:#e9edf3;
+    --red:#e11d2a; --red-soft:#fff1f1; --amber:#c2820b; --green:#15a34a;
+    --dark:#0f172a; --paper:#ffffff; --page:#eef1f6;
   }
-  *{ box-sizing:border-box; }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   html,body{ margin:0; padding:0; }
   body{ background:var(--page); color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     line-height:1.5; -webkit-font-smoothing:antialiased; }
-  .sheet{ max-width:780px; margin:28px auto; background:var(--paper); border-radius:14px; overflow:hidden;
+  .sheet{ max-width:760px; margin:24px auto; background:var(--paper); border-radius:14px; overflow:hidden;
     box-shadow:0 8px 40px rgba(15,23,42,.10); }
-  .accentbar{ height:6px; background:linear-gradient(90deg,var(--accent),#60a5fa); }
-  .pad{ padding:34px 40px; }
 
+  /* Quiet header */
   .hdr{ display:flex; align-items:center; justify-content:space-between; padding:20px 40px 0; }
-  .brand{ font-weight:800; font-size:13px; letter-spacing:.02em; color:var(--accent); }
-  .brand span{ color:var(--faint); font-weight:600; }
+  .brand{ font-weight:800; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); }
   .date{ font-size:12px; color:var(--faint); }
 
-  .eyebrow{ font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--faint); font-weight:800; margin-bottom:10px; }
-  h1{ font-size:30px; line-height:1.2; letter-spacing:-.02em; font-weight:850; margin:6px 0 14px; }
-  h1 .biz{ color:var(--accent); }
-  h1 .big{ font-size:38px; }
-  .verdict{ display:inline-flex; align-items:center; gap:12px; flex-wrap:wrap; }
-  .pill{ font-weight:800; font-size:13px; padding:6px 12px; border-radius:999px; white-space:nowrap; }
-  .pill.crit,.pill.low{ background:var(--red-soft); color:var(--red); }
-  .pill.mid{ background:var(--amber-soft); color:var(--amber); }
-  .pill.high{ background:var(--green-soft); color:var(--green); }
-  .verdict .say{ font-size:15px; color:var(--muted); font-weight:600; }
+  /* HERO — the loudest thing on the page */
+  .hero{ padding:26px 40px 30px; }
+  .kicker{ font-size:13px; color:var(--muted); font-weight:600; margin-bottom:6px; }
+  .kicker b{ color:var(--ink); font-weight:800; }
+  .score{ display:flex; align-items:baseline; gap:16px; margin:2px 0 12px; }
+  .num{ font-size:104px; line-height:.92; font-weight:900; letter-spacing:-.04em; }
+  .num.crit,.num.low{ color:var(--red); }
+  .num.mid{ color:var(--amber); }
+  .num.high{ color:var(--green); }
+  .denom{ font-size:19px; font-weight:700; color:var(--muted); }
+  .denom small{ display:block; font-size:13px; font-weight:600; color:var(--faint); }
+  .punch{ font-size:26px; line-height:1.25; font-weight:850; letter-spacing:-.01em; color:var(--ink); max-width:44ch; }
 
-  .block{ padding:22px 40px; border-top:1px solid var(--line); }
-  h2{ font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:800; margin:0 0 14px; }
+  /* GUT-PUNCH EXHIBIT — big, red-accented, right under the hero */
+  .exhibit{ margin:0 40px 26px; padding:20px 22px; background:var(--red-soft); border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
+  .ex-label{ font-size:13px; color:var(--muted); font-weight:600; margin-bottom:8px; }
+  .ex-quote{ margin:0 0 8px; font-size:23px; line-height:1.4; font-weight:700; color:#3d0f12; }
+  .ex-attr{ font-size:12px; color:var(--muted); font-weight:600; }
+
+  /* Sections — quiet */
+  .block{ padding:20px 40px; border-top:1px solid var(--line); }
+  h2{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 12px; }
 
   table{ width:100%; border-collapse:collapse; }
   thead th{ text-align:left; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint);
     padding:0 0 8px; border-bottom:1px solid var(--line); font-weight:800; }
-  thead th.after{ color:var(--faint); }
-  tbody td{ padding:11px 0; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tbody td{ padding:12px 0; border-bottom:1px solid var(--line); vertical-align:middle; }
   tbody tr:last-child td{ border-bottom:0; }
-  td.eng{ font-weight:700; font-size:15px; width:34%; }
-  td.now{ display:flex; align-items:center; gap:10px; font-variant-numeric:tabular-nums; }
-  td.now b{ font-size:14px; color:var(--ink); min-width:34px; }
-  td.after{ width:22%; text-align:left; }
-  .glyph{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:6px; font-weight:900; font-size:12px; }
-  .glyph.yes{ background:var(--green-soft); color:var(--green); }
-  .glyph.no{ background:var(--red-soft); color:var(--red); }
-  .bar{ flex:1; height:8px; border-radius:999px; background:#eef2f7; overflow:hidden; max-width:180px; }
-  .bar i{ display:block; height:100%; border-radius:999px; background:var(--green); }
-  .await{ color:var(--faint); font-style:italic; font-size:13px; }
+  td.eng{ font-weight:700; font-size:15px; width:40%; color:var(--ink); }
+  td.now{ display:flex; align-items:center; gap:12px; }
+  td.now .count{ font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  td.after{ width:30%; }
+  /* Bold, alarming ✕ (red) / quiet ✓ (green) — the crosses are meant to pop */
+  .glyph{ font-size:22px; font-weight:900; line-height:1; }
+  .glyph.no{ color:var(--red); }
+  .glyph.yes{ color:var(--green); }
+  .await{ color:var(--faint); font-style:italic; font-size:12px; }
   .after-note{ margin-top:12px; font-size:12px; color:var(--faint); }
 
-  .gut{ background:var(--red-soft); border-top:1px solid #f6d5d5; }
-  .gut .q{ font-size:13px; color:var(--muted); }
-  .gut blockquote{ margin:10px 0 8px; padding:16px 18px; background:#fff; border-left:4px solid var(--red);
-    border-radius:0 10px 10px 0; font-size:19px; line-height:1.45; font-weight:600; color:#3f1414; box-shadow:0 2px 12px rgba(220,38,38,.06); }
-  .gut .attr{ font-size:12px; color:var(--muted); font-weight:600; }
-
   .chips{ display:flex; flex-wrap:wrap; gap:8px; }
-  .chip{ background:#f4f6fa; border:1px solid var(--line); border-radius:999px; padding:6px 14px; font-size:14px; font-weight:700; }
+  .chip{ background:#f5f6f9; border:1px solid var(--line); border-radius:999px; padding:5px 13px; font-size:13px; font-weight:600; color:var(--muted); }
 
-  .means{ margin:22px 40px 8px; padding:20px 22px; background:var(--accent-soft); border:1px solid #dbe7ff; border-radius:12px; }
-  .means h3{ margin:0 0 6px; font-size:14px; color:var(--accent); }
-  .means p{ margin:0; font-size:15px; }
+  .means{ padding:20px 40px; border-top:1px solid var(--line); }
+  .means p{ margin:0; font-size:14px; color:var(--muted); max-width:64ch; }
+  .means p b{ color:var(--ink); font-weight:700; }
+
+  /* CLOSING CTA — strong close via dark contrast, not competing colour */
+  .cta{ margin-top:6px; background:var(--dark); color:#e6ebf3; padding:26px 40px; }
+  .cta h3{ margin:0 0 8px; font-size:22px; font-weight:850; color:#fff; letter-spacing:-.01em; }
+  .cta p{ margin:0 0 6px; font-size:14px; color:#aeb7c6; max-width:60ch; }
+  .cta .close{ margin-top:10px; font-size:15px; font-weight:700; color:#fff; }
 
   .foot{ display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
-    padding:16px 40px 28px; font-size:12px; color:var(--faint); }
-  .foot a{ color:var(--accent); text-decoration:none; }
+    padding:14px 40px; font-size:12px; color:var(--faint); }
+  .foot a{ color:var(--muted); text-decoration:none; }
 
-  @page{ size:A4; margin:14mm; }
+  @page{ size:A4; margin:12mm; }
   @media print{
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
-    .block,.gut,.means,.hero{ break-inside:avoid; }
+    .hero,.exhibit,.block,.means,.cta{ break-inside:avoid; }
   }
 </style>
 </head>
 <body>
   <div class="sheet">
-    <div class="accentbar"></div>
     <div class="hdr">
-      <div class="brand">AI Visibility Report <span>· ${esc(d.businessType.trim() || "local business")}</span></div>
+      <div class="brand">AI Visibility Report</div>
       <div class="date">${esc(d.generatedAtLabel)}</div>
     </div>
 
-    <div class="pad hero">
-      <div class="eyebrow">When customers ask AI to recommend a ${esc(type)}</div>
-      <h1><span class="biz">${esc(d.businessName)}</span> is named in <span class="big">${d.named}</span> of <span class="big">${d.total}</span> AI answers</h1>
-      <div class="verdict">
-        <span class="pill ${v.band}">${d.pct}% visibility</span>
-        <span class="say">${v.text}</span>
+    <div class="hero">
+      <div class="kicker">When customers ask AI to recommend a ${esc(type)}, <b>${esc(d.businessName)}</b> is named in…</div>
+      <div class="score">
+        <span class="num ${v.band}">${d.named}</span>
+        <span class="denom">of ${d.total}<small>AI answers we tested</small></span>
       </div>
+      <div class="punch">${v.punch}</div>
     </div>
-
+${exhibit}
     <section class="block">
       <h2>Where AI named you</h2>
       <table>
-        <thead><tr><th>AI engine</th><th>Now</th><th class="after">After changes</th></tr></thead>
+        <thead><tr><th>AI engine</th><th>Now</th><th>After changes</th></tr></thead>
         <tbody>${engineRows}
         </tbody>
       </table>
-      <div class="after-note">Once we improve your AI visibility, we re-run this exact audit to fill the “After” column and show your progress.</div>
+      <div class="after-note">Once we improve your AI visibility, we re-run this exact audit to fill the “After” column.</div>
     </section>
-${gut}${comps}
+${comps}
     <div class="means">
-      <h3>What this means</h3>
-      <p>When people ask AI assistants to recommend a ${esc(type)}, you’re mostly invisible — and other businesses are the answer AI hands your customers. The good news: this is fixable. We can improve what AI says about you, then re-run this exact audit to prove the “after”.</p>
+      <p><b>What this means.</b> When people ask AI to recommend a ${esc(type)}, you’re mostly invisible — and other businesses are the answer it hands your customers. This is fixable.</p>
     </div>
+
+    <section class="cta">
+      <h3>Ready to get found?</h3>
+      <p>We fix what AI says about you — then re-run this exact audit so you can see the before/after in black and white.</p>
+      <div class="close">Let’s get ${esc(d.businessName)} named when your customers ask.</div>
+    </section>
 
     <div class="foot">
       <span>Prepared for ${esc(d.businessName)}</span>
