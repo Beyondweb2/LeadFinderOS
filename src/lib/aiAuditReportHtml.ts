@@ -60,13 +60,13 @@ export function renderReportHtml(d: AiAuditReportData): string {
           <tr>
             <td class="eng">${esc(pe.label)}</td>
             <td class="now"><span class="glyph ${hit ? "yes" : "no"}">${hit ? "✓" : "✕"}</span><span class="count">${pe.named} of ${pe.total}</span></td>
-            <td class="after"><span class="await">— re-run to compare</span></td>
+            <td class="after"><span class="await">after re-run</span></td>
           </tr>`;
   }).join("");
 
   const exhibit = d.gutPunch ? `
     <section class="exhibit">
-      <div class="ex-label">When someone searched “${esc(d.gutPunch.question)}”, here’s what AI told them:</div>
+      <div class="ex-label">When someone searched “<span class="ex-q">${esc(d.gutPunch.question)}</span>”, here’s what AI told them:</div>
       <blockquote class="ex-quote">“${esc(d.gutPunch.text)}”</blockquote>
       ${d.gutPunch.competitor ? `<div class="ex-instead">Instead, AI recommended <span class="rival">${esc(d.gutPunch.competitor)}</span>.</div>` : ""}
       <div class="ex-attr">— ${esc(d.gutPunch.engineLabel)}. ${esc(d.businessName)} was never mentioned.</div>
@@ -106,8 +106,8 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .wave{ position:absolute; left:0; right:0; bottom:-1px; width:100%; height:38px; display:block; }
 
   /* One-line explainer */
-  .explainer{ padding:22px 40px 4px; font-size:16px; color:var(--muted); max-width:64ch; }
-  .explainer b{ color:var(--ink); font-weight:800; }
+  .explainer{ padding:24px 40px 8px; font-size:19px; line-height:1.42; color:#334155; font-weight:600; max-width:58ch; }
+  .explainer b{ color:var(--blue); font-weight:800; }
 
   /* HERO */
   .hero{ padding:14px 40px 26px; }
@@ -121,6 +121,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   /* Gut-punch exhibit */
   .exhibit{ margin:0 40px 22px; padding:18px 20px; background:#fff1f1; border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
   .ex-label{ font-size:13px; color:var(--muted); font-weight:600; margin-bottom:8px; }
+  .ex-q{ font-weight:800; color:var(--ink); }
   .ex-quote{ margin:0 0 8px; font-size:22px; line-height:1.4; font-weight:700; color:#3d0f12; }
   .ex-instead{ margin:0 0 8px; font-size:16px; font-weight:850; color:#3d0f12; }
   .ex-instead .rival{ color:var(--red); }
@@ -153,8 +154,9 @@ export function renderReportHtml(d: AiAuditReportData): string {
   td.now .count{ font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
   td.after{ width:30%; }
   .glyph{ font-size:22px; font-weight:900; line-height:1; } .glyph.no{ color:var(--red); } .glyph.yes{ color:var(--green); }
-  .await{ color:var(--faint); font-style:italic; font-size:12px; }
-  .after-note{ margin-top:12px; font-size:12px; color:var(--faint); }
+  .await{ display:inline-block; padding:2px 10px; border:1px dashed #cdd6e4; border-radius:6px; color:var(--faint); font-size:11px; font-weight:700; }
+  .after-note{ margin-top:12px; font-size:12px; color:var(--muted); max-width:64ch; }
+  .after-note b{ color:var(--ink); font-weight:800; }
 
   /* HOW WE FIX IT — one confident bridge line into the CTA, Findable-branded */
   .fix{ padding:18px 40px; border-top:1px solid var(--line); border-left:4px solid var(--yellow); background:#f3f7ff; }
@@ -162,15 +164,16 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .fix p b{ color:var(--blue); }
   .fix p .hl{ color:var(--blue); }
 
-  /* CLOSING CTA — Findable blue band with a yellow highlight */
-  .cta{ background:var(--blue); color:#fff; padding:26px 40px; }
-  .cta h3{ margin:0 0 8px; font-size:23px; font-weight:850; color:#fff; letter-spacing:-.01em; }
+  /* CLOSING CTA — Findable blue band with a yellow highlight; the report ENDS on blue */
+  .cta{ background:var(--blue); color:#fff; padding:28px 40px 24px; }
+  .cta h3{ margin:0 0 8px; font-size:24px; font-weight:850; color:#fff; letter-spacing:-.01em; }
   .cta h3 .y{ color:var(--yellow); }
   .cta p{ margin:0 0 6px; font-size:14px; color:#c7d3ea; max-width:60ch; }
   .cta .close{ margin-top:10px; font-size:15px; font-weight:800; color:#fff; }
-
-  .foot{ display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:14px 40px; font-size:12px; color:var(--faint); }
-  .foot a{ color:var(--muted); text-decoration:none; }
+  .cta-foot{ margin-top:20px; padding-top:12px; border-top:1px solid rgba(255,255,255,.16);
+    display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:11px; color:#93a6c6; }
+  .cta-foot a{ color:var(--yellow); text-decoration:none; }
+  .cta-note{ margin-top:8px; font-size:11px; color:#7f93b5; }
 
   @page{ size:A4; margin:11mm; }
   @media print{
@@ -228,7 +231,7 @@ ${exhibit}${comps}
         <tbody>${engineRows}
         </tbody>
       </table>
-      <div class="after-note">Once we improve your AI visibility, we re-run this exact audit to fill the “After” column.</div>
+      <div class="after-note"><b>This is your starting point.</b> The “After” column fills in once we’ve made changes and re-run this exact audit — so you see the before &amp; after side by side.</div>
     </section>
 
     <!-- ============================================================================
@@ -245,12 +248,12 @@ ${exhibit}${comps}
       <h3>Ready to get <span class="y">found</span>?</h3>
       <p>We fix what AI says about you — then re-run this exact audit so you can see the before/after in black and white.</p>
       <div class="close">Let’s get ${esc(d.businessName)} named when your customers ask.</div>
+      <div class="cta-foot">
+        <span>Prepared for ${esc(d.businessName)}</span>
+        <span>Findable · AI Visibility Audit · ${esc(d.generatedAtLabel)}${shareFoot}</span>
+      </div>
+      <div class="cta-note">Example report — a snapshot of where you stand today. We re-run it after we’ve made changes to show your before &amp; after.</div>
     </section>
-
-    <div class="foot">
-      <span>Prepared for ${esc(d.businessName)}</span>
-      <span>Findable · AI Visibility Audit${shareFoot}</span>
-    </div>
   </div>
 </body>
 </html>`;
