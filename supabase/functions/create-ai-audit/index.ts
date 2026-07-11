@@ -77,6 +77,9 @@ Deno.serve(async (req) => {
     const providedQuestions: string[] | null = Array.isArray(body.questions)
       ? body.questions.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim()).slice(0, MAX_QUESTIONS)
       : null;
+    // Optional free-text specialisms ("kava, pool tables"). Weights the niche/differentiator
+    // questions; blank → the generator infers the specialism from the name + type.
+    const specialisms: string = typeof body.specialisms === "string" ? body.specialisms.trim().slice(0, 200) : "";
 
     if (!businessName && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
 
@@ -87,7 +90,7 @@ Deno.serve(async (req) => {
     if (preview) {
       const qs = providedQuestions && providedQuestions.length
         ? providedQuestions
-        : await generateQuestions(businessType, locationText, hasWebsite);
+        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms);
       return json({
         ok: true,
         preview: true,
@@ -134,13 +137,13 @@ Deno.serve(async (req) => {
         }
       }
       if (questions.length < QUESTION_COUNT) {
-        questions = await generateQuestions(audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true);
+        questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms);
       }
     } else {
       // New audit: use the edited questions if provided, else generate them.
       questions = providedQuestions && providedQuestions.length
         ? providedQuestions
-        : await generateQuestions(businessType, locationText, hasWebsite);
+        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms);
       const { data: audit, error: insErr } = await service
         .from("ai_audits")
         .insert({
@@ -210,31 +213,49 @@ Deno.serve(async (req) => {
  * non-OK, parse, validation) falls back to the deterministic template set so the audit
  * always has questions.
  */
-async function generateQuestions(businessType: string, locationText: string, hasWebsite: boolean): Promise<string[]> {
+async function generateQuestions(
+  businessName: string,
+  businessType: string,
+  locationText: string,
+  hasWebsite: boolean,
+  specialisms: string,
+): Promise<string[]> {
   const fallback = fallbackQuestions(businessType, locationText, hasWebsite).slice(0, QUESTION_COUNT);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) return fallback;
 
+  const name = businessName || "the business";
   const type = businessType || "local business";
   const loc = locationText || "the local area";
   // has_website branches the framing: website/service-page angles vs presence/directory.
   const framing = hasWebsite
     ? "The business HAS a website, so it's fine to include questions about services, service pages, online booking, or comparing providers' websites."
     : "The business has NO website, so lean on presence/discovery angles: directories, reviews, recommendations, and being found without a site.";
+  // Ground the questions in the REAL specialism: use the operator's stated specialisms if
+  // given, else infer it from the name + type (names often carry the whole point).
+  const specialismLine = specialisms
+    ? `The operator says the business is known for: ${specialisms}. WEIGHT the niche and differentiator questions toward these specialisms.`
+    : `No specialisms were given — INFER the real specialism from the NAME and type. The name often contains the whole point (e.g. a name like "X Kava Bar" means kava is central; "Y Vinyl Cafe" means records). Ground the niche/differentiator questions in that.`;
 
-  const systemPrompt = `You generate the exact search questions a REAL CUSTOMER would type into an AI assistant (ChatGPT, Perplexity, Gemini) when trying to find a ${type} in ${loc}.
+  const systemPrompt = `You generate the exact search questions a REAL CUSTOMER would type into an AI assistant (ChatGPT, Gemini) when trying to find a ${type} in ${loc}.
+
+Business name: ${name}
+Business type: ${type}
+Location: ${loc}
+
+${specialismLine}
 
 Return EXACTLY 6 questions, as natural as a real person's phrasing (lowercase is fine), covering this mix:
 - 2 BROAD: best / top ${type} in ${loc}
-- 2 NICHE / type-specific: a specific service or need someone would have for a ${type}
-- 1 DIFFERENTIATOR: what sets one apart (quality, price, specialism, reviews)
+- 2 NICHE / type-specific: a specific service or need for this kind of business, grounded in its ACTUAL specialism (from the name/type or the specialisms above)
+- 1 DIFFERENTIATOR: what sets it apart — use ONLY a real angle implied by the name, type, or specialisms. Do NOT invent differentiators (live music, food, happy hour, etc.) unless they're clearly implied. Prefer the real, grounded specialism over a plausible guess.
 - 1 NEAR-ME style: a "near me" / very local phrasing
 
 ${framing}
 
-Rules: no business names, no brand names, no quotes. Each question is one line, a real query a customer would send. Return via the return_questions tool.`;
+Rules: the questions must NOT contain the business's own name or any brand name (the customer is trying to DISCOVER it), no quotes. Each question is one line, a real query a customer would send. Return via the return_questions tool.`;
 
-  const userPrompt = `Business type: ${type}\nLocation: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}\n\nGenerate the 6 questions.`;
+  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for / specialisms: ${specialisms}` : ""}\n\nInfer the real specialism and generate the 6 grounded questions.`;
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {

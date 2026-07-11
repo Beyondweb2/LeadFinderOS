@@ -22,8 +22,9 @@ import type { Country } from '@/types/outreach';
 type Step = 'source' | 'name' | 'type' | 'location' | 'website' | 'review' | 'results';
 // The stacked wizard steps, in order. `revealed` is the furthest index shown; every
 // step 0..revealed is rendered at once. 'results' is a separate phase (step === 'results').
-const WIZARD_STEPS = ['source', 'name', 'type', 'location', 'website', 'review'] as const;
+const WIZARD_STEPS = ['source', 'name', 'type', 'location', 'website', 'specialisms', 'review'] as const;
 const REVIEW_INDEX = WIZARD_STEPS.indexOf('review');
+const SPECIALISMS_INDEX = WIZARD_STEPS.indexOf('specialisms');
 
 // value = the Country name stored/passed to the audit; the edge toCountryCode /
 // COUNTRY_TO_ISO2 map converts every name to lowercase ISO-2 uniformly. label = display.
@@ -75,6 +76,7 @@ interface PersistedWizard {
   country: Country | '';
   hasWebsite: boolean | null;
   website: string;
+  specialisms: string;
   questions: string[];
   unitCost: number;
   engineCount: number;
@@ -122,6 +124,7 @@ const AiAudit = () => {
   const [country, setCountry] = useState<Country | ''>(persisted?.country ?? '');
   const [hasWebsite, setHasWebsite] = useState<boolean | null>(persisted?.hasWebsite ?? null);
   const [website, setWebsite] = useState(persisted?.website ?? '');
+  const [specialisms, setSpecialisms] = useState(persisted?.specialisms ?? ''); // optional — grounds question generation
 
   // Existing-lead picker + saved audits
   const [leads, setLeads] = useState<LeadOption[]>([]);
@@ -146,6 +149,7 @@ const AiAudit = () => {
   const typeRef = useRef<HTMLInputElement>(null);
   const townRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
+  const specialismsRef = useRef<HTMLInputElement>(null);
 
   const estimatedCost = Number((questions.length * engineCount * unitCost).toFixed(2));
 
@@ -158,10 +162,10 @@ const AiAudit = () => {
     if (step === 'results') { clearWizard(); return; }
     try {
       sessionStorage.setItem(WIZARD_KEY, JSON.stringify({
-        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, questions, unitCost, engineCount,
+        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, specialisms, questions, unitCost, engineCount,
       }));
     } catch { /* storage unavailable — persistence is best-effort */ }
-  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, questions, unitCost, engineCount]);
+  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, specialisms, questions, unitCost, engineCount]);
 
   // ── Initial load: the user's leads (for the picker) + saved audits ──────────
   const loadSaved = useCallback(async () => {
@@ -237,7 +241,7 @@ const AiAudit = () => {
 
   const resetWizard = () => {
     setMode(null); setLeadId(null); setBusinessName(''); setBusinessType('');
-    setLocationText(''); setCountry(''); setHasWebsite(null); setWebsite('');
+    setLocationText(''); setCountry(''); setHasWebsite(null); setWebsite(''); setSpecialisms('');
     setQuestions([]); setUnitCost(0); setEngineCount(SCORED_ENGINES.length);
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
     setRevealed(0); setStep('source');
@@ -266,7 +270,7 @@ const AiAudit = () => {
           preview: true,
           business_name: businessName, business_type: businessType,
           location_text: locationText, country, has_website: hasWebsite,
-          website: website || undefined,
+          website: website || undefined, specialisms: specialisms || undefined,
         },
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'preview failed');
@@ -278,7 +282,7 @@ const AiAudit = () => {
     } finally {
       setPreviewing(false);
     }
-  }, [businessName, businessType, locationText, country, hasWebsite, website, toast]);
+  }, [businessName, businessType, locationText, country, hasWebsite, website, specialisms, toast]);
 
   // When the review step is first revealed with no questions yet, generate them.
   // Editing type/location later does NOT auto-wipe/regenerate (only reveal-fresh or the
@@ -288,6 +292,7 @@ const AiAudit = () => {
     if (cur === 'name') nameRef.current?.focus();
     else if (cur === 'type') typeRef.current?.focus();
     else if (cur === 'location') townRef.current?.focus();
+    else if (cur === 'specialisms') specialismsRef.current?.focus();
     else if (cur === 'review' && questions.length === 0 && !previewing) runPreview();
     // Fire only on reveal changes — not on every keystroke/question edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -304,6 +309,7 @@ const AiAudit = () => {
           business_name: businessName, business_type: businessType,
           location_text: locationText, country, has_website: hasWebsite,
           website: website || undefined, lead_id: leadId || undefined,
+          specialisms: specialisms || undefined,
           questions: clean,
         },
       });
@@ -483,12 +489,12 @@ const AiAudit = () => {
               <StepHeader title="Does it have a website?" />
               <div className="grid grid-cols-2 gap-3">
                 <ChoiceButton active={hasWebsite === true} onClick={() => { setHasWebsite(true); setTimeout(() => urlRef.current?.focus(), 0); }} label="Yes" hint="Enter the URL" />
-                <ChoiceButton active={hasWebsite === false} onClick={() => { setHasWebsite(false); setWebsite(''); reveal(REVIEW_INDEX); }} label="No" hint="Presence-led audit" />
+                <ChoiceButton active={hasWebsite === false} onClick={() => { setHasWebsite(false); setWebsite(''); reveal(SPECIALISMS_INDEX); }} label="No" hint="Presence-led audit" />
               </div>
               {hasWebsite === true && (
                 <>
                   <Input ref={urlRef} value={website} onChange={(e) => setWebsite(e.target.value)}
-                    onKeyDown={enterAdvance(!!website.trim(), REVIEW_INDEX)}
+                    onKeyDown={enterAdvance(!!website.trim(), SPECIALISMS_INDEX)}
                     placeholder="https://…" />
                   <p className="text-[11px] text-muted-foreground">Press Enter to continue</p>
                 </>
@@ -496,7 +502,23 @@ const AiAudit = () => {
             </StepCard>
           )}
 
-          {/* Step 6 — review questions + cost */}
+          {/* Step 6 — specialisms (OPTIONAL) */}
+          {shown('specialisms') && (
+            <StepCard>
+              <StepHeader title="What are they known for? (optional)" />
+              <Input ref={specialismsRef} value={specialisms} onChange={(e) => setSpecialisms(e.target.value)}
+                onKeyDown={enterAdvance(true, REVIEW_INDEX)}
+                placeholder="e.g. kava, pool tables, vinyl" />
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] text-muted-foreground">Optional — helps ground the questions. Press Enter to continue{specialisms.trim() ? '' : ' (or skip)'}.</p>
+                <Button variant="ghost" size="sm" onClick={() => reveal(REVIEW_INDEX)}>
+                  {specialisms.trim() ? 'Continue' : 'Skip'}
+                </Button>
+              </div>
+            </StepCard>
+          )}
+
+          {/* Step 7 — review questions + cost */}
           {shown('review') && (
             <StepCard>
               <div className="flex items-center justify-between gap-2">
