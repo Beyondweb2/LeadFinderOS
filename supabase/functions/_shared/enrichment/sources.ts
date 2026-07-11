@@ -16,8 +16,9 @@ import {
   type NormalizedPlace,
 } from "./apify.ts";
 import { AI_SEARCH_ACTOR } from "./ai-search.ts";
+import { SEO_AUDIT_ACTOR } from "./seo-audit.ts";
 
-export type SourceKey = "maps" | "contact_scraper" | "social_images" | "whatsapp" | "ai_search";
+export type SourceKey = "maps" | "contact_scraper" | "social_images" | "whatsapp" | "ai_search" | "seo_audit";
 export type SourceStage = "discovery" | "enrich";
 
 export interface EnrichmentSourceDef {
@@ -77,6 +78,16 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
     // per-question estimate in create-ai-audit. Drives the runner cap pre-check.
     estCostUsd: 0.05,
     description: "AI Visibility Audit multi-engine SERP via apify/google-search-scraper",
+    enabled: true,
+  },
+  seo_audit: {
+    key: "seo_audit",
+    stage: "enrich",
+    actorId: SEO_AUDIT_ACTOR,
+    // Per single-page audit (usage-based, not per-result) — CONSERVATIVE estimate;
+    // verify the real per-run cost on the first live run and tune here.
+    estCostUsd: 0.02,
+    description: "On-page SEO audit (misceres/seo-audit-tool), graded for the AI-audit report's SEO section",
     enabled: true,
   },
 };
