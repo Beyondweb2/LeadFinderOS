@@ -1,5 +1,6 @@
-import { useState } from 'react';
 import { Search, MapPin, Radius, Loader2 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { usePersistedState } from '@/hooks/usePersistedState';
 import logoIcon from '@/assets/leadfinder-logo-icon.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,10 +39,14 @@ export function SearchForm({
   isUpgradeLoading = false,
   freeSearchesExhausted = false,
 }: SearchFormProps) {
-  const [keyword, setKeyword] = useState('');
-  const [location, setLocation] = useState('');
-  const [radius, setRadius] = useState(initialRadius ?? 50);
-  const [selectedCountry, setSelectedCountry] = useState<Country>('UK' as Country);
+  // Persist the search inputs per-user (tier 'both' to survive a tab close, matching the
+  // already-persisted results) so returning to Find Leads keeps the boxes filled.
+  const { user } = useAuth();
+  const persist = { tier: 'both', scope: user?.id } as const;
+  const [keyword, setKeyword] = usePersistedState('find-leads-keyword', '', persist);
+  const [location, setLocation] = usePersistedState('find-leads-location', '', persist);
+  const [radius, setRadius] = usePersistedState('find-leads-radius', initialRadius ?? 50, persist);
+  const [selectedCountry, setSelectedCountry] = usePersistedState<Country>('find-leads-country', 'UK' as Country, persist);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

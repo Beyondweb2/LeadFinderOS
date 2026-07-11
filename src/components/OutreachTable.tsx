@@ -529,6 +529,15 @@ export function OutreachTable({
     if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
     if (typeof parsed.trackedOnly === 'boolean') setTrackedOnly(parsed.trackedOnly);
     if (typeof parsed.hideNoWhatsApp === 'boolean') setHideNoWhatsApp(parsed.hideNoWhatsApp);
+    // Contactability + listing-signal filter toggles (persisted alongside the rest so
+    // they don't reset on navigation while the neighbouring filters survive).
+    if (typeof parsed.hasEmail === 'boolean') setHasEmail(parsed.hasEmail);
+    if (typeof parsed.hasInstagram === 'boolean') setHasInstagram(parsed.hasInstagram);
+    if (typeof parsed.hasFacebook === 'boolean') setHasFacebook(parsed.hasFacebook);
+    if (typeof parsed.hasWhatsApp === 'boolean') setHasWhatsApp(parsed.hasWhatsApp);
+    if (typeof parsed.sigWebsite === 'boolean') setSigWebsite(parsed.sigWebsite);
+    if (typeof parsed.sigFacebook === 'boolean') setSigFacebook(parsed.sigFacebook);
+    if (typeof parsed.sigInstagram === 'boolean') setSigInstagram(parsed.sigInstagram);
     if (parsed.sortField) setSortField(parsed.sortField);
     if (parsed.sortDirection) setSortDirection(parsed.sortDirection);
     if (shouldForcePage1) {
@@ -557,11 +566,18 @@ export function OutreachTable({
       countryFilter,
       trackedOnly,
       hideNoWhatsApp,
+      hasEmail,
+      hasInstagram,
+      hasFacebook,
+      hasWhatsApp,
+      sigWebsite,
+      sigFacebook,
+      sigInstagram,
       sortField,
       sortDirection,
       currentPage,
     });
-  }, [tableStateKey, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hideNoWhatsApp, sortField, sortDirection, currentPage]);
+  }, [tableStateKey, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hideNoWhatsApp, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection, currentPage]);
 
   // Apply optimistic updates to leads for rendering
   const leadsWithOptimistic = useMemo(() => {
