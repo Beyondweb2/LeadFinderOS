@@ -4,6 +4,7 @@ import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConv
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useSubscription } from '@/hooks/useSubscription';
+import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
 import { fillTemplate } from '@/lib/leadUtils';
 import { barberSitePreviewUrl } from '@/config/publicSite';
@@ -100,10 +101,11 @@ const Inbox = () => {
   // Campaign filter (null = all). Unassigned conversations are ALWAYS shown, even
   // when a specific campaign is selected — that's where mis-routed / unknown-sender
   // replies land and must never be hidden.
-  const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+  // Persisted per-user (sessionStorage) so the filter survives navigating away and back.
+  const [campaignFilter, setCampaignFilter] = usePersistedState<string | null>('inbox-campaign-filter', null, { tier: 'session', scope: user?.id });
   // Status filter (null = all statuses). Composes with the campaign filter (AND).
   // Unassigned stays visible regardless (never hidden by a filter).
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = usePersistedState<string | null>('inbox-status-filter', null, { tier: 'session', scope: user?.id });
   // Not-interested conversations are hidden by default (dead prospects); a toggle
   // reveals them. A new inbound reply flips the lead back to 'replied' server-side
   // (whatsapp-inbound), so re-engaging conversations reappear on their own.
