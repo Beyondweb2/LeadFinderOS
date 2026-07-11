@@ -112,6 +112,11 @@ const GENERIC_TERMS = new Set([
   'nimman', 'bazaar', 'market', 'plaza', 'mall', 'square', 'park', 'quarter', 'village', 'zone', 'riverside',
   'beach', 'harbour', 'harbor', 'pier', 'walking', 'district',
 ]);
+// Pronoun / sentence-fragment words that leak in as "competitors" ("It's …", "They …").
+const PRONOUNS = new Set([
+  'it', 'its', "it's", 'they', 'them', 'their', 'we', 'us', 'our', 'i', 'he', 'she', 'him', 'her',
+  'that', 'this', 'these', 'those', 'here', 'there', 'what', 'where', 'when', 'who', 'why', 'how', 'if', 'is', 'are', 'was',
+]);
 
 /** Niche keywords for the business — its real specialisms + the distinctive part of its
  *  type (drops the generic category word). Used to prefer WINNABLE, specialism-relevant
@@ -151,11 +156,12 @@ function looksAbsent(text: string): boolean {
 function isRealCompetitor(name: string, locationText: string): boolean {
   const n = name.trim();
   if (n.length < 3 || n.length > 60) return false;
+  if (n.includes('@')) return false;                     // social handle, not a venue ("… (@kava_thailand)")
   const nl = n.toLowerCase();
   if (UI_PHRASES.some((p) => nl === p || nl.includes(p))) return false;          // "gemini apps activity" etc.
   const words = nl.split(/\s+/).map((w) => w.replace(/[^a-z0-9.&'-]/g, '')).filter(Boolean);
   if (!words.length) return false;
-  const generic = (w: string) => COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || GENERIC_TERMS.has(w);
+  const generic = (w: string) => COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || GENERIC_TERMS.has(w) || PRONOUNS.has(w);
   // Every word is generic (stopword / cuisine / descriptor / venue-type / area) → not a real
   // name: "Thai Food", "Cocktail Lounge", "Night Bazaar", "Gemini Apps Activity".
   if (words.every(generic)) return false;
@@ -182,6 +188,58 @@ function trimToSentence(text: string, max: number): string {
   const cut = t.slice(0, max);
   const stop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
   return stop > max * 0.5 ? cut.slice(0, stop + 1).trim() : cut.trim() + '…';
+}
+
+/** Strip UI chrome + markdown out of an engine answer so it reads as clean prose. */
+function cleanAnswerText(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, ' ')                 // code fences
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')            // images
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')          // links → their text
+    .replace(/^\s{0,3}#{1,6}\s*/gm, '')               // markdown headings (###)
+    .replace(/^\s{0,3}[-*•]\s+/gm, '')                // list bullets (* / -)
+    .replace(/^\s{0,3}\d+[.)]\s+/gm, '')              // numbered lists
+    .replace(/[*_`>#]+/g, '')                         // stray md symbols (** __ ` > #)
+    .replace(/\bgive feedback\b/gi, ' ')              // AI-UI cruft
+    .replace(/^\s*feedback\b[:\-\s]*/gi, ' ')
+    .replace(/\bshow (?:more|less)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// A sentence is "damning evidence" if it names the competitor, states the business/
+// category doesn't exist, or starts the recommendations — i.e. the point, not the preamble.
+function isDamningSentence(s: string, rival?: string): boolean {
+  const l = s.toLowerCase();
+  if (rival && l.includes(rival.toLowerCase())) return true;
+  if (/\b(no|not|none|couldn't|don't|doesn't|aren't|isn't|unable|cannot)\b/.test(l)
+    && /\b(any|dedicated|specific|bar|bars|kava|find|aware|exist|listing|results?|options?)\b/.test(l)) return true;
+  if (/\b(best|top|recommend(?:ed)?|you might|try|options? include|here are|popular|consider|check out|go to|standout|notable)\b/.test(l)) return true;
+  return false;
+}
+
+/**
+ * Extract 1–3 CLEAN, relevant sentences from an engine answer for the gut-punch — the
+ * damning bit (competitor named / doesn't exist / recommendations), not the rambling
+ * preamble or UI/markdown junk. Returns null if nothing clean + relevant can be pulled
+ * (so pickGutPunch can prefer a different question's answer).
+ */
+function extractGutPunch(raw: string, rival?: string): string | null {
+  const clean = cleanAnswerText(raw);
+  if (clean.length < 20) return null;
+  const parts = clean.split(/(?<=[.!?])\s+(?=[A-Z0-9"“'])/).map((s) => s.trim()).filter(Boolean);
+  const sentences = parts.length ? parts : [clean];
+  let start = sentences.findIndex((s) => isDamningSentence(s, rival));
+  if (start < 0) return null;                          // no relevant sentence → let another question win
+  let out = '';
+  for (let i = start; i < sentences.length && i < start + 3; i++) {
+    const next = out ? `${out} ${sentences[i]}` : sentences[i];
+    if (out && next.length > 340) break;
+    out = next;
+    if (out.length >= 200) break;
+  }
+  out = out.trim();
+  return out.length >= 20 ? trimToSentence(out, 320) : null;
 }
 
 // Head words that signal a broad, unwinnable vanity term ("best bar in X").
@@ -216,8 +274,12 @@ function pickGutPunch(
       const er = r.result[engine];
       if (!er || er.named) continue;
       const text = (er.answer_text || '').trim();
-      if (!text) continue;
+      if (!text || isJunkAnswer(text)) continue;         // skip map/image/URL junk outright
       const rival = er.competitors.find((c) => isRealCompetitor(c, locationText));
+      // Extract the CLEAN, relevant sentence(s). If nothing clean+relevant → skip this
+      // candidate entirely and let a different question's answer win.
+      const snippet = extractGutPunch(text, rival);
+      if (!snippet) continue;
       let score = 0;
       // (1) Relevance / winnability — dominant.
       if (hasNiche) score += 2_000_000;                  // specialism-relevant, winnable
@@ -225,12 +287,11 @@ function pickGutPunch(
       // (2) Damning answer.
       if (looksAbsent(text)) score += 400_000;
       if (rival) score += 200_000;                       // names a real competitor
-      // (3) Clarity tiebreak + junk guard.
-      score += Math.min(text.length, 400) / 100;
-      if (isJunkAnswer(text)) score -= 10_000_000;       // last resort only
+      // (3) Clarity tiebreak.
+      score += Math.min(snippet.length, 400) / 100;
       if (score > bestScore) {
         bestScore = score;
-        best = { question: r.question, engineLabel: ENGINE_LABELS[engine] ?? engine, text: trimToSentence(text, 380), competitor: rival };
+        best = { question: r.question, engineLabel: ENGINE_LABELS[engine] ?? engine, text: snippet, competitor: rival };
       }
     }
   }
