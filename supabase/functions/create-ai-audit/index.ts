@@ -18,25 +18,43 @@ const corsHeaders = {
 // Google organic in the same run; those are captured/shown but not queue engines.
 // (Perplexity dropped — kept dormant in ai-search.ts in case it's re-added.)
 const AUDIT_ENGINES = ["chatgpt", "gemini"];
-const QUESTION_COUNT = 6;
+// The wizard lets the caller pick how many questions to generate. Range 6..12,
+// default 8. Always clamped server-side (the count is untrusted client input).
+const MIN_QUESTION_COUNT = 6;
+const MAX_QUESTION_COUNT = 12;
+const DEFAULT_QUESTION_COUNT = 8;
+
+/** Clamp an untrusted question-count to 6..12, defaulting to 8. */
+function clampCount(n: unknown): number {
+  const v = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : DEFAULT_QUESTION_COUNT;
+  return Math.min(MAX_QUESTION_COUNT, Math.max(MIN_QUESTION_COUNT, v));
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
 /** Deterministic template questions — the fallback when OpenAI is unavailable or
- *  returns something that doesn't validate. Deliberately plain. */
-function fallbackQuestions(type: string, loc: string, hasWebsite: boolean): string[] {
+ *  returns something that doesn't validate. Deliberately plain. Sliced to `count`
+ *  (enough single-intent variants here to cover the full 6..12 range). */
+function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, count: number): string[] {
   const t = type || "business";
   const where = loc ? ` in ${loc}` : "";
-  return [
+  const base = [
     `best ${t}${where}`,
     `top rated ${t}${where}`,
     `who is the best ${t}${where} for quality`,
     `which ${t}${where} do people recommend`,
     hasWebsite ? `${t}${where} with the best website and online booking` : `${t}${where} that is easy to contact`,
     `${t} near me${loc ? ` (${loc})` : ""}`,
+    `affordable ${t}${where}`,
+    `${t}${where} with great reviews`,
+    `where to find a good ${t}${where}`,
+    `most popular ${t}${where}`,
+    `highly rated ${t}${where}`,
+    `${t}${where} people trust`,
   ];
+  return base.slice(0, Math.min(base.length, Math.max(1, count)));
 }
 
 Deno.serve(async (req) => {
@@ -73,7 +91,10 @@ Deno.serve(async (req) => {
     // wizard's editable review screen. questions[]: an explicit override (edited list)
     // used instead of generating; capped so a client can't enqueue an unbounded run.
     const preview: boolean = body.preview === true;
-    const MAX_QUESTIONS = 10;
+    // How many questions to generate (6..12, default 8). Also the cap for an edited
+    // list the client submits, so a user who picked 12 can enqueue 12.
+    const questionCount = clampCount(body.question_count ?? body.questionCount);
+    const MAX_QUESTIONS = MAX_QUESTION_COUNT;
     const providedQuestions: string[] | null = Array.isArray(body.questions)
       ? body.questions.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim()).slice(0, MAX_QUESTIONS)
       : null;
@@ -90,7 +111,7 @@ Deno.serve(async (req) => {
     if (preview) {
       const qs = providedQuestions && providedQuestions.length
         ? providedQuestions
-        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms);
+        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount);
       return json({
         ok: true,
         preview: true,
@@ -136,14 +157,14 @@ Deno.serve(async (req) => {
           if (q && !seen.has(q)) { seen.add(q); questions.push(q); }
         }
       }
-      if (questions.length < QUESTION_COUNT) {
-        questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms);
+      if (questions.length < MIN_QUESTION_COUNT) {
+        questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms, questionCount);
       }
     } else {
       // New audit: use the edited questions if provided, else generate them.
       questions = providedQuestions && providedQuestions.length
         ? providedQuestions
-        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms);
+        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount);
       const { data: audit, error: insErr } = await service
         .from("ai_audits")
         .insert({
@@ -208,10 +229,11 @@ Deno.serve(async (req) => {
 });
 
 /**
- * Generate 6 audit questions via OpenAI (gpt-4o-mini, tool-calling). Model output is
- * untrusted — validated to exactly 6 non-empty strings; ANY failure (config, network,
- * non-OK, parse, validation) falls back to the deterministic template set so the audit
- * always has questions.
+ * Generate `count` audit questions via OpenAI (gpt-4o-mini, tool-calling). `count` is
+ * clamped to 6..12 (default 8). Model output is untrusted — validated to at least
+ * `count` non-empty strings then sliced to exactly `count`; ANY failure (config,
+ * network, non-OK, parse, validation) falls back to the deterministic template set so
+ * the audit always has questions.
  */
 async function generateQuestions(
   businessName: string,
@@ -219,8 +241,10 @@ async function generateQuestions(
   locationText: string,
   hasWebsite: boolean,
   specialisms: string,
+  count: number,
 ): Promise<string[]> {
-  const fallback = fallbackQuestions(businessType, locationText, hasWebsite).slice(0, QUESTION_COUNT);
+  const n = clampCount(count);
+  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, n);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) return fallback;
 
@@ -250,16 +274,16 @@ HOW REAL PEOPLE SEARCH — follow this exactly:
 - Short, natural, conversational — often terse/keyword-like, not full polite sentences. Prefer "best kava bar in ${loc}" or "where to play pool in ${loc}" over long multi-clause questions.
 - If there are multiple specialisms, SPREAD them across separate questions — one specialism per question.
 
-Return EXACTLY 6 questions covering this mix (lowercase is fine):
+Return EXACTLY ${n} questions covering this mix (lowercase is fine):
 - 2 BROAD: best / top ${type} in ${loc} (e.g. "best bars in ${loc}")
-- ~3 SPECIALISM: one question per specialism, single-intent, grounded in the real specialism (from the name/type or the list above). If there are fewer specialisms than slots, add another single-intent angle for the strongest one rather than combining.
+- ~${Math.max(1, n - 3)} SPECIALISM: one question per specialism, single-intent, grounded in the real specialism (from the name/type or the list above). If there are fewer specialisms than slots, add another single-intent angle for the strongest one rather than combining.
 - 1 NEAR-ME: a short "near me" / very local phrasing
 
 ${framing}
 
 Rules: ONE intent per question, no combining. Questions must NOT contain the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes. Do NOT invent features (live music, food, happy hour) unless clearly implied by the name/type/specialisms. Each question is one short line. Return via the return_questions tool.`;
 
-  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for / specialisms: ${specialisms}` : ""}\n\nGenerate 6 short, single-intent search phrases — one intent each, never combine specialisms.`;
+  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for / specialisms: ${specialisms}` : ""}\n\nGenerate ${n} short, single-intent search phrases — one intent each, never combine specialisms.`;
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -276,11 +300,11 @@ Rules: ONE intent per question, no combining. Questions must NOT contain the bus
           type: "function",
           function: {
             name: "return_questions",
-            description: "Return exactly 6 customer search questions",
+            description: `Return exactly ${n} customer search questions`,
             parameters: {
               type: "object",
               properties: {
-                questions: { type: "array", items: { type: "string" }, minItems: QUESTION_COUNT, maxItems: QUESTION_COUNT },
+                questions: { type: "array", items: { type: "string" }, minItems: n, maxItems: n },
               },
               required: ["questions"],
               additionalProperties: false,
@@ -299,7 +323,7 @@ Rules: ONE intent per question, no combining. Questions must NOT contain the bus
     const arr = Array.isArray(parsed?.questions) ? parsed.questions : null;
     if (!arr) return fallback;
     const cleaned = arr.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim());
-    return cleaned.length >= QUESTION_COUNT ? cleaned.slice(0, QUESTION_COUNT) : fallback;
+    return cleaned.length >= n ? cleaned.slice(0, n) : fallback;
   } catch (_e) {
     return fallback;
   }

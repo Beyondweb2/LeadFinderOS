@@ -26,7 +26,18 @@ type Step = 'source' | 'name' | 'type' | 'location' | 'website' | 'review' | 're
 // step 0..revealed is rendered at once. 'results' is a separate phase (step === 'results').
 const WIZARD_STEPS = ['source', 'name', 'type', 'location', 'website', 'specialisms', 'review'] as const;
 const REVIEW_INDEX = WIZARD_STEPS.indexOf('review');
-const SPECIALISMS_INDEX = WIZARD_STEPS.indexOf('specialisms');
+
+// Question-count selector: how many search questions to generate. Range mirrors the
+// create-ai-audit clamp (6..12, default 8).
+const MIN_QUESTION_COUNT = 6;
+const MAX_QUESTION_COUNT = 12;
+const DEFAULT_QUESTION_COUNT = 8;
+const QUESTION_COUNT_OPTIONS = Array.from(
+  { length: MAX_QUESTION_COUNT - MIN_QUESTION_COUNT + 1 },
+  (_, i) => MIN_QUESTION_COUNT + i,
+);
+const clampQuestionCount = (n: number) =>
+  Math.min(MAX_QUESTION_COUNT, Math.max(MIN_QUESTION_COUNT, Math.round(n) || DEFAULT_QUESTION_COUNT));
 
 // value = the Country name stored/passed to the audit; the edge toCountryCode /
 // COUNTRY_TO_ISO2 map converts every name to lowercase ISO-2 uniformly. label = display.
@@ -316,6 +327,7 @@ interface PersistedWizard {
   hasWebsite: boolean | null;
   website: string;
   specialisms: string;
+  questionCount: number;
   questions: string[];
   unitCost: number;
   engineCount: number;
@@ -364,6 +376,8 @@ const AiAudit = () => {
   const [hasWebsite, setHasWebsite] = useState<boolean | null>(persisted?.hasWebsite ?? null);
   const [website, setWebsite] = useState(persisted?.website ?? '');
   const [specialisms, setSpecialisms] = useState(persisted?.specialisms ?? ''); // optional — grounds question generation
+  const [questionCount, setQuestionCount] = useState<number>(() =>
+    clampQuestionCount(persisted?.questionCount ?? DEFAULT_QUESTION_COUNT));
 
   // Existing-lead picker + saved audits
   const [leads, setLeads] = useState<LeadOption[]>([]);
@@ -402,10 +416,10 @@ const AiAudit = () => {
     if (step === 'results') { clearWizard(); return; }
     try {
       sessionStorage.setItem(WIZARD_KEY, JSON.stringify({
-        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, specialisms, questions, unitCost, engineCount,
+        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, specialisms, questionCount, questions, unitCost, engineCount,
       }));
     } catch { /* storage unavailable — persistence is best-effort */ }
-  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, specialisms, questions, unitCost, engineCount]);
+  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, specialisms, questionCount, questions, unitCost, engineCount]);
 
   // ── Initial load: the user's leads (for the picker) + saved audits ──────────
   const loadSaved = useCallback(async () => {
@@ -511,6 +525,7 @@ const AiAudit = () => {
           business_name: businessName, business_type: businessType,
           location_text: locationText, country, has_website: hasWebsite,
           website: website || undefined, specialisms: specialisms || undefined,
+          question_count: questionCount,
         },
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'preview failed');
@@ -522,18 +537,13 @@ const AiAudit = () => {
     } finally {
       setPreviewing(false);
     }
-  }, [businessName, businessType, locationText, country, hasWebsite, website, specialisms, toast]);
+  }, [businessName, businessType, locationText, country, hasWebsite, website, specialisms, questionCount, toast]);
 
   // When the review step is first revealed with no questions yet, generate them.
   // Editing type/location later does NOT auto-wipe/regenerate (only reveal-fresh or the
-  // explicit Regenerate button do). Focus moves to the newly-revealed step.
+  // explicit Regenerate button do).
   useEffect(() => {
-    const cur = WIZARD_STEPS[revealed];
-    if (cur === 'name') nameRef.current?.focus();
-    else if (cur === 'type') typeRef.current?.focus();
-    else if (cur === 'location') townRef.current?.focus();
-    else if (cur === 'specialisms') specialismsRef.current?.focus();
-    else if (cur === 'review' && questions.length === 0 && !previewing) runPreview();
+    if (WIZARD_STEPS[revealed] === 'review' && questions.length === 0 && !previewing) runPreview();
     // Fire only on reveal changes — not on every keystroke/question edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealed]);
@@ -550,6 +560,7 @@ const AiAudit = () => {
           location_text: locationText, country, has_website: hasWebsite,
           website: website || undefined, lead_id: leadId || undefined,
           specialisms: specialisms || undefined,
+          question_count: questionCount,
           questions: clean,
         },
       });
@@ -665,13 +676,16 @@ const AiAudit = () => {
     generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
   } : null;
 
-  // Advance from a text field on Enter (if valid). Editing an earlier field re-fires
-  // reveal(), but reveal is monotonic so nothing below collapses.
-  const enterAdvance = (valid: boolean, nextIndex: number) => (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); if (valid) reveal(nextIndex); }
-  };
-
   const shown = (name: typeof WIZARD_STEPS[number]) => revealed >= WIZARD_STEPS.indexOf(name);
+
+  // The business-details form is shown as one settled block once a path is chosen
+  // (new business, or an existing lead has been picked). No progressive field reveal.
+  const showForm = mode === 'new' || (mode === 'existing' && !!leadId);
+  // All required fields present → questions can be generated. Website URL is required
+  // only when "has website" is Yes (preserves the has_website behaviour). Specialisms
+  // are optional.
+  const canGenerate = !!businessName.trim() && !!businessType.trim() && !!locationText.trim()
+    && !!country && hasWebsite !== null && (hasWebsite === false || !!website.trim());
 
   // Client-facing report is a separate view (replaces results while open).
   if (reportOpen && reportData) {
@@ -733,82 +747,86 @@ const AiAudit = () => {
             )}
           </StepCard>
 
-          {/* Step 2 — name */}
-          {shown('name') && (
+          {/* Business details — one settled form, all fields visible at once */}
+          {showForm && (
             <StepCard>
-              <StepHeader title="What's the business name?" />
-              <Input ref={nameRef} value={businessName} onChange={(e) => setBusinessName(e.target.value)}
-                onKeyDown={enterAdvance(!!businessName.trim(), WIZARD_STEPS.indexOf('type'))}
-                placeholder="e.g. Joe's Barbers" />
-              <p className="text-[11px] text-muted-foreground">Press Enter to continue</p>
-            </StepCard>
-          )}
-
-          {/* Step 3 — type */}
-          {shown('type') && (
-            <StepCard>
-              <StepHeader title="What type of business is it?" />
-              <Input ref={typeRef} value={businessType} onChange={(e) => setBusinessType(e.target.value)}
-                onKeyDown={enterAdvance(!!businessType.trim(), WIZARD_STEPS.indexOf('location'))}
-                placeholder="e.g. barber, plumber, dentist" />
-              <p className="text-[11px] text-muted-foreground">Press Enter to continue</p>
-            </StepCard>
-          )}
-
-          {/* Step 4 — location + country */}
-          {shown('location') && (
-            <StepCard>
-              <StepHeader title="Where is it based?" />
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2 space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Town / city</Label>
-                  <Input ref={townRef} value={locationText} onChange={(e) => setLocationText(e.target.value)}
-                    onKeyDown={enterAdvance(!!locationText.trim() && !!country, WIZARD_STEPS.indexOf('website'))}
-                    placeholder="e.g. Leeds" />
-                </div>
+              <StepHeader title="Business details" />
+              <div className="space-y-4">
+                {/* Name */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Country</Label>
-                  <Select value={country || undefined} onValueChange={(v) => { setCountry(v as Country); if (locationText.trim()) reveal(WIZARD_STEPS.indexOf('website')); }}>
-                    <SelectTrigger><SelectValue placeholder="Country" /></SelectTrigger>
-                    <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <Label className="text-xs text-muted-foreground">Business name</Label>
+                  <Input ref={nameRef} value={businessName} onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="e.g. Joe's Barbers" />
                 </div>
-              </div>
-              <p className="text-[11px] text-muted-foreground">Pick a country (or press Enter) to continue</p>
-            </StepCard>
-          )}
 
-          {/* Step 5 — website */}
-          {shown('website') && (
-            <StepCard>
-              <StepHeader title="Does it have a website?" />
-              <div className="grid grid-cols-2 gap-3">
-                <ChoiceButton active={hasWebsite === true} onClick={() => { setHasWebsite(true); setTimeout(() => urlRef.current?.focus(), 0); }} label="Yes" hint="Enter the URL" />
-                <ChoiceButton active={hasWebsite === false} onClick={() => { setHasWebsite(false); setWebsite(''); reveal(SPECIALISMS_INDEX); }} label="No" hint="Presence-led audit" />
-              </div>
-              {hasWebsite === true && (
-                <>
-                  <Input ref={urlRef} value={website} onChange={(e) => setWebsite(e.target.value)}
-                    onKeyDown={enterAdvance(!!website.trim(), SPECIALISMS_INDEX)}
-                    placeholder="https://…" />
-                  <p className="text-[11px] text-muted-foreground">Press Enter to continue</p>
-                </>
-              )}
-            </StepCard>
-          )}
+                {/* Type */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Business type</Label>
+                  <Input ref={typeRef} value={businessType} onChange={(e) => setBusinessType(e.target.value)}
+                    placeholder="e.g. barber, plumber, dentist" />
+                </div>
 
-          {/* Step 6 — specialisms (OPTIONAL) */}
-          {shown('specialisms') && (
-            <StepCard>
-              <StepHeader title="What are they known for? (optional)" />
-              <Input ref={specialismsRef} value={specialisms} onChange={(e) => setSpecialisms(e.target.value)}
-                onKeyDown={enterAdvance(true, REVIEW_INDEX)}
-                placeholder="e.g. kava, pool tables, vinyl" />
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] text-muted-foreground">Optional — helps ground the questions. Press Enter to continue{specialisms.trim() ? '' : ' (or skip)'}.</p>
-                <Button variant="ghost" size="sm" onClick={() => reveal(REVIEW_INDEX)}>
-                  {specialisms.trim() ? 'Continue' : 'Skip'}
-                </Button>
+                {/* Location + country */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Town / city</Label>
+                    <Input ref={townRef} value={locationText} onChange={(e) => setLocationText(e.target.value)}
+                      placeholder="e.g. Leeds" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Country</Label>
+                    <Select value={country || undefined} onValueChange={(v) => setCountry(v as Country)}>
+                      <SelectTrigger><SelectValue placeholder="Country" /></SelectTrigger>
+                      <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Website (URL box appears only when "Yes" — drives has_website / SEO step) */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Does it have a website?</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <ChoiceButton active={hasWebsite === true} onClick={() => { setHasWebsite(true); setTimeout(() => urlRef.current?.focus(), 0); }} label="Yes" hint="Enter the URL" />
+                    <ChoiceButton active={hasWebsite === false} onClick={() => { setHasWebsite(false); setWebsite(''); }} label="No" hint="Presence-led audit" />
+                  </div>
+                  {hasWebsite === true && (
+                    <Input ref={urlRef} value={website} onChange={(e) => setWebsite(e.target.value)}
+                      placeholder="https://…" />
+                  )}
+                </div>
+
+                {/* Specialisms (optional) */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">What are they known for? (optional)</Label>
+                  <Input ref={specialismsRef} value={specialisms} onChange={(e) => setSpecialisms(e.target.value)}
+                    placeholder="e.g. kava, pool tables, vinyl" />
+                  <p className="text-[11px] text-muted-foreground">Optional — helps ground the questions.</p>
+                </div>
+
+                {/* Number of questions to generate (6–12, default 8) */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">How many questions?</Label>
+                  <div className="flex items-center gap-3">
+                    <Select value={String(questionCount)} onValueChange={(v) => setQuestionCount(clampQuestionCount(Number(v)))}>
+                      <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                      <SelectContent>{QUESTION_COUNT_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <span className="text-[11px] text-muted-foreground">
+                      We'll generate {questionCount} search question{questionCount === 1 ? '' : 's'}
+                      {unitCost > 0 ? ` · est. cost ~$${(questionCount * engineCount * unitCost).toFixed(2)}` : ''}.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Generate → reveals the review step, which generates the questions */}
+                <div className="pt-1">
+                  <Button onClick={() => reveal(REVIEW_INDEX)} disabled={!canGenerate}>
+                    <Sparkles className="mr-2 h-4 w-4" /> Generate questions
+                  </Button>
+                  {!canGenerate && (
+                    <p className="text-[11px] text-muted-foreground mt-1.5">Fill in name, type, location, country and the website choice to continue.</p>
+                  )}
+                </div>
               </div>
             </StepCard>
           )}
