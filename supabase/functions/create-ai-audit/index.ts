@@ -234,10 +234,10 @@ async function generateQuestions(
   // Ground the questions in the REAL specialism: use the operator's stated specialisms if
   // given, else infer it from the name + type (names often carry the whole point).
   const specialismLine = specialisms
-    ? `The operator says the business is known for: ${specialisms}. WEIGHT the niche and differentiator questions toward these specialisms.`
-    : `No specialisms were given — INFER the real specialism from the NAME and type. The name often contains the whole point (e.g. a name like "X Kava Bar" means kava is central; "Y Vinyl Cafe" means records). Ground the niche/differentiator questions in that.`;
+    ? `Known for: ${specialisms}. Treat these as SEPARATE specialisms — give each its own single-intent question; NEVER combine two in one query.`
+    : `No specialisms were given — INFER the single main specialism from the NAME and type. The name often carries the whole point (e.g. "X Kava Bar" → kava; "Y Vinyl Cafe" → records). Build the specialism questions around it, one intent each.`;
 
-  const systemPrompt = `You generate the exact search questions a REAL CUSTOMER would type into an AI assistant (ChatGPT, Gemini) when trying to find a ${type} in ${loc}.
+  const systemPrompt = `You generate the search phrases a REAL PERSON would actually type into an AI assistant (ChatGPT, Gemini) to find a ${type} in ${loc}.
 
 Business name: ${name}
 Business type: ${type}
@@ -245,17 +245,21 @@ Location: ${loc}
 
 ${specialismLine}
 
-Return EXACTLY 6 questions, as natural as a real person's phrasing (lowercase is fine), covering this mix:
-- 2 BROAD: best / top ${type} in ${loc}
-- 2 NICHE / type-specific: a specific service or need for this kind of business, grounded in its ACTUAL specialism (from the name/type or the specialisms above)
-- 1 DIFFERENTIATOR: what sets it apart — use ONLY a real angle implied by the name, type, or specialisms. Do NOT invent differentiators (live music, food, happy hour, etc.) unless they're clearly implied. Prefer the real, grounded specialism over a plausible guess.
-- 1 NEAR-ME style: a "near me" / very local phrasing
+HOW REAL PEOPLE SEARCH — follow this exactly:
+- ONE intent per question. Never combine two specialisms or features in a single query (NOT "bar with pool tables and live music", NOT "nearest bar with kava and pool").
+- Short, natural, conversational — often terse/keyword-like, not full polite sentences. Prefer "best kava bar in ${loc}" or "where to play pool in ${loc}" over long multi-clause questions.
+- If there are multiple specialisms, SPREAD them across separate questions — one specialism per question.
+
+Return EXACTLY 6 questions covering this mix (lowercase is fine):
+- 2 BROAD: best / top ${type} in ${loc} (e.g. "best bars in ${loc}")
+- ~3 SPECIALISM: one question per specialism, single-intent, grounded in the real specialism (from the name/type or the list above). If there are fewer specialisms than slots, add another single-intent angle for the strongest one rather than combining.
+- 1 NEAR-ME: a short "near me" / very local phrasing
 
 ${framing}
 
-Rules: the questions must NOT contain the business's own name or any brand name (the customer is trying to DISCOVER it), no quotes. Each question is one line, a real query a customer would send. Return via the return_questions tool.`;
+Rules: ONE intent per question, no combining. Questions must NOT contain the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes. Do NOT invent features (live music, food, happy hour) unless clearly implied by the name/type/specialisms. Each question is one short line. Return via the return_questions tool.`;
 
-  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for / specialisms: ${specialisms}` : ""}\n\nInfer the real specialism and generate the 6 grounded questions.`;
+  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for / specialisms: ${specialisms}` : ""}\n\nGenerate 6 short, single-intent search phrases — one intent each, never combine specialisms.`;
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
