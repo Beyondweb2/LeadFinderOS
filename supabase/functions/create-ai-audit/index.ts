@@ -34,27 +34,86 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
-/** Deterministic template questions — the fallback when OpenAI is unavailable or
- *  returns something that doesn't validate. Deliberately plain. Sliced to `count`
- *  (enough single-intent variants here to cover the full 6..12 range). */
-function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, count: number): string[] {
+// Country / region / remote tokens that mark a business as NATIONAL scope. Mirrors the
+// classification the OpenAI prompt is told to do, so the deterministic fallback produces
+// the right SHAPE of questions too.
+const NATIONAL_LOC_TERMS = new Set([
+  "uk", "u.k.", "united kingdom", "great britain", "britain", "gb", "england", "scotland",
+  "wales", "northern ireland", "ireland", "eire", "republic of ireland",
+  "usa", "u.s.a.", "us", "u.s.", "united states", "united states of america", "america",
+  "canada", "australia", "new zealand", "nz", "thailand",
+  "nationwide", "national", "online", "remote", "everywhere", "anywhere",
+]);
+// Location tokens that are national but NOT a usable country/region qualifier for a phrase.
+const NON_GEO_NATIONAL = new Set(["nationwide", "national", "online", "remote", "everywhere", "anywhere"]);
+
+/** True when the business serves a whole country/region or works remotely (NATIONAL scope),
+ *  vs a specific town/city (LOCAL). Empty location → treated as national. */
+function isNationalScope(loc: string, specialisms: string): boolean {
+  const l = loc.trim().toLowerCase();
+  if (!l || l === "the local area") return true;                       // no town given → national
+  if (NATIONAL_LOC_TERMS.has(l)) return true;                          // location IS a country/region/"online"
+  if (/\b(nationwide|national|online|remote|whole of|across the|no physical office|serves? clients nationally)\b/.test(l)) return true;
+  if (/\b(nationwide|national|remote|online|no physical office|clients? (?:across|nationally))\b/.test(specialisms.toLowerCase())) return true;
+  return false;
+}
+
+/** Deterministic template questions — the fallback when OpenAI is unavailable or returns
+ *  something that doesn't validate. Scope-aware: LOCAL uses "[service] in [town]" plus a
+ *  single "near me"; NATIONAL uses audience-qualified "[service] for [audience] [country]"
+ *  with NO "near me" and NO broad best/top head-terms. Grounded in "known for" when given.
+ *  Sliced to `count`. */
+function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number): string[] {
   const t = type || "business";
-  const where = loc ? ` in ${loc}` : "";
-  const base = [
-    `best ${t}${where}`,
-    `top rated ${t}${where}`,
-    `who is the best ${t}${where} for quality`,
-    `which ${t}${where} do people recommend`,
-    hasWebsite ? `${t}${where} with the best website and online booking` : `${t}${where} that is easy to contact`,
-    `${t} near me${loc ? ` (${loc})` : ""}`,
-    `affordable ${t}${where}`,
-    `${t}${where} with great reviews`,
-    `where to find a good ${t}${where}`,
-    `most popular ${t}${where}`,
-    `highly rated ${t}${where}`,
-    `${t}${where} people trust`,
-  ];
-  return base.slice(0, Math.min(base.length, Math.max(1, count)));
+  const niches = specialisms
+    ? specialisms.split(/[,;/]|\band\b/i).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 1)
+    : [];
+
+  let base: string[];
+  if (isNationalScope(loc, specialisms)) {
+    const l = loc.trim().toLowerCase();
+    // Use the real country/region from the location when it is one; else default to "uk".
+    const region = l && NATIONAL_LOC_TERMS.has(l) && !NON_GEO_NATIONAL.has(l) ? ` ${l}` : " uk";
+    base = [
+      ...niches.map((nk) => `${nk} ${t}${region}`),                    // niche-grounded, national
+      `${t} for small businesses${region}`,
+      `${t} for startups${region}`,
+      `specialist ${t}${region}`,
+      `${t} for sole traders${region}`,
+      `${t} for limited companies${region}`,
+      `remote ${t}${region}`,
+      `${t} for contractors${region}`,
+      `${t} for ecommerce businesses${region}`,
+      `${t} for landlords${region}`,
+      `${t} for charities${region}`,
+      `${t} for freelancers${region}`,
+      `${t} for property investors${region}`,
+    ];
+  } else {
+    const where = loc ? ` in ${loc}` : "";
+    base = [
+      ...niches.map((nk) => `${nk} ${t}${where}`),                     // niche-grounded, local
+      `best ${t}${where}`,
+      `top rated ${t}${where}`,
+      `which ${t}${where} do people recommend`,
+      hasWebsite ? `${t}${where} with online booking` : `${t}${where} that is easy to contact`,
+      `${t} near me${loc ? ` (${loc})` : ""}`,                         // the single allowed near-me
+      `affordable ${t}${where}`,
+      `${t}${where} with great reviews`,
+      `where to find a good ${t}${where}`,
+      `most popular ${t}${where}`,
+      `highly rated ${t}${where}`,
+    ];
+  }
+
+  // De-dupe (a niche can echo a template) and slice to the requested count.
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const q of base) {
+    const k = q.trim();
+    if (k && !seen.has(k)) { seen.add(k); out.push(k); }
+  }
+  return out.slice(0, Math.min(out.length, Math.max(1, count)));
 }
 
 Deno.serve(async (req) => {
@@ -244,7 +303,7 @@ async function generateQuestions(
   count: number,
 ): Promise<string[]> {
   const n = clampCount(count);
-  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, n);
+  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) return fallback;
 
@@ -261,29 +320,42 @@ async function generateQuestions(
     ? `Known for: ${specialisms}. Treat these as SEPARATE specialisms — give each its own single-intent question; NEVER combine two in one query.`
     : `No specialisms were given — INFER the single main specialism from the NAME and type. The name often carries the whole point (e.g. "X Kava Bar" → kava; "Y Vinyl Cafe" → records). Build the specialism questions around it, one intent each.`;
 
-  const systemPrompt = `You generate the search phrases a REAL PERSON would actually type into an AI assistant (ChatGPT, Gemini) to find a ${type} in ${loc}.
+  const systemPrompt = `You generate the exact search phrases a REAL PERSON would type into an AI assistant (ChatGPT, Gemini) to find a business like this one. Output nothing but the phrases, via the return_questions tool.
 
 Business name: ${name}
 Business type: ${type}
-Location: ${loc}
+Location as given: ${loc}
 
 ${specialismLine}
 
-HOW REAL PEOPLE SEARCH — follow this exactly:
-- ONE intent per question. Never combine two specialisms or features in a single query (NOT "bar with pool tables and live music", NOT "nearest bar with kava and pool").
-- Short, natural, conversational — often terse/keyword-like, not full polite sentences. Prefer "best kava bar in ${loc}" or "where to play pool in ${loc}" over long multi-clause questions.
-- If there are multiple specialisms, SPREAD them across separate questions — one specialism per question.
+STEP 1 — CLASSIFY THE SCOPE (decide this first, silently, from the location and "known for"):
+- NATIONAL if the location names a country, nation, or large region (e.g. "UK", "United Kingdom", "England", "Britain", "Scotland", "Wales", "Ireland", "USA", "Australia"), OR is empty / says "nationwide" / "national" / "online" / "remote", OR the "known for" text says the business serves clients nationally, works remotely, or has no physical office.
+- LOCAL if the location names a specific town, city, or local area (e.g. "Leeds", "Chiang Mai", "Camden").
 
-Return EXACTLY ${n} questions covering this mix (lowercase is fine):
-- 2 BROAD: best / top ${type} in ${loc} (e.g. "best bars in ${loc}")
-- ~${Math.max(1, n - 3)} SPECIALISM: one question per specialism, single-intent, grounded in the real specialism (from the name/type or the list above). If there are fewer specialisms than slots, add another single-intent angle for the strongest one rather than combining.
-- 1 NEAR-ME: a short "near me" / very local phrasing
+STEP 2 — GENERATE under the matching rule set.
 
-${framing}
+RULES THAT ALWAYS APPLY (both scopes):
+- EXACTLY ONE intent per question. Never combine two services or needs. No "and" joining two things (NOT "tax returns and payroll", NOT "bar with kava and pool").
+- Natural phrasing a real person would type or ask an AI — short, terse, plain lowercase.
+- Ground EVERY question in the business's ACTUAL services and the "known for" field. NEVER invent a service it doesn't offer.
+- SPREAD the questions across the business's main services / niches — no near-duplicates.
+- Do NOT include the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes.
 
-Rules: ONE intent per question, no combining. Questions must NOT contain the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes. Do NOT invent features (live music, food, happy hour) unless clearly implied by the name/type/specialisms. Each question is one short line. Return via the return_questions tool.`;
+IF LOCAL:
+- Local framing is good: "[service] in ${loc}".
+- Broad head-terms are allowed here (a small local pool is winnable): e.g. "best [service] in ${loc}", "top [service] in ${loc}".
+- At most ONE "near me" question in total.
 
-  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for / specialisms: ${specialisms}` : ""}\n\nGenerate ${n} short, single-intent search phrases — one intent each, never combine specialisms.`;
+IF NATIONAL:
+- NEVER use "near me".
+- NEVER use broad head-terms like "best [service] in [country]", "top [service] in [country]", or "leading [service] in [country]". These are dominated by directories and comparison sites, are unwinnable for a single firm, and prove nothing — do not produce any.
+- EVERY question must be a SPECIFIC service or problem, qualified by AUDIENCE and national scope. Use the pattern "[specific service] for [audience] [country]" or "[niche] [service] [country]" — e.g. "[service] for small businesses uk", "[niche] [service] uk". Use the real country/region from the location; if the location gives no country, use "uk". Prioritise the differentiators / niches in the "known for" field.
+
+Return EXACTLY ${n} questions (lowercase), spread across the business's services/niches under the matching rule set. ${framing}
+
+Return via the return_questions tool.`;
+
+  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation as given: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for: ${specialisms}` : ""}\n\nFirst classify this business as NATIONAL or LOCAL from the location, then generate ${n} short, single-intent search phrases under the matching rules — one intent each, grounded in its real services, no "and", no invented services.`;
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
