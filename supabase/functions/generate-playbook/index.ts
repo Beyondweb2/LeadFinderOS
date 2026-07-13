@@ -54,12 +54,49 @@ const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 const strArr = (v: unknown, cap: number): string[] =>
   (Array.isArray(v) ? v : []).map(str).filter(Boolean).slice(0, cap);
 
+/* ── National vs local (computed in code — mirrors the SYSTEM_PROMPT fork) ────────
+ * The prompt asks the model to de-prioritise local map listings for national firms, but
+ * the model still slips GBP into quickWins — so we ALSO decide national-vs-local here and
+ * enforce it. Conservative by design: only NATIONAL on a clear signal, otherwise LOCAL, so
+ * we never wrongly strip GBP from a genuine local firm (per the task's ambiguity rule). */
+
+// GBP / local-map / local-listing terms that must NOT be a quick win for a national firm.
+const GBP_LOCAL_RE =
+  /google business profile|google business|google my business|\bgbp\b|\bgmb\b|bing places|apple business connect|apple maps|google maps|\bmaps?\b|map pack|map listing|local listing|local citation|local pack|near me/i;
+
+/** Decide if this business is NATIONAL (no walk-in premises / served UK-wide). Uses the
+ *  same signals the prompt describes; ambiguous ⇒ LOCAL. */
+function isNationalBusiness(audit: Row): boolean {
+  const loc = str(audit.location_text).toLowerCase().replace(/[.,]/g, " ").replace(/\bthe\b/g, " ").replace(/\s+/g, " ").trim();
+  const type = str(audit.business_type).toLowerCase();
+
+  // Unambiguous national indicators anywhere in the location or type.
+  const NATIONWIDE = /\b(nationwide|national|uk[-\s]?wide|country[-\s]?wide|countrywide|online|remote|e-?commerce|virtual)\b/;
+  if (NATIONWIDE.test(loc) || NATIONWIDE.test(type)) return true;
+
+  // Location is JUST a country/region (no specific town/city) → national.
+  const REGIONS = new Set([
+    "uk", "u k", "united kingdom", "great britain", "britain", "gb", "gbr",
+    "england", "scotland", "wales", "northern ireland", "n ireland",
+  ]);
+  if (loc && REGIONS.has(loc)) return true;
+
+  // No usable location given, but the type reads as a UK-wide professional/no-premises firm
+  // → national. A specific town/city given ⇒ falls through to LOCAL. Local trades
+  // (barber, dentist, café, garage…) are deliberately NOT matched here.
+  const noLoc = !loc || loc.includes("not given") || loc.includes("n/a");
+  const NATIONAL_TYPE = /\b(chartered|accountanc|accountant|solicitor|law firm|lawyer|barrister|consultanc|consultant|agency|software|saas|fintech)\b/;
+  if (noLoc && NATIONAL_TYPE.test(type)) return true;
+
+  return false; // specific place, or ambiguous → LOCAL (GBP stays a valid quick win)
+}
+
 /**
  * Validate the model's tool output into a clean Playbook. Rejects (returns an error) unless
  * the core contract holds — never stores a half-built plan. Drops individual malformed
  * sub-items (bad actions/directories) rather than failing the whole plan for one bad row.
  */
-function buildValidatedPlaybook(raw: unknown, fallbackName: string): { ok: true; playbook: Playbook } | { ok: false; error: string } {
+function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: boolean): { ok: true; playbook: Playbook } | { ok: false; error: string } {
   if (!raw || typeof raw !== "object") return { ok: false, error: "not_an_object" };
   const o = raw as Record<string, unknown>;
 
@@ -97,7 +134,12 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string): { ok: true;
     .slice(0, 12);
   if (directories.length < 1) return { ok: false, error: "no_directories" };
 
-  const quickWins = strArr(o.quickWins, 8);
+  // quickWins — for NATIONAL firms, code-enforce the prompt's rule: GBP / Bing Places /
+  // Apple Business Connect / local-maps / local-listings are NEVER a quick win (the model
+  // still slips them in). GBP stays allowed as a light entity-verification action in the
+  // Data Layer week — we only strip it from quickWins here. LOCAL firms are untouched.
+  let quickWins = strArr(o.quickWins, 8);
+  if (national) quickWins = quickWins.filter((q) => !GBP_LOCAL_RE.test(q));
   if (quickWins.length < 1) return { ok: false, error: "no_quick_wins" };
 
   const timelineNote = str(o.timelineNote);
@@ -204,11 +246,21 @@ If LOCAL:
   genuine quick wins), alongside local citations, reviews, and location/area pages.
 
 ════════ USE THE ACTUAL DATA ════════
-- Name the specific engines that did NOT return the business. The competitor firms supplied
-  are PRE-CLEANED real rivals — reference only those by name. If the list says "(none
-  identified …)", refer to competitors generically as "other firms" and NEVER name a
-  gov/tax body (HMRC, Companies House), a tax term (Corporation Tax, VAT), or software
-  (Xero, QuickBooks, Sage) as a competitor.
+- Name the specific engines that did NOT return the business.
+- COMPETITOR NAMES — JUDGE EACH BEFORE USING: the supplied competitor list is a set of
+  UNVERIFIED CANDIDATES scraped from AI answers, NOT a clean list. Before you name any of
+  them, judge each one and use it ONLY if it is plausibly a REAL COMPETITOR FIRM — an actual
+  business a customer could hire instead. EXCLUDE (never name) anything that is:
+    · a service or task (Payroll, Bookkeeping, Tax Returns, Audit);
+    · a tax form or tax term (CT600, VAT, Corporation Tax, Self Assessment, PAYE);
+    · a government/regulatory body (HMRC, Companies House, Gov.uk);
+    · software or a tool (Xero, QuickBooks, Sage, "Software");
+    · a generic word (Customs, Cost, Cheap, Pricing, Near, Best);
+    · an obvious fragment or fused token (e.g. "CloseThank", "FacebookGmailX…").
+  Keep only names that genuinely read like a firm. If NONE of the candidates are clearly
+  real competitor firms, refer to competitors GENERICALLY as "other firms" — NEVER name a
+  junk candidate to fill space. Apply this judgement EVERYWHERE competitors appear: the
+  summary AND the Weeks 5-8 competitor-gap actions, in BOTH internalActions and clientSummary.
 - Tie actions to their real SEO findings / baseline signals when SEO data is present
   (e.g. "no LocalBusiness schema detected" → schema action). SYNTHESISE from the pasted SEO
   detail; NEVER reproduce chunks of it verbatim.
@@ -313,8 +365,9 @@ function buildUserPrompt(audit: Row, results: Row, cleanedCompetitors: string[])
     return `  - ${e.label}: named in ${named} of ${total} answers`;
   }).join("\n");
 
-  // Real competitor firms AI named instead — ALREADY cleaned by the frontend
-  // (isRealCompetitor). If none survived cleaning, refer to competitors generically.
+  // Competitor-name CANDIDATES AI named instead. Frontend-filtered but NOT guaranteed clean
+  // (junk like Payroll / CT600 / Customs / fused tokens can slip through) — the model must
+  // JUDGE each and use only real firms (see SYSTEM_PROMPT), else say "other firms".
   const topComps = (cleanedCompetitors ?? []).map(str).filter(Boolean).slice(0, 10);
   const compLine = topComps.length
     ? topComps.join(", ")
@@ -353,7 +406,7 @@ ${findings || "    (none)"}
 
 AI-VISIBILITY AUDIT (Week 0 baseline)
 ${engineLines}
-  Real competitor firms AI named instead (pre-cleaned — reference only these): ${compLine}
+  Competitor-name CANDIDATES scraped from AI answers (UNVERIFIED — judge each; use only real firms, else "other firms"): ${compLine}
   Questions tested:
 ${questionList || "  (none)"}
 
@@ -440,7 +493,7 @@ Deno.serve(async (req) => {
     let parsed: unknown;
     try { parsed = JSON.parse(raw); } catch { return json({ ok: false, error: "model_bad_json" }, 422); }
 
-    const validated = buildValidatedPlaybook(parsed, str(audit.business_name));
+    const validated = buildValidatedPlaybook(parsed, str(audit.business_name), isNationalBusiness(audit));
     if (!validated.ok) return json({ ok: false, error: `invalid_playbook:${validated.error}` }, 422);
 
     // Store at results.playbook. Read-modify-write MERGE (re-read immediately before write)
