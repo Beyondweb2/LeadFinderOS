@@ -338,8 +338,13 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .step p{ margin:0; font-size:13px; line-height:1.45; color:var(--muted); }
 
 
-  /* WEBSITE SEO — grade circles + radar + findings (all inline SVG, no chart lib) */
-  .seo{ padding:24px 40px 26px; border-top:1px solid var(--line); }
+  /* WEBSITE SEO — grade circles + radar + findings (all inline SVG, no chart lib).
+     Its own QUIET "chapter": a subtle --page tint for depth in the alternating rhythm
+     (white hero/gutbox → tinted SEO → white 'why' → the stronger solution band). Kept
+     lighter than .dowe — no blue rule, no white inner card — so it never competes with
+     the solution peak. The white→tint bg change is the section separator (with the crisp
+     --line top edge); the following white 'why' reopens the rhythm. */
+  .seo{ padding:24px 40px 26px; border-top:1px solid var(--line); background:var(--page); }
   .seo-intro{ margin:-4px 0 20px; font-size:15px; line-height:1.5; color:var(--muted); font-weight:600; max-width:66ch; }
   .seo-intro b{ font-weight:850; }
   .seo-grades{ display:flex; align-items:center; gap:30px; flex-wrap:wrap; }
