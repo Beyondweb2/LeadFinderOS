@@ -358,6 +358,10 @@ export function renderReportHtml(d: AiAuditReportData): string {
 
   @page{ size:A4; margin:11mm; }
   @media print{
+    /* Force backgrounds (blue header band, section tints, CTA, footer, dots, icon tiles) to
+       print WITHOUT the user ticking Chrome's "Background graphics" — exact colour adjust. */
+    html,body,.sheet,.band,.hero,.gutbox,.why,.dowe,.cta,.site-foot,.seo,.find-dot,.step .ic{
+      -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
     .band,.hero,.gutbox,.why,.dowe,.cta,.site-foot,.seo{ break-inside:avoid; }
@@ -485,23 +489,30 @@ function printHtmlAsPdf(html: string, title: string): void {
   const titled = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${esc(title)}</title>`);
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
+  // Off-screen but FULLY RENDERED — a real width so the document lays out at its normal size
+  // and paginates correctly. A 0×0 / visibility:hidden / display:none iframe is NOT laid out,
+  // so the print engine captures a collapsed render → one near-empty page. Height is grown to
+  // the content after load so the whole document is in layout.
   iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
+  iframe.style.left = "-10000px";
+  iframe.style.top = "0";
+  iframe.style.width = "794px"; // ~A4 width @96dpi
+  iframe.style.height = "1123px"; // ~A4 height; replaced with content height on load
   iframe.style.border = "0";
-  iframe.style.visibility = "hidden";
+  iframe.style.opacity = "0"; // hide visually WITHOUT suppressing layout/paint (unlike visibility/display)
   let done = false;
   const cleanup = () => { if (done) return; done = true; iframe.remove(); };
   iframe.onload = () => {
     const win = iframe.contentWindow;
-    if (!win) { cleanup(); return; }
-    try { if (iframe.contentDocument) iframe.contentDocument.title = title; } catch { /* same-origin srcdoc */ }
+    const doc = iframe.contentDocument;
+    if (!win || !doc) { cleanup(); return; }
+    try { doc.title = title; } catch { /* same-origin srcdoc */ }
+    // Size to content so the FULL document is laid out (not clipped to a viewport height).
+    try { iframe.style.height = `${doc.documentElement.scrollHeight}px`; } catch { /* ignore */ }
     win.addEventListener("afterprint", () => setTimeout(cleanup, 300), { once: true });
     setTimeout(cleanup, 60_000); // fallback if afterprint never fires (rare)
-    win.focus();
-    win.print();
+    // Print only AFTER layout + paint have settled (double rAF) so nothing prints empty.
+    requestAnimationFrame(() => requestAnimationFrame(() => { win.focus(); win.print(); }));
   };
   document.body.appendChild(iframe);
   iframe.srcdoc = titled;
