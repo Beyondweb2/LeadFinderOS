@@ -11,11 +11,12 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
-  Building2, Users, TrendingUp, EyeOff, Globe, MapPin,
+  Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map, Download,
 } from 'lucide-react';
 import type { Country } from '@/types/outreach';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { downloadReportHtml, type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
+import { renderPlaybookHtml, downloadPlaybookHtml, type PlaybookData, type PlaybookView } from '@/lib/playbookHtml';
 import { usePersistedState } from '@/hooks/usePersistedState';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
@@ -544,6 +545,14 @@ const AiAudit = () => {
     'ai-audit-reports', {}, { tier: 'local', scope: user?.id ?? null, version: 1 },
   );
 
+  // ── Delivery playbook (8-week Sprint plan) — same persistence pattern as the report. ──
+  const [playbookRunId, setPlaybookRunId] = useState<string | null>(null);   // which run's playbook is open
+  const [playbookView, setPlaybookView] = useState<PlaybookView>('internal'); // Internal | Client toggle
+  const [playbookGenerating, setPlaybookGenerating] = useState(false);
+  const [playbooks, setPlaybooks] = usePersistedState<Record<string, PlaybookData>>(
+    'ai-audit-playbooks', {}, { tier: 'local', scope: user?.id ?? null, version: 1 },
+  );
+
   // Refs to move focus to a newly-revealed step (accessibility).
   const nameRef = useRef<HTMLInputElement>(null);
   const typeRef = useRef<HTMLInputElement>(null);
@@ -958,6 +967,28 @@ const AiAudit = () => {
     }
   };
 
+  // ── Playbook: generate/open/regenerate (mirrors the report's working pattern) ──
+  const openPlaybookData: PlaybookData | null = playbookRunId ? (playbooks[playbookRunId] ?? null) : null;
+  // Generate the playbook via the edge fn, snapshot it, and open. If a snapshot already
+  // exists and this isn't an explicit regenerate, just open it (no re-generation).
+  const generatePlaybook = async (regenerate = false) => {
+    if (!runId || playbookGenerating) return;
+    if (!regenerate && playbooks[runId]) { setPlaybookRunId(runId); return; }
+    const rid = runId;
+    setPlaybookGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-playbook', { body: { runId: rid } });
+      if (error || !data?.ok || !data.playbook) throw new Error(error?.message ?? data?.error ?? 'generation failed');
+      setPlaybooks((prev) => ({ ...prev, [rid]: data.playbook as PlaybookData }));
+      setPlaybookRunId(rid);
+      toast({ title: regenerate ? 'Playbook regenerated' : 'Playbook ready', description: 'Tailored 8-week Sprint plan built from this audit.' });
+    } catch (e) {
+      toast({ title: "Couldn't generate the playbook", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setPlaybookGenerating(false);
+    }
+  };
+
   // Client-facing report is a separate view (replaces results while open).
   if (reportRunId && openReportData) {
     return (
@@ -968,6 +999,47 @@ const AiAudit = () => {
         onRegenerate={canRegenerate ? regenerateReport : undefined}
         regenerating={regenerating}
       />
+    );
+  }
+
+  // Delivery playbook is a separate view (iframe preview + Download + Regenerate + view toggle).
+  if (playbookRunId && openPlaybookData) {
+    const pbHtml = renderPlaybookHtml(openPlaybookData, playbookView);
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setPlaybookRunId(null)}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to results
+          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Internal | Client view toggle — re-renders from the SAME stored data, no re-gen */}
+            <div className="inline-flex rounded-lg border border-border/60 p-0.5">
+              <button onClick={() => setPlaybookView('internal')}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${playbookView === 'internal' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                Internal
+              </button>
+              <button onClick={() => setPlaybookView('client')}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${playbookView === 'client' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                Client
+              </button>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => generatePlaybook(true)} disabled={playbookGenerating} title="Rebuild the playbook from the latest audit data">
+              {playbookGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              {playbookGenerating ? 'Regenerating…' : 'Regenerate'}
+            </Button>
+            <Button size="sm" onClick={() => downloadPlaybookHtml(openPlaybookData, playbookView)}>
+              <Download className="mr-2 h-4 w-4" /> Download {playbookView === 'internal' ? 'internal' : 'client'}
+            </Button>
+          </div>
+        </div>
+        <iframe
+          title="Delivery Playbook preview"
+          srcDoc={pbHtml}
+          onLoad={(e) => { const el = e.currentTarget; const doc = el.contentWindow?.document; if (doc) el.style.height = `${doc.documentElement.scrollHeight}px`; }}
+          className="w-full rounded-xl border border-border bg-white"
+          style={{ height: 1200 }}
+        />
+      </div>
     );
   }
 
@@ -1217,6 +1289,13 @@ const AiAudit = () => {
                   {!isDraining && liveTally.done > 0 && (
                     <Button variant="outline" size="sm" onClick={openReportForCurrentRun}>
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
+                    </Button>
+                  )}
+                  {/* Delivery playbook — available on ANY completed audit */}
+                  {!isDraining && liveTally.done > 0 && (
+                    <Button variant="outline" size="sm" onClick={() => generatePlaybook(false)} disabled={playbookGenerating}>
+                      {playbookGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Map className="mr-2 h-4 w-4" />}
+                      {playbookGenerating ? 'Generating…' : (runId && playbooks[runId] ? 'View playbook' : 'Generate playbook')}
                     </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={resetWizard}>New audit</Button>
