@@ -113,7 +113,7 @@ function gradeCircle(grade: string, score: number | null, size: number, label: s
   return `
         <figure class="gc">
           <svg width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="${esc(label)}: grade ${esc(g)}">
-            <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--line)" stroke-width="8" />
+            <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--line-strong)" stroke-width="8" />
             <circle cx="50" cy="50" r="${r}" fill="none" stroke="${colour}" stroke-width="8" stroke-linecap="round"
               stroke-dasharray="${dash}" transform="rotate(-90 50 50)" />
             <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" font-weight="900" fill="${colour}">${esc(g)}</text>
@@ -138,8 +138,8 @@ function seoRadar(onPage: number, localPresence: number, contentTechnical: numbe
   ];
   const ring = (frac: number) =>
     axes.map((a) => { const [x, y] = pt(a.deg, frac); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
-  const grid = [0.25, 0.5, 0.75, 1].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="var(--line)" stroke-width="1" />`).join("");
-  const spokes = axes.map((a) => { const [x, y] = pt(a.deg, 1); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1" />`; }).join("");
+  const grid = [0.25, 0.5, 0.75, 1].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="var(--line-strong)" stroke-width="1" />`).join("");
+  const spokes = axes.map((a) => { const [x, y] = pt(a.deg, 1); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line-strong)" stroke-width="1" />`; }).join("");
   const dataPts = axes.map((a) => { const [x, y] = pt(a.deg, a.val / 100); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
   const dots = axes.map((a) => { const [x, y] = pt(a.deg, a.val / 100); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--blue)" />`; }).join("");
   const lineH = 11;
@@ -158,7 +158,7 @@ function seoRadar(onPage: number, localPresence: number, contentTechnical: numbe
           </svg>`;
 }
 
-const SEV_COLOUR: Record<SeoFinding["severity"], string> = { high: "var(--red)", med: "var(--amber)", low: "var(--faint)" };
+const SEV_COLOUR: Record<SeoFinding["severity"], string> = { high: "var(--red)", med: "var(--amber)", low: "var(--muted)" };
 
 /** Build the whole SEO section, or "" when there's no seo data (slot renders nothing). */
 function seoSection(seo: AiAuditSeo | undefined): string {
@@ -252,6 +252,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   :root{
     --blue:#1a3d7c; --blue-2:#2a5aa8; --yellow:#ffd23f;
     --ink:#0f172a; --muted:#5b6472; --faint:#9aa3b2; --line:#e9edf3;
+    --line-strong:#94a3b8; /* darker grey — for SEO graphics that must stay visible on the --page tint */
     --red:#e11d2a; --amber:#c2820b; --green:#15a34a; --paper:#ffffff; --page:#eef1f6;
     --foot:#102a58;
   }
@@ -344,7 +345,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
      lighter than .dowe — no blue rule, no white inner card — so it never competes with
      the solution peak. The white→tint bg change is the section separator (with the crisp
      --line top edge); the following white 'why' reopens the rhythm. */
-  .seo{ padding:24px 40px 26px; border-top:1px solid var(--line); background:var(--page); }
+  .seo{ padding:24px 40px 26px; border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); background:var(--page); }
   .seo-intro{ margin:-4px 0 20px; font-size:15px; line-height:1.5; color:var(--muted); font-weight:600; max-width:66ch; }
   .seo-intro b{ font-weight:850; }
   .seo-grades{ display:flex; align-items:center; gap:30px; flex-wrap:wrap; }
