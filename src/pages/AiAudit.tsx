@@ -11,8 +11,11 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
-  Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map, Download,
+  Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download,
 } from 'lucide-react';
+// NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
+// Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
+// the page on load ("Map is not a constructor").
 import type { Country } from '@/types/outreach';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { downloadReportHtml, type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
@@ -1294,7 +1297,7 @@ const AiAudit = () => {
                   {/* Delivery playbook — available on ANY completed audit */}
                   {!isDraining && liveTally.done > 0 && (
                     <Button variant="outline" size="sm" onClick={() => generatePlaybook(false)} disabled={playbookGenerating}>
-                      {playbookGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Map className="mr-2 h-4 w-4" />}
+                      {playbookGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapIcon className="mr-2 h-4 w-4" />}
                       {playbookGenerating ? 'Generating…' : (runId && playbooks[runId] ? 'View playbook' : 'Generate playbook')}
                     </Button>
                   )}
