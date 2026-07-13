@@ -173,8 +173,9 @@ function seoSection(seo: AiAuditSeo | undefined): string {
   return `
     <!-- WEBSITE SEO — self-contained SVG grades + radar + findings; renders only when seo present -->
     <section class="seo">
-      <h2>Your website’s SEO</h2>
-      <p class="seo-intro">Your site’s technical SEO grades <b style="color:${overallColour}">${esc(overallGrade)}</b> — but that’s separate from whether AI can find you. Here’s what’s holding the site back.</p>
+      <div class="sec-eyebrow">Your website</div>
+      <div class="sec-title">SEO health</div>
+      <p class="seo-intro">Your site’s overall SEO grade is <b style="color:${overallColour}">${esc(overallGrade)}</b>. A site can be technically sound and still land here — because AI and search can’t yet establish it as a real, findable business. Here’s what’s holding it back.</p>
 
       <div class="seo-grades">
         <div class="seo-overall">${gradeCircle(overallGrade, null, 124, "Overall")}</div>
@@ -230,19 +231,11 @@ export function renderReportHtml(d: AiAuditReportData): string {
     </section>`;
   }
 
-  // ── Proof: one card per engine. Zeros + red crosses are the evidence, so they get weight.
+  // ── Proof: one COMPACT chip per engine (named/not-named + count). Tight horizontal row —
+  //    still reads as before/after re-run proof, far less vertical space.
   const engineCards = d.perEngine.map((pe) => {
     const hit = pe.named > 0;
-    return `
-        <div class="res-card ${hit ? "hit" : "zero"}">
-          <div class="rc-top">
-            <span class="rc-eng">${esc(pe.label)}</span>
-            <span class="rc-glyph ${hit ? "yes" : "no"}">${hit ? "✓" : "✕"}</span>
-          </div>
-          <div class="rc-count"><span class="rc-n ${hit ? "yes" : "no"}">${pe.named}</span><span class="rc-of">of ${pe.total}</span></div>
-          <div class="rc-lbl">answers named you</div>
-          <div class="rc-after">after re-run</div>
-        </div>`;
+    return `<span class="eng-chip ${hit ? "hit" : "zero"}"><span class="eng-name">${esc(pe.label)}</span><span class="eng-mark ${hit ? "yes" : "no"}">${hit ? "✓" : "✕"}</span><span class="eng-cnt">${pe.named}/${pe.total}</span></span>`;
   }).join("");
 
   const shareFoot = d.shareUrl ? ` · <a href="${esc(d.shareUrl)}">View online</a>` : "";
@@ -313,6 +306,10 @@ export function renderReportHtml(d: AiAuditReportData): string {
   /* WHY THIS MATTERS — stakes stats, big coloured numbers, muted supporting text */
   .why{ padding:24px 40px 26px; border-top:1px solid var(--line); }
   h2{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 16px; }
+  /* Consistent phase header: tiny eyebrow + human-readable title (pain → stakes → solution) */
+  .sec-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 4px; }
+  .sec-title{ font-size:22px; line-height:1.15; letter-spacing:-.01em; font-weight:850; color:var(--ink); margin:0 0 16px; }
+  .dowe .sec-title{ font-size:26px; }
   .stats{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }
   .stat{ display:flex; align-items:flex-start; gap:14px; }
   .stat .big{ font-size:46px; line-height:.9; font-weight:900; letter-spacing:-.03em; color:var(--blue); }
@@ -343,21 +340,17 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .st{ font-size:16px; font-weight:850; color:var(--ink); margin:2px 0 5px; }
   .step p{ margin:0; font-size:13px; line-height:1.45; color:var(--muted); }
 
-  /* PROOF — "Where AI named you": per-engine evidence cards, zeros made to land */
+  /* PROOF — "Where AI named you": ONE compact chip row (per-engine named/not-named + count) */
   .results{ padding:24px 40px 26px; border-top:1px solid var(--line); }
-  .res-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
-  .res-card{ border:1px solid var(--line); border-left:5px solid var(--faint); border-radius:12px; padding:15px 18px; background:#fff; }
-  .res-card.zero{ border-left-color:var(--red); background:#fff7f7; }
-  .res-card.hit{ border-left-color:var(--green); background:#f4fdf8; }
-  .rc-top{ display:flex; align-items:center; justify-content:space-between; }
-  .rc-eng{ font-weight:800; font-size:16px; color:var(--ink); }
-  .rc-glyph{ font-size:20px; font-weight:900; line-height:1; } .rc-glyph.no{ color:var(--red); } .rc-glyph.yes{ color:var(--green); }
-  .rc-count{ margin-top:8px; display:flex; align-items:baseline; gap:7px; }
-  .rc-n{ font-size:42px; font-weight:900; letter-spacing:-.03em; line-height:.9; } .rc-n.no{ color:var(--red); } .rc-n.yes{ color:var(--green); }
-  .rc-of{ font-size:15px; color:var(--muted); font-weight:800; }
-  .rc-lbl{ margin-top:2px; font-size:12px; color:var(--muted); }
-  .rc-after{ margin-top:11px; display:inline-block; padding:2px 10px; border:1px dashed #cdd6e4; border-radius:6px; color:var(--faint); font-size:10.5px; font-weight:700; }
-  .res-note{ margin-top:16px; font-size:13px; line-height:1.5; color:var(--muted); max-width:70ch; }
+  .eng-row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .eng-chip{ display:inline-flex; align-items:center; gap:8px; padding:7px 12px; border:1px solid var(--line);
+    border-left:4px solid var(--faint); border-radius:10px; background:#fff; }
+  .eng-chip.zero{ border-left-color:var(--red); background:#fff7f7; }
+  .eng-chip.hit{ border-left-color:var(--green); background:#f4fdf8; }
+  .eng-name{ font-size:13px; font-weight:800; color:var(--ink); }
+  .eng-mark{ font-size:15px; font-weight:900; line-height:1; } .eng-mark.no{ color:var(--red); } .eng-mark.yes{ color:var(--green); }
+  .eng-cnt{ font-size:12px; font-weight:800; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .res-note{ margin-top:14px; font-size:13px; line-height:1.5; color:var(--muted); max-width:70ch; }
   .res-note b{ color:var(--ink); font-weight:800; }
 
   /* WEBSITE SEO — grade circles + radar + findings (all inline SVG, no chart lib) */
@@ -401,7 +394,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
     .band,.hero,.gutbox,.why,.dowe,.results,.cta,.site-foot,.seo{ break-inside:avoid; }
-    .steps,.res-grid,.stats,.seo-grades,.seo-viz,.dowe-panel{ break-inside:avoid; }
+    .steps,.eng-row,.stats,.seo-grades,.seo-viz,.dowe-panel{ break-inside:avoid; }
   }
 </style>
 </head>
@@ -437,9 +430,9 @@ export function renderReportHtml(d: AiAuditReportData): string {
 ${gutbox}
     <!-- PROOF — where AI named you (moved up: pain → evidence → stakes → solution) -->
     <section class="results">
-      <h2>Where AI named you</h2>
-      <div class="res-grid">${engineCards}
-      </div>
+      <div class="sec-eyebrow">The evidence</div>
+      <div class="sec-title">Where AI named you</div>
+      <div class="eng-row">${engineCards}</div>
       <div class="res-note"><b>This is your starting point.</b> We re-run this exact audit after the fixes so you see the before &amp; after side by side — businesses we work with typically go from invisible to named across most engines.</div>
     </section>
 
@@ -452,7 +445,8 @@ ${seoSection(d.seo)}
 
     <!-- WHY THIS MATTERS (stakes) -->
     <section class="why">
-      <h2>Why this matters</h2>
+      <div class="sec-eyebrow">The stakes</div>
+      <div class="sec-title">Why this matters</div>
       <div class="stats">
         <div class="stat">
           <span class="big">45%</span>
@@ -467,9 +461,10 @@ ${seoSection(d.seo)}
       <div class="src">Source: BrightLocal, 2026</div>
     </section>
 
-    <!-- WHAT WE DO (solution) — a premium 3-step process panel -->
+    <!-- WHAT WE DO (solution) — the confident turn from problem to fix -->
     <section class="dowe">
-      <h2>What we do about it</h2>
+      <div class="sec-eyebrow">The fix</div>
+      <div class="sec-title">Here’s how we get you found</div>
       <div class="dowe-panel">
         <p class="dowe-lead">We get you into the sources AI reads — and make sure it can understand and <span class="hl">name you</span>.</p>
         <div class="steps">
