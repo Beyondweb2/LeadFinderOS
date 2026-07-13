@@ -23,7 +23,7 @@ const BATCH = 1;                 // ONE row per tick → a tick can't exceed the
 const CAP_USD = 3.0;             // per-RUN Apify cost ceiling (this audit run)
 const DAILY_CAP_USD = 15.0;      // per-USER rolling-24h ceiling (across audits) via the runner
 const MAX_ATTEMPTS = 3;          // per queue row before it's marked failed
-const RUN_TIMEOUT_MS = 110_000;  // per actor run — heavy multi-engine run often needs >80s; BATCH=1 keeps one attempt under the edge wall-clock
+const RUN_TIMEOUT_MS = 85_000;  // per actor run — heavy multi-engine run often needs >80s; BATCH=1 keeps one attempt under the edge wall-clock
 const STALE_RUNNING_MS = 3 * 60 * 1000; // reclaim rows stuck 'running' longer than this
 const SEO_TIMEOUT_MS = 60_000;   // single-page SEO audit — well under the wall-clock (its own tick)
 // mention_rate is scored over the engines the audit targeted (the queue row's list).
