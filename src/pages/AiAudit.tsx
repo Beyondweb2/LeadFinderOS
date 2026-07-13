@@ -11,10 +11,12 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
+  Building2, Users, TrendingUp, EyeOff, Globe, MapPin,
 } from 'lucide-react';
 import type { Country } from '@/types/outreach';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { downloadReportHtml, type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
 // and answering one reveals the next below it (no per-step Next). Generates search
@@ -311,6 +313,69 @@ function pickGutPunch(
   return best;
 }
 
+/** Derive the client report's data from a run's queue rows. Pure — used both for the live
+ *  report on the results screen and to build a snapshot when opening a past audit's report.
+ *  Returns null until at least one question has completed. */
+function buildReportData(
+  queueRows: QueueRow[],
+  run: RunRow | null,
+  ctx: { businessName: string; businessType: string; locationText: string; specialisms: string },
+): AiAuditReportData | null {
+  let done = 0;
+  let liveNamed = 0;
+  let liveTotal = 0;
+  for (const r of queueRows) {
+    if (r.status === 'done' && r.result) {
+      done++;
+      for (const e of SCORED_ENGINES) { liveTotal++; if (r.result[e]?.named) liveNamed++; }
+    }
+  }
+  if (done === 0) return null;
+
+  const summary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number } } | null)?.summary;
+  const named = summary?.named_datapoints ?? liveNamed;
+  const total = summary?.total_datapoints ?? liveTotal;
+
+  const perEngine = DISPLAY_ENGINES.map((engine) => {
+    let n = 0;
+    let t = 0;
+    for (const r of queueRows) {
+      if (r.status === 'done' && r.result?.[engine]) { t++; if (r.result[engine]!.named) n++; }
+    }
+    return { engine, named: n, total: t };
+  }).filter((pe) => pe.total > 0).map((pe) => ({ label: ENGINE_LABELS[pe.engine] ?? pe.engine, named: pe.named, total: pe.total }));
+
+  const counts = new Map<string, { name: string; count: number }>();
+  for (const r of queueRows) {
+    if (r.status !== 'done' || !r.result) continue;
+    for (const engine of DISPLAY_ENGINES) {
+      const er = r.result[engine];
+      if (!er) continue;
+      for (const c of er.competitors) {
+        if (!isRealCompetitor(c, ctx.locationText)) continue;
+        const key = c.trim().toLowerCase();
+        if (!key) continue;
+        const cur = counts.get(key);
+        if (cur) cur.count++; else counts.set(key, { name: c.trim(), count: 1 });
+      }
+    }
+  }
+  const competitors = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 4).map((x) => x.name);
+
+  return {
+    businessName: ctx.businessName || 'This business',
+    businessType: ctx.businessType || '',
+    named,
+    total,
+    pct: total > 0 ? Math.round((named / total) * 100) : 0,
+    perEngine,
+    competitors,
+    gutPunch: pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
+    generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    seo: (run?.results as { seo?: AiAuditSeo } | null)?.seo,
+  };
+}
+
 // Wizard state is persisted to sessionStorage so it survives leaving the page and
 // coming back (unmount/remount) and a tab refresh, but clears when the tab closes.
 // Only the WIZARD fields are persisted — never results/polling state. `revealed` is
@@ -381,7 +446,7 @@ const AiAudit = () => {
 
   // Existing-lead picker + saved audits
   const [leads, setLeads] = useState<LeadOption[]>([]);
-  const [savedAudits, setSavedAudits] = useState<(AuditRow & { latest_mention_rate: number | null })[]>([]);
+  const [savedAudits, setSavedAudits] = useState<(AuditRow & { latest_mention_rate: number | null; latest_run_id: string | null })[]>([]);
 
   // Review (questions) state
   const [previewing, setPreviewing] = useState(false);
@@ -396,7 +461,15 @@ const AiAudit = () => {
   const [run, setRun] = useState<RunRow | null>(null);
   const [queueRows, setQueueRows] = useState<QueueRow[]>([]);
   const [resultsBusinessName, setResultsBusinessName] = useState('');
-  const [reportOpen, setReportOpen] = useState(false);
+  // Which run's report is currently open (null = not viewing a report). Replaces the old
+  // boolean so we can open a SPECIFIC run's persisted report snapshot.
+  const [reportRunId, setReportRunId] = useState<string | null>(null);
+  // Generated report snapshots, keyed by run id. Persisted (per-user, survives navigation
+  // AND tab close) so a report that's been generated is shown as-is on return — it is only
+  // rebuilt by the explicit Regenerate action, never silently re-derived.
+  const [reports, setReports] = usePersistedState<Record<string, AiAuditReportData>>(
+    'ai-audit-reports', {}, { tier: 'local', scope: user?.id ?? null, version: 1 },
+  );
 
   // Refs to move focus to a newly-revealed step (accessibility).
   const nameRef = useRef<HTMLInputElement>(null);
@@ -432,18 +505,23 @@ const AiAudit = () => {
     const auditRows = (audits ?? []) as AuditRow[];
     // Latest run mention_rate per audit (one query, newest first, reduce client-side).
     const ids = auditRows.map((a) => a.id);
-    let rateByAudit: Record<string, number | null> = {};
+    const latestByAudit: Record<string, { rate: number | null; runId: string }> = {};
     if (ids.length) {
       const { data: runs } = await supabase
         .from('ai_audit_runs')
-        .select('audit_id, mention_rate, run_number')
+        .select('id, audit_id, mention_rate, run_number')
         .in('audit_id', ids)
         .order('run_number', { ascending: false });
-      for (const r of (runs ?? []) as { audit_id: string; mention_rate: number | null }[]) {
-        if (!(r.audit_id in rateByAudit)) rateByAudit[r.audit_id] = r.mention_rate;
+      for (const r of (runs ?? []) as { id: string; audit_id: string; mention_rate: number | null }[]) {
+        // newest first → first seen per audit is the latest run
+        if (!(r.audit_id in latestByAudit)) latestByAudit[r.audit_id] = { rate: r.mention_rate, runId: r.id };
       }
     }
-    setSavedAudits(auditRows.map((a) => ({ ...a, latest_mention_rate: rateByAudit[a.id] ?? null })));
+    setSavedAudits(auditRows.map((a) => ({
+      ...a,
+      latest_mention_rate: latestByAudit[a.id]?.rate ?? null,
+      latest_run_id: latestByAudit[a.id]?.runId ?? null,
+    })));
   }, [user]);
 
   useEffect(() => {
@@ -459,6 +537,17 @@ const AiAudit = () => {
     })();
     loadSaved();
   }, [user, loadSaved]);
+
+  // One-shot fetch of a run's queue rows (used when opening a report for a past audit that
+  // has no cached snapshot yet — we need the raw rows to build the report data once).
+  const loadRunRows = useCallback(async (rid: string): Promise<QueueRow[]> => {
+    const { data: q } = await supabase
+      .from('ai_audit_queue')
+      .select('id, question, status, result')
+      .eq('run_id', rid)
+      .order('created_at', { ascending: true });
+    return (q ?? []) as QueueRow[];
+  }, []);
 
   // ── Poll the active run while it drains ─────────────────────────────────────
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -602,7 +691,7 @@ const AiAudit = () => {
       .order('run_number', { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (!latest) { toast({ title: 'No runs yet for this audit', variant: 'destructive' }); return; }
+    if (!latest) { toast({ title: 'No runs yet for this audit', variant: 'destructive' }); return null; }
     setAuditId(audit.id);
     setResultsBusinessName(audit.business_name);
     setBusinessType(audit.business_type ?? ''); // so the report's "what this means" line is populated for reopened audits
@@ -610,6 +699,28 @@ const AiAudit = () => {
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
     setStep('results');
+    return latest as RunRow;
+  };
+
+  // Open a past audit's report DIRECTLY from its row. Prefers the stored snapshot (shown
+  // as-is, never silently regenerated); only builds one if this run has never had a report
+  // generated. Loads the run into results state too, so Regenerate has live data to work from.
+  const viewReport = async (audit: AuditRow & { latest_run_id: string | null }) => {
+    const latest = await reopenAudit(audit);
+    if (!latest) return;
+    const rid = latest.id;
+    if (reports[rid]) { setReportRunId(rid); return; }   // stored snapshot → show it
+    const rows = await loadRunRows(rid);
+    setQueueRows(rows);
+    const data = buildReportData(rows, latest, {
+      businessName: audit.business_name,
+      businessType: audit.business_type ?? '',
+      locationText: audit.location_text ?? '',
+      specialisms: '',
+    });
+    if (!data) { toast({ title: 'No completed results to report yet', variant: 'destructive' }); return; }
+    setReports((prev) => ({ ...prev, [rid]: data }));
+    setReportRunId(rid);
   };
 
   // ── Derived results tallies ─────────────────────────────────────────────────
@@ -659,25 +770,27 @@ const AiAudit = () => {
     return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 4).map((x) => x.name);
   })();
 
-  // Client report data (from the same saved run data). Headline totals prefer the folded
-  // summary; falls back to the live tally. Null until at least one question has completed.
-  const reportSummary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number } } | null)?.summary;
-  const reportNamed = reportSummary?.named_datapoints ?? liveTally.named;
-  const reportTotal = reportSummary?.total_datapoints ?? liveTally.total;
-  const reportData: AiAuditReportData | null = liveTally.done > 0 ? {
-    businessName: resultsBusinessName || businessName || 'This business',
-    businessType: businessType || '',
-    named: reportNamed,
-    total: reportTotal,
-    pct: reportTotal > 0 ? Math.round((reportNamed / reportTotal) * 100) : 0,
-    perEngine: perEngineScore.filter((pe) => pe.total > 0).map((pe) => ({ label: ENGINE_LABELS[pe.engine] ?? pe.engine, named: pe.named, total: pe.total })),
-    competitors: topCompetitors,
-    gutPunch: pickGutPunch(queueRows, locationText, specialisms, businessType),
-    generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-    // Straight passthrough of the run's results.seo — no transformation; renders only when
-    // present, so AI-only audits (no SEO data) leave d.seo undefined and are unaffected.
-    seo: (run?.results as { seo?: AiAuditSeo } | null)?.seo,
-  } : null;
+  // Live report data derived from the current run's rows (results.seo passed straight
+  // through). Recomputed each render; snapshotted into `reports` only on generate/regenerate.
+  const liveReportData = buildReportData(queueRows, run, {
+    businessName: resultsBusinessName || businessName,
+    businessType,
+    locationText,
+    specialisms,
+  });
+
+  // Landing metrics — derived ONLY from data we already have (no invented numbers).
+  // Average visibility is over audits that have a scored run; invisible = 0% named.
+  const metrics = (() => {
+    const total = savedAudits.length;
+    const rated = savedAudits.filter((a) => a.latest_mention_rate !== null);
+    const avgPct = rated.length
+      ? Math.round((rated.reduce((s, a) => s + (a.latest_mention_rate as number), 0) / rated.length) * 100)
+      : null;
+    const invisible = savedAudits.filter((a) => a.latest_mention_rate === 0).length;
+    const withSite = savedAudits.filter((a) => a.has_website).length;
+    return { total, avgPct, invisible, withSite, presence: total - withSite };
+  })();
 
   const shown = (name: typeof WIZARD_STEPS[number]) => revealed >= WIZARD_STEPS.indexOf(name);
 
@@ -690,9 +803,33 @@ const AiAudit = () => {
   const canGenerate = !!businessName.trim() && !!businessType.trim() && !!locationText.trim()
     && !!country && hasWebsite !== null && (hasWebsite === false || !!website.trim());
 
+  // Open a report: prefer the stored snapshot for that run (shown as-is), else the live
+  // build. Regenerate is enabled only when we have live data for THIS run loaded.
+  const openReportData = reportRunId ? (reports[reportRunId] ?? (reportRunId === runId ? liveReportData : null)) : null;
+  const canRegenerate = !!reportRunId && reportRunId === runId && !!liveReportData;
+
+  // Snapshot the current run's live report and open it (used by the results screen). If a
+  // snapshot already exists it is kept — opening never silently rebuilds it.
+  const openReportForCurrentRun = () => {
+    if (!runId) return;
+    if (!reports[runId] && liveReportData) setReports((prev) => ({ ...prev, [runId]: liveReportData }));
+    setReportRunId(runId);
+  };
+  const regenerateReport = () => {
+    if (!reportRunId || !liveReportData) return;
+    setReports((prev) => ({ ...prev, [reportRunId]: liveReportData }));
+  };
+
   // Client-facing report is a separate view (replaces results while open).
-  if (reportOpen && reportData) {
-    return <AiAuditReport data={reportData} onBack={() => setReportOpen(false)} onDownload={() => downloadReportHtml(reportData)} />;
+  if (reportRunId && openReportData) {
+    return (
+      <AiAuditReport
+        data={openReportData}
+        onBack={() => setReportRunId(null)}
+        onDownload={() => downloadReportHtml(openReportData)}
+        onRegenerate={canRegenerate ? regenerateReport : undefined}
+      />
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -710,12 +847,38 @@ const AiAudit = () => {
       {/* Stacked wizard — answered steps stay visible; each answer reveals the next. */}
       {step !== 'results' && (
         <div className="space-y-4">
+          {/* Metrics strip — a quick read on the whole audit book (only when there are audits) */}
+          {metrics.total > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <MetricCard icon={<FileText className="h-4 w-4" />} label="Audits" value={String(metrics.total)} />
+              {metrics.avgPct !== null && (
+                <MetricCard
+                  icon={<TrendingUp className="h-4 w-4" />}
+                  label="Avg visibility"
+                  value={`${metrics.avgPct}%`}
+                  tone={metrics.avgPct >= 50 ? 'good' : metrics.avgPct > 0 ? 'mid' : 'bad'}
+                />
+              )}
+              <MetricCard
+                icon={<EyeOff className="h-4 w-4" />}
+                label="Invisible"
+                value={String(metrics.invisible)}
+                tone={metrics.invisible > 0 ? 'bad' : 'good'}
+              />
+              <MetricCard
+                icon={<Globe className="h-4 w-4" />}
+                label="Site · presence"
+                value={`${metrics.withSite} · ${metrics.presence}`}
+              />
+            </div>
+          )}
+
           {/* Step 1 — source */}
           <StepCard>
             <StepHeader title="Audit a new business, or an existing lead?" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <ChoiceButton active={mode === 'new'} onClick={() => { setMode('new'); setLeadId(null); reveal(WIZARD_STEPS.indexOf('name')); }} label="New business" hint="Enter the details yourself" />
-              <ChoiceButton active={mode === 'existing'} onClick={() => setMode('existing')} label="Existing lead" hint="Pick from your CRM" />
+              <ChoiceButton active={mode === 'new'} onClick={() => { setMode('new'); setLeadId(null); reveal(WIZARD_STEPS.indexOf('name')); }} icon={<Building2 className="h-4 w-4" />} label="New business" hint="Enter the details yourself" />
+              <ChoiceButton active={mode === 'existing'} onClick={() => setMode('existing')} icon={<Users className="h-4 w-4" />} label="Existing lead" hint="Pick from your CRM" />
             </div>
             {mode === 'existing' && (
               <div className="space-y-1.5">
@@ -731,23 +894,37 @@ const AiAudit = () => {
               </div>
             )}
 
-            {savedAudits.length > 0 && (
-              <div className="pt-4 mt-2 border-t border-border/60 space-y-2">
-                <Label className="text-xs text-muted-foreground">Past audits</Label>
+            <div className="pt-4 mt-2 border-t border-border/60 space-y-2">
+              <Label className="text-xs text-muted-foreground">Past audits</Label>
+              {savedAudits.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
+                  <Sparkles className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
+                  <div className="text-sm font-medium">No audits yet</div>
+                  <div className="text-[11px] text-muted-foreground">Run your first audit above to see how AI answers for a business.</div>
+                </div>
+              ) : (
                 <div className="space-y-1.5">
                   {savedAudits.map((a) => (
-                    <button key={a.id} onClick={() => reopenAudit(a)}
-                      className="w-full flex items-center justify-between rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-left hover:bg-card transition-colors">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">{a.business_name}</div>
+                    <div key={a.id}
+                      className="group flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2 transition-colors hover:bg-card">
+                      <button onClick={() => reopenAudit(a)} className="min-w-0 flex-1 text-left" title="Open results">
+                        <div className="flex items-center gap-1.5 text-sm font-medium truncate">
+                          {a.has_website ? <Globe className="h-3 w-3 shrink-0 text-muted-foreground" /> : <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                          <span className="truncate">{a.business_name}</span>
+                        </div>
                         <div className="text-[11px] text-muted-foreground truncate">{a.business_type || '—'}{a.location_text ? ` · ${a.location_text}` : ''}</div>
-                      </div>
+                      </button>
                       <MentionPill rate={a.latest_mention_rate} />
-                    </button>
+                      {a.latest_run_id && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={() => viewReport(a)} title="View report">
+                          <FileText className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">View report</span>
+                        </Button>
+                      )}
+                    </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </StepCard>
 
           {/* Business details — one settled form, all fields visible at once */}
@@ -893,8 +1070,8 @@ const AiAudit = () => {
                 </Button>
                 <div className="flex items-center gap-2">
                   {!isDraining && liveTally.done > 0 && (
-                    <Button variant="outline" size="sm" onClick={() => setReportOpen(true)}>
-                      <FileText className="mr-2 h-4 w-4" /> Create report
+                    <Button variant="outline" size="sm" onClick={openReportForCurrentRun}>
+                      <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
                     </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={resetWizard}>New audit</Button>
@@ -983,24 +1160,49 @@ function StepHeader({ title, onBack }: { title: string; onBack?: () => void }) {
     </div>
   );
 }
-function ChoiceButton({ active, onClick, label, hint }: { active: boolean; onClick: () => void; label: string; hint: string }) {
+function ChoiceButton({ active, onClick, label, hint, icon }: { active: boolean; onClick: () => void; label: string; hint: string; icon?: React.ReactNode }) {
   return (
     <button onClick={onClick}
-      className={`rounded-xl border p-3 text-left transition-colors ${active ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border/60 bg-card/60 hover:bg-card'}`}>
-      <div className="flex items-center gap-2 text-sm font-medium">
-        {active && <Check className="h-4 w-4 text-primary" />}{label}
+      className={`group rounded-xl border p-3.5 text-left transition-all ${active ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border/60 bg-card/60 hover:border-primary/40 hover:bg-card hover:shadow-sm'}`}>
+      <div className="flex items-center gap-2.5">
+        {icon && (
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${active ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'}`}>
+            {icon}
+          </span>
+        )}
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-sm font-medium">
+            {label}{active && <Check className="h-3.5 w-3.5 text-primary" />}
+          </div>
+          <div className="text-[11px] text-muted-foreground">{hint}</div>
+        </div>
       </div>
-      <div className="text-[11px] text-muted-foreground">{hint}</div>
     </button>
   );
 }
+// Score badge: colour by band — red for invisible (0%), amber mid, green high.
 function MentionPill({ rate }: { rate: number | null }) {
   if (rate === null || rate === undefined) return <Badge variant="secondary" className="shrink-0">—</Badge>;
   const pct = Math.round(rate * 100);
-  const cls = pct >= 50 ? 'bg-[hsl(var(--badge-interested))] text-[hsl(var(--badge-interested-fg))]'
+  const cls = pct >= 50 ? 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))]'
     : pct > 0 ? 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))]'
-    : 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))]';
+    : 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))]';
   return <Badge className={`shrink-0 border-transparent ${cls}`}>{pct}% named</Badge>;
+}
+// Small stat tile for the landing metrics strip. `tone` tints the value only.
+function MetricCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone?: 'good' | 'mid' | 'bad' }) {
+  const valCls = tone === 'good' ? 'text-[hsl(var(--badge-closed))]'
+    : tone === 'mid' ? 'text-[hsl(var(--badge-waiting))]'
+    : tone === 'bad' ? 'text-[hsl(var(--badge-not-interested))]'
+    : 'text-foreground';
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/60 p-3">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        <span className="text-muted-foreground">{icon}</span>{label}
+      </div>
+      <div className={`mt-1 text-2xl font-bold tracking-tight ${valCls}`}>{value}</div>
+    </div>
+  );
 }
 function ResultsHeadline({ run, live, draining }: { run: RunRow | null; live: { named: number; total: number; failed: number; done: number }; draining: boolean }) {
   // Prefer the folded summary once complete; otherwise the live tally as it drains.

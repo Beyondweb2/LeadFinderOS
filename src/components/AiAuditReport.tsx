@@ -1,15 +1,20 @@
 import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
 import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtml';
 
 // In-app preview of the client report. Renders the EXACT downloadable HTML in an
 // iframe (WYSIWYG — one source of design, zero drift with the sent file). The iframe
 // auto-sizes to the document so the whole one-page report is visible without scroll.
-export function AiAuditReport({ data, onBack, onDownload }: {
+//
+// `data` is a persisted snapshot held by the parent — the report shown on return is the
+// one that was generated, not a fresh derivation. `onRegenerate` (when provided) is the
+// ONLY path that rebuilds it from the latest run data.
+export function AiAuditReport({ data, onBack, onDownload, onRegenerate }: {
   data: AiAuditReportData;
   onBack: () => void;
   onDownload: () => void;
+  onRegenerate?: () => void;
 }) {
   const html = renderReportHtml(data);
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -29,6 +34,11 @@ export function AiAuditReport({ data, onBack, onDownload }: {
         </Button>
         <div className="flex items-center gap-3">
           <span className="hidden sm:inline text-xs text-muted-foreground">This is exactly what your prospect receives.</span>
+          {onRegenerate && (
+            <Button variant="outline" size="sm" onClick={onRegenerate} title="Rebuild this report from the latest run data">
+              <RefreshCw className="mr-2 h-4 w-4" /> Regenerate
+            </Button>
+          )}
           <Button size="sm" onClick={onDownload}>
             <Download className="mr-2 h-4 w-4" /> Download report
           </Button>
