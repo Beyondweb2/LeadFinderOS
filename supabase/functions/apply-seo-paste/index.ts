@@ -18,7 +18,8 @@ const corsHeaders = {
 
 // Accuracy matters (client-facing grade) → use a more capable model than gpt-4o-mini.
 const MODEL = "gpt-4o";
-const MAX_PASTE_CHARS = 24_000; // bound token cost; a SEOptimer report is well under this
+const MAX_PASTE_CHARS = 24_000;     // bound token cost for the OpenAI call
+const MAX_RAW_PASTE_CHARS = 50_000; // cap the raw paste STORED on the run (avoid row bloat)
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -307,10 +308,15 @@ Extract + grade per the rubric. Return via return_seo.`;
     // Store at results.seo. Read-modify-write MERGE (re-read immediately before write) so
     // the SEO block merges with summary/questions rather than clobbering them. (jsonb_set
     // proper would need a DB RPC/migration — out of scope; this matches maybeRunSeoStep.)
+    // Also stash the RAW pasted text at results.seo.rawPaste (capped) for the upcoming
+    // playbook to learn from full detail. It is INTERNAL only — the report's seoSection
+    // renders just overallGrade/categories/leadFindings and isRenderableSeo ignores extra
+    // fields, so rawPaste never renders and never trips the guard.
+    const storedSeo = { ...validated.seo, rawPaste: pastedText.slice(0, MAX_RAW_PASTE_CHARS) };
     const { data: fresh } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
     const cur = fresh?.results && typeof fresh.results === "object" ? fresh.results as Record<string, unknown> : {};
     const { error: upErr } = await service
-      .from("ai_audit_runs").update({ results: { ...cur, seo: validated.seo } }).eq("id", runId);
+      .from("ai_audit_runs").update({ results: { ...cur, seo: storedSeo } }).eq("id", runId);
     if (upErr) return json({ ok: false, error: "store_failed", detail: upErr.message }, 500);
 
     return json({ ok: true, seo: validated.seo });
