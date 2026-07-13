@@ -135,8 +135,10 @@ Reference the SPECIFIC engines that did / didn't name the business, per-engine.
 - "Week 0" — Baseline. Already done (this audit). State plainly where they stand today
   (per-engine visibility, the competitors AI named instead, SEO grade if present).
 - "Weeks 1-2" — DATA LAYER: NAP consistency everywhere AI reads; Organization +
-  LocalBusiness identity schema; Google Business Profile + Bing Places + Apple Business
-  Connect claimed & optimised; switch on review velocity (ask after every job, never filter).
+  (for local firms) LocalBusiness identity schema; review velocity switched on (ask after
+  every job, never filter). Local-map listings (Google Business Profile + Bing Places +
+  Apple Business Connect) LEAD here for LOCAL firms — but for NATIONAL firms they are only a
+  light entity-verification step, not a lead action (see the National vs Local fork below).
 - "Weeks 2-4" — CONTENT LAYER: service + area pages built from real data; FAQ pages that
   match real question phrasing (4-8 FAQs, 40-60 word answers); placement across the
   "best of" / industry directory network; front-load a direct 40-60 word answer on key pages.
@@ -180,9 +182,33 @@ Reference the SPECIFIC engines that did / didn't name the business, per-engine.
 - If the business HAS a website: include BOTH on-site (schema, FAQ pages, front-loaded
   answers, service/area pages) AND off-site (listings, directories, earned mentions).
 
+════════ NATIONAL vs LOCAL FORK (critical — get the weighting right) ════════
+First decide whether this business is NATIONAL or LOCAL:
+- NATIONAL / no walk-in premises if the location is a country/region ("UK", "United Kingdom",
+  "England", "nationwide", "online", "remote") OR the type implies clients served across the
+  country with no physical footfall (e.g. a chartered accountancy / law / consultancy firm
+  serving clients UK-wide). ABLM-type firms are NATIONAL.
+- LOCAL if the location is a specific town/city AND the business has physical premises /
+  walk-in trade (barber, dentist, café, garage, restaurant).
+
+If NATIONAL:
+- DE-PRIORITISE local map listings. Google Business Profile, Bing Places and Apple Business
+  Connect are ONLY a light one-off entity-verification step in the Data Layer — NEVER a lead
+  action and NEVER in quickWins. Do NOT frame the plan around local / "map" / "near me" visibility.
+- LEAD instead with industry & authority DIRECTORIES for the vertical, EARNED MEDIA (third-
+  party mentions, niche reviews, PR, guest content), and content matched to NATIONAL
+  buyer-intent queries ("[service] for [audience] uk"). quickWins for a national firm should
+  be directory/earned-media/content moves, not GBP.
+If LOCAL:
+- Keep the local-first weighting: GBP + Bing Places + Apple Business Connect LEAD (they are
+  genuine quick wins), alongside local citations, reviews, and location/area pages.
+
 ════════ USE THE ACTUAL DATA ════════
-- Name the specific engines that did NOT return the business, and the real competitor firms
-  AI recommended instead (ignore obvious non-business fragments in the supplied list).
+- Name the specific engines that did NOT return the business. The competitor firms supplied
+  are PRE-CLEANED real rivals — reference only those by name. If the list says "(none
+  identified …)", refer to competitors generically as "other firms" and NEVER name a
+  gov/tax body (HMRC, Companies House), a tax term (Corporation Tax, VAT), or software
+  (Xero, QuickBooks, Sage) as a competitor.
 - Tie actions to their real SEO findings / baseline signals when SEO data is present
   (e.g. "no LocalBusiness schema detected" → schema action). SYNTHESISE from the pasted SEO
   detail; NEVER reproduce chunks of it verbatim.
@@ -265,11 +291,15 @@ const PLAYBOOK_TOOL = {
   },
 };
 
-/** Pack the run's available data into a compact user message. Handles partial data. */
-function buildUserPrompt(audit: Row, results: Row): string {
+/** Pack the run's available data into a compact user message. Handles partial data.
+ *  `cleanedCompetitors` is the frontend's already-filtered rival list (isRealCompetitor —
+ *  gov/tax/software + fragments removed); we never re-derive competitors from raw here, so
+ *  junk like HMRC / Xero / "Corporation Tax" can't reach the model. */
+function buildUserPrompt(audit: Row, results: Row, cleanedCompetitors: string[]): string {
   const name = str(audit.business_name) || "the business";
   const type = str(audit.business_type) || "(not given — infer & confirm at onboarding)";
   const loc = str(audit.location_text) || "(not given)";
+  const country = str(audit.country);
   const hasWebsite = audit.has_website === true && !!str(audit.website);
 
   // Per-engine visibility from results.questions.
@@ -283,23 +313,12 @@ function buildUserPrompt(audit: Row, results: Row): string {
     return `  - ${e.label}: named in ${named} of ${total} answers`;
   }).join("\n");
 
-  // The real competitor firms AI named instead (deduped, capped; may contain noise).
-  const compSet = new Map<string, number>();
-  for (const q of questions) {
-    for (const e of PLAYBOOK_ENGINES) {
-      const comps: unknown = q?.engines?.[e.key]?.competitors;
-      if (Array.isArray(comps)) for (const c of comps) {
-        const k = str(c); if (k) compSet.set(k.toLowerCase(), (compSet.get(k.toLowerCase()) ?? 0) + 1);
-      }
-    }
-  }
-  // Preserve original casing from first sighting.
-  const compCasing = new Map<string, string>();
-  for (const q of questions) for (const e of PLAYBOOK_ENGINES) {
-    const comps: unknown = q?.engines?.[e.key]?.competitors;
-    if (Array.isArray(comps)) for (const c of comps) { const k = str(c); if (k && !compCasing.has(k.toLowerCase())) compCasing.set(k.toLowerCase(), k); }
-  }
-  const topComps = [...compSet.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([k]) => compCasing.get(k) ?? k);
+  // Real competitor firms AI named instead — ALREADY cleaned by the frontend
+  // (isRealCompetitor). If none survived cleaning, refer to competitors generically.
+  const topComps = (cleanedCompetitors ?? []).map(str).filter(Boolean).slice(0, 10);
+  const compLine = topComps.length
+    ? topComps.join(", ")
+    : "(none identified — refer to competitors generically as \"other firms\"; NEVER name gov/tax bodies or software)";
 
   const questionList = questions.map((q) => `  - "${str(q?.question)}"`).slice(0, 20).join("\n");
 
@@ -329,12 +348,12 @@ ${findings || "    (none)"}
   return `BUSINESS
   Name: ${name}
   Type / vertical: ${type}
-  Location: ${loc}
+  Location: ${loc}${country ? `\n  Country: ${country}` : ""}
   Website: ${hasWebsite ? str(audit.website) : "NO WEBSITE — apply the no-website fork (off-site only + our hosted pages)"}
 
 AI-VISIBILITY AUDIT (Week 0 baseline)
 ${engineLines}
-  Competitors AI named instead (may include noise — use only real firms): ${topComps.length ? topComps.join(", ") : "(none captured)"}
+  Real competitor firms AI named instead (pre-cleaned — reference only these): ${compLine}
   Questions tested:
 ${questionList || "  (none)"}
 
@@ -368,6 +387,11 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const runId: string = typeof body.runId === "string" ? body.runId.trim() : "";
     if (!runId) return json({ ok: false, error: "runId required" }, 400);
+    // Competitors are cleaned client-side (isRealCompetitor) and passed in — we never
+    // re-derive them from raw here, so junk (HMRC/Xero/tax terms) can't reach the model.
+    const cleanedCompetitors: string[] = Array.isArray(body.competitors)
+      ? body.competitors.filter((c: unknown) => typeof c === "string" && c.trim()).map((c: string) => c.trim()).slice(0, 10)
+      : [];
 
     // Load the run + ownership-check.
     const { data: run } = await service
@@ -384,7 +408,7 @@ Deno.serve(async (req) => {
     if (!OPENAI_API_KEY) return json({ ok: false, error: "openai_not_configured" }, 500);
 
     const results = run.results && typeof run.results === "object" ? run.results as Row : {};
-    const userPrompt = buildUserPrompt(audit, results);
+    const userPrompt = buildUserPrompt(audit, results, cleanedCompetitors);
 
     let raw: string | undefined;
     try {
