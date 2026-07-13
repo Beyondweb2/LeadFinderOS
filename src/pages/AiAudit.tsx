@@ -140,6 +140,18 @@ const DOMAIN_GENERIC = new Set([
   'firm', 'firms', 'ltd', 'limited', 'llp', 'plc', 'inc', 'associates', 'partners', 'partnership', 'group',
   'company', 'co', 'agency', 'agencies', 'specialists', 'experts', 'professional', 'professionals',
 ]);
+// Ordinary English words (verbs, helpers, guide-speak) that leak in as capitalised SENTENCE
+// FRAGMENTS — "Choosing an accountant…", "Company Help", "Finding the right…". Never a firm's
+// name. Combined with the "single word ending in -ing → gerund fragment" rule below, this drops
+// fragments while keeping real one-word brands (Crunch, Mazuma, Azets, IRIS, TaxAssist).
+const FRAGMENT_WORDS = new Set([
+  'choosing', 'choose', 'chose', 'finding', 'find', 'looking', 'look', 'getting', 'get',
+  'considering', 'consider', 'comparing', 'compare', 'understanding', 'understand', 'knowing', 'know',
+  'using', 'use', 'making', 'make', 'hiring', 'hire', 'searching', 'search', 'picking', 'pick',
+  'selecting', 'select', 'avoiding', 'avoid', 'ensuring', 'ensure', 'reviewing', 'review', 'reviews',
+  'learn', 'learning', 'discover', 'explore', 'help', 'helping', 'need', 'needs', 'want', 'tips',
+  'guide', 'guides', 'how', 'why', 'what', 'when', 'where', 'whether', 'first', 'next', 'before', 'after',
+]);
 // NEVER a competing business: government / tax authorities + statutory terms, and accounting
 // SOFTWARE (tools, not rival firms). These leak from answer_text ("Corporation Tax", "HM Revenue",
 // "Companies House", "QuickBooks. The") and must be dropped outright.
@@ -215,7 +227,8 @@ function isRealCompetitor(name: string, locationText: string): boolean {
   // Gov/tax authority, statutory term, or accounting software → never a competing firm.
   if (isNotACompetitor(nl, words)) return false;
   const generic = (w: string) =>
-    COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || GENERIC_TERMS.has(w) || PRONOUNS.has(w) || DOMAIN_GENERIC.has(w);
+    COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || GENERIC_TERMS.has(w) || PRONOUNS.has(w)
+    || DOMAIN_GENERIC.has(w) || FRAGMENT_WORDS.has(w);
   // Every word is generic (stopword / descriptor / venue-type / domain word) → not a real
   // name: "Thai Food", "Cocktail Lounge", "Tax Advisors", "Accountancy Services".
   if (words.every(generic)) return false;
@@ -231,6 +244,7 @@ function isRealCompetitor(name: string, locationText: string): boolean {
     const w = words[0];
     if (generic(w) || w.length < 4) return false;
     if (!/^[A-Z]/.test(n)) return false;                 // must start capitalised (a proper noun)
+    if (/ing$/.test(w) && w.length >= 5) return false;   // gerund fragment ("Choosing", "Finding") — never a firm
   }
   return true;
 }
