@@ -231,14 +231,6 @@ export function renderReportHtml(d: AiAuditReportData): string {
     </section>`;
   }
 
-  // ── Proof: ONE quiet single-line strip — each engine with a small state marker
-  //    (red ✕ when named by none, green ✓ when named) + a tiny count. Understated, no
-  //    boxes. Still per-engine before/after proof for the re-run.
-  const engineCards = d.perEngine.map((pe) => {
-    const hit = pe.named > 0;
-    return `<span class="eng"><span class="eng-mark ${hit ? "yes" : "no"}">${hit ? "✓" : "✕"}</span><span class="eng-name">${esc(pe.label)}</span><span class="eng-cnt">${pe.named}/${pe.total}</span></span>`;
-  }).join("");
-
   const shareFoot = d.shareUrl ? ` · <a href="${esc(d.shareUrl)}">View online</a>` : "";
 
   // Purpose-drawn inline icons for the "What we do" steps — one per step, 2px stroke,
@@ -345,13 +337,6 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .st{ font-size:16px; font-weight:850; color:var(--ink); margin:2px 0 5px; }
   .step p{ margin:0; font-size:13px; line-height:1.45; color:var(--muted); }
 
-  /* PROOF — "Where AI named you": ONE quiet single-line strip (per-engine ✓/✕ + count) */
-  .results{ padding:24px 40px 26px; border-top:1px solid var(--line); }
-  .eng-row{ display:flex; flex-wrap:wrap; align-items:center; gap:10px 22px; }
-  .eng{ display:inline-flex; align-items:center; gap:7px; }
-  .eng-mark{ font-size:14px; font-weight:900; line-height:1; } .eng-mark.no{ color:var(--red); } .eng-mark.yes{ color:var(--green); }
-  .eng-name{ font-size:14px; font-weight:700; color:var(--ink); }
-  .eng-cnt{ font-size:12px; font-weight:700; color:var(--faint); font-variant-numeric:tabular-nums; }
 
   /* WEBSITE SEO — grade circles + radar + findings (all inline SVG, no chart lib) */
   .seo{ padding:24px 40px 26px; border-top:1px solid var(--line); }
@@ -394,8 +379,8 @@ export function renderReportHtml(d: AiAuditReportData): string {
   @media print{
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
-    .band,.hero,.gutbox,.why,.dowe,.results,.cta,.site-foot,.seo{ break-inside:avoid; }
-    .steps,.eng-row,.stats,.seo-grades,.seo-viz,.dowe-panel{ break-inside:avoid; }
+    .band,.hero,.gutbox,.why,.dowe,.cta,.site-foot,.seo{ break-inside:avoid; }
+    .steps,.stats,.seo-grades,.seo-viz,.dowe-panel{ break-inside:avoid; }
   }
 </style>
 </head>
@@ -429,13 +414,6 @@ export function renderReportHtml(d: AiAuditReportData): string {
       </div>
     </div>
 ${gutbox}
-    <!-- PROOF — where AI named you (moved up: pain → evidence → stakes → solution) -->
-    <section class="results">
-      <div class="sec-eyebrow">The evidence</div>
-      <div class="sec-title">Where AI named you</div>
-      <div class="eng-row">${engineCards}</div>
-    </section>
-
     <!-- ============================================================================
          SEO SECTION SLOT — renders results.seo when present (overall grade + three
          category grades + a radar of the three scores + the lead findings). Renders
