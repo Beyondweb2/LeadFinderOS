@@ -130,6 +130,37 @@ const PRONOUNS = new Set([
   'it', 'its', "it's", 'they', 'them', 'their', 'we', 'us', 'our', 'i', 'he', 'she', 'him', 'her',
   'that', 'this', 'these', 'those', 'here', 'there', 'what', 'where', 'when', 'who', 'why', 'how', 'if', 'is', 'are', 'was',
 ]);
+// Business-DOMAIN generic words — describe what a firm IS, never a firm's NAME on their own
+// ("Accountants", "Services", "Advisors"). Lets a single generic word be dropped while a real
+// brand token survives; a multi-word all-generic phrase ("Tax Advisors") is dropped too.
+const DOMAIN_GENERIC = new Set([
+  'accountant', 'accountants', 'accounting', 'accountancy', 'bookkeeping', 'bookkeeper', 'bookkeepers',
+  'tax', 'taxes', 'audit', 'audits', 'auditor', 'auditors', 'advisor', 'advisors', 'adviser', 'advisers',
+  'consultant', 'consultants', 'consultancy', 'finance', 'financial', 'services', 'service', 'solutions',
+  'firm', 'firms', 'ltd', 'limited', 'llp', 'plc', 'inc', 'associates', 'partners', 'partnership', 'group',
+  'company', 'co', 'agency', 'agencies', 'specialists', 'experts', 'professional', 'professionals',
+]);
+// NEVER a competing business: government / tax authorities + statutory terms, and accounting
+// SOFTWARE (tools, not rival firms). These leak from answer_text ("Corporation Tax", "HM Revenue",
+// "Companies House", "QuickBooks. The") and must be dropped outright.
+// Multi-word phrases matched as substrings; single tokens matched only when they dominate a short name.
+const NOT_COMPETITOR_PHRASES = [
+  'hm revenue', 'hmrc', 'companies house', 'corporation tax', 'value added tax', 'national insurance',
+  'self assessment', 'self-assessment', 'income tax', 'capital gains', 'stamp duty', 'tax return',
+  'tax returns', 'the pensions regulator', 'pensions regulator', 'pension regulator', 'making tax digital',
+];
+const NOT_COMPETITOR_TOKENS = new Set([
+  'hmrc', 'gov.uk', 'gov', 'vat', 'paye', 'ir35', 'mtd', 'fca', 'ico', 'nino',
+  'quickbooks', 'xero', 'sage', 'freeagent', 'kashflow', 'freshbooks', 'clearbooks', 'wave', 'intuit',
+]);
+/** True when the candidate is a gov/tax authority, statutory term, or accounting software —
+ *  never a competing firm. `nl` is the lowercased name; `words` its cleaned word tokens. */
+function isNotACompetitor(nl: string, words: string[]): boolean {
+  if (NOT_COMPETITOR_PHRASES.some((p) => nl === p || nl.includes(p))) return true;
+  // A single authority/software token dominating a short name ("VAT", "QuickBooks", "Sage Ltd").
+  if (words.length <= 2 && words.some((w) => NOT_COMPETITOR_TOKENS.has(w))) return true;
+  return false;
+}
 
 /** Niche keywords for the business — its real specialisms + the distinctive part of its
  *  type (drops the generic category word). Used to prefer WINNABLE, specialism-relevant
@@ -167,16 +198,26 @@ function looksAbsent(text: string): boolean {
 /** Keep only things that look like a real business name — drop stopwords, the audit's
  *  location, and short fragments. Bias to precision (better fewer real than lots of noise). */
 function isRealCompetitor(name: string, locationText: string): boolean {
-  const n = name.trim();
+  // Strip trailing fragments the extractor leaves on: punctuation, then a dangling article/
+  // conjunction ("QuickBooks. The" → "QuickBooks", "Crunch and" → "Crunch"). Also a leading "The ".
+  let n = name.trim()
+    .replace(/^the\s+/i, '')
+    .replace(/[\s.,;:–—-]+$/g, '')                        // trailing punctuation ("QuickBooks." )
+    .replace(/\s+(?:the|and|or|a|an|of|for|with|to)$/i, '') // dangling article/conjunction (" The")
+    .replace(/[\s.,;:–—-]+$/g, '')                        // punctuation exposed by the strip above
+    .trim();
   if (n.length < 3 || n.length > 60) return false;
   if (n.includes('@')) return false;                     // social handle, not a venue ("… (@kava_thailand)")
   const nl = n.toLowerCase();
   if (UI_PHRASES.some((p) => nl === p || nl.includes(p))) return false;          // "gemini apps activity" etc.
   const words = nl.split(/\s+/).map((w) => w.replace(/[^a-z0-9.&'-]/g, '')).filter(Boolean);
   if (!words.length) return false;
-  const generic = (w: string) => COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || GENERIC_TERMS.has(w) || PRONOUNS.has(w);
-  // Every word is generic (stopword / cuisine / descriptor / venue-type / area) → not a real
-  // name: "Thai Food", "Cocktail Lounge", "Night Bazaar", "Gemini Apps Activity".
+  // Gov/tax authority, statutory term, or accounting software → never a competing firm.
+  if (isNotACompetitor(nl, words)) return false;
+  const generic = (w: string) =>
+    COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || GENERIC_TERMS.has(w) || PRONOUNS.has(w) || DOMAIN_GENERIC.has(w);
+  // Every word is generic (stopword / descriptor / venue-type / domain word) → not a real
+  // name: "Thai Food", "Cocktail Lounge", "Tax Advisors", "Accountancy Services".
   if (words.every(generic)) return false;
   // Ends in a PLURAL category word → a category/list, not a single venue ("Kava Bars").
   if (PLURAL_CATEGORIES.has(words[words.length - 1])) return false;
@@ -184,12 +225,12 @@ function isRealCompetitor(name: string, locationText: string): boolean {
   if (locTokens.length && locTokens.every((tk) => nl.includes(tk)) && words.length <= locTokens.length + 1) return false; // basically the location
   if (!/[A-Z0-9]/.test(n)) return false;                 // no capital/digit anywhere → a fragment, not a name
   if (words.length === 1) {
-    // Single word: keep ONLY if it's a clear brand token (has . & digit or apostrophe, e.g.
-    // "Bar.San", "O'Malley's"). Plain single words — cuisines, neighbourhoods, cities — are
-    // dropped ("Thai", "Nimman", "Cocktail", "Leeds").
+    // Single word: keep a proper-noun-shaped brand token ("Crunch", "Mazuma", "Azets", "IRIS",
+    // "TaxAssist"). Drop generics/domain words and very short tokens. (We no longer require a
+    // .&digit char — that was wrongly dropping real one-word brand names.)
     const w = words[0];
     if (generic(w) || w.length < 4) return false;
-    if (!/[.&0-9']/.test(n)) return false;
+    if (!/^[A-Z]/.test(n)) return false;                 // must start capitalised (a proper noun)
   }
   return true;
 }
