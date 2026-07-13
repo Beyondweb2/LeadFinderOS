@@ -174,19 +174,37 @@ ChatGPT, Gemini, and Google AI Overview ONLY. NEVER mention Perplexity or Copilo
 Reference the SPECIFIC engines that did / didn't name the business, per-engine.
 
 ════════ OUR 8-WEEK SPRINT (map EVERY action to the right window) ════════
+SEQUENCING PRINCIPLE (critical — get the ORDER right, not just the buckets):
+Off-site trust signals — industry / authority directory submissions, citations, earned
+mentions, and review velocity — take WEEKS-TO-MONTHS for AI engines to crawl, cross-check
+across independent sources, and build entity confidence from. They are the SLOWEST to pay
+off, so they must be INITIATED IN WEEK 1 and left to mature — START THE SLOW OFF-SITE WORK
+FIRST. On-site work (schema, NAP, service / area / FAQ pages, front-loaded answers) lands
+faster, so it runs IN PARALLEL and can complete slightly later. A plan that defers ALL
+directory / earned-media work to Weeks 5-8 is WRONG: the slow-burn off-site items MUST
+appear in Week 1, and Weeks 5-8 are for REINFORCING and CHASING what was started early —
+never the first time off-site work appears.
+
 - "Week 0" — Baseline. Already done (this audit). State plainly where they stand today
   (per-engine visibility, the competitors AI named instead, SEO grade if present).
-- "Weeks 1-2" — DATA LAYER: NAP consistency everywhere AI reads; Organization +
-  (for local firms) LocalBusiness identity schema; review velocity switched on (ask after
-  every job, never filter). Local-map listings (Google Business Profile + Bing Places +
-  Apple Business Connect) LEAD here for LOCAL firms — but for NATIONAL firms they are only a
-  light entity-verification step, not a lead action (see the National vs Local fork below).
-- "Weeks 2-4" — CONTENT LAYER: service + area pages built from real data; FAQ pages that
-  match real question phrasing (4-8 FAQs, 40-60 word answers); placement across the
-  "best of" / industry directory network; front-load a direct 40-60 word answer on key pages.
+- "Weeks 1-2" — DATA LAYER + KICK OFF THE SLOW OFF-SITE WORK (start now, it takes time to
+  land): in WEEK 1, submit to the industry / authority directories for this vertical AND
+  switch on review velocity (ask after every job, never filter) — these are slow-burn, so
+  they LEAD the timeline. In PARALLEL: NAP consistency everywhere AI reads; Organization +
+  (for local firms) LocalBusiness identity schema. Local-map listings (Google Business
+  Profile + Bing Places + Apple Business Connect) LEAD here for LOCAL firms — but for
+  NATIONAL firms they are only a light entity-verification step, not a lead action, and the
+  Week-1 off-site kickoff is industry directories + earned media, NOT local maps (see the
+  National vs Local fork below).
+- "Weeks 2-4" — CONTENT LAYER (on-site, faster payoff): service + area pages built from real
+  data; FAQ pages that match real question phrasing (4-8 FAQs, 40-60 word answers); front-
+  load a direct 40-60 word answer on key pages. CONTINUE the off-site work in parallel: more
+  citations / earned mentions and additional "best of" / niche directory placements building
+  on the submissions started in Week 1.
 - "Week 4" — Mid-scan: re-check which prompts/engines have flipped; report progress.
-- "Weeks 5-8" — Iterate on what HASN'T flipped; competitor-gap actions (close the specific
-  gaps vs the firms AI named); add more citations / earned mentions.
+- "Weeks 5-8" — REINFORCE & CHASE what was STARTED EARLY (do NOT begin off-site here): follow
+  up on pending directory approvals / listings, add more citations / earned mentions, and
+  close the specific competitor gaps vs the firms AI named. Iterate on whatever HASN'T flipped.
 - "Week 8" — Final scan, before/after per engine, guarantee check.
 
 ════════ VERIFIED 2026 GEO METHODOLOGY (the moat — bake these in) ════════
