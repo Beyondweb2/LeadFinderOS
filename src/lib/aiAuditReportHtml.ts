@@ -315,9 +315,10 @@ export function renderReportHtml(d: AiAuditReportData): string {
   /* Consistent phase header: tiny eyebrow + human-readable title (pain → stakes → solution) */
   .sec-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 4px; }
   .sec-title{ font-size:22px; line-height:1.15; letter-spacing:-.01em; font-weight:850; color:var(--ink); margin:0 0 16px; }
-  /* Solution = THE standout moment: brand-blue headline, bigger + heavier than any other title */
+  /* Solution = THE standout moment: still the biggest/heaviest title, but standard ink/black
+     colour (like every other .sec-title) — it stands out via its band + size, not colour. */
   .dowe .sec-eyebrow{ color:var(--blue); }
-  .dowe .sec-title{ font-size:33px; font-weight:900; color:var(--blue); margin:0 0 18px; }
+  .dowe .sec-title{ font-size:33px; font-weight:900; color:var(--ink); margin:0 0 18px; }
   .stats{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }
   .stat{ display:flex; align-items:flex-start; gap:14px; }
   .stat .big{ font-size:46px; line-height:.9; font-weight:900; letter-spacing:-.03em; color:var(--blue); }
