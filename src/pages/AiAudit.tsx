@@ -313,6 +313,16 @@ function pickGutPunch(
   return best;
 }
 
+/** results.seo is only renderable by the report when it's a GRADED object (overall grade +
+ *  the three category grades). The queue writes a failure/cap marker ({error, checked_at})
+ *  when the SEO step doesn't produce a grade — passing that to the report crashes its
+ *  seoSection (reads .categories.onPage). Gate on shape so markers are dropped, not rendered. */
+function isRenderableSeo(s: unknown): s is AiAuditSeo {
+  if (!s || typeof s !== 'object') return false;
+  const c = (s as { categories?: unknown }).categories as Record<string, unknown> | undefined;
+  return !!c && typeof c === 'object' && !!c.onPage && !!c.localPresence && !!c.contentTechnical;
+}
+
 /** Derive the client report's data from a run's queue rows. Pure — used both for the live
  *  report on the results screen and to build a snapshot when opening a past audit's report.
  *  Returns null until at least one question has completed. */
@@ -372,7 +382,8 @@ function buildReportData(
     competitors,
     gutPunch: pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
     generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-    seo: (run?.results as { seo?: AiAuditSeo } | null)?.seo,
+    // Only carry a GRADED seo; drop failure/cap markers so the report never crashes on them.
+    seo: (() => { const s = (run?.results as { seo?: unknown } | null)?.seo; return isRenderableSeo(s) ? s : undefined; })(),
   };
 }
 
@@ -805,7 +816,12 @@ const AiAudit = () => {
 
   // Open a report: prefer the stored snapshot for that run (shown as-is), else the live
   // build. Regenerate is enabled only when we have live data for THIS run loaded.
-  const openReportData = reportRunId ? (reports[reportRunId] ?? (reportRunId === runId ? liveReportData : null)) : null;
+  const rawOpenReportData = reportRunId ? (reports[reportRunId] ?? (reportRunId === runId ? liveReportData : null)) : null;
+  // Defensive: a snapshot cached before the seo-guard shipped could still hold a failure
+  // marker — strip it so opening a persisted report can't crash the generator.
+  const openReportData = rawOpenReportData && rawOpenReportData.seo && !isRenderableSeo(rawOpenReportData.seo)
+    ? { ...rawOpenReportData, seo: undefined }
+    : rawOpenReportData;
   const canRegenerate = !!reportRunId && reportRunId === runId && !!liveReportData;
 
   // Snapshot the current run's live report and open it (used by the results screen). If a
