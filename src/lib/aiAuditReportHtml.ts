@@ -247,10 +247,14 @@ export function renderReportHtml(d: AiAuditReportData): string {
 
   const shareFoot = d.shareUrl ? ` · <a href="${esc(d.shareUrl)}">View online</a>` : "";
 
-  // Purposeful inline icons for the "What we do" steps (stroke, currentColor — inherit blue).
-  const icListed = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
-  const icStruct = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
-  const icNamed = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>`;
+  // Purpose-drawn inline icons for the "What we do" steps — one per step, 2px stroke,
+  // consistent weight, brand blue (currentColor inherits var(--blue) from the tile).
+  // 1 · Get you listed → stacked directory cards (listings across many sources).
+  const icListed = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h9"/><rect x="8" y="8" width="12" height="12" rx="2"/><line x1="11" y1="12" x2="17" y2="12"/><line x1="11" y1="16" x2="15" y2="16"/></svg>`;
+  // 2 · Structure your info → a schema/node graph (structured data engines can read).
+  const icStruct = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.4"/><circle cx="5.5" cy="18.5" r="2.4"/><circle cx="18.5" cy="18.5" r="2.4"/><line x1="11" y1="7.1" x2="6.6" y2="16.4"/><line x1="13" y1="7.1" x2="17.4" y2="16.4"/></svg>`;
+  // 3 · Get you named → an answer bubble with a star (AI naming you in its reply).
+  const icNamed = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H9l-4 4V5.5Z"/><path d="M12 7.3l1.15 2.33 2.57.37-1.86 1.81.44 2.56L12 13.17l-2.3 1.2.44-2.56-1.86-1.81 2.57-.37Z"/></svg>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -299,15 +303,15 @@ export function renderReportHtml(d: AiAuditReportData): string {
 
   /* GUT-PUNCH — a written summary of the worst answer (never the raw AI text) */
   .gutbox{ margin:0 40px 24px; padding:18px 22px; background:#fff5f5; border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
-  .gb-eyebrow{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--red); font-weight:800; margin-bottom:9px; }
+  .gb-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--red); font-weight:800; margin-bottom:9px; }
   .gb-sum{ margin:0 0 9px; font-size:20px; line-height:1.42; font-weight:700; color:#3d0f12; }
   .gb-sum .gb-q{ color:var(--ink); font-weight:800; }
   .gb-sum .rv{ color:var(--red); font-weight:850; white-space:nowrap; }
   .gb-sum b{ color:var(--ink); font-weight:850; }
   .gb-attr{ font-size:12px; color:var(--muted); font-weight:600; }
 
-  /* WHY THIS MATTERS — pain stats, big coloured numbers, muted supporting text */
-  .why{ padding:22px 40px; border-top:1px solid var(--line); }
+  /* WHY THIS MATTERS — stakes stats, big coloured numbers, muted supporting text */
+  .why{ padding:24px 40px 26px; border-top:1px solid var(--line); }
   h2{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 16px; }
   .stats{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }
   .stat{ display:flex; align-items:flex-start; gap:14px; }
@@ -318,15 +322,24 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .why-frame .hl{ color:var(--blue); }
   .src{ margin-top:6px; font-size:11px; color:var(--faint); }
 
-  /* WHAT WE DO — the solution reveal: a confident 3-step, icon-led */
-  .dowe{ padding:24px 40px 26px; border-top:1px solid var(--line); background:#fbfcfe; }
-  .dowe-lead{ font-size:16px; font-weight:800; color:var(--ink); margin:-4px 0 18px; max-width:60ch; }
+  /* WHAT WE DO — the solution reveal: a premium 3-step process panel (the valuable part) */
+  .dowe{ padding:26px 40px 30px; border-top:1px solid var(--line); }
+  .dowe h2{ margin-bottom:14px; }
+  .dowe-panel{ background:var(--page); border:1px solid var(--line); border-radius:16px; padding:24px 26px 26px; }
+  .dowe-lead{ font-size:17px; font-weight:800; color:var(--ink); margin:0 0 22px; max-width:60ch; }
   .dowe-lead .hl{ color:var(--blue); }
-  .steps{ display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
-  .step .ic{ width:46px; height:46px; border-radius:13px; background:#eaf1fc; color:var(--blue);
-    display:flex; align-items:center; justify-content:center; margin-bottom:12px; }
-  .step .ic svg{ width:24px; height:24px; }
-  .step-n{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:800; }
+  .steps{ position:relative; display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
+  /* connecting flow line behind the three icon tiles → reads as a process */
+  .steps::before{ content:""; position:absolute; top:23px; left:16.67%; right:16.67%; height:2px; background:var(--line); z-index:0; }
+  .step{ position:relative; text-align:center; }
+  .step-ic{ position:relative; width:46px; height:46px; margin:0 auto 13px; z-index:1; }
+  .step .ic{ width:46px; height:46px; border-radius:14px; background:#eaf1fc; color:var(--blue);
+    display:flex; align-items:center; justify-content:center; }
+  .step .ic svg{ width:25px; height:25px; }
+  .badge{ position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%;
+    background:var(--blue); color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 3px var(--page); }
+  .step-n{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; }
   .st{ font-size:16px; font-weight:850; color:var(--ink); margin:2px 0 5px; }
   .step p{ margin:0; font-size:13px; line-height:1.45; color:var(--muted); }
 
@@ -388,7 +401,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
     .band,.hero,.gutbox,.why,.dowe,.results,.cta,.site-foot,.seo{ break-inside:avoid; }
-    .steps,.res-grid,.stats,.seo-grades,.seo-viz{ break-inside:avoid; }
+    .steps,.res-grid,.stats,.seo-grades,.seo-viz,.dowe-panel{ break-inside:avoid; }
   }
 </style>
 </head>
@@ -422,7 +435,22 @@ export function renderReportHtml(d: AiAuditReportData): string {
       </div>
     </div>
 ${gutbox}
-    <!-- WHY THIS MATTERS (pain) -->
+    <!-- PROOF — where AI named you (moved up: pain → evidence → stakes → solution) -->
+    <section class="results">
+      <h2>Where AI named you</h2>
+      <div class="res-grid">${engineCards}
+      </div>
+      <div class="res-note"><b>This is your starting point.</b> We re-run this exact audit after the fixes so you see the before &amp; after side by side — businesses we work with typically go from invisible to named across most engines.</div>
+    </section>
+
+    <!-- ============================================================================
+         SEO SECTION SLOT — renders results.seo when present (overall grade + three
+         category grades + a radar of the three scores + the lead findings). Renders
+         nothing when d.seo is absent, so AI-only audits (e.g. the bar) don't break.
+         ============================================================================ -->
+${seoSection(d.seo)}
+
+    <!-- WHY THIS MATTERS (stakes) -->
     <section class="why">
       <h2>Why this matters</h2>
       <div class="stats">
@@ -439,45 +467,32 @@ ${gutbox}
       <div class="src">Source: BrightLocal, 2026</div>
     </section>
 
-    <!-- WHAT WE DO (solution) -->
+    <!-- WHAT WE DO (solution) — a premium 3-step process panel -->
     <section class="dowe">
       <h2>What we do about it</h2>
-      <p class="dowe-lead">We get you into the sources AI reads — and make sure it can understand and <span class="hl">name you</span>.</p>
-      <div class="steps">
-        <div class="step">
-          <div class="ic">${icListed}</div>
-          <div class="step-n">Step 1</div>
-          <div class="st">Get you listed</div>
-          <p>We put you in the directories, maps and review sites AI pulls its answers from.</p>
-        </div>
-        <div class="step">
-          <div class="ic">${icStruct}</div>
-          <div class="step-n">Step 2</div>
-          <div class="st">Structure your info</div>
-          <p>We mark up your details so AI understands who you are, what you do and where.</p>
-        </div>
-        <div class="step">
-          <div class="ic">${icNamed}</div>
-          <div class="step-n">Step 3</div>
-          <div class="st">Get you named</div>
-          <p>So when your customers ask AI, your name is the one that comes up.</p>
+      <div class="dowe-panel">
+        <p class="dowe-lead">We get you into the sources AI reads — and make sure it can understand and <span class="hl">name you</span>.</p>
+        <div class="steps">
+          <div class="step">
+            <div class="step-ic"><span class="ic">${icListed}</span><span class="badge">1</span></div>
+            <div class="step-n">Step 1</div>
+            <div class="st">Get you listed</div>
+            <p>We put you in the directories, maps and review sites AI pulls its answers from.</p>
+          </div>
+          <div class="step">
+            <div class="step-ic"><span class="ic">${icStruct}</span><span class="badge">2</span></div>
+            <div class="step-n">Step 2</div>
+            <div class="st">Structure your info</div>
+            <p>We mark up your details so AI understands who you are, what you do and where.</p>
+          </div>
+          <div class="step">
+            <div class="step-ic"><span class="ic">${icNamed}</span><span class="badge">3</span></div>
+            <div class="step-n">Step 3</div>
+            <div class="st">Get you named</div>
+            <p>So when your customers ask AI, your name is the one that comes up.</p>
+          </div>
         </div>
       </div>
-    </section>
-
-    <!-- ============================================================================
-         SEO SECTION SLOT — renders results.seo when present (overall grade + three
-         category grades + a radar of the three scores + the lead findings). Renders
-         nothing when d.seo is absent, so AI-only audits (e.g. the bar) don't break.
-         ============================================================================ -->
-${seoSection(d.seo)}
-
-    <!-- PROOF -->
-    <section class="results">
-      <h2>Where AI named you</h2>
-      <div class="res-grid">${engineCards}
-      </div>
-      <div class="res-note"><b>This is your starting point.</b> We re-run this exact audit after the fixes so you see the before &amp; after side by side — businesses we work with typically go from invisible to named across most engines.</div>
     </section>
 
     <!-- CTA -->
