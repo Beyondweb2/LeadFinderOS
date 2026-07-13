@@ -516,7 +516,7 @@ const AiAudit = () => {
 
   // Existing-lead picker + saved audits
   const [leads, setLeads] = useState<LeadOption[]>([]);
-  const [savedAudits, setSavedAudits] = useState<(AuditRow & { latest_mention_rate: number | null; latest_run_id: string | null })[]>([]);
+  const [savedAudits, setSavedAudits] = useState<(AuditRow & { latest_mention_rate: number | null; latest_run_id: string | null; latest_has_playbook: boolean })[]>([]);
 
   // Review (questions) state
   const [previewing, setPreviewing] = useState(false);
@@ -554,6 +554,11 @@ const AiAudit = () => {
   const [playbookGenerating, setPlaybookGenerating] = useState(false);
   const [playbooks, setPlaybooks] = usePersistedState<Record<string, PlaybookData>>(
     'ai-audit-playbooks', {}, { tier: 'local', scope: user?.id ?? null, version: 1 },
+  );
+  // Delivery-checklist tick state, keyed runId → { itemKey: boolean }. Persisted locally
+  // (survives refresh/navigation); no DB migration needed.
+  const [checklist, setChecklist] = usePersistedState<Record<string, Record<string, boolean>>>(
+    'ai-audit-checklist', {}, { tier: 'local', scope: user?.id ?? null, version: 1 },
   );
 
   // Refs to move focus to a newly-revealed step (accessibility).
@@ -602,11 +607,29 @@ const AiAudit = () => {
         if (!(r.audit_id in latestByAudit)) latestByAudit[r.audit_id] = { rate: r.mention_rate, runId: r.id };
       }
     }
-    setSavedAudits(auditRows.map((a) => ({
-      ...a,
-      latest_mention_rate: latestByAudit[a.id]?.rate ?? null,
-      latest_run_id: latestByAudit[a.id]?.runId ?? null,
-    })));
+    // Best-effort: which latest runs already have a playbook (light scalar existence check —
+    // results.playbook.summary; no big JSONB pulled). If the JSON-path select isn't supported
+    // it returns null/error and we fall back to the localStorage `playbooks` map at render.
+    const latestRunIds = Object.values(latestByAudit).map((x) => x.runId);
+    const playbookRuns = new Set<string>();
+    if (latestRunIds.length) {
+      const { data: flags } = await supabase
+        .from('ai_audit_runs')
+        .select('id, pb_summary:results->playbook->>summary')
+        .in('id', latestRunIds);
+      for (const f of (flags ?? []) as { id: string; pb_summary: string | null }[]) {
+        if (f.pb_summary) playbookRuns.add(f.id);
+      }
+    }
+    setSavedAudits(auditRows.map((a) => {
+      const runId = latestByAudit[a.id]?.runId ?? null;
+      return {
+        ...a,
+        latest_mention_rate: latestByAudit[a.id]?.rate ?? null,
+        latest_run_id: runId,
+        latest_has_playbook: !!runId && playbookRuns.has(runId),
+      };
+    }));
   }, [user]);
 
   useEffect(() => {
@@ -787,8 +810,27 @@ const AiAudit = () => {
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
     setSeoPasteOpen(false); setSeoPasteText('');
+    // Hydrate the local playbook cache from the server so the opened-audit + row playbook
+    // buttons and the delivery checklist reflect a playbook made on any device.
+    const serverPb = (latest as { results?: { playbook?: unknown } } | null)?.results?.playbook;
+    if (serverPb && typeof serverPb === 'object') {
+      const rid = (latest as RunRow).id;
+      setPlaybooks((prev) => (prev[rid] ? prev : { ...prev, [rid]: serverPb as PlaybookData }));
+    }
     setStep('results');
     return latest as RunRow;
+  };
+
+  // Open a past audit's PLAYBOOK directly from its row: reopen (loads the run + hydrates the
+  // playbook from results.playbook), then show the existing playbook view. No new viewer.
+  const viewPlaybookFromRow = async (audit: AuditRow & { latest_run_id: string | null }) => {
+    const latest = await reopenAudit(audit);
+    if (!latest) return;
+    const rid = latest.id;
+    const pb = playbooks[rid] ?? (latest as { results?: { playbook?: unknown } }).results?.playbook;
+    if (!pb || typeof pb !== 'object') { toast({ title: 'No playbook yet for this audit', variant: 'destructive' }); return; }
+    if (!playbooks[rid]) setPlaybooks((prev) => ({ ...prev, [rid]: pb as PlaybookData }));
+    setPlaybookRunId(rid);
   };
 
   // Open a past audit's report DIRECTLY from its row. Prefers the stored snapshot (shown
@@ -1131,9 +1173,16 @@ const AiAudit = () => {
                         <div className="text-[11px] text-muted-foreground truncate">{a.business_type || '—'}{a.location_text ? ` · ${a.location_text}` : ''}</div>
                       </button>
                       <MentionPill rate={a.latest_mention_rate} />
-                      {a.latest_run_id && (
+                      {/* Report — shown when the audit is complete (finalised = mention_rate set) */}
+                      {a.latest_mention_rate !== null && (
                         <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={() => viewReport(a)} title="View report">
-                          <FileText className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">View report</span>
+                          <FileText className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Report</span>
+                        </Button>
+                      )}
+                      {/* Playbook — shown ONLY when one exists (server flag, or generated in this browser) */}
+                      {(a.latest_has_playbook || (!!a.latest_run_id && !!playbooks[a.latest_run_id])) && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={() => viewPlaybookFromRow(a)} title="View playbook">
+                          <MapIcon className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Playbook</span>
                         </Button>
                       )}
                     </div>
@@ -1383,6 +1432,22 @@ const AiAudit = () => {
             </CardContent>
           </Card>
 
+          {/* Delivery checklist — progressive, ordered, derived from the playbook */}
+          {!isDraining && runId && (
+            <DeliveryChecklist
+              playbook={playbooks[runId] ?? ((run?.results as { playbook?: PlaybookData } | null)?.playbook ?? null)}
+              hasWebsite={resultsHasWebsite}
+              hasSeo={hasSeo}
+              state={checklist[runId] ?? {}}
+              onToggle={(key) => setChecklist((prev) => {
+                const cur = prev[runId] ?? {};
+                return { ...prev, [runId]: { ...cur, [key]: !(cur[key] ?? false) } };
+              })}
+              onGeneratePlaybook={() => generatePlaybook(false)}
+              generating={playbookGenerating}
+            />
+          )}
+
           {/* Per-question results */}
           {queueRows.length === 0 && !isDraining && (
             <p className="text-sm text-muted-foreground">No results yet.</p>
@@ -1395,6 +1460,113 @@ const AiAudit = () => {
     </div>
   );
 };
+
+/* ── Delivery checklist — progressive, ordered, derived from the playbook ──────
+ * Stages: a system "Setup" stage (audit run; SEO added when the business has a website),
+ * then one stage per playbook week (window = stage, internalActions = tick items). One
+ * stage shown at a time: completed stages collapse to a green summary above the current
+ * one; upcoming stages stay hidden until the current stage's items are all ticked. */
+type ChecklistItem = { key: string; text: string; autoDone?: boolean };
+type ChecklistStage = { id: string; label: string; sub?: string; items: ChecklistItem[] };
+
+function DeliveryChecklist({ playbook, hasWebsite, hasSeo, state, onToggle, onGeneratePlaybook, generating }: {
+  playbook: PlaybookData | null;
+  hasWebsite: boolean;
+  hasSeo: boolean;
+  state: Record<string, boolean>;
+  onToggle: (key: string) => void;
+  onGeneratePlaybook: () => void;
+  generating: boolean;
+}) {
+  // Setup stage (system-known items). "SEO data added" only when the business has a website;
+  // audit-run + SEO auto-tick from known state (autoDone) until the user overrides them.
+  const setupItems: ChecklistItem[] = [{ key: 'sys:auditrun', text: 'AI visibility audit run', autoDone: true }];
+  if (hasWebsite) setupItems.push({ key: 'sys:seo', text: 'Website SEO data added', autoDone: hasSeo });
+
+  const stages: ChecklistStage[] = [{ id: 'setup', label: 'Setup', sub: 'Baseline captured', items: setupItems }];
+  (playbook?.weeks ?? []).forEach((w, wi) => {
+    stages.push({
+      id: `wk${wi}`,
+      label: w.window,
+      sub: w.goal,
+      items: (w.internalActions ?? []).map((a, ai) => ({ key: `wk${wi}:${ai}`, text: a.action })),
+    });
+  });
+
+  const isTicked = (it: ChecklistItem) => state[it.key] ?? it.autoDone ?? false;
+  const stageComplete = (s: ChecklistStage) => s.items.length > 0 && s.items.every(isTicked);
+  let currentIdx = stages.findIndex((s) => !stageComplete(s));
+  if (currentIdx === -1) currentIdx = stages.length; // every stage complete
+  const allDone = !!playbook && currentIdx >= stages.length;
+
+  return (
+    <Card>
+      <CardContent className="p-4 sm:p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Delivery</div>
+          <div className="text-[11px] text-muted-foreground">{Math.min(currentIdx, stages.length)}/{stages.length} stages</div>
+        </div>
+
+        {stages.map((s, i) => {
+          if (i > currentIdx) return null; // upcoming → hidden until we reach it
+          if (i < currentIdx) {
+            // completed → collapsed green summary
+            return (
+              <div key={s.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2">
+                <Check className="h-4 w-4 shrink-0 text-[hsl(var(--badge-closed))]" />
+                <div className="min-w-0 text-sm font-medium truncate">
+                  {s.label}{s.sub ? <span className="text-muted-foreground font-normal"> · {s.sub}</span> : null}
+                </div>
+                <span className="ml-auto text-[11px] font-semibold text-[hsl(var(--badge-closed))]">Done</span>
+              </div>
+            );
+          }
+          // current stage → full + tickable
+          return (
+            <div key={s.id} className="rounded-lg border border-primary/50 bg-card/60 px-3 py-3 space-y-2">
+              <div>
+                <div className="text-sm font-semibold">{s.label}</div>
+                {s.sub && <div className="text-[11px] text-muted-foreground">{s.sub}</div>}
+              </div>
+              <div className="space-y-1">
+                {s.items.map((it) => {
+                  const done = isTicked(it);
+                  return (
+                    <button key={it.key} onClick={() => onToggle(it.key)}
+                      className="w-full flex items-start gap-2.5 text-left rounded-md px-1 py-1 hover:bg-muted/50 transition-colors">
+                      <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${done ? 'bg-[hsl(var(--badge-closed))] border-transparent' : 'border-border'}`}>
+                        {done && <Check className="h-3 w-3 text-white" />}
+                      </span>
+                      <span className={`text-sm ${done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{it.text}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+
+        {!playbook && (
+          <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-4 text-center space-y-2">
+            <div className="text-sm font-medium">Generate the playbook to build the delivery checklist</div>
+            <div className="text-[11px] text-muted-foreground">The 8-week Sprint stages become your tickable delivery steps.</div>
+            <Button size="sm" onClick={onGeneratePlaybook} disabled={generating}>
+              {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapIcon className="mr-2 h-4 w-4" />}
+              {generating ? 'Generating…' : 'Generate playbook'}
+            </Button>
+          </div>
+        )}
+
+        {allDone && (
+          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2">
+            <Check className="h-4 w-4 text-[hsl(var(--badge-closed))]" />
+            <span className="text-sm font-medium">All delivery stages complete.</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 /* ── Small presentational helpers ─────────────────────────────────────────── */
 
