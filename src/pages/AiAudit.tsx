@@ -175,6 +175,9 @@ const NOT_COMPETITOR_PHRASES = [
 const NOT_COMPETITOR_TOKENS = new Set([
   'hmrc', 'gov.uk', 'gov', 'vat', 'paye', 'ir35', 'mtd', 'fca', 'ico', 'nino',
   'quickbooks', 'xero', 'sage', 'freeagent', 'kashflow', 'freshbooks', 'clearbooks', 'wave', 'intuit',
+  // Tax forms/codes + services/tasks — never a competing FIRM ("CT600", "Payroll", "Customs").
+  'ct600', 'sa100', 'sa102', 'sa302', 'sa800', 'p11d', 'p60', 'p45', 'p87', 'r40',
+  'payroll', 'bookkeeping', 'customs', 'duty', 'duties', 'compliance',
 ]);
 /** True when the candidate is a gov/tax authority, statutory term, or accounting software —
  *  never a competing firm. `nl` is the lowercased name; `words` its cleaned word tokens. */
@@ -218,9 +221,45 @@ function looksAbsent(text: string): boolean {
     && /\b(appear|aware|find|identify|seem|exist|any|dedicated|specific|listing|results?)\b/i.test(text);
 }
 
+/* ── Furniture / franken reject — mirrors the fixed edge extractor's isJunkCandidate
+ *  (_shared/enrichment/ai-search.ts). Catches scraped page furniture (social/share widgets,
+ *  nav/footer links, cookie text) and concatenated link-label tokens ("CloseThank",
+ *  "FacebookGmailX…") that the stopword sets miss because they're proper-noun-shaped. */
+const FURNITURE_TERMS = new Set([
+  'sharethis', 'share', 'facebook', 'gmail', 'reddit', 'whatsapp', 'twitter', 'linkedin',
+  'pinterest', 'telegram', 'messenger', 'tumblr', 'instagram', 'youtube', 'tiktok', 'print',
+  'privacy', 'terms', 'contact', 'report', 'signin', 'signup', 'login', 'logout', 'register',
+  'subscribe', 'newsletter', 'menu', 'copyright', 'disclaimer', 'sitemap', 'feedback',
+  'next', 'previous', 'close', 'thank', 'thanks', 'accept', 'cookie', 'cookies', 'consent',
+]);
+const FURNITURE_SUBSTR = /sharethis|facebook|whatsapp|reddit|linkedin|pinterest/i;
+/** Split a camelCase / fused token into word parts ("CloseThank"→["Close","Thank"],
+ *  "TaxAssist"→["Tax","Assist"]). */
+const camelParts = (t: string): string[] => t.replace(/([a-zà-ÿ])([A-ZÀ-Þ])/g, '$1 $2').split(/\s+/).filter(Boolean);
+/** Count lower→upper transitions in a single (spaceless) token — many = glued link labels. */
+function camelHumps(t: string): number {
+  let n = 0;
+  for (let i = 1; i < t.length; i++) if (/[a-zà-ÿ]/.test(t[i - 1]) && /[A-ZÀ-Þ]/.test(t[i])) n++;
+  return n;
+}
+/** True when a candidate is page furniture or a concatenated link-label franken-word. */
+function isFurnitureOrFranken(name: string): boolean {
+  const cleaned = name.replace(/[.\s]+$/, '').trim();
+  const key = cleaned.toLowerCase();
+  if (!key) return true;
+  if (FURNITURE_TERMS.has(key) || FURNITURE_TERMS.has(key.split(/\s+/)[0])) return true;
+  if (FURNITURE_SUBSTR.test(cleaned)) return true;
+  if (!/\s/.test(cleaned)) {
+    if (cleaned.length > 25 || camelHumps(cleaned) >= 3) return true;      // mega-fused run
+    if (camelParts(cleaned).some((p) => FURNITURE_TERMS.has(p.toLowerCase()))) return true; // fused furniture ("CloseThank")
+  }
+  return false;
+}
+
 /** Keep only things that look like a real business name — drop stopwords, the audit's
  *  location, and short fragments. Bias to precision (better fewer real than lots of noise). */
 function isRealCompetitor(name: string, locationText: string): boolean {
+  if (isFurnitureOrFranken(name)) return false;          // page furniture / fused link labels
   // Strip trailing fragments the extractor leaves on: punctuation, then a dangling article/
   // conjunction ("QuickBooks. The" → "QuickBooks", "Crunch and" → "Crunch"). Also a leading "The ".
   let n = name.trim()
@@ -258,6 +297,48 @@ function isRealCompetitor(name: string, locationText: string): boolean {
     if (/ing$/.test(w) && w.length >= 5) return false;   // gerund fragment ("Choosing", "Finding") — never a firm
   }
   return true;
+}
+
+/** Candidate business names from an engine's answer_text — mirrors the fixed edge
+ *  extractTextNames (_shared/enrichment/ai-search.ts): capitalised 1–4 word runs, split on
+ *  the sentence/element "." boundary so a real firm fused to trailing furniture survives. */
+function extractNamesFromAnswer(text: string): string[] {
+  const matches = (text || '').match(/[A-Z][\wÀ-ÿ&'’.]+(?:\s+[A-Z][\wÀ-ÿ&'’.]+){0,3}/g) ?? [];
+  const out: string[] = [];
+  for (const m of matches) {
+    for (const part of m.split(/\.\s+/)) {
+      const s = part.replace(/\.$/, '').trim();
+      if (s.length >= 3) out.push(s);
+    }
+  }
+  return out;
+}
+
+/** Re-derive an engine's competitor list from its STORED answer_text (no scrape), unioned
+ *  with its existing competitors so google_organic's title-derived rivals survive re-cleaning.
+ *  Everything is run through isRealCompetitor (furniture/franken + stopword/tax cleaning) and
+ *  the audited business is excluded. Returns a fresh EngineMap; leaves non-object entries as-is. */
+function reextractEngineCompetitors(result: EngineMap | null, locationText: string, businessName: string): EngineMap | null {
+  if (!result || typeof result !== 'object') return result;
+  const self = businessName.trim().toLowerCase();
+  const out: EngineMap = {};
+  for (const [engine, er] of Object.entries(result)) {
+    if (!er || typeof er !== 'object') { out[engine] = er; continue; }
+    const candidates = [...extractNamesFromAnswer(er.answer_text || ''), ...(Array.isArray(er.competitors) ? er.competitors : [])];
+    const seen = new Set<string>();
+    const clean: string[] = [];
+    for (const c of candidates) {
+      const name = (c || '').trim();
+      if (!name || !isRealCompetitor(name, locationText)) continue;
+      const k = name.toLowerCase();
+      if (seen.has(k)) continue;
+      if (self && (k === self || k.includes(self) || self.includes(k))) continue; // drop self-mentions
+      seen.add(k);
+      clean.push(name);
+    }
+    out[engine] = { ...er, competitors: clean };
+  }
+  return out;
 }
 
 /** Trim to a sentence boundary near `max` chars (avoid cutting mid-word). */
@@ -545,6 +626,7 @@ const AiAudit = () => {
   const [seoPasteText, setSeoPasteText] = useState('');
   const [seoApplying, setSeoApplying] = useState(false);
   const [regenerating, setRegenerating] = useState(false); // Regenerate-button loading state
+  const [reextracting, setReextracting] = useState(false); // Re-extract-competitors loading state
   // Which run's report is currently open (null = not viewing a report). Replaces the old
   // boolean so we can open a SPECIFIC run's persisted report snapshot.
   const [reportRunId, setReportRunId] = useState<string | null>(null);
@@ -853,6 +935,52 @@ const AiAudit = () => {
       toast({ title: "Couldn't re-run", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
     } finally {
       setRunning(false);
+    }
+  };
+
+  // Re-extract competitors for THIS run from its already-stored answer text — FREE / instant,
+  // NO Apify re-scrape. Re-runs the fixed extraction (isRealCompetitor incl. furniture/franken
+  // reject) over stored answer_text per engine, rewrites the competitors in BOTH stores
+  // (ai_audit_queue rows that drive the report/display + the run.results.questions snapshot the
+  // playbook reads), refreshes in-memory state, and drops the cached report snapshot so the
+  // report + "AI names these instead" rebuild clean on view/Regenerate.
+  const reextractCompetitors = async () => {
+    if (!runId || reextracting) return;
+    setReextracting(true);
+    try {
+      const loc = locationText || '';
+      const bn = resultsBusinessName || businessName || '';
+      const rows = await loadRunRows(runId);
+      // Rewrite each done row's stored competitors in ai_audit_queue.
+      const updatedRows: QueueRow[] = [];
+      for (const r of rows) {
+        const newResult = reextractEngineCompetitors(r.result, loc, bn);
+        updatedRows.push({ ...r, result: newResult });
+        if (r.status === 'done' && r.result) {
+          const { error } = await supabase.from('ai_audit_queue').update({ result: newResult }).eq('id', r.id);
+          if (error) throw new Error(error.message);
+        }
+      }
+      setQueueRows(updatedRows);
+      // Rewrite the folded snapshot on the run (results.questions[].engines) too.
+      const { data: fresh } = await supabase.from('ai_audit_runs').select('results').eq('id', runId).maybeSingle();
+      const cur = fresh?.results && typeof fresh.results === 'object' ? fresh.results as Record<string, unknown> : {};
+      const q: unknown[] = Array.isArray((cur as { questions?: unknown }).questions) ? (cur as { questions: unknown[] }).questions : [];
+      const newQuestions = q.map((qq) => ({
+        ...(qq as Record<string, unknown>),
+        engines: reextractEngineCompetitors(((qq as { engines?: EngineMap | null })?.engines ?? null), loc, bn),
+      }));
+      const newResults = { ...cur, questions: newQuestions };
+      const { error: upErr } = await supabase.from('ai_audit_runs').update({ results: newResults }).eq('id', runId);
+      if (upErr) throw new Error(upErr.message);
+      setRun((prev) => (prev ? { ...prev, results: newResults } : prev));
+      // Invalidate the cached report snapshot so it rebuilds from the cleaned rows.
+      setReports((prev) => { const n = { ...prev }; delete n[runId]; return n; });
+      toast({ title: 'Competitors re-extracted', description: 'Recomputed from the stored answers — no new search run.' });
+    } catch (e) {
+      toast({ title: "Couldn't re-extract competitors", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setReextracting(false);
     }
   };
 
@@ -1423,6 +1551,14 @@ const AiAudit = () => {
                   {!isDraining && liveTally.done > 0 && runId && playbooks[runId] && (
                     <Button variant="outline" size="sm" onClick={() => generatePlaybook(false)}>
                       <MapIcon className="mr-2 h-4 w-4" /> View playbook
+                    </Button>
+                  )}
+                  {/* Re-extract competitors — FREE/instant: recompute from stored answers, no re-scrape. */}
+                  {!isDraining && liveTally.done > 0 && (
+                    <Button variant="outline" size="sm" onClick={reextractCompetitors} disabled={reextracting}
+                      title="Recompute competitor names from the stored answers — free, no new search">
+                      {reextracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+                      {reextracting ? 'Re-extracting…' : 'Re-extract competitors'}
                     </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={resetWizard}>New audit</Button>
