@@ -472,6 +472,12 @@ const AiAudit = () => {
   const [run, setRun] = useState<RunRow | null>(null);
   const [queueRows, setQueueRows] = useState<QueueRow[]>([]);
   const [resultsBusinessName, setResultsBusinessName] = useState('');
+  // Whether the run's audit has a website — gates the "Add SEO data" paste feature.
+  const [resultsHasWebsite, setResultsHasWebsite] = useState(false);
+  // "Add/Update SEO data" paste panel state.
+  const [seoPasteOpen, setSeoPasteOpen] = useState(false);
+  const [seoPasteText, setSeoPasteText] = useState('');
+  const [seoApplying, setSeoApplying] = useState(false);
   // Which run's report is currently open (null = not viewing a report). Replaces the old
   // boolean so we can open a SPECIFIC run's persisted report snapshot.
   const [reportRunId, setReportRunId] = useState<string | null>(null);
@@ -669,7 +675,9 @@ const AiAudit = () => {
       setAuditId(data.audit_id);
       setRunId(data.run_id);
       setResultsBusinessName(data.business_name ?? businessName);
+      setResultsHasWebsite(hasWebsite === true);
       setRun(null); setQueueRows([]);
+      setSeoPasteOpen(false); setSeoPasteText('');
       setStep('results');
     } catch (e) {
       toast({ title: "Couldn't start the audit", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
@@ -705,10 +713,12 @@ const AiAudit = () => {
     if (!latest) { toast({ title: 'No runs yet for this audit', variant: 'destructive' }); return null; }
     setAuditId(audit.id);
     setResultsBusinessName(audit.business_name);
+    setResultsHasWebsite(audit.has_website === true);
     setBusinessType(audit.business_type ?? ''); // so the report's "what this means" line is populated for reopened audits
     setLocationText(audit.location_text ?? ''); // so the competitor filter can drop the location for reopened audits
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
+    setSeoPasteOpen(false); setSeoPasteText('');
     setStep('results');
     return latest as RunRow;
   };
@@ -834,6 +844,35 @@ const AiAudit = () => {
   const regenerateReport = () => {
     if (!reportRunId || !liveReportData) return;
     setReports((prev) => ({ ...prev, [reportRunId]: liveReportData }));
+  };
+
+  // Does this run already have a graded SEO block? Drives the button label + panel copy.
+  const hasSeo = isRenderableSeo((run?.results as { seo?: unknown } | null)?.seo);
+
+  // Submit pasted SEO text → apply-seo-paste (AI extract + grade) → store at results.seo.
+  // On success: refresh the run so results.seo is live, and INVALIDATE this run's cached
+  // report snapshot so the SEO section shows immediately (not a stale pre-SEO snapshot).
+  const applySeoPaste = async () => {
+    if (!runId || !seoPasteText.trim()) return;
+    setSeoApplying(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('apply-seo-paste', {
+        body: { runId, pastedText: seoPasteText },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'apply failed');
+      await pollRun(runId);                                   // refresh run.results (now has seo)
+      setReports((prev) => {                                  // drop stale snapshot for this run
+        if (!(runId in prev)) return prev;
+        const next = { ...prev }; delete next[runId]; return next;
+      });
+      setSeoPasteOpen(false);
+      setSeoPasteText('');
+      toast({ title: 'SEO data added', description: 'The report now includes the SEO section.' });
+    } catch (e) {
+      toast({ title: "Couldn't read that SEO data", description: e instanceof Error ? e.message : 'Try pasting the full report text again', variant: 'destructive' });
+    } finally {
+      setSeoApplying(false);
+    }
   };
 
   // Client-facing report is a separate view (replaces results while open).
@@ -1085,6 +1124,12 @@ const AiAudit = () => {
                   <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
                 </Button>
                 <div className="flex items-center gap-2">
+                  {/* SEO paste — website audits only. Toggles the paste panel below. */}
+                  {!isDraining && resultsHasWebsite && (
+                    <Button variant="outline" size="sm" onClick={() => setSeoPasteOpen((o) => !o)}>
+                      <Globe className="mr-2 h-4 w-4" /> {hasSeo ? 'Update SEO data' : 'Add SEO data'}
+                    </Button>
+                  )}
                   {!isDraining && liveTally.done > 0 && (
                     <Button variant="outline" size="sm" onClick={openReportForCurrentRun}>
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
@@ -1097,6 +1142,30 @@ const AiAudit = () => {
                   </Button>
                 </div>
               </div>
+
+              {/* SEO paste panel — paste a SEOptimer report; AI extracts + grades it. */}
+              {seoPasteOpen && resultsHasWebsite && (
+                <div className="rounded-lg border border-border/60 bg-card/60 p-3 space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {hasSeo ? 'Update SEO data' : 'Add SEO data'}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Paste the full SEOptimer report text. We extract the signals and grade them into the report's SEO section.</p>
+                  <textarea
+                    value={seoPasteText}
+                    onChange={(e) => setSeoPasteText(e.target.value)}
+                    disabled={seoApplying}
+                    placeholder="Paste the SEO report here…"
+                    className="w-full min-h-[140px] rounded-md border border-border/60 bg-background p-2 text-sm font-mono resize-y focus:outline-none focus:ring-1 focus:ring-primary/40"
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => { setSeoPasteOpen(false); setSeoPasteText(''); }} disabled={seoApplying}>Cancel</Button>
+                    <Button size="sm" onClick={applySeoPaste} disabled={seoApplying || seoPasteText.trim().length < 20}>
+                      {seoApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                      {seoApplying ? 'Grading…' : hasSeo ? 'Update SEO' : 'Grade & add'}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Headline */}
               <div>
