@@ -140,7 +140,7 @@ function seoSection(seo: AiAuditSeo | undefined): string {
     <!-- WEBSITE SEO — grade circles + tight findings (radar dropped); renders only when seo present -->
     <section class="seo">
       <div class="sec-eyebrow">Your website</div>
-      <div class="sec-title">How findable your website is</div>
+      <div class="sec-title">How <span class="tl-y">findable</span> is your website?</div>
       <p class="seo-intro">Your site’s overall SEO grade is <b style="color:${overallColour}">${esc(overallGrade)}</b>. A site can be technically sound and still land here — because AI and search can’t yet establish it as a real, findable business. Here’s what’s holding it back.</p>
 
       <div class="seo-body">
@@ -277,6 +277,10 @@ export function renderReportHtml(d: AiAuditReportData): string {
   /* Consistent phase header: tiny eyebrow + human-readable title (pain → stakes → solution) */
   .sec-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 4px; }
   .sec-title{ font-size:22px; line-height:1.15; letter-spacing:-.01em; font-weight:850; color:var(--ink); margin:0 0 16px; }
+  /* Brand-yellow keyword inside a section title. These titles sit on the light --page tint,
+     where plain --yellow is illegible (~1.2:1), so a thin --ink outline keeps the brand yellow
+     as the fill while making the letterforms readable. Reuses existing tokens; no new colour. */
+  .tl-y{ color:var(--yellow); text-shadow:-0.6px -0.6px 0 var(--ink), 0.6px -0.6px 0 var(--ink), -0.6px 0.6px 0 var(--ink), 0.6px 0.6px 0 var(--ink); }
   /* Solution = THE standout moment: still the biggest/heaviest title, but standard ink/black
      colour (like every other .sec-title) — it stands out via its band + size, not colour. */
   .dowe .sec-eyebrow{ color:var(--blue); }
@@ -427,7 +431,7 @@ ${seoSection(d.seo)}
     <!-- WHAT WE DO (solution) — the confident turn from problem to fix -->
     <section class="dowe">
       <div class="sec-eyebrow">The fix</div>
-      <div class="sec-title">Here’s how we get you found</div>
+      <div class="sec-title">Here’s how we <span class="tl-y">get you found</span></div>
       <div class="dowe-panel">
         <p class="dowe-lead">We get you into the sources AI reads — and make sure it can understand and <span class="hl">name you</span>.</p>
         <div class="steps">
