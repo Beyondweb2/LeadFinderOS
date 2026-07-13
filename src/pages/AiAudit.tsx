@@ -1218,7 +1218,7 @@ const AiAudit = () => {
               {playbookGenerating ? 'Regenerating…' : 'Regenerate'}
             </Button>
             <Button size="sm" onClick={() => downloadPlaybookHtml(openPlaybookData, playbookView)}>
-              <Download className="mr-2 h-4 w-4" /> Download {playbookView === 'internal' ? 'internal' : 'client'}
+              <Download className="mr-2 h-4 w-4" /> Download PDF
             </Button>
           </div>
         </div>

@@ -42,7 +42,7 @@ export function AiAuditReport({ data, onBack, onDownload, onRegenerate, regenera
             </Button>
           )}
           <Button size="sm" onClick={onDownload}>
-            <Download className="mr-2 h-4 w-4" /> Download report
+            <Download className="mr-2 h-4 w-4" /> Download PDF
           </Button>
         </div>
       </div>
