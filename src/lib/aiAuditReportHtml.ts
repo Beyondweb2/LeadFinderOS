@@ -102,7 +102,7 @@ const clamp100 = (n: number) => Math.max(0, Math.min(100, Number.isFinite(n) ? n
 
 /** A grade "circle": a ring (coloured arc = score, or full ring when no score) with the
  *  letter grade in the middle, and a caption below. Pure SVG so it survives print/PDF. */
-function gradeCircle(grade: string, score: number | null, size: number, label: string): string {
+function gradeCircle(grade: string, score: number | null, size: number, label: string, showScore = false): string {
   const colour = gradeColour(grade);
   const r = 44;
   const circ = 2 * Math.PI * r;
@@ -110,54 +110,18 @@ function gradeCircle(grade: string, score: number | null, size: number, label: s
   const dash = `${(frac * circ).toFixed(1)} ${circ.toFixed(1)}`;
   const g = (grade || "").trim();
   const fontSize = g.length > 1 ? 32 : 40; // "A+" vs "C"
+  // Surface the numeric score under sub-grades (data already present) — more useful detail.
+  const scoreCap = showScore && score != null ? `<div class="gc-score">${clamp100(score)}/100</div>` : "";
   return `
         <figure class="gc">
-          <svg width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="${esc(label)}: grade ${esc(g)}">
+          <svg width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="${esc(label)}: grade ${esc(g)}${score != null ? `, score ${clamp100(score)} of 100` : ""}">
             <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--line-strong)" stroke-width="8" />
             <circle cx="50" cy="50" r="${r}" fill="none" stroke="${colour}" stroke-width="8" stroke-linecap="round"
               stroke-dasharray="${dash}" transform="rotate(-90 50 50)" />
             <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" font-weight="900" fill="${colour}">${esc(g)}</text>
           </svg>
-          <figcaption class="gc-lbl">${esc(label)}</figcaption>
+          <figcaption class="gc-lbl">${esc(label)}</figcaption>${scoreCap}
         </figure>`;
-}
-
-/** Radar/spider chart of the three category scores (0–100) on three axes. Hand-drawn SVG. */
-function seoRadar(onPage: number, localPresence: number, contentTechnical: number): string {
-  const cx = 160, cy = 118, R = 82;
-  const rad = (deg: number) => (deg * Math.PI) / 180;
-  const pt = (deg: number, frac: number): [number, number] => [
-    cx + R * frac * Math.cos(rad(deg)),
-    cy + R * frac * Math.sin(rad(deg)),
-  ];
-  // Axis 0 top, then clockwise (+120°). Each carries a category + a 1–2 line label.
-  const axes = [
-    { deg: -90, val: clamp100(onPage), lx: cx, ly: cy - R - 18, lines: ["On-Page SEO"] },
-    { deg: 30, val: clamp100(contentTechnical), lx: cx + (R + 40) * Math.cos(rad(30)), ly: cy + (R + 26) * Math.sin(rad(30)), lines: ["Content &", "Technical"] },
-    { deg: 150, val: clamp100(localPresence), lx: cx + (R + 40) * Math.cos(rad(150)), ly: cy + (R + 26) * Math.sin(rad(150)), lines: ["Local", "Presence"] },
-  ];
-  const ring = (frac: number) =>
-    axes.map((a) => { const [x, y] = pt(a.deg, frac); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
-  // Rings: a white base plate on the outer ring lifts the chart off the --page tint; the
-  // outermost stroke is heavier so the frame reads first. Data fill/stroke strengthened.
-  const grid = [1, 0.75, 0.5, 0.25].map((f) => `<polygon points="${ring(f)}" fill="${f === 1 ? "var(--paper)" : "none"}" stroke="var(--line-strong)" stroke-width="${f === 1 ? 1.6 : 1}" />`).join("");
-  const spokes = axes.map((a) => { const [x, y] = pt(a.deg, 1); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line-strong)" stroke-width="1" />`; }).join("");
-  const dataPts = axes.map((a) => { const [x, y] = pt(a.deg, a.val / 100); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
-  const dots = axes.map((a) => { const [x, y] = pt(a.deg, a.val / 100); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.6" fill="var(--blue)" stroke="var(--paper)" stroke-width="1.5" />`; }).join("");
-  const lineH = 11;
-  const labels = axes.map((a) => {
-    const startY = a.ly - ((a.lines.length - 1) * lineH) / 2;
-    const tspans = a.lines.map((ln, i) => `<tspan x="${a.lx.toFixed(1)}" dy="${i === 0 ? 0 : lineH}">${esc(ln)}</tspan>`).join("");
-    return `<text x="${a.lx.toFixed(1)}" y="${startY.toFixed(1)}" text-anchor="middle" class="seo-axis">${tspans}</text>`;
-  }).join("");
-  return `
-          <svg class="radar" width="320" height="212" viewBox="0 0 320 212" role="img" aria-label="SEO category scores radar chart">
-            ${grid}
-            ${spokes}
-            <polygon points="${dataPts}" fill="var(--blue)" fill-opacity="0.22" stroke="var(--blue)" stroke-width="2.5" stroke-linejoin="round" />
-            ${dots}
-            ${labels}
-          </svg>`;
 }
 
 const SEV_COLOUR: Record<SeoFinding["severity"], string> = { high: "var(--red)", med: "var(--amber)", low: "var(--muted)" };
@@ -168,29 +132,27 @@ function seoSection(seo: AiAuditSeo | undefined): string {
   const { overallGrade, categories: c, leadFindings } = seo;
   const overallColour = gradeColour(overallGrade);
   const findings = (leadFindings ?? []).map((f) => `
-          <li class="find" style="border-left-color:${SEV_COLOUR[f.severity] ?? "var(--faint)"}">
-            <span class="find-title">${esc(f.title)}</span>
-            <span class="find-detail">${esc(f.detail)}</span>
+          <li class="find">
+            <span class="find-dot" style="background:${SEV_COLOUR[f.severity] ?? "var(--faint)"}"></span>
+            <span class="find-body"><b class="find-title">${esc(f.title)}</b> <span class="find-detail">${esc(f.detail)}</span></span>
           </li>`).join("");
   return `
-    <!-- WEBSITE SEO — self-contained SVG grades + radar + findings; renders only when seo present -->
+    <!-- WEBSITE SEO — grade circles + tight findings (radar dropped); renders only when seo present -->
     <section class="seo">
       <div class="sec-eyebrow">Your website</div>
-      <div class="sec-title">SEO health</div>
+      <div class="sec-title">How findable your website is</div>
       <p class="seo-intro">Your site’s overall SEO grade is <b style="color:${overallColour}">${esc(overallGrade)}</b>. A site can be technically sound and still land here — because AI and search can’t yet establish it as a real, findable business. Here’s what’s holding it back.</p>
 
-      <div class="seo-grades">
-        <div class="seo-overall">${gradeCircle(overallGrade, null, 152, "Overall")}</div>
-        <div class="seo-grade-split" aria-hidden="true"></div>
-        <div class="seo-cats">
-          ${gradeCircle(c.onPage.grade, c.onPage.score, 82, "On-Page SEO")}
-          ${gradeCircle(c.localPresence.grade, c.localPresence.score, 82, "Local Presence")}
-          ${gradeCircle(c.contentTechnical.grade, c.contentTechnical.score, 82, "Content & Technical")}
+      <div class="seo-body">
+        <div class="seo-grades">
+          <div class="seo-overall">${gradeCircle(overallGrade, null, 124, "Overall")}</div>
+          <div class="seo-grade-split" aria-hidden="true"></div>
+          <div class="seo-cats">
+            ${gradeCircle(c.onPage.grade, c.onPage.score, 60, "On-Page SEO", true)}
+            ${gradeCircle(c.localPresence.grade, c.localPresence.score, 60, "Local Presence", true)}
+            ${gradeCircle(c.contentTechnical.grade, c.contentTechnical.score, 60, "Content & Technical", true)}
+          </div>
         </div>
-      </div>
-
-      <div class="seo-viz">
-        <div class="seo-radar">${seoRadar(c.onPage.score, c.localPresence.score, c.contentTechnical.score)}</div>
         ${findings ? `<ul class="seo-findings">${findings}
         </ul>` : ""}
       </div>
@@ -355,30 +317,32 @@ export function renderReportHtml(d: AiAuditReportData): string {
      lighter than .dowe — no blue rule, no white inner card — so it never competes with
      the solution peak. The white→tint bg change is the section separator (with the crisp
      --line top edge); the following white 'why' reopens the rhythm. */
-  .seo{ padding:24px 40px 26px; border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); background:var(--page); }
-  .seo-intro{ margin:-4px 0 22px; font-size:15px; line-height:1.5; color:var(--muted); font-weight:600; max-width:66ch; }
+  .seo{ padding:22px 40px 24px; border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); background:var(--page); }
+  .seo-intro{ margin:-4px 0 16px; font-size:15px; line-height:1.5; color:var(--muted); font-weight:600; max-width:66ch; }
   .seo-intro b{ font-weight:900; } /* the SEO verdict — bold accent, same as other numbers/verdicts */
-  /* GRADE ROW — Overall is the focal point (large, first), the three categories are a
-     visually secondary cluster to the right of a hairline divider. */
-  .seo-grades{ display:flex; align-items:center; gap:28px; flex-wrap:wrap; }
-  .seo-grade-split{ flex:0 0 auto; width:1px; height:104px; background:var(--line-strong); opacity:.55; }
-  .seo-cats{ display:flex; gap:18px; flex-wrap:wrap; }
+  /* Grades ROW (radar dropped to reclaim height): Overall dominant, then the three
+     sub-grades as a tidy secondary row past a hairline divider. Findings sit BELOW, full
+     width, so they stay tight (1–2 lines) instead of wrapping in a narrow column. */
+  .seo-body{ /* block wrapper: grades row, then full-width findings */ }
+  .seo-grades{ display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+  .seo-grade-split{ flex:0 0 auto; width:1px; height:80px; background:var(--line-strong); opacity:.55; }
+  .seo-cats{ display:flex; gap:14px; flex-wrap:wrap; }
   .gc{ margin:0; text-align:center; }
   .gc svg{ display:block; margin:0 auto; }
-  .gc-lbl{ margin-top:7px; font-size:11px; font-weight:700; color:var(--muted); max-width:11ch; }
+  .gc-lbl{ margin-top:6px; font-size:10.5px; font-weight:700; color:var(--muted); max-width:11ch; line-height:1.2; }
+  .gc-score{ margin-top:2px; font-size:10.5px; font-weight:800; color:var(--ink); font-variant-numeric:tabular-nums; }
   .seo-overall{ text-align:center; }
-  .seo-overall .gc-lbl{ margin-top:9px; font-size:13px; color:var(--ink); font-weight:900; letter-spacing:.02em; }
-  .seo-viz{ display:flex; align-items:center; gap:28px; flex-wrap:wrap; margin-top:24px; }
-  .seo-radar{ flex:0 0 auto; }
-  .radar{ display:block; }
-  .seo-axis{ font-size:11px; font-weight:800; fill:var(--ink); }
-  /* FINDINGS — the key takeaways: severity-coloured left rail, prominent title, readable
-     detail, lifted onto white chips so they carry weight against the tint. */
-  .seo-findings{ list-style:none; margin:0; padding:0; flex:1; min-width:260px; display:flex; flex-direction:column; gap:9px; }
-  .find{ display:block; padding:11px 14px; background:var(--paper); border:1px solid var(--line);
-    border-left:4px solid var(--faint); border-radius:9px; box-shadow:0 1px 3px rgba(15,23,42,.05); }
-  .find-title{ display:block; font-weight:850; font-size:14.5px; line-height:1.3; color:var(--ink); }
-  .find-detail{ display:block; margin-top:3px; font-size:13px; line-height:1.5; color:var(--muted); }
+  .seo-overall .gc-lbl{ margin-top:8px; font-size:13px; color:var(--ink); font-weight:900; letter-spacing:.02em; }
+  /* FINDINGS — tight full-width rows: a severity dot + bold title + short detail on the same
+     flow. No big padded cards; far less vertical space, still reads as the key takeaways. */
+  .seo-findings{ list-style:none; margin:16px 0 0; padding:0; }
+  .find{ display:flex; gap:9px; padding:7px 0; border-bottom:1px solid var(--line); }
+  .find:first-child{ padding-top:0; }
+  .find:last-child{ border-bottom:0; padding-bottom:0; }
+  .find-dot{ width:8px; height:8px; border-radius:50%; margin-top:5px; flex:0 0 auto; }
+  .find-body{ flex:1; }
+  .find-title{ font-weight:800; font-size:13px; color:var(--ink); }
+  .find-detail{ font-size:12.5px; line-height:1.45; color:var(--muted); }
 
   /* CLOSING CTA — Findable blue band with a yellow highlight */
   .cta{ background:var(--blue); color:#fff; padding:28px 40px 26px; }
@@ -401,7 +365,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
     .band,.hero,.gutbox,.why,.dowe,.cta,.site-foot,.seo{ break-inside:avoid; }
-    .steps,.stats,.seo-grades,.seo-viz,.dowe-panel{ break-inside:avoid; }
+    .steps,.stats,.seo-grades,.seo-body,.dowe-panel{ break-inside:avoid; }
   }
 </style>
 </head>
