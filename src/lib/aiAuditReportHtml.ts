@@ -138,10 +138,12 @@ function seoRadar(onPage: number, localPresence: number, contentTechnical: numbe
   ];
   const ring = (frac: number) =>
     axes.map((a) => { const [x, y] = pt(a.deg, frac); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
-  const grid = [0.25, 0.5, 0.75, 1].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="var(--line-strong)" stroke-width="1" />`).join("");
+  // Rings: a white base plate on the outer ring lifts the chart off the --page tint; the
+  // outermost stroke is heavier so the frame reads first. Data fill/stroke strengthened.
+  const grid = [1, 0.75, 0.5, 0.25].map((f) => `<polygon points="${ring(f)}" fill="${f === 1 ? "var(--paper)" : "none"}" stroke="var(--line-strong)" stroke-width="${f === 1 ? 1.6 : 1}" />`).join("");
   const spokes = axes.map((a) => { const [x, y] = pt(a.deg, 1); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line-strong)" stroke-width="1" />`; }).join("");
   const dataPts = axes.map((a) => { const [x, y] = pt(a.deg, a.val / 100); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
-  const dots = axes.map((a) => { const [x, y] = pt(a.deg, a.val / 100); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--blue)" />`; }).join("");
+  const dots = axes.map((a) => { const [x, y] = pt(a.deg, a.val / 100); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.6" fill="var(--blue)" stroke="var(--paper)" stroke-width="1.5" />`; }).join("");
   const lineH = 11;
   const labels = axes.map((a) => {
     const startY = a.ly - ((a.lines.length - 1) * lineH) / 2;
@@ -152,7 +154,7 @@ function seoRadar(onPage: number, localPresence: number, contentTechnical: numbe
           <svg class="radar" width="320" height="212" viewBox="0 0 320 212" role="img" aria-label="SEO category scores radar chart">
             ${grid}
             ${spokes}
-            <polygon points="${dataPts}" fill="var(--blue)" fill-opacity="0.16" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" />
+            <polygon points="${dataPts}" fill="var(--blue)" fill-opacity="0.22" stroke="var(--blue)" stroke-width="2.5" stroke-linejoin="round" />
             ${dots}
             ${labels}
           </svg>`;
@@ -166,9 +168,9 @@ function seoSection(seo: AiAuditSeo | undefined): string {
   const { overallGrade, categories: c, leadFindings } = seo;
   const overallColour = gradeColour(overallGrade);
   const findings = (leadFindings ?? []).map((f) => `
-          <li class="find">
-            <span class="find-dot" style="background:${SEV_COLOUR[f.severity] ?? "var(--faint)"}"></span>
-            <span class="find-body"><span class="find-title">${esc(f.title)}</span> <span class="find-detail">${esc(f.detail)}</span></span>
+          <li class="find" style="border-left-color:${SEV_COLOUR[f.severity] ?? "var(--faint)"}">
+            <span class="find-title">${esc(f.title)}</span>
+            <span class="find-detail">${esc(f.detail)}</span>
           </li>`).join("");
   return `
     <!-- WEBSITE SEO — self-contained SVG grades + radar + findings; renders only when seo present -->
@@ -178,11 +180,12 @@ function seoSection(seo: AiAuditSeo | undefined): string {
       <p class="seo-intro">Your site’s overall SEO grade is <b style="color:${overallColour}">${esc(overallGrade)}</b>. A site can be technically sound and still land here — because AI and search can’t yet establish it as a real, findable business. Here’s what’s holding it back.</p>
 
       <div class="seo-grades">
-        <div class="seo-overall">${gradeCircle(overallGrade, null, 124, "Overall")}</div>
+        <div class="seo-overall">${gradeCircle(overallGrade, null, 152, "Overall")}</div>
+        <div class="seo-grade-split" aria-hidden="true"></div>
         <div class="seo-cats">
-          ${gradeCircle(c.onPage.grade, c.onPage.score, 84, "On-Page SEO")}
-          ${gradeCircle(c.localPresence.grade, c.localPresence.score, 84, "Local Presence")}
-          ${gradeCircle(c.contentTechnical.grade, c.contentTechnical.score, 84, "Content & Technical")}
+          ${gradeCircle(c.onPage.grade, c.onPage.score, 82, "On-Page SEO")}
+          ${gradeCircle(c.localPresence.grade, c.localPresence.score, 82, "Local Presence")}
+          ${gradeCircle(c.contentTechnical.grade, c.contentTechnical.score, 82, "Content & Technical")}
         </div>
       </div>
 
@@ -274,7 +277,15 @@ export function renderReportHtml(d: AiAuditReportData): string {
 
   /* One-line explainer */
   .explainer{ padding:24px 40px 6px; font-size:19px; line-height:1.42; color:#334155; font-weight:600; max-width:58ch; }
-  .explainer b{ color:var(--blue); font-weight:800; }
+  .explainer b{ color:var(--blue); font-weight:850; }
+
+  /* ── EMPHASIS SYSTEM (one rule, whole document) ───────────────────────────────
+     Key WORDS get a consistent accent at weight 850: brand --blue for neutral/positive
+     terms (.hl, .explainer b) and --red for loss/negative terms (.rv, .was) — same
+     strength, colour carries the meaning. Key NUMBERS/verdicts stay at 900 in their
+     severity/brand colour (hero .num, why .big/.was, SEO grade). --blue holds strong on
+     BOTH --paper and the --page tint, so the accent never reads weak in any section. */
+  .hl{ color:var(--blue); font-weight:850; }
 
   /* HERO — balanced two-part: big number/label on the left, the verdict on the right */
   .hero{ display:flex; align-items:stretch; gap:30px; padding:20px 40px 30px; }
@@ -293,7 +304,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .gutbox{ margin:0 40px 24px; padding:18px 22px; background:#fff5f5; border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
   .gb-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--red); font-weight:800; margin-bottom:9px; }
   .gb-sum{ margin:0 0 9px; font-size:20px; line-height:1.42; font-weight:700; color:#3d0f12; }
-  .gb-sum .gb-q{ color:var(--ink); font-weight:800; }
+  .gb-sum .gb-q{ color:var(--ink); font-weight:850; }
   .gb-sum .rv{ color:var(--red); font-weight:850; white-space:nowrap; }
   .gb-sum b{ color:var(--ink); font-weight:850; }
   .gb-attr{ font-size:12px; color:var(--muted); font-weight:600; }
@@ -313,7 +324,6 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .stat p{ margin:0; font-size:14px; color:var(--muted); }
   .stat p .was{ color:var(--red); font-weight:900; font-size:17px; }
   .why-frame{ margin:16px 0 0; font-size:17px; font-weight:800; color:var(--ink); max-width:56ch; }
-  .why-frame .hl{ color:var(--blue); }
   .src{ margin-top:6px; font-size:11px; color:var(--faint); }
 
   /* WHAT WE DO — the solution reveal (the money section): a tinted full-width band with a
@@ -322,7 +332,6 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .dowe h2{ margin-bottom:14px; }
   .dowe-panel{ background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:24px 26px 26px; box-shadow:0 4px 24px rgba(15,23,42,.06); }
   .dowe-lead{ font-size:17px; font-weight:800; color:var(--ink); margin:0 0 22px; max-width:60ch; }
-  .dowe-lead .hl{ color:var(--blue); }
   .steps{ position:relative; display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
   /* connecting flow line behind the three icon tiles → reads as a process */
   .steps::before{ content:""; position:absolute; top:23px; left:16.67%; right:16.67%; height:2px; background:var(--line); z-index:0; }
@@ -346,24 +355,29 @@ export function renderReportHtml(d: AiAuditReportData): string {
      the solution peak. The white→tint bg change is the section separator (with the crisp
      --line top edge); the following white 'why' reopens the rhythm. */
   .seo{ padding:24px 40px 26px; border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); background:var(--page); }
-  .seo-intro{ margin:-4px 0 20px; font-size:15px; line-height:1.5; color:var(--muted); font-weight:600; max-width:66ch; }
-  .seo-intro b{ font-weight:850; }
-  .seo-grades{ display:flex; align-items:center; gap:30px; flex-wrap:wrap; }
-  .seo-cats{ display:flex; gap:22px; flex-wrap:wrap; }
+  .seo-intro{ margin:-4px 0 22px; font-size:15px; line-height:1.5; color:var(--muted); font-weight:600; max-width:66ch; }
+  .seo-intro b{ font-weight:900; } /* the SEO verdict — bold accent, same as other numbers/verdicts */
+  /* GRADE ROW — Overall is the focal point (large, first), the three categories are a
+     visually secondary cluster to the right of a hairline divider. */
+  .seo-grades{ display:flex; align-items:center; gap:28px; flex-wrap:wrap; }
+  .seo-grade-split{ flex:0 0 auto; width:1px; height:104px; background:var(--line-strong); opacity:.55; }
+  .seo-cats{ display:flex; gap:18px; flex-wrap:wrap; }
   .gc{ margin:0; text-align:center; }
   .gc svg{ display:block; margin:0 auto; }
   .gc-lbl{ margin-top:7px; font-size:11px; font-weight:700; color:var(--muted); max-width:11ch; }
-  .seo-overall .gc-lbl{ font-size:12px; color:var(--ink); font-weight:800; }
-  .seo-viz{ display:flex; align-items:center; gap:30px; flex-wrap:wrap; margin-top:22px; }
+  .seo-overall{ text-align:center; }
+  .seo-overall .gc-lbl{ margin-top:9px; font-size:13px; color:var(--ink); font-weight:900; letter-spacing:.02em; }
+  .seo-viz{ display:flex; align-items:center; gap:28px; flex-wrap:wrap; margin-top:24px; }
   .seo-radar{ flex:0 0 auto; }
   .radar{ display:block; }
-  .seo-axis{ font-size:10px; font-weight:700; fill:var(--muted); }
-  .seo-findings{ list-style:none; margin:0; padding:0; flex:1; min-width:250px; }
-  .find{ display:flex; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
-  .find:last-child{ border-bottom:0; }
-  .find-dot{ width:9px; height:9px; border-radius:50%; margin-top:5px; flex:0 0 auto; }
-  .find-title{ font-weight:800; font-size:13.5px; color:var(--ink); }
-  .find-detail{ font-size:12.5px; line-height:1.45; color:var(--muted); }
+  .seo-axis{ font-size:11px; font-weight:800; fill:var(--ink); }
+  /* FINDINGS — the key takeaways: severity-coloured left rail, prominent title, readable
+     detail, lifted onto white chips so they carry weight against the tint. */
+  .seo-findings{ list-style:none; margin:0; padding:0; flex:1; min-width:260px; display:flex; flex-direction:column; gap:9px; }
+  .find{ display:block; padding:11px 14px; background:var(--paper); border:1px solid var(--line);
+    border-left:4px solid var(--faint); border-radius:9px; box-shadow:0 1px 3px rgba(15,23,42,.05); }
+  .find-title{ display:block; font-weight:850; font-size:14.5px; line-height:1.3; color:var(--ink); }
+  .find-detail{ display:block; margin-top:3px; font-size:13px; line-height:1.5; color:var(--muted); }
 
   /* CLOSING CTA — Findable blue band with a yellow highlight */
   .cta{ background:var(--blue); color:#fff; padding:28px 40px 26px; }
