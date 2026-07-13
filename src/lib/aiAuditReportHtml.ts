@@ -226,7 +226,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     box-shadow:0 8px 40px rgba(15,23,42,.12); }
 
   /* Header band — Findable blue with a yellow wordmark and a wave bottom edge */
-  .band{ position:relative; background:var(--blue); color:#fff; padding:26px 40px 40px; }
+  .band{ position:relative; background:var(--blue); color:#fff; padding:22px 28px 34px; }
   .band-row{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
   .wordmark{ font-size:27px; font-weight:900; letter-spacing:-.02em; color:var(--yellow); }
   .wordmark .dot{ color:#fff; }
@@ -234,7 +234,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .wave{ position:absolute; left:0; right:0; bottom:-1px; width:100%; height:38px; display:block; }
 
   /* One-line explainer */
-  .explainer{ padding:24px 40px 6px; font-size:19px; line-height:1.42; color:#334155; font-weight:600; max-width:58ch; }
+  .explainer{ padding:16px 28px 4px; font-size:19px; line-height:1.4; color:#334155; font-weight:600; max-width:70ch; }
   .explainer b{ color:var(--blue); font-weight:850; }
 
   /* ── EMPHASIS SYSTEM (one rule, whole document) ───────────────────────────────
@@ -246,7 +246,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .hl{ color:var(--blue); font-weight:850; }
 
   /* HERO — balanced two-part: big number/label on the left, the verdict on the right */
-  .hero{ display:flex; align-items:stretch; gap:30px; padding:20px 40px 30px; }
+  .hero{ display:flex; align-items:stretch; gap:26px; padding:14px 28px 20px; }
   .hero-num{ display:flex; align-items:center; gap:18px; flex:0 0 auto; }
   .num{ font-size:104px; line-height:.82; font-weight:900; letter-spacing:-.04em; }
   .num.crit,.num.low{ color:var(--red); } .num.mid{ color:var(--amber); } .num.high{ color:var(--green); }
@@ -259,16 +259,16 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .punch{ font-size:27px; line-height:1.2; font-weight:850; letter-spacing:-.01em; color:var(--ink); }
 
   /* GUT-PUNCH — a written summary of the worst answer (never the raw AI text) */
-  .gutbox{ margin:0 40px 24px; padding:18px 22px; background:#fff5f5; border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
-  .gb-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--red); font-weight:800; margin-bottom:9px; }
-  .gb-sum{ margin:0 0 9px; font-size:20px; line-height:1.42; font-weight:700; color:#3d0f12; }
+  .gutbox{ margin:0 28px 16px; padding:14px 18px; background:#fff5f5; border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
+  .gb-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--red); font-weight:800; margin-bottom:7px; }
+  .gb-sum{ margin:0 0 7px; font-size:20px; line-height:1.4; font-weight:700; color:#3d0f12; }
   .gb-sum .gb-q{ color:var(--ink); font-weight:850; }
   .gb-sum .rv{ color:var(--red); font-weight:850; white-space:nowrap; }
   .gb-sum b{ color:var(--ink); font-weight:850; }
   .gb-attr{ font-size:12px; color:var(--muted); font-weight:600; }
 
   /* WHY THIS MATTERS — stakes stats, big coloured numbers, muted supporting text */
-  .why{ padding:24px 40px 26px; border-top:1px solid var(--line); }
+  .why{ padding:18px 28px 18px; border-top:1px solid var(--line); }
   h2{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 16px; }
   /* Consistent phase header: tiny eyebrow + human-readable title (pain → stakes → solution) */
   .sec-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 4px; }
@@ -277,21 +277,21 @@ export function renderReportHtml(d: AiAuditReportData): string {
      colour (like every other .sec-title) — it stands out via its band + size, not colour. */
   .dowe .sec-eyebrow{ color:var(--blue); }
   .dowe .sec-title{ font-size:33px; font-weight:900; color:var(--ink); margin:0 0 18px; }
-  .stats{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  .stats{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
   .stat{ display:flex; align-items:flex-start; gap:14px; }
   .stat .big{ font-size:46px; line-height:.9; font-weight:900; letter-spacing:-.03em; color:var(--blue); }
   .stat p{ margin:0; font-size:14px; color:var(--muted); }
   .stat p .was{ color:var(--red); font-weight:900; font-size:17px; }
-  .why-frame{ margin:16px 0 0; font-size:17px; font-weight:800; color:var(--ink); max-width:56ch; }
+  .why-frame{ margin:12px 0 0; font-size:17px; font-weight:800; color:var(--ink); max-width:64ch; }
   .src{ margin-top:6px; font-size:11px; color:var(--faint); }
 
   /* WHAT WE DO — the solution reveal (the money section): a tinted full-width band with a
      heavy brand-blue top rule so it visibly BREAKS from the section above; white card inside. */
-  .dowe{ padding:30px 40px 34px; border-top:3px solid var(--blue); background:var(--page); }
+  .dowe{ padding:22px 28px 24px; border-top:3px solid var(--blue); background:var(--page); }
   .dowe h2{ margin-bottom:14px; }
-  .dowe-panel{ background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:24px 26px 26px; box-shadow:0 4px 24px rgba(15,23,42,.06); }
-  .dowe-lead{ font-size:17px; font-weight:800; color:var(--ink); margin:0 0 22px; max-width:60ch; }
-  .steps{ position:relative; display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
+  .dowe-panel{ background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:18px 22px 20px; box-shadow:0 4px 24px rgba(15,23,42,.06); }
+  .dowe-lead{ font-size:17px; font-weight:800; color:var(--ink); margin:0 0 16px; max-width:64ch; }
+  .steps{ position:relative; display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
   /* connecting flow line behind the three icon tiles → reads as a process */
   .steps::before{ content:""; position:absolute; top:23px; left:16.67%; right:16.67%; height:2px; background:var(--line); z-index:0; }
   .step{ position:relative; text-align:center; }
@@ -313,8 +313,8 @@ export function renderReportHtml(d: AiAuditReportData): string {
      lighter than .dowe — no blue rule, no white inner card — so it never competes with
      the solution peak. The white→tint bg change is the section separator (with the crisp
      --line top edge); the following white 'why' reopens the rhythm. */
-  .seo{ padding:22px 40px 24px; border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); background:var(--page); }
-  .seo-intro{ margin:-4px 0 16px; font-size:15px; line-height:1.5; color:var(--muted); font-weight:600; max-width:66ch; }
+  .seo{ padding:18px 28px 18px; border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); background:var(--page); }
+  .seo-intro{ margin:-2px 0 12px; font-size:15px; line-height:1.45; color:var(--muted); font-weight:600; max-width:74ch; }
   .seo-intro b{ font-weight:900; } /* the SEO verdict — bold accent, same as other numbers/verdicts */
   /* Grades ROW (radar dropped to reclaim height): Overall dominant, then the three
      sub-grades as a tidy secondary row past a hairline divider. Findings sit BELOW, full
@@ -331,7 +331,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .seo-overall .gc-lbl{ margin-top:8px; font-size:13px; color:var(--ink); font-weight:900; letter-spacing:.02em; }
   /* FINDINGS — tight full-width rows: a severity dot + bold title + short detail on the same
      flow. No big padded cards; far less vertical space, still reads as the key takeaways. */
-  .seo-findings{ list-style:none; margin:16px 0 0; padding:0; }
+  .seo-findings{ list-style:none; margin:12px 0 0; padding:0; }
   .find{ display:flex; gap:9px; padding:7px 0; border-bottom:1px solid var(--line); }
   .find:first-child{ padding-top:0; }
   .find:last-child{ border-bottom:0; padding-bottom:0; }
@@ -341,22 +341,22 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .find-detail{ font-size:12.5px; line-height:1.45; color:var(--muted); }
 
   /* CLOSING CTA — Findable blue band with a yellow highlight */
-  .cta{ background:var(--blue); color:#fff; padding:28px 40px 26px; }
-  .cta h3{ margin:0 0 8px; font-size:24px; font-weight:850; color:#fff; letter-spacing:-.01em; }
+  .cta{ background:var(--blue); color:#fff; padding:20px 28px 20px; }
+  .cta h3{ margin:0 0 7px; font-size:24px; font-weight:850; color:#fff; letter-spacing:-.01em; }
   .cta h3 .y{ color:var(--yellow); }
-  .cta p{ margin:0 0 6px; font-size:14px; color:#c7d3ea; max-width:60ch; }
+  .cta p{ margin:0 0 6px; font-size:14px; color:#c7d3ea; max-width:66ch; }
   .cta p b{ color:#fff; }
   .cta .close{ margin-top:10px; font-size:15px; font-weight:800; color:#fff; }
 
   /* FOOTER — a distinct darker navy bar so the text is clearly readable (no blue-on-blue) */
-  .site-foot{ background:var(--foot); padding:14px 40px 16px; }
+  .site-foot{ background:var(--foot); padding:12px 28px 14px; }
   .site-foot .row{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
     font-size:11.5px; color:#c7d5ee; font-weight:600; }
   .site-foot .row b{ color:#fff; }
   .site-foot .row a{ color:var(--yellow); text-decoration:none; }
   .site-foot .note{ margin-top:8px; font-size:11px; color:#8fa4c8; }
 
-  @page{ size:A4; margin:11mm; }
+  @page{ size:A4; margin:10mm; }
   @media print{
     /* Force backgrounds (blue header band, section tints, CTA, footer, dots, icon tiles) to
        print WITHOUT the user ticking Chrome's "Background graphics" — exact colour adjust. */
