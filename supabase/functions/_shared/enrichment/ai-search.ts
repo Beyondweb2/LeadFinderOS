@@ -149,6 +149,62 @@ function citationOf(src: unknown): AiCitation {
  * business and dedup. This is approximate — it can miss names or catch a stray
  * capitalised phrase — kept deliberately simple so it's easy to tune. */
 
+/* ── junk guard ───────────────────────────────────────────────────────────────
+ * The AI-Overview full-page scrape mixes rendered page FURNITURE into answer_text:
+ * social/share widgets, nav/footer links and cookie notices. Those capitalise like
+ * names, so the raw candidate pool picks up "ShareThis", "Report", "Privacy Policy.
+ * Share". Worse, adjacent inline share-button labels are scraped with the spaces
+ * already lost and get swallowed as one franken-token ("FacebookGmailXRedditWhatsApp
+ * Thank"). This predicate rejects both classes at the source so they never become a
+ * stored competitor. Conservative: prefer dropping a borderline candidate to keeping
+ * furniture — the downstream isRealCompetitor filter is a second line of defence. */
+const FURNITURE_TERMS = new Set<string>([
+  // social / share widgets
+  "sharethis", "share", "share this", "facebook", "gmail", "reddit", "whatsapp",
+  "twitter", "linkedin", "pinterest", "telegram", "messenger", "tumblr", "instagram",
+  "youtube", "tiktok", "email", "print", "copy link", "copy",
+  // nav / footer / action labels
+  "privacy", "privacy policy", "terms", "terms of service", "terms and conditions",
+  "terms of use", "contact", "contact us", "about", "about us", "report", "sign in",
+  "sign up", "signin", "signup", "log in", "logout", "login", "register", "subscribe",
+  "newsletter", "home", "menu", "search", "read more", "learn more", "more",
+  "back to top", "copyright", "all rights reserved", "disclaimer", "sitemap",
+  "feedback", "help", "support", "faq", "advertise", "careers", "jobs", "press",
+  "follow us", "share on", "next", "previous", "close",
+  // cookie / consent
+  "cookie", "cookies", "cookie policy", "cookie settings", "accept", "accept all",
+  "manage cookies", "we use cookies", "consent", "preferences", "settings",
+]);
+// Social-brand substrings that mark a token as a share-row fragment even when glued
+// to other text (e.g. "ShareThis", "…WhatsAppThank").
+const FURNITURE_SUBSTR = /sharethis|facebook|whatsapp|reddit|linkedin|pinterest/i;
+
+/** Count lower→upper transitions inside a single (whitespace-free) token. Real brands
+ *  rarely have 3+ internal camel humps; concatenated link labels have many. */
+function camelHumps(token: string): number {
+  let n = 0;
+  for (let i = 1; i < token.length; i++) {
+    if (/[a-zà-ÿ]/.test(token[i - 1]) && /[A-ZÀ-Þ]/.test(token[i])) n++;
+  }
+  return n;
+}
+
+/** True if a candidate name is page furniture or a concatenated link-label franken-word,
+ *  not a real business/brand. Applied at the dedup chokepoint so BOTH the answer-text and
+ *  organic-title paths are covered. */
+function isJunkCandidate(name: string): boolean {
+  const cleaned = name.replace(/[.\s]+$/, "").trim(); // drop trailing period/space ("Policy." )
+  const key = norm(cleaned);
+  if (!key) return true;
+  if (FURNITURE_TERMS.has(key)) return true;              // whole candidate is furniture
+  if (FURNITURE_TERMS.has(key.split(/\s+/)[0])) return true; // leads with furniture ("Privacy Policy. Share")
+  if (FURNITURE_SUBSTR.test(cleaned)) return true;        // social share-row fragment
+  // Concatenation franken-word: a spaceless token that's either very long or has many
+  // camel humps is glued link labels, not one brand.
+  if (!/\s/.test(cleaned) && (cleaned.length > 25 || camelHumps(cleaned) >= 3)) return true;
+  return false;
+}
+
 /** Leading business-name segment of a SERP/result title. */
 function organicTitleName(title: string): string {
   return asStr(title).split(TITLE_DELIMS)[0].trim();
@@ -167,7 +223,17 @@ function extractOrganicNames(item: Record<string, unknown>): string[] {
  *  Noisy by nature (may catch place names / marketing phrases); refine as needed. */
 function extractTextNames(text: string): string[] {
   const matches = asStr(text).match(/[A-Z][\wÀ-ÿ&'’.]+(?:\s+[A-Z][\wÀ-ÿ&'’.]+){0,3}/g) ?? [];
-  return matches.map((s) => s.trim()).filter((s) => s.length >= 3);
+  const out: string[] = [];
+  for (const m of matches) {
+    // A period+space is a sentence/element boundary the "." in the char class wrongly bridges
+    // (so a real firm gets fused to trailing furniture: "…Accountants. ShareThis"). Split on
+    // it so the real name survives on its own and only the furniture half is rejected later.
+    for (const part of m.split(/\.\s+/)) {
+      const s = part.replace(/\.$/, "").trim();
+      if (s.length >= 3) out.push(s);
+    }
+  }
+  return out;
 }
 
 /** Dedup names case-insensitively (first-seen casing), dropping the audited business
@@ -180,6 +246,7 @@ function dedupExcludingSelf(names: string[], businessName: string): string[] {
     const key = norm(n);
     if (!key || seen.has(key)) continue;
     if (self && (key === self || key.includes(self) || self.includes(key))) continue;
+    if (isJunkCandidate(n)) continue; // drop page furniture + concatenated link-label franken-words
     seen.add(key);
     out.push(n);
   }
