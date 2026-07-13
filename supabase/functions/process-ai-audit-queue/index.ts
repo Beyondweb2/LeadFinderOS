@@ -19,11 +19,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const BATCH = 1;                 // ONE row per tick → a tick can't exceed the edge wall-clock
+const BATCH = 4;                 // rows CLAIMED + run CONCURRENTLY per tick (Promise.allSettled) — tune here
 const CAP_USD = 3.0;             // per-RUN Apify cost ceiling (this audit run)
 const DAILY_CAP_USD = 15.0;      // per-USER rolling-24h ceiling (across audits) via the runner
 const MAX_ATTEMPTS = 3;          // per queue row before it's marked failed
-const RUN_TIMEOUT_MS = 85_000;  // per actor run — heavy multi-engine run often needs >80s; BATCH=1 keeps one attempt under the edge wall-clock
+// Per actor run. The batch runs CONCURRENTLY (Promise.allSettled), so calls OVERLAP: the
+// invocation's wall-clock ≈ the SLOWEST single call, NOT BATCH × timeout. One ~115s call +
+// a few seconds of claim/normalise/DB overhead stays under the ~150s edge wall-clock, so we
+// can afford 115s (up from 85s) for headroom on genuinely slow multi-engine bundles.
+const RUN_TIMEOUT_MS = 115_000;
 const STALE_RUNNING_MS = 3 * 60 * 1000; // reclaim rows stuck 'running' longer than this
 const SEO_TIMEOUT_MS = 60_000;   // single-page SEO audit — well under the wall-clock (its own tick)
 // mention_rate is scored over the engines the audit targeted (the queue row's list).
@@ -101,21 +105,39 @@ Deno.serve(async (req) => {
       return json({ ok: true, seo: "ran" });
     }
 
-    // 1) Claim a batch of pending questions (oldest first — uses the status,created_at index).
-    const { data: pending } = await service
+    // 1) ATOMICALLY claim up to BATCH pending questions. Two steps, race-safe:
+    //    (a) read the oldest pending ids; (b) flip them pending→running in ONE UPDATE
+    //    guarded by `status='pending'`, RETURNING the rows actually updated. Postgres
+    //    row-locks each UPDATE, so if a concurrent invocation already claimed a row the
+    //    guard no longer matches and that row is NOT in our RETURNING set — every returned
+    //    row is owned by EXACTLY ONE invocation. This is the PostgREST-expressible
+    //    equivalent of SELECT … FOR UPDATE SKIP LOCKED (the JS client can't issue that
+    //    directly). `updated_at` is bumped by the BEFORE-UPDATE trigger, so the stale-
+    //    'running' reclaim keeps working.
+    const { data: candidates } = await service
       .from("ai_audit_queue")
-      .select("id, audit_id, run_id, user_id, question, engines, attempts, status")
+      .select("id")
       .eq("status", "pending")
       .order("created_at", { ascending: true })
       .limit(BATCH);
-    if (!pending || pending.length === 0) {
+    const candidateIds = (candidates ?? []).map((r: Row) => r.id);
+    if (candidateIds.length === 0) {
       // Even with nothing pending, finalise any runs left settled by a prior tick.
       const finalised = await finaliseSettledRuns(service, [], estCost);
       return json({ ok: true, processed: 0, finalised });
     }
-
-    // Mark them running so an overlapping tick can't re-grab them.
-    await service.from("ai_audit_queue").update({ status: "running" }).in("id", pending.map((r: Row) => r.id));
+    const { data: claimedRows } = await service
+      .from("ai_audit_queue")
+      .update({ status: "running" })
+      .in("id", candidateIds)
+      .eq("status", "pending") // atomic guard: only rows STILL pending are claimed + returned
+      .select("id, audit_id, run_id, user_id, question, engines, attempts, status");
+    const claimed = (claimedRows ?? []) as Row[];
+    if (claimed.length === 0) {
+      // A concurrent invocation grabbed them first — nothing to process this tick.
+      const finalised = await finaliseSettledRuns(service, [], estCost);
+      return json({ ok: true, processed: 0, finalised });
+    }
 
     // Cache audit lookups (country + business name) per audit_id.
     const auditCache = new Map<string, { businessName: string; countryCode: string; userId: string }>();
@@ -142,23 +164,44 @@ Deno.serve(async (req) => {
       return spent;
     }
     const cappedRuns = new Set<string>();
-
-    let processed = 0;
     const touchedRuns = new Set<string>();
+    for (const r of claimed) touchedRuns.add(r.run_id);
 
-    for (const row of pending as Row[]) {
-      touchedRuns.add(row.run_id);
-      const audit = await getAudit(row.audit_id);
-
-      // Per-run cost cap — never spend past CAP_USD.
-      const spent = await accumulatedCost(row.run_id);
-      if (cappedRuns.has(row.run_id) || spent + estCost > CAP_USD) {
+    // 2) Per-RUN cost gate, decided ONCE — before any concurrent call launches — so the
+    //    batch can never overshoot CAP_USD. For each run: affordable = how many more calls
+    //    the remaining budget covers = floor((CAP_USD − alreadySpent) / estCost). Launch
+    //    only the first `affordable` claimed rows of that run; mark the rest failed 'capped'
+    //    immediately (never launched). Because the launch COUNT is bounded here, ahead of
+    //    Promise.allSettled, concurrency cannot overshoot. Spend is persisted PER-ROW (via
+    //    `attempts`), so there is no shared in-memory counter to lose updates on. Two
+    //    overlapping invocations only ever hold DISJOINT rows (atomic claim above); the sole
+    //    residual is a bounded ≤ BATCH×estCost cross-invocation window — far under CAP_USD,
+    //    and it is acceptable to UNDER-spend (a skipped row is retried next tick).
+    const toLaunch: Row[] = [];
+    const perRunBudget = new Map<string, number>();
+    for (const row of claimed) {
+      let remaining = perRunBudget.get(row.run_id);
+      if (remaining === undefined) {
+        const spent = await accumulatedCost(row.run_id);
+        remaining = Math.max(0, Math.floor((CAP_USD - spent) / estCost + 1e-9));
+        perRunBudget.set(row.run_id, remaining);
+      }
+      if (remaining > 0) {
+        toLaunch.push(row);
+        perRunBudget.set(row.run_id, remaining - 1);
+      } else {
         cappedRuns.add(row.run_id);
         await service.from("ai_audit_queue")
           .update({ status: "failed", result: { error: "capped" } }).eq("id", row.id);
-        continue;
       }
+    }
 
+    // 3) Process the affordable batch CONCURRENTLY. Promise.allSettled → one question's
+    //    abort/failure NEVER rejects the batch; each row settles itself (done / daily_cap /
+    //    retry-or-fail with attempts+1), preserving the per-row timeout + 3-attempt retry.
+    //    Concurrent calls OVERLAP, so the invocation's wall-clock ≈ the slowest single call.
+    async function processRow(row: Row): Promise<boolean> {
+      const audit = await getAudit(row.audit_id);
       try {
         const outcome = await runEnrichSource({
           service,
@@ -170,13 +213,13 @@ Deno.serve(async (req) => {
           estCostUsd: estCost,
           // TWO caps apply: the runner enforces a per-USER rolling-24h ceiling
           // (DAILY_CAP_USD, so many audits in a day can't run away), and the explicit
-          // per-RUN CAP_USD check above bounds this single audit run.
+          // per-RUN CAP_USD gate above bounds this single audit run.
           capUsd: DAILY_CAP_USD,
           run: async () => {
-            // In-call retry is 429/5xx ONLY — deliberately NOT onAbort, so a single tick
-            // stays one ≤RUN_TIMEOUT_MS attempt (well under the edge wall-clock). A timeout/
-            // abort throws → the catch below bumps attempts and re-queues it as 'pending',
-            // so timeouts DO retry, just on the NEXT tick, up to MAX_ATTEMPTS.
+            // In-call retry is 429/5xx ONLY — deliberately NOT onAbort, so each row is one
+            // ≤RUN_TIMEOUT_MS attempt. A timeout/abort throws → the catch below bumps attempts
+            // and re-queues it as 'pending', so timeouts DO retry on the NEXT tick, up to
+            // MAX_ATTEMPTS. One question's abort does not affect its concurrent siblings.
             const { items } = await runAiSearch(String(row.question), audit.countryCode, {
               token: apifyToken,
               timeoutMs: RUN_TIMEOUT_MS,
@@ -187,17 +230,16 @@ Deno.serve(async (req) => {
         });
 
         // Runner hit the per-user rolling-24h ceiling → treat like a cap, not an error:
-        // stop this run, drop its remaining rows below. No spend happened.
+        // stop this run, drop its remaining rows on finalisation. No spend happened.
         if (outcome.capReached) {
           cappedRuns.add(row.run_id);
           await service.from("ai_audit_queue")
             .update({ status: "failed", result: { error: "daily_cap" } }).eq("id", row.id);
-          continue;
+          return false;
         }
         if (!outcome.result) throw new Error("empty_actor_result");
         await service.from("ai_audit_queue").update({ status: "done", result: outcome.result }).eq("id", row.id);
-        runCost.set(row.run_id, spent + (outcome.costUsd || estCost));
-        processed++;
+        return true;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         const attempts = (Number(row.attempts) || 0) + 1;
@@ -207,13 +249,16 @@ Deno.serve(async (req) => {
         // is overwritten by the real result if a later attempt succeeds.
         await service.from("ai_audit_queue")
           .update({ status: failed ? "failed" : "pending", attempts, result: { error: msg } }).eq("id", row.id);
-        // A retry consumed a run too → count it toward the cap.
-        runCost.set(row.run_id, spent + estCost);
         console.error(`[process-ai-audit-queue] question failed (attempt ${attempts}${failed ? ", giving up" : ""}):`, msg);
+        return false;
       }
     }
 
-    // 2) Finalise runs that are now fully settled (all rows done/failed) or capped.
+    // allSettled (not all) → a rejected/aborted row can't take the batch down with it.
+    const settled = await Promise.allSettled(toLaunch.map((row) => processRow(row)));
+    const processed = settled.filter((s) => s.status === "fulfilled" && s.value === true).length;
+
+    // 4) Finalise runs that are now fully settled (all rows done/failed) or capped.
     const finalised = await finaliseSettledRuns(service, [...touchedRuns], estCost, cappedRuns);
 
     return json({ ok: true, processed, finalised, capped: [...cappedRuns] });
