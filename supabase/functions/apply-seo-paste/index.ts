@@ -160,7 +160,8 @@ Each finding: a short punchy "title", a one-line "detail", and severity "high" |
 
 ════════ CALIBRATION ANCHOR ════════
 For a firm like ABLM Associates with equivalent signals, the correct output is:
-  overall C; onPage ~D (score ~38); localPresence ~F (score ~8); contentTechnical ~B (score ~76);
+  overall F; onPage F (score ~38 — below the 40 threshold, so F); localPresence F (score ~8);
+  contentTechnical B (score ~76);
   findings such as:
     - high  "AI can't read your site" — only ~1% loads without scripts, and there's no identity schema
     - high  "You're placed nowhere" — no address/phone or business schema, and you're not on directories
