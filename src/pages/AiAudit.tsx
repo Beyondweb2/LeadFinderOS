@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
-  Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download,
+  Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
@@ -562,6 +562,16 @@ const AiAudit = () => {
   const [playbooks, setPlaybooks] = usePersistedState<Record<string, PlaybookData>>(
     'ai-audit-playbooks', {}, { tier: 'local', scope: user?.id ?? null, version: 1 },
   );
+
+  // Detailed per-question results are collapsed by default — the opened audit reads as a
+  // command centre, not a raw dump. Toggled open on demand.
+  const [showDetails, setShowDetails] = useState(false);
+  // The run whose opened-audit view we're on. Persisted (per-tab) so navigating away to the
+  // report/playbook sub-views — or off the page entirely — and back returns to THIS audit
+  // instead of resetting to the list. Cleared by "New audit" and "Back" (to the list).
+  const [openRunId, setOpenRunId] = usePersistedState<string | null>(
+    'ai-audit-open-run', null, { tier: 'session', scope: user?.id ?? null, version: 1 },
+  );
   // Delivery-checklist tick state, keyed runId → { itemKey: boolean }. Persisted locally
   // (survives refresh/navigation); no DB migration needed.
   const [checklist, setChecklist] = usePersistedState<Record<string, Record<string, boolean>>>(
@@ -664,6 +674,38 @@ const AiAudit = () => {
     return (q ?? []) as QueueRow[];
   }, []);
 
+  // Restore an opened audit by run id after a remount (route change / refresh) so the user
+  // returns to the audit they were on, not the list. Fetches the run + its audit, restores
+  // the results state, and lets the poll effect refill the queue rows. Returns false if the
+  // run/audit no longer exists (so the caller can clear the stale pointer).
+  const rehydrateOpenRun = useCallback(async (rid: string): Promise<boolean> => {
+    const { data: latest } = await supabase
+      .from('ai_audit_runs')
+      .select('id, audit_id, run_number, status, mention_rate, results')
+      .eq('id', rid)
+      .maybeSingle();
+    if (!latest) return false;
+    const { data: audit } = await supabase
+      .from('ai_audits')
+      .select('id, business_name, business_type, location_text, has_website, website')
+      .eq('id', (latest as RunRow).audit_id)
+      .maybeSingle();
+    if (!audit) return false;
+    setAuditId(audit.id);
+    setResultsBusinessName(audit.business_name);
+    setResultsHasWebsite(audit.has_website === true);
+    setBusinessType(audit.business_type ?? '');
+    setLocationText(audit.location_text ?? '');
+    setRun(latest as RunRow);
+    setRunId((latest as RunRow).id);
+    const serverPb = (latest as { results?: { playbook?: unknown } } | null)?.results?.playbook;
+    if (serverPb && typeof serverPb === 'object') {
+      setPlaybooks((prev) => (prev[rid] ? prev : { ...prev, [rid]: serverPb as PlaybookData }));
+    }
+    setStep('results');
+    return true;
+  }, [setPlaybooks]);
+
   // ── Poll the active run while it drains ─────────────────────────────────────
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRun = useCallback(async (rid: string) => {
@@ -697,11 +739,23 @@ const AiAudit = () => {
     return () => { stop = true; if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   }, [step, runId, pollRun, loadSaved]);
 
+  // On mount, if a previously-opened audit was persisted (page was left and returned to),
+  // restore it so the user lands back on that audit rather than the list. Runs once; skipped
+  // if a session is already active. A stale pointer (deleted run) clears itself.
+  const rehydratedRef = useRef(false);
+  useEffect(() => {
+    if (!user || rehydratedRef.current) return;
+    if (!openRunId || runId || step === 'results') return;
+    rehydratedRef.current = true;
+    rehydrateOpenRun(openRunId).then((ok) => { if (!ok) setOpenRunId(null); });
+  }, [user, openRunId, runId, step, rehydrateOpenRun, setOpenRunId]);
+
   const resetWizard = () => {
     setMode(null); setLeadId(null); setBusinessName(''); setBusinessType('');
     setLocationText(''); setCountry(''); setHasWebsite(null); setWebsite(''); setSpecialisms('');
     setQuestions([]); setUnitCost(0); setEngineCount(SCORED_ENGINES.length);
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
+    setOpenRunId(null); setShowDetails(false);
     setRevealed(0); setStep('source');
   };
 
@@ -772,6 +826,7 @@ const AiAudit = () => {
       clearWizard(); // audit created successfully → next visit starts clean
       setAuditId(data.audit_id);
       setRunId(data.run_id);
+      setOpenRunId(data.run_id);
       setResultsBusinessName(data.business_name ?? businessName);
       setResultsHasWebsite(hasWebsite === true);
       setRun(null); setQueueRows([]);
@@ -792,6 +847,7 @@ const AiAudit = () => {
       const { data, error } = await supabase.functions.invoke('create-ai-audit', { body: { audit_id: auditId } });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 're-run failed');
       setRunId(data.run_id);
+      setOpenRunId(data.run_id);
       setRun(null); setQueueRows([]);
     } catch (e) {
       toast({ title: "Couldn't re-run", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
@@ -816,6 +872,7 @@ const AiAudit = () => {
     setLocationText(audit.location_text ?? ''); // so the competitor filter can drop the location for reopened audits
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
+    setOpenRunId((latest as RunRow).id);
     setSeoPasteOpen(false); setSeoPasteText('');
     // Hydrate the local playbook cache from the server so the opened-audit + row playbook
     // buttons and the delivery checklist reflect a playbook made on any device.
@@ -992,6 +1049,16 @@ const AiAudit = () => {
 
   // Does this run already have a graded SEO block? Drives the button label + panel copy.
   const hasSeo = isRenderableSeo((run?.results as { seo?: unknown } | null)?.seo);
+
+  // Opened-audit header tiles. AI visibility = named datapoints (folded summary, else live
+  // tally); SEO = the graded overall letter. Same sources the headline/report already use —
+  // no new metric invented.
+  const vizSummary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number } } | null)?.summary;
+  const vizNamed = vizSummary?.named_datapoints ?? liveTally.named;
+  const vizTotal = vizSummary?.total_datapoints ?? liveTally.total;
+  const vizPct = vizTotal > 0 ? Math.round((vizNamed / vizTotal) * 100) : 0;
+  const vizTone: TileTone = vizTotal === 0 ? 'muted' : vizPct >= 50 ? 'green' : vizPct > 0 ? 'amber' : 'red';
+  const seoGrade = hasSeo ? String((run?.results as { seo?: { overallGrade?: string } } | null)?.seo?.overallGrade ?? '') : '';
 
   // Submit pasted SEO text → apply-seo-paste (AI extract + grade) → store at results.seo.
   // On success: refresh the run so results.seo is live, and INVALIDATE this run's cached
@@ -1332,15 +1399,15 @@ const AiAudit = () => {
 
       {step === 'results' && (
         <div className="space-y-4">
-          {/* Scorecard */}
+          {/* ── Command-centre header: business + two score tiles + actions ── */}
           <Card>
             <CardContent className="p-4 sm:p-5 space-y-4">
-              {/* Back + actions */}
-              <div className="flex items-center justify-between gap-2">
-                <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setStep('source')}>
-                  <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
+              {/* Top bar: back to the list + tidy action buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Button variant="ghost" size="sm" className="-ml-2" onClick={() => { setStep('source'); setOpenRunId(null); }}>
+                  <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to audits
                 </Button>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {/* SEO paste — website audits only. Toggles the paste panel below. */}
                   {!isDraining && resultsHasWebsite && (
                     <Button variant="outline" size="sm" onClick={() => setSeoPasteOpen((o) => !o)}>
@@ -1352,11 +1419,10 @@ const AiAudit = () => {
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
                     </Button>
                   )}
-                  {/* Delivery playbook — available on ANY completed audit */}
-                  {!isDraining && liveTally.done > 0 && (
-                    <Button variant="outline" size="sm" onClick={() => generatePlaybook(false)} disabled={playbookGenerating}>
-                      {playbookGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapIcon className="mr-2 h-4 w-4" />}
-                      {playbookGenerating ? 'Generating…' : (runId && playbooks[runId] ? 'View playbook' : 'Generate playbook')}
+                  {/* View playbook — only when one exists; generation lives in the checklist below. */}
+                  {!isDraining && liveTally.done > 0 && runId && playbooks[runId] && (
+                    <Button variant="outline" size="sm" onClick={() => generatePlaybook(false)}>
+                      <MapIcon className="mr-2 h-4 w-4" /> View playbook
                     </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={resetWizard}>New audit</Button>
@@ -1366,6 +1432,41 @@ const AiAudit = () => {
                   </Button>
                 </div>
               </div>
+
+              {/* Business name — large + bold */}
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight leading-tight">{resultsBusinessName || 'Audit'}</h2>
+                {(businessType || locationText) && (
+                  <div className="mt-0.5 text-sm text-muted-foreground">{[businessType, locationText].filter(Boolean).join(' · ')}</div>
+                )}
+              </div>
+
+              {/* While draining: progress. Once complete: two score tiles side-by-side. */}
+              {isDraining ? (
+                <div className="space-y-1.5">
+                  <Progress value={queueRows.length ? (doneCount / queueRows.length) * 100 : 0} />
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running searches… {doneCount}/{queueRows.length || '…'}
+                    {run?.status === 'capped' && <span className="text-amber-500">· cost cap reached</span>}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <ScoreTile
+                    label="AI Visibility"
+                    value={vizTotal > 0 ? `${vizNamed}/${vizTotal}` : '—'}
+                    sub={vizTotal > 0 ? `${vizPct}% of AI answers name them` : 'No searches completed'}
+                    tone={vizTone}
+                  />
+                  {hasSeo ? (
+                    <ScoreTile label="SEO grade" value={seoGrade || '—'} sub="Website SEO health" tone={gradeTone(seoGrade)} />
+                  ) : resultsHasWebsite ? (
+                    <ScoreTile label="SEO grade" value="Add data" sub="Paste an SEO report to grade it" tone="muted" onClick={() => setSeoPasteOpen(true)} />
+                  ) : (
+                    <ScoreTile label="SEO grade" value="N/A" sub="No website for this business" tone="muted" />
+                  )}
+                </div>
+              )}
 
               {/* SEO paste panel — paste a SEOptimer report; AI extracts + grades it. */}
               {seoPasteOpen && resultsHasWebsite && (
@@ -1391,49 +1492,34 @@ const AiAudit = () => {
                 </div>
               )}
 
-              {/* Headline */}
-              <div>
-                <div className="text-sm text-muted-foreground">{resultsBusinessName}</div>
-                <ResultsHeadline run={run} live={liveTally} draining={isDraining} />
-              </div>
-
-              {/* Progress while draining */}
-              {isDraining && (
-                <div className="space-y-1.5">
-                  <Progress value={queueRows.length ? (doneCount / queueRows.length) * 100 : 0} />
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running searches… {doneCount}/{queueRows.length || '…'}
-                    {run?.status === 'capped' && <span className="text-amber-500">· cost cap reached</span>}
-                  </div>
-                </div>
-              )}
-
-              {/* Per-engine breakdown — named vs not, as a tick/cross + simple bar */}
-              {!isDraining && liveTally.done > 0 && (
-                <div className="space-y-2 pt-1">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Where AI named them</div>
-                  {perEngineScore.filter((pe) => pe.total > 0).map((pe) => (
-                    <div key={pe.engine} className="flex items-center gap-3">
-                      <span className="w-24 shrink-0 text-xs font-medium">{ENGINE_LABELS[pe.engine] ?? pe.engine}</span>
-                      {pe.named > 0
-                        ? <Check className="h-4 w-4 shrink-0 text-[hsl(var(--badge-interested))]" />
-                        : <X className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                      <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                        <div className="h-full rounded-full bg-[hsl(var(--badge-interested))]" style={{ width: `${Math.round((pe.named / pe.total) * 100)}%` }} />
-                      </div>
-                      <span className="w-16 shrink-0 text-right text-[11px] text-muted-foreground">{pe.named}/{pe.total}</span>
+              {/* At-a-glance signals: where AI named them + who it names instead. */}
+              {!isDraining && liveTally.done > 0 && (perEngineScore.some((pe) => pe.total > 0) || topCompetitors.length > 0) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1">
+                  {perEngineScore.some((pe) => pe.total > 0) && (
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Where AI named them</div>
+                      {perEngineScore.filter((pe) => pe.total > 0).map((pe) => (
+                        <div key={pe.engine} className="flex items-center gap-3">
+                          <span className="w-24 shrink-0 text-xs font-medium">{ENGINE_LABELS[pe.engine] ?? pe.engine}</span>
+                          {pe.named > 0
+                            ? <Check className="h-4 w-4 shrink-0 text-[hsl(var(--badge-interested))]" />
+                            : <X className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-[hsl(var(--badge-interested))]" style={{ width: `${Math.round((pe.named / pe.total) * 100)}%` }} />
+                          </div>
+                          <span className="w-16 shrink-0 text-right text-[11px] text-muted-foreground">{pe.named}/{pe.total}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Competitor callout */}
-              {!isDraining && topCompetitors.length > 0 && (
-                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
-                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">AI names these instead</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {topCompetitors.map((c) => <Badge key={c} variant="secondary">{c}</Badge>)}
-                  </div>
+                  )}
+                  {topCompetitors.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">AI names these instead</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {topCompetitors.map((c) => <Badge key={c} variant="secondary">{c}</Badge>)}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -1455,13 +1541,28 @@ const AiAudit = () => {
             />
           )}
 
-          {/* Per-question results */}
+          {/* Detailed per-question results — collapsed by default behind one toggle. */}
+          {!isDraining && queueRows.length > 0 && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowDetails((s) => !s)}
+                className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+              >
+                <span className="text-sm font-semibold">
+                  Detailed results
+                  <span className="ml-1.5 font-normal text-muted-foreground">· {queueRows.length} {queueRows.length === 1 ? 'question' : 'questions'}</span>
+                </span>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showDetails ? 'rotate-180' : ''}`} />
+              </button>
+              {showDetails && queueRows.map((row) => (
+                <QuestionCard key={row.id} row={row} businessName={resultsBusinessName} />
+              ))}
+            </div>
+          )}
           {queueRows.length === 0 && !isDraining && (
             <p className="text-sm text-muted-foreground">No results yet.</p>
           )}
-          {queueRows.map((row) => (
-            <QuestionCard key={row.id} row={row} businessName={resultsBusinessName} />
-          ))}
         </div>
       )}
     </div>
@@ -1492,11 +1593,15 @@ function DeliveryChecklist({ playbook, hasWebsite, hasSeo, state, onToggle, onGe
 
   const stages: ChecklistStage[] = [{ id: 'setup', label: 'Setup', sub: 'Baseline captured', items: setupItems }];
   (playbook?.weeks ?? []).forEach((w, wi) => {
+    // "Week 0" is the baseline window — the work it lists (audit run, SEO captured) is already
+    // done by the time the audit exists, so its items default to ticked. Later weeks stay
+    // manual. Explicit un-ticks are still honoured (state[key] wins over autoDone).
+    const isBaseline = /week\s*0\b/i.test(w.window ?? '');
     stages.push({
       id: `wk${wi}`,
       label: w.window,
       sub: w.goal,
-      items: (w.internalActions ?? []).map((a, ai) => ({ key: `wk${wi}:${ai}`, text: a.action })),
+      items: (w.internalActions ?? []).map((a, ai) => ({ key: `wk${wi}:${ai}`, text: a.action, autoDone: isBaseline })),
     });
   });
 
@@ -1636,6 +1741,38 @@ function MetricCard({ icon, label, value, tone }: { icon: React.ReactNode; label
     </div>
   );
 }
+// A single score tile for the opened-audit header. Colour-toned by outcome; optionally
+// clickable (used for the "Add SEO data" empty state).
+type TileTone = 'green' | 'amber' | 'red' | 'muted';
+const TILE_TONE: Record<TileTone, string> = {
+  green: 'border-[hsl(var(--badge-closed))]/30 bg-[hsl(var(--badge-closed))]/10 text-[hsl(var(--badge-closed))]',
+  amber: 'border-[hsl(var(--badge-waiting))]/30 bg-[hsl(var(--badge-waiting))]/10 text-[hsl(var(--badge-waiting))]',
+  red: 'border-[hsl(var(--badge-not-interested))]/30 bg-[hsl(var(--badge-not-interested))]/10 text-[hsl(var(--badge-not-interested))]',
+  muted: 'border-border bg-muted/40 text-muted-foreground',
+};
+function ScoreTile({ label, value, sub, tone, onClick }: {
+  label: string; value: string; sub?: string; tone: TileTone; onClick?: () => void;
+}) {
+  const cls = `rounded-lg border p-3.5 ${TILE_TONE[tone]} ${onClick ? 'text-left w-full transition-colors hover:bg-muted/60 cursor-pointer' : ''}`;
+  const body = (
+    <>
+      <div className="text-[11px] font-semibold uppercase tracking-wider opacity-80">{label}</div>
+      <div className="mt-1 text-2xl font-bold tabular-nums leading-none">{value}</div>
+      {sub && <div className="mt-1.5 text-xs opacity-80">{sub}</div>}
+    </>
+  );
+  return onClick ? <button type="button" onClick={onClick} className={cls}>{body}</button> : <div className={cls}>{body}</div>;
+}
+
+// Grade → tone for the SEO tile. A/B are strong, C is middling, D/E/F are weak.
+function gradeTone(grade: string): TileTone {
+  const g = (grade || '').trim().charAt(0).toUpperCase();
+  if (g === 'A' || g === 'B') return 'green';
+  if (g === 'C') return 'amber';
+  if (g === 'D' || g === 'E' || g === 'F') return 'red';
+  return 'muted';
+}
+
 function ResultsHeadline({ run, live, draining }: { run: RunRow | null; live: { named: number; total: number; failed: number; done: number }; draining: boolean }) {
   // Prefer the folded summary once complete; otherwise the live tally as it drains.
   const summary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number; failed_questions?: number; done_questions?: number } } | null)?.summary;
