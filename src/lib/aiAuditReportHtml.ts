@@ -231,11 +231,12 @@ export function renderReportHtml(d: AiAuditReportData): string {
     </section>`;
   }
 
-  // ── Proof: one COMPACT chip per engine (named/not-named + count). Tight horizontal row —
-  //    still reads as before/after re-run proof, far less vertical space.
+  // ── Proof: ONE quiet single-line strip — each engine with a small state marker
+  //    (red ✕ when named by none, green ✓ when named) + a tiny count. Understated, no
+  //    boxes. Still per-engine before/after proof for the re-run.
   const engineCards = d.perEngine.map((pe) => {
     const hit = pe.named > 0;
-    return `<span class="eng-chip ${hit ? "hit" : "zero"}"><span class="eng-name">${esc(pe.label)}</span><span class="eng-mark ${hit ? "yes" : "no"}">${hit ? "✓" : "✕"}</span><span class="eng-cnt">${pe.named}/${pe.total}</span></span>`;
+    return `<span class="eng"><span class="eng-mark ${hit ? "yes" : "no"}">${hit ? "✓" : "✕"}</span><span class="eng-name">${esc(pe.label)}</span><span class="eng-cnt">${pe.named}/${pe.total}</span></span>`;
   }).join("");
 
   const shareFoot = d.shareUrl ? ` · <a href="${esc(d.shareUrl)}">View online</a>` : "";
@@ -287,8 +288,9 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .hero-num{ display:flex; align-items:center; gap:18px; flex:0 0 auto; }
   .num{ font-size:104px; line-height:.82; font-weight:900; letter-spacing:-.04em; }
   .num.crit,.num.low{ color:var(--red); } .num.mid{ color:var(--amber); } .num.high{ color:var(--green); }
+  .num-cap{ max-width:24ch; }
   .num-cap .l1{ font-size:22px; font-weight:850; color:var(--ink); line-height:1.1; }
-  .num-cap .l2{ font-size:14px; color:var(--muted); max-width:20ch; margin-top:3px; }
+  .num-cap .l2{ font-size:14px; color:var(--muted); margin-top:3px; }
   .hero-rule{ width:1px; background:var(--line); align-self:stretch; }
   .hero-verdict{ flex:1; display:flex; flex-direction:column; justify-content:center; }
   .hero-verdict .vk{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin-bottom:8px; }
@@ -309,7 +311,9 @@ export function renderReportHtml(d: AiAuditReportData): string {
   /* Consistent phase header: tiny eyebrow + human-readable title (pain → stakes → solution) */
   .sec-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 4px; }
   .sec-title{ font-size:22px; line-height:1.15; letter-spacing:-.01em; font-weight:850; color:var(--ink); margin:0 0 16px; }
-  .dowe .sec-title{ font-size:26px; }
+  /* Solution = THE standout moment: brand-blue headline, bigger + heavier than any other title */
+  .dowe .sec-eyebrow{ color:var(--blue); }
+  .dowe .sec-title{ font-size:33px; font-weight:900; color:var(--blue); margin:0 0 18px; }
   .stats{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }
   .stat{ display:flex; align-items:flex-start; gap:14px; }
   .stat .big{ font-size:46px; line-height:.9; font-weight:900; letter-spacing:-.03em; color:var(--blue); }
@@ -319,10 +323,11 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .why-frame .hl{ color:var(--blue); }
   .src{ margin-top:6px; font-size:11px; color:var(--faint); }
 
-  /* WHAT WE DO — the solution reveal: a premium 3-step process panel (the valuable part) */
-  .dowe{ padding:26px 40px 30px; border-top:1px solid var(--line); }
+  /* WHAT WE DO — the solution reveal (the money section): a tinted full-width band with a
+     heavy brand-blue top rule so it visibly BREAKS from the section above; white card inside. */
+  .dowe{ padding:30px 40px 34px; border-top:3px solid var(--blue); background:var(--page); }
   .dowe h2{ margin-bottom:14px; }
-  .dowe-panel{ background:var(--page); border:1px solid var(--line); border-radius:16px; padding:24px 26px 26px; }
+  .dowe-panel{ background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:24px 26px 26px; box-shadow:0 4px 24px rgba(15,23,42,.06); }
   .dowe-lead{ font-size:17px; font-weight:800; color:var(--ink); margin:0 0 22px; max-width:60ch; }
   .dowe-lead .hl{ color:var(--blue); }
   .steps{ position:relative; display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
@@ -335,23 +340,18 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .step .ic svg{ width:25px; height:25px; }
   .badge{ position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%;
     background:var(--blue); color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;
-    box-shadow:0 0 0 3px var(--page); }
+    box-shadow:0 0 0 3px var(--paper); }
   .step-n{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; }
   .st{ font-size:16px; font-weight:850; color:var(--ink); margin:2px 0 5px; }
   .step p{ margin:0; font-size:13px; line-height:1.45; color:var(--muted); }
 
-  /* PROOF — "Where AI named you": ONE compact chip row (per-engine named/not-named + count) */
+  /* PROOF — "Where AI named you": ONE quiet single-line strip (per-engine ✓/✕ + count) */
   .results{ padding:24px 40px 26px; border-top:1px solid var(--line); }
-  .eng-row{ display:flex; flex-wrap:wrap; gap:8px; }
-  .eng-chip{ display:inline-flex; align-items:center; gap:8px; padding:7px 12px; border:1px solid var(--line);
-    border-left:4px solid var(--faint); border-radius:10px; background:#fff; }
-  .eng-chip.zero{ border-left-color:var(--red); background:#fff7f7; }
-  .eng-chip.hit{ border-left-color:var(--green); background:#f4fdf8; }
-  .eng-name{ font-size:13px; font-weight:800; color:var(--ink); }
-  .eng-mark{ font-size:15px; font-weight:900; line-height:1; } .eng-mark.no{ color:var(--red); } .eng-mark.yes{ color:var(--green); }
-  .eng-cnt{ font-size:12px; font-weight:800; color:var(--muted); font-variant-numeric:tabular-nums; }
-  .res-note{ margin-top:14px; font-size:13px; line-height:1.5; color:var(--muted); max-width:70ch; }
-  .res-note b{ color:var(--ink); font-weight:800; }
+  .eng-row{ display:flex; flex-wrap:wrap; align-items:center; gap:10px 22px; }
+  .eng{ display:inline-flex; align-items:center; gap:7px; }
+  .eng-mark{ font-size:14px; font-weight:900; line-height:1; } .eng-mark.no{ color:var(--red); } .eng-mark.yes{ color:var(--green); }
+  .eng-name{ font-size:14px; font-weight:700; color:var(--ink); }
+  .eng-cnt{ font-size:12px; font-weight:700; color:var(--faint); font-variant-numeric:tabular-nums; }
 
   /* WEBSITE SEO — grade circles + radar + findings (all inline SVG, no chart lib) */
   .seo{ padding:24px 40px 26px; border-top:1px solid var(--line); }
@@ -379,6 +379,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .cta h3{ margin:0 0 8px; font-size:24px; font-weight:850; color:#fff; letter-spacing:-.01em; }
   .cta h3 .y{ color:var(--yellow); }
   .cta p{ margin:0 0 6px; font-size:14px; color:#c7d3ea; max-width:60ch; }
+  .cta p b{ color:#fff; }
   .cta .close{ margin-top:10px; font-size:15px; font-weight:800; color:#fff; }
 
   /* FOOTER — a distinct darker navy bar so the text is clearly readable (no blue-on-blue) */
@@ -417,8 +418,8 @@ export function renderReportHtml(d: AiAuditReportData): string {
       <div class="hero-num">
         <span class="num ${v.band}">${d.named}</span>
         <div class="num-cap">
-          <div class="l1">times you showed up</div>
-          <div class="l2">out of ${d.total} answers, when customers asked AI</div>
+          <div class="l1">times ${esc(d.businessName)} showed up in AI search</div>
+          <div class="l2">out of ${d.total} answers</div>
         </div>
       </div>
       <div class="hero-rule"></div>
@@ -433,7 +434,6 @@ ${gutbox}
       <div class="sec-eyebrow">The evidence</div>
       <div class="sec-title">Where AI named you</div>
       <div class="eng-row">${engineCards}</div>
-      <div class="res-note"><b>This is your starting point.</b> We re-run this exact audit after the fixes so you see the before &amp; after side by side — businesses we work with typically go from invisible to named across most engines.</div>
     </section>
 
     <!-- ============================================================================
@@ -493,7 +493,7 @@ ${seoSection(d.seo)}
     <!-- CTA -->
     <section class="cta">
       <h3>Ready to get <span class="y">found</span>?</h3>
-      <p>We fix what AI says about you — then re-run this exact audit so you can see the before/after in black and white.</p>
+      <p><b>This is your starting point.</b> We fix what AI says about you — then re-run this exact audit so you see the before &amp; after in black and white.</p>
       <div class="close">Let’s get ${esc(d.businessName)} named when your customers ask.</div>
     </section>
 
