@@ -299,48 +299,6 @@ function isRealCompetitor(name: string, locationText: string): boolean {
   return true;
 }
 
-/** Candidate business names from an engine's answer_text — mirrors the fixed edge
- *  extractTextNames (_shared/enrichment/ai-search.ts): capitalised 1–4 word runs, split on
- *  the sentence/element "." boundary so a real firm fused to trailing furniture survives. */
-function extractNamesFromAnswer(text: string): string[] {
-  const matches = (text || '').match(/[A-Z][\wÀ-ÿ&'’.]+(?:\s+[A-Z][\wÀ-ÿ&'’.]+){0,3}/g) ?? [];
-  const out: string[] = [];
-  for (const m of matches) {
-    for (const part of m.split(/\.\s+/)) {
-      const s = part.replace(/\.$/, '').trim();
-      if (s.length >= 3) out.push(s);
-    }
-  }
-  return out;
-}
-
-/** Re-derive an engine's competitor list from its STORED answer_text (no scrape), unioned
- *  with its existing competitors so google_organic's title-derived rivals survive re-cleaning.
- *  Everything is run through isRealCompetitor (furniture/franken + stopword/tax cleaning) and
- *  the audited business is excluded. Returns a fresh EngineMap; leaves non-object entries as-is. */
-function reextractEngineCompetitors(result: EngineMap | null, locationText: string, businessName: string): EngineMap | null {
-  if (!result || typeof result !== 'object') return result;
-  const self = businessName.trim().toLowerCase();
-  const out: EngineMap = {};
-  for (const [engine, er] of Object.entries(result)) {
-    if (!er || typeof er !== 'object') { out[engine] = er; continue; }
-    const candidates = [...extractNamesFromAnswer(er.answer_text || ''), ...(Array.isArray(er.competitors) ? er.competitors : [])];
-    const seen = new Set<string>();
-    const clean: string[] = [];
-    for (const c of candidates) {
-      const name = (c || '').trim();
-      if (!name || !isRealCompetitor(name, locationText)) continue;
-      const k = name.toLowerCase();
-      if (seen.has(k)) continue;
-      if (self && (k === self || k.includes(self) || self.includes(k))) continue; // drop self-mentions
-      seen.add(k);
-      clean.push(name);
-    }
-    out[engine] = { ...er, competitors: clean };
-  }
-  return out;
-}
-
 /** Trim to a sentence boundary near `max` chars (avoid cutting mid-word). */
 function trimToSentence(text: string, max: number): string {
   const t = text.trim();
@@ -938,45 +896,28 @@ const AiAudit = () => {
     }
   };
 
-  // Re-extract competitors for THIS run from its already-stored answer text — FREE / instant,
-  // NO Apify re-scrape. Re-runs the fixed extraction (isRealCompetitor incl. furniture/franken
-  // reject) over stored answer_text per engine, rewrites the competitors in BOTH stores
+  // Re-extract competitors for THIS run from its already-stored answer text — FREE-ish /
+  // instant, NO Apify re-scrape. Calls the extract-competitors edge fn, which has an AI read
+  // each engine's stored answer_text and return the real competitor firms it recommended (the
+  // way a human would), then writes the cleaned competitors back to BOTH stores
   // (ai_audit_queue rows that drive the report/display + the run.results.questions snapshot the
-  // playbook reads), refreshes in-memory state, and drops the cached report snapshot so the
-  // report + "AI names these instead" rebuild clean on view/Regenerate.
+  // playbook reads). We then reload from those stores and drop the cached report snapshot so
+  // the report + "AI names these instead" rebuild clean on view/Regenerate. isRealCompetitor
+  // still filters at display as a light final backstop.
   const reextractCompetitors = async () => {
     if (!runId || reextracting) return;
     setReextracting(true);
     try {
-      const loc = locationText || '';
-      const bn = resultsBusinessName || businessName || '';
+      const { data, error } = await supabase.functions.invoke('extract-competitors', { body: { runId } });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'extraction failed');
+      // Refresh in-memory state from the updated stores.
       const rows = await loadRunRows(runId);
-      // Rewrite each done row's stored competitors in ai_audit_queue.
-      const updatedRows: QueueRow[] = [];
-      for (const r of rows) {
-        const newResult = reextractEngineCompetitors(r.result, loc, bn);
-        updatedRows.push({ ...r, result: newResult });
-        if (r.status === 'done' && r.result) {
-          const { error } = await supabase.from('ai_audit_queue').update({ result: newResult }).eq('id', r.id);
-          if (error) throw new Error(error.message);
-        }
-      }
-      setQueueRows(updatedRows);
-      // Rewrite the folded snapshot on the run (results.questions[].engines) too.
+      setQueueRows(rows);
       const { data: fresh } = await supabase.from('ai_audit_runs').select('results').eq('id', runId).maybeSingle();
-      const cur = fresh?.results && typeof fresh.results === 'object' ? fresh.results as Record<string, unknown> : {};
-      const q: unknown[] = Array.isArray((cur as { questions?: unknown }).questions) ? (cur as { questions: unknown[] }).questions : [];
-      const newQuestions = q.map((qq) => ({
-        ...(qq as Record<string, unknown>),
-        engines: reextractEngineCompetitors(((qq as { engines?: EngineMap | null })?.engines ?? null), loc, bn),
-      }));
-      const newResults = { ...cur, questions: newQuestions };
-      const { error: upErr } = await supabase.from('ai_audit_runs').update({ results: newResults }).eq('id', runId);
-      if (upErr) throw new Error(upErr.message);
-      setRun((prev) => (prev ? { ...prev, results: newResults } : prev));
+      if (fresh?.results) setRun((prev) => (prev ? { ...prev, results: fresh.results } : prev));
       // Invalidate the cached report snapshot so it rebuilds from the cleaned rows.
       setReports((prev) => { const n = { ...prev }; delete n[runId]; return n; });
-      toast({ title: 'Competitors re-extracted', description: 'Recomputed from the stored answers — no new search run.' });
+      toast({ title: 'Competitors re-extracted', description: 'AI re-read the stored answers — no new search run.' });
     } catch (e) {
       toast({ title: "Couldn't re-extract competitors", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
     } finally {
