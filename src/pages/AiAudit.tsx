@@ -519,6 +519,7 @@ const AiAudit = () => {
   const [seoPasteOpen, setSeoPasteOpen] = useState(false);
   const [seoPasteText, setSeoPasteText] = useState('');
   const [seoApplying, setSeoApplying] = useState(false);
+  const [regenerating, setRegenerating] = useState(false); // Regenerate-button loading state
   // Which run's report is currently open (null = not viewing a report). Replaces the old
   // boolean so we can open a SPECIFIC run's persisted report snapshot.
   const [reportRunId, setReportRunId] = useState<string | null>(null);
@@ -873,7 +874,9 @@ const AiAudit = () => {
   const openReportData = rawOpenReportData && rawOpenReportData.seo && !isRenderableSeo(rawOpenReportData.seo)
     ? { ...rawOpenReportData, seo: undefined }
     : rawOpenReportData;
-  const canRegenerate = !!reportRunId && reportRunId === runId && !!liveReportData;
+  // Regenerate is available whenever the current run's report is open. It re-fetches live
+  // data itself, so it doesn't depend on liveReportData already being in state.
+  const canRegenerate = !!reportRunId && reportRunId === runId;
 
   // Snapshot the current run's live report and open it (used by the results screen). If a
   // snapshot already exists it is kept — opening never silently rebuilds it.
@@ -882,9 +885,34 @@ const AiAudit = () => {
     if (!reports[runId] && liveReportData) setReports((prev) => ({ ...prev, [runId]: liveReportData }));
     setReportRunId(runId);
   };
-  const regenerateReport = () => {
-    if (!reportRunId || !liveReportData) return;
-    setReports((prev) => ({ ...prev, [reportRunId]: liveReportData }));
+  // Rebuild the open report from the LATEST run data: re-fetch the run + its rows, rebuild
+  // via buildReportData, overwrite the persisted snapshot, and surface feedback. (The old
+  // version just re-stored the identical in-memory snapshot with no refresh and no feedback,
+  // so clicking it did nothing visible.)
+  const regenerateReport = async () => {
+    if (!reportRunId || regenerating) return;
+    const rid = reportRunId;
+    setRegenerating(true);
+    try {
+      const freshRun = await pollRun(rid);          // refresh run + queueRows state, returns the run
+      const rows = await loadRunRows(rid);          // authoritative rows to rebuild from
+      const data = buildReportData(rows, freshRun ?? run, {
+        businessName: resultsBusinessName || businessName,
+        businessType,
+        locationText,
+        specialisms,
+      });
+      if (!data) {
+        toast({ title: 'Nothing to rebuild yet', description: 'This run has no completed results.', variant: 'destructive' });
+        return;
+      }
+      setReports((prev) => ({ ...prev, [rid]: data }));
+      toast({ title: 'Report regenerated', description: 'Rebuilt from the latest run data.' });
+    } catch (e) {
+      toast({ title: "Couldn't regenerate", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setRegenerating(false);
+    }
   };
 
   // Does this run already have a graded SEO block? Drives the button label + panel copy.
@@ -924,6 +952,7 @@ const AiAudit = () => {
         onBack={() => setReportRunId(null)}
         onDownload={() => downloadReportHtml(openReportData)}
         onRegenerate={canRegenerate ? regenerateReport : undefined}
+        regenerating={regenerating}
       />
     );
   }
