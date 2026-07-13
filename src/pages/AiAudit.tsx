@@ -156,6 +156,13 @@ const FRAGMENT_WORDS = new Set([
   'learn', 'learning', 'discover', 'explore', 'help', 'helping', 'need', 'needs', 'want', 'tips',
   'guide', 'guides', 'how', 'why', 'what', 'when', 'where', 'whether', 'first', 'next', 'before', 'after',
 ]);
+// Generic common nouns/adjectives that leak in as fake single-word "competitors" from the
+// answer prose ("Cost", "Software", "Pricing", "Cheap") — never a firm's name on their own.
+const NOISE_WORDS = new Set([
+  'cost', 'costs', 'price', 'prices', 'pricing', 'fee', 'fees', 'value', 'budget', 'cheap', 'affordable',
+  'software', 'tool', 'tools', 'platform', 'platforms', 'app', 'apps', 'system', 'systems', 'online', 'digital',
+  'support', 'quality', 'feature', 'features', 'options', 'choice', 'choices', 'range', 'expertise', 'experience',
+]);
 // NEVER a competing business: government / tax authorities + statutory terms, and accounting
 // SOFTWARE (tools, not rival firms). These leak from answer_text ("Corporation Tax", "HM Revenue",
 // "Companies House", "QuickBooks. The") and must be dropped outright.
@@ -232,7 +239,7 @@ function isRealCompetitor(name: string, locationText: string): boolean {
   if (isNotACompetitor(nl, words)) return false;
   const generic = (w: string) =>
     COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || GENERIC_TERMS.has(w) || PRONOUNS.has(w)
-    || DOMAIN_GENERIC.has(w) || FRAGMENT_WORDS.has(w);
+    || DOMAIN_GENERIC.has(w) || FRAGMENT_WORDS.has(w) || NOISE_WORDS.has(w);
   // Every word is generic (stopword / descriptor / venue-type / domain word) → not a real
   // name: "Thai Food", "Cocktail Lounge", "Tax Advisors", "Accountancy Services".
   if (words.every(generic)) return false;
