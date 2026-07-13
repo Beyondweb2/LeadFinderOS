@@ -980,7 +980,9 @@ const AiAudit = () => {
     const rid = runId;
     setPlaybookGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-playbook', { body: { runId: rid } });
+      // Pass the already-cleaned competitor list (isRealCompetitor) so the playbook never
+      // sees junk rivals (HMRC, Xero, tax terms); the edge fn uses this verbatim.
+      const { data, error } = await supabase.functions.invoke('generate-playbook', { body: { runId: rid, competitors: topCompetitors } });
       if (error || !data?.ok || !data.playbook) throw new Error(error?.message ?? data?.error ?? 'generation failed');
       setPlaybooks((prev) => ({ ...prev, [rid]: data.playbook as PlaybookData }));
       setPlaybookRunId(rid);
