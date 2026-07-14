@@ -81,9 +81,20 @@ Deno.serve(async (req) => {
     try {
       const staleBefore = new Date(Date.now() - STALE_RUNNING_MS).toISOString();
       const { data: stale } = await service
-        .from("ai_audit_queue").select("id, attempts")
+        .from("ai_audit_queue").select("id, attempts, run_id")
         .eq("status", "running").lt("updated_at", staleBefore);
-      for (const r of (stale ?? []) as Row[]) {
+      const staleRows = (stale ?? []) as Row[];
+      // Don't reclaim rows that belong to a cancelled run — re-queueing them would resurrect a
+      // run the user stopped. Leave them; the cancelled path (finalise) cleans them up.
+      const cancelledStaleRuns = new Set<string>();
+      const staleRunIds = [...new Set(staleRows.map((r) => r.run_id))];
+      if (staleRunIds.length) {
+        const { data: cRuns } = await service
+          .from("ai_audit_runs").select("id").in("id", staleRunIds).eq("status", "cancelled");
+        for (const cr of (cRuns ?? []) as Row[]) cancelledStaleRuns.add(cr.id);
+      }
+      for (const r of staleRows) {
+        if (cancelledStaleRuns.has(r.run_id)) continue; // cancelled run → don't re-queue
         const attempts = (Number(r.attempts) || 0) + 1;
         const failed = attempts >= MAX_ATTEMPTS;
         await service.from("ai_audit_queue").update({
@@ -340,6 +351,16 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   let finalised = 0;
 
   for (const runId of ids) {
+    // A cancelled run is terminal — never resurrect it or flip it to 'complete'. Drop any
+    // leftover pending/running rows (e.g. one in-flight when the user hit Stop) so they aren't
+    // reprocessed, and leave the run marked 'cancelled'.
+    const { data: runRow } = await service.from("ai_audit_runs").select("status").eq("id", runId).maybeSingle();
+    if (runRow?.status === "cancelled") {
+      await service.from("ai_audit_queue")
+        .update({ status: "cancelled" }).eq("run_id", runId).in("status", ["pending", "running"]);
+      continue;
+    }
+
     const { data: rows } = await service
       .from("ai_audit_queue")
       .select("question, engines, status, result, attempts")

@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save,
+  Copy, Save, Trash2, CircleStop,
 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
@@ -568,7 +568,9 @@ const AiAudit = () => {
 
   // Existing-lead picker + saved audits
   const [leads, setLeads] = useState<LeadOption[]>([]);
-  const [savedAudits, setSavedAudits] = useState<(AuditRow & { latest_mention_rate: number | null; latest_run_id: string | null; latest_has_playbook: boolean })[]>([]);
+  const [savedAudits, setSavedAudits] = useState<(AuditRow & { latest_mention_rate: number | null; latest_run_id: string | null; latest_has_playbook: boolean; latest_status: string | null; is_running: boolean })[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null); // audit being deleted (disables its row buttons)
+  const [cancellingId, setCancellingId] = useState<string | null>(null); // audit whose run is being cancelled
 
   // Review (questions) state
   const [previewing, setPreviewing] = useState(false);
@@ -676,16 +678,16 @@ const AiAudit = () => {
     const auditRows = (audits ?? []) as AuditRow[];
     // Latest run mention_rate per audit (one query, newest first, reduce client-side).
     const ids = auditRows.map((a) => a.id);
-    const latestByAudit: Record<string, { rate: number | null; runId: string }> = {};
+    const latestByAudit: Record<string, { rate: number | null; runId: string; status: string | null }> = {};
     if (ids.length) {
       const { data: runs } = await supabase
         .from('ai_audit_runs')
-        .select('id, audit_id, mention_rate, run_number')
+        .select('id, audit_id, mention_rate, run_number, status')
         .in('audit_id', ids)
         .order('run_number', { ascending: false });
-      for (const r of (runs ?? []) as { id: string; audit_id: string; mention_rate: number | null }[]) {
+      for (const r of (runs ?? []) as { id: string; audit_id: string; mention_rate: number | null; status: string | null }[]) {
         // newest first → first seen per audit is the latest run
-        if (!(r.audit_id in latestByAudit)) latestByAudit[r.audit_id] = { rate: r.mention_rate, runId: r.id };
+        if (!(r.audit_id in latestByAudit)) latestByAudit[r.audit_id] = { rate: r.mention_rate, runId: r.id, status: r.status };
       }
     }
     // Best-effort: which latest runs already have a playbook (light scalar existence check —
@@ -704,11 +706,15 @@ const AiAudit = () => {
     }
     setSavedAudits(auditRows.map((a) => {
       const runId = latestByAudit[a.id]?.runId ?? null;
+      const status = latestByAudit[a.id]?.status ?? null;
       return {
         ...a,
         latest_mention_rate: latestByAudit[a.id]?.rate ?? null,
         latest_run_id: runId,
         latest_has_playbook: !!runId && playbookRuns.has(runId),
+        latest_status: status,
+        // Still in flight (drainable by the queue) — gates the Stop button.
+        is_running: status === 'pending' || status === 'running',
       };
     }));
   }, [user]);
@@ -821,6 +827,50 @@ const AiAudit = () => {
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
     setOpenRunId(null); setShowDetails(false);
     setRevealed(0); setStep('source');
+  };
+
+  // Delete an audit + all its children (ai_audit_runs / ai_audit_queue cascade from the FK).
+  // Owner RLS lets the browser delete its own row. Mirrors AdminSitesList: confirm → delete →
+  // optimistic filter → toast. If the deleted audit is the one open in the results view, reset.
+  const deleteAudit = async (a: AuditRow) => {
+    if (deletingId) return;
+    if (!window.confirm(`Delete "${a.business_name}"? This can't be undone.`)) return;
+    setDeletingId(a.id);
+    try {
+      const { error } = await supabase.from('ai_audits').delete().eq('id', a.id);
+      if (error) throw new Error(error.message);
+      setSavedAudits((prev) => prev.filter((x) => x.id !== a.id));
+      if (auditId === a.id) resetWizard(); // don't leave a stale open view of a deleted audit
+      toast({ title: 'Audit deleted' });
+    } catch (e) {
+      toast({ title: 'Delete failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Cancel a still-running audit: mark the latest run + its unsettled queue rows 'cancelled'.
+  // The queue processor claims only status='pending', so this stops all unclaimed work at once;
+  // the processor's cancelled-handling finalises the run as cancelled. Owner RLS covers both.
+  const cancelAudit = async (a: AuditRow & { latest_run_id: string | null }) => {
+    if (cancellingId || !a.latest_run_id) return;
+    if (!window.confirm(`Stop the audit for "${a.business_name}"? It won't finish.`)) return;
+    setCancellingId(a.id);
+    try {
+      const runId = a.latest_run_id;
+      const { error: qErr } = await supabase.from('ai_audit_queue')
+        .update({ status: 'cancelled' }).eq('run_id', runId).in('status', ['pending', 'running']);
+      if (qErr) throw new Error(qErr.message);
+      const { error: rErr } = await supabase.from('ai_audit_runs')
+        .update({ status: 'cancelled' }).eq('id', runId);
+      if (rErr) throw new Error(rErr.message);
+      setSavedAudits((prev) => prev.map((x) => x.id === a.id ? { ...x, latest_status: 'cancelled', is_running: false } : x));
+      toast({ title: 'Audit stopped' });
+    } catch (e) {
+      toast({ title: "Couldn't stop the audit", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setCancellingId(null);
+    }
   };
 
   const pickLead = (id: string) => {
@@ -1462,6 +1512,16 @@ const AiAudit = () => {
                           <MapIcon className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Playbook</span>
                         </Button>
                       )}
+                      {/* Stop — only while the latest run is still in flight (pending/running) */}
+                      {a.is_running && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => cancelAudit(a)} disabled={cancellingId === a.id} title="Stop this audit">
+                          {cancellingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleStop className="h-3.5 w-3.5" />}
+                        </Button>
+                      )}
+                      {/* Delete — always available (cascades to runs + queue) */}
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => deleteAudit(a)} disabled={deletingId === a.id} title="Delete this audit">
+                        {deletingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </Button>
                     </div>
                   ))}
                 </div>
