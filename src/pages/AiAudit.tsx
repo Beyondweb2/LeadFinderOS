@@ -1693,6 +1693,14 @@ const AiAudit = () => {
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
                     </Button>
                   )}
+                  {/* Generate playbook — shown until one exists; flips to "View playbook" below.
+                      Exact inverse condition, so exactly one of the two ever shows. */}
+                  {!isDraining && liveTally.done > 0 && runId && !playbooks[runId] && (
+                    <Button variant="outline" size="sm" onClick={() => generatePlaybook(false)} disabled={playbookGenerating}>
+                      {playbookGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapIcon className="mr-2 h-4 w-4" />}
+                      {playbookGenerating ? 'Generating…' : 'Generate playbook'}
+                    </Button>
+                  )}
                   {/* View playbook — only when one exists; generation lives in the checklist below. */}
                   {!isDraining && liveTally.done > 0 && runId && playbooks[runId] && (
                     <Button variant="outline" size="sm" onClick={() => generatePlaybook(false)}>
