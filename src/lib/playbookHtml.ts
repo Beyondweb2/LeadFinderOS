@@ -13,6 +13,7 @@ export interface PlaybookInternalAction {
   why: string;
   pillar: string;
   priority?: ActionPriority; // leverage for THIS business; optional (older playbooks lack it)
+  leadTime?: "fast" | "medium" | "slow"; // how long until it moves AI visibility; optional (older playbooks lack it)
   dependsOn?: string;
 }
 export interface PlaybookDeprioritised {
@@ -32,6 +33,7 @@ export interface PlaybookDirectory {
 export interface PlaybookData {
   businessName: string;
   vertical: string;
+  businessScope?: "national" | "local" | "hybrid"; // model's scope determination; optional, not rendered
   summary: string;
   weeks: PlaybookWeek[];
   quickWins: string[];
@@ -59,9 +61,12 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
           (w.internalActions ?? []).map((a) => {
             const prio: ActionPriority | null = a.priority === "high" || a.priority === "medium" || a.priority === "low" ? a.priority : null;
             const prioPill = prio ? `<span class="prio prio-${prio}">${prioLabel[prio]}</span>` : "";
+            const leadLabel: Record<string, string> = { fast: "Fast", medium: "Weeks", slow: "Slow-burn · start now" };
+            const lead = a.leadTime === "fast" || a.leadTime === "medium" || a.leadTime === "slow" ? a.leadTime : null;
+            const leadPill = lead ? `<span class="lead lead-${lead}">${leadLabel[lead]}</span>` : "";
             return `
             <li class="act${prio ? ` p-${prio}` : ""}">
-              <div class="act-top"><span class="act-do">${esc(a.action)}</span><span class="act-tags">${prioPill}<span class="pillar">${esc(a.pillar)}</span></span></div>
+              <div class="act-top"><span class="act-do">${esc(a.action)}</span><span class="act-tags">${leadPill}${prioPill}<span class="pillar">${esc(a.pillar)}</span></span></div>
               <div class="act-why">${esc(a.why)}</div>
               ${a.dependsOn ? `<div class="act-dep">Depends on: ${esc(a.dependsOn)}</div>` : ""}
             </li>`;
@@ -182,6 +187,12 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
   .prio-low{ background:#f4f5f7; color:var(--faint); border:1px solid var(--line); }
   .act.p-low .act-do{ color:var(--muted); font-weight:700; }   /* low-leverage actions recede */
   .act.p-low .act-why{ color:var(--faint); }
+  /* Lead-time pills — same sizing as .prio. "Slow-burn · start now" is emphasised (filled
+     amber) so the start-early signal stands out; fast/medium are muted. */
+  .lead{ font-size:9.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; border-radius:999px; padding:2px 7px; white-space:nowrap; }
+  .lead-slow{ background:var(--amber); color:#fff; }
+  .lead-fast{ background:#eef1f6; color:var(--muted); }
+  .lead-medium{ background:#f4f5f7; color:var(--faint); border:1px solid var(--line); }
 
   /* "Do lightly or skip" block — the deprioritised list. */
   .skips{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:8px 22px; }
@@ -214,7 +225,7 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
   @media print{
     /* Force backgrounds (blue header band, tinted blocks, pillar chips, timeline dots, internal
        flag, footer) to print WITHOUT the user ticking Chrome's "Background graphics". */
-    html,body,.sheet,.band,.internal-flag,.block,.pillar,.prio,.wk-dot,.site-foot{
+    html,body,.sheet,.band,.internal-flag,.block,.pillar,.prio,.lead,.wk-dot,.site-foot{
       -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }

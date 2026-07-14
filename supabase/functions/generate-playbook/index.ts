@@ -38,14 +38,17 @@ const PLAYBOOK_ENGINES: { key: string; label: string }[] = [
 /* ── Validated playbook shape ─────────────────────────────────────────────────── */
 // Leverage ranking for THIS specific business (not generic importance).
 type Priority = "high" | "medium" | "low";
+type LeadTime = "fast" | "medium" | "slow";
 const PRIORITIES = new Set<Priority>(["high", "medium", "low"]);
-interface InternalAction { action: string; why: string; pillar: string; priority: Priority; dependsOn?: string }
+const LEAD_TIMES = new Set<LeadTime>(["fast", "medium", "slow"]);
+interface InternalAction { action: string; why: string; pillar: string; priority: Priority; leadTime: LeadTime; dependsOn?: string }
 interface PlaybookWeek { window: string; goal: string; internalActions: InternalAction[]; clientSummary: string }
 interface DirectoryRec { name: string; why: string }
 interface DeprioritisedItem { item: string; why: string }
 interface Playbook {
   businessName: string;
   vertical: string;
+  businessScope: "national" | "local" | "hybrid";
   summary: string;
   weeks: PlaybookWeek[];
   quickWins: string[];
@@ -120,8 +123,9 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
       .filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
       .map((a) => ({
         action: str(a.action), why: str(a.why), pillar: str(a.pillar),
-        // Default to "medium" for missing/invalid priority — never reject the plan over it.
+        // Default to "medium" for missing/invalid priority / leadTime — never reject the plan over it.
         priority: (typeof a.priority === "string" && PRIORITIES.has(a.priority as Priority) ? a.priority : "medium") as Priority,
+        leadTime: (typeof a.leadTime === "string" && LEAD_TIMES.has(a.leadTime as LeadTime) ? a.leadTime : "medium") as LeadTime,
         dependsOn: str(a.dependsOn) || undefined,
       }))
       .filter((a) => a.action && a.why && a.pillar)
@@ -144,12 +148,17 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
     .slice(0, 12);
   if (directories.length < 1) return { ok: false, error: "no_directories" };
 
-  // quickWins — for NATIONAL firms, code-enforce the prompt's rule: GBP / Bing Places /
-  // Apple Business Connect / local-maps / local-listings are NEVER a quick win (the model
-  // still slips them in). GBP stays allowed as a light entity-verification action in the
+  // Business scope: the model's determination, else the code heuristic (the `national` param).
+  const scope: "national" | "local" | "hybrid" =
+    o.businessScope === "national" || o.businessScope === "local" || o.businessScope === "hybrid"
+      ? o.businessScope : (national ? "national" : "local");
+
+  // quickWins — for NATIONAL or HYBRID firms, code-enforce the prompt's rule: GBP / Bing
+  // Places / Apple Business Connect / local-maps / local-listings are NEVER a quick win (the
+  // model still slips them in). GBP stays allowed as a light entity-verification action in the
   // Data Layer week — we only strip it from quickWins here. LOCAL firms are untouched.
   let quickWins = strArr(o.quickWins, 8);
-  if (national) quickWins = quickWins.filter((q) => !GBP_LOCAL_RE.test(q));
+  if (scope !== "local") quickWins = quickWins.filter((q) => !GBP_LOCAL_RE.test(q));
   if (quickWins.length < 1) return { ok: false, error: "no_quick_wins" };
 
   // deprioritised = things to do LIGHTLY or SKIP for this business (validated loosely — drop
@@ -169,6 +178,7 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
     playbook: {
       businessName: str(o.businessName) || fallbackName || "This business",
       vertical: str(o.vertical) || "",
+      businessScope: scope,
       summary,
       weeks: orderedWeeks,
       quickWins,
@@ -190,6 +200,8 @@ detail is missing, say what to CONFIRM AT ONBOARDING instead of guessing.
 
 ════════ ENGINES IN SCOPE ════════
 ChatGPT, Gemini, and Google AI Overview ONLY. NEVER mention Perplexity or Copilot.
+Write ALL brand / product / engine names in the OUTPUT in lowercase (chatgpt, gemini, google ai overview, google business profile, bing places, trustpilot, xero, etc.) - this is our house style. Proper directory/body names keep their normal form (ICAEW, ACCA, Chartered Institute of Taxation, unbiased.co.uk).
+
 Reference the SPECIFIC engines that did / didn't name the business, per-engine.
 
 ════════ OUR 8-WEEK SPRINT (map EVERY action to the right window) ════════
@@ -198,7 +210,7 @@ Off-site trust signals — industry / authority directory submissions, citations
 mentions, and review velocity — take WEEKS-TO-MONTHS for AI engines to crawl, cross-check
 across independent sources, and build entity confidence from. They are the SLOWEST to pay
 off, so they must be INITIATED IN WEEK 1 and left to mature — START THE SLOW OFF-SITE WORK
-FIRST. On-site work (schema, NAP, service / area / FAQ pages, front-loaded answers) lands
+FIRST. On-site work (schema, NAP, service / FAQ pages, front-loaded answers - plus area pages only where scope calls for them, see the National vs Local fork) lands
 faster, so it runs IN PARALLEL and can complete slightly later. A plan that defers ALL
 directory / earned-media work to Weeks 5-8 is WRONG: the slow-burn off-site items MUST
 appear in Week 1, and Weeks 5-8 are for REINFORCING and CHASING what was started early —
@@ -208,15 +220,14 @@ never the first time off-site work appears.
   (per-engine visibility, the competitors AI named instead, SEO grade if present).
 - "Weeks 1-2" — DATA LAYER + KICK OFF THE SLOW OFF-SITE WORK (start now, it takes time to
   land): in WEEK 1, submit to the industry / authority directories for this vertical AND
-  switch on review velocity (ask after every job, never filter) — these are slow-burn, so
+  switch on review velocity at the RIGHT cadence for THIS business - high-frequency local trades ask after every job; B2B / long-cycle / national firms (accountancy, law, consultancy) ask at natural milestones (year-end, project sign-off, onboarding) and prioritise the review platforms that matter for the vertical (industry-specific review sites + Trustpilot for national B2B; Google reviews mainly for local walk-in). Never filter or gate reviews — these are slow-burn, so
   they LEAD the timeline. In PARALLEL: NAP consistency everywhere AI reads; Organization +
   (for local firms) LocalBusiness identity schema. Local-map listings (Google Business
   Profile + Bing Places + Apple Business Connect) LEAD here for LOCAL firms — but for
   NATIONAL firms they are only a light entity-verification step, not a lead action, and the
   Week-1 off-site kickoff is industry directories + earned media, NOT local maps (see the
   National vs Local fork below).
-- "Weeks 2-4" — CONTENT LAYER (on-site, faster payoff): service + area pages built from real
-  data; FAQ pages that match real question phrasing (4-8 FAQs, 40-60 word answers); front-
+- "Weeks 2-4" — CONTENT LAYER (on-site, faster payoff): build the on-site pages that fit THIS business's businessScope (set in the National vs Local fork) - service pages always; add area / "near me" pages ONLY when businessScope is local (or the local side of hybrid); for national scope build SECTOR / AUDIENCE pages instead (e.g. "[service] for [sector] uk"), never area pages. FAQ pages that match real question phrasing (4-8 FAQs, 40-60 word answers); front-
   load a direct 40-60 word answer on key pages. CONTINUE the off-site work in parallel: more
   citations / earned mentions and additional "best of" / niche directory placements building
   on the submissions started in Week 1.
@@ -259,16 +270,17 @@ never the first time off-site work appears.
   directories, reviews, community, and pages hosted on OUR infrastructure + the directory
   network. Say plainly that a site (or our hosted pages) is where owned content will live.
 - If the business HAS a website: include BOTH on-site (schema, FAQ pages, front-loaded
-  answers, service/area pages) AND off-site (listings, directories, earned mentions).
+  answers, service pages - area / location pages ONLY where businessScope makes them relevant, see the National vs Local fork) AND off-site (listings, directories, earned mentions).
 
 ════════ NATIONAL vs LOCAL FORK (critical — get the weighting right) ════════
-First decide whether this business is NATIONAL or LOCAL:
-- NATIONAL / no walk-in premises if the location is a country/region ("UK", "United Kingdom",
-  "England", "nationwide", "online", "remote") OR the type implies clients served across the
-  country with no physical footfall (e.g. a chartered accountancy / law / consultancy firm
-  serving clients UK-wide). ABLM-type firms are NATIONAL.
-- LOCAL if the location is a specific town/city AND the business has physical premises /
-  walk-in trade (barber, dentist, café, garage, restaurant).
+FIRST set "businessScope" = "national" | "local" | "hybrid" for THIS business, using the System scope hint in the input as a strong default and overriding only with a clear reason stated in "summary". Apply the fork below from YOUR businessScope, and keep every action consistent with it.
+
+First decide businessScope from ONE core test, reasoning from the specific business - do NOT just pattern-match the examples, which are illustrative only:
+CORE TEST: do this business's customers physically travel to a premises to be served, or does it serve customers remotely / across a wide area with no walk-in footfall?
+- NATIONAL / no walk-in premises: served remotely or country-wide, no location customers visit. Signals: location is a country/region ("UK", "England", "nationwide", "online", "remote"), or the model of the business is inherently non-local (clients served UK-wide, work delivered remotely / by post / online). Examples (illustrative, not exhaustive): chartered accountancy, law or consultancy firms serving clients UK-wide, online-only retailers, national SaaS/service providers. ABLM-type firms are NATIONAL.
+- LOCAL: customers physically come to a premises, or the business travels to customers within one local area. Signals: a specific town/city AND walk-in or local-catchment trade. Examples (illustrative): barber, dentist, café, garage, restaurant, mobile trades serving one town.
+- HYBRID: a genuine mix (e.g. a regional firm with a few offices that also serves clients remotely). Apply the national levers for the remote side AND the local levers for each real premises - do not force it fully into either bucket.
+When unsure, decide on the CORE TEST (physical-visit vs not), state your reasoning briefly in "summary", and flag anything to confirm at onboarding.
 
 If NATIONAL:
 - DE-PRIORITISE local map listings. Google Business Profile, Bing Places and Apple Business
@@ -278,6 +290,7 @@ If NATIONAL:
   party mentions, niche reviews, PR, guest content), and content matched to NATIONAL
   buyer-intent queries ("[service] for [audience] uk"). quickWins for a national firm should
   be directory/earned-media/content moves, not GBP.
+- NO location / area / "near me" pages - they chase local intent a UK-wide firm has no claim to. Build sector / audience / service pages instead.
 If LOCAL:
 - Keep the local-first weighting: GBP + Bing Places + Apple Business Connect LEAD (they are
   genuine quick wins), alongside local citations, reviews, and location/area pages.
@@ -314,6 +327,13 @@ Concrete ranking guidance (apply to the ACTUAL business, don't copy blindly):
   (these are the main lever); broad national directories drop to lower priority.
 Ground every ranking in the verified methodology above (what actually gets a business CITED),
 not in habit.
+
+════════ TAG EVERY ACTION BY LEAD TIME (short-term vs long-term levers) ════════
+Give EVERY internalAction a "leadTime" = how long until it actually moves AI visibility:
+- "fast" (days): on-site fixes - identity / Organization schema, meta / title / H1, site readability, FAQ + front-loaded answers, service / sector page builds; one-off GBP setup.
+- "medium" (2-4 weeks): directory submissions that approve quickly, NAP propagation, first review requests landing.
+- "slow" (weeks-to-months): authority / industry-body directory approvals, earned media / PR / guest content, cross-source entity trust building, review accumulation to a critical mass.
+HARD RULE: every "slow" action that is "high" OR "medium" leverage MUST be scheduled in Weeks 1-2 (initiated immediately) - the payoff lands late, so the START must be early. A slow high/medium lever first appearing in Weeks 2-4 or 5-8 is WRONG. Weeks 5-8 may contain slow items ONLY as follow-up / chase on work started in Week 1, never as first appearance. Fast high-leverage items are the visible quick wins. In each week's clientSummary, reassure plainly (no jargon) that the slow-burn trust work is being started NOW precisely because it takes time to mature.
 
 ════════ USE THE ACTUAL DATA ════════
 - Name the specific engines that did NOT return the business.
@@ -366,6 +386,7 @@ const PLAYBOOK_TOOL = {
       properties: {
         businessName: { type: "string" },
         vertical: { type: "string", description: "The business's vertical/niche, e.g. 'accountancy firm'." },
+        businessScope: { type: "string", enum: ["national", "local", "hybrid"], description: "Your determination for THIS business, applied to the national/local fork." },
         summary: { type: "string", description: "2-4 sentence where-they-stand-and-what-we'll-do overview, grounded in the audit." },
         weeks: {
           type: "array",
@@ -385,9 +406,10 @@ const PLAYBOOK_TOOL = {
                     why: { type: "string", description: "Why it matters for THIS business. For LOW priority, say plainly it's low-value here + what to do (do lightly / set up once / skip)." },
                     pillar: { type: "string", enum: ["Data Layer", "Content Layer", "Off-site / Earned", "Reviews", "Community", "Measurement"] },
                     priority: { type: "string", enum: ["high", "medium", "low"], description: "LEVERAGE for THIS specific business (not generic importance). Rank honestly — do NOT make everything high." },
+                    leadTime: { type: "string", enum: ["fast", "medium", "slow"], description: "How long until this action actually moves AI visibility: fast=days, medium=2-4wks, slow=weeks-to-months." },
                     dependsOn: { type: "string" },
                   },
-                  required: ["action", "why", "pillar", "priority"],
+                  required: ["action", "why", "pillar", "priority", "leadTime"],
                   additionalProperties: false,
                 },
               },
@@ -426,7 +448,7 @@ const PLAYBOOK_TOOL = {
         timelineNote: { type: "string" },
         guaranteeNote: { type: "string" },
       },
-      required: ["businessName", "vertical", "summary", "weeks", "quickWins", "directories", "timelineNote", "guaranteeNote"],
+      required: ["businessName", "vertical", "businessScope", "summary", "weeks", "quickWins", "directories", "timelineNote", "guaranteeNote"],
       additionalProperties: false,
     },
   },
@@ -491,7 +513,7 @@ ${findings || "    (none)"}
   Name: ${name}
   Type / vertical: ${type}
   Location: ${loc}${country ? `\n  Country: ${country}` : ""}
-  Website: ${hasWebsite ? str(audit.website) : "NO WEBSITE — apply the no-website fork (off-site only + our hosted pages)"}
+  Website: ${hasWebsite ? str(audit.website) : "NO WEBSITE — apply the no-website fork (off-site only + our hosted pages)"}\n  System scope hint (heuristic - treat as a STRONG default; override only with a clear reason you state in "summary"): ${isNationalBusiness(audit) ? "NATIONAL / no walk-in premises" : "LOCAL / has premises"}
 
 AI-VISIBILITY AUDIT (Week 0 baseline)
 ${engineLines}
