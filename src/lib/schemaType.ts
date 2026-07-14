@@ -25,8 +25,8 @@ function countryName(country: string): string {
 
 // A business type that reads as accountancy → AccountingService; other professional-services
 // signals → ProfessionalService; anything else → Organization.
-const ACCOUNTANCY_RE = /\b(account|accountanc|bookkeep|tax|audit|payroll)\b/i;
-const PROFESSIONAL_RE = /\b(solicitor|law|legal|lawyer|barrister|consult|advis|agency|architect|survey|financ|mortgage|insurance|recruit|marketing|design|software|engineer|it services)\b/i;
+const ACCOUNTANCY_RE = /\b(?:account(?:ant|ants|ancy|ing)?|bookkeep(?:er|ers|ing)?|payroll|audit(?:or|ors|ing|s)?|tax|taxation)\b/i;
+const PROFESSIONAL_RE = /\b(?:solicitor\w*|lawyer\w*|barrister\w*|law|legal\w*|consult\w*|advis\w*|agenc\w*|architect\w*|survey\w*|financ\w*|mortgage\w*|insur\w*|recruit\w*|marketing\w*|design\w*|software\w*|engineer\w*|it services)\b/i;
 
 /** Decide the schema.org @type from the business type. Scope does NOT change the @type
  *  (per spec) — it only affects areaServed / address below. */
@@ -84,7 +84,10 @@ export function buildSchema(input: SchemaInput): Record<string, unknown> {
   const name = (input.name || "").trim() || "This business";
   const businessType = (input.businessType || "").trim();
   const locationText = (input.locationText || "").trim();
-  const url = (input.url || "").trim();
+  // Normalise to a valid absolute URL — a stored value like "ablm.co.uk" isn't a valid schema
+  // URL; prefix https:// when no scheme is present. Already-valid http(s) URLs are untouched.
+  const rawUrl = (input.url || "").trim();
+  const url = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : "";
   const phone = (input.phone || "").trim();
   const address = (input.address || "").trim();
   const email = (input.email || "").trim();
@@ -114,11 +117,19 @@ export function buildSchema(input: SchemaInput): Record<string, unknown> {
   if (email) obj.email = email;
 
   // Description — a plain sentence from KNOWN facts only (type + specialism + area).
-  const typeLabel = businessType
-    || (type === "AccountingService" ? "accountancy firm" : type === "ProfessionalService" ? "professional services firm" : "business");
+  // Type label from business_type, first-letter-lowercased (a common noun mid-sentence)
+  // UNLESS the first word is an acronym like "IT"/"SEO"; falls back to a sensible default.
+  const rawLabel = businessType.trim();
+  const firstWord = rawLabel.split(/\s+/)[0] ?? "";
+  const isAcronym = /^[A-Z0-9&]{2,}$/.test(firstWord);
+  const typeLabel = rawLabel
+    ? (isAcronym ? rawLabel : rawLabel.charAt(0).toLowerCase() + rawLabel.slice(1))
+    : (type === "AccountingService" ? "accountancy firm" : type === "ProfessionalService" ? "professional services firm" : "business");
+  // "a" vs "an" from the label's leading vowel (simple a/e/i/o/u rule).
+  const article = /^[aeiou]/i.test(typeLabel.trim()) ? "an" : "a";
   const specPhrase = specialism ? ` specialising in ${specialism}` : "";
   const areaPhrase = nationalish ? ` serving clients across ${cName}` : (locationText ? ` based in ${locationText}` : "");
-  obj.description = `${name} is a ${typeLabel}${specPhrase}${areaPhrase}.`.replace(/\s+/g, " ").trim();
+  obj.description = `${name} is ${article} ${typeLabel}${specPhrase}${areaPhrase}.`.replace(/\s+/g, " ").trim();
 
   return obj;
 }
