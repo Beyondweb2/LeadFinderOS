@@ -72,9 +72,21 @@ const strArr = (v: unknown, cap: number): string[] =>
 const GBP_LOCAL_RE =
   /google business profile|google business|google my business|\bgbp\b|\bgmb\b|bing places|apple business connect|apple maps|google maps|\bmaps?\b|map pack|map listing|local listing|local citation|local pack|near me/i;
 
-/** Decide if this business is NATIONAL (no walk-in premises / served UK-wide). Uses the
- *  same signals the prompt describes; ambiguous ⇒ LOCAL. */
+/** The client's EXPLICIT engagement scope stored at audit creation, or null when unset.
+ *  This is the highest-precedence signal — it beats the model output and the code heuristic. */
+function explicitScope(audit: Row): "national" | "local" | "hybrid" | null {
+  const s = str(audit.business_scope).toLowerCase();
+  return s === "national" || s === "local" || s === "hybrid" ? s : null;
+}
+
+/** Decide if this business is NATIONAL (no walk-in premises / served UK-wide). An explicit
+ *  stored business_scope wins outright ("national"/"hybrid" ⇒ national, "local" ⇒ local);
+ *  otherwise falls back to the same signals the prompt describes; ambiguous ⇒ LOCAL. */
 function isNationalBusiness(audit: Row): boolean {
+  // Explicit client answer overrides the guess (hybrid is treated as national-ish, like scope !== "local").
+  const explicit = explicitScope(audit);
+  if (explicit) return explicit !== "local";
+
   const loc = str(audit.location_text).toLowerCase().replace(/[.,]/g, " ").replace(/\bthe\b/g, " ").replace(/\s+/g, " ").trim();
   const type = str(audit.business_type).toLowerCase();
 
@@ -104,7 +116,7 @@ function isNationalBusiness(audit: Row): boolean {
  * the core contract holds — never stores a half-built plan. Drops individual malformed
  * sub-items (bad actions/directories) rather than failing the whole plan for one bad row.
  */
-function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: boolean): { ok: true; playbook: Playbook } | { ok: false; error: string } {
+function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: boolean, explicit: "national" | "local" | "hybrid" | null): { ok: true; playbook: Playbook } | { ok: false; error: string } {
   if (!raw || typeof raw !== "object") return { ok: false, error: "not_an_object" };
   const o = raw as Record<string, unknown>;
 
@@ -148,10 +160,13 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
     .slice(0, 12);
   if (directories.length < 1) return { ok: false, error: "no_directories" };
 
-  // Business scope: the model's determination, else the code heuristic (the `national` param).
-  const scope: "national" | "local" | "hybrid" =
+  // Business scope precedence: explicit stored answer > model's determination > code heuristic
+  // (the `national` param). The client's explicit engagement scope always wins when present.
+  const modelScope: "national" | "local" | "hybrid" | null =
     o.businessScope === "national" || o.businessScope === "local" || o.businessScope === "hybrid"
-      ? o.businessScope : (national ? "national" : "local");
+      ? o.businessScope : null;
+  const scope: "national" | "local" | "hybrid" =
+    explicit ?? modelScope ?? (national ? "national" : "local");
 
   // quickWins — for NATIONAL or HYBRID firms, code-enforce the prompt's rule: GBP / Bing
   // Places / Apple Business Connect / local-maps / local-listings are NEVER a quick win (the
@@ -463,7 +478,14 @@ function buildUserPrompt(audit: Row, results: Row, cleanedCompetitors: string[])
   const type = str(audit.business_type) || "(not given — infer & confirm at onboarding)";
   const loc = str(audit.location_text) || "(not given)";
   const country = str(audit.country);
+  const specialism = str(audit.specialism);
   const hasWebsite = audit.has_website === true && !!str(audit.website);
+  // Scope hint: an explicit client answer is authoritative; otherwise the code heuristic is a
+  // strong default the model may override with a stated reason.
+  const explicit = explicitScope(audit);
+  const scopeHint = explicit
+    ? `CLIENT-STATED scope (AUTHORITATIVE — build to this): ${explicit.toUpperCase()}`
+    : `System scope hint (heuristic - treat as a STRONG default; override only with a clear reason you state in "summary"): ${isNationalBusiness(audit) ? "NATIONAL / no walk-in premises" : "LOCAL / has premises"}`;
 
   // Per-engine visibility from results.questions.
   const questions: Row[] = Array.isArray(results?.questions) ? results.questions : [];
@@ -511,9 +533,9 @@ ${findings || "    (none)"}
 
   return `BUSINESS
   Name: ${name}
-  Type / vertical: ${type}
+  Type / vertical: ${type}${specialism ? `\n  Specialism / niche: ${specialism}` : ""}
   Location: ${loc}${country ? `\n  Country: ${country}` : ""}
-  Website: ${hasWebsite ? str(audit.website) : "NO WEBSITE — apply the no-website fork (off-site only + our hosted pages)"}\n  System scope hint (heuristic - treat as a STRONG default; override only with a clear reason you state in "summary"): ${isNationalBusiness(audit) ? "NATIONAL / no walk-in premises" : "LOCAL / has premises"}
+  Website: ${hasWebsite ? str(audit.website) : "NO WEBSITE — apply the no-website fork (off-site only + our hosted pages)"}\n  ${scopeHint}
 
 AI-VISIBILITY AUDIT (Week 0 baseline)
 ${engineLines}
@@ -565,7 +587,7 @@ Deno.serve(async (req) => {
 
     // Load the audit for business context. (No website gate — playbook works for ANY audit.)
     const { data: audit } = await service
-      .from("ai_audits").select("business_name, business_type, location_text, country, has_website, website").eq("id", run.audit_id).maybeSingle();
+      .from("ai_audits").select("business_name, business_type, location_text, country, has_website, website, business_scope, specialism").eq("id", run.audit_id).maybeSingle();
     if (!audit) return json({ ok: false, error: "audit_not_found" }, 404);
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -604,7 +626,7 @@ Deno.serve(async (req) => {
     let parsed: unknown;
     try { parsed = JSON.parse(raw); } catch { return json({ ok: false, error: "model_bad_json" }, 422); }
 
-    const validated = buildValidatedPlaybook(parsed, str(audit.business_name), isNationalBusiness(audit));
+    const validated = buildValidatedPlaybook(parsed, str(audit.business_name), isNationalBusiness(audit), explicitScope(audit));
     if (!validated.ok) return json({ ok: false, error: `invalid_playbook:${validated.error}` }, 422);
 
     // Store at results.playbook. Read-modify-write MERGE (re-read immediately before write)

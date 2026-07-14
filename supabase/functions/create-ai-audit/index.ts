@@ -160,6 +160,11 @@ Deno.serve(async (req) => {
     // Optional free-text specialisms ("kava, pool tables"). Weights the niche/differentiator
     // questions; blank → the generator infers the specialism from the name + type.
     const specialisms: string = typeof body.specialisms === "string" ? body.specialisms.trim().slice(0, 200) : "";
+    // Explicit client-engagement scope from the wizard. Only the three known values are stored;
+    // anything else (incl. absent) → null, so the downstream heuristic still applies.
+    const VALID_SCOPES = new Set(["national", "local", "hybrid"]);
+    const businessScope: string | null = typeof body.business_scope === "string" && VALID_SCOPES.has(body.business_scope)
+      ? body.business_scope : null;
 
     if (!businessName && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
 
@@ -235,6 +240,8 @@ Deno.serve(async (req) => {
           country,
           has_website: hasWebsite,
           website,
+          specialism: specialisms || null,
+          business_scope: businessScope,
         })
         .select("id, business_name")
         .single();

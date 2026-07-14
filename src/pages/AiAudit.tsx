@@ -32,7 +32,7 @@ import { usePersistedState } from '@/hooks/usePersistedState';
 type Step = 'source' | 'name' | 'type' | 'location' | 'website' | 'review' | 'results';
 // The stacked wizard steps, in order. `revealed` is the furthest index shown; every
 // step 0..revealed is rendered at once. 'results' is a separate phase (step === 'results').
-const WIZARD_STEPS = ['source', 'name', 'type', 'location', 'website', 'specialisms', 'review'] as const;
+const WIZARD_STEPS = ['source', 'name', 'type', 'location', 'website', 'scope', 'specialisms', 'review'] as const;
 const REVIEW_INDEX = WIZARD_STEPS.indexOf('review');
 
 // Question-count selector: how many search questions to generate. Range mirrors the
@@ -509,6 +509,7 @@ interface PersistedWizard {
   country: Country | '';
   hasWebsite: boolean | null;
   website: string;
+  businessScope: 'national' | 'local' | 'hybrid' | null;
   specialisms: string;
   questionCount: number;
   questions: string[];
@@ -558,6 +559,9 @@ const AiAudit = () => {
   const [country, setCountry] = useState<Country | ''>(persisted?.country ?? '');
   const [hasWebsite, setHasWebsite] = useState<boolean | null>(persisted?.hasWebsite ?? null);
   const [website, setWebsite] = useState(persisted?.website ?? '');
+  // How the client engages — sets business scope explicitly (overrides the downstream guess).
+  // Optional: null when the user skips it (then we send null and the heuristic still applies).
+  const [businessScope, setBusinessScope] = useState<'national' | 'local' | 'hybrid' | null>(persisted?.businessScope ?? null);
   const [specialisms, setSpecialisms] = useState(persisted?.specialisms ?? ''); // optional — grounds question generation
   const [questionCount, setQuestionCount] = useState<number>(() =>
     clampQuestionCount(persisted?.questionCount ?? DEFAULT_QUESTION_COUNT));
@@ -615,6 +619,9 @@ const AiAudit = () => {
   const [showSchema, setShowSchema] = useState(false);
   const [schemaNap, setSchemaNap] = useState({ phone: '', address: '', email: '', specialism: '' });
   const [schemaWebsite, setSchemaWebsite] = useState('');
+  // The audit's explicit stored engagement scope (null when unset) — preferred over the
+  // playbook-derived scope when building the JSON-LD schema.
+  const [schemaScope, setSchemaScope] = useState<'national' | 'local' | 'hybrid' | null>(null);
   const [schemaCopied, setSchemaCopied] = useState(false);
   const [schemaSaving, setSchemaSaving] = useState(false);
   // "Link hub" section — collapsible list of the client's own URLs (label + url), loaded from
@@ -653,10 +660,10 @@ const AiAudit = () => {
     if (step === 'results') { clearWizard(); return; }
     try {
       sessionStorage.setItem(WIZARD_KEY, JSON.stringify({
-        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, specialisms, questionCount, questions, unitCost, engineCount,
+        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, questionCount, questions, unitCost, engineCount,
       }));
     } catch { /* storage unavailable — persistence is best-effort */ }
-  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, specialisms, questionCount, questions, unitCost, engineCount]);
+  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, questionCount, questions, unitCost, engineCount]);
 
   // ── Initial load: the user's leads (for the picker) + saved audits ──────────
   const loadSaved = useCallback(async () => {
@@ -839,7 +846,8 @@ const AiAudit = () => {
           preview: true,
           business_name: businessName, business_type: businessType,
           location_text: locationText, country, has_website: hasWebsite,
-          website: website || undefined, specialisms: specialisms || undefined,
+          website: website || undefined, business_scope: businessScope || undefined,
+          specialisms: specialisms || undefined,
           question_count: questionCount,
         },
       });
@@ -852,7 +860,7 @@ const AiAudit = () => {
     } finally {
       setPreviewing(false);
     }
-  }, [businessName, businessType, locationText, country, hasWebsite, website, specialisms, questionCount, toast]);
+  }, [businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, questionCount, toast]);
 
   // When the review step is first revealed with no questions yet, generate them.
   // Editing type/location later does NOT auto-wipe/regenerate (only reveal-fresh or the
@@ -874,6 +882,7 @@ const AiAudit = () => {
           business_name: businessName, business_type: businessType,
           location_text: locationText, country, has_website: hasWebsite,
           website: website || undefined, lead_id: leadId || undefined,
+          business_scope: businessScope || undefined,
           specialisms: specialisms || undefined,
           question_count: questionCount,
           questions: clean,
@@ -945,18 +954,19 @@ const AiAudit = () => {
   // Load the audit's stored NAP + specialism + website for the Schema section whenever the
   // opened audit changes (these aren't in the wizard/results state on a reopened audit).
   useEffect(() => {
-    if (!auditId) { setSchemaNap({ phone: '', address: '', email: '', specialism: '' }); setSchemaWebsite(''); setClientLinks([]); return; }
+    if (!auditId) { setSchemaNap({ phone: '', address: '', email: '', specialism: '' }); setSchemaWebsite(''); setSchemaScope(null); setClientLinks([]); return; }
     let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from('ai_audits')
-        .select('website, business_phone, business_address, business_email, specialism, client_links')
+        .select('website, business_phone, business_address, business_email, specialism, business_scope, client_links')
         .eq('id', auditId)
         .maybeSingle();
       if (cancelled || !data) return;
-      const d = data as { website: string | null; business_phone: string | null; business_address: string | null; business_email: string | null; specialism: string | null; client_links: unknown };
+      const d = data as { website: string | null; business_phone: string | null; business_address: string | null; business_email: string | null; specialism: string | null; business_scope: string | null; client_links: unknown };
       setSchemaWebsite(d.website ?? '');
       setSchemaNap({ phone: d.business_phone ?? '', address: d.business_address ?? '', email: d.business_email ?? '', specialism: d.specialism ?? '' });
+      setSchemaScope(d.business_scope === 'national' || d.business_scope === 'local' || d.business_scope === 'hybrid' ? d.business_scope : null);
       // Guard: only accept an array of {label,url}; anything else falls back to [].
       const links = Array.isArray(d.client_links)
         ? (d.client_links as unknown[]).map((l) => {
@@ -1236,8 +1246,10 @@ const AiAudit = () => {
   const seoGrade = hasSeo ? String((run?.results as { seo?: { overallGrade?: string } } | null)?.seo?.overallGrade ?? '') : '';
 
   // Live JSON-LD schema for the "Schema markup" section — rebuilt each render as the NAP /
-  // specialism inputs change. businessScope comes from the generated playbook when present.
-  const schemaBusinessScope = (run?.results as { playbook?: { businessScope?: 'national' | 'local' | 'hybrid' } } | null)?.playbook?.businessScope;
+  // specialism inputs change. businessScope precedence: explicit stored scope > the generated
+  // playbook's scope > undefined (buildSchema then falls back to its own heuristic).
+  const playbookScope = (run?.results as { playbook?: { businessScope?: 'national' | 'local' | 'hybrid' } } | null)?.playbook?.businessScope;
+  const schemaBusinessScope = schemaScope ?? playbookScope;
   const schemaCode = `<script type="application/ld+json">\n${JSON.stringify(buildSchema({
     name: resultsBusinessName || businessName,
     url: schemaWebsite || (resultsHasWebsite ? website : ''),
@@ -1503,6 +1515,17 @@ const AiAudit = () => {
                     <Input ref={urlRef} value={website} onChange={(e) => setWebsite(e.target.value)}
                       placeholder="https://…" />
                   )}
+                </div>
+
+                {/* Engagement scope — sets business_scope explicitly (overrides the downstream guess) */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">How do clients work with you?</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <ChoiceButton active={businessScope === 'local'} onClick={() => setBusinessScope('local')} label="They come to my premises" hint="Local" />
+                    <ChoiceButton active={businessScope === 'national'} onClick={() => setBusinessScope('national')} label="I work remotely / across the country" hint="National" />
+                    <ChoiceButton active={businessScope === 'hybrid'} onClick={() => setBusinessScope('hybrid')} label="A mix of both" hint="Hybrid" />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">This shapes whether we focus on local listings or national directories.</p>
                 </div>
 
                 {/* Specialisms (optional) */}
