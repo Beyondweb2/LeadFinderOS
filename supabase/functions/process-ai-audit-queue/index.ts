@@ -19,7 +19,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const BATCH = 4;                 // rows CLAIMED + run CONCURRENTLY per tick (Promise.allSettled) — tune here
+const BATCH = 2;                 // rows CLAIMED + run CONCURRENTLY per tick (Promise.allSettled) — tune here.
+                                 // Lowered 4→2 to cut per-query Apify timeouts ("signal has been aborted"):
+                                 // fewer overlapping actor calls → less upstream/Apify rate-limiting, so slow
+                                 // multi-engine bundles are likelier to finish under RUN_TIMEOUT_MS. Costs more
+                                 // ticks to drain a run (bounded by the cron cadence), which is the intended trade.
 const CAP_USD = 3.0;             // per-RUN Apify cost ceiling (this audit run)
 const DAILY_CAP_USD = 15.0;      // per-USER rolling-24h ceiling (across audits) via the runner
 const MAX_ATTEMPTS = 3;          // per queue row before it's marked failed
