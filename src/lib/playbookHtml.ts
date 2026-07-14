@@ -7,11 +7,17 @@
 //   - "client":   a softer roadmap — per-week clientSummary only (no internal/technical talk).
 // One generated plan, two registers. Used by the in-app iframe preview AND the download.
 
+export type ActionPriority = "high" | "medium" | "low";
 export interface PlaybookInternalAction {
   action: string;
   why: string;
   pillar: string;
+  priority?: ActionPriority; // leverage for THIS business; optional (older playbooks lack it)
   dependsOn?: string;
+}
+export interface PlaybookDeprioritised {
+  item: string;
+  why: string;
 }
 export interface PlaybookWeek {
   window: string;              // "Week 0" | "Weeks 1-2" | "Weeks 2-4" | "Week 4" | "Weeks 5-8" | "Week 8"
@@ -30,6 +36,7 @@ export interface PlaybookData {
   weeks: PlaybookWeek[];
   quickWins: string[];
   directories: PlaybookDirectory[];
+  deprioritised?: PlaybookDeprioritised[]; // do lightly or skip for THIS business (optional)
   timelineNote: string;
   guaranteeNote: string;
 }
@@ -45,15 +52,20 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
   const internal = view === "internal";
   const viewLabel = internal ? "Internal delivery plan" : "Your roadmap";
 
+  const prioLabel: Record<ActionPriority, string> = { high: "High", medium: "Med", low: "Low" };
   const weeks = (d.weeks ?? []).map((w) => {
     const body = internal
       ? `<ul class="acts">${
-          (w.internalActions ?? []).map((a) => `
-            <li class="act">
-              <div class="act-top"><span class="act-do">${esc(a.action)}</span><span class="pillar">${esc(a.pillar)}</span></div>
+          (w.internalActions ?? []).map((a) => {
+            const prio: ActionPriority | null = a.priority === "high" || a.priority === "medium" || a.priority === "low" ? a.priority : null;
+            const prioPill = prio ? `<span class="prio prio-${prio}">${prioLabel[prio]}</span>` : "";
+            return `
+            <li class="act${prio ? ` p-${prio}` : ""}">
+              <div class="act-top"><span class="act-do">${esc(a.action)}</span><span class="act-tags">${prioPill}<span class="pillar">${esc(a.pillar)}</span></span></div>
               <div class="act-why">${esc(a.why)}</div>
               ${a.dependsOn ? `<div class="act-dep">Depends on: ${esc(a.dependsOn)}</div>` : ""}
-            </li>`).join("")
+            </li>`;
+          }).join("")
         }</ul>`
       : `<p class="wk-client">${esc(w.clientSummary)}</p>`;
     return `
@@ -81,6 +93,18 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
         <div class="sec-title">Authority listings for ${esc(d.vertical || "your sector")}</div>
         <ul class="dirs">${(d.directories ?? []).map((x) => `
           <li class="dir"><span class="dir-name">${esc(x.name)}</span><span class="dir-why">${esc(x.why)}</span></li>`).join("")}</ul>
+      </section>`
+    : "";
+
+  // Do lightly or skip — the deprioritised list. Shown in BOTH views; the client register gets
+  // a softer heading. Renders only when the model flagged something.
+  const dep = (d.deprioritised ?? []).filter((x) => x && x.item && x.why);
+  const deprioritised = dep.length
+    ? `<section class="block skip">
+        <div class="sec-eyebrow">${internal ? "Effort" : "Where we focus"}</div>
+        <div class="sec-title">${internal ? "Do lightly or skip" : "What we won’t over-invest in"}</div>
+        <ul class="skips">${dep.map((x) => `
+          <li class="skip-item"><span class="skip-name">${esc(x.item)}</span><span class="skip-why">${esc(x.why)}</span></li>`).join("")}</ul>
       </section>`
     : "";
 
@@ -150,6 +174,20 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
     color:var(--blue); background:#eaf1fc; border-radius:999px; padding:2px 9px; white-space:nowrap; }
   .act-why{ margin-top:2px; font-size:12.5px; line-height:1.45; color:var(--muted); }
   .act-dep{ margin-top:3px; font-size:11px; color:var(--faint); font-weight:700; }
+  /* Priority ranking — leverage for THIS business. HIGH stands out (solid blue), LOW recedes. */
+  .act-tags{ display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+  .prio{ font-size:9.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; border-radius:999px; padding:2px 7px; white-space:nowrap; }
+  .prio-high{ background:var(--blue); color:#fff; }
+  .prio-medium{ background:#eef1f6; color:var(--muted); }
+  .prio-low{ background:#f4f5f7; color:var(--faint); border:1px solid var(--line); }
+  .act.p-low .act-do{ color:var(--muted); font-weight:700; }   /* low-leverage actions recede */
+  .act.p-low .act-why{ color:var(--faint); }
+
+  /* "Do lightly or skip" block — the deprioritised list. */
+  .skips{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:8px 22px; }
+  .skip-item{ display:flex; flex-direction:column; }
+  .skip-name{ font-size:13.5px; font-weight:850; color:var(--ink); }
+  .skip-why{ font-size:12px; color:var(--muted); line-height:1.4; }
 
   /* Blocks (quick wins / directories) */
   .block{ padding:22px 40px; border-top:1px solid var(--line); }
@@ -176,12 +214,12 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
   @media print{
     /* Force backgrounds (blue header band, tinted blocks, pillar chips, timeline dots, internal
        flag, footer) to print WITHOUT the user ticking Chrome's "Background graphics". */
-    html,body,.sheet,.band,.internal-flag,.block,.pillar,.wk-dot,.site-foot{
+    html,body,.sheet,.band,.internal-flag,.block,.pillar,.prio,.wk-dot,.site-foot{
       -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
     .band,.head,.summary,.timeline,.block,.notes,.site-foot{ break-inside:avoid; }
-    .wk,.dir,.act{ break-inside:avoid; }
+    .wk,.dir,.act,.skip-item{ break-inside:avoid; }
   }
 </style>
 </head>
@@ -211,6 +249,7 @@ ${weeks}
 
     ${quickWins}
     ${directories}
+    ${deprioritised}
 
     <section class="notes">
       <p class="note"><b>Timeline &amp; re-audit.</b> ${esc(d.timelineNote)}</p>

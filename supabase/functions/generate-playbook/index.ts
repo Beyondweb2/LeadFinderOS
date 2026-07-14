@@ -36,9 +36,13 @@ const PLAYBOOK_ENGINES: { key: string; label: string }[] = [
 ];
 
 /* ── Validated playbook shape ─────────────────────────────────────────────────── */
-interface InternalAction { action: string; why: string; pillar: string; dependsOn?: string }
+// Leverage ranking for THIS specific business (not generic importance).
+type Priority = "high" | "medium" | "low";
+const PRIORITIES = new Set<Priority>(["high", "medium", "low"]);
+interface InternalAction { action: string; why: string; pillar: string; priority: Priority; dependsOn?: string }
 interface PlaybookWeek { window: string; goal: string; internalActions: InternalAction[]; clientSummary: string }
 interface DirectoryRec { name: string; why: string }
+interface DeprioritisedItem { item: string; why: string }
 interface Playbook {
   businessName: string;
   vertical: string;
@@ -46,6 +50,7 @@ interface Playbook {
   weeks: PlaybookWeek[];
   quickWins: string[];
   directories: DirectoryRec[];
+  deprioritised: DeprioritisedItem[]; // things to do lightly or skip for THIS business
   timelineNote: string;
   guaranteeNote: string;
 }
@@ -113,7 +118,12 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
     if (!WINDOW_SET.has(window) || !goal) continue; // must map to a real Sprint window
     const internalActions: InternalAction[] = (Array.isArray(ww.internalActions) ? ww.internalActions : [])
       .filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
-      .map((a) => ({ action: str(a.action), why: str(a.why), pillar: str(a.pillar), dependsOn: str(a.dependsOn) || undefined }))
+      .map((a) => ({
+        action: str(a.action), why: str(a.why), pillar: str(a.pillar),
+        // Default to "medium" for missing/invalid priority — never reject the plan over it.
+        priority: (typeof a.priority === "string" && PRIORITIES.has(a.priority as Priority) ? a.priority : "medium") as Priority,
+        dependsOn: str(a.dependsOn) || undefined,
+      }))
       .filter((a) => a.action && a.why && a.pillar)
       .slice(0, 8);
     weeks.push({ window, goal, internalActions, clientSummary: str(ww.clientSummary) });
@@ -142,6 +152,14 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
   if (national) quickWins = quickWins.filter((q) => !GBP_LOCAL_RE.test(q));
   if (quickWins.length < 1) return { ok: false, error: "no_quick_wins" };
 
+  // deprioritised = things to do LIGHTLY or SKIP for this business (validated loosely — drop
+  // malformed entries, never fail the plan over them). Optional; empty is fine.
+  const deprioritised: DeprioritisedItem[] = (Array.isArray(o.deprioritised) ? o.deprioritised : [])
+    .filter((d): d is Record<string, unknown> => !!d && typeof d === "object")
+    .map((d) => ({ item: str(d.item), why: str(d.why) }))
+    .filter((d) => d.item && d.why)
+    .slice(0, 8);
+
   const timelineNote = str(o.timelineNote);
   const guaranteeNote = str(o.guaranteeNote);
   if (!timelineNote || !guaranteeNote) return { ok: false, error: "missing_notes" };
@@ -155,6 +173,7 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
       weeks: orderedWeeks,
       quickWins,
       directories,
+      deprioritised,
       timelineNote,
       guaranteeNote,
     },
@@ -263,6 +282,39 @@ If LOCAL:
 - Keep the local-first weighting: GBP + Bing Places + Apple Business Connect LEAD (they are
   genuine quick wins), alongside local citations, reviews, and location/area pages.
 
+════════ RANK EVERY ACTION BY LEVERAGE (for THIS business — this is the point) ════════
+This plan is PRIORITISED ADVICE, not a flat checklist. Give EVERY internalAction a "priority"
+of "high", "medium" or "low" based on its LEVERAGE FOR THIS SPECIFIC BUSINESS — how much it
+actually moves the needle on getting cited by AI given this business's type / location /
+website / national-or-local status — NOT its generic importance. RANK HONESTLY: a real plan
+has a few HIGH-leverage moves and several lower ones. Do NOT mark everything high; if
+everything is high, nothing is.
+
+EDITORIALISE — for LOW-priority actions, say so plainly in the action's "why": that it's
+low-value for THIS business and what to do about it (do lightly / set up once and move on /
+skip). Never present a low-leverage action as if it deserves real effort.
+
+DEPRIORITISED / SKIP LIST — also populate the top-level "deprioritised" array with anything
+that is genuinely NOT worth much effort for this business type: each entry = { item, why },
+where "why" explains it's low-value here and whether to set up once or skip entirely. Leave it
+empty only if truly nothing applies.
+
+Concrete ranking guidance (apply to the ACTUAL business, don't copy blindly):
+- NATIONAL / no-premises firm (e.g. a UK-wide accountancy, law or consultancy firm):
+    · HIGH: NAP consistency (foundational), Organization / professional identity schema,
+      site-readability (render-without-JS, entity clarity), industry & authority DIRECTORIES
+      for the vertical, earned media / citations, FAQ + front-loaded answers.
+    · LOW: Google Business Profile — "set up once, don't over-invest"; Bing Places — "set up
+      once, minimal effort". These verify the entity but won't drive citations for a firm with
+      no walk-in trade.
+    · SKIP (put in "deprioritised"): Apple Business Connect — it's a maps product for
+      businesses customers physically visit; not relevant to a national no-premises firm.
+- LOCAL business with premises (barber, dentist, café, garage, restaurant): FLIP IT — Google
+  Business Profile + Bing Places + Apple Business Connect + local citations/reviews = HIGH
+  (these are the main lever); broad national directories drop to lower priority.
+Ground every ranking in the verified methodology above (what actually gets a business CITED),
+not in habit.
+
 ════════ USE THE ACTUAL DATA ════════
 - Name the specific engines that did NOT return the business.
 - COMPETITOR NAMES — JUDGE EACH BEFORE USING: the supplied competitor list is a set of
@@ -294,11 +346,15 @@ If LOCAL:
   "guaranteed top result".
 - pillar (per action) = the layer it belongs to, one of: "Data Layer", "Content Layer",
   "Off-site / Earned", "Reviews", "Community", "Measurement".
+- priority (per action) = "high" | "medium" | "low" leverage FOR THIS BUSINESS (see the ranking
+  section above). Required on every action.
 
 Return the whole plan via return_playbook. Include a "Week 0" baseline week, then the Sprint
-windows that apply. quickWins = 3-6 highest-leverage first moves. directories = the real,
-named authority directories/platforms for THIS vertical with a one-line why each. timelineNote
-= the honest re-audit/instability framing. guaranteeNote = the honest week-8 before/after promise.`;
+windows that apply. Rank every action's priority. quickWins = 3-6 highest-leverage first moves.
+directories = the real, named authority directories/platforms for THIS vertical with a one-line
+why each. deprioritised = what to do lightly or skip for this business (empty only if nothing
+applies). timelineNote = the honest re-audit/instability framing. guaranteeNote = the honest
+week-8 before/after promise.`;
 
 const PLAYBOOK_TOOL = {
   type: "function",
@@ -326,11 +382,12 @@ const PLAYBOOK_TOOL = {
                   type: "object",
                   properties: {
                     action: { type: "string" },
-                    why: { type: "string" },
+                    why: { type: "string", description: "Why it matters for THIS business. For LOW priority, say plainly it's low-value here + what to do (do lightly / set up once / skip)." },
                     pillar: { type: "string", enum: ["Data Layer", "Content Layer", "Off-site / Earned", "Reviews", "Community", "Measurement"] },
+                    priority: { type: "string", enum: ["high", "medium", "low"], description: "LEVERAGE for THIS specific business (not generic importance). Rank honestly — do NOT make everything high." },
                     dependsOn: { type: "string" },
                   },
-                  required: ["action", "why", "pillar"],
+                  required: ["action", "why", "pillar", "priority"],
                   additionalProperties: false,
                 },
               },
@@ -349,6 +406,20 @@ const PLAYBOOK_TOOL = {
             type: "object",
             properties: { name: { type: "string" }, why: { type: "string" } },
             required: ["name", "why"],
+            additionalProperties: false,
+          },
+        },
+        deprioritised: {
+          type: "array",
+          maxItems: 8,
+          description: "Things to do LIGHTLY or SKIP for THIS business (e.g. Apple Business Connect for a national no-premises firm). Empty if nothing applies.",
+          items: {
+            type: "object",
+            properties: {
+              item: { type: "string", description: "What to skip / go light on." },
+              why: { type: "string", description: "Why it's low-value for THIS business, and whether to set up once or skip entirely." },
+            },
+            required: ["item", "why"],
             additionalProperties: false,
           },
         },
