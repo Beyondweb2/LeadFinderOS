@@ -21,7 +21,7 @@ import type { Country } from '@/types/outreach';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { downloadReportHtml, type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { renderPlaybookHtml, downloadPlaybookHtml, type PlaybookData, type PlaybookView } from '@/lib/playbookHtml';
-import { buildSchema } from '@/lib/schemaType';
+import { buildSchema, normalizeUrl } from '@/lib/schemaType';
 import { usePersistedState } from '@/hooks/usePersistedState';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
@@ -617,6 +617,12 @@ const AiAudit = () => {
   const [schemaWebsite, setSchemaWebsite] = useState('');
   const [schemaCopied, setSchemaCopied] = useState(false);
   const [schemaSaving, setSchemaSaving] = useState(false);
+  // "Link hub" section — collapsible list of the client's own URLs (label + url), loaded from
+  // ai_audits.client_links and saved back per audit. Mirrors the Schema markup section.
+  const [showLinks, setShowLinks] = useState(false);
+  const [clientLinks, setClientLinks] = useState<{ label: string; url: string }[]>([]);
+  const [linksSaving, setLinksSaving] = useState(false);
+  const [linkCopiedIdx, setLinkCopiedIdx] = useState<number | null>(null);
   // The run whose opened-audit view we're on. Persisted (per-tab) so navigating away to the
   // report/playbook sub-views — or off the page entirely — and back returns to THIS audit
   // instead of resetting to the list. Cleared by "New audit" and "Back" (to the list).
@@ -939,18 +945,26 @@ const AiAudit = () => {
   // Load the audit's stored NAP + specialism + website for the Schema section whenever the
   // opened audit changes (these aren't in the wizard/results state on a reopened audit).
   useEffect(() => {
-    if (!auditId) { setSchemaNap({ phone: '', address: '', email: '', specialism: '' }); setSchemaWebsite(''); return; }
+    if (!auditId) { setSchemaNap({ phone: '', address: '', email: '', specialism: '' }); setSchemaWebsite(''); setClientLinks([]); return; }
     let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from('ai_audits')
-        .select('website, business_phone, business_address, business_email, specialism')
+        .select('website, business_phone, business_address, business_email, specialism, client_links')
         .eq('id', auditId)
         .maybeSingle();
       if (cancelled || !data) return;
-      const d = data as { website: string | null; business_phone: string | null; business_address: string | null; business_email: string | null; specialism: string | null };
+      const d = data as { website: string | null; business_phone: string | null; business_address: string | null; business_email: string | null; specialism: string | null; client_links: unknown };
       setSchemaWebsite(d.website ?? '');
       setSchemaNap({ phone: d.business_phone ?? '', address: d.business_address ?? '', email: d.business_email ?? '', specialism: d.specialism ?? '' });
+      // Guard: only accept an array of {label,url}; anything else falls back to [].
+      const links = Array.isArray(d.client_links)
+        ? (d.client_links as unknown[]).map((l) => {
+            const o = (l ?? {}) as { label?: unknown; url?: unknown };
+            return { label: typeof o.label === 'string' ? o.label : '', url: typeof o.url === 'string' ? o.url : '' };
+          })
+        : [];
+      setClientLinks(links);
     })();
     return () => { cancelled = true; };
   }, [auditId]);
@@ -983,6 +997,37 @@ const AiAudit = () => {
       toast({ title: "Couldn't save details", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
     } finally {
       setSchemaSaving(false);
+    }
+  };
+
+  // Persist the link hub to ai_audits.client_links: trim, drop rows blank in BOTH fields, and
+  // normalise each url with the shared schemaType helper. Mirrors saveSchemaDetails.
+  const saveClientLinks = async () => {
+    if (!auditId || linksSaving) return;
+    setLinksSaving(true);
+    try {
+      const cleaned = clientLinks
+        .map((l) => ({ label: l.label.trim(), url: normalizeUrl(l.url) }))
+        .filter((l) => l.label || l.url);
+      const { error } = await supabase.from('ai_audits').update({ client_links: cleaned }).eq('id', auditId);
+      if (error) throw new Error(error.message);
+      setClientLinks(cleaned);
+      toast({ title: 'Links saved' });
+    } catch (e) {
+      toast({ title: "Couldn't save links", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setLinksSaving(false);
+    }
+  };
+
+  // Copy a single link's URL (reuses the inline clipboard convention from copySchema).
+  const copyLink = async (url: string, idx: number) => {
+    try {
+      await navigator.clipboard.writeText(normalizeUrl(url));
+      setLinkCopiedIdx(idx);
+      setTimeout(() => setLinkCopiedIdx((i) => (i === idx ? null : i)), 2000);
+    } catch {
+      toast({ title: 'Copy failed', variant: 'destructive' });
     }
   };
 
@@ -1740,6 +1785,62 @@ const AiAudit = () => {
                       <Button variant="outline" size="sm" onClick={saveSchemaDetails} disabled={schemaSaving}>
                         {schemaSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                         {schemaSaving ? 'Saving…' : 'Save details'}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* Link hub — the client's own URLs, collapsed by default (mirrors Schema markup). */}
+          {!isDraining && liveTally.done > 0 && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowLinks((s) => !s)}
+                className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+              >
+                <span className="text-sm font-semibold">
+                  Link hub
+                  <span className="ml-1.5 font-normal text-muted-foreground">· {clientLinks.length} {clientLinks.length === 1 ? 'link' : 'links'}</span>
+                </span>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showLinks ? 'rotate-180' : ''}`} />
+              </button>
+              {showLinks && (
+                <Card>
+                  <CardContent className="p-4 sm:p-5 space-y-3">
+                    <p className="text-sm text-muted-foreground">Store this client's own links — Wix login, Companies House, Google Business Profile, live site — so they're always to hand.</p>
+                    <div className="space-y-2">
+                      {clientLinks.map((link, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <Input
+                            className="sm:max-w-[12rem]"
+                            value={link.label}
+                            placeholder="Label"
+                            onChange={(e) => setClientLinks((prev) => prev.map((x, xi) => xi === i ? { ...x, label: e.target.value } : x))}
+                          />
+                          <Input
+                            value={link.url}
+                            placeholder="https://…"
+                            onChange={(e) => setClientLinks((prev) => prev.map((x, xi) => xi === i ? { ...x, url: e.target.value } : x))}
+                          />
+                          <Button variant="ghost" size="icon" onClick={() => copyLink(link.url, i)} title="Copy URL" disabled={!link.url.trim()}>
+                            {linkCopiedIdx === i ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => setClientLinks((prev) => prev.filter((_, xi) => xi !== i))} title="Remove">
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button variant="outline" size="sm" onClick={() => setClientLinks((prev) => [...prev, { label: '', url: '' }])}>
+                        <Plus className="mr-1 h-4 w-4" /> Add link
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={saveClientLinks} disabled={linksSaving}>
+                        {linksSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        {linksSaving ? 'Saving…' : 'Save links'}
                       </Button>
                     </div>
                   </CardContent>

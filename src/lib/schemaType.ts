@@ -11,6 +11,14 @@
 export type BusinessScope = "national" | "local" | "hybrid";
 export type SchemaType = "AccountingService" | "ProfessionalService" | "Organization";
 
+/** Normalise a free-typed URL to an absolute one — a stored value like "ablm.co.uk" isn't a
+ *  valid URL; prefix https:// when no scheme is present. Already-valid http(s) URLs and empty
+ *  strings are returned untouched (trimmed). Shared by buildSchema and the link-hub save. */
+export function normalizeUrl(raw: string): string {
+  const u = (raw || "").trim();
+  return u ? (/^https?:\/\//i.test(u) ? u : `https://${u}`) : "";
+}
+
 /** Country enum / raw → display name for areaServed / addressCountry. */
 const COUNTRY_DISPLAY: Record<string, string> = {
   UK: "United Kingdom", GB: "United Kingdom", "United Kingdom": "United Kingdom",
@@ -84,10 +92,8 @@ export function buildSchema(input: SchemaInput): Record<string, unknown> {
   const name = (input.name || "").trim() || "This business";
   const businessType = (input.businessType || "").trim();
   const locationText = (input.locationText || "").trim();
-  // Normalise to a valid absolute URL — a stored value like "ablm.co.uk" isn't a valid schema
-  // URL; prefix https:// when no scheme is present. Already-valid http(s) URLs are untouched.
-  const rawUrl = (input.url || "").trim();
-  const url = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : "";
+  // Normalise to a valid absolute URL (a stored value like "ablm.co.uk" isn't valid schema URL).
+  const url = normalizeUrl(input.url || "");
   const phone = (input.phone || "").trim();
   const address = (input.address || "").trim();
   const email = (input.email || "").trim();
