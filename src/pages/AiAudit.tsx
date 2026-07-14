@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
+  Copy, Save,
 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
@@ -20,6 +21,7 @@ import type { Country } from '@/types/outreach';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { downloadReportHtml, type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { renderPlaybookHtml, downloadPlaybookHtml, type PlaybookData, type PlaybookView } from '@/lib/playbookHtml';
+import { buildSchema } from '@/lib/schemaType';
 import { usePersistedState } from '@/hooks/usePersistedState';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
@@ -606,6 +608,15 @@ const AiAudit = () => {
   // Detailed per-question results are collapsed by default — the opened audit reads as a
   // command centre, not a raw dump. Toggled open on demand.
   const [showDetails, setShowDetails] = useState(false);
+
+  // "Schema markup" section — collapsible JSON-LD generator with editable NAP + specialism.
+  // The four fields + the website URL are loaded from ai_audits (not in the wizard state on a
+  // reopened audit) and saved back on demand, so they pre-fill next visit.
+  const [showSchema, setShowSchema] = useState(false);
+  const [schemaNap, setSchemaNap] = useState({ phone: '', address: '', email: '', specialism: '' });
+  const [schemaWebsite, setSchemaWebsite] = useState('');
+  const [schemaCopied, setSchemaCopied] = useState(false);
+  const [schemaSaving, setSchemaSaving] = useState(false);
   // The run whose opened-audit view we're on. Persisted (per-tab) so navigating away to the
   // report/playbook sub-views — or off the page entirely — and back returns to THIS audit
   // instead of resetting to the list. Cleared by "New audit" and "Back" (to the list).
@@ -925,6 +936,56 @@ const AiAudit = () => {
     }
   };
 
+  // Load the audit's stored NAP + specialism + website for the Schema section whenever the
+  // opened audit changes (these aren't in the wizard/results state on a reopened audit).
+  useEffect(() => {
+    if (!auditId) { setSchemaNap({ phone: '', address: '', email: '', specialism: '' }); setSchemaWebsite(''); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('ai_audits')
+        .select('website, business_phone, business_address, business_email, specialism')
+        .eq('id', auditId)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      const d = data as { website: string | null; business_phone: string | null; business_address: string | null; business_email: string | null; specialism: string | null };
+      setSchemaWebsite(d.website ?? '');
+      setSchemaNap({ phone: d.business_phone ?? '', address: d.business_address ?? '', email: d.business_email ?? '', specialism: d.specialism ?? '' });
+    })();
+    return () => { cancelled = true; };
+  }, [auditId]);
+
+  // Copy the JSON-LD block (existing inline clipboard convention).
+  const copySchema = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setSchemaCopied(true);
+      setTimeout(() => setSchemaCopied(false), 2000);
+    } catch {
+      toast({ title: 'Copy failed', variant: 'destructive' });
+    }
+  };
+
+  // Persist the four schema fields back to ai_audits so they pre-fill next visit.
+  const saveSchemaDetails = async () => {
+    if (!auditId || schemaSaving) return;
+    setSchemaSaving(true);
+    try {
+      const { error } = await supabase.from('ai_audits').update({
+        business_phone: schemaNap.phone.trim() || null,
+        business_address: schemaNap.address.trim() || null,
+        business_email: schemaNap.email.trim() || null,
+        specialism: schemaNap.specialism.trim() || null,
+      }).eq('id', auditId);
+      if (error) throw new Error(error.message);
+      toast({ title: 'Details saved' });
+    } catch (e) {
+      toast({ title: "Couldn't save details", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setSchemaSaving(false);
+    }
+  };
+
   const reopenAudit = async (audit: AuditRow) => {
     const { data: latest } = await supabase
       .from('ai_audit_runs')
@@ -1128,6 +1189,22 @@ const AiAudit = () => {
   const vizPct = vizTotal > 0 ? Math.round((vizNamed / vizTotal) * 100) : 0;
   const vizTone: TileTone = vizTotal === 0 ? 'muted' : vizPct >= 50 ? 'green' : vizPct > 0 ? 'amber' : 'red';
   const seoGrade = hasSeo ? String((run?.results as { seo?: { overallGrade?: string } } | null)?.seo?.overallGrade ?? '') : '';
+
+  // Live JSON-LD schema for the "Schema markup" section — rebuilt each render as the NAP /
+  // specialism inputs change. businessScope comes from the generated playbook when present.
+  const schemaBusinessScope = (run?.results as { playbook?: { businessScope?: 'national' | 'local' | 'hybrid' } } | null)?.playbook?.businessScope;
+  const schemaCode = `<script type="application/ld+json">\n${JSON.stringify(buildSchema({
+    name: resultsBusinessName || businessName,
+    url: schemaWebsite || (resultsHasWebsite ? website : ''),
+    businessType,
+    businessScope: schemaBusinessScope,
+    locationText,
+    country,
+    phone: schemaNap.phone,
+    address: schemaNap.address,
+    email: schemaNap.email,
+    specialism: schemaNap.specialism,
+  }), null, 2)}\n</script>`;
 
   // Submit pasted SEO text → apply-seo-paste (AI extract + grade) → store at results.seo.
   // On success: refresh the run so results.seo is live, and INVALIDATE this run's cached
@@ -1616,6 +1693,59 @@ const AiAudit = () => {
               onGeneratePlaybook={() => generatePlaybook(false)}
               generating={playbookGenerating}
             />
+          )}
+
+          {/* Schema markup — copy-paste JSON-LD, collapsed by default (mirrors Detailed results). */}
+          {!isDraining && liveTally.done > 0 && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowSchema((s) => !s)}
+                className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+              >
+                <span className="text-sm font-semibold">
+                  Schema markup
+                  <span className="ml-1.5 font-normal text-muted-foreground">· JSON-LD for the site &lt;head&gt;</span>
+                </span>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showSchema ? 'rotate-180' : ''}`} />
+              </button>
+              {showSchema && (
+                <Card>
+                  <CardContent className="p-4 sm:p-5 space-y-3">
+                    <p className="text-sm text-muted-foreground">Structured data that helps AI engines read this business. Fill in the details below, then copy the code into the site's &lt;head&gt;.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Phone</Label>
+                        <Input value={schemaNap.phone} onChange={(e) => setSchemaNap((p) => ({ ...p, phone: e.target.value }))} placeholder="+44 …" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Email</Label>
+                        <Input value={schemaNap.email} onChange={(e) => setSchemaNap((p) => ({ ...p, email: e.target.value }))} placeholder="hello@example.co.uk" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Address</Label>
+                        <Input value={schemaNap.address} onChange={(e) => setSchemaNap((p) => ({ ...p, address: e.target.value }))} placeholder="Street, town, postcode" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Specialism</Label>
+                        <Input value={schemaNap.specialism} onChange={(e) => setSchemaNap((p) => ({ ...p, specialism: e.target.value }))} placeholder="e.g. CIS / construction" />
+                      </div>
+                    </div>
+                    <pre className="overflow-x-auto rounded-lg border border-border bg-muted/40 p-3 text-[11px] leading-relaxed"><code>{schemaCode}</code></pre>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" onClick={() => copySchema(schemaCode)}>
+                        {schemaCopied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                        {schemaCopied ? 'Copied' : 'Copy code'}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={saveSchemaDetails} disabled={schemaSaving}>
+                        {schemaSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        {schemaSaving ? 'Saving…' : 'Save details'}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           )}
 
           {/* Detailed per-question results — collapsed by default behind one toggle. */}
