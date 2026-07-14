@@ -261,13 +261,40 @@ function competitorsForEngine(answerText: string, organicNames: string[], busine
   return dedupExcludingSelf([...fromOrganic, ...fromText], businessName);
 }
 
+/* ── AI Overview furniture strip ─────────────────────────────────────────────
+ * Google's full-page AI Overview scrape appends UI chrome AFTER the real answer —
+ * the share row, feedback widget, "AI responses may include mistakes" disclaimer, and
+ * voice-input controls — which pollutes named-detection and competitor extraction.
+ * Truncate at the EARLIEST of a few SPECIFIC, unambiguous MULTI-WORD markers so the whole
+ * trailing furniture block is removed in one cut. Deliberately NOT generic single words
+ * (share/report/thank/close): only these exact phrases, so it can only ever cut the trailing
+ * chrome, never real mid-answer content. No marker present → text returned unchanged. */
+const AIO_FURNITURE_MARKERS = [
+  "AI responses may include mistakes",
+  "AI can make mistakes",
+  "ShareThis public link",
+  "Your feedback helps Google improve",
+  "Report a problem",
+];
+function stripAiOverviewFurniture(text: string): string {
+  const hay = text.toLowerCase();
+  let cut = -1;
+  for (const m of AIO_FURNITURE_MARKERS) {
+    const i = hay.indexOf(m.toLowerCase());
+    if (i >= 0 && (cut === -1 || i < cut)) cut = i;
+  }
+  return cut >= 0 ? text.slice(0, cut).trim() : text;
+}
+
 /** An AI engine block: {text, sources[]}. named = name in answer OR in a source title. */
 function normalizeEngineBlock(
   block: Record<string, unknown>,
   organicNames: string[],
   businessName: string,
 ): AiEngineResult {
-  const answer_text = asStr(firstKey(block, TEXT_KEYS));
+  // Clean once at the top so named-detection, competitorsForEngine, AND the stored answer_text
+  // all get the furniture-stripped value.
+  const answer_text = stripAiOverviewFurniture(asStr(firstKey(block, TEXT_KEYS)));
   const rawSources = firstKey(block, SOURCES_KEYS);
   const sources = Array.isArray(rawSources) ? rawSources : [];
   const citations = sources.map(citationOf).filter((c) => c.title || c.url).slice(0, MAX_CITATIONS);
