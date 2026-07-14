@@ -245,6 +245,18 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: "bad_number", lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }
 
+    // Cross-channel suppression: "one no = suppressed everywhere". If this number opted
+    // out (e.g. an SMS STOP recorded by twilio-inbound), NEVER message it on WhatsApp
+    // either. contact_suppressions is keyed by canonical E.164 (+…); toNumber is digits.
+    const { data: suppressed } = await service
+      .from("contact_suppressions").select("id").eq("phone_e164", `+${toNumber}`).maybeSingle();
+    if (suppressed) {
+      await service.from("outreach_leads").update({
+        status: "opted_out", whatsapp_delivery_status: "suppressed", contact_method: null,
+      }).eq("id", lead.id);
+      return json({ ok: true, skipped: "suppressed", lead_id: lead.id, business: lead.business_name, ...statusPayload });
+    }
+
     // Tier-1 offline line-type backstop: the enqueue UI already blocks non-mobiles,
     // but a number could have been queued before this shipped, or via a bypassed path.
     // Re-check here so we NEVER spend a send at a landline/VoIP — flag it for SMS and
