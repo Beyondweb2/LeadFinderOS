@@ -110,14 +110,13 @@ export function buildSchema(input: SchemaInput): Record<string, unknown> {
   const topics = specialism ? splitSpecialism(specialism) : [];
   if (topics.length) obj.knowsAbout = topics;
 
-  // Area / address: national|hybrid → country-level areaServed, NO geo. local → PostalAddress
-  // (when provided) + the locality text as areaServed.
-  if (nationalish) {
-    obj.areaServed = { "@type": "Country", name: cName };
-  } else {
-    if (address) obj.address = { "@type": "PostalAddress", streetAddress: address, ...(cName ? { addressCountry: cName } : {}) };
-    if (locationText) obj.areaServed = locationText;
-  }
+  // Address: a PostalAddress (registered-office / entity-trust signal) whenever an address is
+  // given — for ALL scopes, national included. NEVER any geo / GeoCoordinates / hasMap, so a
+  // national firm never reads as a walk-in. Area: national|hybrid → country-level areaServed;
+  // local → the locality text.
+  if (address) obj.address = { "@type": "PostalAddress", streetAddress: address, ...(cName ? { addressCountry: cName } : {}) };
+  if (nationalish) obj.areaServed = { "@type": "Country", name: cName };
+  else if (locationText) obj.areaServed = locationText;
 
   if (phone) obj.telephone = phone;
   if (email) obj.email = email;
