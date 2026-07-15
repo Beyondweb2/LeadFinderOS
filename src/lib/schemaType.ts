@@ -31,6 +31,23 @@ function countryName(country: string): string {
   return COUNTRY_DISPLAY[c] ?? c;
 }
 
+/** Country enum / raw → ISO 3166-1 alpha-2 code for schema addressCountry (e.g. "GB").
+ *  Full display names are for prose (countryName); the schema addressCountry wants the code. */
+function countryCode(country: string): string {
+  const c = (country || "").trim().toUpperCase();
+  if (!c) return "GB"; // UK-first default
+  const CODE: Record<string, string> = {
+    UK: "GB", GB: "GB", "UNITED KINGDOM": "GB", "GREAT BRITAIN": "GB",
+    USA: "US", US: "US", "UNITED STATES": "US", IRELAND: "IE", AUSTRALIA: "AU",
+    CANADA: "CA", NEWZEALAND: "NZ", "NEW ZEALAND": "NZ",
+  };
+  return CODE[c] ?? c;
+}
+
+/** Display country names that take a leading "the" in prose ("across the United Kingdom").
+ *  Most do not ("across Australia"); keep this to the ones that genuinely warrant it. */
+const THE_COUNTRIES = new Set<string>(["United Kingdom", "United States"]);
+
 // A business type that reads as accountancy → AccountingService; other professional-services
 // signals → ProfessionalService; anything else → Organization.
 const ACCOUNTANCY_RE = /\b(?:account(?:ant|ants|ancy|ing)?|bookkeep(?:er|ers|ing)?|payroll|audit(?:or|ors|ing|s)?|tax|taxation)\b/i;
@@ -103,6 +120,7 @@ export function buildSchema(input: SchemaInput): Record<string, unknown> {
   const nationalish = scope === "national" || scope === "hybrid";
   const type = decideSchemaType(businessType);
   const cName = countryName(input.country || "");
+  const cCode = countryCode(input.country || "");
 
   const obj: Record<string, unknown> = { "@context": "https://schema.org", "@type": type, name };
   if (url) obj.url = url;
@@ -114,7 +132,7 @@ export function buildSchema(input: SchemaInput): Record<string, unknown> {
   // given — for ALL scopes, national included. NEVER any geo / GeoCoordinates / hasMap, so a
   // national firm never reads as a walk-in. Area: national|hybrid → country-level areaServed;
   // local → the locality text.
-  if (address) obj.address = { "@type": "PostalAddress", streetAddress: address, ...(cName ? { addressCountry: cName } : {}) };
+  if (address) obj.address = { "@type": "PostalAddress", streetAddress: address, ...(cCode ? { addressCountry: { "@type": "Country", name: cCode } } : {}) };
   if (nationalish) obj.areaServed = { "@type": "Country", name: cName };
   else if (locationText) obj.areaServed = locationText;
 
@@ -133,7 +151,8 @@ export function buildSchema(input: SchemaInput): Record<string, unknown> {
   // "a" vs "an" from the label's leading vowel (simple a/e/i/o/u rule).
   const article = /^[aeiou]/i.test(typeLabel.trim()) ? "an" : "a";
   const specPhrase = specialism ? ` specialising in ${specialism}` : "";
-  const areaPhrase = nationalish ? ` serving clients across ${cName}` : (locationText ? ` based in ${locationText}` : "");
+  const cNamePhrase = THE_COUNTRIES.has(cName) ? `the ${cName}` : cName;
+  const areaPhrase = nationalish ? ` serving clients across ${cNamePhrase}` : (locationText ? ` based in ${locationText}` : "");
   obj.description = `${name} is ${article} ${typeLabel}${specPhrase}${areaPhrase}.`.replace(/\s+/g, " ").trim();
 
   return obj;
