@@ -42,6 +42,9 @@ verify_jwt = false
 [functions.scan-site-details]
 verify_jwt = false
 
+[functions.run-seo-scan]
+verify_jwt = false
+
 [functions.process-whatsapp-queue]
 verify_jwt = false
 
