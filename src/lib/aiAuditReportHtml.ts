@@ -35,7 +35,6 @@ export interface AiAuditSeo {
   overallGrade: string;                 // "A+".."F-"
   categories: {
     onPage: SeoCategoryGrade;
-    localPresence: SeoCategoryGrade;
     contentTechnical: SeoCategoryGrade;
   };
   leadFindings: SeoFinding[];
@@ -137,7 +136,7 @@ function seoSection(seo: AiAuditSeo | undefined): string {
     <section class="seo">
       <div class="sec-eyebrow">Your website</div>
       <div class="sec-title">How findable is your website?</div>
-      <p class="seo-intro">Your site’s overall SEO grade is <b style="color:${overallColour}">${esc(overallGrade)}</b>. A site can be technically sound and still land here — because AI and search can’t yet establish it as a real, findable business. Here’s what’s holding it back.</p>
+      <p class="seo-intro">Your site’s overall SEO grade is <b style="color:${overallColour}">${esc(overallGrade)}</b>. This scores how well your pages are built for search engines and AI to read - the on-page and technical foundations. Here’s what’s holding it back.</p>
 
       <div class="seo-body">
         <div class="seo-grades">
@@ -145,7 +144,6 @@ function seoSection(seo: AiAuditSeo | undefined): string {
           <div class="seo-grade-split" aria-hidden="true"></div>
           <div class="seo-cats">
             ${gradeCircle(c.onPage.grade, c.onPage.score, 60, "On-Page SEO", true)}
-            ${gradeCircle(c.localPresence.grade, c.localPresence.score, 60, "Local Presence", true)}
             ${gradeCircle(c.contentTechnical.grade, c.contentTechnical.score, 60, "Content & Technical", true)}
           </div>
         </div>
