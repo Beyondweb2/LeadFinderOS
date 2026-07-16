@@ -25,9 +25,6 @@ function json(body: unknown, status = 200): Response {
 // deno-lint-ignore no-explicit-any
 type Row = any;
 
-// Our fixed Sprint windows — every action must map to one of these.
-const WINDOWS = ["Week 0", "Weeks 1-2", "Weeks 2-4", "Week 4", "Weeks 5-8", "Week 8"] as const;
-const WINDOW_SET = new Set<string>(WINDOWS);
 // The three engines in scope (never Perplexity / Copilot).
 const PLAYBOOK_ENGINES: { key: string; label: string }[] = [
   { key: "chatgpt", label: "ChatGPT" },
@@ -41,16 +38,21 @@ type Priority = "high" | "medium" | "low";
 type LeadTime = "fast" | "medium" | "slow";
 const PRIORITIES = new Set<Priority>(["high", "medium", "low"]);
 const LEAD_TIMES = new Set<LeadTime>(["fast", "medium", "slow"]);
+// Sort weights: the whole plan is ONE ordered list — highest-leverage first, and within a
+// priority tier the slowest-burning (start-now) work first (it takes longest to pay off).
+const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+const LEADTIME_ORDER: Record<LeadTime, number> = { slow: 0, medium: 1, fast: 2 };
+const MAX_ACTIONS = 40; // upper bound on the flat action list
 interface InternalAction { action: string; why: string; pillar: string; priority: Priority; leadTime: LeadTime; dependsOn?: string }
-interface PlaybookWeek { window: string; goal: string; internalActions: InternalAction[]; clientSummary: string }
 interface DirectoryRec { name: string; why: string }
 interface DeprioritisedItem { item: string; why: string }
 interface Playbook {
   businessName: string;
   vertical: string;
   businessScope: "national" | "local" | "hybrid";
-  summary: string;
-  weeks: PlaybookWeek[];
+  summary: string;              // internal/intro overview (where they stand + what we'll do)
+  clientSummary: string;        // plain-language roadmap paragraph for the client view
+  actions: InternalAction[];    // ONE ordered list (was per-week internalActions); code-sorted
   quickWins: string[];
   directories: DirectoryRec[];
   deprioritised: DeprioritisedItem[]; // things to do lightly or skip for THIS business
@@ -123,35 +125,29 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
   const summary = str(o.summary);
   if (summary.length < 20) return { ok: false, error: "missing_summary" };
 
-  const rawWeeks = Array.isArray(o.weeks) ? o.weeks : [];
-  const weeks: PlaybookWeek[] = [];
-  for (const w of rawWeeks) {
-    if (!w || typeof w !== "object") continue;
-    const ww = w as Record<string, unknown>;
-    const window = str(ww.window);
-    const goal = str(ww.goal);
-    if (!WINDOW_SET.has(window) || !goal) continue; // must map to a real Sprint window
-    const internalActions: InternalAction[] = (Array.isArray(ww.internalActions) ? ww.internalActions : [])
-      .filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
-      .map((a) => ({
-        action: str(a.action), why: str(a.why), pillar: str(a.pillar),
-        // Default to "medium" for missing/invalid priority / leadTime — never reject the plan over it.
-        priority: (typeof a.priority === "string" && PRIORITIES.has(a.priority as Priority) ? a.priority : "medium") as Priority,
-        leadTime: (typeof a.leadTime === "string" && LEAD_TIMES.has(a.leadTime as LeadTime) ? a.leadTime : "medium") as LeadTime,
-        dependsOn: str(a.dependsOn) || undefined,
-      }))
-      .filter((a) => a.action && a.why && a.pillar)
-      .slice(0, 8);
-    weeks.push({ window, goal, internalActions, clientSummary: str(ww.clientSummary) });
-  }
-  // Keep at most one entry per window, ordered by our Sprint sequence.
-  const byWindow = new Map<string, PlaybookWeek>();
-  for (const w of weeks) if (!byWindow.has(w.window)) byWindow.set(w.window, w);
-  const orderedWeeks = WINDOWS.filter((win) => byWindow.has(win)).map((win) => {
-    const w = byWindow.get(win)!;
-    return { window: w.window, goal: w.goal, internalActions: w.internalActions, clientSummary: w.clientSummary };
-  });
-  if (orderedWeeks.length < 3) return { ok: false, error: "too_few_weeks" };
+  const clientSummary = str(o.clientSummary);
+  if (clientSummary.length < 20) return { ok: false, error: "missing_client_summary" };
+
+  // ONE flat action list (was per-week internalActions). Drop malformed rows; default missing
+  // priority / leadTime to "medium" rather than rejecting the whole plan.
+  const actions: InternalAction[] = (Array.isArray(o.actions) ? o.actions : [])
+    .filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
+    .map((a) => ({
+      action: str(a.action), why: str(a.why), pillar: str(a.pillar),
+      priority: (typeof a.priority === "string" && PRIORITIES.has(a.priority as Priority) ? a.priority : "medium") as Priority,
+      leadTime: (typeof a.leadTime === "string" && LEAD_TIMES.has(a.leadTime as LeadTime) ? a.leadTime : "medium") as LeadTime,
+      dependsOn: str(a.dependsOn) || undefined,
+    }))
+    .filter((a) => a.action && a.why && a.pillar)
+    .slice(0, MAX_ACTIONS);
+  if (actions.length < 3) return { ok: false, error: "too_few_actions" };
+
+  // CODE-ENFORCED ORDER (the fix): highest-leverage first, and within a priority tier the
+  // slowest-burning start-now work first. Array.sort is stable in Deno, so ties keep the
+  // model's original order.
+  actions.sort((a, b) =>
+    (PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]) ||
+    (LEADTIME_ORDER[a.leadTime] - LEADTIME_ORDER[b.leadTime]));
 
   const directories: DirectoryRec[] = (Array.isArray(o.directories) ? o.directories : [])
     .filter((d): d is Record<string, unknown> => !!d && typeof d === "object")
@@ -170,8 +166,8 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
 
   // quickWins — for NATIONAL or HYBRID firms, code-enforce the prompt's rule: GBP / Bing
   // Places / Apple Business Connect / local-maps / local-listings are NEVER a quick win (the
-  // model still slips them in). GBP stays allowed as a light entity-verification action in the
-  // Data Layer week — we only strip it from quickWins here. LOCAL firms are untouched.
+  // model still slips them in). GBP stays allowed as a light entity-verification action — we
+  // only strip it from quickWins here. LOCAL firms are untouched.
   let quickWins = strArr(o.quickWins, 8);
   if (scope !== "local") quickWins = quickWins.filter((q) => !GBP_LOCAL_RE.test(q));
   if (quickWins.length < 1) return { ok: false, error: "no_quick_wins" };
@@ -195,7 +191,8 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
       vertical: str(o.vertical) || "",
       businessScope: scope,
       summary,
-      weeks: orderedWeeks,
+      clientSummary,
+      actions,
       quickWins,
       directories,
       deprioritised,
@@ -207,8 +204,9 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
 
 const SYSTEM_PROMPT =
 `You are Findable's senior GEO (Generative Engine Optimisation) strategist. You turn an AI-
-visibility audit into a tailored 8-WEEK SPRINT delivery plan for ONE specific business,
-returned as ONE structured object via the return_playbook tool — no prose outside the tool.
+visibility audit into a tailored GEO delivery plan for ONE specific business — ONE ordered
+list of actions plus a client roadmap — returned as ONE structured object via the
+return_playbook tool — no prose outside the tool.
 
 Every plan is grounded in THIS business's real audit data. Never invent specifics; where a
 detail is missing, say what to CONFIRM AT ONBOARDING instead of guessing.
@@ -219,38 +217,29 @@ Write ALL brand / product / engine names in the OUTPUT in lowercase (chatgpt, ge
 
 Reference the SPECIFIC engines that did / didn't name the business, per-engine.
 
-════════ OUR 8-WEEK SPRINT (map EVERY action to the right window) ════════
-SEQUENCING PRINCIPLE (critical — get the ORDER right, not just the buckets):
-Off-site trust signals — industry / authority directory submissions, citations, earned
-mentions, and review velocity — take WEEKS-TO-MONTHS for AI engines to crawl, cross-check
-across independent sources, and build entity confidence from. They are the SLOWEST to pay
-off, so they must be INITIATED IN WEEK 1 and left to mature — START THE SLOW OFF-SITE WORK
-FIRST. On-site work (schema, NAP, service / FAQ pages, front-loaded answers - plus area pages only where scope calls for them, see the National vs Local fork) lands
-faster, so it runs IN PARALLEL and can complete slightly later. A plan that defers ALL
-directory / earned-media work to Weeks 5-8 is WRONG: the slow-burn off-site items MUST
-appear in Week 1, and Weeks 5-8 are for REINFORCING and CHASING what was started early —
-never the first time off-site work appears.
+════════ ONE ORDERED ACTION LIST (no week buckets) ════════
+Return the whole plan as a SINGLE flat "actions" array — do NOT group by week or map actions
+to time windows. The list ORDER is set in CODE from each action's priority then leadTime
+(highest-leverage first; within a tier, slowest-burning start-now work first), so you do NOT
+sequence the list yourself — you just TAG each action honestly (see the priority + leadTime
+sections below) and describe it well. Cover the full engagement (roughly an 8-week horizon):
+the foundational data-layer work, the slow off-site trust building, the on-site content, and
+the later reinforce/chase/measure work — all as individual actions in the one list.
 
-- "Week 0" — Baseline. Already done (this audit). State plainly where they stand today
-  (per-engine visibility, the competitors AI named instead, SEO grade if present).
-- "Weeks 1-2" — DATA LAYER + KICK OFF THE SLOW OFF-SITE WORK (start now, it takes time to
-  land): in WEEK 1, submit to the industry / authority directories for this vertical AND
-  switch on review velocity at the RIGHT cadence for THIS business - high-frequency local trades ask after every job; B2B / long-cycle / national firms (accountancy, law, consultancy) ask at natural milestones (year-end, project sign-off, onboarding) and prioritise the review platforms that matter for the vertical (industry-specific review sites + Trustpilot for national B2B; Google reviews mainly for local walk-in). Never filter or gate reviews — these are slow-burn, so
-  they LEAD the timeline. In PARALLEL: NAP consistency everywhere AI reads; Organization +
-  (for local firms) LocalBusiness identity schema. Local-map listings (Google Business
-  Profile + Bing Places + Apple Business Connect) LEAD here for LOCAL firms — but for
-  NATIONAL firms they are only a light entity-verification step, not a lead action, and the
-  Week-1 off-site kickoff is industry directories + earned media, NOT local maps (see the
-  National vs Local fork below).
-- "Weeks 2-4" — CONTENT LAYER (on-site, faster payoff): build the on-site pages that fit THIS business's businessScope (set in the National vs Local fork) - service pages always; add area / "near me" pages ONLY when businessScope is local (or the local side of hybrid); for national scope build SECTOR / AUDIENCE pages instead (e.g. "[service] for [sector] uk"), never area pages. FAQ pages that match real question phrasing (4-8 FAQs, 40-60 word answers); front-
-  load a direct 40-60 word answer on key pages. CONTINUE the off-site work in parallel: more
-  citations / earned mentions and additional "best of" / niche directory placements building
-  on the submissions started in Week 1.
-- "Week 4" — Mid-scan: re-check which prompts/engines have flipped; report progress.
-- "Weeks 5-8" — REINFORCE & CHASE what was STARTED EARLY (do NOT begin off-site here): follow
-  up on pending directory approvals / listings, add more citations / earned mentions, and
-  close the specific competitor gaps vs the firms AI named. Iterate on whatever HASN'T flipped.
-- "Week 8" — Final scan, before/after per engine, guarantee check.
+SEQUENCING PRINCIPLE (why the tags matter): off-site trust signals — industry / authority
+directory submissions, citations, earned mentions, and review velocity — take WEEKS-TO-MONTHS
+for AI engines to crawl, cross-check across independent sources, and build entity confidence
+from. They are the SLOWEST to pay off, so they must be STARTED NOW even though the payoff lands
+late — tag them leadTime "slow" so the code floats them to the top of their priority tier.
+On-site work (schema, NAP, service / FAQ pages, front-loaded answers - plus area pages only
+where scope calls for them, see the National vs Local fork) lands faster: tag it "fast" (or
+"medium"). Review velocity: switch it on at the RIGHT cadence for THIS business — high-frequency
+local trades ask after every job; B2B / long-cycle / national firms (accountancy, law,
+consultancy) ask at natural milestones (year-end, project sign-off, onboarding) and prioritise
+the review platforms that matter for the vertical (industry-specific review sites + Trustpilot
+for national B2B; Google reviews mainly for local walk-in). Never filter or gate reviews.
+Include measurement actions (mid-point re-scan, final before/after per engine) as their own
+list items too.
 
 ════════ VERIFIED 2026 GEO METHODOLOGY (the moat — bake these in) ════════
 - AI CITES, it doesn't rank. It recommends a business it can READ, VERIFY as a distinct
@@ -262,10 +251,22 @@ never the first time off-site work appears.
   be cited; entity clarity + schema lifts small-brand appearances ~36%; schema improves LLM
   discoverability ~67% but is NOT sufficient alone.
 - INDUSTRY-SPECIFIC AUTHORITY DIRECTORIES are a top lever. Identify the real ones for THIS
-  vertical and prioritise tier-1 general → niche industry body → local. Examples:
-  accountant → ICAEW, ACCA, Chartered Institute of Taxation, unbiased.co.uk; solicitor →
-  Law Society "Find a Solicitor", SRA; dentist → GDC, BDA; plus Bing Places, Apple Business
-  Connect, Yell for most UK local firms. Pick the ones that genuinely fit the business.
+  vertical and prioritise tier-1 general → niche industry body → local. Examples (illustrative
+  of the SPACE, not a set to suggest wholesale): accountant → an ICAEW / ACCA / AAT / CIMA
+  member directory + Chartered Institute of Taxation + unbiased.co.uk; solicitor → Law Society
+  "Find a Solicitor" / SRA (or CILEx for legal executives); dentist → GDC, BDA; plus Bing
+  Places, Apple Business Connect, Yell for most UK local firms. Pick the ones that genuinely fit.
+- PROFESSIONAL-BODY ACCURACY (critical — do NOT mis-suggest): a firm belongs to SOME
+  professional bodies but not others, and rival bodies are mutually exclusive for a given firm
+  (an accountant is ACCA OR ICAEW OR AAT OR CIMA — not all of them; a lawyer is SRA-regulated
+  OR CILEx). The input does NOT state which body THIS firm belongs to. So ONLY name a specific
+  professional-body directory when the business_type or name makes membership UNAMBIGUOUS
+  (e.g. "Chartered Accountants" → ICAEW / ICAS; "Chartered Certified Accountants" → ACCA;
+  "Chartered Tax Advisers" → CIOT). When you are NOT sure which body applies, do NOT guess one
+  and do NOT list several rival bodies as if they all apply — instead give ONE generic entry:
+  name it "Your professional body's directory" with a why like "list on the directory of
+  whichever body you're a member of (e.g. ICAEW, ACCA or AAT for accountants) — confirm at
+  onboarding". NEVER suggest ICAEW to a firm that may be ACCA-only, or vice versa.
 - FAQ SCHEMA + a front-loaded 40-60 word answer is the highest-leverage on-page add (can
   lift citations up to ~115% for lower-ranked domains).
 - COMMUNITY: niche, buyer-intent forum/Reddit threads help AI Overview + ChatGPT (via Bing),
@@ -311,8 +312,8 @@ If LOCAL:
   genuine quick wins), alongside local citations, reviews, and location/area pages.
 
 ════════ RANK EVERY ACTION BY LEVERAGE (for THIS business — this is the point) ════════
-This plan is PRIORITISED ADVICE, not a flat checklist. Give EVERY internalAction a "priority"
-of "high", "medium" or "low" based on its LEVERAGE FOR THIS SPECIFIC BUSINESS — how much it
+This plan is PRIORITISED ADVICE. Give EVERY action a "priority" of "high", "medium" or "low"
+based on its LEVERAGE FOR THIS SPECIFIC BUSINESS — how much it
 actually moves the needle on getting cited by AI given this business's type / location /
 website / national-or-local status — NOT its generic importance. RANK HONESTLY: a real plan
 has a few HIGH-leverage moves and several lower ones. Do NOT mark everything high; if
@@ -344,11 +345,11 @@ Ground every ranking in the verified methodology above (what actually gets a bus
 not in habit.
 
 ════════ TAG EVERY ACTION BY LEAD TIME (short-term vs long-term levers) ════════
-Give EVERY internalAction a "leadTime" = how long until it actually moves AI visibility:
+Give EVERY action a "leadTime" = how long until it actually moves AI visibility:
 - "fast" (days): on-site fixes - identity / Organization schema, meta / title / H1, site readability, FAQ + front-loaded answers, service / sector page builds; one-off GBP setup.
 - "medium" (2-4 weeks): directory submissions that approve quickly, NAP propagation, first review requests landing.
 - "slow" (weeks-to-months): authority / industry-body directory approvals, earned media / PR / guest content, cross-source entity trust building, review accumulation to a critical mass.
-HARD RULE: every "slow" action that is "high" OR "medium" leverage MUST be scheduled in Weeks 1-2 (initiated immediately) - the payoff lands late, so the START must be early. A slow high/medium lever first appearing in Weeks 2-4 or 5-8 is WRONG. Weeks 5-8 may contain slow items ONLY as follow-up / chase on work started in Week 1, never as first appearance. Fast high-leverage items are the visible quick wins. In each week's clientSummary, reassure plainly (no jargon) that the slow-burn trust work is being started NOW precisely because it takes time to mature.
+TAG HONESTLY: leadTime describes ONLY how long the payoff takes — NOT importance and NOT when to start. A "slow" action is started immediately precisely because it matures late; the code SORTS the list so slow high-leverage work sits at the very top (started now), and fast quick wins follow within their tier. Do not down-rank a slow action just because it pays off late. In the clientSummary roadmap, reassure plainly (no jargon) that the slow-burn trust work is being started NOW precisely because it takes time to mature.
 
 ════════ USE THE ACTUAL DATA ════════
 - Name the specific engines that did NOT return the business.
@@ -365,7 +366,7 @@ HARD RULE: every "slow" action that is "high" OR "medium" leverage MUST be sched
   Keep only names that genuinely read like a firm. If NONE of the candidates are clearly
   real competitor firms, refer to competitors GENERICALLY as "other firms" — NEVER name a
   junk candidate to fill space. Apply this judgement EVERYWHERE competitors appear: the
-  summary AND the Weeks 5-8 competitor-gap actions, in BOTH internalActions and clientSummary.
+  summary, the competitor-gap actions in the action list, AND the clientSummary roadmap.
 - Tie actions to their real SEO findings / baseline signals when SEO data is present
   (e.g. "no LocalBusiness schema detected" → schema action). SYNTHESISE from the pasted SEO
   detail; NEVER reproduce chunks of it verbatim.
@@ -373,29 +374,31 @@ HARD RULE: every "slow" action that is "high" OR "medium" leverage MUST be sched
   infer from the name/type and flag it to confirm at onboarding.
 
 ════════ TWO REGISTERS (same plan, two audiences) ════════
-- internalActions = what WE do. Specific, technical, our language (schema types, directory
-  names, tooling, dependencies). This is our execution checklist.
-- clientSummary (one per week) = plain, reassuring, jargon-free, safe to show the client.
-  No internal cost/tooling talk. NEVER over-promise. Consistent with an honest, per-engine
-  guarantee: the promise is "named in MORE answers at week 8 than on day 0", not "#1" or
-  "guaranteed top result".
+- actions = what WE do. Each action is specific, technical, our language (schema types,
+  directory names, tooling, dependencies). This is our execution list.
+- clientSummary = ONE plain-language roadmap paragraph for a NON-TECHNICAL business owner:
+  what we'll do across the engagement and roughly in what order, in reassuring everyday
+  language. It is NOT a repeat of "summary" — summary is the where-they-stand overview;
+  clientSummary reads as "here's the plan". No internal cost/tooling talk. NEVER over-promise:
+  consistent with an honest, per-engine guarantee — the promise is "named in MORE answers by
+  the end than on day 0", not "#1" or "guaranteed top result".
 - pillar (per action) = the layer it belongs to, one of: "Data Layer", "Content Layer",
   "Off-site / Earned", "Reviews", "Community", "Measurement".
 - priority (per action) = "high" | "medium" | "low" leverage FOR THIS BUSINESS (see the ranking
   section above). Required on every action.
 
-Return the whole plan via return_playbook. Include a "Week 0" baseline week, then the Sprint
-windows that apply. Rank every action's priority. quickWins = 3-6 highest-leverage first moves.
-directories = the real, named authority directories/platforms for THIS vertical with a one-line
-why each. deprioritised = what to do lightly or skip for this business (empty only if nothing
-applies). timelineNote = the honest re-audit/instability framing. guaranteeNote = the honest
-week-8 before/after promise.`;
+Return the whole plan via return_playbook as ONE ordered "actions" list (code sorts it — you
+just tag each action's priority + leadTime honestly) plus the client roadmap. quickWins = 3-6
+highest-leverage first moves. directories = the real, named authority directories/platforms for
+THIS vertical with a one-line why each. deprioritised = what to do lightly or skip for this
+business (empty only if nothing applies). timelineNote = the honest re-audit/instability
+framing. guaranteeNote = the honest before/after promise.`;
 
 const PLAYBOOK_TOOL = {
   type: "function",
   function: {
     name: "return_playbook",
-    description: "Return the tailored 8-week Sprint playbook (internal + client views) for this business.",
+    description: "Return the tailored GEO playbook (one ordered action list + client roadmap) for this business.",
     parameters: {
       type: "object",
       properties: {
@@ -403,34 +406,23 @@ const PLAYBOOK_TOOL = {
         vertical: { type: "string", description: "The business's vertical/niche, e.g. 'accountancy firm'." },
         businessScope: { type: "string", enum: ["national", "local", "hybrid"], description: "Your determination for THIS business, applied to the national/local fork." },
         summary: { type: "string", description: "2-4 sentence where-they-stand-and-what-we'll-do overview, grounded in the audit." },
-        weeks: {
+        clientSummary: { type: "string", description: "A plain-language roadmap paragraph for a NON-TECHNICAL business owner: what we'll do across the engagement and roughly in what order, in reassuring everyday language. NOT a repeat of summary — this reads as 'here's the plan'." },
+        actions: {
           type: "array",
           minItems: 3,
-          maxItems: 6,
+          maxItems: 40,
+          description: "ONE flat list of every action. Do NOT group by week — the order is set in code from priority + leadTime. Tag each action honestly.",
           items: {
             type: "object",
             properties: {
-              window: { type: "string", enum: ["Week 0", "Weeks 1-2", "Weeks 2-4", "Week 4", "Weeks 5-8", "Week 8"] },
-              goal: { type: "string" },
-              internalActions: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    action: { type: "string" },
-                    why: { type: "string", description: "Why it matters for THIS business. For LOW priority, say plainly it's low-value here + what to do (do lightly / set up once / skip)." },
-                    pillar: { type: "string", enum: ["Data Layer", "Content Layer", "Off-site / Earned", "Reviews", "Community", "Measurement"] },
-                    priority: { type: "string", enum: ["high", "medium", "low"], description: "LEVERAGE for THIS specific business (not generic importance). Rank honestly — do NOT make everything high." },
-                    leadTime: { type: "string", enum: ["fast", "medium", "slow"], description: "How long until this action actually moves AI visibility: fast=days, medium=2-4wks, slow=weeks-to-months." },
-                    dependsOn: { type: "string" },
-                  },
-                  required: ["action", "why", "pillar", "priority", "leadTime"],
-                  additionalProperties: false,
-                },
-              },
-              clientSummary: { type: "string" },
+              action: { type: "string" },
+              why: { type: "string", description: "Why it matters for THIS business. For LOW priority, say plainly it's low-value here + what to do (do lightly / set up once / skip)." },
+              pillar: { type: "string", enum: ["Data Layer", "Content Layer", "Off-site / Earned", "Reviews", "Community", "Measurement"] },
+              priority: { type: "string", enum: ["high", "medium", "low"], description: "LEVERAGE for THIS specific business (not generic importance). Rank honestly — do NOT make everything high." },
+              leadTime: { type: "string", enum: ["fast", "medium", "slow"], description: "How long until this action actually moves AI visibility: fast=days, medium=2-4wks, slow=weeks-to-months (start these now, they pay off late)." },
+              dependsOn: { type: "string" },
             },
-            required: ["window", "goal", "internalActions", "clientSummary"],
+            required: ["action", "why", "pillar", "priority", "leadTime"],
             additionalProperties: false,
           },
         },
@@ -463,7 +455,7 @@ const PLAYBOOK_TOOL = {
         timelineNote: { type: "string" },
         guaranteeNote: { type: "string" },
       },
-      required: ["businessName", "vertical", "businessScope", "summary", "weeks", "quickWins", "directories", "timelineNote", "guaranteeNote"],
+      required: ["businessName", "vertical", "businessScope", "summary", "clientSummary", "actions", "quickWins", "directories", "timelineNote", "guaranteeNote"],
       additionalProperties: false,
     },
   },
@@ -546,9 +538,10 @@ ${questionList || "  (none)"}
 WEBSITE SEO
 ${seoBlock}
 
-Build the tailored 8-week Sprint playbook for THIS business via return_playbook. Map every
-action to a Sprint window, use the real data above, apply the correct website fork, and write
-both internalActions (our execution language) and a client-safe clientSummary per week.`;
+Build the tailored GEO playbook for THIS business via return_playbook: ONE ordered "actions"
+list (tag each action's priority + leadTime honestly — code sorts the order), plus a single
+client-safe clientSummary roadmap paragraph. Use the real data above and apply the correct
+website + national/local forks.`;
 }
 
 Deno.serve(async (req) => {

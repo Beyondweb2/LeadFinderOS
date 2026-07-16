@@ -3,8 +3,8 @@
 // aiAuditReportHtml.ts: reuses the same :root tokens + header band.
 //
 // renderPlaybookHtml(data, view) is a PURE function of PlaybookData + a view selector:
-//   - "internal": our execution checklist — per-week internalActions (action/why/pillar/dep).
-//   - "client":   a softer roadmap — per-week clientSummary only (no internal/technical talk).
+//   - "internal": our execution checklist — the ONE ordered action list (action/why/pillar/tags).
+//   - "client":   a softer roadmap — the plain-language clientSummary paragraph (no technical talk).
 // One generated plan, two registers. Used by the in-app iframe preview AND the download.
 
 export type ActionPriority = "high" | "medium" | "low";
@@ -20,12 +20,6 @@ export interface PlaybookDeprioritised {
   item: string;
   why: string;
 }
-export interface PlaybookWeek {
-  window: string;              // "Week 0" | "Weeks 1-2" | "Weeks 2-4" | "Week 4" | "Weeks 5-8" | "Week 8"
-  goal: string;
-  internalActions: PlaybookInternalAction[];
-  clientSummary: string;
-}
 export interface PlaybookDirectory {
   name: string;
   why: string;
@@ -34,8 +28,9 @@ export interface PlaybookData {
   businessName: string;
   vertical: string;
   businessScope?: "national" | "local" | "hybrid"; // model's scope determination; optional, not rendered
-  summary: string;
-  weeks: PlaybookWeek[];
+  summary: string;                        // where-they-stand + what-we'll-do overview
+  clientSummary: string;                  // plain-language roadmap paragraph (client view)
+  actions: PlaybookInternalAction[];      // ONE ordered list (code-sorted: priority then leadTime)
   quickWins: string[];
   directories: PlaybookDirectory[];
   deprioritised?: PlaybookDeprioritised[]; // do lightly or skip for THIS business (optional)
@@ -55,34 +50,25 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
   const viewLabel = internal ? "Internal delivery plan" : "Your roadmap";
 
   const prioLabel: Record<ActionPriority, string> = { high: "High", medium: "Med", low: "Low" };
-  const weeks = (d.weeks ?? []).map((w) => {
-    const body = internal
-      ? `<ul class="acts">${
-          (w.internalActions ?? []).map((a) => {
-            const prio: ActionPriority | null = a.priority === "high" || a.priority === "medium" || a.priority === "low" ? a.priority : null;
-            const prioPill = prio ? `<span class="prio prio-${prio}">${prioLabel[prio]}</span>` : "";
-            const leadLabel: Record<string, string> = { fast: "Fast", medium: "Weeks", slow: "Slow-burn · start now" };
-            const lead = a.leadTime === "fast" || a.leadTime === "medium" || a.leadTime === "slow" ? a.leadTime : null;
-            const leadPill = lead ? `<span class="lead lead-${lead}">${leadLabel[lead]}</span>` : "";
-            return `
-            <li class="act${prio ? ` p-${prio}` : ""}">
-              <div class="act-top"><span class="act-do">${esc(a.action)}</span><span class="act-tags">${leadPill}${prioPill}<span class="pillar">${esc(a.pillar)}</span></span></div>
-              <div class="act-why">${esc(a.why)}</div>
-              ${a.dependsOn ? `<div class="act-dep">Depends on: ${esc(a.dependsOn)}</div>` : ""}
-            </li>`;
-          }).join("")
-        }</ul>`
-      : `<p class="wk-client">${esc(w.clientSummary)}</p>`;
-    return `
-      <section class="wk">
-        <div class="wk-rail"><span class="wk-dot"></span></div>
-        <div class="wk-body">
-          <div class="wk-win">${esc(w.window)}</div>
-          <div class="wk-goal">${esc(w.goal)}</div>
-          ${body}
-        </div>
-      </section>`;
-  }).join("");
+  const leadLabel: Record<string, string> = { fast: "Fast", medium: "Weeks", slow: "Slow-burn · start now" };
+  // Internal view = ONE ordered action list (already sorted by the generator: priority then
+  // leadTime). Client view = the plain-language roadmap paragraph. No week grouping.
+  const planBody = internal
+    ? `<ul class="acts">${
+        (d.actions ?? []).map((a) => {
+          const prio: ActionPriority | null = a.priority === "high" || a.priority === "medium" || a.priority === "low" ? a.priority : null;
+          const prioPill = prio ? `<span class="prio prio-${prio}">${prioLabel[prio]}</span>` : "";
+          const lead = a.leadTime === "fast" || a.leadTime === "medium" || a.leadTime === "slow" ? a.leadTime : null;
+          const leadPill = lead ? `<span class="lead lead-${lead}">${leadLabel[lead]}</span>` : "";
+          return `
+          <li class="act${prio ? ` p-${prio}` : ""}">
+            <div class="act-top"><span class="act-do">${esc(a.action)}</span><span class="act-tags">${leadPill}${prioPill}<span class="pillar">${esc(a.pillar)}</span></span></div>
+            <div class="act-why">${esc(a.why)}</div>
+            ${a.dependsOn ? `<div class="act-dep">Depends on: ${esc(a.dependsOn)}</div>` : ""}
+          </li>`;
+        }).join("")
+      }</ul>`
+    : `<p class="wk-client">${esc(d.clientSummary)}</p>`;
 
   const quickWins = (d.quickWins ?? []).length
     ? `<section class="block">
@@ -157,18 +143,9 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
   .sec-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 4px; }
   .sec-title{ font-size:22px; line-height:1.15; letter-spacing:-.01em; font-weight:850; color:var(--ink); margin:0 0 16px; }
 
-  /* 8-week timeline */
-  .timeline{ padding:20px 40px 8px; border-top:1px solid var(--line); }
-  .timeline-h{ margin-bottom:6px; }
-  .wk{ display:flex; gap:16px; }
-  .wk-rail{ position:relative; flex:0 0 auto; width:14px; }
-  .wk-rail::before{ content:""; position:absolute; left:6px; top:0; bottom:0; width:2px; background:var(--line); }
-  .wk:last-child .wk-rail::before{ bottom:auto; height:22px; }
-  .wk-dot{ position:relative; z-index:1; display:block; width:14px; height:14px; margin-top:4px; border-radius:50%;
-    background:var(--blue); box-shadow:0 0 0 3px var(--paper); }
-  .wk-body{ flex:1; padding-bottom:22px; }
-  .wk-win{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--blue); font-weight:800; }
-  .wk-goal{ font-size:17px; font-weight:850; color:var(--ink); margin:1px 0 10px; }
+  /* Ordered action plan (internal) / roadmap paragraph (client) */
+  .plan{ padding:20px 40px 8px; border-top:1px solid var(--line); }
+  .plan-h{ margin-bottom:14px; }
   .wk-client{ margin:0; font-size:14px; line-height:1.55; color:var(--muted); max-width:64ch; }
   .acts{ list-style:none; margin:0; padding:0; }
   .act{ padding:9px 0; border-bottom:1px solid var(--line); }
@@ -229,8 +206,8 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
       -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
-    .band,.head,.summary,.timeline,.block,.notes,.site-foot{ break-inside:avoid; }
-    .wk,.dir,.act,.skip-item{ break-inside:avoid; }
+    .band,.head,.summary,.plan,.block,.notes,.site-foot{ break-inside:avoid; }
+    .dir,.act,.skip-item{ break-inside:avoid; }
   }
 </style>
 </head>
@@ -253,9 +230,9 @@ ${internal ? `    <div class="internal-flag">Internal — execution copy, not fo
     </div>
     <div class="summary">${esc(d.summary)}</div>
 
-    <section class="timeline">
-      <div class="timeline-h"><div class="sec-eyebrow">The plan</div><div class="sec-title">Your 8-week Sprint</div></div>
-${weeks}
+    <section class="plan">
+      <div class="plan-h"><div class="sec-eyebrow">The plan</div><div class="sec-title">${internal ? "Prioritised action plan" : "Your roadmap"}</div></div>
+      ${planBody}
     </section>
 
     ${quickWins}

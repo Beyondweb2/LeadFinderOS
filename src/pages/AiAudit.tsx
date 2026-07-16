@@ -1968,13 +1968,12 @@ const AiAudit = () => {
   );
 };
 
-/* ── Delivery checklist — progressive, ordered, derived from the playbook ──────
- * Stages: a system "Setup" stage (audit run; SEO added when the business has a website),
- * then one stage per playbook week (window = stage, internalActions = tick items). One
- * stage shown at a time: completed stages collapse to a green summary above the current
- * one; upcoming stages stay hidden until the current stage's items are all ticked. */
-type ChecklistItem = { key: string; text: string; autoDone?: boolean };
-type ChecklistStage = { id: string; label: string; sub?: string; items: ChecklistItem[] };
+/* ── Delivery checklist — one ordered, tickable action list from the playbook ──────
+ * A system "Setup" group (audit run; SEO added when the business has a website), then the
+ * playbook's single ordered action list — shown ALL AT ONCE (no week-by-week gating), already
+ * sorted highest-leverage first (slow-burn start-now work at the top of each tier). Each item
+ * ticks independently; progress = ticked / total. */
+type ChecklistItem = { key: string; text: string; autoDone?: boolean; priority?: 'high' | 'medium' | 'low'; leadTime?: 'fast' | 'medium' | 'slow' };
 
 function DeliveryChecklist({ playbook, hasWebsite, hasSeo, state, onToggle, onGeneratePlaybook, generating }: {
   playbook: PlaybookData | null;
@@ -1985,82 +1984,74 @@ function DeliveryChecklist({ playbook, hasWebsite, hasSeo, state, onToggle, onGe
   onGeneratePlaybook: () => void;
   generating: boolean;
 }) {
-  // Setup stage (system-known items). "SEO data added" only when the business has a website;
+  // Setup group (system-known items). "SEO data added" only when the business has a website;
   // audit-run + SEO auto-tick from known state (autoDone) until the user overrides them.
   const setupItems: ChecklistItem[] = [{ key: 'sys:auditrun', text: 'AI visibility audit run', autoDone: true }];
   if (hasWebsite) setupItems.push({ key: 'sys:seo', text: 'Website SEO data added', autoDone: hasSeo });
 
-  const stages: ChecklistStage[] = [{ id: 'setup', label: 'Setup', sub: 'Baseline captured', items: setupItems }];
-  (playbook?.weeks ?? []).forEach((w, wi) => {
-    // "Week 0" is the baseline window — the work it lists (audit run, SEO captured) is already
-    // done by the time the audit exists, so its items default to ticked. Later weeks stay
-    // manual. Explicit un-ticks are still honoured (state[key] wins over autoDone).
-    const isBaseline = /week\s*0\b/i.test(w.window ?? '');
-    stages.push({
-      id: `wk${wi}`,
-      label: w.window,
-      sub: w.goal,
-      items: (w.internalActions ?? []).map((a, ai) => ({ key: `wk${wi}:${ai}`, text: a.action, autoDone: isBaseline })),
-    });
-  });
+  // The single ordered action list (code-sorted by the generator: priority then leadTime).
+  const actionItems: ChecklistItem[] = (playbook?.actions ?? []).map((a, i) => ({
+    key: `act:${i}`, text: a.action, priority: a.priority, leadTime: a.leadTime,
+  }));
 
   const isTicked = (it: ChecklistItem) => state[it.key] ?? it.autoDone ?? false;
-  const stageComplete = (s: ChecklistStage) => s.items.length > 0 && s.items.every(isTicked);
-  let currentIdx = stages.findIndex((s) => !stageComplete(s));
-  if (currentIdx === -1) currentIdx = stages.length; // every stage complete
-  const allDone = !!playbook && currentIdx >= stages.length;
+  const allItems = [...setupItems, ...actionItems];
+  const doneCount = allItems.filter(isTicked).length;
+  const allDone = !!playbook && allItems.length > 0 && doneCount === allItems.length;
+
+  const leadLabel: Record<string, string> = { fast: 'Fast', medium: 'Weeks', slow: 'Slow-burn · start now' };
+  const renderRow = (it: ChecklistItem, showTags: boolean) => {
+    const done = isTicked(it);
+    return (
+      <button key={it.key} onClick={() => onToggle(it.key)}
+        className="w-full flex items-start gap-2.5 text-left rounded-md px-1 py-1 hover:bg-muted/50 transition-colors">
+        <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${done ? 'bg-[hsl(var(--badge-closed))] border-transparent' : 'border-border'}`}>
+          {done && <Check className="h-3 w-3 text-white" />}
+        </span>
+        <span className={`flex-1 text-sm ${done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{it.text}</span>
+        {showTags && (it.leadTime === 'slow' || it.priority === 'high') && (
+          <span className="mt-0.5 flex shrink-0 items-center gap-1">
+            {it.leadTime === 'slow' && (
+              <span className="rounded-full bg-[hsl(var(--badge-waiting))]/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[hsl(var(--badge-waiting))] whitespace-nowrap">{leadLabel.slow}</span>
+            )}
+            {it.priority === 'high' && (
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">High</span>
+            )}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   return (
     <Card>
       <CardContent className="p-4 sm:p-5 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Delivery</div>
-          <div className="text-[11px] text-muted-foreground">{Math.min(currentIdx, stages.length)}/{stages.length} stages</div>
+          {playbook && <div className="text-[11px] text-muted-foreground">{doneCount}/{allItems.length} done</div>}
         </div>
 
-        {stages.map((s, i) => {
-          if (i > currentIdx) return null; // upcoming → hidden until we reach it
-          if (i < currentIdx) {
-            // completed → collapsed green summary
-            return (
-              <div key={s.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2">
-                <Check className="h-4 w-4 shrink-0 text-[hsl(var(--badge-closed))]" />
-                <div className="min-w-0 text-sm font-medium truncate">
-                  {s.label}{s.sub ? <span className="text-muted-foreground font-normal"> · {s.sub}</span> : null}
-                </div>
-                <span className="ml-auto text-[11px] font-semibold text-[hsl(var(--badge-closed))]">Done</span>
-              </div>
-            );
-          }
-          // current stage → full + tickable
-          return (
-            <div key={s.id} className="rounded-lg border border-primary/50 bg-card/60 px-3 py-3 space-y-2">
-              <div>
-                <div className="text-sm font-semibold">{s.label}</div>
-                {s.sub && <div className="text-[11px] text-muted-foreground">{s.sub}</div>}
-              </div>
-              <div className="space-y-1">
-                {s.items.map((it) => {
-                  const done = isTicked(it);
-                  return (
-                    <button key={it.key} onClick={() => onToggle(it.key)}
-                      className="w-full flex items-start gap-2.5 text-left rounded-md px-1 py-1 hover:bg-muted/50 transition-colors">
-                      <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${done ? 'bg-[hsl(var(--badge-closed))] border-transparent' : 'border-border'}`}>
-                        {done && <Check className="h-3 w-3 text-white" />}
-                      </span>
-                      <span className={`text-sm ${done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{it.text}</span>
-                    </button>
-                  );
-                })}
-              </div>
+        {/* Setup (baseline) — always shown */}
+        <div className="rounded-lg border border-border/60 bg-card/60 px-3 py-3 space-y-2">
+          <div className="text-sm font-semibold">Setup<span className="text-muted-foreground font-normal"> · Baseline captured</span></div>
+          <div className="space-y-1">{setupItems.map((it) => renderRow(it, false))}</div>
+        </div>
+
+        {/* Ordered delivery actions — ALL shown at once, highest-leverage first */}
+        {playbook && actionItems.length > 0 && (
+          <div className="rounded-lg border border-primary/50 bg-card/60 px-3 py-3 space-y-2">
+            <div>
+              <div className="text-sm font-semibold">Delivery plan</div>
+              <div className="text-[11px] text-muted-foreground">Ordered by leverage — highest-impact first</div>
             </div>
-          );
-        })}
+            <div className="space-y-1">{actionItems.map((it) => renderRow(it, true))}</div>
+          </div>
+        )}
 
         {!playbook && (
           <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-4 text-center space-y-2">
             <div className="text-sm font-medium">Generate the playbook to build the delivery checklist</div>
-            <div className="text-[11px] text-muted-foreground">The 8-week Sprint stages become your tickable delivery steps.</div>
+            <div className="text-[11px] text-muted-foreground">The prioritised action list becomes your tickable delivery steps.</div>
             <Button size="sm" onClick={onGeneratePlaybook} disabled={generating}>
               {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapIcon className="mr-2 h-4 w-4" />}
               {generating ? 'Generating…' : 'Generate playbook'}
@@ -2071,7 +2062,7 @@ function DeliveryChecklist({ playbook, hasWebsite, hasSeo, state, onToggle, onGe
         {allDone && (
           <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2">
             <Check className="h-4 w-4 text-[hsl(var(--badge-closed))]" />
-            <span className="text-sm font-medium">All delivery stages complete.</span>
+            <span className="text-sm font-medium">All delivery actions complete.</span>
           </div>
         )}
       </CardContent>
