@@ -18,6 +18,20 @@ const MODEL = "gpt-4o";
 const TEMPERATURE = 0.3;
 const MAX_RAW_PASTE_CHARS = 40_000; // bound token cost when packing the stored raw paste
 
+// PASS 2 — steps enrichment. A SEPARATE, batched, cheaper call per small group of tasks so the
+// step-by-step "how" never bloats the structure call or risks the edge-function timeout.
+const STEPS_MODEL = "gpt-4o-mini"; // execution detail — mini is enough, and much faster/cheaper than gpt-4o
+const STEPS_BATCH_SIZE = 5;        // tasks per enrichment call (small = fast, can't truncate mid-batch)
+const STEPS_MAX_TOKENS = 1500;     // per batch — bounded so the JSON can't be cut off part-way
+const STEPS_MAX_PER_TASK = 8;      // hard cap on steps kept per task
+
+// PASS 3 — self-review. One extra call that audits the assembled playbook against the HARD RULES
+// and fixes violations. Bounded + time-budgeted: if the earlier passes already ate the budget we
+// SKIP the review (return the pre-review playbook) so we never risk the ~150s edge wall-clock.
+const REVIEW_MODEL = "gpt-4o";     // judgment call — the stronger model catches subtle rule breaks
+const REVIEW_MAX_TOKENS = 8000;    // full corrected playbook incl. steps — generous so it can't truncate
+const REVIEW_SKIP_AFTER_MS = 95_000; // if structure+steps already took this long, skip review (protect wall-clock)
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
@@ -43,7 +57,7 @@ const LEAD_TIMES = new Set<LeadTime>(["fast", "medium", "slow"]);
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 const LEADTIME_ORDER: Record<LeadTime, number> = { slow: 0, medium: 1, fast: 2 };
 const MAX_ACTIONS = 40; // upper bound on the flat action list
-interface InternalAction { action: string; why: string; pillar: string; priority: Priority; leadTime: LeadTime; dependsOn?: string }
+interface InternalAction { action: string; why: string; pillar: string; priority: Priority; leadTime: LeadTime; steps: string[]; dependsOn?: string }
 interface DirectoryRec { name: string; why: string }
 interface DeprioritisedItem { item: string; why: string }
 interface Playbook {
@@ -53,6 +67,7 @@ interface Playbook {
   summary: string;              // internal/intro overview (where they stand + what we'll do)
   clientSummary: string;        // plain-language roadmap paragraph for the client view
   actions: InternalAction[];    // ONE ordered list (was per-week internalActions); code-sorted
+  clientTasks: string[];        // "what the client needs to do" (populated in a later stage)
   quickWins: string[];
   directories: DirectoryRec[];
   deprioritised: DeprioritisedItem[]; // things to do lightly or skip for THIS business
@@ -136,6 +151,7 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
       action: str(a.action), why: str(a.why), pillar: str(a.pillar),
       priority: (typeof a.priority === "string" && PRIORITIES.has(a.priority as Priority) ? a.priority : "medium") as Priority,
       leadTime: (typeof a.leadTime === "string" && LEAD_TIMES.has(a.leadTime as LeadTime) ? a.leadTime : "medium") as LeadTime,
+      steps: strArr(a.steps, 12), // step-by-step how-to; may be empty until the enrichment pass (later stage)
       dependsOn: str(a.dependsOn) || undefined,
     }))
     .filter((a) => a.action && a.why && a.pillar)
@@ -154,7 +170,8 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
     .map((d) => ({ name: str(d.name), why: str(d.why) }))
     .filter((d) => d.name && d.why)
     .slice(0, 12);
-  if (directories.length < 1) return { ok: false, error: "no_directories" };
+  // No hard floor: directories is now "where the client gains citations/presence" (led by our own
+  // network); an empty list is acceptable rather than forcing the model to invent third-party ones.
 
   // Business scope precedence: explicit stored answer > model's determination > code heuristic
   // (the `national` param). The client's explicit engagement scope always wins when present.
@@ -180,6 +197,9 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
     .filter((d) => d.item && d.why)
     .slice(0, 8);
 
+  // "What the client needs to do" — populated in a later stage; empty for now is fine.
+  const clientTasks = strArr(o.clientTasks, 12);
+
   const timelineNote = str(o.timelineNote);
   const guaranteeNote = str(o.guaranteeNote);
   if (!timelineNote || !guaranteeNote) return { ok: false, error: "missing_notes" };
@@ -193,6 +213,7 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
       summary,
       clientSummary,
       actions,
+      clientTasks,
       quickWins,
       directories,
       deprioritised,
@@ -201,6 +222,59 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
     },
   };
 }
+
+// The verified delivery method — the single source of truth for WHAT tasks exist and the HARD
+// RULES. Shared by the structure pass (SYSTEM_PROMPT) AND the steps-enrichment pass so both draw
+// from the SAME method and can't drift apart.
+const VERIFIED_METHOD =
+`════════ THE VERIFIED DELIVERY METHOD (GROUND TRUTH — draw EVERY task from this) ════════
+This is Findable's verified method. EVERY action you output MUST come from one of the four tiers
+below — do NOT invent tasks outside it. Why it works: AI CITES rather than ranks (it recommends
+a business it can READ, VERIFY as a distinct entity across independent sources, and TRUST);
+entity/NAP consistency + validated schema are foundational; content must be fact-dense and
+answer-first; credibility compounds slowly, so start it early; visibility is unstable, so measure
+and iterate. Google is now the PRIMARY source feeding ChatGPT (it shifted off Bing), so Google
+Business Profile + Google Search Console are prioritised over Bing.
+
+TIER 1 — FOUNDATION (fast, high priority):
+- NAP (name / address / phone) consistent everywhere AI reads.
+- Structured data / schema, VALIDATED (Organization / LocalBusiness / FAQ as fits the business).
+- Contact details as REAL TEXT on the site (not only an image or a form).
+- Page titles + meta descriptions.
+- Site crawlable / readable WITHOUT JavaScript, and indexing switched on.
+- Google Business Profile — claim / verify / complete (handle with care for no-premises firms; see the national/local fork).
+- Bing Places — secondary (Google is primary now).
+
+TIER 2 — CONTENT (weeks 2-4):
+- Answer-first content matching the REAL question phrasing customers use.
+- Service pages + area pages built from REAL data (area pages only where scope makes them relevant).
+- FAQ pages matching real questions.
+- High fact-density, verifiable content.
+- A clear entity / about page.
+
+TIER 3 — CREDIBILITY / OFF-SITE (slow-burn, START EARLY, compounds):
+- Placement in OUR OWN "best [trade] in [city]" directory network — NOT manual submission to third-party directories.
+- Reviews — Google first; switch on review velocity / auto-request at the right cadence for THIS business.
+- Selective high-authority review / citation presence.
+- ONLY genuinely-relevant vertical directories (never scattergun submission).
+
+TIER 4 — MEASURE / ITERATE (ongoing):
+- Track a FIXED prompt set over time.
+- Monthly refresh / iterate — double down on what got cited, rewrite what got skipped.
+- Google Search Console.
+
+HARD RULES (follow exactly — these override any habit or prior training):
+- Draw EVERY task ONLY from the four tiers above. Never invent a task outside the method.
+- NEVER suggest manual submission to third-party directories as the strategy — WE build our own
+  "best [trade] in [city]" network (Tier 3). Reference an external directory only when it is
+  genuinely relevant to this vertical, never as the core off-site play.
+- NEVER guess a professional body. Only name a body (ICAEW, ACCA, SRA, CIOT, …) if the INPUT
+  clearly states it; otherwise say "your professional body's directory". Never suggest ICAEW to
+  a firm that may be ACCA-only, or vice versa.
+- Google is PRIMARY (ChatGPT shifted from Bing to Google): prioritise Google Business Profile +
+  Google Search Console OVER Bing Places.
+- NEVER promise rankings or specific outcomes. For medical / health businesses keep everything
+  visibility-only (ASA compliance) — no treatment or outcome claims.`;
 
 const SYSTEM_PROMPT =
 `You are Findable's senior GEO (Generative Engine Optimisation) strategist. You turn an AI-
@@ -241,52 +315,15 @@ for national B2B; Google reviews mainly for local walk-in). Never filter or gate
 Include measurement actions (mid-point re-scan, final before/after per engine) as their own
 list items too.
 
-════════ VERIFIED 2026 GEO METHODOLOGY (the moat — bake these in) ════════
-- AI CITES, it doesn't rank. It recommends a business it can READ, VERIFY as a distinct
-  entity across multiple independent sources, and TRUST.
-- EARNED MEDIA beats owned: ~82% of AI citations are earned media; >80% of AI-cited pages
-  don't rank in Google's top 10. The leverage is OFF-SITE — listings, directories, third-
-  party mentions — not just their website.
-- ENTITY / NAP consistency is foundational: presence on 4+ platforms ≈ 2.8× more likely to
-  be cited; entity clarity + schema lifts small-brand appearances ~36%; schema improves LLM
-  discoverability ~67% but is NOT sufficient alone.
-- INDUSTRY-SPECIFIC AUTHORITY DIRECTORIES are a top lever. Identify the real ones for THIS
-  vertical and prioritise tier-1 general → niche industry body → local. Examples (illustrative
-  of the SPACE, not a set to suggest wholesale): accountant → an ICAEW / ACCA / AAT / CIMA
-  member directory + Chartered Institute of Taxation + unbiased.co.uk; solicitor → Law Society
-  "Find a Solicitor" / SRA (or CILEx for legal executives); dentist → GDC, BDA; plus Bing
-  Places, Apple Business Connect, Yell for most UK local firms. Pick the ones that genuinely fit.
-- PROFESSIONAL-BODY ACCURACY (critical — do NOT mis-suggest): a firm belongs to SOME
-  professional bodies but not others, and rival bodies are mutually exclusive for a given firm
-  (an accountant is ACCA OR ICAEW OR AAT OR CIMA — not all of them; a lawyer is SRA-regulated
-  OR CILEx). The input does NOT state which body THIS firm belongs to. So ONLY name a specific
-  professional-body directory when the business_type or name makes membership UNAMBIGUOUS
-  (e.g. "Chartered Accountants" → ICAEW / ICAS; "Chartered Certified Accountants" → ACCA;
-  "Chartered Tax Advisers" → CIOT). When you are NOT sure which body applies, do NOT guess one
-  and do NOT list several rival bodies as if they all apply — instead give ONE generic entry:
-  name it "Your professional body's directory" with a why like "list on the directory of
-  whichever body you're a member of (e.g. ICAEW, ACCA or AAT for accountants) — confirm at
-  onboarding". NEVER suggest ICAEW to a firm that may be ACCA-only, or vice versa.
-- FAQ SCHEMA + a front-loaded 40-60 word answer is the highest-leverage on-page add (can
-  lift citations up to ~115% for lower-ranked domains).
-- COMMUNITY: niche, buyer-intent forum/Reddit threads help AI Overview + ChatGPT (via Bing),
-  but for commercial / high-intent queries, category-specific proof (specialist directories,
-  niche reviews, vendor pages) beats broad Reddit. Recommend GENUINE niche participation,
-  never spam.
-- PROPRIETARY DATA / CASE STUDIES are citation magnets — use their real track record (years
-  in business, client outcomes) as unique content nobody else has.
-- FRESHNESS matters (a ~3-month citation cliff) — content is a living asset, not one-and-done.
-- ENGINES DISAGREE and visibility is UNSTABLE: overlap between engines is low and 40-60% of
-  cited sources change month to month. Frame visibility HONESTLY, per engine, and set a
-  realistic re-audit window (~4-8 weeks; ChatGPT lags, Gemini / AI Overview move faster).
+${VERIFIED_METHOD}
 
 ════════ WEBSITE FORK (critical) ════════
 - If the business HAS NO website: produce NO on-site actions — no meta/H1/on-site schema,
-  no page builds on their site. Focus entirely on Google Business Profile, listings /
-  directories, reviews, community, and pages hosted on OUR infrastructure + the directory
-  network. Say plainly that a site (or our hosted pages) is where owned content will live.
+  no page builds on their site. Focus entirely on Google Business Profile, Google-first reviews,
+  our own "best [trade] in [city]" network + genuinely-relevant sources, community, and pages
+  hosted on OUR infrastructure. Say plainly that our hosted pages are where owned content will live.
 - If the business HAS a website: include BOTH on-site (schema, FAQ pages, front-loaded
-  answers, service pages - area / location pages ONLY where businessScope makes them relevant, see the National vs Local fork) AND off-site (listings, directories, earned mentions).
+  answers, service pages - area / location pages ONLY where businessScope makes them relevant, see the National vs Local fork) AND off-site (our own network placement + genuinely-relevant citations, Google-first reviews).
 
 ════════ NATIONAL vs LOCAL FORK (critical — get the weighting right) ════════
 FIRST set "businessScope" = "national" | "local" | "hybrid" for THIS business, using the System scope hint in the input as a strong default and overriding only with a clear reason stated in "summary". Apply the fork below from YOUR businessScope, and keep every action consistent with it.
@@ -302,14 +339,16 @@ If NATIONAL:
 - DE-PRIORITISE local map listings. Google Business Profile, Bing Places and Apple Business
   Connect are ONLY a light one-off entity-verification step in the Data Layer — NEVER a lead
   action and NEVER in quickWins. Do NOT frame the plan around local / "map" / "near me" visibility.
-- LEAD instead with industry & authority DIRECTORIES for the vertical, EARNED MEDIA (third-
-  party mentions, niche reviews, PR, guest content), and content matched to NATIONAL
-  buyer-intent queries ("[service] for [audience] uk"). quickWins for a national firm should
-  be directory/earned-media/content moves, not GBP.
+- LEAD instead with OUR OWN "best [trade] in [city/sector]" network placement (Tier 3),
+  Google-first REVIEWS, genuinely-relevant citations/sources for the vertical, and content
+  matched to NATIONAL buyer-intent queries ("[service] for [audience] uk"). Do NOT lead with
+  manual third-party directory submission. quickWins for a national firm should be
+  our-network / reviews / content moves, not GBP.
 - NO location / area / "near me" pages - they chase local intent a UK-wide firm has no claim to. Build sector / audience / service pages instead.
 If LOCAL:
-- Keep the local-first weighting: GBP + Bing Places + Apple Business Connect LEAD (they are
-  genuine quick wins), alongside local citations, reviews, and location/area pages.
+- Keep the local-first weighting: Google Business Profile LEADS (Google is primary), with Bing
+  Places secondary and Apple Business Connect only where customers physically visit — alongside
+  our own "best [trade] in [city]" network placement, Google-first reviews, and location/area pages.
 
 ════════ RANK EVERY ACTION BY LEVERAGE (for THIS business — this is the point) ════════
 This plan is PRIORITISED ADVICE. Give EVERY action a "priority" of "high", "medium" or "low"
@@ -330,17 +369,18 @@ empty only if truly nothing applies.
 
 Concrete ranking guidance (apply to the ACTUAL business, don't copy blindly):
 - NATIONAL / no-premises firm (e.g. a UK-wide accountancy, law or consultancy firm):
-    · HIGH: NAP consistency (foundational), Organization / professional identity schema,
-      site-readability (render-without-JS, entity clarity), industry & authority DIRECTORIES
-      for the vertical, earned media / citations, FAQ + front-loaded answers.
+    · HIGH: NAP consistency (foundational), validated Organization / professional identity schema,
+      site-readability (render-without-JS, entity clarity), OUR OWN network placement + Google-first
+      reviews + genuinely-relevant citations, FAQ + front-loaded answers.
     · LOW: Google Business Profile — "set up once, don't over-invest"; Bing Places — "set up
-      once, minimal effort". These verify the entity but won't drive citations for a firm with
-      no walk-in trade.
+      once, minimal effort, secondary to Google". These verify the entity but won't drive citations
+      for a firm with no walk-in trade.
     · SKIP (put in "deprioritised"): Apple Business Connect — it's a maps product for
       businesses customers physically visit; not relevant to a national no-premises firm.
 - LOCAL business with premises (barber, dentist, café, garage, restaurant): FLIP IT — Google
-  Business Profile + Bing Places + Apple Business Connect + local citations/reviews = HIGH
-  (these are the main lever); broad national directories drop to lower priority.
+  Business Profile (primary) + Google-first reviews + our own "best [trade] in [city]" network +
+  local citations = HIGH (the main lever); Bing Places secondary, Apple Business Connect only if
+  they have premises.
 Ground every ranking in the verified methodology above (what actually gets a business CITED),
 not in habit.
 
@@ -387,12 +427,31 @@ TAG HONESTLY: leadTime describes ONLY how long the payoff takes — NOT importan
 - priority (per action) = "high" | "medium" | "low" leverage FOR THIS BUSINESS (see the ranking
   section above). Required on every action.
 
+════════ CLIENT-SIDE TASKS ("clientTasks" — SELECT from this defined set, do NOT invent) ════════
+Under our hybrid delivery model WE do the work; a few things only the CLIENT can do. Populate
+"clientTasks" by SELECTING the ones relevant to THIS business from the DEFINED SET below and
+phrasing each plainly (short, friendly, second-person "you"). Do NOT invent client tasks outside
+this set. Include an item ONLY if it actually applies (e.g. no "grant website access" for a
+no-website business; no "confirm memberships" unless the vertical has professional bodies):
+- Confirm your business details (name, address, phone) are correct.
+- Give us access to your website / hosting (so we can make the on-site changes).
+- Provide your logo and any brand assets (colours, images).
+- Confirm your professional memberships / credentials (so we list the RIGHT body — we never guess).
+- Set up / own any account that needs YOUR personal or payment details (e.g. Google Business
+  Profile ownership) — we'll guide you, but these must be in your name.
+- Approve wording and design changes before they go live.
+Phrase them as things the client ticks off; keep it to the ones that genuinely apply.
+
 Return the whole plan via return_playbook as ONE ordered "actions" list (code sorts it — you
 just tag each action's priority + leadTime honestly) plus the client roadmap. quickWins = 3-6
-highest-leverage first moves. directories = the real, named authority directories/platforms for
-THIS vertical with a one-line why each. deprioritised = what to do lightly or skip for this
-business (empty only if nothing applies). timelineNote = the honest re-audit/instability
-framing. guaranteeNote = the honest before/after promise.`;
+highest-leverage first moves. directories = WHERE THE CLIENT WILL GAIN CITATIONS / PRESENCE —
+LEAD with our own "best [trade] in [city]" network placement, then ONLY genuinely-relevant,
+genuinely-authoritative sources for THIS vertical (a professional-body directory ONLY if the
+input states membership, Google Business Profile, key review platforms). NOT a scattergun of
+third-party directories; never guess a professional body. One-line why each. clientTasks = the
+relevant items from the CLIENT-SIDE TASKS defined set, plainly phrased (empty only if none apply).
+deprioritised = what to do lightly or skip for this business (empty only if nothing applies).
+timelineNote = the honest re-audit/instability framing. guaranteeNote = the honest before/after promise.`;
 
 const PLAYBOOK_TOOL = {
   type: "function",
@@ -420,17 +479,19 @@ const PLAYBOOK_TOOL = {
               pillar: { type: "string", enum: ["Data Layer", "Content Layer", "Off-site / Earned", "Reviews", "Community", "Measurement"] },
               priority: { type: "string", enum: ["high", "medium", "low"], description: "LEVERAGE for THIS specific business (not generic importance). Rank honestly — do NOT make everything high." },
               leadTime: { type: "string", enum: ["fast", "medium", "slow"], description: "How long until this action actually moves AI visibility: fast=days, medium=2-4wks, slow=weeks-to-months (start these now, they pay off late)." },
+              steps: { type: "array", items: { type: "string" }, description: "Step-by-step how-to for delivering THIS task. May be left empty for now — it is filled in a later enrichment pass." },
               dependsOn: { type: "string" },
             },
             required: ["action", "why", "pillar", "priority", "leadTime"],
             additionalProperties: false,
           },
         },
+        clientTasks: { type: "array", items: { type: "string" }, description: "What the CLIENT themselves needs to do — SELECT the relevant items from the CLIENT-SIDE TASKS defined set in the system prompt, phrased plainly. Do NOT invent tasks outside that set. Empty only if none apply." },
         quickWins: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 6 },
         directories: {
           type: "array",
-          minItems: 1,
           maxItems: 12,
+          description: "WHERE THE CLIENT WILL GAIN CITATIONS / PRESENCE. Lead with our own 'best [trade] in [city]' network placement, then ONLY genuinely-relevant / genuinely-authoritative sources (a professional-body directory only if the input states membership, Google Business Profile, key review platforms). NOT scattergun third-party directories; never guess a professional body.",
           items: {
             type: "object",
             properties: { name: { type: "string" }, why: { type: "string" } },
@@ -544,10 +605,155 @@ client-safe clientSummary roadmap paragraph. Use the real data above and apply t
 website + national/local forks.`;
 }
 
+/* ── PASS 2 — steps enrichment (batched, graceful) ────────────────────────────────
+ * Runs AFTER the structure pass + sort, so tasks are in final order. Splits the sorted actions
+ * into small batches and asks a cheap model for concrete step-by-step "how" per task, drawn from
+ * the SAME verified method (VERIFIED_METHOD). Steps merge back by the task's global index. A
+ * failed/timed-out batch leaves those tasks with an empty steps[] — never fails the whole plan. */
+
+const STEPS_SYSTEM_PROMPT =
+`You are Findable's GEO delivery lead. For each task you are given, return concrete, ordered
+"how I actually do it" steps — the practical delivery steps for THAT task, drawn ONLY from the
+verified method below. Do not add tasks; only explain how to deliver the ones given.
+
+${VERIFIED_METHOD}
+
+STEP RULES:
+- 3-7 tight steps per task; each a short imperative instruction starting with a verb.
+- Specific to the task and method — e.g. schema → "…validate in Google Rich Results Test";
+  reviews → "…Google first, switch on auto-request at the right cadence"; our-network placement →
+  place the business in OUR OWN "best [trade] in [city]" pages (NOT third-party submission).
+- Obey the HARD RULES above: never third-party-directory submission as the strategy; never guess a
+  professional body; Google primary over Bing; never promise rankings or outcomes.
+- Return ONLY JSON of this exact shape, one entry per given id:
+  {"results":[{"id":<number>,"steps":["step 1","step 2", ...]}]}`;
+
+/** One enrichment call for a batch of tasks. Returns id→steps[]; throws on HTTP / parse error
+ *  so the caller can degrade that batch gracefully. `startIdx` is the batch's first GLOBAL index
+ *  in the sorted action list, so ids map straight back to actions[]. */
+async function runStepsBatch(
+  batch: InternalAction[],
+  startIdx: number,
+  ctx: { businessName: string; vertical: string; scope: string },
+  apiKey: string,
+): Promise<Map<number, string[]>> {
+  const list = batch.map((a, j) =>
+    `[id: ${startIdx + j}] (${a.pillar} · ${a.priority} priority · ${a.leadTime}) ${a.action} — WHY: ${a.why}`
+  ).join("\n");
+  const userPrompt = `Business: ${ctx.businessName || "(unknown)"} — ${ctx.vertical || "(vertical unknown)"} (${ctx.scope}).\n\nWrite delivery steps for EACH task below (one results entry per id):\n${list}`;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: STEPS_MODEL,
+      temperature: 0.2,
+      max_tokens: STEPS_MAX_TOKENS,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: STEPS_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`openai_http_${res.status}`);
+  const data = await res.json();
+  const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+  const out = new Map<number, string[]>();
+  for (const r of Array.isArray(parsed?.results) ? parsed.results : []) {
+    const id = Number((r as Record<string, unknown>)?.id);
+    if (!Number.isFinite(id)) continue;
+    const steps = strArr((r as Record<string, unknown>)?.steps, STEPS_MAX_PER_TASK).map((s) => s.slice(0, 200));
+    if (steps.length) out.set(id, steps);
+  }
+  return out;
+}
+
+/** Fill actions[].steps in place, one small batch per call, sequentially (keeps each call small
+ *  and avoids rate-limit bursts — we prioritise NOT timing out over speed). A batch that fails
+ *  leaves its tasks' steps empty rather than failing the whole generation. */
+async function enrichActionSteps(
+  pb: Playbook,
+  ctx: { businessName: string; vertical: string; scope: string },
+  apiKey: string,
+): Promise<void> {
+  const actions = pb.actions;
+  for (let start = 0; start < actions.length; start += STEPS_BATCH_SIZE) {
+    const batch = actions.slice(start, start + STEPS_BATCH_SIZE);
+    try {
+      const byId = await runStepsBatch(batch, start, ctx, apiKey);
+      for (let j = 0; j < batch.length; j++) {
+        const steps = byId.get(start + j);
+        if (steps && steps.length) batch[j].steps = steps;
+      }
+    } catch (e) {
+      // Graceful degradation: this batch's tasks keep steps: [] — better than a dead generation.
+      console.error(`[generate-playbook] steps batch @${start} failed:`, e instanceof Error ? e.message : e);
+    }
+  }
+}
+
+/* ── PASS 3 — self-review (bounded, graceful) ──────────────────────────────────────
+ * Audits the ASSEMBLED playbook (structure + steps) against the HARD RULES and returns a
+ * corrected copy. Reuses PLAYBOOK_TOOL + buildValidatedPlaybook, so the corrected output is
+ * re-sanitised AND re-sorted (ordering stays intact) and steps/clientTasks are preserved.
+ * THROWS on any HTTP / parse / revalidation failure so the caller keeps the pre-review playbook. */
+async function reviewPlaybook(
+  pb: Playbook,
+  national: boolean,
+  explicit: "national" | "local" | "hybrid" | null,
+  apiKey: string,
+): Promise<Playbook> {
+  const reviewSystem =
+`You are Findable's GEO QA reviewer. AUDIT the assembled playbook below against the verified
+method and FIX any violations, returning the FULL corrected playbook via the return_playbook
+tool. Change ONLY what violates — preserve compliant content, and KEEP each action's steps and
+its priority + leadTime tags (code re-sorts, so don't worry about order).
+
+${VERIFIED_METHOD}
+
+REVIEW CHECKLIST — fix any that fail:
+1. No task, step, or directory suggests manual THIRD-PARTY-DIRECTORY SUBMISSION as the strategy —
+   it must be our own "best [trade] in [city]" network + genuinely-relevant sources.
+2. No GUESSED professional body — if the input doesn't state the firm's body, use "your
+   professional body's directory", never a specific one (no ICAEW-for-unknown).
+3. Google is PRIMARY over Bing everywhere; NO ranking / outcome promises; medical / health =
+   visibility-only.
+4. EVERY action has concrete, method-consistent steps (3-7). If an action's steps are missing or
+   vague, write proper ones.
+5. Keep the same actions + their priority/leadTime tags and the clientSummary / clientTasks.
+Return the corrected playbook via return_playbook.`;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: REVIEW_MODEL,
+      temperature: 0.1,
+      max_tokens: REVIEW_MAX_TOKENS,
+      messages: [
+        { role: "system", content: reviewSystem },
+        { role: "user", content: `PLAYBOOK TO REVIEW (JSON):\n${JSON.stringify(pb)}` },
+      ],
+      tools: [PLAYBOOK_TOOL],
+      tool_choice: { type: "function", function: { name: "return_playbook" } },
+    }),
+  });
+  if (!res.ok) throw new Error(`review_http_${res.status}`);
+  const data = await res.json();
+  const raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+  if (typeof raw !== "string") throw new Error("review_no_output");
+  const parsed = JSON.parse(raw);
+  const revalidated = buildValidatedPlaybook(parsed, pb.businessName, national, explicit);
+  if (!revalidated.ok) throw new Error(`review_invalid:${revalidated.error}`);
+  return revalidated.playbook;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const t0 = Date.now(); // wall-clock start — used to time-budget the optional self-review pass
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -621,16 +827,44 @@ Deno.serve(async (req) => {
 
     const validated = buildValidatedPlaybook(parsed, str(audit.business_name), isNationalBusiness(audit), explicitScope(audit));
     if (!validated.ok) return json({ ok: false, error: `invalid_playbook:${validated.error}` }, 422);
+    let playbook = validated.playbook;
+    const national = isNationalBusiness(audit);
+    const explicit = explicitScope(audit);
+
+    // PASS 2 — steps enrichment (batched, graceful). Runs after the sort so tasks are in final
+    // order; fills actions[].steps in place. Wrapped so it can NEVER fail the whole generation —
+    // worst case some tasks store with steps: [] and can be re-enriched on a later regenerate.
+    try {
+      await enrichActionSteps(
+        playbook,
+        { businessName: str(audit.business_name), vertical: playbook.vertical, scope: playbook.businessScope },
+        OPENAI_API_KEY,
+      );
+    } catch (e) {
+      console.error("[generate-playbook] steps enrichment skipped:", e instanceof Error ? e.message : e);
+    }
+
+    // PASS 3 — self-review (bounded, time-budgeted, graceful). Only run it if the earlier passes
+    // left enough of the wall-clock budget; on ANY failure keep the pre-review playbook.
+    if (Date.now() - t0 < REVIEW_SKIP_AFTER_MS) {
+      try {
+        playbook = await reviewPlaybook(playbook, national, explicit, OPENAI_API_KEY);
+      } catch (e) {
+        console.error("[generate-playbook] self-review skipped (error):", e instanceof Error ? e.message : e);
+      }
+    } else {
+      console.warn(`[generate-playbook] self-review skipped (time budget: ${Date.now() - t0}ms elapsed)`);
+    }
 
     // Store at results.playbook. Read-modify-write MERGE (re-read immediately before write)
     // so the playbook merges with summary/questions/seo rather than clobbering them.
     const { data: fresh } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
     const cur = fresh?.results && typeof fresh.results === "object" ? fresh.results as Record<string, unknown> : {};
     const { error: upErr } = await service
-      .from("ai_audit_runs").update({ results: { ...cur, playbook: validated.playbook } }).eq("id", runId);
+      .from("ai_audit_runs").update({ results: { ...cur, playbook } }).eq("id", runId);
     if (upErr) return json({ ok: false, error: "store_failed", detail: upErr.message }, 500);
 
-    return json({ ok: true, playbook: validated.playbook });
+    return json({ ok: true, playbook });
   } catch (e) {
     console.error("[generate-playbook] error:", e);
     return json({ ok: false, error: e instanceof Error ? e.message : "unknown_error" }, 500);

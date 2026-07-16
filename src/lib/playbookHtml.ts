@@ -14,6 +14,7 @@ export interface PlaybookInternalAction {
   pillar: string;
   priority?: ActionPriority; // leverage for THIS business; optional (older playbooks lack it)
   leadTime?: "fast" | "medium" | "slow"; // how long until it moves AI visibility; optional (older playbooks lack it)
+  steps?: string[]; // step-by-step how-to (internal view); optional (older playbooks lack it)
   dependsOn?: string;
 }
 export interface PlaybookDeprioritised {
@@ -31,6 +32,7 @@ export interface PlaybookData {
   summary: string;                        // where-they-stand + what-we'll-do overview
   clientSummary: string;                  // plain-language roadmap paragraph (client view)
   actions: PlaybookInternalAction[];      // ONE ordered list (code-sorted: priority then leadTime)
+  clientTasks?: string[];                 // "what we need from you" (client view); optional (older playbooks lack it)
   quickWins: string[];
   directories: PlaybookDirectory[];
   deprioritised?: PlaybookDeprioritised[]; // do lightly or skip for THIS business (optional)
@@ -51,8 +53,8 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
 
   const prioLabel: Record<ActionPriority, string> = { high: "High", medium: "Med", low: "Low" };
   const leadLabel: Record<string, string> = { fast: "Fast", medium: "Weeks", slow: "Slow-burn · start now" };
-  // Internal view = ONE ordered action list (already sorted by the generator: priority then
-  // leadTime). Client view = the plain-language roadmap paragraph. No week grouping.
+  // Internal view = ONE ordered action list with per-task step-by-step (already sorted by the
+  // generator: priority then leadTime). Client view = plain roadmap + what-we'll-do + what-we-need.
   const planBody = internal
     ? `<ul class="acts">${
         (d.actions ?? []).map((a) => {
@@ -60,15 +62,30 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
           const prioPill = prio ? `<span class="prio prio-${prio}">${prioLabel[prio]}</span>` : "";
           const lead = a.leadTime === "fast" || a.leadTime === "medium" || a.leadTime === "slow" ? a.leadTime : null;
           const leadPill = lead ? `<span class="lead lead-${lead}">${leadLabel[lead]}</span>` : "";
+          const steps = (a.steps ?? []).filter(Boolean); // null-safe: older playbooks have no steps
+          const stepsList = steps.length
+            ? `<ol class="act-steps">${steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`
+            : "";
           return `
           <li class="act${prio ? ` p-${prio}` : ""}">
             <div class="act-top"><span class="act-do">${esc(a.action)}</span><span class="act-tags">${leadPill}${prioPill}<span class="pillar">${esc(a.pillar)}</span></span></div>
             <div class="act-why">${esc(a.why)}</div>
+            ${stepsList}
             ${a.dependsOn ? `<div class="act-dep">Depends on: ${esc(a.dependsOn)}</div>` : ""}
           </li>`;
         }).join("")
       }</ul>`
-    : `<p class="wk-client">${esc(d.clientSummary)}</p>`;
+    : `<p class="wk-client">${esc(d.clientSummary)}</p>
+       <div class="client-do">
+         <div class="cd-title">What we'll be doing</div>
+         <ul class="cd-list">${(d.actions ?? []).map((a) => `<li>${esc(a.action)}</li>`).join("")}</ul>
+       </div>
+       ${(d.clientTasks ?? []).filter(Boolean).length
+          ? `<div class="client-need">
+               <div class="cd-title">What we need from you</div>
+               <ul class="cd-list">${(d.clientTasks ?? []).filter(Boolean).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
+             </div>`
+          : ""}`;
 
   const quickWins = (d.quickWins ?? []).length
     ? `<section class="block">
@@ -170,6 +187,18 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
   .lead-slow{ background:var(--amber); color:#fff; }
   .lead-fast{ background:#eef1f6; color:var(--muted); }
   .lead-medium{ background:#f4f5f7; color:var(--faint); border:1px solid var(--line); }
+
+  /* Per-task step-by-step (internal view) — an indented numbered sub-list under each action. */
+  .act-steps{ margin:6px 0 2px; padding:0 0 0 20px; }
+  .act-steps li{ font-size:12.5px; line-height:1.5; color:var(--ink); margin:2px 0; padding-left:2px; }
+  .act.p-low .act-steps li{ color:var(--muted); }
+
+  /* Client view — "What we'll be doing" + "What we need from you". */
+  .client-do, .client-need{ margin-top:16px; }
+  .cd-title{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 8px; }
+  .client-need .cd-title{ color:var(--blue); }
+  .cd-list{ margin:0; padding-left:18px; }
+  .cd-list li{ font-size:14px; line-height:1.5; color:var(--ink); margin-bottom:6px; }
 
   /* "Do lightly or skip" block — the deprioritised list. */
   .skips{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:8px 22px; }

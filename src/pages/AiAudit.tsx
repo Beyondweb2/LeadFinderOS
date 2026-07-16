@@ -2166,7 +2166,7 @@ const AiAudit = () => {
  * playbook's single ordered action list — shown ALL AT ONCE (no week-by-week gating), already
  * sorted highest-leverage first (slow-burn start-now work at the top of each tier). Each item
  * ticks independently; progress = ticked / total. */
-type ChecklistItem = { key: string; text: string; autoDone?: boolean; priority?: 'high' | 'medium' | 'low'; leadTime?: 'fast' | 'medium' | 'slow' };
+type ChecklistItem = { key: string; text: string; autoDone?: boolean; priority?: 'high' | 'medium' | 'low'; leadTime?: 'fast' | 'medium' | 'slow'; steps?: string[] };
 
 function DeliveryChecklist({ playbook, hasWebsite, hasSeo, state, onToggle, onGeneratePlaybook, generating }: {
   playbook: PlaybookData | null;
@@ -2184,7 +2184,7 @@ function DeliveryChecklist({ playbook, hasWebsite, hasSeo, state, onToggle, onGe
 
   // The single ordered action list (code-sorted by the generator: priority then leadTime).
   const actionItems: ChecklistItem[] = (playbook?.actions ?? []).map((a, i) => ({
-    key: `act:${i}`, text: a.action, priority: a.priority, leadTime: a.leadTime,
+    key: `act:${i}`, text: a.action, priority: a.priority, leadTime: a.leadTime, steps: a.steps,
   }));
 
   const isTicked = (it: ChecklistItem) => state[it.key] ?? it.autoDone ?? false;
@@ -2195,24 +2195,32 @@ function DeliveryChecklist({ playbook, hasWebsite, hasSeo, state, onToggle, onGe
   const leadLabel: Record<string, string> = { fast: 'Fast', medium: 'Weeks', slow: 'Slow-burn · start now' };
   const renderRow = (it: ChecklistItem, showTags: boolean) => {
     const done = isTicked(it);
+    const steps = (it.steps ?? []).filter(Boolean); // null-safe: older playbooks have no steps
     return (
-      <button key={it.key} onClick={() => onToggle(it.key)}
-        className="w-full flex items-start gap-2.5 text-left rounded-md px-1 py-1 hover:bg-muted/50 transition-colors">
-        <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${done ? 'bg-[hsl(var(--badge-closed))] border-transparent' : 'border-border'}`}>
-          {done && <Check className="h-3 w-3 text-white" />}
-        </span>
-        <span className={`flex-1 text-sm ${done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{it.text}</span>
-        {showTags && (it.leadTime === 'slow' || it.priority === 'high') && (
-          <span className="mt-0.5 flex shrink-0 items-center gap-1">
-            {it.leadTime === 'slow' && (
-              <span className="rounded-full bg-[hsl(var(--badge-waiting))]/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[hsl(var(--badge-waiting))] whitespace-nowrap">{leadLabel.slow}</span>
-            )}
-            {it.priority === 'high' && (
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">High</span>
-            )}
+      <div key={it.key}>
+        <button onClick={() => onToggle(it.key)}
+          className="w-full flex items-start gap-2.5 text-left rounded-md px-1 py-1 hover:bg-muted/50 transition-colors">
+          <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${done ? 'bg-[hsl(var(--badge-closed))] border-transparent' : 'border-border'}`}>
+            {done && <Check className="h-3 w-3 text-white" />}
           </span>
+          <span className={`flex-1 text-sm ${done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{it.text}</span>
+          {showTags && (it.leadTime === 'slow' || it.priority === 'high') && (
+            <span className="mt-0.5 flex shrink-0 items-center gap-1">
+              {it.leadTime === 'slow' && (
+                <span className="rounded-full bg-[hsl(var(--badge-waiting))]/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[hsl(var(--badge-waiting))] whitespace-nowrap">{leadLabel.slow}</span>
+              )}
+              {it.priority === 'high' && (
+                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">High</span>
+              )}
+            </span>
+          )}
+        </button>
+        {showTags && steps.length > 0 && (
+          <ol className="ml-10 mr-1 mb-1 list-decimal space-y-0.5 text-[11px] text-muted-foreground">
+            {steps.map((s, si) => <li key={si} className="pl-0.5">{s}</li>)}
+          </ol>
         )}
-      </button>
+      </div>
     );
   };
 
