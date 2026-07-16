@@ -39,6 +39,9 @@ verify_jwt = false
 [functions.scan-services]
 verify_jwt = false
 
+[functions.scan-site-details]
+verify_jwt = false
+
 [functions.process-whatsapp-queue]
 verify_jwt = false
 

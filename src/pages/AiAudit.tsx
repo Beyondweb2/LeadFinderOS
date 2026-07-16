@@ -540,6 +540,20 @@ function initialRevealed(p: PersistedWizard | null): number {
   return Math.min(Math.max(raw, 0), WIZARD_STEPS.length - 1);
 }
 
+// Site-builder template-default social handles (ported from the edge _shared/aggregators.ts
+// isSiteBuilderSocialUrl, generalised to ANY social host so it also catches twitter.com/wix
+// and linkedin.com/company/wix-com, not just fb/ig). Flags a scanned link as a likely
+// template default so the operator doesn't apply it. Warning-only — never auto-drops.
+const SITE_BUILDER_TOKENS = ['wix', 'squarespace', 'godaddy', 'shopify', 'weebly', 'wordpress', 'webflow', 'jimdo', 'strikingly', 'site123', 'duda', 'yola', 'carrd'];
+function looksLikeTemplateDefault(url: string): boolean {
+  try {
+    const path = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).pathname.toLowerCase();
+    return SITE_BUILDER_TOKENS.some((t) => path.includes(t));
+  } catch {
+    return false;
+  }
+}
+
 const AiAudit = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -632,6 +646,15 @@ const AiAudit = () => {
   const [clientLinks, setClientLinks] = useState<{ label: string; url: string }[]>([]);
   const [linksSaving, setLinksSaving] = useState(false);
   const [linkCopiedIdx, setLinkCopiedIdx] = useState<number | null>(null);
+  // "Scan site & autofill" — scan the client's own site (scan-site-details), review the found
+  // details + links, then apply into schemaNap / clientLinks via the EXISTING save paths.
+  // Nothing auto-saves; scanReview holds the editable, include-gated review until applied.
+  const [scanning, setScanning] = useState(false);
+  const [scanReview, setScanReview] = useState<null | {
+    details: { phone: string; address: string; email: string; hours: string };
+    detailInclude: { phone: boolean; address: boolean; email: boolean; hours: boolean };
+    links: { label: string; url: string; include: boolean; templateDefault: boolean }[];
+  }>(null);
   // The run whose opened-audit view we're on. Persisted (per-tab) so navigating away to the
   // report/playbook sub-views — or off the page entirely — and back returns to THIS audit
   // instead of resetting to the list. Cleared by "New audit" and "Back" (to the list).
@@ -1089,6 +1112,73 @@ const AiAudit = () => {
     } catch {
       toast({ title: 'Copy failed', variant: 'destructive' });
     }
+  };
+
+  // The site to scan: the schema website, else the wizard website when the audit has one.
+  const scanTargetUrl = (schemaWebsite || (resultsHasWebsite ? website : '')).trim();
+
+  // Scan the client's own site → open the editable review panel. Saves NOTHING.
+  const runScan = async () => {
+    if (!auditId || !scanTargetUrl || scanning) return;
+    setScanning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('scan-site-details', {
+        body: { website: scanTargetUrl, business_name: resultsBusinessName || businessName, audit_id: auditId },
+      });
+      if (error || !data?.success) throw new Error(error?.message ?? data?.error ?? 'scan failed');
+      const d = (data.details ?? {}) as { phone?: string; address?: string; email?: string; hours?: string };
+      const rawLinks = Array.isArray(data.links) ? data.links as { label?: string; url?: string }[] : [];
+      setScanReview({
+        details: { phone: d.phone ?? '', address: d.address ?? '', email: d.email ?? '', hours: d.hours ?? '' },
+        detailInclude: { phone: !!d.phone, address: !!d.address, email: !!d.email, hours: false }, // hours: no column to save into
+        links: rawLinks.map((l) => {
+          const url = (l.url ?? '').trim();
+          const templateDefault = looksLikeTemplateDefault(url);
+          // Default-EXCLUDE template defaults (facebook.com/wix etc.) so they're never applied by accident.
+          return { label: (l.label ?? '').trim(), url, include: !templateDefault, templateDefault };
+        }),
+      });
+      if (!data.found) toast({ title: 'Nothing found', description: "The scan didn't find details or links on that site." });
+    } catch (e) {
+      toast({ title: "Couldn't scan the site", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  // Apply the INCLUDED, non-empty scanned details into the schemaNap fields (does NOT save —
+  // the operator then clicks the existing "Save details"). Opens the Schema section so the
+  // pre-filled fields are visible. Overwrites are never silent: the review shows the current
+  // value + a "will replace" flag, and each field is include-gated + editable before this.
+  const applyScanDetails = () => {
+    if (!scanReview) return;
+    const r = scanReview;
+    setSchemaNap((p) => ({
+      ...p,
+      phone: r.detailInclude.phone && r.details.phone.trim() ? r.details.phone.trim() : p.phone,
+      address: r.detailInclude.address && r.details.address.trim() ? r.details.address.trim() : p.address,
+      email: r.detailInclude.email && r.details.email.trim() ? r.details.email.trim() : p.email,
+      // hours has no ai_audits column — intentionally NOT applied (see review note).
+    }));
+    setShowSchema(true);
+    toast({ title: 'Details applied', description: 'Review the Schema-markup fields, then Save details.' });
+  };
+
+  // Append the INCLUDED scanned links into clientLinks (never wipes existing; dedups by URL).
+  // Operator then clicks the existing "Save links".
+  const applyScanLinks = () => {
+    if (!scanReview) return;
+    const chosen = scanReview.links
+      .filter((l) => l.include && (l.label.trim() || l.url.trim()))
+      .map((l) => ({ label: l.label.trim(), url: l.url.trim() }));
+    if (!chosen.length) { toast({ title: 'No links selected' }); return; }
+    setClientLinks((prev) => {
+      const have = new Set(prev.map((x) => x.url.trim().toLowerCase().replace(/\/+$/, '')));
+      const add = chosen.filter((l) => !have.has(l.url.toLowerCase().replace(/\/+$/, '')));
+      return [...prev, ...add];
+    });
+    setShowLinks(true);
+    toast({ title: 'Links added', description: 'Review the Link hub rows, then Save links.' });
   };
 
   const reopenAudit = async (audit: AuditRow) => {
@@ -1829,6 +1919,109 @@ const AiAudit = () => {
               onGeneratePlaybook={() => generatePlaybook(false)}
               generating={playbookGenerating}
             />
+          )}
+
+          {/* Scan site & autofill — pull NAP + links off the client's own site to review, then
+              apply into the Schema-markup fields + Link hub below (via their existing save paths). */}
+          {!isDraining && liveTally.done > 0 && (
+            <Card>
+              <CardContent className="p-4 sm:p-5 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">Scan site &amp; autofill</div>
+                    <div className="text-[11px] text-muted-foreground">Pull contact details + links off the client's own site to review, then apply to the fields below.</div>
+                  </div>
+                  <Button size="sm" className="shrink-0" onClick={runScan} disabled={scanning || !scanTargetUrl}>
+                    {scanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                    {scanning ? 'Scanning…' : 'Scan site'}
+                  </Button>
+                </div>
+                {!scanTargetUrl && (
+                  <p className="text-[11px] text-muted-foreground">No website on this audit — nothing to scan.</p>
+                )}
+
+                {scanReview && (
+                  <div className="rounded-lg border border-primary/40 bg-card/60 p-3 space-y-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Review — nothing is saved until you apply</div>
+
+                    {/* Details found — editable + include-gated; conflicts with existing values flagged */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold">Details found</div>
+                      {(['phone', 'address', 'email', 'hours'] as const).map((f) => {
+                        const current = f === 'hours' ? '' : schemaNap[f]; // hours has no ai_audits column
+                        const conflict = f !== 'hours' && current.trim() && current.trim() !== scanReview.details[f].trim();
+                        return (
+                          <div key={f} className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              className="mt-2 h-4 w-4 shrink-0 accent-primary disabled:opacity-40"
+                              checked={scanReview.detailInclude[f]}
+                              disabled={f === 'hours'}
+                              onChange={(e) => setScanReview((s) => s && ({ ...s, detailInclude: { ...s.detailInclude, [f]: e.target.checked } }))}
+                            />
+                            <div className="flex-1 min-w-0 space-y-0.5">
+                              <Label className="text-[11px] capitalize">
+                                {f}{f === 'hours' && <span className="ml-1 font-normal text-muted-foreground">— no field to save into yet</span>}
+                              </Label>
+                              <Input
+                                value={scanReview.details[f]}
+                                placeholder={`No ${f} found`}
+                                onChange={(e) => setScanReview((s) => s && ({ ...s, details: { ...s.details, [f]: e.target.value } }))}
+                              />
+                              {conflict && (
+                                <div className="text-[11px] text-[hsl(var(--badge-waiting))]">Current: "{current}" — applying will replace it</div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <Button variant="outline" size="sm" onClick={applyScanDetails}>Apply details → Schema fields</Button>
+                    </div>
+
+                    {/* Links found — editable + include-gated; template defaults flagged + default-excluded */}
+                    <div className="space-y-2 border-t border-border/60 pt-3">
+                      <div className="text-xs font-semibold">Links found</div>
+                      {scanReview.links.length === 0 && (
+                        <p className="text-[11px] text-muted-foreground">No social / booking links found on the homepage.</p>
+                      )}
+                      {scanReview.links.map((l, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            className="mt-2 h-4 w-4 shrink-0 accent-primary"
+                            checked={l.include}
+                            onChange={(e) => setScanReview((s) => s && ({ ...s, links: s.links.map((x, xi) => xi === i ? { ...x, include: e.target.checked } : x) }))}
+                          />
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                className="sm:max-w-[10rem]"
+                                value={l.label}
+                                placeholder="Label"
+                                onChange={(e) => setScanReview((s) => s && ({ ...s, links: s.links.map((x, xi) => xi === i ? { ...x, label: e.target.value } : x) }))}
+                              />
+                              <Input
+                                value={l.url}
+                                placeholder="https://…"
+                                onChange={(e) => setScanReview((s) => s && ({ ...s, links: s.links.map((x, xi) => xi === i ? { ...x, url: e.target.value } : x) }))}
+                              />
+                            </div>
+                            {l.templateDefault && (
+                              <div className="text-[11px] font-medium text-[hsl(var(--badge-not-interested))]">⚠ Looks like a template default — likely wrong, fix the URL or leave unchecked</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      <Button variant="outline" size="sm" onClick={applyScanLinks}>Apply links → Link hub</Button>
+                    </div>
+
+                    <div className="border-t border-border/60 pt-2">
+                      <Button variant="ghost" size="sm" onClick={() => setScanReview(null)}>Dismiss</Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {/* Schema markup — copy-paste JSON-LD, collapsed by default (mirrors Detailed results). */}
