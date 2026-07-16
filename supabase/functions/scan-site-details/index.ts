@@ -110,6 +110,7 @@ function htmlToText(html: string): string {
     .replace(/&pound;/gi, "£")
     .replace(/&#163;/g, "£")
     .replace(/&[a-z]+;/gi, " ")
+    .replace(/[​‌‍⁠﻿]/g, "") // strip zero-width cruft (Wix injects these, fragmenting labels/values)
     .replace(/[ \t\f\v]+/g, " ")
     .replace(/\s*\n\s*/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -203,20 +204,62 @@ function harvestSocialLinks(html: string, base: URL): ScannedLink[] {
   return out;
 }
 
+/* ── Email harvest (deterministic — no LLM) ──────────────────────────────────── */
+
+// Junk / third-party email domains that are never the business's own contact.
+const JUNK_EMAIL_DOMAINS = /(?:sentry\.io|wixpress\.com|wix\.com|example\.com|schema\.org|w3\.org|sentry-next\.wixpress\.com|googleapis\.com|gstatic\.com)$/i;
+const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
+
+function isPlausibleEmail(e: string): boolean {
+  if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(e)) return false;
+  if (/\.(?:png|jpe?g|gif|svg|webp|css|js)$/i.test(e)) return false; // asset filenames that look email-ish
+  const dom = e.split("@")[1] ?? "";
+  return !JUNK_EMAIL_DOMAINS.test(dom);
+}
+
+/** All plausible emails in a page's raw HTML — both mailto: hrefs and plain-text addresses. */
+function harvestEmails(html: string): string[] {
+  const out = new Set<string>();
+  for (const m of html.matchAll(/mailto:([^"'?>\s]+)/gi)) {
+    let e = m[1].trim();
+    try { e = decodeURIComponent(e); } catch { /* leave as-is */ }
+    e = e.toLowerCase();
+    if (isPlausibleEmail(e)) out.add(e);
+  }
+  for (const m of html.matchAll(EMAIL_RE)) {
+    const e = m[0].trim().toLowerCase();
+    if (isPlausibleEmail(e)) out.add(e);
+  }
+  return [...out];
+}
+
+/** Pick the most likely MAIN business email from candidates gathered per page. Prefers an
+ *  own-domain address (e.g. @ablm.co.uk), then one seen on the contact page; first-seen wins ties. */
+function pickMainEmail(cands: { email: string; fromContact: boolean }[], siteDomain: string): string | undefined {
+  if (!cands.length) return undefined;
+  const ownDomain = (e: string): boolean => {
+    const d = e.split("@")[1] ?? "";
+    return !!siteDomain && (d === siteDomain || d.endsWith(`.${siteDomain}`));
+  };
+  const score = (c: { email: string; fromContact: boolean }) => (ownDomain(c.email) ? 4 : 0) + (c.fromContact ? 2 : 0);
+  let best = cands[0];
+  for (const c of cands) if (score(c) > score(best)) best = c; // strictly-greater → first-seen wins ties
+  return best.email;
+}
+
 /* ── LLM details extraction ──────────────────────────────────────────────────── */
 
 interface ScannedDetails { phone?: string; address?: string; email?: string; hours?: string }
 
 const SYSTEM_PROMPT = `You extract a business's contact details from the plain text of THEIR OWN website.
 
-Rules — follow exactly:
-- Extract ONLY values LITERALLY present in the text. Never invent, infer, guess, or normalise.
-- If a field is not present on the page, OMIT it entirely. An omitted field is the correct answer when it isn't shown.
-- "phone": the main business phone exactly as written (e.g. "01733 555123", "+44 1733 555123").
-- "email": the main business email exactly as written.
-- "address": the full postal address as one line, joined with commas, exactly as written (street, town, county, postcode).
-- "hours": opening hours as a short single string exactly as written (e.g. "Mon-Fri 9am-5pm"); omit if none shown.
-- Return the MAIN business contact only — not every phone/email that appears (ignore third-party / partner / cookie / social contacts).
+Capture what is SHOWN — do not invent. Rules:
+- Extract values that appear in the text. Do NOT guess, infer, or normalise a value that isn't shown; if a field genuinely does not appear, OMIT it (an omitted field is correct when it isn't shown).
+- Clearly-labelled contact info SHOULD be captured even when the layout is loose or fragmented. Contact details commonly sit next to headings/labels like "Contact", "Get in touch", "Let's Chat", "Working Hours", "Opening Hours", "Find us", "Visit us" — read the value next to the label. E.g. a "Working Hours" heading followed by "Mon - Fri: 9am - 5pm" → hours = "Mon - Fri: 9am - 5pm"; a "Let's Chat" / "Email" label followed by "info@acme.co.uk" → email = "info@acme.co.uk".
+- "phone": the business phone exactly as written (e.g. "01733 555123", "+44 1733 555123"). Omit if none shown.
+- "email": the business email exactly as written. Omit if none shown.
+- "address": the full postal address as one comma-joined line exactly as written (street, town, county, postcode). Omit if none shown — do NOT assemble an address from stray fragments.
+- "hours": opening hours as a short single string exactly as written (e.g. "Mon - Fri: 9am - 5pm"). Omit if none shown.
 
 Return ONLY a JSON object of this exact shape (omit any field not found):
 {"phone"?: string, "address"?: string, "email"?: string, "hours"?: string}`;
@@ -260,7 +303,9 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    const cacheKey = `${auditId || homepage.hostname}:site_details`;
+    // _v2: the extraction was fixed (deterministic email + stronger hours prompt + zwsp strip);
+    // bump the version so already-cached empty-detail results don't keep coming back.
+    const cacheKey = `${auditId || homepage.hostname}:site_details_v2`;
 
     // cache → cap → run → persist (enrichment_cache/usage + api_usage_log).
     const outcome = await runEnrichSource<{
@@ -287,6 +332,10 @@ Deno.serve(async (req) => {
         // Links: deterministic harvest from the HOMEPAGE anchors (no LLM, no cost).
         const links = harvestSocialLinks(homeHtml, homepage);
 
+        // Email candidates harvested per page (mailto: + plain-text) — deterministic, not the LLM.
+        const emailCands: { email: string; fromContact: boolean }[] = [];
+        for (const e of harvestEmails(homeHtml)) emailCands.push({ email: e, fromContact: false });
+
         // Details text: homepage + up to MAX_SUBPAGES contact/about pages (that's where NAP lives).
         let text = htmlToText(homeHtml);
         const candidates = findContactLinks(homeHtml, homepage, MAX_SUBPAGES);
@@ -294,13 +343,20 @@ Deno.serve(async (req) => {
           const subHtml = await fetchHtml(url);
           if (!subHtml) continue;
           sourceUrls.push(url);
+          const fromContact = /contact/i.test(url);
+          for (const e of harvestEmails(subHtml)) emailCands.push({ email: e, fromContact });
           text += `\n\n----- ${url} -----\n\n` + htmlToText(subHtml).slice(0, MAX_SUBPAGE_CHARS);
           if (text.length >= MAX_TEXT_CHARS) break;
         }
         text = text.slice(0, MAX_TEXT_CHARS);
 
+        // Deterministic main email (prefers own-domain, then contact page). Beats the LLM for email.
+        const harvestedEmail = pickMainEmail(emailCands, domainOf(homepage.href));
+
         if (!text.trim()) {
-          return { result: { details: {}, links, source_urls: sourceUrls, found: links.length > 0 }, costUsd: 0 };
+          // No readable text for the LLM, but a harvested email still stands on its own.
+          const details: ScannedDetails = harvestedEmail ? { email: harvestedEmail } : {};
+          return { result: { details, links, source_urls: sourceUrls, found: links.length > 0 || !!harvestedEmail }, costUsd: 0 };
         }
 
         // 2) Strict details extraction via gpt-4o-mini (temperature 0 — extraction, not creative).
@@ -341,11 +397,14 @@ Deno.serve(async (req) => {
           const hours = pick(parsed?.hours, 200);
           if (phone) details.phone = phone;
           if (address) details.address = address;
-          if (email) details.email = email;
+          if (email) details.email = email; // LLM email is a fallback; harvested wins below
           if (hours) details.hours = hours;
         } catch (e) {
           console.error("[scan-site-details] JSON parse failed:", (e as Error).message);
         }
+
+        // Deterministic email is authoritative — override the LLM's when we harvested one.
+        if (harvestedEmail) details.email = harvestedEmail;
 
         const found = links.length > 0 || Object.keys(details).length > 0;
         return { result: { details, links, source_urls: sourceUrls, found }, costUsd };
