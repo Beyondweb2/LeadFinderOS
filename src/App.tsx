@@ -36,6 +36,7 @@ const AdminClients = lazy(() => import("./pages/AdminClients"));
 const AdminSiteImages = lazy(() => import("./pages/AdminSiteImages"));
 const AdminSitesList = lazy(() => import("./pages/AdminSitesList"));
 const AdminSiteManage = lazy(() => import("./pages/AdminSiteManage"));
+const AdminDirectory = lazy(() => import("./pages/AdminDirectory"));
 const SiteManage = lazy(() => import("./pages/SiteManage"));
 const Landing = lazy(() => import("./pages/Landing"));
 const Terms = lazy(() => import("./pages/Terms"));
@@ -392,6 +393,16 @@ const App = () => {
                 <ProtectedRoute>
                   <RequireAdmin>
                     <AdminClients />
+                  </RequireAdmin>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/directory"
+              element={
+                <ProtectedRoute>
+                  <RequireAdmin>
+                    <AdminDirectory />
                   </RequireAdmin>
                 </ProtectedRoute>
               }
