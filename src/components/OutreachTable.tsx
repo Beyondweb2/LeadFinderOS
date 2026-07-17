@@ -290,6 +290,10 @@ export function OutreachTable({
   const [siteGenDialogOpen, setSiteGenDialogOpen] = useState(false);
   const [siteGenChoice, setSiteGenChoice] = useState<string>('barber');
   const [sitesByLead, setSitesByLead] = useState<Record<string, { id: string; slug: string; opened: boolean; claimed: boolean; addon: boolean }>>({});
+  // Per-lead LATEST audit state (mirrors sitesByLead) — drives the upcoming "Run audit" /
+  // "Manage" row control. Keyed by lead_id, newest audit first; each entry carries that
+  // audit's latest run + its status (pending|running|complete|capped|failed).
+  const [auditsByLead, setAuditsByLead] = useState<Record<string, { auditId: string; runId: string; status: string }>>({});
   const navigate = useNavigate();
   const [resettingTestBarber, setResettingTestBarber] = useState(false);
 
@@ -349,6 +353,34 @@ export function OutreachTable({
     })();
     return () => { cancelled = true; };
   }, [isAdmin, sitesRefreshToken]);
+
+  // Map lead_id -> its LATEST audit run + status, so each row can show "Run audit" (none) /
+  // "Running…" / "Manage" (complete). Mirrors sitesByLead: RLS-scoped (no explicit user filter),
+  // newest audit first, keep the FIRST audit seen per lead_id. For that audit, pick its latest
+  // run (max run_number, else newest created_at); audits with no runs are skipped.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audits')
+        .select('id, lead_id, ai_audit_runs(id, run_number, status, created_at)')
+        .order('created_at', { ascending: false });
+      if (cancelled || !data) return;
+      const map: Record<string, { auditId: string; runId: string; status: string }> = {};
+      for (const row of data as Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ id: string; run_number: number | null; status: string | null; created_at: string | null }> | null }>) {
+        if (!row.lead_id || map[row.lead_id]) continue; // no lead, or a newer audit already won
+        const runs = Array.isArray(row.ai_audit_runs) ? row.ai_audit_runs : [];
+        if (runs.length === 0) continue;               // no run yet → nothing to show
+        const latestRun = [...runs].sort((a, b) =>
+          (b.run_number ?? 0) - (a.run_number ?? 0) ||
+          (new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
+        )[0];
+        map[row.lead_id] = { auditId: row.id, runId: latestRun.id, status: latestRun.status ?? 'pending' };
+      }
+      setAuditsByLead(map);
+    })();
+    return () => { cancelled = true; };
+  }, [isAdmin]);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
@@ -1695,6 +1727,9 @@ export function OutreachTable({
                   onGenerateSite={!sitesByLead[lead.id] ? (template, mode) => handleGenerateSite(lead, template, mode) : undefined}
                   isGeneratingSite={isRowGenerating(lead.id)}
                   onManageSite={sitesByLead[lead.id] ? () => navigate(isAdmin ? `/admin/sites/${sitesByLead[lead.id].id}` : `/sites/${sitesByLead[lead.id].id}`) : undefined}
+                  onManageAudit={(() => { const a = auditsByLead[lead.id]; return a && (a.status === 'complete' || a.status === 'capped') ? () => navigate(`/ai-audit?runId=${a.runId}`) : undefined; })()}
+                  auditRunning={(() => { const a = auditsByLead[lead.id]; return !!a && (a.status === 'pending' || a.status === 'running'); })()}
+                  onRunAudit={(() => { const a = auditsByLead[lead.id]; return a && (a.status === 'complete' || a.status === 'capped' || a.status === 'pending' || a.status === 'running') ? undefined : () => navigate(`/ai-audit?leadId=${lead.id}`); })()}
                   
                 />
               ))
@@ -2039,6 +2074,44 @@ export function OutreachTable({
                               </DropdownMenu>
                             )
                           )}
+                          {/* AI audit control — mirrors the site button. Reads auditsByLead[lead.id]:
+                              complete/capped → Manage audit; pending/running → Running…; else (incl.
+                              failed → re-runnable) → Run audit. Deep-links to the audit page. */}
+                          {(() => {
+                            const a = auditsByLead[lead.id];
+                            if (a && (a.status === 'complete' || a.status === 'capped')) {
+                              return (
+                                <button
+                                  className="p-1.5 rounded-md text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors"
+                                  title="Manage audit"
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/ai-audit?runId=${a.runId}`); }}
+                                >
+                                  <ClipboardList className="h-4 w-4" />
+                                </button>
+                              );
+                            }
+                            if (a && (a.status === 'pending' || a.status === 'running')) {
+                              return (
+                                <button
+                                  className="p-1.5 rounded-md text-muted-foreground/70 cursor-default disabled:opacity-100"
+                                  title="Audit running"
+                                  disabled
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                >
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                </button>
+                              );
+                            }
+                            return (
+                              <button
+                                className="p-1.5 rounded-md text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 transition-colors"
+                                title="Run AI audit"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/ai-audit?leadId=${lead.id}`); }}
+                              >
+                                <ClipboardList className="h-4 w-4" />
+                              </button>
+                            );
+                          })()}
                         </div>
                       </TableCell>
                     </TableRow>

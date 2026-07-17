@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -557,6 +558,8 @@ function looksLikeTemplateDefault(url: string): boolean {
 const AiAudit = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  // Deep-link params (?runId=… / ?leadId=…) — read + cleared by the deep-link effect below.
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Rehydrate the wizard once from sessionStorage. Nothing is pre-filled on a fresh
   // start. `step` is only the wizard/results discriminator; results is never persisted.
@@ -837,10 +840,11 @@ const AiAudit = () => {
   const rehydratedRef = useRef(false);
   useEffect(() => {
     if (!user || rehydratedRef.current) return;
+    if (searchParams.get('runId') || searchParams.get('leadId')) return; // deep-link handler owns this load
     if (!openRunId || runId || step === 'results') return;
     rehydratedRef.current = true;
     rehydrateOpenRun(openRunId).then((ok) => { if (!ok) setOpenRunId(null); });
-  }, [user, openRunId, runId, step, rehydrateOpenRun, setOpenRunId]);
+  }, [user, openRunId, runId, step, rehydrateOpenRun, setOpenRunId, searchParams]);
 
   const resetWizard = () => {
     setMode(null); setLeadId(null); setBusinessName(''); setBusinessType('');
@@ -908,6 +912,42 @@ const AiAudit = () => {
     }
     reveal(WIZARD_STEPS.indexOf('name'));
   };
+
+  // Deep-link receiver: /ai-audit?runId=XXX opens that run (Manage); ?leadId=YYY starts a
+  // pre-filled wizard for that lead (Run audit). Fires ONCE (deepLinkHandledRef) — the guard is
+  // set true only when we actually handle a param, so the leadId case can wait for `leads` to
+  // load then fire. The param is cleared after handling so a refresh/back doesn't re-trigger.
+  // Placed after pickLead (referenced in deps) so its const is initialised before this runs.
+  const deepLinkHandledRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandledRef.current || !user) return;
+    const rid = searchParams.get('runId');
+    const lid = searchParams.get('leadId');
+    if (!rid && !lid) return; // normal page load — nothing to deep-link
+    if (rid) {
+      // MANAGE — open the specific run directly (wins over the persisted-run rehydrate).
+      deepLinkHandledRef.current = true;
+      rehydrateOpenRun(rid).then((ok) => { if (!ok) toast({ title: 'Audit not found', variant: 'destructive' }); });
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    // RUN-AUDIT — needs the lead loaded. Wait (without consuming the guard) until loadSaved
+    // populates `leads`, then open a pre-filled "existing lead" wizard.
+    if (leads.length === 0) return; // effect re-runs when leads changes
+    deepLinkHandledRef.current = true;
+    const found = leads.some((l) => l.id === lid);
+    if (found) {
+      setOpenRunId(null);   // drop any previously-open audit so the fresh wizard wins
+      setRunId(null);
+      setRun(null);
+      setMode('existing');
+      pickLead(lid!);
+      setStep('source');
+    } else {
+      toast({ title: 'Lead not found', variant: 'destructive' });
+    }
+    setSearchParams({}, { replace: true });
+  }, [user, searchParams, leads, rehydrateOpenRun, setSearchParams, pickLead, setMode, setStep, toast, setOpenRunId, setRunId, setRun]);
 
   // ── Preview questions (generate for the review step) ─────────────────────────
   const runPreview = useCallback(async () => {

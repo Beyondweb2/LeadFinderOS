@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench, ClipboardList } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
@@ -57,6 +57,11 @@ interface OutreachMobileCardProps {
   onGenerateSite?: (template: 'barber' | 'salon' | 'plumber', mode?: 'booking_only') => void;
   isGeneratingSite?: boolean;
   onManageSite?: () => void;
+  // AI audit control (parity with the desktop row). onManageAudit → complete/capped;
+  // auditRunning → pending/running; onRunAudit → none/failed (re-runnable).
+  onRunAudit?: () => void;
+  onManageAudit?: () => void;
+  auditRunning?: boolean;
   onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
 }
 
@@ -87,6 +92,9 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   onGenerateSite,
   isGeneratingSite = false,
   onManageSite,
+  onRunAudit,
+  onManageAudit,
+  auditRunning = false,
   onUpdateLead,
 }: OutreachMobileCardProps) {
   const isPhoneFetching = phoneFetchStatus === 'pending';
@@ -390,6 +398,38 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
+                {/* AI audit control — parity with the desktop row (auditsByLead state). */}
+                {onManageAudit ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                    onClick={onManageAudit}
+                    title="Manage audit"
+                  >
+                    <ClipboardList className="h-3.5 w-3.5" />
+                  </Button>
+                ) : auditRunning ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground/70 cursor-default"
+                    disabled
+                    title="Audit running"
+                  >
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  </Button>
+                ) : onRunAudit ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
+                    onClick={onRunAudit}
+                    title="Run AI audit"
+                  >
+                    <ClipboardList className="h-3.5 w-3.5" />
+                  </Button>
+                ) : null}
               </div>
             </>
           )}

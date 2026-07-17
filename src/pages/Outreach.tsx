@@ -16,7 +16,7 @@ import { Loader2, CheckCircle2, X } from 'lucide-react';
 import { isDemoLead } from '@/lib/demoLeads';
 import { readCampaignFilter, writeCampaignFilter } from '@/lib/outreachPrefs';
 import type { ContactMethod, PipelineStatus } from '@/types/outreach';
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 const Outreach = () => {
   const {
