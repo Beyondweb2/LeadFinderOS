@@ -79,7 +79,7 @@ type EngineMap = Record<string, EngineResult>;
 interface QueueRow { id: string; question: string; status: string; result: EngineMap | null; }
 interface RunRow { id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null; results: unknown }
 interface AuditRow { id: string; business_name: string; business_type: string | null; location_text: string | null; country: string | null; has_website: boolean; created_at: string }
-interface LeadOption { id: string; business_name: string; category: string | null; country: string | null; website: string | null; address: string | null }
+interface LeadOption { id: string; business_name: string; category: string | null; country: string | null; website: string | null; address: string | null; search_keyword?: string | null; search_location?: string | null }
 
 const TERMINAL = new Set(['complete', 'capped', 'failed']);
 
@@ -749,7 +749,7 @@ const AiAudit = () => {
     (async () => {
       const { data } = await supabase
         .from('outreach_leads')
-        .select('id, business_name, category, country, website, address')
+        .select('id, business_name, category, country, website, address, search_keyword, search_location')
         .eq('is_archived', false)
         .order('created_at', { ascending: false })
         .limit(500);
@@ -904,8 +904,8 @@ const AiAudit = () => {
     setLeadId(id);
     if (lead) {
       setBusinessName(lead.business_name ?? '');
-      setBusinessType(lead.category ?? '');
-      setLocationText(lead.address ?? '');
+      setBusinessType(lead.search_keyword || lead.category || '');
+      setLocationText(lead.search_location || lead.address || '');
       if (lead.country) setCountry(lead.country as Country);
       setHasWebsite(!!lead.website);
       setWebsite(lead.website ?? '');

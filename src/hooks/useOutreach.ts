@@ -306,7 +306,7 @@ export function useOutreach() {
     }
   }, [leads, archivedLeads, removeLeadNoPhone]);
 
-  const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website', campaignId: string | null = null, enrichment?: Partial<OutreachLead> | null, silent = false) => {
+  const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website', campaignId: string | null = null, enrichment?: Partial<OutreachLead> | null, silent = false, searchKeyword: string | null = null, searchLocation: string | null = null) => {
     if (!user) {
       toast({
         title: 'Not authenticated',
@@ -375,6 +375,8 @@ export function useOutreach() {
         google_maps_url: lead.googleMapsUrl,
         address: lead.address || null,
         category: lead.category || null,
+        search_keyword: searchKeyword || null,
+        search_location: searchLocation || null,
         website: lead.websiteUrl || null,
         status: 'not_contacted' as LeadStatus,
         next_action: 'none' as NextActionType,

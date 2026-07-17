@@ -38,6 +38,8 @@ const Index = () => {
   const { toast } = useToast();
 
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
+  const [lastSearchKeyword, setLastSearchKeyword] = useState<string | null>(null);
+  const [lastSearchLocation, setLastSearchLocation] = useState<string | null>(null);
   // One page, one search. The radius slider is the single control: ≤50km = a
   // normal single-centre search only — region tiling is capped out of the UI.
 
@@ -107,6 +109,8 @@ const Index = () => {
 
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
+    setLastSearchKeyword(filters.keyword?.trim() || null);
+    setLastSearchLocation(filters.location?.trim() || null);
     // Region tiling is capped out of the UI (slider max = 50km) — always a normal
     // single-centre search. The backend tiledRegionSearch stays in place but
     // dormant: the frontend never sends region:true.
@@ -130,11 +134,11 @@ const Index = () => {
   const handleBulkAdd = useCallback(async (sel: Lead[], campaignId: string | null = activeCampaign) => {
     let added = 0, skipped = 0;
     for (const lead of sel) {
-      const res = await addToOutreach(lead, lastSearchCountry, 'no_website', campaignId, getEnrichment(lead.id), true);
+      const res = await addToOutreach(lead, lastSearchCountry, 'no_website', campaignId, getEnrichment(lead.id), true, lastSearchKeyword, lastSearchLocation);
       if (res) added++; else skipped++;
     }
     return { added, skipped };
-  }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
+  }, [addToOutreach, lastSearchCountry, lastSearchKeyword, lastSearchLocation, activeCampaign, getEnrichment]);
 
   // ── Add-to-CRM entry points (Index decides whether to prompt) ───────────────
   const activeCampaignName = useMemo(
@@ -153,8 +157,8 @@ const Index = () => {
       setPendingAdd({ kind: 'row', lead });
       return Promise.resolve(null);
     }
-    return addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id));
-  }, [askCampaignEachTime, activeCampaign, addToOutreach, lastSearchCountry, getEnrichment]);
+    return addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id), false, lastSearchKeyword, lastSearchLocation);
+  }, [askCampaignEachTime, activeCampaign, addToOutreach, lastSearchCountry, lastSearchKeyword, lastSearchLocation, getEnrichment]);
 
   // Bulk Add: prompt ONCE for the batch when ON, else run as today. When prompting,
   // return a promise that resolves after the dialog so LeadsTable's summary toast is accurate.
@@ -173,13 +177,13 @@ const Index = () => {
     setPendingAdd(null);
     if (!p) return;
     if (p.kind === 'row') {
-      await addToOutreach(p.lead, lastSearchCountry, 'no_website', chosenCampaign, getEnrichment(p.lead.id));
+      await addToOutreach(p.lead, lastSearchCountry, 'no_website', chosenCampaign, getEnrichment(p.lead.id), false, lastSearchKeyword, lastSearchLocation);
     } else {
       const res = await handleBulkAdd(p.leads, chosenCampaign);
       bulkResolverRef.current?.(res);
       bulkResolverRef.current = null;
     }
-  }, [pendingAdd, chosenCampaign, addToOutreach, lastSearchCountry, getEnrichment, handleBulkAdd]);
+  }, [pendingAdd, chosenCampaign, addToOutreach, lastSearchCountry, lastSearchKeyword, lastSearchLocation, getEnrichment, handleBulkAdd]);
 
   // Dialog cancel/close: nothing added; resolve a pending bulk promise so the caller unblocks.
   const handleCancelCampaign = useCallback(() => {
