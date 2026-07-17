@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { runAiSearch, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
-import { runSeoAudit, gradeSeo } from "../_shared/enrichment/seo-audit.ts";
+import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. Each tick claims a small batch of pending questions, runs
@@ -315,8 +315,9 @@ async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolea
         estCostUsd: SOURCES.seo_audit.estCostUsd,
         capUsd: DAILY_CAP_USD,
         run: async () => {
-          const { items } = await runSeoAudit(website, { token: apifyToken, timeoutMs: SEO_TIMEOUT_MS, retry: { on429: true } });
-          return { result: gradeSeo(items, { url: website, location: audit.location_text }), costUsd: SOURCES.seo_audit.estCostUsd };
+          const r = await runSeoScanCore(website, { token: apifyToken });
+          if (!r.ok) throw new Error(r.error + (r.detail ? `: ${r.detail}` : ""));
+          return { result: r.seo, costUsd: SOURCES.seo_audit.estCostUsd };
         },
       });
       seo = outcome.capReached

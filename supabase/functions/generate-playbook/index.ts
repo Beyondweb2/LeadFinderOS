@@ -574,7 +574,7 @@ function buildUserPrompt(audit: Row, results: Row, cleanedCompetitors: string[])
     const rawPaste = str(seo.rawPaste).slice(0, MAX_RAW_PASTE_CHARS);
     seoBlock =
 `Overall SEO grade: ${str(seo.overallGrade)}
-  On-Page: ${str(c?.onPage?.grade)} (${c?.onPage?.score}) | Local/Entity Presence: ${str(c?.localPresence?.grade)} (${c?.localPresence?.score}) | Content & Technical: ${str(c?.contentTechnical?.grade)} (${c?.contentTechnical?.score})
+  On-Page: ${str(c?.onPage?.grade)} (${c?.onPage?.score}) | Content & Technical: ${str(c?.contentTechnical?.grade)} (${c?.contentTechnical?.score})
   Lead findings:
 ${findings || "    (none)"}
   Baseline signals (JSON): ${baseline}

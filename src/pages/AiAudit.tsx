@@ -1426,7 +1426,7 @@ const AiAudit = () => {
   const openPlaybookData: PlaybookData | null = playbookRunId ? (playbooks[playbookRunId] ?? null) : null;
   // Generate the playbook via the edge fn, snapshot it, and open. If a snapshot already
   // exists and this isn't an explicit regenerate, just open it (no re-generation).
-  const generatePlaybook = async (regenerate = false) => {
+  const generatePlaybook = async (regenerate = false, autoOpen = true) => {
     if (!runId || playbookGenerating) return;
     if (!regenerate && playbooks[runId]) { setPlaybookRunId(runId); return; }
     const rid = runId;
@@ -1437,7 +1437,7 @@ const AiAudit = () => {
       const { data, error } = await supabase.functions.invoke('generate-playbook', { body: { runId: rid, competitors: topCompetitors } });
       if (error || !data?.ok || !data.playbook) throw new Error(error?.message ?? data?.error ?? 'generation failed');
       setPlaybooks((prev) => ({ ...prev, [rid]: data.playbook as PlaybookData }));
-      setPlaybookRunId(rid);
+      if (autoOpen) setPlaybookRunId(rid);   // manual button opens the view; auto-trigger stays silent
       toast({ title: regenerate ? 'Playbook regenerated' : 'Playbook ready', description: 'Tailored 8-week Sprint plan built from this audit.' });
     } catch (e) {
       toast({ title: "Couldn't generate the playbook", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
@@ -1445,6 +1445,26 @@ const AiAudit = () => {
       setPlaybookGenerating(false);
     }
   };
+
+  // Auto-generate the playbook ONCE when a COMPLETE audit is opened with no playbook yet, so the
+  // user doesn't have to click "Generate playbook". Website audits wait until SEO data exists
+  // (hasSeo); no-website audits proceed immediately. Fires at most once per runId per session
+  // (autoPlaybookFired) and never while one is already generating — the manual button stays as the
+  // fallback + regenerate path. Reuses the existing generatePlaybook handler (no duplicated logic).
+  const autoPlaybookFired = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!runId || playbookGenerating) return;
+    if (run?.status !== 'complete') return;                       // not draining / capped / cancelled / failed
+    const serverPlaybook = (run?.results as { playbook?: unknown } | null)?.playbook;
+    if (playbooks[runId] || serverPlaybook) return;               // a playbook already exists (local or server)
+    if (!(hasSeo || !resultsHasWebsite)) return;                  // website audits wait for SEO; no-website proceed
+    if (autoPlaybookFired.current.has(runId)) return;             // already auto-fired this run this session
+    autoPlaybookFired.current.add(runId);
+    void generatePlaybook(false, false);   // auto: generate silently, don't navigate
+    // generatePlaybook is intentionally omitted from deps (redefined each render); the fired-set +
+    // playbookGenerating guards make this safe to re-evaluate on the listed state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId, run, playbooks, hasSeo, resultsHasWebsite, playbookGenerating]);
 
   // Client-facing report is a separate view (replaces results while open).
   if (reportRunId && openReportData) {
