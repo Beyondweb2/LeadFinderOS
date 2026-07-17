@@ -14,6 +14,7 @@ export interface PlaybookInternalAction {
   pillar: string;
   priority?: ActionPriority; // leverage for THIS business; optional (older playbooks lack it)
   leadTime?: "fast" | "medium" | "slow"; // how long until it moves AI visibility; optional (older playbooks lack it)
+  track?: "seo" | "visibility"; // which deliverable — visibility (base) vs seo (add-on); optional (older playbooks lack it)
   steps?: string[]; // step-by-step how-to (internal view); optional (older playbooks lack it)
   dependsOn?: string;
 }
@@ -55,26 +56,43 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
   const leadLabel: Record<string, string> = { fast: "Fast", medium: "Weeks", slow: "Slow-burn · start now" };
   // Internal view = ONE ordered action list with per-task step-by-step (already sorted by the
   // generator: priority then leadTime). Client view = plain roadmap + what-we'll-do + what-we-need.
-  const planBody = internal
-    ? `<ul class="acts">${
-        (d.actions ?? []).map((a) => {
-          const prio: ActionPriority | null = a.priority === "high" || a.priority === "medium" || a.priority === "low" ? a.priority : null;
-          const prioPill = prio ? `<span class="prio prio-${prio}">${prioLabel[prio]}</span>` : "";
-          const lead = a.leadTime === "fast" || a.leadTime === "medium" || a.leadTime === "slow" ? a.leadTime : null;
-          const leadPill = lead ? `<span class="lead lead-${lead}">${leadLabel[lead]}</span>` : "";
-          const steps = (a.steps ?? []).filter(Boolean); // null-safe: older playbooks have no steps
-          const stepsList = steps.length
-            ? `<ol class="act-steps">${steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`
-            : "";
-          return `
+  // Per-action <li> renderer — unchanged detail (priority badge, leadTime tag, pillar, why, steps).
+  const renderAct = (a: PlaybookInternalAction): string => {
+    const prio: ActionPriority | null = a.priority === "high" || a.priority === "medium" || a.priority === "low" ? a.priority : null;
+    const prioPill = prio ? `<span class="prio prio-${prio}">${prioLabel[prio]}</span>` : "";
+    const lead = a.leadTime === "fast" || a.leadTime === "medium" || a.leadTime === "slow" ? a.leadTime : null;
+    const leadPill = lead ? `<span class="lead lead-${lead}">${leadLabel[lead]}</span>` : "";
+    const steps = (a.steps ?? []).filter(Boolean); // null-safe: older playbooks have no steps
+    const stepsList = steps.length
+      ? `<ol class="act-steps">${steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`
+      : "";
+    return `
           <li class="act${prio ? ` p-${prio}` : ""}">
             <div class="act-top"><span class="act-do">${esc(a.action)}</span><span class="act-tags">${leadPill}${prioPill}<span class="pillar">${esc(a.pillar)}</span></span></div>
             <div class="act-why">${esc(a.why)}</div>
             ${stepsList}
             ${a.dependsOn ? `<div class="act-dep">Depends on: ${esc(a.dependsOn)}</div>` : ""}
           </li>`;
-        }).join("")
-      }</ul>`
+  };
+
+  // Group the INTERNAL action list by track — AI Visibility (base deliverable) FIRST, then SEO
+  // Improvement (separately-priced add-on). Preserve the incoming order within each group (already
+  // sorted by priority then leadTime — do NOT re-sort). Missing/unknown track counts as visibility
+  // so no action is ever dropped. An empty group renders nothing (no heading).
+  const allActs = d.actions ?? [];
+  const visActs = allActs.filter((a) => a.track !== "seo");
+  const seoActs = allActs.filter((a) => a.track === "seo");
+  const actGroup = (label: string, sub: string, items: PlaybookInternalAction[]): string =>
+    items.length
+      ? `<div class="act-group">
+           <div class="act-group-h">${esc(label)}</div>
+           ${sub ? `<div class="act-group-sub">${esc(sub)}</div>` : ""}
+           <ul class="acts">${items.map(renderAct).join("")}</ul>
+         </div>`
+      : "";
+
+  const planBody = internal
+    ? `${actGroup("AI Visibility", "", visActs)}${actGroup("SEO Improvement (add-on)", "Charged as a separate SEO package", seoActs)}`
     : `<p class="wk-client">${esc(d.clientSummary)}</p>
        <div class="client-do">
          <div class="cd-title">What we'll be doing</div>
@@ -166,6 +184,10 @@ export function renderPlaybookHtml(d: PlaybookData, view: PlaybookView): string 
   .wk-client{ margin:0; font-size:14px; line-height:1.55; color:var(--muted); max-width:64ch; }
   .acts{ list-style:none; margin:0; padding:0; }
   .act{ padding:9px 0; border-bottom:1px solid var(--line); }
+  .act-group{ margin:0 0 18px; }
+  .act-group:last-child{ margin-bottom:0; }
+  .act-group-h{ font-size:15px; font-weight:850; color:var(--ink); letter-spacing:-.01em; margin:0 0 2px; }
+  .act-group-sub{ font-size:12px; color:var(--muted); margin:0 0 8px; }
   .act:last-child{ border-bottom:0; }
   .act-top{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
   .act-do{ font-size:14px; font-weight:800; color:var(--ink); }

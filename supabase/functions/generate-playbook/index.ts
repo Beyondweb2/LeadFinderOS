@@ -50,14 +50,18 @@ const PLAYBOOK_ENGINES: { key: string; label: string }[] = [
 // Leverage ranking for THIS specific business (not generic importance).
 type Priority = "high" | "medium" | "low";
 type LeadTime = "fast" | "medium" | "slow";
+// Deliverable split: seo = on-page technical work that lifts the SEO grade (chargeable add-on);
+// visibility = off-site + entity + AI-answer work that gets the business named by AI.
+type Track = "seo" | "visibility";
 const PRIORITIES = new Set<Priority>(["high", "medium", "low"]);
 const LEAD_TIMES = new Set<LeadTime>(["fast", "medium", "slow"]);
+const TRACKS = new Set<Track>(["seo", "visibility"]);
 // Sort weights: the whole plan is ONE ordered list — highest-leverage first, and within a
 // priority tier the slowest-burning (start-now) work first (it takes longest to pay off).
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 const LEADTIME_ORDER: Record<LeadTime, number> = { slow: 0, medium: 1, fast: 2 };
 const MAX_ACTIONS = 40; // upper bound on the flat action list
-interface InternalAction { action: string; why: string; pillar: string; priority: Priority; leadTime: LeadTime; steps: string[]; dependsOn?: string }
+interface InternalAction { action: string; why: string; pillar: string; priority: Priority; leadTime: LeadTime; track: Track; steps: string[]; dependsOn?: string }
 interface DirectoryRec { name: string; why: string }
 interface DeprioritisedItem { item: string; why: string }
 interface Playbook {
@@ -151,6 +155,9 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
       action: str(a.action), why: str(a.why), pillar: str(a.pillar),
       priority: (typeof a.priority === "string" && PRIORITIES.has(a.priority as Priority) ? a.priority : "medium") as Priority,
       leadTime: (typeof a.leadTime === "string" && LEAD_TIMES.has(a.leadTime as LeadTime) ? a.leadTime : "medium") as LeadTime,
+      // Default missing/invalid track to "visibility" (base deliverable) — never wrongly bill a
+      // mis-tagged action as the chargeable SEO add-on. Preserved through initial + review passes.
+      track: (typeof a.track === "string" && TRACKS.has(a.track as Track) ? a.track : "visibility") as Track,
       steps: strArr(a.steps, 12), // step-by-step how-to; may be empty until the enrichment pass (later stage)
       dependsOn: str(a.dependsOn) || undefined,
     }))
@@ -391,6 +398,19 @@ Give EVERY action a "leadTime" = how long until it actually moves AI visibility:
 - "slow" (weeks-to-months): authority / industry-body directory approvals, earned media / PR / guest content, cross-source entity trust building, review accumulation to a critical mass.
 TAG HONESTLY: leadTime describes ONLY how long the payoff takes — NOT importance and NOT when to start. A "slow" action is started immediately precisely because it matures late; the code SORTS the list so slow high-leverage work sits at the very top (started now), and fast quick wins follow within their tier. Do not down-rank a slow action just because it pays off late. In the clientSummary roadmap, reassure plainly (no jargon) that the slow-burn trust work is being started NOW precisely because it takes time to mature.
 
+════════ CLASSIFY EACH ACTION BY TRACK (seo vs visibility) ════════
+Give EVERY action a "track" of "seo" or "visibility" (see the schema definition):
+- "seo" = ON-PAGE GRADE work in the site's own pages that lifts the SEO score but is NOT about
+  AI naming them: H1 tags, image alt text, broken links, meta descriptions/titles, thin content
+  to expand, other non-schema on-page technical fixes.
+- "visibility" = work that gets the business NAMED and TRUSTED by AI: schema / JSON-LD structured
+  data (entity machine-readability), our own "best [trade] in [city]" network, professional-body /
+  industry directories, reviews, NAP consistency across platforms, answer-first FAQ content
+  targeting real AI questions, citations, and ALL measurement / monitoring.
+schema / structured data is ALWAYS visibility, never seo.
+Tag by what the work DOES (on-page score lift that isn't schema = seo; entity/off-site/AI-naming
+signals = visibility), independent of priority and leadTime. This split does NOT change ordering.
+
 ════════ USE THE ACTUAL DATA ════════
 - Name the specific engines that did NOT return the business.
 - COMPETITOR NAMES — JUDGE EACH BEFORE USING: the supplied competitor list is a set of
@@ -479,10 +499,11 @@ const PLAYBOOK_TOOL = {
               pillar: { type: "string", enum: ["Data Layer", "Content Layer", "Off-site / Earned", "Reviews", "Community", "Measurement"] },
               priority: { type: "string", enum: ["high", "medium", "low"], description: "LEVERAGE for THIS specific business (not generic importance). Rank honestly — do NOT make everything high." },
               leadTime: { type: "string", enum: ["fast", "medium", "slow"], description: "How long until this action actually moves AI visibility: fast=days, medium=2-4wks, slow=weeks-to-months (start these now, they pay off late)." },
+              track: { type: "string", enum: ["seo", "visibility"], description: "Which deliverable this belongs to. visibility = work that gets the business NAMED and TRUSTED by AI: schema/JSON-LD structured data (entity machine-readability), our best-of directory network, professional-body/industry directories, reviews, NAP consistency across platforms, answer-first FAQ content targeting AI questions, citations, and measurement/monitoring. seo = on-page grade work in the site's own pages that lifts the SEO score but is NOT about AI naming them: H1 tags, alt text, broken links, meta descriptions, thin/expand content, other on-page technical fixes. IMPORTANT: schema/structured data is ALWAYS visibility, never seo." },
               steps: { type: "array", items: { type: "string" }, description: "Step-by-step how-to for delivering THIS task. May be left empty for now — it is filled in a later enrichment pass." },
               dependsOn: { type: "string" },
             },
-            required: ["action", "why", "pillar", "priority", "leadTime"],
+            required: ["action", "why", "pillar", "priority", "leadTime", "track"],
             additionalProperties: false,
           },
         },
@@ -721,7 +742,7 @@ REVIEW CHECKLIST — fix any that fail:
    visibility-only.
 4. EVERY action has concrete, method-consistent steps (3-7). If an action's steps are missing or
    vague, write proper ones.
-5. Keep the same actions + their priority/leadTime tags and the clientSummary / clientTasks.
+5. Keep the same actions + their priority / leadTime / track tags and the clientSummary / clientTasks.
 Return the corrected playbook via return_playbook.`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
