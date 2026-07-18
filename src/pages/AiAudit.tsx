@@ -480,6 +480,37 @@ function buildReportData(
   }
   const competitors = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 4).map((x) => x.name);
 
+  // Per-term winnability — from the SAME per-question/engine {named, competitors} data.
+  // clientNamed → we already win/defend ('named'); else no real rivals on a non-vanity term →
+  // 'open' (winnable); ≥3 distinct real rivals → 'locked'; otherwise 'contested'. Head-term /
+  // near-me vanity questions with nobody named are 'contested', NOT 'open' — a vanity term with
+  // no one named isn't a real opportunity (consistent with pickGutPunch deprioritising head terms).
+  const winnability = queueRows
+    .filter((r) => r.status === 'done' && r.result)
+    .map((r) => {
+      const q = r.question.toLowerCase();
+      const isVanity = HEAD_TERMS.test(q) || NEAR_ME.test(q);
+      let clientNamed = false;
+      const rivalSet = new Set<string>();
+      for (const engine of DISPLAY_ENGINES) {
+        const er = r.result?.[engine];
+        if (!er) continue;
+        if (er.named) clientNamed = true;
+        for (const c of er.competitors) {
+          if (!isRealCompetitor(c, ctx.locationText)) continue;
+          const key = c.trim().toLowerCase();
+          if (key) rivalSet.add(key);
+        }
+      }
+      const rivalCount = rivalSet.size;
+      const verdict: 'open' | 'contested' | 'locked' | 'named' =
+        clientNamed ? 'named'
+        : (rivalCount === 0 && !isVanity) ? 'open'
+        : rivalCount >= 3 ? 'locked'
+        : 'contested';
+      return { question: r.question, verdict, rivalCount };
+    });
+
   return {
     businessName: ctx.businessName || 'This business',
     businessType: ctx.businessType || '',
@@ -488,6 +519,7 @@ function buildReportData(
     pct: total > 0 ? Math.round((named / total) * 100) : 0,
     perEngine,
     competitors,
+    winnability,
     gutPunch: pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
     generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
     // Only carry a GRADED seo; drop failure/cap markers so the report never crashes on them.
@@ -2224,11 +2256,20 @@ const AiAudit = () => {
                 <span className="text-sm font-semibold">
                   Detailed results
                   <span className="ml-1.5 font-normal text-muted-foreground">· {queueRows.length} {queueRows.length === 1 ? 'question' : 'questions'}</span>
+                  {(() => {
+                    const winnable = (liveReportData?.winnability ?? []).filter((w) => w.verdict === 'open').length;
+                    return winnable > 0 ? <span className="ml-1.5 font-normal text-green-500">· {winnable} winnable</span> : null;
+                  })()}
                 </span>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showDetails ? 'rotate-180' : ''}`} />
               </button>
               {showDetails && queueRows.map((row) => (
-                <QuestionCard key={row.id} row={row} businessName={resultsBusinessName} />
+                <QuestionCard
+                  key={row.id}
+                  row={row}
+                  businessName={resultsBusinessName}
+                  verdict={liveReportData?.winnability?.find((w) => w.question === row.question)?.verdict}
+                />
               ))}
             </div>
           )}
@@ -2468,7 +2509,15 @@ function ResultsHeadline({ run, live, draining }: { run: RunRow | null; live: { 
   );
 }
 
-function QuestionCard({ row, businessName }: { row: QueueRow; businessName: string }) {
+// Per-term winnability badge styling (matches the app's soft-badge convention).
+const WINNABILITY_BADGE: Record<'open' | 'contested' | 'locked' | 'named', { label: string; cls: string }> = {
+  open:      { label: 'Open',      cls: 'bg-green-500/20 text-green-500 border-transparent' },
+  contested: { label: 'Contested', cls: 'bg-amber-500/20 text-amber-500 border-transparent' },
+  locked:    { label: 'Locked',    cls: 'bg-red-500/20 text-red-400 border-transparent' },
+  named:     { label: 'Named',     cls: 'bg-blue-500/20 text-blue-400 border-transparent' },
+};
+
+function QuestionCard({ row, businessName, verdict }: { row: QueueRow; businessName: string; verdict?: 'open' | 'contested' | 'locked' | 'named' }) {
   const pending = row.status === 'pending' || row.status === 'running';
   // Failed rows store { error } (not an engine map); surface it instead of engines.
   const failure = row.status === 'failed' ? (row.result as unknown as { error?: string } | null)?.error ?? null : null;
@@ -2476,7 +2525,12 @@ function QuestionCard({ row, businessName }: { row: QueueRow; businessName: stri
     <Card>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="text-sm font-medium">{row.question}</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">{row.question}</span>
+            {verdict && (
+              <Badge className={`shrink-0 ${WINNABILITY_BADGE[verdict].cls}`}>{WINNABILITY_BADGE[verdict].label}</Badge>
+            )}
+          </div>
           {pending ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
             : row.status === 'failed' ? <Badge variant="secondary" className="shrink-0">failed</Badge>
             : null}
