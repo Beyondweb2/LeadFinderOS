@@ -81,7 +81,7 @@ interface RunRow { id: string; audit_id: string; run_number: number; status: str
 interface AuditRow { id: string; business_name: string; business_type: string | null; location_text: string | null; country: string | null; has_website: boolean; created_at: string }
 interface LeadOption { id: string; business_name: string; category: string | null; country: string | null; website: string | null; address: string | null; search_keyword?: string | null; search_location?: string | null }
 
-const TERMINAL = new Set(['complete', 'capped', 'failed']);
+const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
 
 /* ── Report data hygiene ─────────────────────────────────────────────────────
  * The actor's answer_text and competitor lists are noisy (map/image junk leaks in,
@@ -624,6 +624,19 @@ const AiAudit = () => {
   // Review (questions) state
   const [previewing, setPreviewing] = useState(false);
   const [questions, setQuestions] = useState<string[]>(persisted?.questions ?? []);
+  // Editable re-run (results view): an inline editor seeded with the current run's questions.
+  // Persisted (session, per-user) so a tab-away/reload doesn't lose the operator's edits — the
+  // editor reopens with them. reRunForRunId scopes the editor to the run it was opened for, so a
+  // persisted "editing" flag can't reopen a stale editor over a DIFFERENT audit.
+  const [reRunEditing, setReRunEditing] = usePersistedState<boolean>(
+    'ai-audit-rerun-editing', false, { tier: 'session', scope: user?.id ?? null, version: 1 },
+  );
+  const [reRunForRunId, setReRunForRunId] = usePersistedState<string | null>(
+    'ai-audit-rerun-run', null, { tier: 'session', scope: user?.id ?? null, version: 1 },
+  );
+  const [reRunQuestions, setReRunQuestions] = usePersistedState<string[]>(
+    'ai-audit-rerun-questions', [], { tier: 'session', scope: user?.id ?? null, version: 1 },
+  );
   const [unitCost, setUnitCost] = useState(persisted?.unitCost ?? 0);
   const [engineCount, setEngineCount] = useState(persisted?.engineCount ?? SCORED_ENGINES.length);
   const [running, setRunning] = useState(false);
@@ -873,9 +886,24 @@ const AiAudit = () => {
   useEffect(() => {
     if (!user || rehydratedRef.current) return;
     if (searchParams.get('runId') || searchParams.get('leadId')) return; // deep-link handler owns this load
-    if (!openRunId || runId || step === 'results') return;
+    if (runId || step === 'results') return; // already restored / active
+    // openRunId is bound to a user-scoped storage key ONCE at mount (usePersistedState). Auth-gating
+    // (ProtectedRoute) means `user` is normally resolved before this page mounts, so the key is
+    // scoped correctly and openRunId reads fine. Defensive fallback: if openRunId is empty but a
+    // user-scoped value exists in storage, read it directly so restoration still works even if the
+    // scope wasn't ready at first render. Safe-degrading: any parse/format miss just yields null.
+    let rid = openRunId;
+    if (!rid && user.id) {
+      try {
+        const key = `leadfinder:ai-audit-open-run:${user.id}`;
+        const raw = sessionStorage.getItem(key) ?? localStorage.getItem(key);
+        const parsed = raw ? (JSON.parse(raw) as { d?: unknown }) : null;
+        if (parsed && typeof parsed.d === 'string' && parsed.d) rid = parsed.d;
+      } catch { /* storage unavailable / corrupt — degrade to no restore */ }
+    }
+    if (!rid) return;
     rehydratedRef.current = true;
-    rehydrateOpenRun(openRunId).then((ok) => { if (!ok) setOpenRunId(null); });
+    rehydrateOpenRun(rid).then((ok) => { if (!ok) setOpenRunId(null); });
   }, [user, openRunId, runId, step, rehydrateOpenRun, setOpenRunId, searchParams]);
 
   const resetWizard = () => {
@@ -907,22 +935,47 @@ const AiAudit = () => {
     }
   };
 
-  // Cancel a still-running audit: mark the latest run + its unsettled queue rows 'cancelled'.
-  // The queue processor claims only status='pending', so this stops all unclaimed work at once;
-  // the processor's cancelled-handling finalises the run as cancelled. Owner RLS covers both.
+  // Cancel a run: mark its unsettled queue rows + the run 'cancelled'. The queue processor
+  // claims only status='pending', so this stops all unclaimed work at once; the processor's
+  // cancelled-handling finalises the run as cancelled. Owner RLS covers both. Shared core used
+  // by the saved-audits list (cancelAudit) AND the open results view (cancelOpenRun) — one
+  // implementation of the two writes so they can't drift.
+  const cancelRun = async (runId: string): Promise<void> => {
+    const { error: qErr } = await supabase.from('ai_audit_queue')
+      .update({ status: 'cancelled' }).eq('run_id', runId).in('status', ['pending', 'running']);
+    if (qErr) throw new Error(qErr.message);
+    const { error: rErr } = await supabase.from('ai_audit_runs')
+      .update({ status: 'cancelled' }).eq('id', runId);
+    if (rErr) throw new Error(rErr.message);
+  };
+
+  // Stop a still-running audit FROM THE LIST (per-row Stop button).
   const cancelAudit = async (a: AuditRow & { latest_run_id: string | null }) => {
     if (cancellingId || !a.latest_run_id) return;
     if (!window.confirm(`Stop the audit for "${a.business_name}"? It won't finish.`)) return;
     setCancellingId(a.id);
     try {
-      const runId = a.latest_run_id;
-      const { error: qErr } = await supabase.from('ai_audit_queue')
-        .update({ status: 'cancelled' }).eq('run_id', runId).in('status', ['pending', 'running']);
-      if (qErr) throw new Error(qErr.message);
-      const { error: rErr } = await supabase.from('ai_audit_runs')
-        .update({ status: 'cancelled' }).eq('id', runId);
-      if (rErr) throw new Error(rErr.message);
+      await cancelRun(a.latest_run_id);
       setSavedAudits((prev) => prev.map((x) => x.id === a.id ? { ...x, latest_status: 'cancelled', is_running: false } : x));
+      toast({ title: 'Audit stopped' });
+    } catch (e) {
+      toast({ title: "Couldn't stop the audit", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  // Stop the CURRENTLY OPEN run (results view). Same two writes as cancelAudit, keyed by the
+  // open runId, then refresh the run so the view flips out of the in-flight state ('cancelled'
+  // is TERMINAL → isDraining false, polling stops).
+  const cancelOpenRun = async () => {
+    if (!runId || cancellingId) return;
+    if (!window.confirm("Stop this audit? It won't finish.")) return;
+    setCancellingId(runId);
+    try {
+      await cancelRun(runId);
+      await pollRun(runId); // refresh run.status → 'cancelled'
+      setSavedAudits((prev) => prev.map((x) => x.latest_run_id === runId ? { ...x, latest_status: 'cancelled', is_running: false } : x));
       toast({ title: 'Audit stopped' });
     } catch (e) {
       toast({ title: "Couldn't stop the audit", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
@@ -1048,13 +1101,33 @@ const AiAudit = () => {
     }
   };
 
-  // ── Re-run (new run on the same audit, same questions) ──────────────────────
-  const reRun = async () => {
+  // ── Re-run (new run on the SAME audit) — now EDITABLE. "Re-run" opens an inline editor
+  //    seeded with the current run's questions; the operator tweaks the terms and confirms.
+  //    Submit sends { audit_id, questions } — create-ai-audit honors providedQuestions on the
+  //    reuse path (else reuses verbatim), so edits take effect on the same audit.
+  const startReRun = () => {
+    if (!auditId || isDraining) return;
+    const seen = new Set<string>();
+    const seed = queueRows
+      .map((r) => (r.question ?? '').trim())
+      .filter((q) => { if (!q) return false; const k = q.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+    setReRunQuestions(seed.length ? seed : ['']);
+    setReRunForRunId(runId);   // scope this editor to the currently-open run
+    setReRunEditing(true);
+  };
+
+  const cancelReRun = () => { setReRunEditing(false); setReRunForRunId(null); setReRunQuestions([]); };
+
+  const confirmReRun = async () => {
     if (!auditId) return;
+    const clean = reRunQuestions.map((q) => q.trim()).filter(Boolean);
+    if (clean.length === 0) { toast({ title: 'Add at least one question', variant: 'destructive' }); return; }
     setRunning(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-ai-audit', { body: { audit_id: auditId } });
+      const { data, error } = await supabase.functions.invoke('create-ai-audit', { body: { audit_id: auditId, questions: clean } });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 're-run failed');
+      // Editor done → clear its persisted state so it doesn't reopen after the new run starts.
+      setReRunEditing(false); setReRunForRunId(null); setReRunQuestions([]);
       setRunId(data.run_id);
       setOpenRunId(data.run_id);
       setRun(null); setQueueRows([]);
@@ -1327,6 +1400,9 @@ const AiAudit = () => {
     { named: 0, total: 0, failed: 0, done: 0 },
   );
   const isDraining = !!runId && !(run && TERMINAL.has(run.status));
+  // The re-run editor is open only for the run it was opened for (persisted flag is run-scoped),
+  // so a stale editor can't reopen over a different audit after a tab-away/reload.
+  const reRunOpen = reRunEditing && !!runId && reRunForRunId === runId;
 
   // Scorecard: per-engine hit-rate across the completed questions + the competitors AI
   // named most often (from the per-engine "instead" lists). Cheap; recomputed from the
@@ -1857,6 +1933,14 @@ const AiAudit = () => {
                   <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to audits
                 </Button>
                 <div className="flex flex-wrap items-center gap-2">
+                  {/* Stop — only while the open run is still in flight (pending/running). */}
+                  {isDraining && runId && (
+                    <Button variant="outline" size="sm" onClick={cancelOpenRun} disabled={cancellingId === runId}
+                      className="text-destructive hover:text-destructive" title="Stop this audit — it won't finish">
+                      {cancellingId === runId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CircleStop className="mr-2 h-4 w-4" />}
+                      {cancellingId === runId ? 'Stopping…' : 'Stop'}
+                    </Button>
+                  )}
                   {/* Automated SEO scan — website audits only. Runs the Apify actor (~30-120s). */}
                   {!isDraining && resultsHasWebsite && (
                     <Button variant="outline" size="sm" onClick={runSeoScan} disabled={seoScanning}>
@@ -1892,12 +1976,49 @@ const AiAudit = () => {
                     </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={resetWizard}>New audit</Button>
-                  <Button size="sm" onClick={reRun} disabled={running || isDraining}>
+                  <Button size="sm" onClick={startReRun} disabled={running || isDraining || reRunOpen}>
                     {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                     Re-run
                   </Button>
                 </div>
               </div>
+
+              {/* Editable re-run — inline editor seeded with the current run's questions. Edit/add/
+                  remove terms, then Start re-run (submits { audit_id, questions } on the SAME audit).
+                  Leaving them unchanged re-runs the same questions. */}
+              {reRunOpen && (
+                <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold">Edit questions for the re-run</span>
+                    <Button variant="ghost" size="sm" onClick={cancelReRun} disabled={running}>Cancel</Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    Edit, add or remove the search terms for this re-run. Leaving them unchanged re-runs the same questions on this audit.
+                  </p>
+                  <div className="space-y-2">
+                    {reRunQuestions.map((q, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Input value={q} onChange={(e) => setReRunQuestions((prev) => prev.map((x, xi) => xi === i ? e.target.value : x))} />
+                        <Button variant="ghost" size="icon" onClick={() => setReRunQuestions((prev) => prev.filter((_, xi) => xi !== i))} title="Remove">
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button variant="outline" size="sm" onClick={() => setReRunQuestions((prev) => [...prev, ''])}>
+                      <Plus className="mr-1 h-4 w-4" /> Add question
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs text-muted-foreground">
+                      {reRunQuestions.filter((q) => q.trim()).length} question{reRunQuestions.filter((q) => q.trim()).length === 1 ? '' : 's'}
+                    </span>
+                    <Button size="sm" onClick={confirmReRun} disabled={running || reRunQuestions.filter((q) => q.trim()).length === 0}>
+                      {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                      Start re-run
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Business name — large + bold */}
               <div>

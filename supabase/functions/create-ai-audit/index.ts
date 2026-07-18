@@ -208,21 +208,26 @@ Deno.serve(async (req) => {
       if (!audit || audit.user_id !== userId) return json({ ok: false, error: "audit_not_found" }, 403);
       auditId = audit.id;
       auditBusinessName = audit.business_name;
-      // Reuse the questions from the audit's latest run (like-for-like re-run).
-      const { data: latestRun } = await service
-        .from("ai_audit_runs").select("id").eq("audit_id", auditId)
-        .order("run_number", { ascending: false }).limit(1).maybeSingle();
-      if (latestRun) {
-        const { data: prevQ } = await service
-          .from("ai_audit_queue").select("question").eq("run_id", latestRun.id).order("created_at", { ascending: true });
-        const seen = new Set<string>();
-        for (const r of prevQ ?? []) {
-          const q = String(r.question ?? "").trim();
-          if (q && !seen.has(q)) { seen.add(q); questions.push(q); }
+      if (providedQuestions && providedQuestions.length) {
+        // Edited re-run: honor the operator's edited question list on the SAME audit.
+        questions = providedQuestions;
+      } else {
+        // Like-for-like re-run: reuse the questions from the audit's latest run.
+        const { data: latestRun } = await service
+          .from("ai_audit_runs").select("id").eq("audit_id", auditId)
+          .order("run_number", { ascending: false }).limit(1).maybeSingle();
+        if (latestRun) {
+          const { data: prevQ } = await service
+            .from("ai_audit_queue").select("question").eq("run_id", latestRun.id).order("created_at", { ascending: true });
+          const seen = new Set<string>();
+          for (const r of prevQ ?? []) {
+            const q = String(r.question ?? "").trim();
+            if (q && !seen.has(q)) { seen.add(q); questions.push(q); }
+          }
         }
-      }
-      if (questions.length < MIN_QUESTION_COUNT) {
-        questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms, questionCount);
+        if (questions.length < MIN_QUESTION_COUNT) {
+          questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms, questionCount);
+        }
       }
     } else {
       // New audit: use the edited questions if provided, else generate them.
