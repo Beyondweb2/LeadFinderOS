@@ -81,7 +81,9 @@ export function buildAiSearchInput(query: string, countryCode: string): Record<s
     languageCode: "en",
     // AI-engine add-ons (nested-object form the actor expects) + Google organic (always)
     // + AI Overview. Engine set = ChatGPT + Gemini + AI Overview. Copilot / AI Mode off.
-    aiOverview: { scrapeFullAiOverview: true },
+    // light mode - AI Overview isn't scored (only chatgpt+gemini), and full-page scrape was
+    // blowing the 115s timeout. Light still returns the overview text+sources we consume.
+    aiOverview: { scrapeFullAiOverview: false },
     chatGptSearch: { enableChatGpt: true },
     geminiSearch: { enableGemini: true },
     // Perplexity dropped (kept dormant — flip enablePerplexity:true to re-add):

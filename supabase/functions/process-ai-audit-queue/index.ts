@@ -235,11 +235,12 @@ Deno.serve(async (req) => {
             // ≤RUN_TIMEOUT_MS attempt. A timeout/abort throws → the catch below bumps attempts
             // and re-queues it as 'pending', so timeouts DO retry on the NEXT tick, up to
             // MAX_ATTEMPTS. One question's abort does not affect its concurrent siblings.
-            const { items } = await runAiSearch(String(row.question), audit.countryCode, {
+            const { items, ms } = await runAiSearch(String(row.question), audit.countryCode, {
               token: apifyToken,
               timeoutMs: RUN_TIMEOUT_MS,
               retry: { on429: true },
             });
+            console.log(`[ai-audit] q="${row.question.slice(0, 60)}" took ${ms}ms`);
             return { result: normalizeAiSearch(items, audit.businessName), costUsd: estCost };
           },
         });
