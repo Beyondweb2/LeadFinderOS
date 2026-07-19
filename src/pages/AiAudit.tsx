@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -654,6 +655,11 @@ const AiAudit = () => {
   const [showSeoDetail, setShowSeoDetail] = useState(false);
   const [regenerating, setRegenerating] = useState(false); // Regenerate-button loading state
   const [reextracting, setReextracting] = useState(false); // Re-extract-competitors loading state
+  // Public /r/[slug] report PAGE for the open audit (business_reports row, if any). Distinct from
+  // the internal `reports` snapshot below: this is the crawlable page served at yoursites.uk/r/.
+  const [reportSlug, setReportSlug] = useState<string | null>(null);      // slug of the newest report row
+  const [reportStatus, setReportStatus] = useState<string | null>(null);  // 'published' | 'draft' | null
+  const [reportPageLoading, setReportPageLoading] = useState(false);      // generate-report in flight
   // Which run's report is currently open (null = not viewing a report). Replaces the old
   // boolean so we can open a SPECIFIC run's persisted report snapshot.
   const [reportRunId, setReportRunId] = useState<string | null>(null);
@@ -1594,6 +1600,59 @@ const AiAudit = () => {
     }
   };
 
+  // ── Public report page (/r/[slug]) ──────────────────────────────────────────
+  // Look up the newest business_reports row for the OPEN audit, so the action row can show
+  // "View report" (published) vs "Generate report" (none yet). business_reports isn't in the
+  // generated types, so query through an untyped client cast. Keyed on auditId; cleared when
+  // no audit is open. `cancelled` guards against a late response after the audit switched.
+  useEffect(() => {
+    let cancelled = false;
+    if (!auditId) { setReportSlug(null); setReportStatus(null); return; }
+    (async () => {
+      const { data } = await (supabase as unknown as SupabaseClient)
+        .from('business_reports')
+        .select('slug, status')
+        .eq('audit_id', auditId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      const row = data as { slug?: string; status?: string } | null;
+      setReportSlug(row?.slug ?? null);
+      setReportStatus(row?.status ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [auditId]);
+
+  const openReportPage = (slug: string) =>
+    window.open(`https://yoursites.uk/r/${slug}`, '_blank', 'noopener');
+
+  // Generate the public report PAGE for this audit (generate-report edge fn → inserts a published
+  // business_reports row), then link to it. Admin-gated on the edge, so we pass the session token
+  // explicitly. Takes ~10-20s; the button shows a loading state meanwhile.
+  const generateReportPage = async () => {
+    if (!auditId || reportPageLoading) return;
+    setReportPageLoading(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      const { data, error } = await supabase.functions.invoke('generate-report', {
+        body: { auditId },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (error || !data?.ok || !data.slug) throw new Error(error?.message ?? data?.error ?? 'generation failed');
+      const slug = data.slug as string;
+      setReportSlug(slug);
+      setReportStatus('published');   // generate-report inserts as published
+      toast({ title: 'Report generated', description: 'The public report page is live.' });
+      openReportPage(slug);            // auto-open the new page
+    } catch (e) {
+      toast({ title: "Couldn't generate the report", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setReportPageLoading(false);
+    }
+  };
+
   // Auto-generate the playbook ONCE when a COMPLETE audit is opened with no playbook yet, so the
   // user doesn't have to click "Generate playbook". Website audits wait until SEO data exists
   // (hasSeo); no-website audits proceed immediately. Fires at most once per runId per session
@@ -1952,6 +2011,23 @@ const AiAudit = () => {
                     <Button variant="outline" size="sm" onClick={openReportForCurrentRun}>
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
                     </Button>
+                  )}
+                  {/* Public LISTING page (/r/[slug]): View if a published one exists, else Generate.
+                      Distinct from the internal in-app report button above — this is the crawlable
+                      public listing served at yoursites.uk/r/. Needs auditId (the generate-report key). */}
+                  {!isDraining && liveTally.done > 0 && auditId && (
+                    reportSlug && reportStatus === 'published' ? (
+                      <Button variant="outline" size="sm" onClick={() => openReportPage(reportSlug)}
+                        title="Open the public listing page (yoursites.uk/r/…)">
+                        <ExternalLink className="mr-2 h-4 w-4" /> View listing
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={generateReportPage} disabled={reportPageLoading}
+                        title="Generate the public listing page for this business">
+                        {reportPageLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+                        {reportPageLoading ? 'Generating…' : 'Generate listing'}
+                      </Button>
+                    )
                   )}
                   {/* Generate playbook — shown until one exists; flips to "View playbook" below.
                       Exact inverse condition, so exactly one of the two ever shows. */}
