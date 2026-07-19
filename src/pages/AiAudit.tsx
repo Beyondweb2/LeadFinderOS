@@ -660,6 +660,10 @@ const AiAudit = () => {
   const [reportSlug, setReportSlug] = useState<string | null>(null);      // slug of the newest report row
   const [reportStatus, setReportStatus] = useState<string | null>(null);  // 'published' | 'draft' | null
   const [reportPageLoading, setReportPageLoading] = useState(false);      // generate-report in flight
+  // Operator-entered professional credentials/regulation for the open audit (ai_audits.credentials).
+  // Fed to generate-report as a trust signal; set here inline so it's ready BEFORE generating a listing.
+  const [credentials, setCredentials] = useState('');
+  const [credentialsSaving, setCredentialsSaving] = useState(false);
   // Which run's report is currently open (null = not viewing a report). Replaces the old
   // boolean so we can open a SPECIFIC run's persisted report snapshot.
   const [reportRunId, setReportRunId] = useState<string | null>(null);
@@ -1607,7 +1611,7 @@ const AiAudit = () => {
   // no audit is open. `cancelled` guards against a late response after the audit switched.
   useEffect(() => {
     let cancelled = false;
-    if (!auditId) { setReportSlug(null); setReportStatus(null); return; }
+    if (!auditId) { setReportSlug(null); setReportStatus(null); setCredentials(''); return; }
     (async () => {
       const { data } = await (supabase as unknown as SupabaseClient)
         .from('business_reports')
@@ -1620,9 +1624,34 @@ const AiAudit = () => {
       const row = data as { slug?: string; status?: string } | null;
       setReportSlug(row?.slug ?? null);
       setReportStatus(row?.status ?? null);
+      // Pre-fill the inline credentials field from the audit's stored value (may be null). Untyped
+      // cast: `credentials` was added by migration but isn't in the (stale) generated types yet.
+      const { data: aud } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audits').select('credentials').eq('id', auditId).maybeSingle();
+      if (cancelled) return;
+      setCredentials(((aud as { credentials?: string | null } | null)?.credentials ?? '').toString());
     })();
     return () => { cancelled = true; };
   }, [auditId]);
+
+  // Save the inline credentials field back to ai_audits.credentials. The NEXT "Generate listing"
+  // picks it up (generate-report reads this column). Untyped cast: credentials isn't in the gen types.
+  const saveCredentials = async () => {
+    if (!auditId || credentialsSaving) return;
+    setCredentialsSaving(true);
+    try {
+      const { error } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audits')
+        .update({ credentials: credentials.trim() || null })
+        .eq('id', auditId);
+      if (error) throw new Error(error.message);
+      toast({ title: 'Credentials saved', description: 'Included next time you generate the listing.' });
+    } catch (e) {
+      toast({ title: "Couldn't save credentials", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setCredentialsSaving(false);
+    }
+  };
 
   const openReportPage = (slug: string) =>
     window.open(`https://yoursites.uk/r/${slug}`, '_blank', 'noopener');
@@ -2058,6 +2087,24 @@ const AiAudit = () => {
                   </Button>
                 </div>
               </div>
+
+              {/* Inline credentials/regulation for the listing — a small operator field. Saved to
+                  ai_audits.credentials; the NEXT "Generate listing" picks it up. Same gate as the
+                  listing button (a valid, non-draining audit). */}
+              {!isDraining && liveTally.done > 0 && auditId && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Credentials / regulation (for listing)</Label>
+                  <div className="flex items-center gap-2">
+                    <Input value={credentials} onChange={(e) => setCredentials(e.target.value)}
+                      placeholder="e.g. ACCA regulated, Chartered Tax Adviser (CTA)" className="h-8 text-sm" />
+                    <Button variant="outline" size="sm" onClick={saveCredentials} disabled={credentialsSaving} className="shrink-0">
+                      {credentialsSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      {credentialsSaving ? 'Saving…' : 'Save'}
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Set before generating the listing — it's surfaced as a trust signal.</p>
+                </div>
+              )}
 
               {/* Editable re-run — inline editor seeded with the current run's questions. Edit/add/
                   remove terms, then Start re-run (submits { audit_id, questions } on the SAME audit).
