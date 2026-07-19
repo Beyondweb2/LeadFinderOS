@@ -11,6 +11,46 @@
 export const DIRECTORY_NAME = "Findable Directory";
 export const DIRECTORY_TAGLINE = "Find trusted UK businesses";
 
+// License-free Unsplash CDN images (commercial-free, no key). BOTH IDs are the ones already proven
+// live by the report pages (functions/r/[slug].ts) — office + desk/documents. Used as hero backgrounds.
+export const IMG_OFFICE = "https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=1600&q=80";
+export const IMG_DESK = "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=1600&q=80";
+
+/** Pick a hero background for a niche. Only PROVEN-LIVE image IDs are used (office default,
+ *  desk/documents for finance-type niches). Add per-niche entries here as new IDs are confirmed. */
+export function nicheHeroImage(niche: string): string {
+  const key = (niche || "").trim().toLowerCase();
+  const map: Record<string, string> = {
+    accountant: IMG_DESK, accountants: IMG_DESK, bookkeeper: IMG_DESK, bookkeepers: IMG_DESK,
+  };
+  return map[key] || IMG_OFFICE;
+}
+
+/** business name → clean URL slug (mirrors the generator's slugify). Used to link category cards
+ *  to /directory/<niche>/<slug> and, in piece 3, to resolve the business page. */
+export function slugify(name: string): string {
+  return String(name || "")
+    .toLowerCase().normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80).replace(/-+$/, "");
+}
+
+/** Raw niche ("accountant", "letting agent") → display label ("Accountants", "Letting Agents").
+ *  Title-cases each word and pluralises; the URL keeps the raw niche unchanged. */
+export function nicheLabel(niche: string): string {
+  const n = (niche || "").trim().toLowerCase();
+  if (!n) return "";
+  const titled = n.replace(/\b\w/g, (c) => c.toUpperCase());
+  const pluralise = (w: string): string =>
+    /[^aeiou]y$/i.test(w) ? w.replace(/y$/i, "ies")
+    : /(s|x|z|ch|sh)$/i.test(w) ? `${w}es`
+    : /s$/i.test(w) ? w
+    : `${w}s`;
+  // Pluralise only the final word (e.g. "Letting Agent" → "Letting Agents").
+  const words = titled.split(" ");
+  words[words.length - 1] = pluralise(words[words.length - 1]);
+  return words.join(" ");
+}
+
 /** Escape for HTML text/attribute contexts (titles, labels, attributes). */
 export function escHtml(s: string): string {
   return String(s ?? "")
@@ -71,6 +111,10 @@ img{max-width:100%;display:block}
 .hero{background:linear-gradient(180deg,#0f2740,#16324f);color:#fff;padding:64px 0 56px;text-align:center}
 .hero h1{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:clamp(30px,5vw,46px);line-height:1.1;margin:0 0 14px;text-wrap:balance}
 .hero p{font-size:clamp(16px,2.2vw,19px);color:rgba(255,255,255,.82);max-width:60ch;margin:0 auto}
+/* hero with a background image — the page sets background-image inline; an overlay keeps text legible */
+.hero.hero--img{position:relative;background-color:#0f2740;background-size:cover;background-position:center;isolation:isolate}
+.hero.hero--img::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(12,28,46,.66),rgba(12,28,46,.82));z-index:-1}
+.hero.hero--img p{color:rgba(255,255,255,.9)}
 /* main + sections */
 main{display:block;padding-bottom:56px}
 .section{padding:48px 0}
@@ -83,6 +127,22 @@ main{display:block;padding-bottom:56px}
 .card h3{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:19px;color:var(--ink);margin:0 0 4px;text-transform:capitalize}
 .card .count{font-size:13px;color:var(--muted)}
 .card .arrow{color:var(--accent);font-size:13px;font-weight:600;margin-top:12px;display:inline-block}
+/* business list (category page) */
+.biz-list{display:flex;flex-direction:column;gap:14px}
+.biz{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;transition:box-shadow .15s,border-color .15s}
+.biz:hover{border-color:#cdd8e3;box-shadow:0 6px 22px rgba(15,39,64,.07)}
+.biz-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 4px}
+.biz-name{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:19px;color:var(--ink);margin:0}
+.biz-name a{color:var(--ink)}
+.biz-name a:hover{color:var(--accent);text-decoration:none}
+.badge{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#17529f;background:#e8f1fd;border:1px solid #cfe2fb;border-radius:999px;padding:2px 9px}
+.biz-meta{font-size:14px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.biz-meta .dot{color:#cdd8e3}
+.rating{color:var(--ink);font-weight:600;white-space:nowrap}
+.rating .stars{color:#e0a13a;margin-right:3px}
+.rating .rc{color:var(--muted);font-weight:400}
+.biz-links{margin-top:10px;display:flex;gap:16px;font-size:14px;font-weight:600}
+.biz-links a{color:var(--accent)}
 /* empty state */
 .empty{background:var(--card);border:1px dashed #cdd8e3;border-radius:12px;padding:48px 24px;text-align:center;color:var(--muted)}
 .empty h2{font-family:'Playfair Display',Georgia,serif;color:var(--ink);margin:0 0 8px;font-size:22px}

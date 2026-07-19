@@ -5,7 +5,7 @@
 // niches present + a count per niche, and renders a hero + a grid of category cards linking to
 // /directory/<niche>. No data → a graceful "coming soon" instead of an empty page.
 
-import { renderDirectoryPage, escHtml, DIRECTORY_NAME, DIRECTORY_TAGLINE } from "./_shared";
+import { renderDirectoryPage, escHtml, nicheLabel, IMG_OFFICE, DIRECTORY_NAME, DIRECTORY_TAGLINE } from "./_shared";
 
 const SUPABASE_URL = "https://ruusxpkkmwtljxxulhbq.supabase.co";
 // Public anon key (safe to embed — already public in the client bundle; identical to functions/r/[slug].ts).
@@ -13,14 +13,6 @@ const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1dXN4cGtrbXd0bGp4eHVsaGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExODgzMzUsImV4cCI6MjA5Njc2NDMzNX0.4PoMZXJS0RDEHyK6wa9k0Q8F0fo2u1e7PMVegJ6nNbw";
 
 interface NicheRow { niche?: string }
-
-/** Prettify a raw niche value ("accountant") for display ("Accountants"). Simple, display-only —
- *  the URL keeps the raw lowercased niche so the category page can query by it verbatim. */
-function pluralLabel(niche: string): string {
-  const n = niche.trim();
-  if (!n) return n;
-  return /s$/i.test(n) ? n : `${n}s`;
-}
 
 export const onRequestGet = async (context: { request: Request; params: Record<string, string> }) => {
   const origin = new URL(context.request.url).origin; // correct canonical/OG wherever this is served
@@ -65,13 +57,14 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
     isPartOf: { "@type": "WebSite", name: DIRECTORY_NAME, url: `${origin}/directory` },
     hasPart: niches.map(([niche]) => ({
       "@type": "CollectionPage",
-      name: pluralLabel(niche),
+      name: nicheLabel(niche),
       url: `${origin}/directory/${encodeURIComponent(niche)}`,
     })),
   });
 
+  // Hero with the proven office image behind a dark overlay (see .hero--img in _shared).
   const hero =
-`<section class="hero">
+`<section class="hero hero--img" style="background-image:url('${IMG_OFFICE}')">
 <div class="container">
 <h1>Find trusted UK businesses</h1>
 <p>Browse local firms by category, compare them side by side, and find the right one for you — accountants, tradespeople and more, all in one place.</p>
@@ -92,7 +85,7 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
 </section>`;
   } else {
     const cards = niches.map(([niche, count]) => {
-      const label = pluralLabel(niche);
+      const label = nicheLabel(niche);
       const href = `/directory/${encodeURIComponent(niche)}`;
       const noun = count === 1 ? "business" : "businesses";
       return (
