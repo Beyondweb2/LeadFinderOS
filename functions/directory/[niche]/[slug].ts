@@ -1,14 +1,16 @@
-// Cloudflare Pages Function for /directory/:niche/:slug — a single business profile page.
+// Cloudflare Pages Function for /directory/:niche/:slug — a SMART handler: the second segment is
+// either an AREA (a town/city with businesses in this niche) → renders a local area listing, OR a
+// business SLUG → renders that business profile. Areas take precedence if a value could match both
+// (towns vs business names rarely collide). Neither → a graceful 404.
 //
-// Fully server-rendered via the shared Findable shell (../_shared). directory_businesses has no slug
-// column, so we fetch the niche's rows (anon key + Supabase REST, same method as the category page)
-// and match the one whose slugify(name) === the URL slug. Shows the AI description (falling back to a
-// data-derived sentence), NAP + rating, a hero image, breadcrumbs, and — for clients with a published
-// business_reports row (matched via lead_id) — a prominent link to their full /r/ report.
+// Both /directory/:niche/:slug shapes route here (Cloudflare can't have [slug].ts AND [area].ts at the
+// same depth), so one function disambiguates. Fully SSR via the shared Findable shell (../_shared);
+// data read with the anon key + Supabase REST, same method as the category page.
 
 import {
-  renderDirectoryPage, renderBreadcrumbs, escHtml, slugify, nicheLabel,
-  IMG_OFFICE, IMG_DESK, DIRECTORY_NAME,
+  renderDirectoryPage, renderBreadcrumbs, escHtml, slugify, nicheLabel, nicheHeroImage, areaLabel,
+  renderRankedCard, ratingHtml, describeBusiness, HERO_WAVE,
+  IMG_OFFICE, IMG_DESK, DIRECTORY_NAME, type DirectoryBiz,
 } from "../_shared";
 
 const SUPABASE_URL = "https://ruusxpkkmwtljxxulhbq.supabase.co";
@@ -18,21 +20,6 @@ const SUPABASE_ANON_KEY =
 
 const ANON_HEADERS = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
 
-interface BizRow {
-  name?: string;
-  website?: string | null;
-  phone?: string | null;
-  address?: string | null;
-  city?: string | null;
-  postal_code?: string | null;
-  category?: string | null;
-  rating?: number | null;
-  review_count?: number | null;
-  is_client?: boolean | null;
-  lead_id?: string | null;
-  description?: string | null;
-}
-
 /** Deterministic hero image so a given business always shows the same one (cycles the proven IDs). */
 function heroFor(slug: string): string {
   const imgs = [IMG_OFFICE, IMG_DESK];
@@ -40,57 +27,46 @@ function heroFor(slug: string): string {
   return imgs[sum % imgs.length];
 }
 
-/** Fallback factual description from the row's own data (used when the AI description is null). */
-function fallbackDescription(b: BizRow, singular: string): string {
-  const noun = ((b.category || "").trim() || singular).toLowerCase();
-  const where = (b.city || "").trim() || (b.address || "").trim();
-  let s = where ? `A ${noun} based in ${where}.` : `A ${noun}.`;
-  if (typeof b.rating === "number" && isFinite(b.rating)) {
-    const rc = typeof b.review_count === "number" && b.review_count > 0
-      ? ` from ${b.review_count} review${b.review_count === 1 ? "" : "s"}` : "";
-    s += ` Rated ${b.rating.toFixed(1)} out of 5${rc}.`;
-  }
-  return s;
-}
-
-function ratingHtml(rating: number | null | undefined, reviewCount: number | null | undefined): string {
-  if (typeof rating !== "number" || !isFinite(rating)) return "";
-  const rc = typeof reviewCount === "number" && reviewCount > 0 ? ` <span class="rc">(${reviewCount})</span>` : "";
-  return `<span class="rating"><span class="stars">&#9733;</span>${rating.toFixed(1)}${rc}</span>`;
-}
-
 export const onRequestGet = async (context: { request: Request; params: Record<string, string> }) => {
   const origin = new URL(context.request.url).origin;
   const niche = String(context.params.niche || "").trim().toLowerCase();
-  const slug = String(context.params.slug || "").trim().toLowerCase();
-  if (!niche || !slug) return businessNotFound(origin, niche);
+  const segment = String(context.params.slug || "").trim().toLowerCase();
+  if (!niche || !segment) return businessNotFound(origin, niche);
 
-  // No slug column → fetch the niche's rows and match by slugified name. Clients first so a slug
-  // collision resolves to the client. Same anon-key + REST read as the category page.
-  let match: BizRow | null = null;
+  // ONE fetch of the niche's rows serves both branches. Clients first so a slug collision resolves
+  // to the client; review_count breaks rating ties (matches the category/area ranking).
+  let rows: DirectoryBiz[] = [];
   try {
     const apiUrl = `${SUPABASE_URL}/rest/v1/directory_businesses` +
       `?niche=eq.${encodeURIComponent(niche)}` +
-      `&select=name,website,phone,address,city,postal_code,category,rating,review_count,is_client,lead_id,description` +
-      `&order=is_client.desc,rating.desc.nullslast`;
+      `&select=name,website,phone,address,city,postal_code,category,rating,review_count,is_client,lead_id,description,area` +
+      `&order=is_client.desc,rating.desc.nullslast,review_count.desc.nullslast`;
     const r = await fetch(apiUrl, { headers: ANON_HEADERS });
     if (r.ok) {
-      const rows = await r.json();
-      if (Array.isArray(rows)) {
-        match = (rows as BizRow[]).find((b) => slugify(b.name || "") === slug) ?? null;
-      }
+      const data = await r.json();
+      if (Array.isArray(data)) rows = data as DirectoryBiz[];
     }
   } catch {
     // network/parse failure → not found
   }
 
+  // DISAMBIGUATE. Areas take precedence: if the segment matches a distinct area value for this niche,
+  // render the local area listing; otherwise try to match a business by slugified name.
+  const areaSet = new Set(rows.map((b) => (b.area || "").trim().toLowerCase()).filter(Boolean));
+  if (areaSet.has(segment)) {
+    const inArea = rows.filter((b) => (b.area || "").trim().toLowerCase() === segment && (b.name || "").trim());
+    return renderAreaPage(origin, niche, segment, inArea);
+  }
+
+  const match = rows.find((b) => slugify(b.name || "") === segment) ?? null;
   if (!match || !(match.name || "").trim()) return businessNotFound(origin, niche);
+  const slug = segment;
 
   const b = match;
   const name = (b.name || "").trim();
   const label = nicheLabel(niche);
   const canonical = `${origin}/directory/${encodeURIComponent(niche)}/${slug}`;
-  const description = (b.description || "").trim() || fallbackDescription(b, niche);
+  const description = (b.description || "").trim() || describeBusiness(b, niche);
 
   // Client → their published business_reports profile (matched by lead_id). Best-effort; failure = no link.
   let reportSlug = "";
@@ -190,6 +166,80 @@ ${reportCta ? `<div class="biz-report">${reportCta}<p class="note">This business
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300, s-maxage=300" },
   });
 };
+
+/** AREA page — "<Niche>s in <Area>" — ranked businesses in this niche+area (local intent). Same
+ *  ranked-card style as the category page; each card links to the business profile. `businesses` is
+ *  already ordered (clients first, then rating, then reviews) and pre-filtered to the area. */
+function renderAreaPage(origin: string, niche: string, area: string, businesses: DirectoryBiz[]): Response {
+  const label = nicheLabel(niche);
+  const areaLbl = areaLabel(area);
+  const canonical = `${origin}/directory/${encodeURIComponent(niche)}/${encodeURIComponent(area)}`;
+  const heading = `${label} in ${areaLbl}`;
+
+  const title = `${heading} — ${DIRECTORY_NAME}`;
+  const metaDescription =
+    `Compare the best ${label.toLowerCase()} in ${areaLbl} — ratings, reviews and credentials, side by side. ` +
+    `Find a trusted local firm and check them before you get in touch.`;
+
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: heading,
+    url: canonical,
+    numberOfItems: businesses.length,
+    itemListElement: businesses.map((b, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      item: {
+        "@type": "LocalBusiness",
+        name: (b.name || "").trim(),
+        url: `${origin}/directory/${encodeURIComponent(niche)}/${slugify(b.name || "")}`,
+        ...(b.website ? { sameAs: b.website } : {}),
+        ...(b.address || b.city ? {
+          address: { "@type": "PostalAddress", streetAddress: b.address || undefined, addressLocality: b.city || undefined, postalCode: b.postal_code || undefined, addressCountry: "GB" },
+        } : {}),
+        ...(typeof b.rating === "number" ? {
+          aggregateRating: { "@type": "AggregateRating", ratingValue: b.rating, reviewCount: b.review_count || undefined },
+        } : {}),
+      },
+    })),
+  });
+
+  const crumbs = renderBreadcrumbs([
+    { label: "Home", href: "/directory" },
+    { label, href: `/directory/${encodeURIComponent(niche)}` },
+    { label: areaLbl },
+  ]);
+
+  const hero =
+`<section class="hero hero--img" style="background-image:url('${nicheHeroImage(niche)}')">
+<div class="container">
+<h1>${escHtml(heading)}</h1>
+<p>Compare ${escHtml(label.toLowerCase())} in ${escHtml(areaLbl)} — check ratings, reviews and credentials, then choose a trusted local firm. Featured clients are marked, and listed honestly among the rest.</p>
+</div>
+${HERO_WAVE}
+</section>`;
+
+  const cards = businesses.map((b, i) => renderRankedCard(b, i, niche)).join("\n");
+  const listSection =
+`<section class="section">
+<div class="container">
+${crumbs}
+<div class="section-head" style="margin-top:14px">
+<h2>${businesses.length} best ${escHtml(label.toLowerCase())} in ${escHtml(areaLbl)}, ranked</h2>
+<p class="sub">Ranked by rating and reviews. <a href="/directory/${encodeURIComponent(niche)}">Back to all ${escHtml(label.toLowerCase())}</a>.</p>
+</div>
+<div class="rank-list">
+${cards}
+</div>
+</div>
+</section>`;
+
+  const html = renderDirectoryPage({ title, metaDescription, canonical, jsonLd, bodyHtml: `${hero}\n${listSection}` });
+  return new Response(html, {
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300, s-maxage=300" },
+  });
+}
 
 /** Graceful, noindex 404 when no business matches — kept in the Findable shell. */
 function businessNotFound(origin: string, niche: string): Response {

@@ -6,51 +6,14 @@
 // the business page /directory/<niche>/<slug> (built in piece 3). No businesses → a graceful 404.
 
 import {
-  renderDirectoryPage, renderBreadcrumbs, escHtml, slugify, nicheLabel, nicheHeroImage,
-  HERO_WAVE, DIRECTORY_THUMBS, DIRECTORY_NAME,
+  renderDirectoryPage, renderBreadcrumbs, escHtml, slugify, nicheLabel, nicheHeroImage, areaLabel,
+  renderRankedCard, HERO_WAVE, DIRECTORY_NAME, type DirectoryBiz,
 } from "./_shared";
 
 const SUPABASE_URL = "https://ruusxpkkmwtljxxulhbq.supabase.co";
 // Public anon key (safe to embed — identical to functions/r/[slug].ts).
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1dXN4cGtrbXd0bGp4eHVsaGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExODgzMzUsImV4cCI6MjA5Njc2NDMzNX0.4PoMZXJS0RDEHyK6wa9k0Q8F0fo2u1e7PMVegJ6nNbw";
-
-interface BizRow {
-  name?: string;
-  website?: string | null;
-  phone?: string | null;
-  address?: string | null;
-  city?: string | null;
-  postal_code?: string | null;
-  category?: string | null;
-  rating?: number | null;
-  review_count?: number | null;
-  is_client?: boolean | null;
-  lead_id?: string | null;
-}
-
-/** Rating snippet: "★ 4.8 (123)" — omitted entirely when there's no rating. */
-function ratingHtml(rating: number | null | undefined, reviewCount: number | null | undefined): string {
-  if (typeof rating !== "number" || !isFinite(rating)) return "";
-  const rc = typeof reviewCount === "number" && reviewCount > 0
-    ? ` <span class="rc">(${reviewCount})</span>` : "";
-  return `<span class="rating"><span class="stars">&#9733;</span>${rating.toFixed(1)}${rc}</span>`;
-}
-
-/** A FACTUAL one-line description assembled from the row's own data (no AI, no invention). Combines
- *  category + location + rating into a natural sentence; falls back gracefully when fields are absent.
- *  The AI-written description comes later; this is the honest placeholder from what we already hold. */
-function describeBusiness(b: BizRow, singular: string): string {
-  const noun = ((b.category || "").trim() || singular).toLowerCase();
-  const where = (b.city || "").trim() || (b.address || "").trim();
-  let s = where ? `A ${noun} based in ${where}.` : `A ${noun}.`;
-  if (typeof b.rating === "number" && isFinite(b.rating)) {
-    const rc = typeof b.review_count === "number" && b.review_count > 0
-      ? ` from ${b.review_count} review${b.review_count === 1 ? "" : "s"}` : "";
-    s += ` Rated ${b.rating.toFixed(1)} out of 5${rc}.`;
-  }
-  return s;
-}
 
 export const onRequestGet = async (context: { request: Request; params: Record<string, string> }) => {
   const origin = new URL(context.request.url).origin;
@@ -62,18 +25,18 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
 
   // Clients featured near the top, then best-rated, then most-reviewed. NULLs sort last so
   // unrated firms don't outrank rated ones. Same anon-key + REST read as the homepage.
-  let rows: BizRow[] = [];
+  let rows: DirectoryBiz[] = [];
   try {
     const apiUrl = `${SUPABASE_URL}/rest/v1/directory_businesses` +
       `?niche=eq.${encodeURIComponent(niche)}` +
-      `&select=name,website,phone,address,city,postal_code,category,rating,review_count,is_client,lead_id` +
+      `&select=name,website,phone,address,city,postal_code,category,rating,review_count,is_client,lead_id,area` +
       `&order=is_client.desc,rating.desc.nullslast,review_count.desc.nullslast`;
     const r = await fetch(apiUrl, {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
     });
     if (r.ok) {
       const data = await r.json();
-      if (Array.isArray(data)) rows = data as BizRow[];
+      if (Array.isArray(data)) rows = data as DirectoryBiz[];
     }
   } catch {
     // network/parse failure → treat as no listings (graceful 404 below)
@@ -81,6 +44,11 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
 
   const businesses = rows.filter((b) => (b.name || "").trim());
   if (businesses.length === 0) return categoryNotFound(origin, niche);
+
+  // Distinct areas for this niche → the "Browse by area" links (local-intent pages at
+  // /directory/<niche>/<area>). Sorted alphabetically; "uk" (national) kept but shown as "UK".
+  const areas = [...new Set(businesses.map((b) => (b.area || "").trim().toLowerCase()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
 
   const title = `${label} in the UK — ${DIRECTORY_NAME}`;
   const metaDescription =
@@ -123,37 +91,24 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
 ${HERO_WAVE}
 </section>`;
 
-  // RANKED, NUMBERED cards — the order is the query order (clients first, then rating, then reviews),
-  // so the rank number reflects the honest "best of" ordering. Imagery cycles the proven Unsplash IDs.
-  const cards = businesses.map((b, i) => {
-    const rank = i + 1;
-    const name = (b.name || "").trim();
-    const href = `/directory/${encodeURIComponent(niche)}/${slugify(name)}`;
-    const thumb = DIRECTORY_THUMBS[i % DIRECTORY_THUMBS.length];
-    const badge = b.is_client ? `<span class="featured">Featured</span>` : "";
-    const rating = ratingHtml(b.rating, b.review_count);
-    // Meta line: rating · category · city (only the parts we actually have).
-    const metaBits: string[] = [];
-    if (rating) metaBits.push(rating);
-    if ((b.category || "").trim()) metaBits.push(escHtml((b.category as string).trim()));
-    if ((b.city || "").trim()) metaBits.push(escHtml((b.city as string).trim()));
-    const meta = metaBits.join('<span class="dot">&middot;</span>');
-    const desc = describeBusiness(b, niche);
-    const website = (b.website || "").trim();
-    const websiteLink = website
-      ? `<a href="${escHtml(website)}" target="_blank" rel="nofollow noopener">Visit website &#8599;</a>` : "";
-    return (
-`<article class="rank">
-<div class="rank-num" aria-label="Rank ${rank}">${rank}</div>
-<div class="rank-img"><img src="${escHtml(thumb)}" alt="" loading="lazy" width="130" height="98"></div>
-<div class="rank-body">
-<div class="rank-head"><h3 class="rank-name"><a href="${escHtml(href)}">${escHtml(name)}</a></h3>${badge}</div>
-${meta ? `<div class="rank-meta">${meta}</div>\n` : ""}<p class="rank-desc">${escHtml(desc)}</p>
-<div class="rank-links"><a href="${escHtml(href)}">View profile &rarr;</a>${websiteLink}</div>
+  // RANKED, NUMBERED cards via the shared helper (same markup as the area page). Query order =
+  // clients first, then rating, then reviews, so the rank number reflects the honest "best of" order.
+  const cards = businesses.map((b, i) => renderRankedCard(b, i, niche)).join("\n");
+
+  // "Browse by area" — local-intent links into /directory/<niche>/<area>. Only when areas exist.
+  const areaSection = areas.length
+    ? `<section class="section" style="padding-bottom:0">
+<div class="container">
+<div class="section-head">
+<h2>Browse by area</h2>
+<p class="sub">Find ${escHtml(label.toLowerCase())} in a specific town or city.</p>
 </div>
-</article>`
-    );
-  }).join("\n");
+<div class="area-links">
+${areas.map((a) => `<a href="/directory/${encodeURIComponent(niche)}/${encodeURIComponent(a)}">${escHtml(areaLabel(a))}</a>`).join("\n")}
+</div>
+</div>
+</section>`
+    : "";
 
   const listSection =
 `<section class="section">
@@ -169,7 +124,7 @@ ${cards}
 </div>
 </section>`;
 
-  const html = renderDirectoryPage({ title, metaDescription, canonical, jsonLd, bodyHtml: `${hero}\n${listSection}` });
+  const html = renderDirectoryPage({ title, metaDescription, canonical, jsonLd, bodyHtml: `${hero}\n${areaSection}\n${listSection}` });
   return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300, s-maxage=300" },
   });

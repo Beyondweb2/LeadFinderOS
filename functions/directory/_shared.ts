@@ -54,6 +54,14 @@ export function nicheLabel(niche: string): string {
   return words.join(" ");
 }
 
+/** Raw area ("peterborough", "uk") → display label ("Peterborough", "UK"). URL keeps the raw area. */
+export function areaLabel(area: string): string {
+  const a = (area || "").trim();
+  if (!a) return "";
+  if (a.toLowerCase() === "uk") return "UK";
+  return a.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 /** Escape for HTML text/attribute contexts (titles, labels, attributes). */
 export function escHtml(s: string): string {
   return String(s ?? "")
@@ -81,6 +89,79 @@ export function renderBreadcrumbs(items: BreadcrumbItem[]): string {
 // Findable signature wave — sits at the bottom of a hero band, blending into the --page tint below.
 export const HERO_WAVE =
 `<svg class="wave" viewBox="0 0 1200 38" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" fill="#eef1f6"/></svg>`;
+
+// One directory_businesses row (all fields the pages read). Shared so category / area / business
+// pages agree on shape and reuse the same card + rating + description helpers.
+export interface DirectoryBiz {
+  name?: string;
+  website?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  category?: string | null;
+  rating?: number | null;
+  review_count?: number | null;
+  is_client?: boolean | null;
+  lead_id?: string | null;
+  description?: string | null;
+  area?: string | null;
+  niche?: string | null;
+}
+
+/** Rating snippet: "★ 4.8 (123)" — "" when there's no rating. */
+export function ratingHtml(rating: number | null | undefined, reviewCount: number | null | undefined): string {
+  if (typeof rating !== "number" || !isFinite(rating)) return "";
+  const rc = typeof reviewCount === "number" && reviewCount > 0 ? ` <span class="rc">(${reviewCount})</span>` : "";
+  return `<span class="rating"><span class="stars">&#9733;</span>${rating.toFixed(1)}${rc}</span>`;
+}
+
+/** A FACTUAL one-line blurb from the row's OWN scraped data (no AI, no invention) — used as the
+ *  ranked-card blurb and as the business-page fallback when the AI description is null. `singular`
+ *  is the raw niche word (e.g. "accountant"). Deliberately does NOT use b.description (kept short). */
+export function describeBusiness(b: DirectoryBiz, singular: string): string {
+  const noun = ((b.category || "").trim() || singular).toLowerCase();
+  const where = (b.city || "").trim() || (b.address || "").trim();
+  let s = where ? `A ${noun} based in ${where}.` : `A ${noun}.`;
+  if (typeof b.rating === "number" && isFinite(b.rating)) {
+    const rc = typeof b.review_count === "number" && b.review_count > 0
+      ? ` from ${b.review_count} review${b.review_count === 1 ? "" : "s"}` : "";
+    s += ` Rated ${b.rating.toFixed(1)} out of 5${rc}.`;
+  }
+  return s;
+}
+
+/** One ranked, numbered "best of" business card (shared by the category + area pages so they match).
+ *  `index` is 0-based (rank = index+1); imagery cycles the proven Unsplash thumbs; the name links to
+ *  the business profile /directory/<niche>/<slug>. */
+export function renderRankedCard(b: DirectoryBiz, index: number, niche: string): string {
+  const rank = index + 1;
+  const name = (b.name || "").trim();
+  const href = `/directory/${encodeURIComponent(niche)}/${slugify(name)}`;
+  const thumb = DIRECTORY_THUMBS[index % DIRECTORY_THUMBS.length];
+  const badge = b.is_client ? `<span class="featured">Featured</span>` : "";
+  const rating = ratingHtml(b.rating, b.review_count);
+  const metaBits: string[] = [];
+  if (rating) metaBits.push(rating);
+  if ((b.category || "").trim()) metaBits.push(escHtml((b.category as string).trim()));
+  if ((b.city || "").trim()) metaBits.push(escHtml((b.city as string).trim()));
+  const meta = metaBits.join('<span class="dot">&middot;</span>');
+  const desc = describeBusiness(b, niche);
+  const website = (b.website || "").trim();
+  const websiteLink = website
+    ? `<a href="${escHtml(website)}" target="_blank" rel="nofollow noopener">Visit website &#8599;</a>` : "";
+  return (
+`<article class="rank">
+<div class="rank-num" aria-label="Rank ${rank}">${rank}</div>
+<div class="rank-img"><img src="${escHtml(thumb)}" alt="" loading="lazy" width="130" height="98"></div>
+<div class="rank-body">
+<div class="rank-head"><h3 class="rank-name"><a href="${escHtml(href)}">${escHtml(name)}</a></h3>${badge}</div>
+${meta ? `<div class="rank-meta">${meta}</div>\n` : ""}<p class="rank-desc">${escHtml(desc)}</p>
+<div class="rank-links"><a href="${escHtml(href)}">View profile &rarr;</a>${websiteLink}</div>
+</div>
+</article>`
+  );
+}
 
 export interface RenderPageOpts {
   title: string;               // <title> + OG title (required — SEO enforced)
@@ -166,6 +247,10 @@ main{display:block;padding-bottom:56px}
 .report-cta{font-size:15px;font-weight:800;color:var(--blue)}
 .biz-report .note{margin:6px 0 0;font-size:13px;color:var(--muted)}
 .biz-back{margin:22px 0 0;font-size:14px;font-weight:600}
+/* area chips (category page "browse by area") */
+.area-links{display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
+.area-links a{display:inline-block;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:600;color:var(--blue)}
+.area-links a:hover{border-color:#cdd8ea;text-decoration:none;box-shadow:0 2px 8px rgba(26,61,124,.08)}
 /* empty state */
 .empty{background:var(--paper);border:1px dashed #cdd8ea;border-radius:14px;padding:48px 24px;text-align:center;color:var(--muted)}
 .empty h2{font-weight:800;color:var(--ink);margin:0 0 8px;font-size:22px}
