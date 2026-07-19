@@ -153,6 +153,19 @@ main{display:block;padding-bottom:56px}
 .rank-desc{font-size:14.5px;color:var(--body);margin:8px 0 0;line-height:1.5}
 .rank-links{margin-top:10px;display:flex;gap:16px;font-size:14px;font-weight:700}
 .rank-links a{color:var(--blue)}
+/* business profile page */
+.biz-hero-head{min-height:22px;margin-bottom:6px}
+.biz-hero-meta{color:#dbe4f4;font-weight:600;margin:12px 0 0}
+.biz-hero-meta .rating{color:#fff} .biz-hero-meta .rating .rc{color:#c7d5ee}
+.biz-hero-meta .dot{color:rgba(255,255,255,.4)}
+.biz-profile{max-width:760px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:26px 28px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.biz-lead{font-size:18px;line-height:1.6;color:var(--ink);margin:0 0 18px}
+.biz-nap{display:flex;flex-direction:column;gap:6px;font-size:15px;color:var(--body);border-top:1px solid var(--line);padding-top:16px}
+.biz-nap strong{color:var(--muted);font-weight:600;display:inline-block;min-width:74px}
+.biz-report{margin-top:20px;padding:16px 18px;background:#f4f8ff;border:1px solid #cfe0fb;border-left:4px solid var(--blue);border-radius:0 12px 12px 0}
+.report-cta{font-size:15px;font-weight:800;color:var(--blue)}
+.biz-report .note{margin:6px 0 0;font-size:13px;color:var(--muted)}
+.biz-back{margin:22px 0 0;font-size:14px;font-weight:600}
 /* empty state */
 .empty{background:var(--paper);border:1px dashed #cdd8ea;border-radius:14px;padding:48px 24px;text-align:center;color:var(--muted)}
 .empty h2{font-weight:800;color:var(--ink);margin:0 0 8px;font-size:22px}
