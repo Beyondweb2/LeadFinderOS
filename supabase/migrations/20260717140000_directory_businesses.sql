@@ -29,12 +29,13 @@ CREATE TABLE public.directory_businesses (
 );
 
 -- Re-scraping an area UPDATES rather than duplicates: one row per (niche, area, place_id).
--- Partial unique index (place_id NOT NULL) so rows without a place_id are always allowed
--- (Postgres would treat NULLs as distinct anyway, but the partial index makes the intent
--- explicit and is a valid ON CONFLICT target: ON CONFLICT (niche, area, place_id) WHERE place_id IS NOT NULL).
-CREATE UNIQUE INDEX idx_directory_businesses_niche_area_place
-  ON public.directory_businesses (niche, area, place_id)
-  WHERE place_id IS NOT NULL;
+-- Plain UNIQUE constraint (not a partial index): the scrape-directory edge function upserts via
+-- supabase-js `.upsert(rows, { onConflict: "niche,area,place_id" })`, which emits a predicate-less
+-- ON CONFLICT (niche, area, place_id). Postgres will only infer a NON-partial unique constraint/index
+-- for that, so a partial index would break the upsert. Postgres treats NULLs as distinct, so rows
+-- without a place_id are still all allowed. Named to match the live DB.
+ALTER TABLE public.directory_businesses
+  ADD CONSTRAINT directory_businesses_niche_area_place_key UNIQUE (niche, area, place_id);
 
 -- Fast page-building lookups by niche + area.
 CREATE INDEX idx_directory_businesses_niche_area
