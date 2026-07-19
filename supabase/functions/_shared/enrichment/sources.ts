@@ -100,10 +100,16 @@ export interface MapsDiscoverInput {
   maxPlaces: number;
   token: string;
   timeoutMs?: number;
+  /** Fact-dense mode (directory scrape): visit each place's detail page so rating +
+   *  review COUNT come back reliably. Reviews text/images stay OFF to control cost.
+   *  Default false → unchanged cheap search-page-only discovery for existing callers. */
+  detail?: boolean;
 }
 
 /** Cheap SEARCH: base list (detail page for phone/website/rating, NO reviews/
- *  images/contacts add-ons). Returns normalised places + the run duration. */
+ *  images/contacts add-ons). Returns normalised places + the run duration.
+ *  With detail:true the per-place detail page IS visited (rating + reviewCount),
+ *  still without review text / images / contacts. */
 export async function mapsDiscover(
   input: MapsDiscoverInput,
 ): Promise<{ places: NormalizedPlace[]; ms: number }> {
@@ -112,10 +118,12 @@ export async function mapsDiscover(
     locationQuery: input.location,
     maxCrawledPlacesPerSearch: input.maxPlaces,
     language: "en",
-    // Search-page-only: NO per-place detail visits → fast + cheap. Returns the
+    // Search-page-only by default: NO per-place detail visits → fast + cheap. Returns the
     // fields discovery needs (title, website, url, address). Phone/rating/reviews/
     // images all come later in the deep-enrich (mapsEnrich) on pick/generate.
-    scrapePlaceDetailPage: false,
+    // detail:true flips ONLY the detail-page visit on (rating + review count) — reviews text
+    // and images stay off, so the cost bump is bounded. Existing callers omit `detail` → false.
+    scrapePlaceDetailPage: input.detail === true,
     maxReviews: 0,
     maxImages: 0,
     scrapeContacts: false,
