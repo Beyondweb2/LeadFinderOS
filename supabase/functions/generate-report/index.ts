@@ -68,7 +68,7 @@ VOICE & STYLE:
 
 STRUCTURE htmlContent with clear H2 sections using semantic tags (<h2>, plus <h3>/<p>/<ul>/<li>), in this order where the data supports it:
   1. Overview — open with a substantial 2-3 sentence introduction: who the business is, what they do, who they serve, and how they operate (scope/location). Make it read as a genuine opening paragraph, not a label.
-  2. Credentials & regulation — place this EARLY as a prominent trust signal. Surface any professional qualifications, chartered/registered status, professional-body memberships, regulation, or accreditation PRESENT IN THE DATA (e.g. ICAEW/ACCA membership, chartered status, a listing category that implies a regulated profession). State ONLY credentials the data actually supports; if the data shows none, OMIT this section entirely rather than implying qualifications.
+  2. Credentials & regulation — place this EARLY as a prominent trust signal. Surface any professional qualifications, chartered/registered status, professional-body memberships, regulation, or accreditation PRESENT IN THE DATA (e.g. ICAEW/ACCA membership, chartered status, a listing category that implies a regulated profession). IMPORTANT: when the data includes a "Professional credentials/regulation" line, you MUST surface it prominently and EARLY — weave it into the opening Overview AND give it its own "Credentials & Regulation" section — because a regulated/chartered status is usually the business's single strongest trust signal for AI answers. State ONLY what the credentials data literally says — do not embellish, upgrade, or infer credentials beyond the exact wording provided (e.g. don't turn "ACCA member" into "award-winning"). If the data shows no credentials at all, OMIT this section entirely rather than implying qualifications.
   3. Services — for each service, write a sentence of real explanation of what it involves and who it helps, not just a bare list. Group with <h3>/<p> or an annotated <ul> where that reads better. Include operator-confirmed prices only if given in the data.
   4. Who they're best for — be specific and grounded in the data (business type, specialism, scope, the buyer questions provided). Describe the customer this business genuinely fits.
   5. How they work — only if the data supports it: describe delivery model (e.g. remote / UK-wide / cloud-based / local in-person), tools, or process implied by the data. Omit if unsupported.
@@ -93,6 +93,9 @@ function composeDataSummary(audit: Row, results: Row, lead: Row | null): string 
   push("Business name", audit.business_name);
   push("Type / vertical", audit.business_type);
   push("Specialism / known for", audit.specialism);
+  // Professional credentials / regulation (e.g. "ACCA regulated, Chartered Tax Adviser") — often the
+  // strongest trust signal. Only present when the operator filled the ai_audits.credentials field.
+  push("Professional credentials/regulation", audit.credentials);
   push("Engagement scope", audit.business_scope); // national | local | hybrid
   push("Location", audit.location_text);
   push("Country", audit.country);
@@ -172,7 +175,7 @@ Deno.serve(async (req) => {
     // --- Load the audit (business context). ---
     const { data: audit } = await service
       .from("ai_audits")
-      .select("id, lead_id, business_name, business_type, location_text, country, has_website, website, business_scope, specialism, business_phone, business_address, business_email")
+      .select("id, lead_id, business_name, business_type, location_text, country, has_website, website, business_scope, specialism, credentials, business_phone, business_address, business_email")
       .eq("id", auditId).maybeSingle();
     if (!audit) return json({ ok: false, error: "audit_not_found" }, 404);
 
