@@ -7,7 +7,7 @@
 
 import {
   renderDirectoryPage, renderBreadcrumbs, escHtml, slugify, nicheLabel, nicheHeroImage,
-  DIRECTORY_NAME,
+  HERO_WAVE, DIRECTORY_THUMBS, DIRECTORY_NAME,
 } from "./_shared";
 
 const SUPABASE_URL = "https://ruusxpkkmwtljxxulhbq.supabase.co";
@@ -35,6 +35,21 @@ function ratingHtml(rating: number | null | undefined, reviewCount: number | nul
   const rc = typeof reviewCount === "number" && reviewCount > 0
     ? ` <span class="rc">(${reviewCount})</span>` : "";
   return `<span class="rating"><span class="stars">&#9733;</span>${rating.toFixed(1)}${rc}</span>`;
+}
+
+/** A FACTUAL one-line description assembled from the row's own data (no AI, no invention). Combines
+ *  category + location + rating into a natural sentence; falls back gracefully when fields are absent.
+ *  The AI-written description comes later; this is the honest placeholder from what we already hold. */
+function describeBusiness(b: BizRow, singular: string): string {
+  const noun = ((b.category || "").trim() || singular).toLowerCase();
+  const where = (b.city || "").trim() || (b.address || "").trim();
+  let s = where ? `A ${noun} based in ${where}.` : `A ${noun}.`;
+  if (typeof b.rating === "number" && isFinite(b.rating)) {
+    const rc = typeof b.review_count === "number" && b.review_count > 0
+      ? ` from ${b.review_count} review${b.review_count === 1 ? "" : "s"}` : "";
+    s += ` Rated ${b.rating.toFixed(1)} out of 5${rc}.`;
+  }
+  return s;
 }
 
 export const onRequestGet = async (context: { request: Request; params: Record<string, string> }) => {
@@ -102,29 +117,40 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
   const hero =
 `<section class="hero hero--img" style="background-image:url('${nicheHeroImage(niche)}')">
 <div class="container">
-<h1>${escHtml(label)} in the UK</h1>
-<p>Compare ${escHtml(label.toLowerCase())} across the country — check ratings, reviews and credentials, then choose the firm that fits. Verified clients are marked, and listed honestly among the rest.</p>
+<h1>Best ${escHtml(label)} in the UK</h1>
+<p>Compare ${escHtml(label.toLowerCase())} across the country — check ratings, reviews and credentials, then choose the firm that fits. Featured clients are marked, and listed honestly among the rest.</p>
 </div>
+${HERO_WAVE}
 </section>`;
 
-  const cards = businesses.map((b) => {
+  // RANKED, NUMBERED cards — the order is the query order (clients first, then rating, then reviews),
+  // so the rank number reflects the honest "best of" ordering. Imagery cycles the proven Unsplash IDs.
+  const cards = businesses.map((b, i) => {
+    const rank = i + 1;
     const name = (b.name || "").trim();
     const href = `/directory/${encodeURIComponent(niche)}/${slugify(name)}`;
-    const badge = b.is_client ? `<span class="badge">Verified</span>` : "";
+    const thumb = DIRECTORY_THUMBS[i % DIRECTORY_THUMBS.length];
+    const badge = b.is_client ? `<span class="featured">Featured</span>` : "";
     const rating = ratingHtml(b.rating, b.review_count);
-    // Meta line: rating · category · city, separated by dots (only the parts we have).
+    // Meta line: rating · category · city (only the parts we actually have).
     const metaBits: string[] = [];
     if (rating) metaBits.push(rating);
     if ((b.category || "").trim()) metaBits.push(escHtml((b.category as string).trim()));
     if ((b.city || "").trim()) metaBits.push(escHtml((b.city as string).trim()));
     const meta = metaBits.join('<span class="dot">&middot;</span>');
+    const desc = describeBusiness(b, niche);
     const website = (b.website || "").trim();
     const websiteLink = website
       ? `<a href="${escHtml(website)}" target="_blank" rel="nofollow noopener">Visit website &#8599;</a>` : "";
     return (
-`<article class="biz">
-<div class="biz-head"><h3 class="biz-name"><a href="${escHtml(href)}">${escHtml(name)}</a></h3>${badge}</div>
-${meta ? `<div class="biz-meta">${meta}</div>\n` : ""}<div class="biz-links"><a href="${escHtml(href)}">View profile &rarr;</a>${websiteLink}</div>
+`<article class="rank">
+<div class="rank-num" aria-label="Rank ${rank}">${rank}</div>
+<div class="rank-img"><img src="${escHtml(thumb)}" alt="" loading="lazy" width="130" height="98"></div>
+<div class="rank-body">
+<div class="rank-head"><h3 class="rank-name"><a href="${escHtml(href)}">${escHtml(name)}</a></h3>${badge}</div>
+${meta ? `<div class="rank-meta">${meta}</div>\n` : ""}<p class="rank-desc">${escHtml(desc)}</p>
+<div class="rank-links"><a href="${escHtml(href)}">View profile &rarr;</a>${websiteLink}</div>
+</div>
 </article>`
     );
   }).join("\n");
@@ -134,10 +160,10 @@ ${meta ? `<div class="biz-meta">${meta}</div>\n` : ""}<div class="biz-links"><a 
 <div class="container">
 ${crumbs}
 <div class="section-head" style="margin-top:14px">
-<h2>${businesses.length} ${escHtml(label.toLowerCase())} listed</h2>
-<p class="sub">Ordered by rating and reviews. Verified clients appear near the top but are listed alongside everyone else.</p>
+<h2>${businesses.length} best ${escHtml(label.toLowerCase())}, ranked</h2>
+<p class="sub">Ranked by rating and reviews. Featured clients appear near the top but are listed alongside everyone else — the ranking is honest.</p>
 </div>
-<div class="biz-list">
+<div class="rank-list">
 ${cards}
 </div>
 </div>
@@ -166,9 +192,10 @@ ${crumbs}
 </section>`;
   const html = renderDirectoryPage({
     title: `${label} — ${DIRECTORY_NAME}`,
-    metaDescription: "",
+    metaDescription: `No ${escHtml(niche ? label.toLowerCase() : "businesses")} are listed in the ${DIRECTORY_NAME} directory yet.`,
     canonical: `${origin}/directory/${encodeURIComponent(niche)}`,
     bodyHtml: body,
+    noindex: true,
   });
   return new Response(html, {
     status: 404,

@@ -5,7 +5,7 @@
 // niches present + a count per niche, and renders a hero + a grid of category cards linking to
 // /directory/<niche>. No data → a graceful "coming soon" instead of an empty page.
 
-import { renderDirectoryPage, escHtml, nicheLabel, IMG_OFFICE, DIRECTORY_NAME, DIRECTORY_TAGLINE } from "./_shared";
+import { renderDirectoryPage, escHtml, nicheLabel, IMG_OFFICE, HERO_WAVE, DIRECTORY_NAME, DIRECTORY_TAGLINE } from "./_shared";
 
 const SUPABASE_URL = "https://ruusxpkkmwtljxxulhbq.supabase.co";
 // Public anon key (safe to embed — already public in the client bundle; identical to functions/r/[slug].ts).
@@ -69,6 +69,7 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
 <h1>Find trusted UK businesses</h1>
 <p>Browse local firms by category, compare them side by side, and find the right one for you — accountants, tradespeople and more, all in one place.</p>
 </div>
+${HERO_WAVE}
 </section>`;
 
   let categoriesSection: string;
