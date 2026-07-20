@@ -137,7 +137,7 @@ function isNationalBusiness(audit: Row): boolean {
  * the core contract holds — never stores a half-built plan. Drops individual malformed
  * sub-items (bad actions/directories) rather than failing the whole plan for one bad row.
  */
-function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: boolean, explicit: "national" | "local" | "hybrid" | null): { ok: true; playbook: Playbook } | { ok: false; error: string } {
+function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: boolean, explicit: "national" | "local" | "hybrid" | null, hasLocation: boolean): { ok: true; playbook: Playbook } | { ok: false; error: string } {
   if (!raw || typeof raw !== "object") return { ok: false, error: "not_an_object" };
   const o = raw as Record<string, unknown>;
 
@@ -188,12 +188,13 @@ function buildValidatedPlaybook(raw: unknown, fallbackName: string, national: bo
   const scope: "national" | "local" | "hybrid" =
     explicit ?? modelScope ?? (national ? "national" : "local");
 
-  // quickWins — for NATIONAL or HYBRID firms, code-enforce the prompt's rule: GBP / Bing
-  // Places / Apple Business Connect / local-maps / local-listings are NEVER a quick win (the
-  // model still slips them in). GBP stays allowed as a light entity-verification action — we
-  // only strip it from quickWins here. LOCAL firms are untouched.
+  // quickWins — local tactics (GBP / Bing Places / local citations) are valid for ANY business
+  // that has a real base location, national brands INCLUDED: a winnable local wedge is the route
+  // to being named. So we ONLY strip GBP / local-map terms when the business has NO location
+  // anywhere (pure-remote, no base town) — then there's no local footing to list against.
+  // Scope (national/local/hybrid) is positioning, NOT a reason to strip local tactics.
   let quickWins = strArr(o.quickWins, 8);
-  if (scope !== "local") quickWins = quickWins.filter((q) => !GBP_LOCAL_RE.test(q));
+  if (!hasLocation) quickWins = quickWins.filter((q) => !GBP_LOCAL_RE.test(q));
   if (quickWins.length < 1) return { ok: false, error: "no_quick_wins" };
 
   // deprioritised = things to do LIGHTLY or SKIP for this business (validated loosely — drop
@@ -240,8 +241,8 @@ below — do NOT invent tasks outside it. Why it works: AI CITES rather than ran
 a business it can READ, VERIFY as a distinct entity across independent sources, and TRUST);
 entity/NAP consistency + validated schema are foundational; content must be fact-dense and
 answer-first; credibility compounds slowly, so start it early; visibility is unstable, so measure
-and iterate. Google is now the PRIMARY source feeding ChatGPT (it shifted off Bing), so Google
-Business Profile + Google Search Console are prioritised over Bing.
+and iterate. Google Business Profile feeds Google's own surfaces AND Bing's index feeds chatgpt +
+other AI assistants' local answers, so Google Business Profile AND Bing Places are BOTH foundation-tier entity signals.
 
 TIER 1 — FOUNDATION (fast, high priority):
 - NAP (name / address / phone) consistent everywhere AI reads.
@@ -249,8 +250,8 @@ TIER 1 — FOUNDATION (fast, high priority):
 - Contact details as REAL TEXT on the site (not only an image or a form).
 - Page titles + meta descriptions.
 - Site crawlable / readable WITHOUT JavaScript, and indexing switched on.
-- Google Business Profile — claim / verify / complete (handle with care for no-premises firms; see the national/local fork).
-- Bing Places — secondary (Google is primary now).
+- Google Business Profile — claim / verify / complete (primary for Google's own surfaces; do this for ANY business with a base location).
+- Bing Places — foundational, claim / verify / complete (chatgpt + other AI assistants pull local answers from Bing's index).
 
 TIER 2 — CONTENT (weeks 2-4):
 - Answer-first content matching the REAL question phrasing customers use.
@@ -272,14 +273,18 @@ TIER 4 — MEASURE / ITERATE (ongoing):
 
 HARD RULES (follow exactly — these override any habit or prior training):
 - Draw EVERY task ONLY from the four tiers above. Never invent a task outside the method.
-- NEVER suggest manual submission to third-party directories as the strategy — WE build our own
-  "best [trade] in [city]" network (Tier 3). Reference an external directory only when it is
-  genuinely relevant to this vertical, never as the core off-site play.
-- NEVER guess a professional body. Only name a body (ICAEW, ACCA, SRA, CIOT, …) if the INPUT
-  clearly states it; otherwise say "your professional body's directory". Never suggest ICAEW to
-  a firm that may be ACCA-only, or vice versa.
-- Google is PRIMARY (ChatGPT shifted from Bing to Google): prioritise Google Business Profile +
-  Google Search Console OVER Bing Places.
+- Foundational listings and NAP-consistent citations across the key sources AI cross-checks
+  (Google Business Profile, Bing Places, and the main reputable directories for the trade) ARE
+  part of the method — this is how AI verifies the business is a real, consistent entity. Our own
+  best-[trade]-in-[city] network is the additive authority layer on top and our differentiator.
+  Avoid low-quality directory spam, but do not skip the foundational citations.
+- Use ONLY the credentials provided in the input; never invent or guess a professional body — if
+  the credentials field is blank, stay silent on professional bodies (say "your professional body's
+  directory", never a specific one like ICAEW/ACCA/SRA/CIOT). Never suggest ICAEW to a firm that
+  may be ACCA-only, or vice versa.
+- Bing Places is foundational, not optional — chatgpt and other AI assistants pull local answers
+  from Bing's index, so a Bing Places listing is a first-tier task. Google Business Profile remains
+  primary for Google's own surfaces. Both are foundation-tier.
 - NEVER promise rankings or specific outcomes. For medical / health businesses keep everything
   visibility-only (ASA compliance) — no treatment or outcome claims.`;
 
@@ -293,7 +298,7 @@ Every plan is grounded in THIS business's real audit data. Never invent specific
 detail is missing, say what to CONFIRM AT ONBOARDING instead of guessing.
 
 ════════ ENGINES IN SCOPE ════════
-ChatGPT, Gemini, and Google AI Overview ONLY. NEVER mention Perplexity or Copilot.
+ChatGPT, Gemini, and Google AI Overview ONLY. NEVER mention Perplexity or Copilot - these may inform our own strategy but must never appear in any client-facing or operator output; the only engines named in output are chatgpt, gemini and google ai overview.
 Write ALL brand / product / engine names in the OUTPUT in lowercase (chatgpt, gemini, google ai overview, google business profile, bing places, trustpilot, xero, etc.) - this is our house style. Proper directory/body names keep their normal form (ICAEW, ACCA, Chartered Institute of Taxation, unbiased.co.uk).
 
 Reference the SPECIFIC engines that did / didn't name the business, per-engine.
@@ -332,30 +337,37 @@ ${VERIFIED_METHOD}
 - If the business HAS a website: include BOTH on-site (schema, FAQ pages, front-loaded
   answers, service pages - area / location pages ONLY where businessScope makes them relevant, see the National vs Local fork) AND off-site (our own network placement + genuinely-relevant citations, Google-first reviews).
 
-════════ NATIONAL vs LOCAL FORK (critical — get the weighting right) ════════
-FIRST set "businessScope" = "national" | "local" | "hybrid" for THIS business, using the System scope hint in the input as a strong default and overriding only with a clear reason stated in "summary". Apply the fork below from YOUR businessScope, and keep every action consistent with it.
+════════ POSITIONING vs TARGETING (critical — the core of the strategy) ════════
+Set "businessScope" = "national" | "local" | "hybrid" for THIS business, using the System scope
+hint as a strong default and overriding only with a clear reason stated in "summary". But be clear
+what businessScope MEANS here:
 
-First decide businessScope from ONE core test, reasoning from the specific business - do NOT just pattern-match the examples, which are illustrative only:
-CORE TEST: do this business's customers physically travel to a premises to be served, or does it serve customers remotely / across a wide area with no walk-in footfall?
-- NATIONAL / no walk-in premises: served remotely or country-wide, no location customers visit. Signals: location is a country/region ("UK", "England", "nationwide", "online", "remote"), or the model of the business is inherently non-local (clients served UK-wide, work delivered remotely / by post / online). Examples (illustrative, not exhaustive): chartered accountancy, law or consultancy firms serving clients UK-wide, online-only retailers, national SaaS/service providers. ABLM-type firms are NATIONAL.
-- LOCAL: customers physically come to a premises, or the business travels to customers within one local area. Signals: a specific town/city AND walk-in or local-catchment trade. Examples (illustrative): barber, dentist, café, garage, restaurant, mobile trades serving one town.
-- HYBRID: a genuine mix (e.g. a regional firm with a few offices that also serves clients remotely). Apply the national levers for the remote side AND the local levers for each real premises - do not force it fully into either bucket.
-When unsure, decide on the CORE TEST (physical-visit vs not), state your reasoning briefly in "summary", and flag anything to confirm at onboarding.
+businessScope is POSITIONING — how the BRAND is PRESENTED (a UK-wide firm vs a one-town trade). It
+is NOT where we target, and it does NOT switch local tactics off.
 
-If NATIONAL:
-- DE-PRIORITISE local map listings. Google Business Profile, Bing Places and Apple Business
-  Connect are ONLY a light one-off entity-verification step in the Data Layer — NEVER a lead
-  action and NEVER in quickWins. Do NOT frame the plan around local / "map" / "near me" visibility.
-- LEAD instead with OUR OWN "best [trade] in [city/sector]" network placement (Tier 3),
-  Google-first REVIEWS, genuinely-relevant citations/sources for the vertical, and content
-  matched to NATIONAL buyer-intent queries ("[service] for [audience] uk"). Do NOT lead with
-  manual third-party directory submission. quickWins for a national firm should be
-  our-network / reviews / content moves, not GBP.
-- NO location / area / "near me" pages - they chase local intent a UK-wide firm has no claim to. Build sector / audience / service pages instead.
-If LOCAL:
-- Keep the local-first weighting: Google Business Profile LEADS (Google is primary), with Bing
-  Places secondary and Apple Business Connect only where customers physically visit — alongside
-  our own "best [trade] in [city]" network placement, Google-first reviews, and location/area pages.
+TARGETING IS ALWAYS A WINNABLE LOCAL WEDGE. Broad and national search terms are already owned by
+entrenched incumbents and will not move — so a LOCAL wedge (the business's base town PLUS the
+specific areas it serves) is the realistic route to being NAMED by AI, even for a national brand.
+Every plan targets that local wedge first.
+
+Decide businessScope from how the brand is presented (do NOT just pattern-match — the examples are illustrative):
+- NATIONAL: presented as serving clients UK-wide / remotely (e.g. chartered accountancy, law or consultancy firms, online-only retailers, national SaaS). ABLM-type firms are NATIONAL positioning — but still worked via their base town's local wedge.
+- LOCAL: a one-town / local-catchment trade (barber, dentist, café, garage, mobile trades serving one area).
+- HYBRID: a genuine mix (e.g. a firm with a few offices that also serves clients remotely).
+
+WHAT THIS MEANS FOR TACTICS (applies regardless of positioning):
+- Google Business Profile, Bing Places and NAP-consistent LOCAL CITATIONS apply to EVERY business
+  that has a real base location — national brands INCLUDED. They are FOUNDATION-tier, not "light
+  entity verification". A national brand with a Peterborough base still claims Google Business
+  Profile + Bing Places in Peterborough and lists in local citations.
+- Build local service / area pages for the base town + served areas (these are the WINNABLE terms),
+  AND sector / audience pages for the brand's wider positioning. For a national brand do BOTH — the
+  local wedge is where naming actually happens first.
+- HYBRID (multiple premises + remote): run the local wedge for EACH real base location.
+- ONLY skip local tactics (GBP, Bing Places, local citations, area pages) when the business
+  genuinely has NO location anywhere — pure-remote with no base town. THEN, and only then, lead
+  with sector / audience content, reviews, and our-own-network placement instead.
+Never let "national" positioning strip the local wedge from a business that has a base location.
 
 ════════ RANK EVERY ACTION BY LEVERAGE (for THIS business — this is the point) ════════
 This plan is PRIORITISED ADVICE. Give EVERY action a "priority" of "high", "medium" or "low"
@@ -375,21 +387,30 @@ where "why" explains it's low-value here and whether to set up once or skip enti
 empty only if truly nothing applies.
 
 Concrete ranking guidance (apply to the ACTUAL business, don't copy blindly):
-- NATIONAL / no-premises firm (e.g. a UK-wide accountancy, law or consultancy firm):
-    · HIGH: NAP consistency (foundational), validated Organization / professional identity schema,
-      site-readability (render-without-JS, entity clarity), OUR OWN network placement + Google-first
-      reviews + genuinely-relevant citations, FAQ + front-loaded answers.
-    · LOW: Google Business Profile — "set up once, don't over-invest"; Bing Places — "set up
-      once, minimal effort, secondary to Google". These verify the entity but won't drive citations
-      for a firm with no walk-in trade.
-    · SKIP (put in "deprioritised"): Apple Business Connect — it's a maps product for
-      businesses customers physically visit; not relevant to a national no-premises firm.
-- LOCAL business with premises (barber, dentist, café, garage, restaurant): FLIP IT — Google
-  Business Profile (primary) + Google-first reviews + our own "best [trade] in [city]" network +
-  local citations = HIGH (the main lever); Bing Places secondary, Apple Business Connect only if
-  they have premises.
+- NATIONAL-positioned firm WITH a base location (e.g. a UK-wide accountancy firm based in one town):
+    · HIGH: reviews (Google + the vertical's review platforms) — usually the single biggest lever;
+      Google Business Profile AND Bing Places for the BASE TOWN (both foundation-tier — they feed AI
+      local answers); NAP consistency + local citations; validated Organization / professional-identity
+      schema; site-readability; local service / area pages for the base town + served areas; FAQ +
+      front-loaded answers; OUR OWN "best [trade] in [city]" network placement.
+    · MEDIUM / LOW: broad national sector pages — worth building for positioning, but the national
+      terms are largely locked by incumbents, so do NOT imply they'll be won quickly.
+    · SKIP (put in "deprioritised") only where genuinely irrelevant, e.g. Apple Business Connect if
+      there is no premises customers physically visit.
+- PURE-REMOTE firm with NO base location anywhere: GBP / Bing Places / local citations / area pages
+  are not applicable — lead with reviews, sector / audience content, and our-network placement.
+- LOCAL business with premises (barber, dentist, café, garage, restaurant): Google Business Profile +
+  Bing Places + Google-first reviews + our own "best [trade] in [city]" network + local citations +
+  area pages = HIGH (the main levers); Apple Business Connect only where customers physically visit.
 Ground every ranking in the verified methodology above (what actually gets a business CITED),
 not in habit.
+
+════════ HONEST CEILING (be truthful about hard cases) ════════
+When the business is a hard case — broad or generalist positioning, near-zero reviews, and most
+terms already locked by established competitors — the plan MUST be honest. Lead with reviews as the
+single biggest lever. State plainly that this is a slow climb, not an overnight switch. Point effort
+at the few genuinely winnable local terms rather than implying the locked national ones can be won.
+Never inflate expected outcomes.
 
 ════════ TAG EVERY ACTION BY LEAD TIME (short-term vs long-term levers) ════════
 Give EVERY action a "leadTime" = how long until it actually moves AI visibility:
@@ -553,6 +574,7 @@ function buildUserPrompt(audit: Row, results: Row, cleanedCompetitors: string[])
   const loc = str(audit.location_text) || "(not given)";
   const country = str(audit.country);
   const specialism = str(audit.specialism);
+  const credentials = str(audit.credentials);
   const hasWebsite = audit.has_website === true && !!str(audit.website);
   // Scope hint: an explicit client answer is authoritative; otherwise the code heuristic is a
   // strong default the model may override with a stated reason.
@@ -607,7 +629,7 @@ ${findings || "    (none)"}
 
   return `BUSINESS
   Name: ${name}
-  Type / vertical: ${type}${specialism ? `\n  Specialism / niche: ${specialism}` : ""}
+  Type / vertical: ${type}${specialism ? `\n  Specialism / niche: ${specialism}` : ""}${credentials ? `\n  Credentials / accreditations / memberships (USE ONLY THESE — never invent or guess a body): ${credentials}` : "\n  Credentials: (none provided — stay silent on professional bodies)"}
   Location: ${loc}${country ? `\n  Country: ${country}` : ""}
   Website: ${hasWebsite ? str(audit.website) : "NO WEBSITE — apply the no-website fork (off-site only + our hosted pages)"}\n  ${scopeHint}
 
@@ -723,6 +745,7 @@ async function reviewPlaybook(
   pb: Playbook,
   national: boolean,
   explicit: "national" | "local" | "hybrid" | null,
+  hasLocation: boolean,
   apiKey: string,
 ): Promise<Playbook> {
   const reviewSystem =
@@ -765,7 +788,7 @@ Return the corrected playbook via return_playbook.`;
   const raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
   if (typeof raw !== "string") throw new Error("review_no_output");
   const parsed = JSON.parse(raw);
-  const revalidated = buildValidatedPlaybook(parsed, pb.businessName, national, explicit);
+  const revalidated = buildValidatedPlaybook(parsed, pb.businessName, national, explicit, hasLocation);
   if (!revalidated.ok) throw new Error(`review_invalid:${revalidated.error}`);
   return revalidated.playbook;
 }
@@ -807,7 +830,7 @@ Deno.serve(async (req) => {
 
     // Load the audit for business context. (No website gate — playbook works for ANY audit.)
     const { data: audit } = await service
-      .from("ai_audits").select("business_name, business_type, location_text, country, has_website, website, business_scope, specialism").eq("id", run.audit_id).maybeSingle();
+      .from("ai_audits").select("business_name, business_type, location_text, country, has_website, website, business_scope, specialism, credentials, business_address").eq("id", run.audit_id).maybeSingle();
     if (!audit) return json({ ok: false, error: "audit_not_found" }, 404);
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -846,7 +869,10 @@ Deno.serve(async (req) => {
     let parsed: unknown;
     try { parsed = JSON.parse(raw); } catch { return json({ ok: false, error: "model_bad_json" }, 422); }
 
-    const validated = buildValidatedPlaybook(parsed, str(audit.business_name), isNationalBusiness(audit), explicitScope(audit));
+    // A "base location" = any location signal at all (served-area text OR a registered address).
+    // Only its ABSENCE (pure-remote, no base town) disables local tactics — see buildValidatedPlaybook.
+    const hasLocation = !!(str(audit.location_text) || str(audit.business_address));
+    const validated = buildValidatedPlaybook(parsed, str(audit.business_name), isNationalBusiness(audit), explicitScope(audit), hasLocation);
     if (!validated.ok) return json({ ok: false, error: `invalid_playbook:${validated.error}` }, 422);
     let playbook = validated.playbook;
     const national = isNationalBusiness(audit);
@@ -869,7 +895,7 @@ Deno.serve(async (req) => {
     // left enough of the wall-clock budget; on ANY failure keep the pre-review playbook.
     if (Date.now() - t0 < REVIEW_SKIP_AFTER_MS) {
       try {
-        playbook = await reviewPlaybook(playbook, national, explicit, OPENAI_API_KEY);
+        playbook = await reviewPlaybook(playbook, national, explicit, hasLocation, OPENAI_API_KEY);
       } catch (e) {
         console.error("[generate-playbook] self-review skipped (error):", e instanceof Error ? e.message : e);
       }
