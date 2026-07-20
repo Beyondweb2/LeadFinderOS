@@ -8,8 +8,8 @@ import { runApifyActor } from "./apify.ts";
 // read/write and NO auth — the caller owns those. Pure mapping, no LLM.
 
 export const SEO_SCAN_ACTOR = "smart-digital~complete-seo-audit-tool"; // Apify API path uses `~`
-export const MAX_PAGES = 5;
-export const ACTOR_TIMEOUT_MS = 140_000; // multi-page run-sync; under the ~150s edge wall-clock
+export const MAX_PAGES = 3;              // smaller actor payload → faster finish + less memory (was 5)
+export const ACTOR_TIMEOUT_MS = 110_000; // kept WELL under the ~150s edge wall-clock, leaving headroom for the pre-fetches + mapping (was 140_000)
 export const MAX_DETAIL_ISSUES = 40;     // issues kept for the in-depth view
 export const MAX_LEAD_FINDINGS = 5;      // findings shown in the overview
 export const MAX_RAW_PASTE_CHARS = 50_000;
@@ -30,17 +30,25 @@ export function normaliseUrl(raw: string): string {
  *  Fixes the case where a stored non-www URL redirects to www and the crawler only
  *  audits the redirect landing page. Returns the final URL, or the input unchanged
  *  if the request fails - never throws. */
+const PROBE_TIMEOUT_MS = 8_000; // per pre-fetch — a hanging site must never block unbounded
+
 export async function resolveCanonicalUrl(input: string): Promise<string> {
   if (!input) return input;
-  try {
-    const res = await fetch(input, { method: "HEAD", redirect: "follow" });
-    if (res.url && /^https?:\/\//i.test(res.url)) return res.url;
-  } catch (_) { /* fall through */ }
-  try {
-    const res = await fetch(input, { method: "GET", redirect: "follow" });
-    if (res.url && /^https?:\/\//i.test(res.url)) return res.url;
-  } catch (_) { /* fall through */ }
-  return input;
+  // Each probe is bounded by an AbortController: HEAD fails/times-out → try GET; GET fails/times-out
+  // → use the original URL as-is. Never let a slow site consume the edge wall-clock here.
+  const probe = async (method: "HEAD" | "GET"): Promise<string | null> => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    try {
+      const res = await fetch(input, { method, redirect: "follow", signal: controller.signal });
+      return res.url && /^https?:\/\//i.test(res.url) ? res.url : null;
+    } catch (_) {
+      return null; // abort / network error → caller tries the next step
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+  return (await probe("HEAD")) ?? (await probe("GET")) ?? input;
 }
 export function urlKey(u: string): string {
   try {
@@ -163,12 +171,15 @@ export async function runSeoScanCore(website: string, opts: { token: string }): 
       { token: opts.token, timeoutMs: ACTOR_TIMEOUT_MS, retry: { on429: true } },
     );
     items = out.items;
+    console.log(`[run-seo-scan] actor returned ${out.items.length} items in ${out.ms}ms`);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const aborted = (e as Error)?.name === "AbortError";
     return { ok: false, error: aborted ? "actor_timeout" : "actor_failed", detail: msg.slice(0, 300) };
   }
   if (!Array.isArray(items) || items.length === 0) return { ok: false, error: "no_results" };
+
+  const mapStart = Date.now(); // time the deterministic mapping (in-memory work over the dataset)
 
   // --- Page items (audit block + pageUrl). A type:"site-summary" item is used for site scores. ---
   const pages = items.map(rec).filter((it): it is Record<string, unknown> => !!it && !!rec(it.audit) && !!strOf(it.pageUrl));
@@ -230,5 +241,6 @@ export async function runSeoScanCore(website: string, opts: { token: string }): 
     ].join("\n").slice(0, MAX_RAW_PASTE_CHARS),
   };
 
+  console.log(`[run-seo-scan] mapped ${pages.length} pages in ${Date.now() - mapStart}ms`);
   return { ok: true, seo };
 }

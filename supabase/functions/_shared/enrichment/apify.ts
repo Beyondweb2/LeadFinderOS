@@ -66,11 +66,13 @@ export async function runApifyActor(
   },
 ): Promise<{ items: unknown[]; ms: number }> {
   const url = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items`;
+  const BUDGET_MS = opts.timeoutMs ?? 90_000;
+  const callStart = Date.now(); // whole-call clock — a retry must fit INSIDE BUDGET_MS, never extend it
 
-  // A single attempt. Throws { retryable } markers so the outer loop can decide.
-  const attempt = async (): Promise<{ items: unknown[]; ms: number }> => {
+  // A single attempt, bounded by the REMAINING budget passed in. Throws { retryable } markers so the outer loop can decide.
+  const attempt = async (attemptTimeoutMs: number): Promise<{ items: unknown[]; ms: number }> => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 90_000);
+    const timeout = setTimeout(() => controller.abort(), attemptTimeoutMs);
     const startedAt = Date.now();
     try {
       const res = await fetch(url, {
@@ -99,19 +101,26 @@ export async function runApifyActor(
 
   const RETRY_DELAY_MS = 1500;
   try {
-    return await attempt();
+    return await attempt(BUDGET_MS);
   } catch (e) {
     const isAbort = (e as Error)?.name === "AbortError";
     const isRetryableHttp = !!(e as { retryableHttp?: boolean })?.retryableHttp;
     const shouldRetry =
       (isAbort && opts.retry?.onAbort) || (isRetryableHttp && opts.retry?.on429);
     if (!shouldRetry) throw e;
-    // Bounded: exactly ONE extra attempt after a short pause.
+    // Bounded to the SAME budget: only retry if the pause PLUS a real second attempt still fit
+    // inside BUDGET_MS — the retry must not extend the total time. (A timed-out first attempt has
+    // consumed ~all the budget, so onAbort effectively won't re-stack a second full attempt.)
+    const remaining = BUDGET_MS - (Date.now() - callStart) - RETRY_DELAY_MS;
+    if (remaining <= 0) {
+      console.warn(`[apify] ${actorId} ${isAbort ? "timed out" : "failed (retryable HTTP)"} — no budget left to retry within ${BUDGET_MS}ms; returning error`);
+      throw e;
+    }
     console.warn(
-      `[apify] ${actorId} ${isAbort ? "timed out" : "failed (retryable HTTP)"} — retrying once in ${RETRY_DELAY_MS}ms`,
+      `[apify] ${actorId} ${isAbort ? "timed out" : "failed (retryable HTTP)"} — retrying once in ${RETRY_DELAY_MS}ms within the remaining ${remaining}ms`,
     );
     await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-    return await attempt();
+    return await attempt(remaining);
   }
 }
 
