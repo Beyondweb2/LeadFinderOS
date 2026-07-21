@@ -471,6 +471,7 @@ function buildReportData(
     for (const engine of DISPLAY_ENGINES) {
       const er = r.result[engine];
       if (!er) continue;
+      if (engine === 'google_organic') continue; // organic result TITLES aren't AI-named firms
       for (const c of er.competitors) {
         if (!isRealCompetitor(c, ctx.locationText)) continue;
         const key = c.trim().toLowerCase();
@@ -498,6 +499,7 @@ function buildReportData(
         const er = r.result?.[engine];
         if (!er) continue;
         if (er.named) clientNamed = true;
+        if (engine === 'google_organic') continue; // organic titles aren't AI-named rivals (named signal above kept)
         for (const c of er.competitors) {
           if (!isRealCompetitor(c, ctx.locationText)) continue;
           const key = c.trim().toLowerCase();
@@ -859,6 +861,7 @@ const AiAudit = () => {
 
   // ── Poll the active run while it drains ─────────────────────────────────────
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRun = useCallback(async (rid: string) => {
     const { data: runRow } = await supabase
       .from('ai_audit_runs')
@@ -883,11 +886,21 @@ const AiAudit = () => {
       if (!stop && r && TERMINAL.has(r.status)) {
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
         loadSaved(); // refresh the saved-audits rates
+        // extract-competitors rewrites the competitor lists a few seconds AFTER the run flips to
+        // complete (it runs post-status-write in the finalisation tick). Polling stops the instant
+        // we see a terminal status, so do ONE bounded delayed refetch to pick up the cleaned lists —
+        // otherwise the live view latches the pre-extraction regex names until a hard refresh.
+        if (settleRef.current) clearTimeout(settleRef.current);
+        settleRef.current = setTimeout(() => { if (!stop) pollRun(runId); }, 10_000);
       }
     };
     tick();
     pollRef.current = setInterval(tick, 3000);
-    return () => { stop = true; if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+    return () => {
+      stop = true;
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      if (settleRef.current) { clearTimeout(settleRef.current); settleRef.current = null; }
+    };
   }, [step, runId, pollRun, loadSaved]);
 
   // On mount, if a previously-opened audit was persisted (page was left and returned to),
@@ -1433,6 +1446,7 @@ const AiAudit = () => {
       for (const engine of DISPLAY_ENGINES) {
         const er = r.result[engine];
         if (!er) continue;
+        if (engine === 'google_organic') continue; // organic result TITLES aren't AI-named firms
         for (const c of er.competitors) {
           if (!isRealCompetitor(c, locationText)) continue; // drop stopwords / location / fragments
           const key = c.trim().toLowerCase();
@@ -2819,6 +2833,10 @@ function scoreQuestion(result: EngineMap, businessName: string, locationText: st
       if ((SCORED_ENGINES as readonly string[]).includes(engine)) scoredNamed++;
       if (er.position != null) bestPosition = bestPosition == null ? er.position : Math.min(bestPosition, er.position);
     }
+    // google_organic's competitors are raw result TITLES (category/location/forum phrases), not
+    // firms an AI named — exclude from rivalCount/namedFirms and the citation aggregator share.
+    // (Its named/position signal above is still honoured.)
+    if (engine === 'google_organic') continue;
     for (const c of er.competitors) {
       if (!isRealCompetitor(c, locationText)) continue;
       const key = c.trim().toLowerCase();
@@ -2944,7 +2962,7 @@ function EngineRow({ engine, er, businessName, locationText }: { engine: string;
         {er.named
           ? <Badge className="border-transparent bg-[hsl(var(--badge-interested))] text-[hsl(var(--badge-interested-fg))]">Named{er.position ? ` · #${er.position}` : ''}</Badge>
           : <Badge className="border-transparent bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))]">Not named</Badge>}
-        {shownCompetitors.length > 0 && (
+        {engine !== 'google_organic' && shownCompetitors.length > 0 && (
           <span className="text-[11px] text-muted-foreground">
             instead: {shownCompetitors.slice(0, 5).join(', ')}
           </span>
