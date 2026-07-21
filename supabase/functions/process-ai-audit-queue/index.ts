@@ -33,8 +33,13 @@ const CAP_USD = 3.0;             // per-RUN Apify cost ceiling (this audit run)
 const DAILY_CAP_USD = 15.0;      // per-USER rolling-24h ceiling (across audits) via the runner
 const MAX_ATTEMPTS = 3;          // per queue row (= actor runs STARTED) before it's marked failed
 // Async guards (RUN_TIMEOUT_MS is gone — nothing blocks on the scrape any more):
-const MAX_RUN_AGE_MS = 5 * 60 * 1000;   // a started run must reach terminal within 5 min, else the
+const MAX_RUN_AGE_MS = 12 * 60 * 1000;  // a started run must reach terminal within 12 min, else the
                                         // poll treats it as a failed attempt (and aborts it on Apify).
+                                        // MUST sit ABOVE the actor's real max runtime: runs legitimately
+                                        // take up to ~9 min (some ~12 min still succeed). At 5 min the guard
+                                        // was culling healthy-but-slow runs → serial retry-storm (a 5-question
+                                        // audit burned 8 Apify runs / 16.4 min). 12 min only catches
+                                        // genuinely-hung runs, letting normal-slow ones finish on attempt 1.
 const STALE_RUNNING_MS = 3 * 60 * 1000; // reclaim rows stuck 'running' with NO runId (a tick died
                                         // between claim and start) — rows WITH a runId are governed by
                                         // MAX_RUN_AGE_MS in the poll path, never by this reclaim.
