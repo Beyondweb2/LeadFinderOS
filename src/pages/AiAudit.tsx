@@ -1599,6 +1599,14 @@ const AiAudit = () => {
   const generatePlaybook = async (regenerate = false, autoOpen = true) => {
     if (!runId || playbookGenerating) return;
     if (!regenerate && playbooks[runId]) { setPlaybookRunId(runId); return; }
+    // Warn (don't block) when a website audit is about to build a playbook with NO SEO data.
+    // Only on manual generation (autoOpen) — the silent auto-fire already waits for SEO. An
+    // ERRORED SEO block counts as "attempted" (present-but-not-renderable) → no warning, proceed;
+    // we only warn when SEO is genuinely absent, so a permanently-failing scan can't hard-block.
+    const seoAttempted = ((run?.results as { seo?: unknown } | null)?.seo) != null;
+    if (autoOpen && resultsHasWebsite && !hasSeo && !seoAttempted) {
+      if (!window.confirm('No SEO scan data yet — the playbook won’t include website SEO findings. Generate anyway?')) return;
+    }
     const rid = runId;
     setPlaybookGenerating(true);
     try {

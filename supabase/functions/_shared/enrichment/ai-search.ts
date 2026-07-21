@@ -29,8 +29,10 @@ import { runApifyActor } from "./apify.ts";
 /** apify/google-search-scraper — actor id uses `~` in the API path. */
 export const AI_SEARCH_ACTOR = "apify~google-search-scraper";
 
-/** Engines we normalise. Active set = ChatGPT + Gemini + AI Overview + Google organic.
- *  The queue targets [chatgpt,gemini]; AI Overview + organic come free in the same run.
+/** Engines we normalise. Active set = ChatGPT + Gemini + Google organic (organic comes free
+ *  in the same run; the queue scores [chatgpt,gemini]). ai_overview stays in the loop but is
+ *  no longer scraped (see buildAiSearchInput) — normalizeAiSearch finds no block and simply
+ *  omits it, so re-enabling the toggle is all it takes to bring it back.
  *  'perplexity' stays in the type (dormant — not enabled, not looped) so it's a one-line
  *  re-add: put it back in AI_ENGINES and re-enable perplexitySearch in the input. */
 export type AiEngineKey = "chatgpt" | "perplexity" | "gemini" | "ai_overview" | "google_organic";
@@ -54,7 +56,10 @@ export interface AiEngineResult {
   answer_text: string;
 }
 
-export type AiSearchResult = Record<AiEngineKey, AiEngineResult>;
+/** Only engines the actor actually scraped are present. A dropped/disabled engine
+ *  (e.g. ai_overview) is ABSENT, not present-with-zeros, so downstream surfaces don't
+ *  count it as a real "0 named" datapoint. */
+export type AiSearchResult = Partial<Record<AiEngineKey, AiEngineResult>>;
 
 /** Lead `country` enum → lowercase ISO-3166 alpha-2 for the actor's countryCode. */
 const COUNTRY_TO_ISO2: Record<string, string> = {
@@ -79,11 +84,11 @@ export function buildAiSearchInput(query: string, countryCode: string): Record<s
     countryCode: (countryCode || "gb").toLowerCase(),
     maxPagesPerQuery: 1,
     languageCode: "en",
-    // AI-engine add-ons (nested-object form the actor expects) + Google organic (always)
-    // + AI Overview. Engine set = ChatGPT + Gemini + AI Overview. Copilot / AI Mode off.
-    // light mode - AI Overview isn't scored (only chatgpt+gemini), and full-page scrape was
-    // blowing the 115s timeout. Light still returns the overview text+sources we consume.
-    aiOverview: { scrapeFullAiOverview: false },
+    // AI-engine add-ons (nested-object form the actor expects) + Google organic (always on).
+    // Engine set = ChatGPT + Gemini + Google organic.
+    // AI Overview DROPPED to cut per-call latency and 115s aborts — it's DISPLAY-ONLY (not in
+    // SCORED_ENGINES, doesn't affect score/mention_rate). Re-enable if needed by restoring:
+    //   aiOverview: { scrapeFullAiOverview: false },
     chatGptSearch: { enableChatGpt: true },
     geminiSearch: { enableGemini: true },
     // Perplexity dropped (kept dormant — flip enablePerplexity:true to re-add):
@@ -135,9 +140,6 @@ function norm(s: string): string {
 function contains(hay: string, needle: string): boolean {
   const n = norm(needle);
   return n.length > 0 && norm(hay).includes(n);
-}
-function emptyEngine(): AiEngineResult {
-  return { named: false, position: null, competitors: [], citations: [], answer_text: "" };
 }
 function citationOf(src: unknown): AiCitation {
   const r = asRecord(src) ?? {};
@@ -336,20 +338,24 @@ function normalizeOrganic(
 
 /**
  * Normalise the actor's dataset (items[0] for a single-query run) into the per-engine
- * shape. Missing engines come back as empty results (named:false) rather than absent,
- * so downstream scoring can count total datapoints consistently.
+ * shape. Only engines the actor actually scraped are emitted — an engine that returned no
+ * block (e.g. ai_overview, no longer scraped) is left ABSENT rather than backfilled with an
+ * empty result, so it can't masquerade as a real "0 named" datapoint on the scorecard /
+ * playbook prompt. A genuinely-scraped-but-not-named engine still carries answer_text /
+ * citations and is kept.
  */
 export function normalizeAiSearch(items: unknown[], businessName: string): AiSearchResult {
   const item = asRecord(Array.isArray(items) ? items[0] : items) ?? {};
   const organicNames = extractOrganicNames(item);
-  const out = {} as AiSearchResult;
+  const out: AiSearchResult = {};
   for (const engine of AI_ENGINES) {
     if (engine === "google_organic") {
+      // Google organic is always part of the run.
       out.google_organic = normalizeOrganic(item, organicNames, businessName);
       continue;
     }
     const block = asRecord(firstKey(item, ENGINE_BLOCK_KEYS[engine]));
-    out[engine] = block ? normalizeEngineBlock(block, organicNames, businessName) : emptyEngine();
+    if (block) out[engine] = normalizeEngineBlock(block, organicNames, businessName);
   }
   return out;
 }
