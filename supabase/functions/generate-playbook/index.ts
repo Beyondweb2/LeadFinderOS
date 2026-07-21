@@ -585,14 +585,17 @@ function buildUserPrompt(audit: Row, results: Row, cleanedCompetitors: string[])
 
   // Per-engine visibility from results.questions.
   const questions: Row[] = Array.isArray(results?.questions) ? results.questions : [];
+  // PLAYBOOK_ENGINES is a FIXED list, so skip any engine absent from the data (total 0) — e.g.
+  // ai_overview is no longer scraped, so it never appears in results.questions[].engines. Don't
+  // tell the model the client scored "0 of 0" on an engine that was never actually checked.
   const engineLines = PLAYBOOK_ENGINES.map((e) => {
     let named = 0, total = 0;
     for (const q of questions) {
       const er = q?.engines?.[e.key];
       if (er) { total++; if (er.named === true) named++; }
     }
-    return `  - ${e.label}: named in ${named} of ${total} answers`;
-  }).join("\n");
+    return total === 0 ? null : `  - ${e.label}: named in ${named} of ${total} answers`;
+  }).filter(Boolean).join("\n");
 
   // Competitor-name CANDIDATES AI named instead. Frontend-filtered but NOT guaranteed clean
   // (junk like Payroll / CT600 / Customs / fused tokens can slip through) — the model must
