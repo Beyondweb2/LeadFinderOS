@@ -141,6 +141,91 @@ function contains(hay: string, needle: string): boolean {
   const n = norm(needle);
   return n.length > 0 && norm(hay).includes(n);
 }
+
+/* ── name matching (connector/shortening-robust) ──────────────────────────────
+ * The old full-string contains() failed on ordinary brand variance: stored
+ * "Sinners and Saints pool bar and kava cafe" vs AI's "Sinners N Saints …" (and/N,
+ * plus AI shortening to the leading brand), so clear namings read "not named". These
+ * helpers match a DISTINCTIVE CORE robustly — punctuation-stripped, connectors (&/and/n)
+ * canonicalised, accents folded — with a strength guard so a weak/generic core can't
+ * over-match. Deliberately NO phonetic/spelling folding (e.g. cafe↔kafe) — too risky. */
+const NAME_CONNECTORS = new Set(["and", "n"]);                    // &/and/n → one canonical token
+const NAME_STOPWORDS = new Set(["the", "a", "an", "of", "for"]);  // ignored when judging core strength
+// Generic venue/trade/legal descriptors — the brand CORE is whatever LEADS before the first of
+// these. Conservative by design (extend as needed); only used to find the distinctive segment.
+const GENERIC_NAME_TOKENS = new Set([
+  "pool", "bar", "cafe", "kava", "restaurant", "grill", "kitchen", "lounge", "club", "pub", "bistro",
+  "diner", "eatery", "salon", "barbers", "barber", "spa", "clinic", "dental", "dentist", "plumbing",
+  "plumber", "electrical", "electrician", "builders", "building", "roofing", "garage", "motors",
+  "cars", "accountants", "accountant", "accountancy", "solicitors", "solicitor", "law", "legal",
+  "consulting", "consultants", "services", "service", "group", "associates", "partners",
+  "partnership", "studio", "gym", "fitness", "hotel", "shop", "store", "boutique",
+  "ltd", "limited", "llp", "llc", "inc", "co", "company", "plc", "gmbh", "corp", "corporation",
+]);
+
+/** Canonical token stream for name matching: lowercase, fold accents (café→cafe), ampersand→"and",
+ *  strip punctuation/apostrophes, collapse whitespace, and canonicalise connector tokens
+ *  (&/and/n all become "and"). No phonetic folding — matching stays exact per token. */
+function normalizeForMatch(s: string): string {
+  return norm(s)
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "") // fold accents so café == cafe
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s]+/g, " ")                     // drop punctuation/apostrophes
+    .split(/\s+/).filter(Boolean)
+    .map((t) => (NAME_CONNECTORS.has(t) ? "and" : t))
+    .join(" ");
+}
+
+/** Distinctive leading brand segment (normalised) — everything before the first generic
+ *  descriptor. "Sinners N Saints Pool Bar and Kava Cafe" → "sinners and saints". */
+function businessCore(businessName: string): string {
+  const tokens = normalizeForMatch(businessName).split(/\s+/).filter(Boolean);
+  const core: string[] = [];
+  for (const t of tokens) {
+    if (GENERIC_NAME_TOKENS.has(t)) break;
+    core.push(t);
+  }
+  while (core.length && NAME_CONNECTORS.has(core[core.length - 1])) core.pop(); // trim trailing connector
+  return core.join(" ");
+}
+
+/** Exact contiguous run of `needle` tokens inside `hay` tokens (word-level — connectors and
+ *  punctuation are already canonical, so no mid-word false hits). */
+function tokensContain(hay: string[], needle: string[]): boolean {
+  if (needle.length === 0 || needle.length > hay.length) return false;
+  for (let i = 0; i + needle.length <= hay.length; i++) {
+    let ok = true;
+    for (let j = 0; j < needle.length; j++) if (hay[i + j] !== needle[j]) { ok = false; break; }
+    if (ok) return true;
+  }
+  return false;
+}
+
+/** Does `haystack` NAME the business? Matches the distinctive core when it's strong enough
+ *  (≥2 meaningful words, OR one word ≥6 chars); else falls back to the FULL normalised name so a
+ *  weak/generic core (e.g. "the") can't over-match on a fragment. */
+function nameMatches(haystack: string, businessName: string): boolean {
+  const hay = normalizeForMatch(haystack).split(/\s+/).filter(Boolean);
+  if (!hay.length) return false;
+  const coreTokens = businessCore(businessName).split(/\s+/).filter(Boolean);
+  const meaningful = coreTokens.filter((t) => !NAME_CONNECTORS.has(t) && !NAME_STOPWORDS.has(t));
+  const strong = meaningful.length >= 2 || meaningful.some((t) => t.length >= 6);
+  const needle = strong && coreTokens.length
+    ? coreTokens
+    : normalizeForMatch(businessName).split(/\s+/).filter(Boolean);
+  return tokensContain(hay, needle);
+}
+
+/** True when a competitor CANDIDATE is really the audited business under name variance — it either
+ *  names the business (core match) or is a fragment of the business's full name. Keeps the firm off
+ *  its own competitor list (shares the same matcher as named-detection, per the recon caveat). */
+function isSelfName(candidate: string, businessName: string): boolean {
+  if (nameMatches(candidate, businessName)) return true;
+  const cand = normalizeForMatch(candidate).split(/\s+/).filter(Boolean);
+  const full = normalizeForMatch(businessName).split(/\s+/).filter(Boolean);
+  return cand.length > 0 && tokensContain(full, cand);
+}
+
 function citationOf(src: unknown): AiCitation {
   const r = asRecord(src) ?? {};
   return { title: asStr(firstKey(r, ["title", "name"])), url: asStr(firstKey(r, ["url", "link"])) };
@@ -243,13 +328,12 @@ function extractTextNames(text: string): string[] {
 /** Dedup names case-insensitively (first-seen casing), dropping the audited business
  *  (and any candidate that is a sub/superstring of it, to strip self-mentions). */
 function dedupExcludingSelf(names: string[], businessName: string): string[] {
-  const self = norm(businessName);
   const seen = new Set<string>();
   const out: string[] = [];
   for (const n of names) {
     const key = norm(n);
     if (!key || seen.has(key)) continue;
-    if (self && (key === self || key.includes(self) || self.includes(key))) continue;
+    if (isSelfName(n, businessName)) continue; // drop the audited business (name-variance aware)
     if (isJunkCandidate(n)) continue; // drop page furniture + concatenated link-label franken-words
     seen.add(key);
     out.push(n);
@@ -303,9 +387,10 @@ function normalizeEngineBlock(
   const sources = Array.isArray(rawSources) ? rawSources : [];
   const citations = sources.map(citationOf).filter((c) => c.title || c.url).slice(0, MAX_CITATIONS);
 
-  // named: in the answer text, OR a source title that is the business.
-  const srcIndex = sources.findIndex((s) => contains(citationOf(s).title, businessName));
-  const named = contains(answer_text, businessName) || srcIndex >= 0;
+  // named: business is named in the answer text, OR in a source title. Uses the core-aware
+  // nameMatches (robust to &/and/n + AI shortening) instead of a brittle full-string contains.
+  const srcIndex = sources.findIndex((s) => nameMatches(citationOf(s).title, businessName));
+  const named = nameMatches(answer_text, businessName) || srcIndex >= 0;
   // position: 1-based source index where the business first appears (else null).
   const position = srcIndex >= 0 ? srcIndex + 1 : null;
   const competitors = competitorsForEngine(answer_text, organicNames, businessName);
