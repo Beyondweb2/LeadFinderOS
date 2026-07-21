@@ -355,12 +355,16 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     ids = (openRuns ?? []).map((r: Row) => r.id);
   }
   let finalised = 0;
+  // Extraction invokes are QUEUED per-run and awaited AFTER the loop, so a slow extract-competitors
+  // call never blocks finalising the other runs — but the edge runtime still can't cut them off.
+  const extractionInvokes: Promise<void>[] = [];
 
   for (const runId of ids) {
     // A cancelled run is terminal — never resurrect it or flip it to 'complete'. Drop any
     // leftover pending/running rows (e.g. one in-flight when the user hit Stop) so they aren't
     // reprocessed, and leave the run marked 'cancelled'.
     const { data: runRow } = await service.from("ai_audit_runs").select("status").eq("id", runId).maybeSingle();
+    const prevStatus = runRow?.status ?? null; // status BEFORE this finalise write — drives the once-per-run guard
     if (runRow?.status === "cancelled") {
       await service.from("ai_audit_queue")
         .update({ status: "cancelled" }).eq("run_id", runId).in("status", ["pending", "running"]);
@@ -430,10 +434,45 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       ...(existingSeo ? { seo: existingSeo } : {}),
     };
     const runStatus = isCapped ? "capped" : "complete";
-    await service.from("ai_audit_runs")
+    const { error: writeErr } = await service.from("ai_audit_runs")
       .update({ results, mention_rate: mentionRate, status: runStatus })
       .eq("id", runId);
+    if (writeErr) {
+      console.error(`[process-ai-audit-queue] finalise write failed for run ${runId}:`, writeErr.message);
+      continue; // don't fire extraction on a failed write — the run retries next tick
+    }
     finalised++;
+
+    // Auto-invoke extract-competitors ONCE per run, at the transition to terminal (prevStatus was
+    // pending/running — never for a run already complete/capped/cancelled on entry). Queued here
+    // (not awaited in-loop) so it can't block finalising other runs; strictly AFTER the results/
+    // status write above has RESOLVED, so it can't race the fold that extract-competitors re-reads
+    // and rewrites. Fail-safe: never throws; a non-2xx is logged (a 401/403 misconfig is visible,
+    // not a silent no-op) and can never flip the run back out of complete.
+    if (prevStatus === "pending" || prevStatus === "running") {
+      extractionInvokes.push((async () => {
+        try {
+          const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extract-competitors`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+              "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+              "x-internal-job": "1",
+            },
+            body: JSON.stringify({ runId }),
+          });
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            console.error(`[process-ai-audit-queue] extract-competitors failed for run ${runId}: HTTP ${res.status} ${txt.slice(0, 300)}`);
+          }
+        } catch (e) {
+          console.error(`[process-ai-audit-queue] extract-competitors invoke error for run ${runId}:`, e instanceof Error ? e.message : String(e));
+        }
+      })());
+    }
   }
+  // Await the queued extraction calls so the edge runtime doesn't cut them off when we return.
+  if (extractionInvokes.length) await Promise.allSettled(extractionInvokes);
   return finalised;
 }
