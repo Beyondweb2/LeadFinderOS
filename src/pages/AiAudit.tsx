@@ -24,6 +24,7 @@ import { AiAuditReport } from '@/components/AiAuditReport';
 import { downloadReportHtml, type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { renderPlaybookHtml, downloadPlaybookHtml, type PlaybookData, type PlaybookView } from '@/lib/playbookHtml';
 import { buildSchema, normalizeUrl } from '@/lib/schemaType';
+import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
@@ -1454,6 +1455,17 @@ const AiAudit = () => {
     specialisms,
   });
 
+  // The business's own website (opened-run schema value, else the wizard URL when it has one) —
+  // used by scoreQuestion to exclude own-site citations from the aggregator share. May be "".
+  const ownWebsite = (schemaWebsite || (resultsHasWebsite ? website : '')).trim();
+  // Winnable shortlist headline: done questions that scored a real, targetable opportunity
+  // (band winnable/named, score ≥ 6). Recomputed live from the queue rows.
+  const winnableCount = queueRows.filter((r) => {
+    if (r.status !== 'done' || !r.result) return false;
+    const s = scoreQuestion(r.result, resultsBusinessName || businessName, locationText, ownWebsite);
+    return (s.band === 'winnable' || s.band === 'named') && (s.score ?? 0) >= 6;
+  }).length;
+
   // Landing metrics — derived ONLY from data we already have (no invented numbers).
   // Average visibility is over audits that have a scored run; invisible = 0% named.
   const metrics = (() => {
@@ -2500,20 +2512,22 @@ const AiAudit = () => {
                 <span className="text-sm font-semibold">
                   Detailed results
                   <span className="ml-1.5 font-normal text-muted-foreground">· {queueRows.length} {queueRows.length === 1 ? 'question' : 'questions'}</span>
-                  {(() => {
-                    const winnable = (liveReportData?.winnability ?? []).filter((w) => w.verdict === 'open').length;
-                    return winnable > 0 ? <span className="ml-1.5 font-normal text-green-500">· {winnable} winnable</span> : null;
-                  })()}
+                  {winnableCount > 0 && <span className="ml-1.5 font-normal text-green-500">· {winnableCount} winnable</span>}
                 </span>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showDetails ? 'rotate-180' : ''}`} />
               </button>
+              {showDetails && (
+                <p className="px-1 text-[11px] text-muted-foreground">
+                  Scores are a heuristic read of what AI shows today (how many rivals are named and whether they lean on directory listings) — a guide to where you can win, not a guarantee.
+                </p>
+              )}
               {showDetails && queueRows.map((row) => (
                 <QuestionCard
                   key={row.id}
                   row={row}
                   businessName={resultsBusinessName}
                   locationText={locationText}
-                  verdict={liveReportData?.winnability?.find((w) => w.question === row.question)?.verdict}
+                  ownWebsite={ownWebsite}
                 />
               ))}
             </div>
@@ -2754,35 +2768,149 @@ function ResultsHeadline({ run, live, draining }: { run: RunRow | null; live: { 
   );
 }
 
-// Per-term winnability badge styling (matches the app's soft-badge convention).
-const WINNABILITY_BADGE: Record<'open' | 'contested' | 'locked' | 'named', { label: string; cls: string }> = {
-  open:      { label: 'Open',      cls: 'bg-green-500/20 text-green-500 border-transparent' },
-  contested: { label: 'Contested', cls: 'bg-amber-500/20 text-amber-500 border-transparent' },
-  locked:    { label: 'Locked',    cls: 'bg-red-500/20 text-red-400 border-transparent' },
-  named:     { label: 'Named',     cls: 'bg-blue-500/20 text-blue-400 border-transparent' },
+// Per-term winnability badge styling (matches the app's soft-badge convention). 'no-local-race' is
+// the new 5th value (neutral grey) for terms where AI gives generic advice and names no local firm.
+const WINNABILITY_BADGE: Record<'open' | 'contested' | 'locked' | 'named' | 'no-local-race', { label: string; cls: string }> = {
+  open:            { label: 'Open',             cls: 'bg-green-500/20 text-green-500 border-transparent' },
+  contested:       { label: 'Contested',        cls: 'bg-amber-500/20 text-amber-500 border-transparent' },
+  locked:          { label: 'Locked',           cls: 'bg-red-500/20 text-red-400 border-transparent' },
+  named:           { label: 'Named',            cls: 'bg-blue-500/20 text-blue-400 border-transparent' },
+  'no-local-race': { label: 'Not a local race', cls: 'bg-muted text-muted-foreground border-transparent' },
 };
 
-function QuestionCard({ row, businessName, locationText, verdict }: { row: QueueRow; businessName: string; locationText: string; verdict?: 'open' | 'contested' | 'locked' | 'named' }) {
+type ScoreBand = 'named' | 'winnable' | 'hard' | 'no-local-race';
+interface QuestionScore {
+  score: number | null;      // /10; null when there's no local race to score
+  band: ScoreBand;
+  reason: string;            // ONE plain-English sentence — the thing a human reads
+  namedFirms: string[];      // real competitor firms AI named (isRealCompetitor-filtered)
+  clientNamed: boolean;
+}
+
+/** Heuristic per-question winnability score from ONE done question's engine data. Signals:
+ *  clientNamed (any engine named us), rivalCount (distinct real firms named across engines), and
+ *  aggregatorShare (fraction of cited URLs that are directory/listing pages — high share means
+ *  incumbents lean on directories, so the term is MORE beatable). Deliberately simple + readable —
+ *  it's a read of "what AI shows today", not a guarantee. Own website (if cited) is excluded from
+ *  the aggregator denominator so a firm's own citation doesn't skew the share. */
+function scoreQuestion(result: EngineMap, businessName: string, locationText: string, ownWebsite: string): QuestionScore {
+  const ownDomain = (() => { try { return ownWebsite ? new URL(/^https?:\/\//i.test(ownWebsite) ? ownWebsite : `https://${ownWebsite}`).hostname.replace(/^www\./, '').toLowerCase() : ''; } catch { return ''; } })();
+
+  let clientNamed = false;
+  let scoredNamed = 0;            // named on a SCORED engine (chatgpt/gemini)
+  let bestPosition: number | null = null;
+  const firms = new Map<string, string>();   // key → display name
+  let citTotal = 0;
+  let citAggregator = 0;
+
+  for (const engine of DISPLAY_ENGINES) {
+    const er = result[engine];
+    if (!er) continue;
+    if (er.named) {
+      clientNamed = true;
+      if ((SCORED_ENGINES as readonly string[]).includes(engine)) scoredNamed++;
+      if (er.position != null) bestPosition = bestPosition == null ? er.position : Math.min(bestPosition, er.position);
+    }
+    for (const c of er.competitors) {
+      if (!isRealCompetitor(c, locationText)) continue;
+      const key = c.trim().toLowerCase();
+      if (key && !firms.has(key)) firms.set(key, c.trim());
+    }
+    for (const cit of er.citations) {
+      const url = cit?.url;
+      if (!url) continue;
+      // Skip the business's own site — it's neither a rival's directory listing nor own-site authority.
+      try { if (ownDomain && new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname.replace(/^www\./, '').toLowerCase().endsWith(ownDomain)) continue; } catch { /* keep */ }
+      citTotal++;
+      if (isAggregatorUrl(url)) citAggregator++;
+    }
+  }
+
+  const namedFirms = [...firms.values()];
+  const rivalCount = namedFirms.length;
+  const aggregatorShare = citTotal > 0 ? citAggregator / citTotal : 0;
+
+  // Already named → defend. 8 base, +1 if named on both scored engines, +1 if a strong position.
+  if (clientNamed) {
+    let score = 8;
+    if (scoredNamed >= 2) score += 1;
+    if (bestPosition != null && bestPosition <= 3) score += 1;
+    score = Math.min(10, score);
+    const namedOn = DISPLAY_ENGINES.filter((e) => result[e]?.named).map((e) => ENGINE_LABELS[e] ?? e);
+    return { score, band: 'named', reason: `You're already named on ${namedOn.join(', ')} — defend this.`, namedFirms, clientNamed: true };
+  }
+
+  // No real firms named anywhere → generic advice, not a local race. Unscored.
+  if (rivalCount === 0) {
+    return { score: null, band: 'no-local-race', reason: 'No local firms named — AI gives generic advice, so there is no local race to win here.', namedFirms: [], clientNamed: false };
+  }
+
+  // Rivals exist, we're absent. Blend rivalCount (fewer = easier) with aggregatorShare (higher =
+  // more beatable, incumbents lean on directories not their own sites).
+  const rivalScore = rivalCount <= 2 ? 7 : rivalCount <= 4 ? 5 : 3;            // 1-2 / 3-4 / 5+
+  const aggAdj = aggregatorShare >= 0.6 ? 1.5 : aggregatorShare >= 0.3 ? 0.5 : -1;
+  const score = Math.round(Math.max(2, Math.min(8, rivalScore + aggAdj)));
+  const band: ScoreBand = score >= 6 ? 'winnable' : 'hard';
+
+  const top = namedFirms.slice(0, 3);
+  const extra = rivalCount - top.length;
+  const firmList = top.join(', ') + (extra > 0 ? ` +${extra}` : '');
+  const beatRead = aggregatorShare >= 0.5
+    ? 'Most rank off directory listings, not their own sites — beatable.'
+    : aggregatorShare >= 0.25
+      ? 'A mix of directory listings and own sites — winnable with focus.'
+      : 'They rank off their own site authority — well dug in.';
+  const reason = band === 'winnable'
+    ? `AI names ${rivalCount} firm${rivalCount === 1 ? '' : 's'} (${firmList}); you're absent. ${beatRead} Worth targeting.`
+    : `AI names ${rivalCount} established firm${rivalCount === 1 ? '' : 's'} (${firmList}); you're absent. ${beatRead}`;
+  return { score, band, reason, namedFirms, clientNamed: false };
+}
+
+/** Map a score band → the existing WINNABILITY_BADGE key so styling stays consistent. */
+function bandVerdict(band: ScoreBand, score: number | null): 'open' | 'contested' | 'locked' | 'named' | 'no-local-race' {
+  if (band === 'named') return 'named';
+  if (band === 'hard') return 'locked';
+  if (band === 'no-local-race') return 'no-local-race';
+  return (score ?? 0) >= 7 ? 'open' : 'contested'; // winnable
+}
+
+function QuestionCard({ row, businessName, locationText, ownWebsite }: { row: QueueRow; businessName: string; locationText: string; ownWebsite: string }) {
   const pending = row.status === 'pending' || row.status === 'running';
-  // Failed rows store { error } (not an engine map); surface it instead of engines.
-  const failure = row.status === 'failed' ? (row.result as unknown as { error?: string } | null)?.error ?? null : null;
+  // Failed rows store { error } (not an engine map). They have NO answer data, so no score.
+  const failed = row.status === 'failed';
+  // The plain-English verdict + /10 score, computed from THIS question's real answer data.
+  const s = row.status === 'done' && row.result ? scoreQuestion(row.result, businessName, locationText, ownWebsite) : null;
+  const verdict = s ? bandVerdict(s.band, s.score) : null;
+  // The chip on the right: the score /10, or an honest non-score state.
+  const scoreChip = failed ? 'Couldn’t check' : pending ? null : s ? (s.score != null ? `${s.score}/10` : 'Not scored') : null;
+
   return (
     <Card>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium">{row.question}</span>
-            {verdict && (
-              <Badge className={`shrink-0 ${WINNABILITY_BADGE[verdict].cls}`}>{WINNABILITY_BADGE[verdict].label}</Badge>
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium">{row.question}</span>
+              {verdict && (
+                <Badge className={`shrink-0 ${WINNABILITY_BADGE[verdict].cls}`}>{WINNABILITY_BADGE[verdict].label}</Badge>
+              )}
+            </div>
+            {/* The upgrade: a one-line plain-English read of WHY + who's named + how hard. */}
+            {s && <p className="text-[13px] leading-relaxed text-foreground/90">{s.reason}</p>}
+            {failed && (
+              <p className="text-[13px] leading-relaxed text-amber-500">Couldn’t check — term too broad to complete. Retry or narrow it.</p>
             )}
           </div>
-          {pending ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-            : row.status === 'failed' ? <Badge variant="secondary" className="shrink-0">failed</Badge>
-            : null}
+          <div className="flex items-center gap-2 shrink-0">
+            {scoreChip && (
+              <span className={`text-sm font-bold tabular-nums ${failed ? 'text-muted-foreground' : s?.score != null ? 'text-foreground' : 'text-muted-foreground'}`}>{scoreChip}</span>
+            )}
+            {pending ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              : failed ? <Badge variant="secondary">failed</Badge>
+              : null}
+          </div>
         </div>
-        {row.status === 'failed' && (
-          <p className="text-[11px] text-amber-500">Search failed{failure ? ` — ${failure}` : ''}. It'll retry, or you can re-run the audit.</p>
-        )}
+        {/* Per-engine detail stays below the summary — the breakdown is still useful. */}
         {row.status === 'done' && row.result && (
           <div className="space-y-2.5">
             {DISPLAY_ENGINES.map((e) => {
