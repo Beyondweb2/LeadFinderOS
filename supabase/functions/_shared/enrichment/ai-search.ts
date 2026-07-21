@@ -24,7 +24,7 @@
  * structured brand field): candidate names come from organicResults titles + the
  * engine's answer_text. It's approximate by design — easy to refine below.
  */
-import { runApifyActor } from "./apify.ts";
+import { runApifyActor, startApifyRun, getApifyRun, getApifyRunItems } from "./apify.ts";
 
 /** apify/google-search-scraper — actor id uses `~` in the API path. */
 export const AI_SEARCH_ACTOR = "apify~google-search-scraper";
@@ -106,6 +106,34 @@ export async function runAiSearch(
   opts: { token: string; timeoutMs?: number; retry?: { on429?: boolean; onAbort?: boolean } },
 ): Promise<{ items: unknown[]; ms: number }> {
   return await runApifyActor(AI_SEARCH_ACTOR, buildAiSearchInput(query, countryCode), opts);
+}
+
+/* ── Async AI-search (start / poll / fetch) ───────────────────────────────────
+ * Non-blocking alternative to runAiSearch: START a run per question (~1s), POLL it on later
+ * ticks, FETCH its dataset once SUCCEEDED. Decouples the 2–9min scrape from the edge
+ * wall-clock so slow questions can't abort. Items shape is IDENTICAL to run-sync (Phase-1
+ * validated), so normalizeAiSearch consumes fetchAiSearchItems output unchanged. */
+
+/** START a run for ONE question. Returns the runId to poll on later ticks. */
+export async function startAiSearch(
+  query: string,
+  countryCode: string,
+  token: string,
+): Promise<{ runId: string; datasetId: string | null; status: string }> {
+  return await startApifyRun(AI_SEARCH_ACTOR, buildAiSearchInput(query, countryCode), token);
+}
+
+/** POLL a started run's status (READY/RUNNING/SUCCEEDED/FAILED/ABORTED/TIMED-OUT). */
+export async function pollAiSearchRun(
+  runId: string,
+  token: string,
+): Promise<{ status: string; datasetId: string | null; runTimeSecs: number | null }> {
+  return await getApifyRun(runId, token);
+}
+
+/** FETCH a SUCCEEDED run's dataset items — feed straight to normalizeAiSearch. */
+export async function fetchAiSearchItems(runId: string, token: string): Promise<unknown[]> {
+  return await getApifyRunItems(runId, token);
 }
 
 /* ───────────────────────────── normalisation ────────────────────────────── */

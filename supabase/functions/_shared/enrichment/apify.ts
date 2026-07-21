@@ -124,6 +124,96 @@ export async function runApifyActor(
   }
 }
 
+/* ── Async actor API (start / poll / fetch) ───────────────────────────────────
+ * Alternative to runApifyActor's blocking run-sync: START a run (returns in ~1s), then
+ * POLL its status on later ticks, then FETCH its dataset once SUCCEEDED. This decouples the
+ * actor's multi-minute runtime from the edge function's ~150s wall-clock, so a slow scrape
+ * can't abort mid-run. Every call here is a SHORT control-plane HTTP request — it NEVER
+ * blocks on the scrape. runApifyActor (run-sync, above) is deliberately left untouched so
+ * the SEO / maps / social callers are byte-for-byte unaffected. */
+export type ApifyRunStatus =
+  | "READY" | "RUNNING" | "SUCCEEDED" | "FAILED" | "ABORTED" | "TIMED-OUT" | string;
+
+/** Short-timeout JSON fetch for the async control-plane calls. Aborts after timeoutMs. */
+async function apifyFetch(url: string, init: RequestInit, timeoutMs: number): Promise<{ res: Response; body: unknown }> {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    const body = await res.json().catch(() => null);
+    return { res, body };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/** START an actor run (async). Returns quickly (~1s) with the runId to poll later.
+ *  Throws on non-2xx / missing id so the caller can bump attempts and retry. */
+export async function startApifyRun(
+  actorId: string,
+  input: Record<string, unknown>,
+  token: string,
+  timeoutMs = 20_000,
+): Promise<{ runId: string; datasetId: string | null; status: ApifyRunStatus }> {
+  const { res, body } = await apifyFetch(
+    `https://api.apify.com/v2/acts/${actorId}/runs`,
+    { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(input) },
+    timeoutMs,
+  );
+  if (!res.ok) throw new Error(`Apify start ${actorId} HTTP ${res.status}`);
+  const data = ((body as { data?: Record<string, unknown> } | null)?.data ?? {}) as Record<string, unknown>;
+  const runId = typeof data.id === "string" ? data.id : "";
+  if (!runId) throw new Error(`Apify start ${actorId}: no run id in response`);
+  return {
+    runId,
+    datasetId: typeof data.defaultDatasetId === "string" ? data.defaultDatasetId : null,
+    status: (typeof data.status === "string" ? data.status : "READY") as ApifyRunStatus,
+  };
+}
+
+/** POLL an actor run's status (async). Short call. Throws on non-2xx. */
+export async function getApifyRun(
+  runId: string,
+  token: string,
+  timeoutMs = 15_000,
+): Promise<{ status: ApifyRunStatus; datasetId: string | null; runTimeSecs: number | null }> {
+  const { res, body } = await apifyFetch(
+    `https://api.apify.com/v2/actor-runs/${runId}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+    timeoutMs,
+  );
+  if (!res.ok) throw new Error(`Apify get-run ${runId} HTTP ${res.status}`);
+  const data = ((body as { data?: Record<string, unknown> } | null)?.data ?? {}) as Record<string, unknown>;
+  const stats = (data.stats as Record<string, unknown> | undefined) ?? {};
+  return {
+    status: (typeof data.status === "string" ? data.status : "") as ApifyRunStatus,
+    datasetId: typeof data.defaultDatasetId === "string" ? data.defaultDatasetId : null,
+    runTimeSecs: typeof stats.runTimeSecs === "number" ? stats.runTimeSecs : null,
+  };
+}
+
+/** FETCH a finished run's dataset items (async). SAME array shape run-sync returns today. */
+export async function getApifyRunItems(runId: string, token: string, timeoutMs = 20_000): Promise<unknown[]> {
+  const { res, body } = await apifyFetch(
+    `https://api.apify.com/v2/actor-runs/${runId}/dataset/items`,
+    { headers: { Authorization: `Bearer ${token}` } },
+    timeoutMs,
+  );
+  if (!res.ok) throw new Error(`Apify get-items ${runId} HTTP ${res.status}`);
+  return Array.isArray(body) ? body : [];
+}
+
+/** Best-effort ABORT of a run (stop billing on a stuck run). Never throws. */
+export async function abortApifyRun(runId: string, token: string, timeoutMs = 15_000): Promise<void> {
+  try {
+    await apifyFetch(
+      `https://api.apify.com/v2/actor-runs/${runId}/abort`,
+      { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+      timeoutMs,
+    );
+  } catch { /* best-effort — the poll guard already marked the row failed */ }
+}
+
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() ? v.trim() : undefined;
 }

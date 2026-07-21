@@ -1,14 +1,17 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
-import { runAiSearch, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
+import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
+import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
-// process-whatsapp-queue. Each tick claims a small batch of pending questions, runs
-// the multi-engine SERP actor per question (through the runner cache/usage harness),
-// normalises the result onto the queue row, and — once a run's rows are all settled —
-// folds them into ai_audit_runs.results and computes mention_rate.
+// process-whatsapp-queue. ASYNC start-and-poll: each tick (a) POLLs in-flight Apify runs and
+// folds any that SUCCEEDED, then (b) STARTs pending questions in PARALLEL (fan-out). A question
+// row carries its Apify runId in result._apify while 'running', so the actor's multi-minute
+// scrape is decoupled from the edge function's ~150s wall-clock — slow questions poll across
+// ticks instead of aborting. Once a run's rows are all settled, they fold into
+// ai_audit_runs.results and mention_rate.
 //
 // A PER-AUDIT/RUN cost cap (CAP_USD) stops a run that would exceed the cap: its
 // remaining rows are dropped and the run is marked 'capped'. All writes use the
@@ -19,21 +22,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const BATCH = 1;                 // rows CLAIMED + run per tick (Promise.allSettled over the batch) — tune here.
-                                 // Lowered 4→2→1 to cut per-query Apify timeouts ("signal has been aborted"):
-                                 // at 1 there are no overlapping actor calls, so each question gets the FULL edge
-                                 // wall-clock instead of sharing it — the next abort lever after dropping ai_overview.
-                                 // Tradeoff is more ticks to drain a run (bounded by the cron cadence), which is
-                                 // fine since runs finish in the background.
+// ASYNC model: starts are just ~1s POST /runs calls, so we fan OUT — start many questions per
+// tick and let them scrape concurrently on Apify (Phase-1 confirmed plan concurrency = 32).
+const START_BATCH = 12;          // max pending rows to START (claim) per tick — parallel fan-out,
+                                 // kept well under the 32 concurrency ceiling to leave headroom for
+                                 // other actors (SEO/maps). Total drain time ≈ the SLOWEST question,
+                                 // not the sum — the key to sub-10-min audits.
+const POLL_BATCH = 32;           // max in-flight 'running' rows to POLL per tick (across all runs).
 const CAP_USD = 3.0;             // per-RUN Apify cost ceiling (this audit run)
 const DAILY_CAP_USD = 15.0;      // per-USER rolling-24h ceiling (across audits) via the runner
-const MAX_ATTEMPTS = 3;          // per queue row before it's marked failed
-// Per actor run. The batch runs CONCURRENTLY (Promise.allSettled), so calls OVERLAP: the
-// invocation's wall-clock ≈ the SLOWEST single call, NOT BATCH × timeout. One ~115s call +
-// a few seconds of claim/normalise/DB overhead stays under the ~150s edge wall-clock, so we
-// can afford 115s (up from 85s) for headroom on genuinely slow multi-engine bundles.
-const RUN_TIMEOUT_MS = 115_000;
-const STALE_RUNNING_MS = 3 * 60 * 1000; // reclaim rows stuck 'running' longer than this
+const MAX_ATTEMPTS = 3;          // per queue row (= actor runs STARTED) before it's marked failed
+// Async guards (RUN_TIMEOUT_MS is gone — nothing blocks on the scrape any more):
+const MAX_RUN_AGE_MS = 5 * 60 * 1000;   // a started run must reach terminal within 5 min, else the
+                                        // poll treats it as a failed attempt (and aborts it on Apify).
+const STALE_RUNNING_MS = 3 * 60 * 1000; // reclaim rows stuck 'running' with NO runId (a tick died
+                                        // between claim and start) — rows WITH a runId are governed by
+                                        // MAX_RUN_AGE_MS in the poll path, never by this reclaim.
 const SEO_TIMEOUT_MS = 60_000;   // single-page SEO audit — well under the wall-clock (its own tick)
 // mention_rate is scored over the engines the audit targeted (the queue row's list).
 const DEFAULT_ENGINES = ["chatgpt", "gemini"];
@@ -77,18 +81,19 @@ Deno.serve(async (req) => {
 
     const estCost = SOURCES.ai_search.estCostUsd;
 
-    // 0) Reclaim rows stranded in 'running' by a killed invocation. A row is flipped to
-    //    'running' before its Apify call; if the tick dies mid-run it never settles and the
-    //    pending-only query below never re-selects it, wedging the whole run. Reset any
-    //    'running' row untouched for > STALE_RUNNING_MS back to 'pending' (attempts+1, or
-    //    'failed' once exhausted). Needs ai_audit_queue.updated_at (manual-apply migration);
-    //    best-effort — if the column is missing this logs and the tick continues.
+    // 0) Reclaim rows stranded in 'running' WITHOUT an Apify runId — i.e. a tick died between the
+    //    pending→running claim and the start call, so the row never got a runId and would otherwise
+    //    wedge the run. Reset those back to 'pending' (attempts+1, or 'failed' once exhausted).
+    //    CRITICAL (async): a 'running' row that DOES carry result._apify.runId is legitimately
+    //    long-lived (the actor scrapes for minutes) — it is governed by MAX_RUN_AGE_MS in the poll
+    //    path, NOT here. Reclaiming it would strand a live actor run and start a duplicate, so we
+    //    skip any row with a runId. Needs ai_audit_queue.updated_at; best-effort.
     try {
       const staleBefore = new Date(Date.now() - STALE_RUNNING_MS).toISOString();
       const { data: stale } = await service
-        .from("ai_audit_queue").select("id, attempts, run_id")
+        .from("ai_audit_queue").select("id, attempts, run_id, result")
         .eq("status", "running").lt("updated_at", staleBefore);
-      const staleRows = (stale ?? []) as Row[];
+      const staleRows = ((stale ?? []) as Row[]).filter((r) => !r.result?._apify?.runId); // skip live async runs
       // Don't reclaim rows that belong to a cancelled run — re-queueing them would resurrect a
       // run the user stopped. Leave them; the cancelled path (finalise) cleans them up.
       const cancelledStaleRuns = new Set<string>();
@@ -121,40 +126,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, seo: "ran" });
     }
 
-    // 1) ATOMICALLY claim up to BATCH pending questions. Two steps, race-safe:
-    //    (a) read the oldest pending ids; (b) flip them pending→running in ONE UPDATE
-    //    guarded by `status='pending'`, RETURNING the rows actually updated. Postgres
-    //    row-locks each UPDATE, so if a concurrent invocation already claimed a row the
-    //    guard no longer matches and that row is NOT in our RETURNING set — every returned
-    //    row is owned by EXACTLY ONE invocation. This is the PostgREST-expressible
-    //    equivalent of SELECT … FOR UPDATE SKIP LOCKED (the JS client can't issue that
-    //    directly). `updated_at` is bumped by the BEFORE-UPDATE trigger, so the stale-
-    //    'running' reclaim keeps working.
-    const { data: candidates } = await service
-      .from("ai_audit_queue")
-      .select("id")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(BATCH);
-    const candidateIds = (candidates ?? []).map((r: Row) => r.id);
-    if (candidateIds.length === 0) {
-      // Even with nothing pending, finalise any runs left settled by a prior tick.
-      const finalised = await finaliseSettledRuns(service, [], estCost);
-      return json({ ok: true, processed: 0, finalised });
-    }
-    const { data: claimedRows } = await service
-      .from("ai_audit_queue")
-      .update({ status: "running" })
-      .in("id", candidateIds)
-      .eq("status", "pending") // atomic guard: only rows STILL pending are claimed + returned
-      .select("id, audit_id, run_id, user_id, question, engines, attempts, status");
-    const claimed = (claimedRows ?? []) as Row[];
-    if (claimed.length === 0) {
-      // A concurrent invocation grabbed them first — nothing to process this tick.
-      const finalised = await finaliseSettledRuns(service, [], estCost);
-      return json({ ok: true, processed: 0, finalised });
-    }
-
+    // Shared helpers ────────────────────────────────────────────────────────────
     // Cache audit lookups (country + business name) per audit_id.
     const auditCache = new Map<string, { businessName: string; countryCode: string; userId: string }>();
     async function getAudit(auditId: string) {
@@ -169,8 +141,8 @@ Deno.serve(async (req) => {
       auditCache.set(auditId, v);
       return v;
     }
-
-    // Accumulated per-run Apify cost (baseline = attempts already spent this run).
+    // Accumulated per-run Apify cost. `attempts` = number of actor runs STARTED for a row, so
+    // sum(attempts)*estCost is the run's spend so far (async: cost is incurred at start).
     const runCost = new Map<string, number>();
     async function accumulatedCost(runId: string): Promise<number> {
       if (runCost.has(runId)) return runCost.get(runId)!;
@@ -181,104 +153,159 @@ Deno.serve(async (req) => {
     }
     const cappedRuns = new Set<string>();
     const touchedRuns = new Set<string>();
-    for (const r of claimed) touchedRuns.add(r.run_id);
 
-    // 2) Per-RUN cost gate, decided ONCE — before any concurrent call launches — so the
-    //    batch can never overshoot CAP_USD. For each run: affordable = how many more calls
-    //    the remaining budget covers = floor((CAP_USD − alreadySpent) / estCost). Launch
-    //    only the first `affordable` claimed rows of that run; mark the rest failed 'capped'
-    //    immediately (never launched). Because the launch COUNT is bounded here, ahead of
-    //    Promise.allSettled, concurrency cannot overshoot. Spend is persisted PER-ROW (via
-    //    `attempts`), so there is no shared in-memory counter to lose updates on. Two
-    //    overlapping invocations only ever hold DISJOINT rows (atomic claim above); the sole
-    //    residual is a bounded ≤ BATCH×estCost cross-invocation window — far under CAP_USD,
-    //    and it is acceptable to UNDER-spend (a skipped row is retried next tick).
-    const toLaunch: Row[] = [];
-    const perRunBudget = new Map<string, number>();
-    for (const row of claimed) {
-      let remaining = perRunBudget.get(row.run_id);
-      if (remaining === undefined) {
-        const spent = await accumulatedCost(row.run_id);
-        remaining = Math.max(0, Math.floor((CAP_USD - spent) / estCost + 1e-9));
-        perRunBudget.set(row.run_id, remaining);
-      }
-      if (remaining > 0) {
-        toLaunch.push(row);
-        perRunBudget.set(row.run_id, remaining - 1);
-      } else {
-        cappedRuns.add(row.run_id);
-        await service.from("ai_audit_queue")
-          .update({ status: "failed", result: { error: "capped" } }).eq("id", row.id);
+    // ── PHASE A: POLL in-flight Apify runs ────────────────────────────────────────
+    // Every 'running' row carrying result._apify.runId is a scrape in progress. Poll them ALL
+    // concurrently (across every active audit) so parallel runs advance together. Each poll is a
+    // SHORT HTTP call — it never blocks on the scrape, so many can run inside one tick.
+    const { data: inflight } = await service
+      .from("ai_audit_queue")
+      .select("id, run_id, audit_id, attempts, result")
+      .eq("status", "running")
+      .limit(POLL_BATCH);
+    const waiting = ((inflight ?? []) as Row[]).filter((r) => r.result?._apify?.runId);
+    for (const r of waiting) touchedRuns.add(r.run_id);
+
+    async function pollRow(row: Row): Promise<void> {
+      const runId: string = row.result._apify.runId;
+      const startedAtTick: string | undefined = row.result._apify.startedAtTick;
+      const attempts = Number(row.attempts) || 0;
+      // A failed actor run → retry (back to 'pending', clear _apify so the next tick starts a FRESH
+      // run) or give up ('failed') once we've started MAX_ATTEMPTS runs.
+      const failAttempt = async (reason: string) => {
+        const giveUp = attempts >= MAX_ATTEMPTS;
+        await service.from("ai_audit_queue").update({
+          status: giveUp ? "failed" : "pending",
+          result: giveUp ? { error: reason } : null, // null clears _apify → re-claimable + re-started
+        }).eq("id", row.id);
+      };
+      try {
+        const { status } = await pollAiSearchRun(runId, apifyToken);
+        if (status === "SUCCEEDED") {
+          const items = await fetchAiSearchItems(runId, apifyToken);
+          const audit = await getAudit(row.audit_id);
+          const result = normalizeAiSearch(items, audit.businessName); // items shape identical to run-sync
+          await service.from("ai_audit_queue").update({ status: "done", result }).eq("id", row.id);
+          return;
+        }
+        if (status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT") {
+          await failAttempt(`apify_${status}`);
+          return;
+        }
+        // Still READY/RUNNING. MAX_RUN_AGE guard: a run that won't finish in time is treated as a
+        // failed attempt (and aborted on Apify to stop billing) — this REPLACES the stale-reclaim's
+        // role for async rows. Otherwise leave it to poll again next tick.
+        const ageMs = startedAtTick ? Date.now() - new Date(startedAtTick).getTime() : 0;
+        if (ageMs > MAX_RUN_AGE_MS) {
+          await abortApifyRun(runId, apifyToken); // best-effort — stop billing on the stuck run
+          await failAttempt("run_age_exceeded");
+        }
+      } catch (e) {
+        // A transient poll/fetch HTTP error must NOT fail the row — leave it 'running' and re-poll
+        // next tick. Only a terminal status or the age guard converts a run to a failed attempt.
+        console.error(`[process-ai-audit-queue] poll error run=${runId}:`, e instanceof Error ? e.message : e);
       }
     }
+    await Promise.allSettled(waiting.map(pollRow));
 
-    // 3) Process the affordable batch CONCURRENTLY. Promise.allSettled → one question's
-    //    abort/failure NEVER rejects the batch; each row settles itself (done / daily_cap /
-    //    retry-or-fail with attempts+1), preserving the per-row timeout + 3-attempt retry.
-    //    Concurrent calls OVERLAP, so the invocation's wall-clock ≈ the slowest single call.
-    async function processRow(row: Row): Promise<boolean> {
-      const audit = await getAudit(row.audit_id);
-      try {
-        const outcome = await runEnrichSource({
-          service,
-          userId: audit.userId || row.user_id,
-          type: "ai_search",
-          // Per-QUEUE-ROW cache key: unique per run, so re-runs always fetch fresh data
-          // (never reuse an old run's cached answers) while a reprocessed row is idempotent.
-          cacheKey: `aiaudit:${row.id}`,
-          estCostUsd: estCost,
-          // TWO caps apply: the runner enforces a per-USER rolling-24h ceiling
-          // (DAILY_CAP_USD, so many audits in a day can't run away), and the explicit
-          // per-RUN CAP_USD gate above bounds this single audit run.
-          capUsd: DAILY_CAP_USD,
-          run: async () => {
-            // In-call retry is 429/5xx ONLY — deliberately NOT onAbort, so each row is one
-            // ≤RUN_TIMEOUT_MS attempt. A timeout/abort throws → the catch below bumps attempts
-            // and re-queues it as 'pending', so timeouts DO retry on the NEXT tick, up to
-            // MAX_ATTEMPTS. One question's abort does not affect its concurrent siblings.
-            const { items, ms } = await runAiSearch(String(row.question), audit.countryCode, {
-              token: apifyToken,
-              timeoutMs: RUN_TIMEOUT_MS,
-              retry: { on429: true },
-            });
-            console.log(`[ai-audit] q="${row.question.slice(0, 60)}" took ${ms}ms`);
-            return { result: normalizeAiSearch(items, audit.businessName), costUsd: estCost };
-          },
-        });
+    // ── PHASE B: START pending questions (PARALLEL fan-out) ───────────────────────
+    // Claim up to START_BATCH oldest pending rows (atomic pending→running guard, same race-safety as
+    // before) and START an Apify run for each CONCURRENTLY. Starts are ~1s POST calls, so firing many
+    // at once makes all questions scrape simultaneously on Apify (ceiling 32) → total drain ≈ the
+    // slowest question, not the sum. The per-RUN CAP_USD gate still bounds starts per run.
+    let started = 0;
+    const { data: candidates } = await service
+      .from("ai_audit_queue")
+      .select("id")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(START_BATCH);
+    const candidateIds = (candidates ?? []).map((r: Row) => r.id);
+    if (candidateIds.length > 0) {
+      const { data: claimedRows } = await service
+        .from("ai_audit_queue")
+        .update({ status: "running" })
+        .in("id", candidateIds)
+        .eq("status", "pending") // atomic: only rows STILL pending are claimed + returned
+        .select("id, audit_id, run_id, user_id, question, engines, attempts");
+      const claimed = (claimedRows ?? []) as Row[];
+      for (const r of claimed) touchedRuns.add(r.run_id);
 
-        // Runner hit the per-user rolling-24h ceiling → treat like a cap, not an error:
-        // stop this run, drop its remaining rows on finalisation. No spend happened.
-        if (outcome.capReached) {
+      // Per-RUN cost gate: only start as many rows per run as CAP_USD covers; mark the rest 'capped'.
+      const toStart: Row[] = [];
+      const perRunBudget = new Map<string, number>();
+      for (const row of claimed) {
+        let remaining = perRunBudget.get(row.run_id);
+        if (remaining === undefined) {
+          const spent = await accumulatedCost(row.run_id);
+          remaining = Math.max(0, Math.floor((CAP_USD - spent) / estCost + 1e-9));
+          perRunBudget.set(row.run_id, remaining);
+        }
+        if (remaining > 0) {
+          toStart.push(row);
+          perRunBudget.set(row.run_id, remaining - 1);
+        } else {
           cappedRuns.add(row.run_id);
           await service.from("ai_audit_queue")
-            .update({ status: "failed", result: { error: "daily_cap" } }).eq("id", row.id);
+            .update({ status: "failed", result: { error: "capped" } }).eq("id", row.id);
+        }
+      }
+
+      // START one row: daily-cap check + cost/usage recording via runEnrichSource (the billable event
+      // is the START), then persist the runId so PHASE A polls it on later ticks. attempts+1 = one
+      // actor run started. noCacheWrite: a cached start-marker would replay a dead runId on retry.
+      async function startRow(row: Row): Promise<boolean> {
+        const audit = await getAudit(row.audit_id);
+        try {
+          const outcome = await runEnrichSource<{ runId: string; datasetId: string | null }>({
+            service,
+            userId: audit.userId || row.user_id,
+            type: "ai_search",
+            cacheKey: `aiaudit:${row.id}`,
+            estCostUsd: estCost,
+            capUsd: DAILY_CAP_USD,
+            noCacheWrite: () => true, // never cache the start marker (would poison retries)
+            run: async () => {
+              const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken);
+              return { result: { runId, datasetId }, costUsd: estCost };
+            },
+          });
+          if (outcome.capReached) {
+            cappedRuns.add(row.run_id);
+            await service.from("ai_audit_queue")
+              .update({ status: "failed", result: { error: "daily_cap" } }).eq("id", row.id);
+            return false;
+          }
+          if (!outcome.result?.runId) throw new Error("no_run_id");
+          await service.from("ai_audit_queue").update({
+            status: "running",
+            attempts: (Number(row.attempts) || 0) + 1,
+            result: { _apify: { runId: outcome.result.runId, datasetId: outcome.result.datasetId ?? null, startedAtTick: new Date().toISOString() } },
+          }).eq("id", row.id);
+          console.log(`[ai-audit] started q="${String(row.question).slice(0, 60)}" run=${outcome.result.runId}`);
+          return true;
+        } catch (e) {
+          // Start failed (no runId stored) — bump attempts and re-queue inline (or fail at MAX).
+          const attempts = (Number(row.attempts) || 0) + 1;
+          const failed = attempts >= MAX_ATTEMPTS;
+          await service.from("ai_audit_queue").update({
+            status: failed ? "failed" : "pending",
+            attempts,
+            result: failed ? { error: e instanceof Error ? e.message : String(e) } : null,
+          }).eq("id", row.id);
+          console.error(`[process-ai-audit-queue] start failed (attempt ${attempts}${failed ? ", giving up" : ""}):`, e instanceof Error ? e.message : e);
           return false;
         }
-        if (!outcome.result) throw new Error("empty_actor_result");
-        await service.from("ai_audit_queue").update({ status: "done", result: outcome.result }).eq("id", row.id);
-        return true;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        const attempts = (Number(row.attempts) || 0) + 1;
-        const failed = attempts >= MAX_ATTEMPTS;
-        // Persist the error onto the row so failures are visible in the DB (not just logs).
-        // A non-terminal error goes back to 'pending' and retries next tick; the last error
-        // is overwritten by the real result if a later attempt succeeds.
-        await service.from("ai_audit_queue")
-          .update({ status: failed ? "failed" : "pending", attempts, result: { error: msg } }).eq("id", row.id);
-        console.error(`[process-ai-audit-queue] question failed (attempt ${attempts}${failed ? ", giving up" : ""}):`, msg);
-        return false;
       }
+      const startResults = await Promise.allSettled(toStart.map(startRow));
+      started = startResults.filter((s) => s.status === "fulfilled" && s.value === true).length;
     }
 
-    // allSettled (not all) → a rejected/aborted row can't take the batch down with it.
-    const settled = await Promise.allSettled(toLaunch.map((row) => processRow(row)));
-    const processed = settled.filter((s) => s.status === "fulfilled" && s.value === true).length;
-
-    // 4) Finalise runs that are now fully settled (all rows done/failed) or capped.
+    // Finalise runs whose rows are now ALL settled (done/failed) or capped. A still-'running'
+    // (polling) row keeps its run open — so a run never finalises while a question is in flight.
     const finalised = await finaliseSettledRuns(service, [...touchedRuns], estCost, cappedRuns);
 
-    return json({ ok: true, processed, finalised, capped: [...cappedRuns] });
+    return json({ ok: true, started, polled: waiting.length, finalised, capped: [...cappedRuns] });
   } catch (e) {
     console.error("[process-ai-audit-queue] error:", e);
     return json({ ok: false, error: e instanceof Error ? e.message : "unknown_error" }, 500);
