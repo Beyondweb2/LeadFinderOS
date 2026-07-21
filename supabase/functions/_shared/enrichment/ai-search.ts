@@ -84,11 +84,13 @@ export function buildAiSearchInput(query: string, countryCode: string): Record<s
     countryCode: (countryCode || "gb").toLowerCase(),
     maxPagesPerQuery: 1,
     languageCode: "en",
-    // AI-engine add-ons (nested-object form the actor expects) + Google organic (always on).
-    // Engine set = ChatGPT + Gemini + Google organic.
+    // AI-engine add-ons (nested-object form the actor expects). Scored engine set = ChatGPT + Gemini.
+    // NOTE: google-search-scraper ALWAYS returns Google organic as its BASE output — there is no
+    // input toggle to disable it (organic IS the search; the AI engines ride on top). So
+    // google_organic is DROPPED at the normalization layer (see normalizeAiSearch), not here: it's
+    // not in SCORED_ENGINES and is no longer emitted, so it's ABSENT downstream (not zero-scored).
     // AI Overview DROPPED to cut per-call latency and 115s aborts — it's DISPLAY-ONLY (not in
-    // SCORED_ENGINES, doesn't affect score/mention_rate). Re-enable if needed by restoring:
-    //   aiOverview: { scrapeFullAiOverview: false },
+    // SCORED_ENGINES). Re-enable if needed by restoring:  aiOverview: { scrapeFullAiOverview: false },
     chatGptSearch: { enableChatGpt: true },
     geminiSearch: { enableGemini: true },
     // Perplexity dropped (kept dormant — flip enablePerplexity:true to re-add):
@@ -397,30 +399,6 @@ function normalizeEngineBlock(
   return { named, position, competitors, citations, answer_text };
 }
 
-/** Google organic: an array of {title,url,position}. No answer, so competitors are the
- *  other organic-title names; named = the business appears in a result; position = rank. */
-function normalizeOrganic(
-  item: Record<string, unknown>,
-  organicNames: string[],
-  businessName: string,
-): AiEngineResult {
-  const raw = item["organicResults"] ?? item["results"];
-  const results = Array.isArray(raw) ? raw : [];
-  const citations: AiCitation[] = results.map(citationOf).filter((c) => c.title || c.url).slice(0, MAX_CITATIONS);
-  let position: number | null = null;
-  let named = false;
-  for (let i = 0; i < results.length; i++) {
-    const r = asRecord(results[i]) ?? {};
-    if (contains(asStr(r.title), businessName) || contains(asStr(firstKey(r, ["url", "link", "displayedUrl"])), businessName)) {
-      named = true;
-      const p = r["position"];
-      position = typeof p === "number" ? p : i + 1;
-      break;
-    }
-  }
-  return { named, position, competitors: dedupExcludingSelf(organicNames, businessName), citations, answer_text: "" };
-}
-
 /**
  * Normalise the actor's dataset (items[0] for a single-query run) into the per-engine
  * shape. Only engines the actor actually scraped are emitted — an engine that returned no
@@ -434,11 +412,11 @@ export function normalizeAiSearch(items: unknown[], businessName: string): AiSea
   const organicNames = extractOrganicNames(item);
   const out: AiSearchResult = {};
   for (const engine of AI_ENGINES) {
-    if (engine === "google_organic") {
-      // Google organic is always part of the run.
-      out.google_organic = normalizeOrganic(item, organicNames, businessName);
-      continue;
-    }
+    // google_organic DROPPED: raw SERP titles aren't a scored engine and aren't AI naming firms, so
+    // it's no longer emitted → ABSENT downstream (not zero-scored). organicNames is still extracted
+    // above and feeds competitor detection for chatgpt/gemini. Re-enable by restoring normalizeOrganic
+    // and: out.google_organic = normalizeOrganic(item, organicNames, businessName).
+    if (engine === "google_organic") continue;
     const block = asRecord(firstKey(item, ENGINE_BLOCK_KEYS[engine]));
     if (block) out[engine] = normalizeEngineBlock(block, organicNames, businessName);
   }
