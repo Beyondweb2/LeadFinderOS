@@ -2512,6 +2512,7 @@ const AiAudit = () => {
                   key={row.id}
                   row={row}
                   businessName={resultsBusinessName}
+                  locationText={locationText}
                   verdict={liveReportData?.winnability?.find((w) => w.question === row.question)?.verdict}
                 />
               ))}
@@ -2761,7 +2762,7 @@ const WINNABILITY_BADGE: Record<'open' | 'contested' | 'locked' | 'named', { lab
   named:     { label: 'Named',     cls: 'bg-blue-500/20 text-blue-400 border-transparent' },
 };
 
-function QuestionCard({ row, businessName, verdict }: { row: QueueRow; businessName: string; verdict?: 'open' | 'contested' | 'locked' | 'named' }) {
+function QuestionCard({ row, businessName, locationText, verdict }: { row: QueueRow; businessName: string; locationText: string; verdict?: 'open' | 'contested' | 'locked' | 'named' }) {
   const pending = row.status === 'pending' || row.status === 'running';
   // Failed rows store { error } (not an engine map); surface it instead of engines.
   const failure = row.status === 'failed' ? (row.result as unknown as { error?: string } | null)?.error ?? null : null;
@@ -2787,7 +2788,7 @@ function QuestionCard({ row, businessName, verdict }: { row: QueueRow; businessN
             {DISPLAY_ENGINES.map((e) => {
               const er = row.result?.[e];
               if (!er) return null;
-              return <EngineRow key={e} engine={e} er={er} businessName={businessName} />;
+              return <EngineRow key={e} engine={e} er={er} businessName={businessName} locationText={locationText} />;
             })}
           </div>
         )}
@@ -2796,7 +2797,10 @@ function QuestionCard({ row, businessName, verdict }: { row: QueueRow; businessN
   );
 }
 
-function EngineRow({ engine, er, businessName }: { engine: string; er: EngineResult; businessName: string }) {
+function EngineRow({ engine, er, businessName, locationText }: { engine: string; er: EngineResult; businessName: string; locationText: string }) {
+  // Belt-and-braces: filter raw stored competitors through isRealCompetitor before display, matching
+  // the scorecard + buildReportData, so regex-scraped junk can't show even pre re-extraction.
+  const shownCompetitors = er.competitors.filter((c) => isRealCompetitor(c, locationText));
   return (
     <div className="rounded-lg border border-border/50 p-2.5">
       <div className="flex items-center gap-2 flex-wrap">
@@ -2804,9 +2808,9 @@ function EngineRow({ engine, er, businessName }: { engine: string; er: EngineRes
         {er.named
           ? <Badge className="border-transparent bg-[hsl(var(--badge-interested))] text-[hsl(var(--badge-interested-fg))]">Named{er.position ? ` · #${er.position}` : ''}</Badge>
           : <Badge className="border-transparent bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))]">Not named</Badge>}
-        {er.competitors.length > 0 && (
+        {shownCompetitors.length > 0 && (
           <span className="text-[11px] text-muted-foreground">
-            instead: {er.competitors.slice(0, 5).join(', ')}
+            instead: {shownCompetitors.slice(0, 5).join(', ')}
           </span>
         )}
       </div>

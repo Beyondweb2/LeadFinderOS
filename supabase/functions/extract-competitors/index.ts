@@ -124,14 +124,27 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
-    // --- Auth: any authenticated user (the run must belong to them). ---
+    // --- Auth: a trusted INTERNAL call (process-ai-audit-queue at run finalisation) OR an
+    //     authenticated user who owns the run. ---
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    if (!token) return json({ ok: false, error: "unauthorized" }, 401);
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-    const { data: u } = await userClient.auth.getUser();
-    if (!u?.user) return json({ ok: false, error: "unauthorized" }, 401);
-    const userId = u.user.id;
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+    // Internal-call branch (mirrors enrich-business / generate-barber-site): a matching CRON_SECRET
+    // header + x-internal-job, OR the service-role key + x-internal-job. Purely ADDITIVE — external
+    // callers can hold neither, so the user path below is unchanged. Trusted internal calls skip the
+    // per-user ownership check (the caller already owns the run's lifecycle).
+    const isInternal =
+      (!!cronSecret && req.headers.get("x-cron-secret") === cronSecret && !!req.headers.get("x-internal-job")) ||
+      (!!serviceKey && token === serviceKey && !!req.headers.get("x-internal-job"));
+
+    let userId: string | null = null;
+    if (!isInternal) {
+      if (!token) return json({ ok: false, error: "unauthorized" }, 401);
+      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+      const { data: u } = await userClient.auth.getUser();
+      if (!u?.user) return json({ ok: false, error: "unauthorized" }, 401);
+      userId = u.user.id;
+    }
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
@@ -139,11 +152,11 @@ Deno.serve(async (req) => {
     const runId: string = typeof body.runId === "string" ? body.runId.trim() : "";
     if (!runId) return json({ ok: false, error: "runId required" }, 400);
 
-    // Load the run + ownership-check.
+    // Load the run + ownership-check (the ownership check is skipped for trusted internal calls).
     const { data: run } = await service
       .from("ai_audit_runs").select("id, audit_id, user_id, results").eq("id", runId).maybeSingle();
     if (!run) return json({ ok: false, error: "run_not_found" }, 404);
-    if (run.user_id !== userId) return json({ ok: false, error: "forbidden" }, 403);
+    if (!isInternal && run.user_id !== userId) return json({ ok: false, error: "forbidden" }, 403);
 
     // Business context (for self-exclusion + prompt grounding).
     const { data: audit } = await service
