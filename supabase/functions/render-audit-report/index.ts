@@ -19,7 +19,9 @@ import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 const SITE_ORIGIN = "https://yoursites.uk";
 
 function htmlResponse(html: string, status = 200): Response {
-  return new Response(html, {
+  // Encode to UTF-8 bytes explicitly so the body is unambiguously UTF-8 regardless of any runtime
+  // string handling — belt-and-braces alongside the ASCII-entity source in renderReportHtml.
+  return new Response(new TextEncoder().encode(html), {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
