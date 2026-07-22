@@ -19,9 +19,12 @@ import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 const SITE_ORIGIN = "https://yoursites.uk";
 
 function htmlResponse(html: string, status = 200): Response {
-  // Encode to UTF-8 bytes explicitly so the body is unambiguously UTF-8 regardless of any runtime
-  // string handling — belt-and-braces alongside the ASCII-entity source in renderReportHtml.
-  return new Response(new TextEncoder().encode(html), {
+  // Return the HTML as a STRING body (Deno encodes string bodies as UTF-8) with an explicit
+  // text/html; charset=utf-8 header. IMPORTANT: a Uint8Array / TextEncoder().encode() body made the
+  // Supabase edge runtime serve the response as `text/plain` (dropping our content-type), so the
+  // browser Latin-1-decoded the correct UTF-8 bytes -> mojibake on every non-ASCII char (accents,
+  // em/en-dashes) in the DYNAMIC data. A string body lets the content-type stick; bytes stay UTF-8.
+  return new Response(html, {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",

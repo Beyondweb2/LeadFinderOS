@@ -39,14 +39,19 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
     const res = await fetch(upstream, {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
     });
-    // Read the rendered HTML and pass it through verbatim (same bytes → same page as hitting the
-    // edge fn directly). Preserve the upstream status (200 report / 404 unavailable) + content-type.
+    // res.text() UTF-8-decodes the upstream body (correct UTF-8 bytes) into a proper string.
     const body = await res.text();
     if (!body) return notFound();
+    // FORCE text/html; charset=utf-8 — do NOT forward the upstream content-type. The Supabase edge
+    // runtime serves render-audit-report as `text/plain` (a serving-layer override, confirmed via
+    // curl), which makes the browser Latin-1-decode the correct UTF-8 bytes -> mojibake on accents /
+    // dashes. render-audit-report only ever returns HTML, so we authoritatively set the type here
+    // (Cloudflare honours it — same pattern as functions/r/[slug].ts). Guarantees the user-facing
+    // yoursites.uk/a/<slug> is correct regardless of the upstream quirk.
     return new Response(body, {
       status: res.status,
       headers: {
-        "content-type": res.headers.get("content-type") ?? "text/html; charset=utf-8",
+        "content-type": "text/html; charset=utf-8",
         "cache-control": res.headers.get("cache-control") ?? "public, max-age=120",
       },
     });
