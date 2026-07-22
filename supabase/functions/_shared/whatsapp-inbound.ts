@@ -162,6 +162,53 @@ export async function handleInboundMessages(
         } catch (e) {
           console.error(`[whatsapp-inbound] lead status→replied failed (${leadId}):`, (e as Error).message);
         }
+
+        // Automation A: a reply auto-triggers an AI-visibility audit for this lead. Fired at most
+        // ONCE per lead — idempotency guard: skip if an ai_audits row already exists for the lead,
+        // so repeat replies never spawn duplicate audits. Own try/catch: a failure to start the
+        // audit must NEVER break the inbound webhook (the reply is already stored + status set).
+        // Runs through the existing async queue; no follow-up message here (that's automation B).
+        try {
+          const { data: existingAudit } = await service
+            .from("ai_audits").select("id").eq("lead_id", leadId).limit(1).maybeSingle();
+          if (!existingAudit) {
+            const { data: lead } = await service
+              .from("outreach_leads")
+              .select("business_name, category, search_keyword, search_location, address, country, website, user_id")
+              .eq("id", leadId).maybeSingle();
+            if (lead?.business_name && lead?.user_id) {
+              const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+              const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+                  "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+                  "x-internal-job": "1",
+                },
+                // No questions[] → create-ai-audit auto-generates them from the lead's details.
+                body: JSON.stringify({
+                  user_id: lead.user_id,
+                  lead_id: leadId,
+                  business_name: lead.business_name,
+                  business_type: lead.category ?? lead.search_keyword ?? "",
+                  location_text: lead.search_location ?? lead.address ?? "",
+                  country: lead.country ?? null,
+                  website: lead.website ?? null,
+                  has_website: !!lead.website,
+                }),
+              });
+              if (!res.ok) {
+                const txt = await res.text().catch(() => "");
+                console.error(`[whatsapp-inbound] reply→audit failed for lead ${leadId}: HTTP ${res.status} ${txt.slice(0, 300)}`);
+              } else {
+                console.log(`[whatsapp-inbound] reply→audit started for lead ${leadId}`);
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`[whatsapp-inbound] reply→audit error for lead ${leadId}:`, (e as Error).message);
+        }
       }
     } catch (e) {
       console.error("[whatsapp-inbound] message handling error:", (e as Error).message);

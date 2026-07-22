@@ -124,18 +124,36 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
-    // --- Auth: identify the caller from their JWT (any authenticated user). ---
+    // --- Auth: a trusted INTERNAL call (whatsapp-inbound's reply→audit automation) OR an
+    //     authenticated user. Internal branch mirrors extract-competitors: a matching CRON_SECRET
+    //     header + x-internal-job, OR the service-role key + x-internal-job. Purely ADDITIVE — an
+    //     external caller can hold neither, so the user-JWT path below is byte-for-byte unchanged.
+    //     An internal call carries no user session, so userId comes from body.user_id (the lead's
+    //     owner, passed by the caller) — set after the body is parsed. ---
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    if (!token) return json({ ok: false, error: "unauthorized" }, 401);
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-    const { data: u } = await userClient.auth.getUser();
-    if (!u?.user) return json({ ok: false, error: "unauthorized" }, 401);
-    const userId = u.user.id;
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+    const isInternal =
+      (!!cronSecret && req.headers.get("x-cron-secret") === cronSecret && !!req.headers.get("x-internal-job")) ||
+      (!!serviceKey && token === serviceKey && !!req.headers.get("x-internal-job"));
+
+    let userId = "";
+    if (!isInternal) {
+      if (!token) return json({ ok: false, error: "unauthorized" }, 401);
+      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+      const { data: u } = await userClient.auth.getUser();
+      if (!u?.user) return json({ ok: false, error: "unauthorized" }, 401);
+      userId = u.user.id;
+    }
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
     const body = await req.json().catch(() => ({}));
+    // Internal call: no session — the owner is supplied explicitly (the lead's user_id).
+    if (isInternal) {
+      userId = typeof body.user_id === "string" ? body.user_id.trim() : "";
+      if (!userId) return json({ ok: false, error: "user_id required for internal call" }, 400);
+    }
     const businessName: string = typeof body.business_name === "string" ? body.business_name.trim() : "";
     const businessType: string = typeof body.business_type === "string" ? body.business_type.trim() : "";
     const locationText: string = typeof body.location_text === "string" ? body.location_text.trim() : "";
@@ -187,8 +205,9 @@ Deno.serve(async (req) => {
     }
 
     // If a lead_id is provided, it MUST belong to the caller (don't let an audit attach
-    // to someone else's lead).
-    if (leadId) {
+    // to someone else's lead). Skipped for trusted internal calls — the automation already acts
+    // as the lead's owner via the passed user_id (mirrors extract-competitors's isInternal skip).
+    if (leadId && !isInternal) {
       const { data: lead } = await service.from("outreach_leads").select("user_id").eq("id", leadId).maybeSingle();
       if (!lead || lead.user_id !== userId) return json({ ok: false, error: "lead_not_found" }, 403);
     }
