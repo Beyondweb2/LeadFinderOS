@@ -136,11 +136,11 @@ function seoSection(seo: AiAuditSeo | undefined): string {
             <span class="find-body"><b class="find-title">${esc(f.title)}</b> <span class="find-detail">${esc(f.detail)}</span></span>
           </li>`).join("");
   return `
-    <!-- WEBSITE SEO — grade circles + tight findings (radar dropped); renders only when seo present -->
+    <!-- WEBSITE SEO &mdash; grade circles + tight findings (radar dropped); renders only when seo present -->
     <section class="seo">
       <div class="sec-eyebrow">Your website</div>
       <div class="sec-title">How findable is your website?</div>
-      <p class="seo-intro">Your site’s overall SEO grade is <b style="color:${overallColour}">${esc(overallGrade)}</b>. This scores how well your pages are built for search engines and AI to read - the on-page and technical foundations. Here’s what’s holding it back.</p>
+      <p class="seo-intro">Your site&rsquo;s overall SEO grade is <b style="color:${overallColour}">${esc(overallGrade)}</b>. This scores how well your pages are built for search engines and AI to read - the on-page and technical foundations. Here&rsquo;s what&rsquo;s holding it back.</p>
 
       <div class="seo-body">
         <div class="seo-grades">
@@ -178,23 +178,23 @@ export function renderReportHtml(d: AiAuditReportData): string {
     const chips = shown.map((c) => `<span class="rv">${esc(c)}</span>`);
     let summary: string;
     if (chips.length === 0) {
-      summary = `When someone searched “<span class="gb-q">${esc(g.question)}</span>”, AI didn’t mention <b>${esc(d.businessName)}</b> at all.`;
+      summary = `When someone searched &ldquo;<span class="gb-q">${esc(g.question)}</span>&rdquo;, AI didn&rsquo;t mention <b>${esc(d.businessName)}</b> at all.`;
     } else {
       let list: string;
       if (chips.length === 1) list = more > 0 ? `${chips[0]} and others` : chips[0];
       else if (more > 0) list = `${chips.join(", ")} and others`;
       else list = `${chips.slice(0, -1).join(", ")} and ${chips[chips.length - 1]}`;
-      summary = `When someone searched “<span class="gb-q">${esc(g.question)}</span>”, AI recommended ${list} — <b>${esc(d.businessName)}</b> wasn’t mentioned at all.`;
+      summary = `When someone searched &ldquo;<span class="gb-q">${esc(g.question)}</span>&rdquo;, AI recommended ${list} &mdash; <b>${esc(d.businessName)}</b> wasn&rsquo;t mentioned at all.`;
     }
     gutbox = `
     <section class="gutbox">
       <div class="gb-eyebrow">What AI actually said</div>
       <p class="gb-sum">${summary}</p>
-      <div class="gb-attr">— ${esc(g.engineLabel)}. ${esc(d.businessName)} was never named.</div>
+      <div class="gb-attr">&mdash; ${esc(g.engineLabel)}. ${esc(d.businessName)} was never named.</div>
     </section>`;
   }
 
-  const shareFoot = d.shareUrl ? ` · <a href="${esc(d.shareUrl)}">View online</a>` : "";
+  const shareFoot = d.shareUrl ? ` &middot; <a href="${esc(d.shareUrl)}">View online</a>` : "";
 
   // Purpose-drawn inline icons for the "What we do" steps — one per step, 2px stroke,
   // consistent weight, brand blue (currentColor inherits var(--blue) from the tile).
@@ -205,17 +205,26 @@ export function renderReportHtml(d: AiAuditReportData): string {
   // 3 · Get you named → an answer bubble with a star (AI naming you in its reply).
   const icNamed = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H9l-4 4V5.5Z"/><path d="M12 7.3l1.15 2.33 2.57.37-1.86 1.81.44 2.56L12 13.17l-2.3 1.2.44-2.56-1.86-1.81 2.57-.37Z"/></svg>`;
 
+  // Findable f-mark favicon: blue bg, yellow PATH-DRAWN lowercase "f" (hooked top + crossbar),
+  // white dot lower-right. Path-based (NOT SVG <text>) so it renders everywhere - some crawlers
+  // don't render <text> in favicons. Carries its own brand mark so the report never falls back to
+  // the site-root /favicon.ico (a stale Lovable asset).
+  const favicon = "data:image/svg+xml," + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#1a3d7c"/><path d="M20 8.5 Q14 8.5 14 13.5 L14 24.5 M9.5 14.8 H18.5" fill="none" stroke="#ffd23f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23" cy="22.5" r="2.4" fill="#fff"/></svg>',
+  );
+
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AI Visibility Report — ${esc(d.businessName)}</title>
+<link rel="icon" type="image/svg+xml" href="${favicon}" />
+<title>AI Visibility Report &mdash; ${esc(d.businessName)}</title>
 <style>
   :root{
     --blue:#1a3d7c; --blue-2:#2a5aa8; --yellow:#ffd23f;
     --ink:#0f172a; --muted:#5b6472; --faint:#9aa3b2; --line:#e9edf3;
-    --line-strong:#94a3b8; /* darker grey — for SEO graphics that must stay visible on the --page tint */
+    --line-strong:#94a3b8; /* darker grey &mdash; for SEO graphics that must stay visible on the --page tint */
     --red:#e11d2a; --amber:#c2820b; --green:#15a34a; --paper:#ffffff; --page:#eef1f6;
     --foot:#102a58;
   }
@@ -227,7 +236,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .sheet{ max-width:760px; margin:24px auto; background:var(--paper); border-radius:14px; overflow:hidden;
     box-shadow:0 8px 40px rgba(15,23,42,.12); }
 
-  /* Header band — Findable blue with a yellow wordmark and a wave bottom edge */
+  /* Header band &mdash; Findable blue with a yellow wordmark and a wave bottom edge */
   .band{ position:relative; background:var(--blue); color:#fff; padding:22px 28px 34px; }
   .band-row{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
   .wordmark{ font-size:22px; font-weight:900; letter-spacing:-.02em; color:var(--yellow); }
@@ -241,13 +250,13 @@ export function renderReportHtml(d: AiAuditReportData): string {
 
   /* ── EMPHASIS SYSTEM (one rule, whole document) ───────────────────────────────
      Key WORDS get a consistent accent at weight 850: brand --blue for neutral/positive
-     terms (.hl, .explainer b) and --red for loss/negative terms (.rv, .was) — same
+     terms (.hl, .explainer b) and --red for loss/negative terms (.rv, .was) &mdash; same
      strength, colour carries the meaning. Key NUMBERS/verdicts stay at 900 in their
      severity/brand colour (hero .num, why .big/.was, SEO grade). --blue holds strong on
      BOTH --paper and the --page tint, so the accent never reads weak in any section. */
   .hl{ color:var(--blue); font-weight:700; }
 
-  /* HERO — balanced two-part: big number/label on the left, the verdict on the right */
+  /* HERO &mdash; balanced two-part: big number/label on the left, the verdict on the right */
   .hero{ display:flex; align-items:stretch; gap:26px; padding:14px 28px 20px; }
   .hero-num{ display:flex; align-items:center; gap:18px; flex:0 0 auto; }
   .num{ font-size:104px; line-height:.82; font-weight:900; letter-spacing:-.04em; }
@@ -260,7 +269,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .hero-verdict .vk{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:700; margin-bottom:8px; }
   .punch{ font-size:22px; line-height:1.2; font-weight:900; letter-spacing:-.01em; color:var(--ink); }
 
-  /* GUT-PUNCH — a written summary of the worst answer (never the raw AI text) */
+  /* GUT-PUNCH &mdash; a written summary of the worst answer (never the raw AI text) */
   .gutbox{ margin:0 28px 16px; padding:14px 18px; background:#fff5f5; border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
   .gb-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--red); font-weight:700; margin-bottom:7px; }
   .gb-sum{ margin:0 0 7px; font-size:14px; line-height:1.4; font-weight:400; color:#3d0f12; }
@@ -269,14 +278,14 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .gb-sum b{ color:var(--ink); font-weight:700; }
   .gb-attr{ font-size:11px; color:var(--muted); font-weight:400; }
 
-  /* WHY THIS MATTERS — stakes stats, big coloured numbers, muted supporting text */
+  /* WHY THIS MATTERS &mdash; stakes stats, big coloured numbers, muted supporting text */
   .why{ padding:18px 28px 18px; border-top:1px solid var(--line); }
   h2{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:700; margin:0 0 16px; }
-  /* Consistent phase header: tiny eyebrow + human-readable title (pain → stakes → solution) */
+  /* Consistent phase header: tiny eyebrow + human-readable title (pain &rarr; stakes &rarr; solution) */
   .sec-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:700; margin:0 0 4px; }
   .sec-title{ font-size:22px; line-height:1.15; letter-spacing:-.01em; font-weight:700; color:var(--ink); margin:0 0 16px; }
   /* Solution = THE standout moment: still the biggest/heaviest title, but standard ink/black
-     colour (like every other .sec-title) — it stands out via its band + size, not colour. */
+     colour (like every other .sec-title) &mdash; it stands out via its band + size, not colour. */
   .dowe .sec-eyebrow{ color:var(--blue); }
   .dowe .sec-title{ font-size:32px; font-weight:700; color:var(--ink); margin:0 0 18px; }
   .stats{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
@@ -287,14 +296,14 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .why-frame{ margin:12px 0 0; font-size:17px; font-weight:700; color:var(--ink); max-width:64ch; }
   .src{ margin-top:6px; font-size:11px; font-weight:400; color:var(--faint); }
 
-  /* WHAT WE DO — the solution reveal (the money section): a tinted full-width band with a
+  /* WHAT WE DO &mdash; the solution reveal (the money section): a tinted full-width band with a
      heavy brand-blue top rule so it visibly BREAKS from the section above; white card inside. */
   .dowe{ padding:22px 28px 24px; border-top:3px solid var(--blue); background:var(--page); }
   .dowe h2{ margin-bottom:14px; }
   .dowe-panel{ background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:18px 22px 20px; box-shadow:0 4px 24px rgba(15,23,42,.06); }
   .dowe-lead{ font-size:17px; font-weight:700; color:var(--ink); margin:0 0 16px; max-width:64ch; }
   .steps{ position:relative; display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
-  /* connecting flow line behind the three icon tiles → reads as a process */
+  /* connecting flow line behind the three icon tiles &rarr; reads as a process */
   .steps::before{ content:""; position:absolute; top:23px; left:16.67%; right:16.67%; height:2px; background:var(--line); z-index:0; }
   .step{ position:relative; text-align:center; }
   .step-ic{ position:relative; width:46px; height:46px; margin:0 auto 13px; z-index:1; }
@@ -309,18 +318,18 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .step p{ margin:0; font-size:14px; line-height:1.45; font-weight:400; color:var(--muted); }
 
 
-  /* WEBSITE SEO — grade circles + radar + findings (all inline SVG, no chart lib).
+  /* WEBSITE SEO &mdash; grade circles + radar + findings (all inline SVG, no chart lib).
      Its own QUIET "chapter": a subtle --page tint for depth in the alternating rhythm
-     (white hero/gutbox → tinted SEO → white 'why' → the stronger solution band). Kept
-     lighter than .dowe — no blue rule, no white inner card — so it never competes with
-     the solution peak. The white→tint bg change is the section separator (with the crisp
+     (white hero/gutbox &rarr; tinted SEO &rarr; white 'why' &rarr; the stronger solution band). Kept
+     lighter than .dowe &mdash; no blue rule, no white inner card &mdash; so it never competes with
+     the solution peak. The white&rarr;tint bg change is the section separator (with the crisp
      --line top edge); the following white 'why' reopens the rhythm. */
   .seo{ padding:18px 28px 18px; border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); background:var(--page); }
   .seo-intro{ margin:-2px 0 12px; font-size:14px; line-height:1.45; color:var(--muted); font-weight:400; max-width:74ch; }
-  .seo-intro b{ font-weight:700; } /* the SEO verdict — bold accent, same as other numbers/verdicts */
+  .seo-intro b{ font-weight:700; } /* the SEO verdict &mdash; bold accent, same as other numbers/verdicts */
   /* Grades ROW (radar dropped to reclaim height): Overall dominant, then the three
      sub-grades as a tidy secondary row past a hairline divider. Findings sit BELOW, full
-     width, so they stay tight (1–2 lines) instead of wrapping in a narrow column. */
+     width, so they stay tight (1&ndash;2 lines) instead of wrapping in a narrow column. */
   .seo-body{ /* block wrapper: grades row, then full-width findings */ }
   .seo-grades{ display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
   .seo-grade-split{ flex:0 0 auto; width:1px; height:80px; background:var(--line-strong); opacity:.55; }
@@ -331,7 +340,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .gc-score{ margin-top:2px; font-size:11px; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums; }
   .seo-overall{ text-align:center; }
   .seo-overall .gc-lbl{ margin-top:8px; font-size:11px; color:var(--ink); font-weight:700; letter-spacing:.02em; }
-  /* FINDINGS — tight full-width rows: a severity dot + bold title + short detail on the same
+  /* FINDINGS &mdash; tight full-width rows: a severity dot + bold title + short detail on the same
      flow. No big padded cards; far less vertical space, still reads as the key takeaways. */
   .seo-findings{ list-style:none; margin:12px 0 0; padding:0; }
   .find{ display:flex; gap:9px; padding:7px 0; border-bottom:1px solid var(--line); }
@@ -342,7 +351,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .find-title{ font-weight:700; font-size:14px; color:var(--ink); }
   .find-detail{ font-size:14px; font-weight:400; line-height:1.45; color:var(--muted); }
 
-  /* CLOSING CTA — Findable blue band with a yellow highlight */
+  /* CLOSING CTA &mdash; Findable blue band with a yellow highlight */
   .cta{ background:var(--blue); color:#fff; padding:20px 28px 20px; }
   .cta h3{ margin:0 0 7px; font-size:22px; font-weight:700; color:#fff; letter-spacing:-.01em; }
   .cta h3 .y{ color:var(--yellow); }
@@ -350,7 +359,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .cta p b{ color:#fff; font-weight:700; }
   .cta .close{ margin-top:10px; font-size:14px; font-weight:700; color:#fff; }
 
-  /* FOOTER — a distinct darker navy bar so the text is clearly readable (no blue-on-blue) */
+  /* FOOTER &mdash; a distinct darker navy bar so the text is clearly readable (no blue-on-blue) */
   .site-foot{ background:var(--foot); padding:12px 28px 14px; }
   .site-foot .row{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
     font-size:11px; color:#c7d5ee; font-weight:400; }
@@ -361,7 +370,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   @page{ size:A4; margin:10mm; }
   @media print{
     /* Force backgrounds (blue header band, section tints, CTA, footer, dots, icon tiles) to
-       print WITHOUT the user ticking Chrome's "Background graphics" — exact colour adjust. */
+       print WITHOUT the user ticking Chrome's "Background graphics" &mdash; exact colour adjust. */
     html,body,.sheet,.band,.hero,.gutbox,.why,.dowe,.cta,.site-foot,.seo,.find-dot,.step .ic{
       -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     body{ background:#fff; }
@@ -376,14 +385,14 @@ export function renderReportHtml(d: AiAuditReportData): string {
     <header class="band">
       <div class="band-row">
         <div class="wordmark">Findable<span class="dot">.</span></div>
-        <div class="band-meta">AI Visibility Report · ${esc(d.generatedAtLabel)}</div>
+        <div class="band-meta">AI Visibility Report &middot; ${esc(d.generatedAtLabel)}</div>
       </div>
       <svg class="wave" viewBox="0 0 1200 38" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" fill="#ffffff"/>
       </svg>
     </header>
 
-    <div class="explainer">We asked AI the questions real customers ask when they’re looking for a <b>${esc(type)}</b>, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
+    <div class="explainer">We asked AI the questions real customers ask when they&rsquo;re looking for a <b>${esc(type)}</b>, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
 
     <!-- HERO -->
     <div class="hero">
@@ -402,7 +411,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     </div>
 ${gutbox}
     <!-- ============================================================================
-         SEO SECTION SLOT — renders results.seo when present (overall grade + three
+         SEO SECTION SLOT &mdash; renders results.seo when present (overall grade + three
          category grades + a radar of the three scores + the lead findings). Renders
          nothing when d.seo is absent, so AI-only audits (e.g. the bar) don't break.
          ============================================================================ -->
@@ -415,23 +424,23 @@ ${seoSection(d.seo)}
       <div class="stats">
         <div class="stat">
           <span class="big">45%</span>
-          <p>of people used AI like ChatGPT and Gemini to find a local business last year — up from just <span class="was">6%</span> the year before.</p>
+          <p>of people used AI like ChatGPT and Gemini to find a local business last year &mdash; up from just <span class="was">6%</span> the year before.</p>
         </div>
         <div class="stat">
           <span class="big">37%</span>
           <p>now start their search with AI instead of Google.</p>
         </div>
       </div>
-      <p class="why-frame">This is where your customers are <span class="hl">already going</span> — and it’s growing fast.</p>
+      <p class="why-frame">This is where your customers are <span class="hl">already going</span> &mdash; and it&rsquo;s growing fast.</p>
       <div class="src">Source: BrightLocal, 2026</div>
     </section>
 
-    <!-- WHAT WE DO (solution) — the confident turn from problem to fix -->
+    <!-- WHAT WE DO (solution) &mdash; the confident turn from problem to fix -->
     <section class="dowe">
       <div class="sec-eyebrow">The fix</div>
-      <div class="sec-title">Here’s how we get you found</div>
+      <div class="sec-title">Here&rsquo;s how we get you found</div>
       <div class="dowe-panel">
-        <p class="dowe-lead">We get you into the sources AI reads — and make sure it can understand and <span class="hl">name you</span>.</p>
+        <p class="dowe-lead">We get you into the sources AI reads &mdash; and make sure it can understand and <span class="hl">name you</span>.</p>
         <div class="steps">
           <div class="step">
             <div class="step-ic"><span class="ic">${icListed}</span><span class="badge">1</span></div>
@@ -458,16 +467,16 @@ ${seoSection(d.seo)}
     <!-- CTA -->
     <section class="cta">
       <h3>Ready to get <span class="y">found</span>?</h3>
-      <p><b>This is your starting point.</b> We fix what AI says about you — then re-run this exact audit so you see the before &amp; after in black and white.</p>
-      <div class="close">Let’s get ${esc(d.businessName)} named when your customers ask.</div>
+      <p><b>This is your starting point.</b> We fix what AI says about you &mdash; then re-run this exact audit so you see the before &amp; after in black and white.</p>
+      <div class="close">Let&rsquo;s get ${esc(d.businessName)} named when your customers ask.</div>
     </section>
 
     <footer class="site-foot">
       <div class="row">
         <span>Prepared for <b>${esc(d.businessName)}</b></span>
-        <span>Findable · AI Visibility Audit · ${esc(d.generatedAtLabel)}${shareFoot}</span>
+        <span>Findable &middot; AI Visibility Audit &middot; ${esc(d.generatedAtLabel)}${shareFoot}</span>
       </div>
-      <div class="note">Example report — a snapshot of where you stand today. We re-run it after we’ve made changes to show your before &amp; after.</div>
+      <div class="note">Example report &mdash; a snapshot of where you stand today. We re-run it after we&rsquo;ve made changes to show your before &amp; after.</div>
     </footer>
   </div>
 </body>
