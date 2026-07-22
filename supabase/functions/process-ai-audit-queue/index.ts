@@ -4,6 +4,10 @@ import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
+import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
+// Automation B: reuse the SHARED report aggregation (same buildReportData the SPA + public
+// renderer use) so the WhatsApp {{2}} competitor list matches the report exactly.
+import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. ASYNC start-and-poll: each tick (a) POLLs in-flight Apify runs and
@@ -46,6 +50,16 @@ const STALE_RUNNING_MS = 3 * 60 * 1000; // reclaim rows stuck 'running' with NO 
 const SEO_TIMEOUT_MS = 60_000;   // single-page SEO audit — well under the wall-clock (its own tick)
 // mention_rate is scored over the engines the audit targeted (the queue row's list).
 const DEFAULT_ENGINES = ["chatgpt", "gemini"];
+
+// Automation B — audit-complete → WhatsApp follow-up with the public report link.
+// audit_reply is sent via a DIRECT Graph call (4 positional vars), NOT the queue allowlist
+// (WA_TEMPLATES only models the 2-var name/url templates). Name + lang MUST match the
+// Meta-approved template exactly before live send (it's in Meta review; sends stay test-gated).
+const AUDIT_REPLY_TEMPLATE = "audit_reply";
+const AUDIT_REPLY_LANG = "en";
+// Canonical public report URL (matches renderReportHtml's "View online" footer). NOTE: /a/<slug>
+// must be wired (a Pages route → render-audit-report) before this link resolves; test-mode gated.
+const REPORT_SITE_ORIGIN = "https://yoursites.uk";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -391,12 +405,16 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   // Extraction invokes are QUEUED per-run and awaited AFTER the loop, so a slow extract-competitors
   // call never blocks finalising the other runs — but the edge runtime still can't cut them off.
   const extractionInvokes: Promise<void>[] = [];
+  // Automation B: runs that just completed AND came from an outreach lead → send the audit_reply
+  // WhatsApp AFTER extraction finishes (so {{2}} competitors are the CLEANED list). Collected in the
+  // loop, processed after the extraction await below.
+  const auditReplyJobs: { runId: string; auditId: string }[] = [];
 
   for (const runId of ids) {
     // A cancelled run is terminal — never resurrect it or flip it to 'complete'. Drop any
     // leftover pending/running rows (e.g. one in-flight when the user hit Stop) so they aren't
     // reprocessed, and leave the run marked 'cancelled'.
-    const { data: runRow } = await service.from("ai_audit_runs").select("status").eq("id", runId).maybeSingle();
+    const { data: runRow } = await service.from("ai_audit_runs").select("status, audit_id").eq("id", runId).maybeSingle();
     const prevStatus = runRow?.status ?? null; // status BEFORE this finalise write — drives the once-per-run guard
     if (runRow?.status === "cancelled") {
       await service.from("ai_audit_queue")
@@ -503,9 +521,137 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
           console.error(`[process-ai-audit-queue] extract-competitors invoke error for run ${runId}:`, e instanceof Error ? e.message : String(e));
         }
       })());
+      // Automation B: queue the audit_reply send for AFTER extraction. Only for a genuinely
+      // COMPLETE run (not capped — a capped run has partial data, don't message a lead about it).
+      // The lead_id gate + idempotency are enforced inside maybeSendAuditReply.
+      if (!isCapped && runRow?.audit_id) auditReplyJobs.push({ runId, auditId: runRow.audit_id as string });
     }
   }
   // Await the queued extraction calls so the edge runtime doesn't cut them off when we return.
   if (extractionInvokes.length) await Promise.allSettled(extractionInvokes);
+  // Automation B: NOW that competitors are cleaned, send the audit_reply follow-ups. Each is
+  // fully guarded + wrapped so a send failure can never break finalisation.
+  for (const job of auditReplyJobs) {
+    try {
+      await maybeSendAuditReply(service, job.runId, job.auditId);
+    } catch (e) {
+      console.error(`[process-ai-audit-queue] audit_reply error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
   return finalised;
+}
+
+/** business name → clean lowercase-hyphenated slug (mirrors generate-report.slugify). */
+function slugify(name: string): string {
+  return (name || "").toLowerCase().normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60).replace(/-+$/, "") || "business";
+}
+
+/** Top competitor names → a readable list ("LeeP, Linda Carr and Stonehouse"). Caps at 3
+ *  so the WhatsApp line stays tight. Empty string when there are none. */
+function formatCompetitors(list: string[]): string {
+  const top = (list ?? []).map((s) => (s ?? "").trim()).filter(Boolean).slice(0, 3);
+  if (top.length === 0) return "";
+  if (top.length === 1) return top[0];
+  return `${top.slice(0, -1).join(", ")} and ${top[top.length - 1]}`;
+}
+
+/** Insert the PUBLIC audit-report mapping row (slug → audit). Unique slug via -N retry on 23505.
+ *  Returns the slug, or null on failure. This row is BOTH the link source (served by
+ *  render-audit-report) and the once-per-audit idempotency marker. */
+// deno-lint-ignore no-explicit-any
+async function insertAuditReportRow(service: any, businessName: string, auditId: string, leadId: string): Promise<string | null> {
+  const base = slugify(businessName);
+  for (let attempt = 1; attempt <= 50; attempt++) {
+    const slug = attempt === 1 ? base : `${base}-${attempt}`;
+    const { data, error } = await service.from("business_reports").insert({
+      slug, business_name: businessName || "This business", audit_id: auditId, lead_id: leadId,
+      status: "published", report_type: "audit",
+    }).select("slug").single();
+    if (!error && data) return data.slug as string;
+    if ((error as { code?: string })?.code !== "23505") {
+      console.error(`[audit-reply] report row insert failed for audit ${auditId}:`, error?.message);
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Automation B — when a lead's audit completes, publish its report page and WhatsApp the lead
+ * the link via the audit_reply template. GATED: only for audits tied to an outreach lead
+ * (ai_audits.lead_id), and only ONCE per audit (guarded by an existing report_type='audit' row).
+ * Runs AFTER extract-competitors so {{2}} is the cleaned competitor list. Never throws to the caller.
+ */
+// deno-lint-ignore no-explicit-any
+async function maybeSendAuditReply(service: any, runId: string, auditId: string): Promise<void> {
+  // 1) Lead gate — a manually-run audit (no lead) has nobody to message.
+  const { data: audit } = await service.from("ai_audits")
+    .select("id, lead_id, business_name, business_type, location_text, specialism")
+    .eq("id", auditId).maybeSingle();
+  if (!audit?.lead_id) return;
+
+  // 2) Idempotency — one audit-report row per audit. If it exists, we've already published+sent.
+  const { data: existing } = await service.from("business_reports")
+    .select("id").eq("audit_id", auditId).eq("report_type", "audit").limit(1).maybeSingle();
+  if (existing) return;
+
+  // 3) Build the report data with the SHARED aggregation (competitors for {{2}} == the report's list).
+  const { data: run } = await service.from("ai_audit_runs")
+    .select("id, audit_id, run_number, status, mention_rate, results").eq("id", runId).maybeSingle();
+  const { data: qrows } = await service.from("ai_audit_queue")
+    .select("id, question, status, result").eq("run_id", runId).order("created_at", { ascending: true });
+  const data = buildReportData((qrows ?? []) as QueueRow[], (run ?? null) as RunRow | null, {
+    businessName: audit.business_name ?? "",
+    businessType: audit.business_type ?? "",
+    locationText: audit.location_text ?? "",
+    specialisms: audit.specialism ?? "",
+  });
+  if (!data) return; // no completed questions (e.g. all-failed) → nothing to report/send
+
+  // 4) Publish the report row (the link + idempotency marker). Created BEFORE the send so the link
+  //    exists even when the send is skipped (test mode / no competitors / no phone).
+  const slug = await insertAuditReportRow(service, audit.business_name ?? "", auditId, audit.lead_id as string);
+  if (!slug) return;
+  const link = `${REPORT_SITE_ORIGIN}/a/${slug}`;
+
+  // 5) Template vars.
+  const trade = (audit.business_type ?? "").trim();
+  const business = (audit.business_name ?? "").trim();
+  const competitors = formatCompetitors(data.competitors);
+
+  // {{2}} REQUIRED but empty → do NOT fabricate a competitor line, and do NOT send (a template
+  // send with an empty required var would fail at Meta anyway). The report link is still published
+  // above, so the lead can still be reached manually.
+  if (!competitors) {
+    console.log(`[audit-reply] audit_reply send skipped: no named competitors for {{2}} (report published: ${slug}).`);
+    return;
+  }
+
+  // 6) Lead phone.
+  const { data: lead } = await service.from("outreach_leads").select("phone, country").eq("id", audit.lead_id).maybeSingle();
+  const to = toWhatsAppNumber(lead?.phone ?? "", lead?.country ?? null);
+  if (!to) {
+    console.log(`[audit-reply] audit ${auditId}: report published (${slug}) but lead ${audit.lead_id} has no usable phone — send skipped.`);
+    return;
+  }
+
+  // 7) DIRECT Graph send of audit_reply (4 positional vars). Test-mode gated — never sends live
+  //    until WHATSAPP_TEST_MODE === "off" AND the secrets exist.
+  const payload = {
+    type: "template",
+    template: {
+      name: AUDIT_REPLY_TEMPLATE,
+      language: { code: AUDIT_REPLY_LANG },
+      components: [{ type: "body", parameters: [trade, competitors, business, link].map((t) => ({ type: "text", text: t })) }],
+    },
+  };
+  const env = resolveWhatsAppEnv();
+  if (!env.live) {
+    console.log(`[audit-reply] WOULD SEND audit_reply → ${to} | {{1}}="${trade}" {{2}}="${competitors}" {{3}}="${business}" {{4}}="${link}" (test mode / secrets missing — not sent)`);
+    return;
+  }
+  const res = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);
+  if (res.ok) console.log(`[audit-reply] sent audit_reply to ${to} (msg ${res.messageId}) for audit ${auditId}`);
+  else console.error(`[audit-reply] send failed for audit ${auditId}: ${res.error}`);
 }
