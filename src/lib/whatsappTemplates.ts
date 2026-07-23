@@ -36,10 +36,12 @@ export interface SendabilityLead {
 }
 
 export interface SendabilityAudit {
-  /** The lead's own latest audit named at least one competitor ({{2}}). */
-  hasCompetitors?: boolean;
-  /** The lead's own published audit report slug (drives /a/<slug>, {{4}}). */
+  /** The lead's own completed-audit report identifier — the audit id served live at
+   *  /a/<auditId> (or a legacy published slug), i.e. {{4}}. Presence = a ready report. */
   reportSlug?: string | null;
+  /** Optional: the audit named ≥1 competitor ({{2}}). NOT required by this client guard —
+   *  competitors are enforced at SEND time (resolveAuditReplyVars refuses if empty). */
+  hasCompetitors?: boolean;
 }
 
 export interface Sendability {
@@ -69,7 +71,9 @@ export function getTemplateSendability(
   if (!req) return { ok: true };
   const link = siteLinkGuard(req.needsUrl, lead?.shareToken);
   if (!link.ok) return link;
-  if (req.needsAudit && !(audit?.hasCompetitors && audit?.reportSlug)) {
+  // audit_reply needs a ready report for this lead (its completed audit → /a/<auditId>).
+  // Competitors ({{2}}) are validated server-side at send (resolveAuditReplyVars), not here.
+  if (req.needsAudit && !audit?.reportSlug) {
     return { ok: false, reason: 'Run an audit for this lead first.' };
   }
   return { ok: true };

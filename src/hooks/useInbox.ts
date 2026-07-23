@@ -85,7 +85,7 @@ export function useInbox() {
   const [messages, setMessages] = useState<WaMessage[]>([]);
   const [leads, setLeads] = useState<LeadLite[]>([]);
   const [sites, setSites] = useState<Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>>([]);
-  const [reports, setReports] = useState<Array<{ slug: string; lead_id: string | null; status: string | null }>>([]);
+  const [audits, setAudits] = useState<Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
@@ -97,14 +97,15 @@ export function useInbox() {
       // scopes rows to the operator's own sites (admins see all). Ordered newest-first
       // so the per-lead pick below takes the most recent site.
       sb.from('generated_sites').select('id, site_name, lead_id, share_token, booking_only, first_opened_at, claimed_at, addon_interest_at').order('created_at', { ascending: false }),
-      // Public AI-visibility audit reports (report_type='audit') → the /a/<slug> the report-ready
-      // pill surfaces + the audit_reply guard reads. Newest-first; RLS scopes to the operator's own.
-      sb.from('business_reports').select('slug, lead_id, status, report_type, created_at').eq('report_type', 'audit').order('created_at', { ascending: false }),
+      // Per-lead audits + their run statuses → the report-ready pill's /a/<auditId> (served LIVE by
+      // render-audit-report from the audit; no stored report row) + the audit_reply guard. Newest-first;
+      // RLS scopes to the operator's own audits.
+      sb.from('ai_audits').select('id, lead_id, created_at, ai_audit_runs(status)').order('created_at', { ascending: false }),
     ]);
     setMessages(((msgRes.data ?? []) as WaMessage[]));
     setLeads(((leadRes.data ?? []) as LeadLite[]).filter((l) => (l.phone ?? '').trim()));
     setSites((siteRes.data ?? []) as Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>);
-    setReports((reportRes.data ?? []) as Array<{ slug: string; lead_id: string | null; status: string | null }>);
+    setAudits((reportRes.data ?? []) as Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>);
     setIsLoading(false);
   }, []);
 
@@ -128,15 +129,18 @@ export function useInbox() {
     return m;
   }, [leads]);
 
-  // Newest PUBLISHED audit report per lead → the /a/<slug> the report-ready pill surfaces and the
-  // audit_reply guard reads. Keyed STRICTLY by lead_id (the lead's own record) — never cross-leaks.
-  const auditReportByLeadId = useMemo(() => {
-    const m: Record<string, { slug: string }> = {};
-    for (const r of reports) {
-      if (r.lead_id && !m[r.lead_id] && r.status === 'published') m[r.lead_id] = { slug: r.slug };
+  // Per-lead latest COMPLETED audit → its /a/<auditId> report (built live by render-audit-report;
+  // no stored report row). Keyed STRICTLY by lead_id (the lead's own audit) — never cross-leaks.
+  // Newest-first, so the first audit per lead that has a complete/capped run wins.
+  const auditByLeadId = useMemo(() => {
+    const m: Record<string, { auditId: string }> = {};
+    for (const a of audits) {
+      if (!a.lead_id || m[a.lead_id]) continue;
+      const runs = Array.isArray(a.ai_audit_runs) ? a.ai_audit_runs : [];
+      if (runs.some((r) => r.status === 'complete' || r.status === 'capped')) m[a.lead_id] = { auditId: a.id };
     }
     return m;
-  }, [reports]);
+  }, [audits]);
 
   // Own-lead ids. `leads` is fetched with the user-session client, so RLS ("Users
   // can view their own leads") already scopes it to the current user's leads —
@@ -217,5 +221,5 @@ export function useInbox() {
   const patchLeadStatus = useCallback((leadId: string, status: string) =>
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status } : l)), []);
 
-  return { user, messages, leads, conversations, messagesForKey, sitesByLeadId, auditReportByLeadId, isLoading, refetch: fetchAll, send, patchLeadStatus };
+  return { user, messages, leads, conversations, messagesForKey, sitesByLeadId, auditByLeadId, isLoading, refetch: fetchAll, send, patchLeadStatus };
 }
