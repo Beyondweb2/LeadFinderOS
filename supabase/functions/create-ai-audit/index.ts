@@ -18,13 +18,16 @@ const corsHeaders = {
 // Google organic in the same run; those are captured/shown but not queue engines.
 // (Perplexity dropped — kept dormant in ai-search.ts in case it's re-added.)
 const AUDIT_ENGINES = ["chatgpt", "gemini"];
-// The wizard lets the caller pick how many questions to generate. Range 6..12,
-// default 8. Always clamped server-side (the count is untrusted client input).
-const MIN_QUESTION_COUNT = 6;
+// How many questions to generate. Range 1..12, default 8. Always clamped server-side
+// (the count is untrusted client input). The interactive wizard offers 6..12 (its OWN
+// local QUESTION_COUNT_OPTIONS floor), so this lower 1 floor only ever applies to the
+// bulk-audit path (Outreach → bulk-jobs), which lets an operator run cheaper 1..5-question
+// batches. Fewer questions just means mention_rate is scored over fewer datapoints.
+const MIN_QUESTION_COUNT = 1;
 const MAX_QUESTION_COUNT = 12;
 const DEFAULT_QUESTION_COUNT = 8;
 
-/** Clamp an untrusted question-count to 6..12, defaulting to 8. */
+/** Clamp an untrusted question-count to 1..12, defaulting to 8. */
 function clampCount(n: unknown): number {
   const v = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : DEFAULT_QUESTION_COUNT;
   return Math.min(MAX_QUESTION_COUNT, Math.max(MIN_QUESTION_COUNT, v));

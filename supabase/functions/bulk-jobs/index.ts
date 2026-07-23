@@ -30,7 +30,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 // set as a function secret (read here) AND in the vault (sent by the cron SQL).
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 
-const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50 };
+const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50, audit: 25 };
 const TIME_BUDGET_MS = 90_000;   // stop starting new WAVES once elapsed passes this…
 const WAVE_HEADROOM_MS = 55_000; // …minus headroom, so one full parallel wave + persist still fits under the 150s limit
 const WAVE_SIZE = 3;             // site_gen bounded concurrency (enrich stays 1-at-a-time). Lowered 5->3: 5 concurrent 9a Apify Maps scrapes on the one shared token overran its concurrency limit → 4 of 5 got 429/contention and baked empty photo pools; 3 matches the proven-reliable per-row cap. Wave still runs in parallel (duration ~slowest generate, unchanged), so no time-budget regression.
@@ -62,7 +62,7 @@ interface JobItem {
 interface JobRow {
   id: string;
   user_id: string;
-  job_type: "enrich" | "site_gen";
+  job_type: "enrich" | "site_gen" | "audit";
   status: string;
   items: JobItem[];
   total: number;
@@ -70,6 +70,7 @@ interface JobRow {
   failed_count: number;
   skipped_count: number;
   params: Record<string, unknown> | null;
+  created_at: string; // used by the audit branch's idempotency guard (skip if this job already made one)
 }
 
 /** Atomically claim a job and process ONE chunk INLINE, in the caller's invocation.
@@ -182,6 +183,58 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     return { status: "failed", error: String(data?.error ?? `HTTP ${res.status}`).slice(0, 200) };
   }
 
+  if (job.job_type === "audit") {
+    // Bulk AI-visibility audit: create ONE queued audit per lead via create-ai-audit's internal
+    // branch. create-ai-audit does NO Apify — it just generates the questions and inserts
+    // ai_audit_queue rows; the existing 1-min process-ai-audit-queue cron drains them under its
+    // own concurrency/cost caps. So this branch only enqueues — it never fires Apify directly.
+    const { data: lead } = await service
+      .from("outreach_leads")
+      .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website")
+      .eq("id", item.lead_id)
+      .eq("user_id", job.user_id)
+      .maybeSingle();
+    if (!lead) return { status: "failed", error: "lead not found" };
+
+    // Idempotency: create-ai-audit is NOT idempotent (every call inserts a fresh audit+run). If a
+    // prior chunk already created an audit for this lead DURING this job (e.g. the isolate died
+    // between the create call and the item-status persist, so the item was reclaimed to pending),
+    // skip re-creating — a retry must not double-spend. Only audits created at/after the job's
+    // start count, so a genuine pre-existing audit never blocks a fresh requested run.
+    const { data: prior } = await service
+      .from("ai_audits")
+      .select("id")
+      .eq("lead_id", item.lead_id)
+      .eq("user_id", job.user_id)
+      .gte("created_at", job.created_at)
+      .limit(1)
+      .maybeSingle();
+    if (prior) return { status: "done" };
+
+    // Inputs sourced the SAME way as the wizard's pickLead: type = search_keyword||category,
+    // location = search_location||address. Eligibility (client-side) already ensures these exist.
+    const website = (lead.website ?? "").trim();
+    const questionCount = Number((job.params as { question_count?: unknown } | null)?.question_count) || 3;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/create-ai-audit`, {
+      method: "POST",
+      headers: internalHeaders,
+      body: JSON.stringify({
+        user_id: job.user_id,                                        // internal call: owner supplied explicitly
+        lead_id: lead.id,                                            // links audit → lead → per-lead report (/a/<auditId>)
+        business_name: lead.business_name ?? "",
+        business_type: (lead.search_keyword || lead.category || "").trim(),
+        location_text: (lead.search_location || lead.address || "").trim(),
+        country: lead.country ?? null,
+        has_website: !!website,
+        website: website || undefined,
+        question_count: questionCount,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data?.ok && data?.audit_id) return { status: "done" };
+    return { status: "failed", error: String(data?.error ?? `HTTP ${res.status}`).slice(0, 200) };
+  }
+
   // site_gen
   const template = (job.params?.template as string) ?? "barber";
   const mode = job.params?.mode as string | undefined;
@@ -214,8 +267,12 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
   let done = job.done_count, failed = job.failed_count, skipped = job.skipped_count;
   let capHit = false;
   // site_gen runs up to WAVE_SIZE concurrently; enrich stays 1-at-a-time (its $2/day
-  // cap lives inside enrich-business and isn't budget-sized here).
-  const concurrency = job.job_type === "site_gen" ? WAVE_SIZE : 1;
+  // cap lives inside enrich-business and isn't budget-sized here). audit runs a small
+  // parallel wave (each item is just a fast create-ai-audit call that generates questions
+  // + enqueues ai_audit_queue rows — NO Apify here), so the whole batch enqueues within a
+  // tick or two. The actual multi-engine drain is throttled downstream by
+  // process-ai-audit-queue (START_BATCH 12 < 32 ceiling), so a burst can't overrun Apify.
+  const concurrency = job.job_type === "site_gen" ? WAVE_SIZE : job.job_type === "audit" ? 4 : 1;
 
   // Recover orphaned in-flight items from a prior chunk that crashed/timed-out mid-wave
   // (a clean chunk boundary never leaves "running"). Re-running is safe — generate-
@@ -381,7 +438,7 @@ Deno.serve(async (req) => {
 
     if (action === "create") {
       const jobType: string = body.job_type ?? "";
-      if (jobType !== "enrich" && jobType !== "site_gen") return json({ error: "invalid job_type" }, 400);
+      if (jobType !== "enrich" && jobType !== "site_gen" && jobType !== "audit") return json({ error: "invalid job_type" }, 400);
       const cap = JOB_CAPS[jobType];
       const leadIds: string[] = Array.from(new Set((body.lead_ids ?? []).filter((x: unknown) => typeof x === "string")));
       if (!leadIds.length) return json({ error: "lead_ids required" }, 400);

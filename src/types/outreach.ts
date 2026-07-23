@@ -99,6 +99,11 @@ export interface OutreachLead {
   place_id?: string | null;
   address: string | null;
   category: string | null;
+  // The keyword + location used when the lead was found (e.g. "accountants" / "Wisbech").
+  // Fetched via select('*'). Used as the audit's business_type / location_text source
+  // (search_keyword||category, search_location||address) — mirrors the wizard's pickLead.
+  search_keyword?: string | null;
+  search_location?: string | null;
   status: LeadStatus;
   next_action: NextActionType | null;
   next_action_date: string | null;
