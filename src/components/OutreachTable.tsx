@@ -38,6 +38,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  ClipboardCheck,
   Download,
   Trash2,
   RotateCcw,
@@ -2192,7 +2193,7 @@ export function OutreachTable({
                                   title="Manage audit"
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/ai-audit?runId=${a.runId}`); }}
                                 >
-                                  <ClipboardList className="h-4 w-4" />
+                                  <ClipboardCheck className="h-4 w-4" />
                                 </button>
                               );
                             }

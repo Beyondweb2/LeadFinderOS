@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench, ClipboardList } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench, ClipboardList, ClipboardCheck } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
@@ -407,7 +407,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     onClick={onManageAudit}
                     title="Manage audit"
                   >
-                    <ClipboardList className="h-3.5 w-3.5" />
+                    <ClipboardCheck className="h-3.5 w-3.5" />
                   </Button>
                 ) : auditRunning ? (
                   <Button
