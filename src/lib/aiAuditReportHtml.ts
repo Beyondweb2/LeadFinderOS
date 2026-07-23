@@ -280,7 +280,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .gb-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--red); font-weight:700; margin-bottom:7px; }
   .gb-sum{ margin:0 0 7px; font-size:14px; line-height:1.4; font-weight:400; color:#3d0f12; }
   .gb-sum .gb-q{ color:var(--ink); font-weight:700; }
-  .gb-sum .rv{ color:var(--red); font-weight:700; white-space:nowrap; }
+  .gb-sum .rv{ color:var(--red); font-weight:700; white-space:normal; }
   .gb-sum b{ color:var(--ink); font-weight:700; }
   .gb-attr{ font-size:11px; color:var(--muted); font-weight:400; }
 
@@ -379,6 +379,39 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .site-foot .row b{ color:#fff; font-weight:700; }
   .site-foot .row a{ color:var(--yellow); text-decoration:none; }
   .site-foot .note{ margin-top:8px; font-size:11px; font-weight:400; color:#8fa4c8; }
+
+  /* MOBILE (~phones) — the report is opened mostly on phones via a WhatsApp link. Stack the
+     multi-column sections, fix the hero's non-shrinking number block, make the CTA full-width
+     tappable, and reclaim width by trimming the 28px side padding. Desktop/tablet + print
+     (below) are untouched. */
+  @media (max-width:560px){
+    .sheet{ margin:12px; }
+    /* Reclaim width: 28px side padding → 18px on every full-bleed section. */
+    .band{ padding-left:18px; padding-right:18px; }
+    .explainer{ padding-left:18px; padding-right:18px; }
+    .hero{ padding-left:18px; padding-right:18px; }
+    .gutbox{ margin-left:18px; margin-right:18px; }
+    .why{ padding-left:18px; padding-right:18px; }
+    .dowe{ padding-left:18px; padding-right:18px; }
+    .seo{ padding-left:18px; padding-right:18px; }
+    .cta{ padding-left:18px; padding-right:18px; }
+    .site-foot{ padding-left:18px; padding-right:18px; }
+    /* 1 · Hero stacks: number+caption on top, verdict below; drop the vertical rule. */
+    .hero{ flex-direction:column; gap:14px; }
+    .hero-num{ align-items:flex-start; }
+    .hero-rule{ display:none; }
+    .num{ font-size:72px; }
+    /* 2 · Fix steps → single column; hide the horizontal connector line. */
+    .steps{ grid-template-columns:1fr; gap:14px; }
+    .steps::before{ display:none; }
+    /* 3 · Stakes stats → single column. */
+    .stats{ grid-template-columns:1fr; }
+    /* 4 · Contact buttons → stacked, full-width, comfortable tap target. */
+    .cta-actions{ flex-direction:column; }
+    .cta-btn{ width:100%; min-height:44px; }
+    /* 6 · Hide the stray vertical grade divider when the SEO grades wrap. */
+    .seo-grade-split{ display:none; }
+  }
 
   @page{ size:A4; margin:10mm; }
   @media print{
