@@ -8,6 +8,7 @@ import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/w
 // Automation B: reuse the SHARED report aggregation (same buildReportData the SPA + public
 // renderer use) so the WhatsApp {{2}} competitor list matches the report exactly.
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
+import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. ASYNC start-and-poll: each tick (a) POLLs in-flight Apify runs and
@@ -608,6 +609,7 @@ async function maybeSendAuditReply(service: any, runId: string, auditId: string)
     businessType: audit.business_type ?? "",
     locationText: audit.location_text ?? "",
     specialisms: audit.specialism ?? "",
+    isAggregatorUrl,
   });
   if (!data) return; // no completed questions (e.g. all-failed) → nothing to report/send
 

@@ -12,6 +12,7 @@
 // those modules are pure (no React/DOM), so Deno runs them (proven by `deno check`).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
+import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 
 // The public origin the clean URL will live at (Stage 3 can front this fn at /a/<slug>); used for
@@ -91,6 +92,8 @@ Deno.serve(async (req) => {
       businessType: audit.business_type ?? "",
       locationText: audit.location_text ?? "",
       specialisms: audit.specialism ?? "",
+      isAggregatorUrl,
+      ownWebsite: audit.website ?? "",
     });
     if (!data) return unavailable("This audit hasn’t completed yet — check back shortly.");
 

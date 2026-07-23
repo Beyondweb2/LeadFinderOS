@@ -370,13 +370,172 @@ export function isRenderableSeo(s: unknown): s is AiAuditSeo {
   return !!c && typeof c === 'object' && !!c.onPage && !!c.contentTechnical;
 }
 
+// ── Per-term winnability: fragmentation + cross-engine consensus ─────────────
+// Reserves 'locked' for a SMALL, CONSISTENT, own-site incumbent set (few firms named on
+// BOTH scored engines, ranking on their own sites, with real citations). Fragmented fields
+// (many distinct firms, low cross-engine overlap, directory-driven) read as 'open' — the
+// OPPOSITE of the old union-count rule, where more rivals wrongly meant more locked. Shared
+// by the badge (AiAudit.tsx) and the report (buildReportData) so the two can't drift.
+// isAggregatorUrl is dependency-injected: the SPA and edge keep separate copies of the
+// domain lists (the '@/' alias can't resolve in a Deno bundle), so the caller passes its own.
+export type Winnability = 'open' | 'contested' | 'locked' | 'named' | 'no-local-race';
+
+export interface WinnabilityResult {
+  verdict: Winnability;
+  score: number | null;   // /10; null for no-local-race
+  U: number;              // distinct real firms across scored engines (normalized)
+  C: number;              // firms named on BOTH scored engines (normalized intersection)
+  overlap: number;        // C / U (0 when U === 0)
+  agg: number;            // aggregator/directory share of non-own citations
+  cites: number;          // count of non-own citations across scored engines
+  clientNamed: boolean;
+  namedFirms: string[];   // display names, deduped, isRealCompetitor-filtered
+  reason: string;
+}
+
+// Corporate suffixes + generic trade words stripped when matching firm names, so
+// "Smith Plumbing" and "J Smith Plumbing Ltd" collapse to the same key ("smith"). Accepted
+// trade-off: two different firms sharing a surname can merge (rare, usually one family firm).
+// Falls back to the full normalized string if every token strips out.
+// Corporate suffixes + connectives ("and"/"of", matching the & → space strip below).
+const FIRM_SUFFIXES = new Set(['ltd', 'limited', 'llp', 'plc', 'co', 'inc', 'llc', 'group', 'uk', 'the', 'and', 'of']);
+const FIRM_TRADE_GENERIC = new Set([
+  'plumbing', 'plumber', 'plumbers', 'heating', 'gas', 'electrical', 'electrician', 'electricians',
+  'services', 'service', 'solutions', 'company', 'contractors', 'contractor',
+]);
+
+function firmKey(name: string): string {
+  const toks = name.toLowerCase().replace(/&/g, ' ').replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/).filter(Boolean)
+    .filter((t) => t.length > 1)                                     // drop single-letter initials ("J")
+    .filter((t) => !FIRM_SUFFIXES.has(t) && !FIRM_TRADE_GENERIC.has(t));
+  return toks.sort().join(' ') || name.trim().toLowerCase();
+}
+
+/** Domain of a URL, lowercased + www-stripped; '' on parse failure. */
+function domainOfSafe(url: string): string {
+  try { return new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname.replace(/^www\./, '').toLowerCase(); }
+  catch { return ''; }
+}
+
+/**
+ * Classify ONE question's winnability from its per-engine data. See the block comment above
+ * for the rule. `isAggregatorUrl` is injected so this stays runnable in both the SPA and Deno.
+ */
+export function classifyWinnability(
+  result: EngineMap,
+  opts: { businessName: string; locationText: string; ownWebsite?: string; isAggregatorUrl: (url: string) => boolean },
+): WinnabilityResult {
+  const { locationText, ownWebsite = '', isAggregatorUrl } = opts;
+  const ownDomain = ownWebsite ? domainOfSafe(ownWebsite) : '';
+
+  let clientNamed = false;
+  let scoredNamed = 0;
+  let bestPosition: number | null = null;
+  // Client named-signal across ALL display engines (defend if named anywhere).
+  for (const engine of DISPLAY_ENGINES) {
+    const er = result[engine];
+    if (!er) continue;
+    if (er.named) {
+      clientNamed = true;
+      if ((SCORED_ENGINES as readonly string[]).includes(engine)) scoredNamed++;
+      if (er.position != null) bestPosition = bestPosition == null ? er.position : Math.min(bestPosition, er.position);
+    }
+  }
+
+  // Competitors + citations from the SCORED engines only (chatgpt, gemini) — the engines with
+  // real AI-named firm lists and where cross-engine agreement is meaningful.
+  const perEngineKeys: Set<string>[] = [];    // firmKey sets, one per scored engine that RAN
+  const display = new Map<string, string>();  // firmKey → display name (first seen)
+  let citTotal = 0;
+  let citAggregator = 0;
+  for (const engine of SCORED_ENGINES) {
+    const er = result[engine];
+    if (!er) continue;                          // engine didn't run for this term
+    const keys = new Set<string>();
+    for (const c of er.competitors) {
+      if (!isRealCompetitor(c, locationText)) continue;
+      const k = firmKey(c);
+      if (!k) continue;
+      keys.add(k);
+      if (!display.has(k)) display.set(k, c.trim());
+    }
+    perEngineKeys.push(keys);
+    for (const cit of er.citations) {
+      const url = cit?.url;
+      if (!url) continue;
+      if (ownDomain && domainOfSafe(url).endsWith(ownDomain)) continue;   // own-site citation — skip
+      citTotal++;
+      if (isAggregatorUrl(url)) citAggregator++;
+    }
+  }
+
+  const enginesRan = perEngineKeys.length;
+  const union = new Set<string>();
+  for (const s of perEngineKeys) for (const k of s) union.add(k);
+  const U = union.size;
+  // Cross-engine consensus: firms named on BOTH scored engines. Only defined when both ran.
+  const C = enginesRan >= 2 ? [...perEngineKeys[0]].filter((k) => perEngineKeys[1].has(k)).length : 0;
+  const overlap = U > 0 ? C / U : 0;
+  const agg = citTotal > 0 ? citAggregator / citTotal : 0;
+  const cites = citTotal;
+  const namedFirms = [...display.values()];
+  const top = namedFirms.slice(0, 3);
+  const firmList = top.join(', ') + (U - top.length > 0 ? ` +${U - top.length}` : '');
+
+  // 1) Named anywhere → defend.
+  if (clientNamed) {
+    let score = 8;
+    if (scoredNamed >= 2) score += 1;
+    if (bestPosition != null && bestPosition <= 3) score += 1;
+    score = Math.min(10, score);
+    const namedOn = DISPLAY_ENGINES.filter((e) => result[e]?.named).map((e) => ENGINE_LABELS[e] ?? e);
+    return { verdict: 'named', score, U, C, overlap, agg, cites, clientNamed: true, namedFirms,
+      reason: `You're already named on ${namedOn.join(', ')} — defend this.` };
+  }
+
+  // 2) No real firms named anywhere → generic advice, not a local race.
+  if (U === 0) {
+    return { verdict: 'no-local-race', score: null, U, C, overlap, agg, cites, clientNamed: false, namedFirms: [],
+      reason: 'No local firms named — AI gives generic advice, so there is no local race to win here.' };
+  }
+
+  // 3) Locked — a small, cross-engine-consistent set of own-site incumbents. Requires BOTH
+  //    engines ran (overlap signal) AND cites >= 2, so a thin/no-citation term can never lock.
+  if (enginesRan >= 2 && U <= 3 && C >= 2 && overlap >= 0.5 && agg < 0.4 && cites >= 2) {
+    const score = overlap >= 0.75 && agg < 0.2 ? 2 : 3;
+    return { verdict: 'locked', score, U, C, overlap, agg, cites, clientNamed: false, namedFirms,
+      reason: `A small, consistent set of firms (${firmList}) rank across ChatGPT and Gemini on their own sites — well dug in.` };
+  }
+
+  // 4) Open — fragmented (many firms), directory-driven, or no cross-engine consensus.
+  if (U >= 6 || agg >= 0.6 || (C === 0 && U >= 2)) {
+    const score = (U >= 8 || agg >= 0.6) ? 9 : U >= 6 ? 8 : 7;
+    const why = U >= 6 ? `AI names ${U} different firms with little overlap`
+      : agg >= 0.6 ? 'incumbents rank off directory listings, not their own sites'
+      : 'ChatGPT and Gemini name different firms — no agreed incumbent';
+    return { verdict: 'open', score, U, C, overlap, agg, cites, clientNamed: false, namedFirms,
+      reason: `${why} (${firmList}); you're absent. A fragmented, winnable field — worth targeting.` };
+  }
+
+  // 5) Contested — a middling field.
+  const score = agg >= 0.4 ? 6 : agg < 0.2 ? 4 : 5;
+  return { verdict: 'contested', score, U, C, overlap, agg, cites, clientNamed: false, namedFirms,
+    reason: `AI names ${U} firm${U === 1 ? '' : 's'} (${firmList}); you're absent. A contested field — winnable with focus.` };
+}
+
 /** Derive the client report's data from a run's queue rows. Pure — used both for the live
  *  report on the results screen and to build a snapshot when opening a past audit's report.
  *  Returns null until at least one question has completed. */
 export function buildReportData(
   queueRows: QueueRow[],
   run: RunRow | null,
-  ctx: { businessName: string; businessType: string; locationText: string; specialisms: string },
+  ctx: {
+    businessName: string; businessType: string; locationText: string; specialisms: string;
+    // Injected so the shared winnability rule runs in both the SPA and Deno (see classifyWinnability).
+    isAggregatorUrl: (url: string) => boolean;
+    ownWebsite?: string;
+  },
 ): AiAuditReportData | null {
   let done = 0;
   let liveNamed = 0;
@@ -420,36 +579,19 @@ export function buildReportData(
   }
   const competitors = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 4).map((x) => x.name);
 
-  // Per-term winnability — from the SAME per-question/engine {named, competitors} data.
-  // clientNamed → we already win/defend ('named'); else no real rivals on a non-vanity term →
-  // 'open' (winnable); ≥3 distinct real rivals → 'locked'; otherwise 'contested'. Head-term /
-  // near-me vanity questions with nobody named are 'contested', NOT 'open' — a vanity term with
-  // no one named isn't a real opportunity (consistent with pickGutPunch deprioritising head terms).
+  // Per-term winnability — the SHARED fragmentation + cross-engine-consensus rule (same helper
+  // the badge uses, so report and badge can't drift). rivalCount = U (distinct firms across the
+  // scored engines) for backward-compat with the report data shape.
   const winnability = queueRows
     .filter((r) => r.status === 'done' && r.result)
     .map((r) => {
-      const q = r.question.toLowerCase();
-      const isVanity = HEAD_TERMS.test(q) || NEAR_ME.test(q);
-      let clientNamed = false;
-      const rivalSet = new Set<string>();
-      for (const engine of DISPLAY_ENGINES) {
-        const er = r.result?.[engine];
-        if (!er) continue;
-        if (er.named) clientNamed = true;
-        if (engine === 'google_organic') continue; // organic titles aren't AI-named rivals (named signal above kept)
-        for (const c of er.competitors) {
-          if (!isRealCompetitor(c, ctx.locationText)) continue;
-          const key = c.trim().toLowerCase();
-          if (key) rivalSet.add(key);
-        }
-      }
-      const rivalCount = rivalSet.size;
-      const verdict: 'open' | 'contested' | 'locked' | 'named' =
-        clientNamed ? 'named'
-        : (rivalCount === 0 && !isVanity) ? 'open'
-        : rivalCount >= 3 ? 'locked'
-        : 'contested';
-      return { question: r.question, verdict, rivalCount };
+      const w = classifyWinnability(r.result!, {
+        businessName: ctx.businessName,
+        locationText: ctx.locationText,
+        ownWebsite: ctx.ownWebsite,
+        isAggregatorUrl: ctx.isAggregatorUrl,
+      });
+      return { question: r.question, verdict: w.verdict, rivalCount: w.U };
     });
 
   return {
