@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2, Sparkles } from 'lucide-react';
-import { generateWhatsAppUrl, fillTemplate } from '@/lib/leadUtils';
+import { generateWhatsAppUrl, fillTemplate, hasLinkToken } from '@/lib/leadUtils';
 import { barberSiteUrl } from '@/config/publicSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TemplatePicker } from '@/components/TemplatePicker';
@@ -88,10 +88,12 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
 
   // Resolve the barber's /s/ link for {{link}} (launch link wins; else lead's own site).
   const [resolvedLink, setResolvedLink] = useState<string | null>(null);
+  const [linkLoading, setLinkLoading] = useState(false);
   useEffect(() => {
-    if (!open || !lead?.id) { setResolvedLink(shareLink ?? null); return; }
-    if (shareLink) { setResolvedLink(shareLink); return; }
+    if (!open || !lead?.id) { setResolvedLink(shareLink ?? null); setLinkLoading(false); return; }
+    if (shareLink) { setResolvedLink(shareLink); setLinkLoading(false); return; }
     let cancelled = false;
+    setLinkLoading(true);
     (async () => {
       try {
         const { data } = await (supabase as unknown as SupabaseClient)
@@ -103,6 +105,8 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
         if (!cancelled) setResolvedLink(token ? barberSiteUrl(token) : null);
       } catch {
         if (!cancelled) setResolvedLink(null);
+      } finally {
+        if (!cancelled) setLinkLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -152,8 +156,17 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
     return fillTemplate(template, { businessName: lead.business_name, link: resolvedLink });
   }, [template, lead, resolvedLink]);
 
+  // Guard: if this template references {{link}} but the lead has no resolvable site link,
+  // block the send — fillTemplate leaves "{{link}}" literal, so sending would ship a broken
+  // link. linkResolving keeps the button disabled while the async token lookup is in flight
+  // (so it can't send before the link resolves); linkMissing is the confirmed no-token case.
+  const needsLink = useMemo(() => hasLinkToken(template), [template]);
+  const linkResolving = needsLink && linkLoading;
+  const linkMissing = needsLink && !linkLoading && !resolvedLink;
+  const linkBlocked = linkResolving || linkMissing;
+
   const handleSend = async () => {
-    if (!lead || !lead.phone || isSending) return;
+    if (!lead || !lead.phone || isSending || linkBlocked) return;
     setIsSending(true);
     
     const message = fillTemplate(template, { businessName: lead.business_name, link: resolvedLink });
@@ -283,6 +296,16 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
               </div>
             </div>
 
+            {/* No-link guard: this template needs a site link but the lead has none. */}
+            {linkBlocked && (
+              <p className="flex items-center gap-1.5 text-[11px] text-amber-600">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                {linkResolving
+                  ? 'Checking for this lead’s site link…'
+                  : 'No site link yet — this message uses {{link}}, but this lead has no generated site. Generate the site first.'}
+              </p>
+            )}
+
             {/* Compliance note */}
             <p className="text-[10px] text-muted-foreground/50 text-center">
               Ensure outreach complies with platform and local regulations.
@@ -297,7 +320,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
             Cancel
           </Button>
           {hasPhone && (
-            <Button onClick={handleSend} disabled={isSending} className="bg-green-600 hover:bg-green-700 whitespace-nowrap">
+            <Button onClick={handleSend} disabled={isSending || linkBlocked} className="bg-green-600 hover:bg-green-700 whitespace-nowrap">
               {isSending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
