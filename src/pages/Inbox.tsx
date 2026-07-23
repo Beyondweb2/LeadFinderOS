@@ -19,7 +19,7 @@ import { PIPELINE_STATUS_OPTIONS, type PipelineStatus } from '@/types/outreach';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks } from 'lucide-react';
+import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check } from 'lucide-react';
 
 // Shared style for the compact thread-header quick-action icon buttons/links.
 const HEADER_ICON_BTN = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
@@ -63,7 +63,7 @@ function listPreview(m: { body: string | null; template_name: string | null }): 
 }
 
 const Inbox = () => {
-  const { user, conversations, messagesForKey, leads, sitesByLeadId, isLoading, send, refetch, patchLeadStatus } = useInbox();
+  const { user, conversations, messagesForKey, leads, sitesByLeadId, auditReportByLeadId, isLoading, send, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
@@ -219,6 +219,19 @@ const Inbox = () => {
   // Thread-header quick-action data — each button/link renders only when present.
   const activeSite = active?.leadId ? sitesByLeadId[active.leadId] : undefined;
   const sitePreviewUrl = activeSite?.shareToken ? barberSitePreviewUrl(activeSite.shareToken) : null;
+
+  // Public audit report for THIS lead — slug resolved strictly by the lead's own record (never
+  // another lead's). Drives the report-ready pill + Copy/Open, and is what the audit_reply guard needs.
+  const activeReport = active?.leadId ? auditReportByLeadId[active.leadId] : undefined;
+  const reportUrl = activeReport?.slug ? `https://yoursites.uk/a/${activeReport.slug}` : null;
+  const [reportCopied, setReportCopied] = useState(false);
+  const copyReportUrl = () => {
+    if (!reportUrl) return;
+    navigator.clipboard?.writeText(reportUrl);
+    setReportCopied(true);
+    setTimeout(() => setReportCopied(false), 1500);
+    toast({ title: 'Report URL copied' });
+  };
 
   // Per-lead template validity (SHARED source of truth with SingleWhatsAppDialog). Resolved
   // strictly from THIS lead's own record: claim templates need its share_token. Audit data isn't
@@ -455,6 +468,14 @@ const Inbox = () => {
                       <ListChecks className="h-4 w-4" />
                     </button>
                   )}
+                  {/* Run / re-run the AI-visibility audit for this lead — opens the audit wizard
+                      prefilled (same deep-link as the Outreach button) in a NEW TAB so the Inbox
+                      keeps its place. */}
+                  {active.leadId && (
+                    <button type="button" onClick={() => window.open(`/ai-audit?leadId=${active.leadId}`, '_blank', 'noopener')} title="Run / re-run AI audit for this lead" aria-label="Run AI audit" className={HEADER_ICON_BTN}>
+                      <Sparkles className="h-4 w-4" />
+                    </button>
+                  )}
                   {/* Google Maps — stored URL preferred, else built from place_id. */}
                   {mapsUrl && (
                     <a href={mapsUrl} target="_blank" rel="noreferrer" title="Open in Google Maps" aria-label="Open in Google Maps" className={HEADER_ICON_BTN}>
@@ -492,6 +513,29 @@ const Inbox = () => {
                   )}
                 </div>
               </div>
+
+              {/* Public audit-report state for this lead — the /a/<slug> is resolved strictly by
+                  this lead's own record (auditReportByLeadId), so it can never show another
+                  business's URL. Ready → Copy/Open; not yet → nudge to run an audit. */}
+              {active.leadId && (
+                <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[11px]">
+                  {reportUrl ? (
+                    <>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 font-semibold text-green-600 dark:text-green-400">
+                        <FileText className="h-3 w-3" /> Report ready
+                      </span>
+                      <button type="button" onClick={copyReportUrl} className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground">
+                        {reportCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />} {reportCopied ? 'Copied' : 'Copy URL'}
+                      </button>
+                      <a href={reportUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground">
+                        <ExternalLink className="h-3 w-3" /> Open
+                      </a>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">No public report yet — run an audit for this lead.</span>
+                  )}
+                </div>
+              )}
 
               {/* Messages */}
               <div ref={threadRef} className="flex-1 space-y-2 overflow-y-auto p-3">
