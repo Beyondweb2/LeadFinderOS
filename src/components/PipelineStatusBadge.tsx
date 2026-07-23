@@ -34,9 +34,13 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
   },
   no_whatsapp_needs_sms: {
-    label: 'Not Mobile — Needs SMS',
+    // Display reads "No WhatsApp" (short → single line, same height as the WhatsApp/
+    // Queued pills). Kept distinct cyan to still signal the not-mobile/needs-SMS state.
+    // Only the label text differs from status 'no_whatsapp'; status value + SMS routing
+    // are unchanged. shortLabel stays "Needs SMS" for compact views that need the distinction.
+    label: 'No WhatsApp',
     shortLabel: 'Needs SMS',
-    className: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent font-semibold',
+    className: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent font-semibold whitespace-nowrap',
   },
   whatsapp_failed: {
     label: 'WhatsApp Failed',
