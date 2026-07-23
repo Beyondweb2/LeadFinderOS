@@ -47,6 +47,10 @@ const NATIONAL_LOC_TERMS = new Set([
 // Location tokens that are national but NOT a usable country/region qualifier for a phrase.
 const NON_GEO_NATIONAL = new Set(["nationwide", "national", "online", "remote", "everywhere", "anywhere"]);
 
+// Explicit client-engagement scope from the wizard. 'local'/'national' HARD-FORCE the
+// question shape (overriding the location heuristic); 'hybrid'/null fall back to it.
+type BusinessScope = "national" | "local" | "hybrid" | null;
+
 /** True when the business serves a whole country/region or works remotely (NATIONAL scope),
  *  vs a specific town/city (LOCAL). Empty location → treated as national. */
 function isNationalScope(loc: string, specialisms: string): boolean {
@@ -58,19 +62,31 @@ function isNationalScope(loc: string, specialisms: string): boolean {
   return false;
 }
 
+/** A usable town for LOCAL "[service] in [town]" framing — not empty, not the "the local
+ *  area" placeholder, and not a bare country/region term. Used to reject a forced-local
+ *  audit that has no town rather than silently producing national ("uk") questions. */
+function hasUsableTown(loc: string): boolean {
+  const l = loc.trim().toLowerCase();
+  if (!l || l === "the local area") return false;
+  if (NATIONAL_LOC_TERMS.has(l)) return false;
+  return true;
+}
+
 /** Deterministic template questions — the fallback when OpenAI is unavailable or returns
  *  something that doesn't validate. Scope-aware: LOCAL uses "[service] in [town]" plus a
  *  single "near me"; NATIONAL uses audience-qualified "[service] for [audience] [country]"
  *  with NO "near me" and NO broad best/top head-terms. Grounded in "known for" when given.
  *  Sliced to `count`. */
-function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number): string[] {
+function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number, scope: BusinessScope): string[] {
   const t = type || "business";
   const niches = specialisms
     ? specialisms.split(/[,;/]|\band\b/i).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 1)
     : [];
 
   let base: string[];
-  if (isNationalScope(loc, specialisms)) {
+  // 'local'/'national' force the branch; 'hybrid'/null keep the location heuristic.
+  const national = scope === "local" ? false : scope === "national" ? true : isNationalScope(loc, specialisms);
+  if (national) {
     const l = loc.trim().toLowerCase();
     // Use the real country/region from the location when it is one; else default to "uk".
     const region = l && NATIONAL_LOC_TERMS.has(l) && !NON_GEO_NATIONAL.has(l) ? ` ${l}` : " uk";
@@ -181,10 +197,17 @@ Deno.serve(async (req) => {
     // Explicit client-engagement scope from the wizard. Only the three known values are stored;
     // anything else (incl. absent) → null, so the downstream heuristic still applies.
     const VALID_SCOPES = new Set(["national", "local", "hybrid"]);
-    const businessScope: string | null = typeof body.business_scope === "string" && VALID_SCOPES.has(body.business_scope)
-      ? body.business_scope : null;
+    const businessScope: BusinessScope = typeof body.business_scope === "string" && VALID_SCOPES.has(body.business_scope)
+      ? (body.business_scope as BusinessScope) : null;
 
     if (!businessName && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
+
+    // Forced LOCAL needs a real town — otherwise "[service] in [town]" has no town and we'd
+    // silently drift national. Reject cleanly so the caller supplies one. Only fires when the
+    // caller explicitly sets scope='local' (wizard/bulk); internal automation passes no scope.
+    if (businessScope === "local" && !hasUsableTown(locationText)) {
+      return json({ ok: false, error: "local_scope_needs_town" }, 400);
+    }
 
     const estCost = SOURCES.ai_search.estCostUsd;
     const estimate = (n: number) => Number((n * AUDIT_ENGINES.length * estCost).toFixed(4));
@@ -193,7 +216,7 @@ Deno.serve(async (req) => {
     if (preview) {
       const qs = providedQuestions && providedQuestions.length
         ? providedQuestions
-        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount);
+        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope);
       return json({
         ok: true,
         preview: true,
@@ -221,12 +244,15 @@ Deno.serve(async (req) => {
       // Re-run: load + ownership-check the existing audit, reuse its questions.
       const { data: audit } = await service
         .from("ai_audits")
-        .select("id, user_id, business_name, business_type, location_text, country, has_website")
+        .select("id, user_id, business_name, business_type, location_text, country, has_website, business_scope")
         .eq("id", reuseAuditId)
         .maybeSingle();
       if (!audit || audit.user_id !== userId) return json({ ok: false, error: "audit_not_found" }, 403);
       auditId = audit.id;
       auditBusinessName = audit.business_name;
+      // Re-run honours the audit's STORED scope (like-for-like), not the request's.
+      const reRunScope: BusinessScope = typeof audit.business_scope === "string" && VALID_SCOPES.has(audit.business_scope)
+        ? (audit.business_scope as BusinessScope) : null;
       if (providedQuestions && providedQuestions.length) {
         // Edited re-run: honor the operator's edited question list on the SAME audit.
         questions = providedQuestions;
@@ -245,14 +271,14 @@ Deno.serve(async (req) => {
           }
         }
         if (questions.length < MIN_QUESTION_COUNT) {
-          questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms, questionCount);
+          questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms, questionCount, reRunScope);
         }
       }
     } else {
       // New audit: use the edited questions if provided, else generate them.
       questions = providedQuestions && providedQuestions.length
         ? providedQuestions
-        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount);
+        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope);
       const { data: audit, error: insErr } = await service
         .from("ai_audits")
         .insert({
@@ -332,11 +358,15 @@ async function generateQuestions(
   hasWebsite: boolean,
   specialisms: string,
   count: number,
+  scope: BusinessScope,
 ): Promise<string[]> {
   const n = clampCount(count);
-  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n);
+  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n, scope);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) return fallback;
+  // 'local'/'national' hard-force the prompt's scope block; 'hybrid'/null let the model classify.
+  const forceLocal = scope === "local";
+  const forceNational = scope === "national";
 
   const name = businessName || "the business";
   const type = businessType || "local business";
@@ -351,6 +381,52 @@ async function generateQuestions(
     ? `Known for: ${specialisms}. Treat these as SEPARATE specialisms — give each its own single-intent question; NEVER combine two in one query.`
     : `No specialisms were given — INFER the single main specialism from the NAME and type. The name often carries the whole point (e.g. "X Kava Bar" → kava; "Y Vinyl Cafe" → records). Build the specialism questions around it, one intent each.`;
 
+  // Shared across all scopes.
+  const ALWAYS_RULES = `RULES THAT ALWAYS APPLY:
+- EXACTLY ONE intent per question. Never combine two services or needs. No "and" joining two things (NOT "tax returns and payroll", NOT "bar with kava and pool").
+- Natural phrasing a real person would type or ask an AI — short, terse, plain lowercase.
+- Ground EVERY question in the business's ACTUAL services and the "known for" field. NEVER invent a service it doesn't offer.
+- SPREAD the questions across the business's main services / niches — no near-duplicates.
+- Do NOT include the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes.`;
+
+  const LOCAL_RULES = `- Local framing is good: "[service] in ${loc}".
+- Broad head-terms are allowed here (a small local pool is winnable): e.g. "best [service] in ${loc}", "top [service] in ${loc}".
+- At most ONE "near me" question in total.`;
+
+  const NATIONAL_RULES = `- NEVER use "near me".
+- NEVER use broad head-terms like "best [service] in [country]", "top [service] in [country]", or "leading [service] in [country]". These are dominated by directories and comparison sites, are unwinnable for a single firm, and prove nothing — do not produce any.
+- EVERY question must be a SPECIFIC service or problem, qualified by AUDIENCE and national scope. Use the pattern "[specific service] for [audience] [country]" or "[niche] [service] [country]" — e.g. "[service] for small businesses uk", "[niche] [service] uk". Use the real country/region from the location; if the location gives no country, use "uk". Prioritise the differentiators / niches in the "known for" field.`;
+
+  // 'local'/'national' hard-force the matching rule set (no classification); 'hybrid'/null
+  // keep the original "classify from the location" heuristic verbatim.
+  const scopeGuidance = forceLocal
+    ? `SCOPE — FORCED LOCAL: This business is LOCAL to ${loc}. Generate LOCAL questions ONLY; do NOT classify, and NEVER use country/region/national terms ("uk", "united kingdom", "england", "britain", "scotland", "wales", "ireland", "nationwide", "national", "online", "remote") or the "[service] for [audience] [country]" pattern.
+
+${ALWAYS_RULES}
+
+LOCAL RULES:
+${LOCAL_RULES}`
+    : forceNational
+    ? `SCOPE — FORCED NATIONAL: This business serves clients NATIONALLY (remote / across the country). Generate NATIONAL questions ONLY; do NOT use local town framing.
+
+${ALWAYS_RULES}
+
+NATIONAL RULES:
+${NATIONAL_RULES}`
+    : `STEP 1 — CLASSIFY THE SCOPE (decide this first, silently, from the location and "known for"):
+- NATIONAL if the location names a country, nation, or large region (e.g. "UK", "United Kingdom", "England", "Britain", "Scotland", "Wales", "Ireland", "USA", "Australia"), OR is empty / says "nationwide" / "national" / "online" / "remote", OR the "known for" text says the business serves clients nationally, works remotely, or has no physical office.
+- LOCAL if the location names a specific town, city, or local area (e.g. "Leeds", "Chiang Mai", "Camden").
+
+STEP 2 — GENERATE under the matching rule set.
+
+${ALWAYS_RULES}
+
+IF LOCAL:
+${LOCAL_RULES}
+
+IF NATIONAL:
+${NATIONAL_RULES}`;
+
   const systemPrompt = `You generate the exact search phrases a REAL PERSON would type into an AI assistant (ChatGPT, Gemini) to find a business like this one. Output nothing but the phrases, via the return_questions tool.
 
 Business name: ${name}
@@ -359,34 +435,19 @@ Location as given: ${loc}
 
 ${specialismLine}
 
-STEP 1 — CLASSIFY THE SCOPE (decide this first, silently, from the location and "known for"):
-- NATIONAL if the location names a country, nation, or large region (e.g. "UK", "United Kingdom", "England", "Britain", "Scotland", "Wales", "Ireland", "USA", "Australia"), OR is empty / says "nationwide" / "national" / "online" / "remote", OR the "known for" text says the business serves clients nationally, works remotely, or has no physical office.
-- LOCAL if the location names a specific town, city, or local area (e.g. "Leeds", "Chiang Mai", "Camden").
-
-STEP 2 — GENERATE under the matching rule set.
-
-RULES THAT ALWAYS APPLY (both scopes):
-- EXACTLY ONE intent per question. Never combine two services or needs. No "and" joining two things (NOT "tax returns and payroll", NOT "bar with kava and pool").
-- Natural phrasing a real person would type or ask an AI — short, terse, plain lowercase.
-- Ground EVERY question in the business's ACTUAL services and the "known for" field. NEVER invent a service it doesn't offer.
-- SPREAD the questions across the business's main services / niches — no near-duplicates.
-- Do NOT include the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes.
-
-IF LOCAL:
-- Local framing is good: "[service] in ${loc}".
-- Broad head-terms are allowed here (a small local pool is winnable): e.g. "best [service] in ${loc}", "top [service] in ${loc}".
-- At most ONE "near me" question in total.
-
-IF NATIONAL:
-- NEVER use "near me".
-- NEVER use broad head-terms like "best [service] in [country]", "top [service] in [country]", or "leading [service] in [country]". These are dominated by directories and comparison sites, are unwinnable for a single firm, and prove nothing — do not produce any.
-- EVERY question must be a SPECIFIC service or problem, qualified by AUDIENCE and national scope. Use the pattern "[specific service] for [audience] [country]" or "[niche] [service] [country]" — e.g. "[service] for small businesses uk", "[niche] [service] uk". Use the real country/region from the location; if the location gives no country, use "uk". Prioritise the differentiators / niches in the "known for" field.
+${scopeGuidance}
 
 Return EXACTLY ${n} questions (lowercase), spread across the business's services/niches under the matching rule set. ${framing}
 
 Return via the return_questions tool.`;
 
-  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation as given: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for: ${specialisms}` : ""}\n\nFirst classify this business as NATIONAL or LOCAL from the location, then generate ${n} short, single-intent search phrases under the matching rules — one intent each, grounded in its real services, no "and", no invented services.`;
+  const userScopeLine = forceLocal
+    ? `This business is LOCAL to ${loc}. Generate ${n} short, single-intent LOCAL phrases ("[service] in ${loc}") — no national/uk terms, at most one "near me".`
+    : forceNational
+    ? `This business is NATIONAL. Generate ${n} short, single-intent phrases qualified by audience + country — no "near me", no broad head-terms.`
+    : `First classify this business as NATIONAL or LOCAL from the location, then generate ${n} short, single-intent search phrases under the matching rules.`;
+
+  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation as given: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for: ${specialisms}` : ""}\n\n${userScopeLine} One intent each, grounded in its real services, no "and", no invented services.`;
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
