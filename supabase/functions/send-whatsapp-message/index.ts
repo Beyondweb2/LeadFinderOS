@@ -8,6 +8,7 @@ import {
   renderTemplateBody,
   WA_TEMPLATES,
 } from "../_shared/whatsapp-send.ts";
+import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -121,28 +122,42 @@ Deno.serve(async (req) => {
     let storedBody: string | null = null;
 
     if (templateName) {
-      // Out-of-window template. The claim link is required ONLY for templates that use a url var;
-      // a url-less opener (e.g. initial_contact, vars ["name"]) sends with no link (claimUrl "").
       if (!WA_TEMPLATES[templateName]) return json({ ok: false, error: "unknown_template" }, 400);
-      const needsUrl = WA_TEMPLATES[templateName].vars.includes("url");
-      let claimUrl = "";
-      if (needsUrl) {
+      const tvars = WA_TEMPLATES[templateName].vars;
+      const lang = WA_TEMPLATES[templateName].lang;
+      const needsAudit = tvars.includes("trade") || tvars.includes("competitors");
+      if (needsAudit) {
+        // audit_reply: 4 vars resolved server-side STRICTLY from the lead's own completed audit
+        // (report link = /a/<auditId>, competitors from that audit). Refuse (don't send a broken
+        // template) when the lead has no completed audit / no competitors.
         if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
-        const { data: site } = await service
-          .from("generated_sites")
-          .select("share_token")
-          .eq("lead_id", resolvedLeadId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const shareToken = (site as { share_token: string | null } | null)?.share_token ?? null;
-        if (!shareToken) return json({ ok: false, error: "no_claim_link" }, 400);
-        claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
+        const a = await resolveAuditReplyVars(service, resolvedLeadId);
+        if (!a.ok) return json({ ok: false, error: "audit_reply_unavailable", reason: a.reason }, 200);
+        payload = claimTemplatePayload(templateName, lang, a.business, a.link, { trade: a.trade, competitors: a.competitors });
+        storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors);
+      } else {
+        // Claim/opener template. The claim link is required ONLY for templates that use a url var;
+        // a url-less opener (e.g. initial_contact, vars ["name"]) sends with no link (claimUrl "").
+        const needsUrl = tvars.includes("url");
+        let claimUrl = "";
+        if (needsUrl) {
+          if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
+          const { data: site } = await service
+            .from("generated_sites")
+            .select("share_token")
+            .eq("lead_id", resolvedLeadId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const shareToken = (site as { share_token: string | null } | null)?.share_token ?? null;
+          if (!shareToken) return json({ ok: false, error: "no_claim_link" }, 400);
+          claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
+        }
+        payload = claimTemplatePayload(templateName, lang, businessName, claimUrl);
+        storedBody = renderTemplateBody(templateName, businessName, claimUrl);
       }
-      payload = claimTemplatePayload(templateName, WA_TEMPLATES[templateName].lang, businessName, claimUrl);
       messageType = "template";
       usedTemplate = templateName;
-      storedBody = renderTemplateBody(templateName, businessName, claimUrl);
     } else {
       // Free-form text — only deliverable inside the 24h window when LIVE. In test
       // mode we allow it (simulated) so the UI can be exercised before the webhook.

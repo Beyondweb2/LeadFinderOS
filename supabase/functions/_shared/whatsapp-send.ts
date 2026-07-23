@@ -35,7 +35,7 @@ export function resolveWhatsAppEnv() {
 // the claim/site link. Each template declares its own order so a new template with a
 // different variable layout (e.g. URL first) can't be silently sent with the values
 // swapped — the builder fills {{1}},{{2}},… strictly in this order.
-export type TemplateVar = "name" | "url";
+export type TemplateVar = "name" | "url" | "trade" | "competitors";
 
 /** Approved template allowlist — mirrors process-whatsapp-queue. `vars` is the BODY
  *  variable order for THIS template ({{1}} = vars[0], {{2}} = vars[1], …). The four
@@ -52,6 +52,9 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
   // Opener — ONE variable: {{1}} = business name. NO url. vars MUST stay ["name"] so
   // templateBodyParams sends exactly one param (Meta rejects a param-count mismatch).
   initial_contact: { lang: "en", vars: ["name"] },
+  // Reply-to-a-reply: 4 vars — {{1}} trade, {{2}} competitors, {{3}} business name, {{4}} report link.
+  // Vars resolved server-side per-lead from the lead's own completed audit (see resolveAuditReplyVars).
+  audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -93,7 +96,16 @@ const barberFreshaBooksyBody = (b: string, u: string) =>
 const initialContactBody = (b: string, _u: string) =>
   `Hi, is this the right number for ${b || "your business"}? Cheers`;
 
-export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string) => string> = {
+// audit_reply — reply to a lead who replied. b={{3}} business, u={{4}} report link,
+// trade={{1}}, competitors={{2}}. Keep in sync with the Meta-registered audit_reply body.
+const auditReplyBody = (b: string, u: string, trade?: string, competitors?: string) =>
+  `Hi, thanks for getting back.
+We asked AI tools like ChatGPT to recommend a ${trade || "provider"} in your area, it's naming ${competitors || "other firms"} - not ${b || "you"}.
+We ran a full report on your business for AI and SEO visibility: ${u}
+We could get you showing up in those results - it's mostly stuff we handle at our end.
+Want me to explain?`;
+
+export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string) => string> = {
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).
   no_website_barbers: noWebsiteBody,
@@ -104,12 +116,14 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   // The "fresha/booksy take a cut" angle — URL-first body.
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
+  audit_reply: auditReplyBody,
 };
 
-/** Render the display copy of a template body with its variables filled. */
-export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string): string {
+/** Render the display copy of a template body with its variables filled. `trade`/`competitors`
+ *  are used only by audit_reply; the other (2-var) bodies ignore them. */
+export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string): string {
   const fn = WA_TEMPLATE_BODIES[templateName];
-  return fn ? fn(businessName, claimUrl) : `[${templateName}]`;
+  return fn ? fn(businessName, claimUrl, trade, competitors) : `[${templateName}]`;
 }
 
 /** Body params for a template, filled STRICTLY in the template's declared `vars`
@@ -117,8 +131,15 @@ export function renderTemplateBody(templateName: string, businessName: string, c
  *  'name' → the business name (with the "your business" fallback). For the original
  *  templates (vars ["name","url"]) this returns EXACTLY the previous shape — {{1}}=name,
  *  {{2}}=url — so their live sends are unchanged. */
-export function templateBodyParams(vars: TemplateVar[], businessName: string, claimUrl: string) {
-  const resolve = (v: TemplateVar) => (v === "url" ? claimUrl : (businessName || "your business"));
+export function templateBodyParams(vars: TemplateVar[], businessName: string, claimUrl: string, extra?: { trade?: string; competitors?: string }) {
+  const resolve = (v: TemplateVar) => {
+    switch (v) {
+      case "url": return claimUrl;
+      case "trade": return extra?.trade ?? "";
+      case "competitors": return extra?.competitors ?? "";
+      default: return businessName || "your business"; // "name"
+    }
+  };
   return [{
     type: "body",
     parameters: vars.map((v) => ({ type: "text", text: resolve(v) })),
@@ -133,11 +154,11 @@ export function textPayload(body: string) {
 /** A claim-template payload (deliverable any time). Variable order comes from the
  *  template's own `vars` in WA_TEMPLATES (falls back to the original name→url order
  *  for any unknown template, so nothing regresses). */
-export function claimTemplatePayload(templateName: string, lang: string, businessName: string, claimUrl: string) {
+export function claimTemplatePayload(templateName: string, lang: string, businessName: string, claimUrl: string, extra?: { trade?: string; competitors?: string }) {
   const vars = WA_TEMPLATES[templateName]?.vars ?? ["name", "url"];
   return {
     type: "template",
-    template: { name: templateName, language: { code: lang }, components: templateBodyParams(vars, businessName, claimUrl) },
+    template: { name: templateName, language: { code: lang }, components: templateBodyParams(vars, businessName, claimUrl, extra) },
   };
 }
 

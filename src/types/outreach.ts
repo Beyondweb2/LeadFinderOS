@@ -230,6 +230,7 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   { value: 'booking_switch_barbers', label: 'Booking switch (no commission)' },
   { value: 'barber_fresha_booksy', label: 'Fresha/Booksy switch' },
   { value: 'initial_contact', label: 'Initial contact (opener)' },
+  { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
 ];
 
 // Contact method options (how the business was contacted)
