@@ -57,10 +57,11 @@ export interface AiAuditReportData {
   generatedAtLabel: string;      // e.g. "11 Jul 2026"
   shareUrl?: string;             // reserved: future public link (not built yet)
   seo?: AiAuditSeo;              // optional website-SEO section; slot renders only when present
-  // Per-term winnability — derived from the stored per-question {named, competitors}. Optional
-  // (older snapshots lack it). 'named' = we win/defend; 'open' = winnable (nobody strong named);
-  // 'contested' = a few rivals; 'locked' = heavily contested.
-  winnability?: { question: string; verdict: 'open' | 'contested' | 'locked' | 'named'; rivalCount: number }[];
+  // Per-term winnability — derived from the stored per-question {named, competitors, citations}.
+  // Optional (older snapshots lack it). 'named' = we win/defend; 'open' = winnable (fragmented /
+  // directory-driven / no cross-engine consensus); 'contested' = a middling field; 'locked' = a
+  // small, consistent, own-site incumbent set; 'no-local-race' = nobody named, generic advice.
+  winnability?: { question: string; verdict: 'open' | 'contested' | 'locked' | 'named' | 'no-local-race'; rivalCount: number }[];
 }
 
 export function esc(s: string): string {

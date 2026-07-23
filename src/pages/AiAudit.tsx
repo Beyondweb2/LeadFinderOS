@@ -24,7 +24,7 @@ import { AiAuditReport } from '@/components/AiAuditReport';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import {
-  DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData,
+  DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, classifyWinnability,
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
 } from '@/lib/auditReport';
 import { renderPlaybookHtml, downloadPlaybookHtml, type PlaybookData, type PlaybookView } from '@/lib/playbookHtml';
@@ -946,6 +946,7 @@ const AiAudit = () => {
       businessType: audit.business_type ?? '',
       locationText: audit.location_text ?? '',
       specialisms: '',
+      isAggregatorUrl,
     });
     if (!data) { toast({ title: 'No completed results to report yet', variant: 'destructive' }); return; }
     setReports((prev) => ({ ...prev, [rid]: data }));
@@ -1010,6 +1011,7 @@ const AiAudit = () => {
     businessType,
     locationText,
     specialisms,
+    isAggregatorUrl,
   });
 
   // The business's own website (opened-run schema value, else the wizard URL when it has one) —
@@ -1082,6 +1084,8 @@ const AiAudit = () => {
         businessType,
         locationText,
         specialisms,
+        isAggregatorUrl,
+        ownWebsite,
       });
       if (!data) {
         toast({ title: 'Nothing to rebuild yet', description: 'This run has no completed results.', variant: 'destructive' });
@@ -2352,87 +2356,20 @@ interface QuestionScore {
   clientNamed: boolean;
 }
 
-/** Heuristic per-question winnability score from ONE done question's engine data. Signals:
- *  clientNamed (any engine named us), rivalCount (distinct real firms named across engines), and
- *  aggregatorShare (fraction of cited URLs that are directory/listing pages — high share means
- *  incumbents lean on directories, so the term is MORE beatable). Deliberately simple + readable —
- *  it's a read of "what AI shows today", not a guarantee. Own website (if cited) is excluded from
- *  the aggregator denominator so a firm's own citation doesn't skew the share. */
+/** Per-question winnability for the badge — a thin adapter over the SHARED classifyWinnability
+ *  rule (auditReport.ts), mapped back into QuestionScore so bandVerdict + QuestionCard stay
+ *  unchanged. isAggregatorUrl is dependency-injected (the SPA's own copy). The fragmentation +
+ *  cross-engine-consensus logic (and the reason text) lives entirely in the shared helper. */
 function scoreQuestion(result: EngineMap, businessName: string, locationText: string, ownWebsite: string): QuestionScore {
-  const ownDomain = (() => { try { return ownWebsite ? new URL(/^https?:\/\//i.test(ownWebsite) ? ownWebsite : `https://${ownWebsite}`).hostname.replace(/^www\./, '').toLowerCase() : ''; } catch { return ''; } })();
-
-  let clientNamed = false;
-  let scoredNamed = 0;            // named on a SCORED engine (chatgpt/gemini)
-  let bestPosition: number | null = null;
-  const firms = new Map<string, string>();   // key → display name
-  let citTotal = 0;
-  let citAggregator = 0;
-
-  for (const engine of DISPLAY_ENGINES) {
-    const er = result[engine];
-    if (!er) continue;
-    if (er.named) {
-      clientNamed = true;
-      if ((SCORED_ENGINES as readonly string[]).includes(engine)) scoredNamed++;
-      if (er.position != null) bestPosition = bestPosition == null ? er.position : Math.min(bestPosition, er.position);
-    }
-    // google_organic's competitors are raw result TITLES (category/location/forum phrases), not
-    // firms an AI named — exclude from rivalCount/namedFirms and the citation aggregator share.
-    // (Its named/position signal above is still honoured.)
-    if (engine === 'google_organic') continue;
-    for (const c of er.competitors) {
-      if (!isRealCompetitor(c, locationText)) continue;
-      const key = c.trim().toLowerCase();
-      if (key && !firms.has(key)) firms.set(key, c.trim());
-    }
-    for (const cit of er.citations) {
-      const url = cit?.url;
-      if (!url) continue;
-      // Skip the business's own site — it's neither a rival's directory listing nor own-site authority.
-      try { if (ownDomain && new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname.replace(/^www\./, '').toLowerCase().endsWith(ownDomain)) continue; } catch { /* keep */ }
-      citTotal++;
-      if (isAggregatorUrl(url)) citAggregator++;
-    }
-  }
-
-  const namedFirms = [...firms.values()];
-  const rivalCount = namedFirms.length;
-  const aggregatorShare = citTotal > 0 ? citAggregator / citTotal : 0;
-
-  // Already named → defend. 8 base, +1 if named on both scored engines, +1 if a strong position.
-  if (clientNamed) {
-    let score = 8;
-    if (scoredNamed >= 2) score += 1;
-    if (bestPosition != null && bestPosition <= 3) score += 1;
-    score = Math.min(10, score);
-    const namedOn = DISPLAY_ENGINES.filter((e) => result[e]?.named).map((e) => ENGINE_LABELS[e] ?? e);
-    return { score, band: 'named', reason: `You're already named on ${namedOn.join(', ')} — defend this.`, namedFirms, clientNamed: true };
-  }
-
-  // No real firms named anywhere → generic advice, not a local race. Unscored.
-  if (rivalCount === 0) {
-    return { score: null, band: 'no-local-race', reason: 'No local firms named — AI gives generic advice, so there is no local race to win here.', namedFirms: [], clientNamed: false };
-  }
-
-  // Rivals exist, we're absent. Blend rivalCount (fewer = easier) with aggregatorShare (higher =
-  // more beatable, incumbents lean on directories not their own sites).
-  const rivalScore = rivalCount <= 2 ? 7 : rivalCount <= 4 ? 5 : 3;            // 1-2 / 3-4 / 5+
-  const aggAdj = aggregatorShare >= 0.6 ? 1.5 : aggregatorShare >= 0.3 ? 0.5 : -1;
-  const score = Math.round(Math.max(2, Math.min(8, rivalScore + aggAdj)));
-  const band: ScoreBand = score >= 6 ? 'winnable' : 'hard';
-
-  const top = namedFirms.slice(0, 3);
-  const extra = rivalCount - top.length;
-  const firmList = top.join(', ') + (extra > 0 ? ` +${extra}` : '');
-  const beatRead = aggregatorShare >= 0.5
-    ? 'Most rank off directory listings, not their own sites — beatable.'
-    : aggregatorShare >= 0.25
-      ? 'A mix of directory listings and own sites — winnable with focus.'
-      : 'They rank off their own site authority — well dug in.';
-  const reason = band === 'winnable'
-    ? `AI names ${rivalCount} firm${rivalCount === 1 ? '' : 's'} (${firmList}); you're absent. ${beatRead} Worth targeting.`
-    : `AI names ${rivalCount} established firm${rivalCount === 1 ? '' : 's'} (${firmList}); you're absent. ${beatRead}`;
-  return { score, band, reason, namedFirms, clientNamed: false };
+  const w = classifyWinnability(result, { businessName, locationText, ownWebsite, isAggregatorUrl });
+  // Map the helper's verdict back to a ScoreBand. 'open'/'contested' both → 'winnable'; bandVerdict
+  // re-derives open vs contested from the score (open 7-9 / contested 4-6), so the verdict round-trips.
+  const band: ScoreBand =
+    w.verdict === 'named' ? 'named'
+    : w.verdict === 'no-local-race' ? 'no-local-race'
+    : w.verdict === 'locked' ? 'hard'
+    : 'winnable';
+  return { score: w.score, band, reason: w.reason, namedFirms: w.namedFirms, clientNamed: w.clientNamed };
 }
 
 /** Map a score band → the existing WINNABILITY_BADGE key so styling stays consistent. */
