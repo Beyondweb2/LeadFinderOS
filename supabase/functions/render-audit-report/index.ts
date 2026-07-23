@@ -47,6 +47,8 @@ function unavailable(msg: string): Response {
   );
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
@@ -58,18 +60,27 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // 1) slug → published business_reports mapping row.
-    const { data: rep } = await service
-      .from("business_reports")
-      .select("audit_id, lead_id, business_name, status")
-      .eq("slug", slug).eq("status", "published").maybeSingle();
-    if (!rep || !rep.audit_id) return unavailable("This report doesn’t exist or isn’t published.");
+    // 1) Resolve the audit id. A UUID path segment IS the audit id — the report is built LIVE from
+    //    the linked audit, no stored business_reports row required (this is what the Inbox report
+    //    pill uses: /a/<auditId>). A non-UUID slug is a published business_reports mapping row
+    //    (backward compat for older published reports + the audit_reply link's slug).
+    let auditId: string;
+    if (UUID_RE.test(slug)) {
+      auditId = slug;
+    } else {
+      const { data: rep } = await service
+        .from("business_reports")
+        .select("audit_id, status")
+        .eq("slug", slug).eq("status", "published").maybeSingle();
+      if (!rep || !rep.audit_id) return unavailable("This report doesn’t exist or isn’t published.");
+      auditId = rep.audit_id as string;
+    }
 
     // 2) audit_id → ai_audits (business context for the report copy).
     const { data: audit } = await service
       .from("ai_audits")
       .select("id, business_name, business_type, location_text, specialism, website")
-      .eq("id", rep.audit_id).maybeSingle();
+      .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
 
     // 3) latest run for the audit.
@@ -88,7 +99,7 @@ Deno.serve(async (req) => {
 
     // 5) build the report data with the SHARED logic (identical to the in-app report), then render.
     const data = buildReportData(queueRows, run as RunRow, {
-      businessName: audit.business_name ?? rep.business_name ?? "",
+      businessName: audit.business_name ?? "",
       businessType: audit.business_type ?? "",
       locationText: audit.location_text ?? "",
       specialisms: audit.specialism ?? "",

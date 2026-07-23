@@ -63,7 +63,7 @@ function listPreview(m: { body: string | null; template_name: string | null }): 
 }
 
 const Inbox = () => {
-  const { user, conversations, messagesForKey, leads, sitesByLeadId, auditReportByLeadId, isLoading, send, refetch, patchLeadStatus } = useInbox();
+  const { user, conversations, messagesForKey, leads, sitesByLeadId, auditByLeadId, isLoading, send, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
@@ -220,10 +220,11 @@ const Inbox = () => {
   const activeSite = active?.leadId ? sitesByLeadId[active.leadId] : undefined;
   const sitePreviewUrl = activeSite?.shareToken ? barberSitePreviewUrl(activeSite.shareToken) : null;
 
-  // Public audit report for THIS lead — slug resolved strictly by the lead's own record (never
-  // another lead's). Drives the report-ready pill + Copy/Open, and is what the audit_reply guard needs.
-  const activeReport = active?.leadId ? auditReportByLeadId[active.leadId] : undefined;
-  const reportUrl = activeReport?.slug ? `https://yoursites.uk/a/${activeReport.slug}` : null;
+  // Public audit report for THIS lead — the lead's own COMPLETED audit, served live at /a/<auditId>
+  // (strictly the lead's own audit id, never another's). Drives the report-ready pill + Copy/Open,
+  // and the audit_reply guard's report identifier.
+  const activeReport = active?.leadId ? auditByLeadId[active.leadId] : undefined;
+  const reportUrl = activeReport?.auditId ? `https://yoursites.uk/a/${activeReport.auditId}` : null;
   const [reportCopied, setReportCopied] = useState(false);
   const copyReportUrl = () => {
     if (!reportUrl) return;
@@ -234,10 +235,10 @@ const Inbox = () => {
   };
 
   // Per-lead template validity (SHARED source of truth with SingleWhatsAppDialog). Resolved
-  // strictly from THIS lead's own record: claim templates need its share_token. Audit data isn't
-  // loaded in the Inbox, so audit-gated templates (none in the picker today) resolve via getTemplateSendability
-  // when/if added. Nothing is auto-hidden — invalid templates render disabled with a clear reason.
-  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: activeSite?.shareToken ?? null }, null);
+  // strictly from THIS lead's own record: claim templates need its share_token; audit_reply needs
+  // the lead's own completed audit (reportSlug = its auditId → /a/<auditId>). Nothing is auto-hidden
+  // — invalid templates render disabled with a clear reason.
+  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: activeSite?.shareToken ?? null }, { reportSlug: activeReport?.auditId ?? null });
   const selectedSendability = templateSendability(template);
   const mapsUrl = activeLead?.google_maps_url
     || (activeLead?.place_id ? `https://www.google.com/maps/place/?q=place_id:${activeLead.place_id}` : null);
