@@ -113,6 +113,7 @@ import { SingleSMSDialog } from '@/components/SingleSMSDialog';
 import { PushToInstantlyDialog } from '@/components/PushToInstantlyDialog';
 import { AiOpenerModal } from '@/components/AiOpenerModal';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useOutreachFindEmails } from '@/hooks/useOutreachFindEmails';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -1209,6 +1210,16 @@ export function OutreachTable({
     return result;
   }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
 
+  // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
+  // with a website and no email yet, persisting to outreach_leads.email via updateLead.
+  const {
+    findEmails,
+    cancel: cancelFindEmails,
+    finding: findingEmails,
+    progress: emailProgress,
+    withWebsiteCount,
+  } = useOutreachFindEmails(filteredAndSortedLeads, onUpdateLead ?? (async () => null));
+
   const newestLeadId = useMemo(() => {
     if (leads.length === 0) return null;
     let newest = leads[0];
@@ -1488,6 +1499,37 @@ export function OutreachTable({
                 <Download className="h-3.5 w-3.5 mr-1.5" />
                 <span className="hidden sm:inline">Export </span>CSV
               </Button>
+              {/* Find emails — free website crawl (extract-email) over filtered leads
+                  with a website and no email yet; writes to outreach_leads.email. */}
+              {!readOnly && onUpdateLead && (
+                findingEmails ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={cancelFindEmails}
+                    className="bg-background text-xs h-8"
+                    title="Cancel the email scan"
+                  >
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    Finding… ({emailProgress ? `${emailProgress.done}/${emailProgress.total}` : '…'})
+                    <X className="h-3.5 w-3.5 ml-1.5" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={findEmails}
+                    disabled={!withWebsiteCount}
+                    className="bg-background text-xs h-8"
+                    title={withWebsiteCount
+                      ? `Crawl ${withWebsiteCount} lead${withWebsiteCount === 1 ? '' : 's'} with a website (and no email yet) for a contact email — free, safe to leave running`
+                      : 'No leads with a website and no email yet'}
+                  >
+                    <Mail className="h-3.5 w-3.5 mr-1.5" />
+                    Find emails ({withWebsiteCount} with a website)
+                  </Button>
+                )
+              )}
               {/* Import button */}
               {!readOnly && onImportLeads && (
                 <Button
