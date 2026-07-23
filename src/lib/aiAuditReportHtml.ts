@@ -516,8 +516,8 @@ ${seoSection(d.seo)}
       <p><b>This is your starting point.</b> We fix what AI says about you &mdash; then re-run this exact audit so you see the before &amp; after in black and white.</p>
       <div class="close">Let&rsquo;s get ${esc(d.businessName)} named when your customers ask.</div>
       <div class="cta-actions">
-        <a class="cta-btn email" href="${emailHref}">Email us</a>
-        <a class="cta-btn wa" href="${waHref}">WhatsApp us</a>
+        <a class="cta-btn email" href="${emailHref}" target="_blank" rel="noopener noreferrer">Email us</a>
+        <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp us</a>
       </div>
     </section>
 
