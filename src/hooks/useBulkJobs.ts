@@ -14,7 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 // bulk_jobs isn't in the generated types yet — RLS still enforces access.
 const sb = supabase as unknown as { from: (t: string) => any; functions: typeof supabase.functions };
 
-export type BulkJobType = 'enrich' | 'site_gen';
+export type BulkJobType = 'enrich' | 'site_gen' | 'audit';
 
 export interface BulkJob {
   id: string;

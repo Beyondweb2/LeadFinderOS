@@ -172,9 +172,9 @@ interface OutreachTableProps {
   } | null;
   /** Called once a launchIntent has been acted on, so the parent can clear it. */
   onLaunchConsumed?: () => void;
-  /** Create a server-side bulk job (enrich / site_gen) for the given lead ids.
+  /** Create a server-side bulk job (enrich / site_gen / audit) for the given lead ids.
    *  Runs in the bulk-jobs edge function — survives leaving the page. */
-  onBulkJob?: (type: 'enrich' | 'site_gen', leadIds: string[], params?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
+  onBulkJob?: (type: 'enrich' | 'site_gen' | 'audit', leadIds: string[], params?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
   /** True while a bulk job is queued/running (or being created) — disables new ones. */
   bulkJobActive?: boolean;
   /** Bumped when a site-gen bulk job completes → re-read generated_sites. */
@@ -290,6 +290,9 @@ export function OutreachTable({
   // Bulk site-gen template picker dialog.
   const [siteGenDialogOpen, setSiteGenDialogOpen] = useState(false);
   const [siteGenChoice, setSiteGenChoice] = useState<string>('barber');
+  // Bulk AI-audit question-count + cost-confirm dialog.
+  const [auditDialogOpen, setAuditDialogOpen] = useState(false);
+  const [auditQuestionCount, setAuditQuestionCount] = useState<number>(3);
   const [sitesByLead, setSitesByLead] = useState<Record<string, { id: string; slug: string; opened: boolean; claimed: boolean; addon: boolean }>>({});
   // Per-lead LATEST audit state (mirrors sitesByLead) — drives the upcoming "Run audit" /
   // "Manage" row control. Keyed by lead_id, newest audit first; each entry carries that
@@ -906,6 +909,54 @@ export function OutreachTable({
     }
   };
 
+  // Leads eligible for a bulk AI audit: selected, real (non-demo), NOT already audited
+  // (auditsByLead — avoids double-spend), and carrying a usable business type + location
+  // (search_keyword||category / search_location||address — the audit's inputs, sourced the
+  // same way the wizard's pickLead does). Mirrors siteGenEligibleIds.
+  const auditEligibleLeads = useMemo(
+    () => leads.filter((l) =>
+      selectedIds.has(l.id) &&
+      !isDemoLead(l.id) &&
+      !auditsByLead[l.id] &&
+      !!(l.search_keyword || l.category) &&
+      !!(l.search_location || l.address)),
+    [leads, selectedIds, auditsByLead],
+  );
+  const auditEligibleIds = useMemo(() => auditEligibleLeads.map((l) => l.id), [auditEligibleLeads]);
+  // Cost estimate for the confirm guard: N × Q AI-search runs @ $0.05 + one $0.02 SEO per website lead.
+  const auditCostUsd = useMemo(() => {
+    const q = Math.max(1, Math.min(5, auditQuestionCount));
+    const websites = auditEligibleLeads.filter((l) => (l.website ?? '').trim()).length;
+    return auditEligibleIds.length * q * 0.05 + websites * 0.02;
+  }, [auditEligibleLeads, auditEligibleIds, auditQuestionCount]);
+
+  // Open the question-count + cost-confirm dialog (validates there's something eligible first).
+  const handleBulkRunAudit = () => {
+    if (!onBulkJob || bulkJobActive) return;
+    if (!auditEligibleIds.length) {
+      toast({ title: 'Nothing to audit', description: 'Selected leads are already audited or missing a business type / location.' });
+      return;
+    }
+    setAuditDialogOpen(true);
+  };
+
+  // Fire the bulk audit: one queued audit per eligible lead, drained by the existing
+  // process-ai-audit-queue cron (no direct Apify). Clears the selection on success.
+  const confirmBulkAudit = async () => {
+    if (!onBulkJob || bulkJobActive) return;
+    const ids = auditEligibleIds;
+    if (!ids.length) { setAuditDialogOpen(false); return; }
+    const q = Math.max(1, Math.min(5, auditQuestionCount));
+    const res = await onBulkJob('audit', ids, { question_count: q });
+    if (res.ok) {
+      toast({ title: `Bulk audit started (${ids.length} lead${ids.length === 1 ? '' : 's'} × ${q}q)`, description: 'Enqueuing server-side — audits drain through the queue. Safe to leave this page.' });
+      setSelectedIds(new Set());
+      setAuditDialogOpen(false);
+    } else {
+      toast({ title: 'Could not start bulk audit', description: res.error, variant: 'destructive' });
+    }
+  };
+
   // Mark selected leads as contacted (Initial Contact)
   const handleMarkAsContacted = () => {
     if (selectedIds.size === 0) return;
@@ -1328,6 +1379,19 @@ export function OutreachTable({
                   >
                     <Sparkles className="h-3.5 w-3.5 mr-1.5 text-violet-500" />
                     Enrich selected ({selectedIds.size})
+                  </Button>
+                )}
+                {!readOnly && onBulkJob && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-background text-xs h-8"
+                    disabled={bulkJobActive}
+                    title={bulkJobActive ? 'A bulk job is already running' : 'Run an AI-visibility audit for each selected lead (with a business type + location) — enqueues server-side and drains through the audit queue'}
+                    onClick={handleBulkRunAudit}
+                  >
+                    <ClipboardList className="h-3.5 w-3.5 mr-1.5 text-sky-500" />
+                    Run audits ({auditEligibleIds.length})
                   </Button>
                 )}
                 {!readOnly && onBulkJob && isAdmin && (
@@ -2252,6 +2316,46 @@ export function OutreachTable({
             <Button size="sm" onClick={confirmBulkSiteGen} disabled={bulkJobActive || !siteGenEligibleIds.length}>
               <Globe className="h-3.5 w-3.5 mr-1.5" />
               Generate {siteGenEligibleIds.length}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk AI-audit — question count (1–5) + explicit cost-confirm guard before firing, so a
+          large accidental selection can't quietly run a costly batch. Enqueues one audit per
+          eligible lead; the existing queue drains them (no direct Apify). */}
+      <Dialog open={auditDialogOpen} onOpenChange={setAuditDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Run AI audits</DialogTitle>
+            <DialogDescription className="text-xs">
+              One AI-visibility audit per selected lead — enqueued server-side and drained through the
+              audit queue (no direct Apify). Uses each lead’s stored business type + location.
+              {selectedIds.size - auditEligibleIds.length > 0 && ` · ${selectedIds.size - auditEligibleIds.length} skipped (already audited or missing type/location)`}.
+              Capped at $3/audit + $15/day. Safe to leave this page.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Questions per business</label>
+            <Select value={String(auditQuestionCount)} onValueChange={(v) => setAuditQuestionCount(Number(v))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n} question{n === 1 ? '' : 's'}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
+            Audit <span className="font-semibold">{auditEligibleIds.length}</span> business{auditEligibleIds.length === 1 ? '' : 'es'}
+            {' '}× <span className="font-semibold">{auditQuestionCount}</span> question{auditQuestionCount === 1 ? '' : 's'}
+            {' '}(~<span className="font-semibold">${auditCostUsd.toFixed(2)}</span>). Proceed?
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setAuditDialogOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={confirmBulkAudit} disabled={bulkJobActive || !auditEligibleIds.length}>
+              <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
+              Audit {auditEligibleIds.length}
             </Button>
           </DialogFooter>
         </DialogContent>
