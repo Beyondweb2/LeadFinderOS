@@ -50,6 +50,8 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   // NEW: {{1}} = site URL, {{2}} = business name (REVERSE of the others). "In review"
   // at Meta — sends fail until approved; the code is correct on approval.
   barber_fresha_booksy: { lang: "en", vars: ["url", "name"] },
+  // Opener — ONE variable: {{1}} = business name, NO url. vars MUST stay ["name"] (one param).
+  initial_contact: { lang: "en", vars: ["name"] },
 };
 const DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -225,18 +227,24 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
     const shareToken: string | null = site?.share_token ?? null;
-    if (!shareToken) {
-      // Can't send the claim link → drop it out of the queue so it can't block,
-      // and surface why. Operator can re-queue once the site exists.
+    // Resolve the template FIRST so the claim-link requirement can be conditional. A url-less
+    // opener (e.g. initial_contact, vars ["name"]) is sent BEFORE any site exists, so it must NOT
+    // be gated on a share_token; only templates that actually use a url var need the link.
+    const templateName = lead.whatsapp_template && TEMPLATES[lead.whatsapp_template] ? lead.whatsapp_template : DEFAULT_TEMPLATE;
+    const lang = TEMPLATES[templateName].lang;
+    const needsUrl = TEMPLATES[templateName].vars.includes("url");
+    if (needsUrl && !shareToken) {
+      // A url template with no claim link → drop it out of the queue so it can't block, and
+      // surface why. Operator can re-queue once the site exists. (Unchanged for name+url templates.)
       await service.from("outreach_leads").update({
         status: "not_contacted", whatsapp_delivery_status: "no_claim_link", contact_method: null,
       }).eq("id", lead.id);
       return json({ ok: true, skipped: "no_claim_link", lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }
 
-    const claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
-    const templateName = lead.whatsapp_template && TEMPLATES[lead.whatsapp_template] ? lead.whatsapp_template : DEFAULT_TEMPLATE;
-    const lang = TEMPLATES[templateName].lang;
+    // "" when there's no token — safe because templateBodyParams only fills the url param for
+    // templates whose vars include "url" (url-less templates never reference it).
+    const claimUrl = shareToken ? `${CLAIM_ORIGIN}/s/${shareToken}` : "";
     const toNumber = toWhatsAppNumber(lead.phone as string, lead.country as string | null);
     if (!toNumber) {
       await service.from("outreach_leads").update({

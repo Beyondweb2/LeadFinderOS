@@ -49,6 +49,9 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
   // NEW: {{1}} = site URL, {{2}} = business name (the REVERSE of the others). "In
   // review" at Meta — sends fail until approved; the code is correct on approval.
   barber_fresha_booksy: { lang: "en", vars: ["url", "name"] },
+  // Opener — ONE variable: {{1}} = business name. NO url. vars MUST stay ["name"] so
+  // templateBodyParams sends exactly one param (Meta rejects a param-count mismatch).
+  initial_contact: { lang: "en", vars: ["name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -85,6 +88,11 @@ const bookingSwitchBarbersBody = (b: string, u: string) =>
 const barberFreshaBooksyBody = (b: string, u: string) =>
   `made you this 👇\n${u}\n\nHey ${b || "your business"}, right now people can only book you through fresha/booksy - who take a cut of every booking and keep your customers on their app, not yours (bit cheeky). That's your shops own booking site up there - fully yours to customize too - colours, photos, prices, whatever you fancy. free if you want it, no stress if not`;
 
+// Opener — ONE variable ({{1}} = business name). The claimUrl arg is ignored (this template
+// has no url). Display-only preview; the real send uses Meta's body + the single name param.
+const initialContactBody = (b: string, _u: string) =>
+  `Hi, is this the right number for ${b || "your business"}? Cheers`;
+
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string) => string> = {
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).
@@ -95,6 +103,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   booking_switch_barbers: bookingSwitchBarbersBody,
   // The "fresha/booksy take a cut" angle — URL-first body.
   barber_fresha_booksy: barberFreshaBooksyBody,
+  initial_contact: initialContactBody,
 };
 
 /** Render the display copy of a template body with its variables filled. */

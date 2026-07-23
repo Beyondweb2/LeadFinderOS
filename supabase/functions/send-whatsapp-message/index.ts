@@ -121,19 +121,24 @@ Deno.serve(async (req) => {
     let storedBody: string | null = null;
 
     if (templateName) {
-      // Out-of-window claim template. Requires the lead's claim link.
+      // Out-of-window template. The claim link is required ONLY for templates that use a url var;
+      // a url-less opener (e.g. initial_contact, vars ["name"]) sends with no link (claimUrl "").
       if (!WA_TEMPLATES[templateName]) return json({ ok: false, error: "unknown_template" }, 400);
-      if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
-      const { data: site } = await service
-        .from("generated_sites")
-        .select("share_token")
-        .eq("lead_id", resolvedLeadId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const shareToken = (site as { share_token: string | null } | null)?.share_token ?? null;
-      if (!shareToken) return json({ ok: false, error: "no_claim_link" }, 400);
-      const claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
+      const needsUrl = WA_TEMPLATES[templateName].vars.includes("url");
+      let claimUrl = "";
+      if (needsUrl) {
+        if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
+        const { data: site } = await service
+          .from("generated_sites")
+          .select("share_token")
+          .eq("lead_id", resolvedLeadId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const shareToken = (site as { share_token: string | null } | null)?.share_token ?? null;
+        if (!shareToken) return json({ ok: false, error: "no_claim_link" }, 400);
+        claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
+      }
       payload = claimTemplatePayload(templateName, WA_TEMPLATES[templateName].lang, businessName, claimUrl);
       messageType = "template";
       usedTemplate = templateName;
