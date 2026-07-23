@@ -524,7 +524,9 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       // Automation B: queue the audit_reply send for AFTER extraction. Only for a genuinely
       // COMPLETE run (not capped — a capped run has partial data, don't message a lead about it).
       // The lead_id gate + idempotency are enforced inside maybeSendAuditReply.
-      if (!isCapped && runRow?.audit_id) auditReplyJobs.push({ runId, auditId: runRow.audit_id as string });
+      // Gated OFF by default (same flag as reply→audit). When off, no report row is published and
+      // no audit_reply is sent. Set AUTO_REPLY_FLOW_ENABLED=1 to re-enable (no code change).
+      if (Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1" && !isCapped && runRow?.audit_id) auditReplyJobs.push({ runId, auditId: runRow.audit_id as string });
     }
   }
   // Await the queued extraction calls so the edge runtime doesn't cut them off when we return.

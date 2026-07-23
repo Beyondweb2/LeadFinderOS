@@ -171,7 +171,9 @@ export async function handleInboundMessages(
         try {
           const { data: existingAudit } = await service
             .from("ai_audits").select("id").eq("lead_id", leadId).limit(1).maybeSingle();
-          if (!existingAudit) {
+          // Automation A gated OFF by default while audit_reply is in Meta review / replies are
+          // handled manually. Set AUTO_REPLY_FLOW_ENABLED=1 to re-enable (no code change).
+          if (Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1" && !existingAudit) {
             const { data: lead } = await service
               .from("outreach_leads")
               .select("business_name, category, search_keyword, search_location, address, country, website, user_id")
