@@ -214,6 +214,11 @@ export function renderReportHtml(d: AiAuditReportData): string {
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#1a3d7c"/><path d="M20 8.5 Q14 8.5 14 13.5 L14 24.5 M9.5 14.8 H18.5" fill="none" stroke="#ffd23f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23" cy="22.5" r="2.4" fill="#fff"/></svg>',
   );
 
+  // Personalised one-tap contact links. encodeURIComponent for the URL params (spaces, hyphen,
+  // apostrophe, &), then esc() for HTML-attribute safety. Single-param each → no & separator.
+  const emailHref = esc(`mailto:paul@move37.fun?subject=${encodeURIComponent(`AI Visibility - ${d.businessName}`)}`);
+  const waHref = esc(`https://wa.me/447347041545?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -359,6 +364,13 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .cta p{ margin:0 0 6px; font-size:14px; font-weight:400; color:#c7d3ea; max-width:66ch; }
   .cta p b{ color:#fff; font-weight:700; }
   .cta .close{ margin-top:10px; font-size:14px; font-weight:700; color:#fff; }
+  /* Contact buttons — side by side, stacking on narrow screens. On-palette (yellow + white). */
+  .cta-actions{ display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
+  .cta-btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:13px 22px; border-radius:10px; font-size:15px; font-weight:700; line-height:1;
+    text-decoration:none; border:1px solid transparent; }
+  .cta-btn.email{ background:var(--yellow); color:var(--blue); }
+  .cta-btn.wa{ background:#fff; color:var(--blue); }
 
   /* FOOTER &mdash; a distinct darker navy bar so the text is clearly readable (no blue-on-blue) */
   .site-foot{ background:var(--foot); padding:12px 28px 14px; }
@@ -470,6 +482,10 @@ ${seoSection(d.seo)}
       <h3>Ready to get <span class="y">found</span>?</h3>
       <p><b>This is your starting point.</b> We fix what AI says about you &mdash; then re-run this exact audit so you see the before &amp; after in black and white.</p>
       <div class="close">Let&rsquo;s get ${esc(d.businessName)} named when your customers ask.</div>
+      <div class="cta-actions">
+        <a class="cta-btn email" href="${emailHref}">Email us</a>
+        <a class="cta-btn wa" href="${waHref}">WhatsApp us</a>
+      </div>
     </section>
 
     <footer class="site-foot">
