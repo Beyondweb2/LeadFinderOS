@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConversation, type LeadLite } from '@/hooks/useInbox';
+import { getTemplateSendability, WA_TEMPLATE_REQS } from '@/lib/whatsappTemplates';
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -218,6 +219,13 @@ const Inbox = () => {
   // Thread-header quick-action data — each button/link renders only when present.
   const activeSite = active?.leadId ? sitesByLeadId[active.leadId] : undefined;
   const sitePreviewUrl = activeSite?.shareToken ? barberSitePreviewUrl(activeSite.shareToken) : null;
+
+  // Per-lead template validity (SHARED source of truth with SingleWhatsAppDialog). Resolved
+  // strictly from THIS lead's own record: claim templates need its share_token. Audit data isn't
+  // loaded in the Inbox, so audit-gated templates (none in the picker today) resolve via getTemplateSendability
+  // when/if added. Nothing is auto-hidden — invalid templates render disabled with a clear reason.
+  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: activeSite?.shareToken ?? null }, null);
+  const selectedSendability = templateSendability(template);
   const mapsUrl = activeLead?.google_maps_url
     || (activeLead?.place_id ? `https://www.google.com/maps/place/?q=place_id:${activeLead.place_id}` : null);
   const websiteUrl = activeLead?.website
@@ -265,6 +273,11 @@ const Inbox = () => {
     if (useTemplate && !active.leadId) {
       toast({ title: 'Template needs a lead', description: 'This conversation has no linked lead, so a claim template can’t be sent.', variant: 'destructive' });
       return;
+    }
+    // Per-lead validity guard — never send a template whose required data this lead lacks.
+    if (useTemplate) {
+      const s = templateSendability(template);
+      if (!s.ok) { toast({ title: 'Template not available for this lead', description: s.reason, variant: 'destructive' }); return; }
     }
     if (!useTemplate && !text.trim()) return;
     setSending(true);
@@ -546,14 +559,33 @@ const Inbox = () => {
                       <Select value={template} onValueChange={setTemplate}>
                         <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {WA_REPLY_TEMPLATES.map((t) => <SelectItem key={t.name} value={t.name}>{t.label}</SelectItem>)}
+                          {WA_REPLY_TEMPLATES.map((t) => {
+                            const s = templateSendability(t.name);
+                            const group = WA_TEMPLATE_REQS[t.name]?.group;
+                            const groupLabel = group === 'site' ? 'Site / claim' : group === 'audit' ? 'Audit' : 'Opener';
+                            return (
+                              <SelectItem key={t.name} value={t.name} disabled={!s.ok}>
+                                <span className="flex flex-col">
+                                  <span>{t.label} <span className="text-[10px] text-muted-foreground">· {groupLabel}</span></span>
+                                  {!s.ok && <span className="text-[10px] text-amber-600">{s.reason}</span>}
+                                </span>
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
-                      <Button onClick={doSend} disabled={sending || !active.leadId} className="shrink-0">
+                      <Button onClick={doSend} disabled={sending || !active.leadId || !selectedSendability.ok} className="shrink-0">
                         {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
                         Send template
                       </Button>
                     </div>
+                    {/* Why the selected template can't be sent to THIS lead (shared guard). */}
+                    {active.leadId && !selectedSendability.ok && (
+                      <p className="flex items-center gap-1.5 text-[11px] text-amber-600">
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                        {selectedSendability.reason}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

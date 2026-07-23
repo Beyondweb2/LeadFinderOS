@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2, Sparkles } from 'lucide-react';
 import { generateWhatsAppUrl, fillTemplate, hasLinkToken } from '@/lib/leadUtils';
+import { siteLinkGuard } from '@/lib/whatsappTemplates';
 import { barberSiteUrl } from '@/config/publicSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TemplatePicker } from '@/components/TemplatePicker';
@@ -158,11 +159,13 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
 
   // Guard: if this template references {{link}} but the lead has no resolvable site link,
   // block the send — fillTemplate leaves "{{link}}" literal, so sending would ship a broken
-  // link. linkResolving keeps the button disabled while the async token lookup is in flight
+  // link. Decision + reason come from the SHARED siteLinkGuard (same rule the Inbox picker
+  // uses). linkResolving keeps the button disabled while the async token lookup is in flight
   // (so it can't send before the link resolves); linkMissing is the confirmed no-token case.
   const needsLink = useMemo(() => hasLinkToken(template), [template]);
+  const linkGuard = siteLinkGuard(needsLink, resolvedLink);
   const linkResolving = needsLink && linkLoading;
-  const linkMissing = needsLink && !linkLoading && !resolvedLink;
+  const linkMissing = !linkResolving && !linkGuard.ok;
   const linkBlocked = linkResolving || linkMissing;
 
   const handleSend = async () => {
@@ -302,7 +305,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
                 <AlertTriangle className="h-3 w-3 shrink-0" />
                 {linkResolving
                   ? 'Checking for this lead’s site link…'
-                  : 'No site link yet — this message uses {{link}}, but this lead has no generated site. Generate the site first.'}
+                  : linkGuard.reason}
               </p>
             )}
 
