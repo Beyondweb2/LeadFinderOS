@@ -468,11 +468,10 @@ const Inbox = () => {
                       <ListChecks className="h-4 w-4" />
                     </button>
                   )}
-                  {/* Run / re-run the AI-visibility audit for this lead — opens the audit wizard
-                      prefilled (same deep-link as the Outreach button) in a NEW TAB so the Inbox
-                      keeps its place. */}
+                  {/* Run / re-run the AI-visibility audit for this lead — navigates SAME-TAB to the
+                      audit wizard prefilled (same deep-link as the Outreach button). */}
                   {active.leadId && (
-                    <button type="button" onClick={() => window.open(`/ai-audit?leadId=${active.leadId}`, '_blank', 'noopener')} title="Run / re-run AI audit for this lead" aria-label="Run AI audit" className={HEADER_ICON_BTN}>
+                    <button type="button" onClick={() => navigate(`/ai-audit?leadId=${active.leadId}`)} title="Run / re-run AI audit for this lead" aria-label="Run AI audit" className={HEADER_ICON_BTN}>
                       <Sparkles className="h-4 w-4" />
                     </button>
                   )}
