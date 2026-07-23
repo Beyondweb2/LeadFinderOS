@@ -240,6 +240,45 @@ const Inbox = () => {
   // — invalid templates render disabled with a clear reason.
   const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: activeSite?.shareToken ?? null }, { reportSlug: activeReport?.auditId ?? null });
   const selectedSendability = templateSendability(template);
+
+  // Approved WhatsApp-template picker — SEPARATE from the free-text "Quick reply" snippets. Shown in
+  // both window states (below). Each option is enabled/disabled by the SHARED getTemplateSendability
+  // guard (audit_reply needs a completed audit; claim templates need a share_token). Send goes via
+  // doSend(true) → send-whatsapp-message, which resolves vars per-lead server-side (safe).
+  const templatePicker = (
+    <>
+      <div className="flex items-center gap-2">
+        <Select value={template} onValueChange={setTemplate}>
+          <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {WA_REPLY_TEMPLATES.map((t) => {
+              const s = templateSendability(t.name);
+              const group = WA_TEMPLATE_REQS[t.name]?.group;
+              const groupLabel = group === 'site' ? 'Site / claim' : group === 'audit' ? 'Audit' : 'Opener';
+              return (
+                <SelectItem key={t.name} value={t.name} disabled={!s.ok}>
+                  <span className="flex flex-col">
+                    <span>{t.label} <span className="text-[10px] text-muted-foreground">· {groupLabel}</span></span>
+                    {!s.ok && <span className="text-[10px] text-amber-600">{s.reason}</span>}
+                  </span>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+        <Button onClick={() => doSend(true)} disabled={sending || !active?.leadId || !selectedSendability.ok} className="shrink-0">
+          {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
+          Send template
+        </Button>
+      </div>
+      {active?.leadId && !selectedSendability.ok && (
+        <p className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-600">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          {selectedSendability.reason}
+        </p>
+      )}
+    </>
+  );
   const mapsUrl = activeLead?.google_maps_url
     || (activeLead?.place_id ? `https://www.google.com/maps/place/?q=place_id:${activeLead.place_id}` : null);
   const websiteUrl = activeLead?.website
@@ -281,9 +320,11 @@ const Inbox = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, leads, isLoading]);
 
-  const doSend = async () => {
+  const doSend = async (asTemplate?: boolean) => {
     if (!active) return;
-    const useTemplate = !win.open;
+    // Explicit template send (asTemplate=true, from the WhatsApp-template picker) works in ANY
+    // window state; otherwise fall back to the window default (out-of-window → template, in → text).
+    const useTemplate = asTemplate ?? !win.open;
     if (useTemplate && !active.leadId) {
       toast({ title: 'Template needs a lead', description: 'This conversation has no linked lead, so a claim template can’t be sent.', variant: 'destructive' });
       return;
@@ -308,8 +349,9 @@ const Inbox = () => {
         no_claim_link: 'That lead has no generated site yet, so there’s no claim link to send.',
         forbidden: 'You can only message your own conversations.',
         template_needs_lead: 'A template needs a linked lead.',
+        audit_reply_unavailable: 'Audit report not ready for this lead — run an audit first.',
       };
-      toast({ title: 'Not sent', description: map[res.error ?? ''] ?? res.error ?? 'Send failed.', variant: 'destructive' });
+      toast({ title: 'Not sent', description: res.reason ?? map[res.error ?? ''] ?? res.error ?? 'Send failed.', variant: 'destructive' });
       return;
     }
     setText('');
@@ -589,9 +631,14 @@ const Inbox = () => {
                       <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a reply…"
                         className="min-h-[44px] max-h-32 flex-1 resize-none" maxLength={4000}
                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } }} disabled={sending} />
-                      <Button onClick={doSend} disabled={sending || !text.trim()} size="icon" className="h-11 w-11 shrink-0">
+                      <Button onClick={() => doSend()} disabled={sending || !text.trim()} size="icon" className="h-11 w-11 shrink-0">
                         {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                       </Button>
+                    </div>
+                    {/* Approved WhatsApp templates — SEPARATE from the free-text "Quick reply" above. */}
+                    <div className="border-t border-border/60 pt-2">
+                      <p className="mb-1 text-[11px] text-muted-foreground">Or send an approved WhatsApp template:</p>
+                      {templatePicker}
                     </div>
                   </div>
                 ) : (
@@ -599,37 +646,7 @@ const Inbox = () => {
                     <p className="text-[11px] text-muted-foreground">
                       Outside the 24h window — free text isn’t allowed. Send an approved template{active.leadId ? '' : ' (needs a linked lead)'}:
                     </p>
-                    <div className="flex items-center gap-2">
-                      <Select value={template} onValueChange={setTemplate}>
-                        <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {WA_REPLY_TEMPLATES.map((t) => {
-                            const s = templateSendability(t.name);
-                            const group = WA_TEMPLATE_REQS[t.name]?.group;
-                            const groupLabel = group === 'site' ? 'Site / claim' : group === 'audit' ? 'Audit' : 'Opener';
-                            return (
-                              <SelectItem key={t.name} value={t.name} disabled={!s.ok}>
-                                <span className="flex flex-col">
-                                  <span>{t.label} <span className="text-[10px] text-muted-foreground">· {groupLabel}</span></span>
-                                  {!s.ok && <span className="text-[10px] text-amber-600">{s.reason}</span>}
-                                </span>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                      <Button onClick={doSend} disabled={sending || !active.leadId || !selectedSendability.ok} className="shrink-0">
-                        {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
-                        Send template
-                      </Button>
-                    </div>
-                    {/* Why the selected template can't be sent to THIS lead (shared guard). */}
-                    {active.leadId && !selectedSendability.ok && (
-                      <p className="flex items-center gap-1.5 text-[11px] text-amber-600">
-                        <AlertTriangle className="h-3 w-3 shrink-0" />
-                        {selectedSendability.reason}
-                      </p>
-                    )}
+                    {templatePicker}
                   </div>
                 )}
               </div>

@@ -16,6 +16,7 @@ export const WA_REPLY_TEMPLATES = [
   { name: 'booking_switch_barbers', label: 'Booking switch (no commission) (claim link)' },
   { name: 'barber_fresha_booksy', label: 'Fresha/Booksy switch (claim link)' },
   { name: 'initial_contact', label: 'Initial contact (opener)' },
+  { name: 'audit_reply', label: 'Audit reply (report + competitors)' },
 ];
 
 export interface WaMessage {
@@ -199,7 +200,7 @@ export function useInbox() {
 
   const send = useCallback(async (args: {
     phone: string; leadId: string | null; country?: string | null; body?: string; templateName?: string;
-  }): Promise<{ ok: boolean; simulated?: boolean; error?: string }> => {
+  }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string }> => {
     const { data, error } = await sb.functions.invoke('send-whatsapp-message', {
       body: {
         phone: args.phone,
@@ -210,7 +211,7 @@ export function useInbox() {
       },
     });
     if (error) return { ok: false, error: error.message };
-    if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed' };
+    if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason };
     await fetchAll();
     return { ok: true, simulated: data.simulated };
   }, [fetchAll]);
