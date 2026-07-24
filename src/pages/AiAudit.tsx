@@ -193,6 +193,9 @@ const AiAudit = () => {
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<RunRow | null>(null);
   const [queueRows, setQueueRows] = useState<QueueRow[]>([]);
+  // Live list of ALL the operator's in-flight audits (pending/running) — so firing a second audit
+  // doesn't hide the first; each shows its own X/N. Keyed by run id, refreshed by a poller below.
+  const [runningList, setRunningList] = useState<{ runId: string; auditId: string; name: string; done: number; total: number; status: string }[]>([]);
   const [resultsBusinessName, setResultsBusinessName] = useState('');
   // Whether the run's audit has a website — gates the "Add SEO data" paste feature.
   const [resultsHasWebsite, setResultsHasWebsite] = useState(false);
@@ -445,6 +448,46 @@ const AiAudit = () => {
       if (settleRef.current) { clearTimeout(settleRef.current); settleRef.current = null; }
     };
   }, [step, runId, pollRun, loadSaved]);
+
+  // Poll ALL of the operator's in-flight audits (pending/running) so the results view can list every
+  // audit currently running — not just the one that's open. RLS scopes ai_audit_runs to the owner.
+  // Per-run X/N is derived from ai_audit_queue counts (done+failed vs total), the SAME notion as the
+  // single-run counter. Runs only on the results step; refreshes on runId change so a freshly-fired
+  // audit appears immediately. Every 8s while open.
+  useEffect(() => {
+    if (step !== 'results') { setRunningList([]); return; }
+    let stop = false;
+    const load = async () => {
+      const { data: runs } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audit_runs')
+        .select('id, audit_id, status, ai_audits(business_name)')
+        .in('status', ['pending', 'running'])
+        .order('created_at', { ascending: true });
+      const list = (runs ?? []) as Array<{ id: string; audit_id: string; status: string; ai_audits: { business_name?: string } | { business_name?: string }[] | null }>;
+      if (list.length === 0) { if (!stop) setRunningList([]); return; }
+      const runIds = list.map((r) => r.id);
+      const { data: q } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audit_queue')
+        .select('run_id, status')
+        .in('run_id', runIds);
+      const counts = new Map<string, { done: number; total: number }>();
+      for (const row of ((q ?? []) as Array<{ run_id: string; status: string }>)) {
+        const c = counts.get(row.run_id) ?? { done: 0, total: 0 };
+        c.total++;
+        if (row.status === 'done' || row.status === 'failed') c.done++;
+        counts.set(row.run_id, c);
+      }
+      const next = list.map((r) => {
+        const a = Array.isArray(r.ai_audits) ? r.ai_audits[0] : r.ai_audits;
+        const c = counts.get(r.id) ?? { done: 0, total: 0 };
+        return { runId: r.id, auditId: r.audit_id, name: (a?.business_name ?? '').trim() || 'Audit', done: c.done, total: c.total, status: r.status };
+      });
+      if (!stop) setRunningList(next);
+    };
+    load();
+    const t = setInterval(load, 8000);
+    return () => { stop = true; clearInterval(t); };
+  }, [step, runId]);
 
   // On mount, if a previously-opened audit was persisted (page was left and returned to),
   // restore it so the user lands back on that audit rather than the list. Runs once; skipped
@@ -1593,6 +1636,25 @@ const AiAudit = () => {
 
       {step === 'results' && (
         <div className="space-y-4">
+          {/* All in-flight audits (this operator) — one progress row each, so firing a second audit
+              doesn't wipe the first from view. Driven by the runningList poller (ai_audit_runs +
+              queue counts), independent of the single open run detailed below. */}
+          {runningList.length > 0 && (
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <div className="text-xs font-medium text-muted-foreground">Audits running now ({runningList.length})</div>
+                {runningList.map((r) => (
+                  <div key={r.runId} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate">{r.name}{r.runId === runId ? ' · current' : ''}</span>
+                      <span className="shrink-0 text-muted-foreground">{r.done}/{r.total || '…'}</span>
+                    </div>
+                    <Progress value={r.total ? (r.done / r.total) * 100 : 0} className="h-1.5" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
           {/* ── Command-centre header: business + two score tiles + actions ── */}
           <Card>
             <CardContent className="p-4 sm:p-5 space-y-4">
