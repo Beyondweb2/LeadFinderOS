@@ -60,6 +60,7 @@ import {
   Upload,
   Eye,
   PhoneOff,
+  ThumbsDown,
   PhoneCall,
   X,
   Wand2,
@@ -400,6 +401,9 @@ export function OutreachTable({
   // Hide leads confirmed NOT on WhatsApp (status='no_whatsapp'). A durable hygiene
   // preference, so it's persisted with the rest of the table state (below).
   const [hideNoWhatsApp, setHideNoWhatsApp] = useState(false);
+  // Hide leads marked NOT INTERESTED (status='not_interested') — same durable hygiene
+  // preference, persisted alongside hideNoWhatsApp so dead leads stay out of the list.
+  const [hideNotInterested, setHideNotInterested] = useState(false);
   // Listing-level signal filters — free (derived from stored website), not verified.
   const [sigWebsite, setSigWebsite] = useState(false);
   const [sigFacebook, setSigFacebook] = useState(false);
@@ -566,6 +570,7 @@ export function OutreachTable({
     if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
     if (typeof parsed.trackedOnly === 'boolean') setTrackedOnly(parsed.trackedOnly);
     if (typeof parsed.hideNoWhatsApp === 'boolean') setHideNoWhatsApp(parsed.hideNoWhatsApp);
+    if (typeof parsed.hideNotInterested === 'boolean') setHideNotInterested(parsed.hideNotInterested);
     // Contactability + listing-signal filter toggles (persisted alongside the rest so
     // they don't reset on navigation while the neighbouring filters survive).
     if (typeof parsed.hasEmail === 'boolean') setHasEmail(parsed.hasEmail);
@@ -603,6 +608,7 @@ export function OutreachTable({
       countryFilter,
       trackedOnly,
       hideNoWhatsApp,
+      hideNotInterested,
       hasEmail,
       hasInstagram,
       hasFacebook,
@@ -614,7 +620,7 @@ export function OutreachTable({
       sortDirection,
       currentPage,
     });
-  }, [tableStateKey, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hideNoWhatsApp, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection, currentPage]);
+  }, [tableStateKey, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hideNoWhatsApp, hideNotInterested, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection, currentPage]);
 
   // Apply optimistic updates to leads for rendering
   const leadsWithOptimistic = useMemo(() => {
@@ -1226,6 +1232,9 @@ export function OutreachTable({
     // Hide leads confirmed not on WhatsApp (permanent 131026 → status='no_whatsapp').
     if (hideNoWhatsApp) result = result.filter((lead) => lead.status !== 'no_whatsapp');
 
+    // Hide leads marked not interested (status='not_interested').
+    if (hideNotInterested) result = result.filter((lead) => lead.status !== 'not_interested');
+
     // Listing-level signal filters (free, derived from stored website; AND).
     if (sigWebsite) result = result.filter((lead) => isOwnWebsite(lead.website));
     if (sigFacebook) result = result.filter((lead) => isFacebookListing(lead.website));
@@ -1260,7 +1269,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
+  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
@@ -1691,14 +1700,14 @@ export function OutreachTable({
                 (unchanged); the trigger shows the active count. */}
             {(() => {
               const activeFilterCount =
-                [hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, sigWebsite, sigFacebook, sigInstagram].filter(Boolean).length;
+                [hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigFacebook, sigInstagram].filter(Boolean).length;
               const toggle = (setter: (updater: (prev: boolean) => boolean) => void) => () => {
                 setter((v) => !v);
                 setCurrentPage(1);
               };
               const clearAll = () => {
                 setHasEmail(false); setHasInstagram(false); setHasFacebook(false); setHasWhatsApp(false);
-                setHideNoWhatsApp(false);
+                setHideNoWhatsApp(false); setHideNotInterested(false);
                 setSigWebsite(false); setSigFacebook(false); setSigInstagram(false);
                 setCurrentPage(1);
               };
@@ -1734,6 +1743,9 @@ export function OutreachTable({
                     <DropdownMenuCheckboxItem checked={hideNoWhatsApp} onCheckedChange={toggle(setHideNoWhatsApp)} onSelect={(e) => e.preventDefault()}>
                       <PhoneOff className="h-3.5 w-3.5 mr-2" /> Hide no-WhatsApp
                     </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={hideNotInterested} onCheckedChange={toggle(setHideNotInterested)} onSelect={(e) => e.preventDefault()}>
+                      <ThumbsDown className="h-3.5 w-3.5 mr-2" /> Hide not interested
+                    </DropdownMenuCheckboxItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>Listing signal (not verified)</DropdownMenuLabel>
                     <DropdownMenuCheckboxItem checked={sigWebsite} onCheckedChange={toggle(setSigWebsite)} onSelect={(e) => e.preventDefault()}>
@@ -1757,7 +1769,7 @@ export function OutreachTable({
                 </DropdownMenu>
               );
             })()}
-            {(hasEmail || hasInstagram || hasFacebook || hasWhatsApp || hideNoWhatsApp || sigWebsite || sigFacebook || sigInstagram) && (
+            {(hasEmail || hasInstagram || hasFacebook || hasWhatsApp || hideNoWhatsApp || hideNotInterested || sigWebsite || sigFacebook || sigInstagram) && (
               <span className="self-center text-xs text-muted-foreground whitespace-nowrap" title="Leads matching all active filters">
                 {filteredAndSortedLeads.length} match
               </span>
