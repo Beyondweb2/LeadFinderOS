@@ -403,6 +403,8 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     ids = (openRuns ?? []).map((r: Row) => r.id);
   }
   let finalised = 0;
+  // Auto-report kill-switch: ON unless AUTO_REPORT_ENABLED is explicitly "0"/"false"/"off". Default ON.
+  const autoReportEnabled = !["0", "false", "off"].includes((Deno.env.get("AUTO_REPORT_ENABLED") ?? "").trim().toLowerCase());
   // Extraction invokes are QUEUED per-run and awaited AFTER the loop, so a slow extract-competitors
   // call never blocks finalising the other runs — but the edge runtime still can't cut them off.
   const extractionInvokes: Promise<void>[] = [];
@@ -410,6 +412,9 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   // WhatsApp AFTER extraction finishes (so {{2}} competitors are the CLEANED list). Collected in the
   // loop, processed after the extraction await below.
   const auditReplyJobs: { runId: string; auditId: string }[] = [];
+  // Auto-report: audits that just finalised → generate their public /r/ report AFTER extraction (so
+  // the report reflects the cleaned competitor list). Collected in the loop; deduped + fired below.
+  const reportJobs: { auditId: string }[] = [];
 
   for (const runId of ids) {
     // A cancelled run is terminal — never resurrect it or flip it to 'complete'. Drop any
@@ -486,13 +491,21 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       ...(existingSeo ? { seo: existingSeo } : {}),
     };
     const runStatus = isCapped ? "capped" : "complete";
-    const { error: writeErr } = await service.from("ai_audit_runs")
+    // ATOMIC completion flip: gate on .in(status,[pending,running]) + .select() so only the tick that
+    // actually transitions the run pending/running → terminal "wins". Overlapping pollers can't both
+    // flip the same run, so every completion side-effect (extract-competitors, audit_reply, auto-report)
+    // fires EXACTLY ONCE — for the winner. A later tick that re-sees a settled run updates 0 rows and
+    // skips, which also stops it clobbering extract-competitors' cleaned results.
+    const { data: flipped, error: writeErr } = await service.from("ai_audit_runs")
       .update({ results, mention_rate: mentionRate, status: runStatus })
-      .eq("id", runId);
+      .eq("id", runId)
+      .in("status", ["pending", "running"])
+      .select("id");
     if (writeErr) {
       console.error(`[process-ai-audit-queue] finalise write failed for run ${runId}:`, writeErr.message);
-      continue; // don't fire extraction on a failed write — the run retries next tick
+      continue; // don't fire side-effects on a failed write — the run retries next tick
     }
+    if (!Array.isArray(flipped) || flipped.length === 0) continue; // another poller already finalised this run
     finalised++;
 
     // Auto-invoke extract-competitors ONCE per run, at the transition to terminal (prevStatus was
@@ -528,6 +541,11 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       // Gated OFF by default (same flag as reply→audit). When off, no report row is published and
       // no audit_reply is sent. Set AUTO_REPLY_FLOW_ENABLED=1 to re-enable (no code change).
       if (Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1" && !isCapped && runRow?.audit_id) auditReplyJobs.push({ runId, auditId: runRow.audit_id as string });
+      // Auto-report: queue a public /r/ business report for this finalised audit — processed AFTER
+      // extraction (below) so it reflects the cleaned competitors. Fires on ALL completions (complete
+      // AND capped — generate-report handles partial data; no lead-id gate), unless AUTO_REPORT_ENABLED
+      // is off. The existing-report SELECT guard + fail-safe wrapping live in the processor below.
+      if (autoReportEnabled && runRow?.audit_id) reportJobs.push({ auditId: runRow.audit_id as string });
     }
   }
   // Await the queued extraction calls so the edge runtime doesn't cut them off when we return.
@@ -539,6 +557,46 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       await maybeSendAuditReply(service, job.runId, job.auditId);
     } catch (e) {
       console.error(`[process-ai-audit-queue] audit_reply error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // Auto-report: NOW that competitors are cleaned, generate the public /r/ business report for each
+  // finalised audit — but ONLY if one doesn't already exist (SELECT guard on audit_id + report_type
+  // 'profile', so re-runs never overwrite). Calls generate-report's internal branch (service key +
+  // x-cron-secret + x-internal-job). Wrapped so any failure only logs and NEVER blocks/fails the
+  // audit — the manual "Generate listing" button remains the fallback. Sequential so two runs of the
+  // same audit in one tick can't both slip past the guard.
+  for (const job of reportJobs) {
+    try {
+      const { data: existing } = await service
+        .from("business_reports")
+        .select("id")
+        .eq("audit_id", job.auditId)
+        .eq("report_type", "profile")
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        console.log(`[process-ai-audit-queue] auto-report skipped for audit ${job.auditId}: a profile report already exists.`);
+        continue;
+      }
+      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-report`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+          "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+          "x-internal-job": "1",
+        },
+        body: JSON.stringify({ auditId: job.auditId }),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        console.error(`[process-ai-audit-queue] auto-report failed for audit ${job.auditId}: HTTP ${res.status} ${txt.slice(0, 300)}`);
+      } else {
+        console.log(`[process-ai-audit-queue] auto-report generated for audit ${job.auditId}.`);
+      }
+    } catch (e) {
+      console.error(`[process-ai-audit-queue] auto-report error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
     }
   }
   return finalised;

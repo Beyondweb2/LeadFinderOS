@@ -154,18 +154,27 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+    const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // --- Auth: require an authenticated ADMIN user (mirrors scrape-directory). ---
+    // --- Auth: a trusted INTERNAL call (the auto-report trigger in process-ai-audit-queue) OR an
+    //     authenticated ADMIN user. Internal branch mirrors extract-competitors: a matching CRON_SECRET
+    //     header + x-internal-job, OR the service-role key + x-internal-job. Purely ADDITIVE — an
+    //     external caller can hold neither, so the admin-JWT path is byte-for-byte unchanged. ---
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    if (!token) return json({ ok: false, error: "unauthorized" }, 401);
-    const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-    const { data: u } = await userClient.auth.getUser();
-    if (!u?.user) return json({ ok: false, error: "unauthorized" }, 401);
-    const { data: roleRow } = await service
-      .from("user_roles").select("role").eq("user_id", u.user.id).eq("role", "admin").maybeSingle();
-    if (!roleRow) return json({ ok: false, error: "forbidden" }, 403);
+    const isInternal =
+      (!!cronSecret && req.headers.get("x-cron-secret") === cronSecret && !!req.headers.get("x-internal-job")) ||
+      (!!serviceKey && token === serviceKey && !!req.headers.get("x-internal-job"));
+    if (!isInternal) {
+      if (!token) return json({ ok: false, error: "unauthorized" }, 401);
+      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+      const { data: u } = await userClient.auth.getUser();
+      if (!u?.user) return json({ ok: false, error: "unauthorized" }, 401);
+      const { data: roleRow } = await service
+        .from("user_roles").select("role").eq("user_id", u.user.id).eq("role", "admin").maybeSingle();
+      if (!roleRow) return json({ ok: false, error: "forbidden" }, 403);
+    }
 
     // --- Body ---
     const body = await req.json().catch(() => ({}));
