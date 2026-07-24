@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
     // Oldest queued lead with a phone.
     const { data: lead } = await service
       .from("outreach_leads")
-      .select("id, business_name, phone, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, user_id")
+      .select("id, business_name, phone, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id")
       .eq("status", "queued")
       .not("phone", "is", null)
       .order("queued_at", { ascending: true })
@@ -263,6 +263,36 @@ Deno.serve(async (req) => {
         status: "opted_out", whatsapp_delivery_status: "suppressed", contact_method: null,
       }).eq("id", lead.id);
       return json({ ok: true, skipped: "suppressed", lead_id: lead.id, business: lead.business_name, ...statusPayload });
+    }
+
+    // Already-contacted guard: NEVER re-send to a lead that already got a SUCCESSFUL WhatsApp. A UI
+    // re-queue (status forced back to 'queued') must not double-send — this is the AUTHORITATIVE server
+    // chokepoint (no queue-insert path exists; enqueue is a client UPDATE). Blocks on a REAL prior send
+    // only: whatsapp_ever_delivered, a lead-linked outbound whatsapp_messages 'sent', or a non-test
+    // whatsapp_sends row. Simulated/test and failed-only history do NOT block (retry stays open). On a
+    // hit: drop the lead from the queue, restore its post-send status, and skip. Best-effort reads
+    // (maybeSingle never throws); a transient read error just falls through to the normal send path.
+    let alreadySent = lead.whatsapp_ever_delivered === true;
+    if (!alreadySent) {
+      const { data: priorMsg } = await service
+        .from("whatsapp_messages").select("id")
+        .eq("lead_id", lead.id).eq("direction", "outbound").eq("status", "sent").limit(1).maybeSingle();
+      alreadySent = !!priorMsg;
+    }
+    if (!alreadySent) {
+      const { data: priorSend } = await service
+        .from("whatsapp_sends").select("id")
+        .eq("lead_id", lead.id).eq("test_mode", false).limit(1).maybeSingle();
+      alreadySent = !!priorSend;
+    }
+    if (alreadySent) {
+      const CONTACTED = ["initial_contact", "site_sent", "replied", "interested", "closed"];
+      const restore = CONTACTED.includes(lead.previous_status ?? "") ? (lead.previous_status as string) : "initial_contact";
+      await service.from("outreach_leads").update({
+        status: restore, queued_at: null, whatsapp_delivery_status: "already_sent", contact_method: "whatsapp",
+      }).eq("id", lead.id);
+      console.log(`[process-whatsapp-queue] already_sent guard: lead ${lead.id} (${lead.business_name}) had a prior successful send — skipped, restored to ${restore}.`);
+      return json({ ok: true, skipped: "already_sent", lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }
 
     // Tier-1 offline line-type backstop: the enqueue UI already blocks non-mobiles,

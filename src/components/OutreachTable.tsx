@@ -977,12 +977,38 @@ export function OutreachTable({
   // Add selected leads to the WhatsApp outreach queue (status='queued' + queued_at
   // for FIFO order). The template is chosen at queue-time and applied to every
   // selected lead (overrides any per-lead template).
-  const handleQueueForWhatsApp = (template: string) => {
+  const handleQueueForWhatsApp = async (template: string) => {
     if (selectedIds.size === 0 || !onUpdateLead) return;
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
-    // Don't re-queue leads already flagged not-on-WhatsApp (permanent skip).
-    const queueable = ids.filter((id) => leads.find((l) => l.id === id)?.status !== 'no_whatsapp');
+    const leadOf = (id: string) => leads.find((l) => l.id === id);
+    // Canonical E.164 ("+…") for a lead, matching the drainer + twilio-inbound suppression key.
+    const e164 = (l?: OutreachLead) => (l?.phone ? `+${formatPhoneForWhatsApp(l.phone)}` : '');
+
+    // Cross-channel suppression (one-no-forever): pull any suppressed phones in the selection.
+    // Best-effort — a query failure just defers to the drainer's authoritative suppression check.
+    const phones = [...new Set(ids.map((id) => e164(leadOf(id))).filter(Boolean))];
+    let suppressed = new Set<string>();
+    if (phones.length) {
+      const { data: supp } = await (supabase as unknown as SupabaseClient)
+        .from('contact_suppressions').select('phone_e164').in('phone_e164', phones);
+      suppressed = new Set(((supp ?? []) as { phone_e164: string }[]).map((r) => r.phone_e164));
+    }
+    // A SUCCESSFUL prior WhatsApp = already contacted → never re-queue (Decision 1: only a real
+    // success blocks; 'simulated'/failed don't). UX filter with an honest count; the drainer is the
+    // authoritative guard for anything this misses (e.g. a send whose delivery webhook never landed).
+    const SENT_OK = new Set(['sent', 'delivered', 'read']);
+    // Exclude: not-on-WhatsApp (permanent), already queued (in-flight), already successfully sent, or
+    // suppressed. What remains goes through the existing mobile line-type gate below.
+    const queueable = ids.filter((id) => {
+      const l = leadOf(id);
+      if (!l) return false;
+      if (l.status === 'no_whatsapp') return false;
+      if (l.status === 'queued') return false;
+      if (SENT_OK.has((l.whatsapp_delivery_status ?? '') as string)) return false;
+      if (suppressed.has(e164(l))) return false;
+      return true;
+    });
     const skipped = ids.length - queueable.length;
     // Tier-1 offline line-type gate: only mobiles may be queued. Landline/VoIP/etc.
     // never enter the queue — they're flagged 'no_whatsapp_needs_sms' so they're easy
@@ -1015,7 +1041,7 @@ export function OutreachTable({
     setQueueDialogOpen(false);
     const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
     const notes = [
-      skipped ? `${skipped} skipped (not on WhatsApp).` : '',
+      skipped ? `${skipped} skipped (already contacted, queued or suppressed).` : '',
       blockedNonMobile ? `${blockedNonMobile} not a mobile → flagged for SMS.` : '',
     ].filter(Boolean).join(' ');
     toast({
