@@ -542,10 +542,12 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       // no audit_reply is sent. Set AUTO_REPLY_FLOW_ENABLED=1 to re-enable (no code change).
       if (Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1" && !isCapped && runRow?.audit_id) auditReplyJobs.push({ runId, auditId: runRow.audit_id as string });
       // Auto-report: queue a public /r/ business report for this finalised audit — processed AFTER
-      // extraction (below) so it reflects the cleaned competitors. Fires on ALL completions (complete
-      // AND capped — generate-report handles partial data; no lead-id gate), unless AUTO_REPORT_ENABLED
-      // is off. The existing-report SELECT guard + fail-safe wrapping live in the processor below.
-      if (autoReportEnabled && runRow?.audit_id) reportJobs.push({ auditId: runRow.audit_id as string });
+      // extraction (below) so it reflects the cleaned competitors. COMPLETE runs only (not capped):
+      // the existing-report SELECT guard makes the FIRST report permanent, so a capped run's
+      // partial-data report would block the full report from a later re-run — capped audits stay on
+      // the manual button. No lead-id gate; skipped when AUTO_REPORT_ENABLED is off. Existing-report
+      // guard + fail-safe wrapping live in the processor below.
+      if (autoReportEnabled && !isCapped && runRow?.audit_id) reportJobs.push({ auditId: runRow.audit_id as string });
     }
   }
   // Await the queued extraction calls so the edge runtime doesn't cut them off when we return.
