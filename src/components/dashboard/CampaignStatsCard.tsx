@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Send, Eye, CheckCircle2, Sparkles, Reply, Pencil, Target } from 'lucide-react';
+import { Send, Eye, CheckCircle2, Sparkles, Reply, Pencil, Target, FileText } from 'lucide-react';
 import { CAMPAIGN_METHOD_LABELS } from '@/lib/campaign';
 import { WHATSAPP_TEMPLATES } from '@/types/outreach';
 import type { CampaignStats } from '@/hooks/useCampaignStats';
@@ -46,9 +46,9 @@ export function CampaignStatsCard({ stat, onEdit }: { stat: CampaignStats; onEdi
   const name = campaign?.name ?? 'Unassigned';
   const method = campaign?.method ? CAMPAIGN_METHOD_LABELS[campaign.method] ?? campaign.method : null;
   const methodTotal = METHOD_PILL.reduce((n, m) => n + methods[m.key], 0);
-  // Per-template mini-funnels, most-sent first. Only queue-sent leads populate this
-  // (see the hook). sent=0 → reply rate shows '—'.
-  const templateFunnels = Object.entries(stat.byTemplate).sort((a, b) => b[1].sent - a[1].sent);
+  // Per-template mini-funnels, most-reached first. Driven by the real per-send template
+  // (whatsapp_messages.template_name) — every template that sent, incl. audit_reply.
+  const templateFunnels = Object.entries(stat.byTemplate).sort((a, b) => b[1].leads - a[1].leads);
 
   return (
     <Card className="bg-gradient-to-br from-primary/5 to-transparent border-border/60">
@@ -71,13 +71,30 @@ export function CampaignStatsCard({ stat, onEdit }: { stat: CampaignStats; onEdi
         </div>
       </CardHeader>
       <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 space-y-3">
-        {/* Funnel counts */}
-        <div className="grid grid-cols-5 gap-1.5">
+        {/* Funnel counts. "Site opened" = barber generated_sites opens (kept for barber
+            campaigns); "Report opened" = real audit-report opens (ai_audits.first_opened_at). */}
+        <div className="grid grid-cols-3 gap-1.5">
           <Count icon={Send} value={funnel.sent} label="Sent" color="text-blue-500" />
-          <Count icon={Eye} value={funnel.opened} label="Opened" color="text-purple-500" />
+          <Count icon={FileText} value={funnel.reportOpened} label="Report opened" color="text-purple-500" />
           <Count icon={Reply} value={funnel.replied} label="Replied" color="text-cyan-500" />
+          <Count icon={Eye} value={funnel.opened} label="Site opened" color="text-amber-500" />
           <Count icon={CheckCircle2} value={funnel.claimed} label="Claimed" color="text-green-500" />
           <Count icon={Sparkles} value={funnel.addon} label="Add-on" color="text-amber-500" />
+        </div>
+
+        {/* WhatsApp delivery receipts — the message read-status ratchet (historical
+            engagement). DISTINCT from "Report opened" above: this is the WhatsApp receipt
+            (did the message land / get read), not a report view. */}
+        <div className="border-t border-border/50 pt-2.5" title="WhatsApp read-status ratchet from whatsapp_delivery_status — the message receipt, not a report view">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Message receipts (WhatsApp)</p>
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="outline" className="text-[11px] font-medium">
+              Delivered: <span className="ml-1 tabular-nums font-bold">{stat.receipts.delivered}</span>
+            </Badge>
+            <Badge variant="outline" className="text-[11px] font-medium">
+              Read: <span className="ml-1 tabular-nums font-bold">{stat.receipts.read}</span>
+            </Badge>
+          </div>
         </div>
 
         {/* Rates */}
@@ -109,22 +126,24 @@ export function CampaignStatsCard({ stat, onEdit }: { stat: CampaignStats; onEdi
           )}
         </div>
 
-        {/* Automated templates used — per-template mini-funnel (queue-sent leads only;
-            old-method / personal leads have no template, so an empty list = no automated
-            sends). One template per lead, so sent/opened/replied attribution is accurate. */}
+        {/* Templates used — per-template mini-funnel from the REAL per-send tag
+            (whatsapp_messages.template_name). Every template that actually sent gets a row,
+            incl. the audit_reply pitch; "Reached" = distinct leads that template reached
+            (a lead reached by both opener AND pitch appears in both rows). Freeform (no
+            template) sends carry no row. Opened = that template's leads whose report was opened. */}
         <div className="border-t border-border/50 pt-2.5">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Automated templates used</p>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Templates used</p>
           {templateFunnels.length === 0 ? (
-            <p className="text-xs text-muted-foreground/60">No automated sends yet</p>
+            <p className="text-xs text-muted-foreground/60">No templated sends yet</p>
           ) : (
             <div className="space-y-1.5">
               {templateFunnels.map(([key, f]) => {
-                const replyRate = f.sent > 0 ? Math.round((f.replied / f.sent) * 100) : null;
+                const replyRate = f.leads > 0 ? Math.round((f.replied / f.leads) * 100) : null;
                 return (
                   <div key={key} className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                     <span className="text-[11px] font-medium text-foreground/90 truncate">{TEMPLATE_LABEL[key] ?? key}</span>
                     <span className="text-[11px] text-muted-foreground tabular-nums">
-                      Sent <span className="font-bold text-foreground/90">{f.sent}</span>
+                      Reached <span className="font-bold text-foreground/90">{f.leads}</span>
                       {' · '}Opened <span className="font-bold text-foreground/90">{f.opened}</span>
                       {' · '}Replied <span className="font-bold text-foreground/90">{f.replied}</span>
                       {' · '}<span className="font-bold text-foreground/90">{replyRate === null ? '—' : `${replyRate}%`}</span> reply
