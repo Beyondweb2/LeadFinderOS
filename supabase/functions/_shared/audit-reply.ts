@@ -2,8 +2,9 @@
 // sender (send-whatsapp-message's audit_reply branch today). Resolves STRICTLY from the target
 // lead's own latest completed audit: {{1}} trade, {{2}} competitors, {{3}} business, {{4}} report.
 // The report link is /a/<auditId> — served live by render-audit-report from the audit (no stored
-// business_reports row needed). Competitors come from the SHARED buildReportData aggregation (same
-// list the report + scorecard use), so nothing drifts.
+// business_reports row needed). Competitors come from the SHARED buildReportData output — the
+// report's HEADLINE rivals (gutPunch) first, so the pitch names exactly what the report leads
+// with; frequency-aggregate fallback (US-marker-filtered for UK audits) when there's no gutPunch.
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
 
@@ -33,7 +34,7 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
   // 1) The lead's newest audit that has a COMPLETE (or capped) run — strictly by lead_id.
   const { data: audits } = await service
     .from("ai_audits")
-    .select("id, business_name, business_type, location_text, specialism, created_at, ai_audit_runs(id, run_number, status, mention_rate, results)")
+    .select("id, business_name, business_type, location_text, specialism, country, created_at, ai_audit_runs(id, run_number, status, mention_rate, results)")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false });
   const list = Array.isArray(audits) ? audits : [];
@@ -60,7 +61,23 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     specialisms: audit.specialism ?? "",
     isAggregatorUrl,
   });
-  const competitors = formatCompetitors(data?.competitors ?? []);
+  // {{2}} competitor names — PREFER the report's HEADLINE rivals (data.gutPunch.rivals: the one
+  // curated best question+engine answer the report leads with), so the pitch and the report agree
+  // BY CONSTRUCTION. Fall back to the cross-question frequency aggregate (data.competitors) only
+  // when there's no gutPunch — and for UK audits, strip obvious US-market names from that FALLBACK
+  // (LLC/Inc/Corp suffixes, trailing ", <state>"): an ambiguous town name (Stamford, Peterborough,
+  // Boston…) can make one engine answer from the wrong country, and those wrong-country names win
+  // the raw frequency count (the exact bug this fixes). gutPunch rivals are already curated —
+  // never filtered here.
+  const US_MARKERS = /\b(LLC|L\.L\.C\.?|Inc\.?|Corp\.?)\b|,\s*(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\.?\s*$/i;
+  const gutRivals = (data?.gutPunch?.rivals ?? []).map((c: string) => (c ?? "").trim()).filter(Boolean);
+  let pool: string[] = gutRivals;
+  if (pool.length === 0) {
+    pool = data?.competitors ?? [];
+    const cc = (audit.country ?? "").trim().toUpperCase();
+    if (cc === "UK" || cc === "GB") pool = pool.filter((c: string) => !US_MARKERS.test(c));
+  }
+  const competitors = formatCompetitors(pool);
   // {{2}} is a REQUIRED Meta var — refuse rather than send an empty/broken template.
   if (!competitors) return { ok: false, reason: "The audit named no competitors yet." };
 

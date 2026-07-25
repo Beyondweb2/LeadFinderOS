@@ -82,8 +82,14 @@ function hasUsableTown(loc: string): boolean {
  *  audience-qualified "[service] for [audience] [country]" with NO broad best/top head-terms.
  *  Grounded in "known for" when given.
  *  Sliced to `count`. */
-function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number, scope: BusinessScope): string[] {
+function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number, scope: BusinessScope, country: string | null): string[] {
   const t = type || "business";
+  // UK LOCAL audits: UNCONDITIONALLY disambiguate the town in question text ("Stamford UK") —
+  // town names shared with bigger non-UK places (Stamford CT, Peterborough Ontario, Boston MA…)
+  // make engines answer from the wrong country. Simpler than an ambiguity list and never wrong.
+  // Skipped when the location already carries a UK marker.
+  const isUK = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
+  const ukTown = (l: string) => (isUK && l && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(l) ? `${l} UK` : l);
   const niches = specialisms
     ? specialisms.split(/[,;/]|\band\b/i).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 1)
     : [];
@@ -111,7 +117,7 @@ function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, speci
       `${t} for property investors${region}`,
     ];
   } else {
-    const where = loc ? ` in ${loc}` : "";
+    const where = loc ? ` in ${ukTown(loc)}` : "";
     base = [
       ...niches.map((nk) => `${nk} ${t}${where}`),                     // niche-grounded, local
       `best ${t}${where}`,
@@ -231,7 +237,7 @@ Deno.serve(async (req) => {
     if (preview) {
       const qs = providedQuestions && providedQuestions.length
         ? providedQuestions
-        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope);
+        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country);
       return json({
         ok: true,
         preview: true,
@@ -286,14 +292,14 @@ Deno.serve(async (req) => {
           }
         }
         if (questions.length < MIN_QUESTION_COUNT) {
-          questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms, questionCount, reRunScope);
+          questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms, questionCount, reRunScope, (audit.country as string | null) ?? country);
         }
       }
     } else {
       // New audit: use the edited questions if provided, else generate them.
       questions = providedQuestions && providedQuestions.length
         ? providedQuestions
-        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope);
+        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country);
       const { data: audit, error: insErr } = await service
         .from("ai_audits")
         .insert({
@@ -405,9 +411,10 @@ async function generateQuestions(
   specialisms: string,
   count: number,
   scope: BusinessScope,
+  country: string | null,
 ): Promise<string[]> {
   const n = clampCount(count);
-  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n, scope);
+  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n, scope, country);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) return fallback;
   // 'local'/'national' hard-force the prompt's scope block; 'hybrid'/null let the model classify.
@@ -417,6 +424,10 @@ async function generateQuestions(
   const name = businessName || "the business";
   const type = businessType || "local business";
   const loc = locationText || "the local area";
+  // UK disambiguation for LOCAL question text (mirrors fallbackQuestions.ukTown): always name the
+  // place as "<town> UK" so engines can't resolve an ambiguous town to a non-UK city.
+  const isUK = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
+  const locQ = isUK && locationText && !/(uk|united kingdom|england|scotland|wales)/i.test(locationText) ? `${locationText} UK` : loc;
   // has_website branches the framing: website/service-page angles vs presence/directory.
   const framing = hasWebsite
     ? "The business HAS a website, so it's fine to include questions about services, service pages, online booking, or comparing providers' websites."
@@ -435,9 +446,10 @@ async function generateQuestions(
 - SPREAD the questions across the business's main services / niches — no near-duplicates.
 - Do NOT include the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes.`;
 
-  const LOCAL_RULES = `- Local framing is good: "[service] in ${loc}".
-- Broad head-terms are allowed here (a small local pool is winnable): e.g. "best [service] in ${loc}", "top [service] in ${loc}".
-- NEVER use "near me" in any form — always name the actual place (${loc}) instead.`;
+  const LOCAL_RULES = `- Local framing is good: "[service] in ${locQ}".
+- ALWAYS write the place EXACTLY as "${locQ}" — never a bare town name (town names are often shared with bigger non-UK places, and a bare name makes AI answer about the wrong country).
+- Broad head-terms are allowed here (a small local pool is winnable): e.g. "best [service] in ${locQ}", "top [service] in ${locQ}".
+- NEVER use "near me" in any form — always name the actual place (${locQ}) instead.`;
 
   const NATIONAL_RULES = `- NEVER use "near me".
 - NEVER use broad head-terms like "best [service] in [country]", "top [service] in [country]", or "leading [service] in [country]". These are dominated by directories and comparison sites, are unwinnable for a single firm, and prove nothing — do not produce any.
@@ -446,7 +458,7 @@ async function generateQuestions(
   // 'local'/'national' hard-force the matching rule set (no classification); 'hybrid'/null
   // keep the original "classify from the location" heuristic verbatim.
   const scopeGuidance = forceLocal
-    ? `SCOPE — FORCED LOCAL: This business is LOCAL to ${loc}. Generate LOCAL questions ONLY; do NOT classify, and NEVER use country/region/national terms ("uk", "united kingdom", "england", "britain", "scotland", "wales", "ireland", "nationwide", "national", "online", "remote") or the "[service] for [audience] [country]" pattern.
+    ? `SCOPE — FORCED LOCAL: This business is LOCAL to ${locQ}. Generate LOCAL questions ONLY; do NOT classify, and NEVER use country/region/national terms ("uk", "united kingdom", "england", "britain", "scotland", "wales", "ireland", "nationwide", "national", "online", "remote") or the "[service] for [audience] [country]" pattern.
 
 ${ALWAYS_RULES}
 
@@ -488,7 +500,7 @@ Return EXACTLY ${n} questions (lowercase), spread across the business's services
 Return via the return_questions tool.`;
 
   const userScopeLine = forceLocal
-    ? `This business is LOCAL to ${loc}. Generate ${n} short, single-intent LOCAL phrases ("[service] in ${loc}") — no national/uk terms, NEVER "near me" (name the place).`
+    ? `This business is LOCAL to ${locQ}. Generate ${n} short, single-intent LOCAL phrases ("[service] in ${locQ}") — no national/uk terms, NEVER "near me" (write the place exactly as "${locQ}").`
     : forceNational
     ? `This business is NATIONAL. Generate ${n} short, single-intent phrases qualified by audience + country — no "near me", no broad head-terms.`
     : `First classify this business as NATIONAL or LOCAL from the location, then generate ${n} short, single-intent search phrases under the matching rules.`;
