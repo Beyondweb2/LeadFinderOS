@@ -187,6 +187,14 @@ Deno.serve(async (req) => {
       // defensive (missing column → false), so status works before the SQL has been run.
       autoReplyEnvOn: autoReplyEnvOn(),
       autoReplyEnabled: await autoReplyToggleOn(service),
+      // D2 — the completion auto-send template (null = off). Defensive read: missing column → null.
+      auditCompleteTemplate: await (async () => {
+        try {
+          const { data: st, error: stErr } = await service
+            .from("whatsapp_outreach_state").select("audit_complete_template").eq("id", 1).maybeSingle();
+          return stErr ? null : ((st?.audit_complete_template as string | null) ?? null);
+        } catch { return null; }
+      })(),
     };
 
     // Status-only probe (the dashboard panel).
@@ -214,18 +222,42 @@ Deno.serve(async (req) => {
       return json({ ok: true, ...statusPayload, autoReplyEnabled: enabled });
     }
 
+    // D2 — set the completion auto-send template (admin-gated like pause). Pass template: null (or
+    // "") to turn the feature off. Validated against the shared allowlist so a typo can't queue
+    // unsendable rows. The AUTO_AUDIT_REPLY_ENABLED master switch still gates actual sends.
+    if (mode === "set_audit_complete_template") {
+      const raw = typeof body.template === "string" ? body.template.trim() : "";
+      const next: string | null = raw ? raw : null;
+      if (next && !WA_TEMPLATES[next]) return json({ ok: false, error: "unknown_template" }, 400);
+      const { error: sErr } = await service.from("whatsapp_outreach_state")
+        .update({ audit_complete_template: next, updated_at: new Date().toISOString() })
+        .eq("id", 1);
+      if (sErr) return json({ ok: false, error: "setting_failed", detail: sErr.message }, 500);
+      return json({ ok: true, ...statusPayload, auditCompleteTemplate: next });
+    }
+
     // ── mode 'auto_replies': drain due whatsapp_auto_replies rows (its own every-minute cron) ──
     // DELIBERATELY exempt from the outreach pause/window/cap/spacing below: these are replies to
     // leads who messaged US (template send, deliverable any time), not cold outreach. Controls are
     // the env kill-switch + the Inbox UI toggle, both re-checked here (send time), not queue time.
     if (mode === "auto_replies") {
+      // Master kill-switch gates EVERYTHING (both triggers). Per-trigger switches are checked
+      // per row below: first_reply rows need the Inbox toggle; audit_complete rows need the
+      // audit_complete_template setting to still be non-null. A row whose own switch is off is
+      // LEFT pending (rule paused, resumes if re-enabled) — never silently dropped.
       if (!autoReplyEnvOn()) return json({ ok: true, mode, skipped: "env_off", processed: 0 });
-      if (!(await autoReplyToggleOn(service))) return json({ ok: true, mode, skipped: "toggle_off", processed: 0 });
+      const replyToggleOn = await autoReplyToggleOn(service);
+      let completeTemplateOn = false;
+      try {
+        const { data: st, error: stErr } = await service
+          .from("whatsapp_outreach_state").select("audit_complete_template").eq("id", 1).maybeSingle();
+        if (!stErr) completeTemplateOn = !!st?.audit_complete_template;
+      } catch { /* column missing → audit_complete rows stay pending */ }
 
       const nowIso = new Date().toISOString();
       const { data: due, error: dueErr } = await service
         .from("whatsapp_auto_replies")
-        .select("id, lead_id, phone, created_at")
+        .select("id, lead_id, phone, created_at, trigger, template_name")
         .eq("status", "pending")
         .lt("fire_after", nowIso)
         .order("fire_after", { ascending: true })
@@ -234,7 +266,11 @@ Deno.serve(async (req) => {
 
       let processed = 0;
       const results: Record<string, string> = {};
-      for (const row of (due ?? []) as Array<{ id: string; lead_id: string; phone: string; created_at: string }>) {
+      for (const row of (due ?? []) as Array<{ id: string; lead_id: string; phone: string; created_at: string; trigger?: string | null; template_name?: string | null }>) {
+        // Per-trigger switch (see above). Default trigger (pre-SQL rows / null) = first_reply.
+        const trigger = row.trigger || "first_reply";
+        if (trigger === "first_reply" && !replyToggleOn) continue;
+        if (trigger === "audit_complete" && !completeTemplateOn) continue;
         // Atomic per-row claim — overlapping ticks can't double-send. (A crash after claiming
         // leaves the row 'processing', which fails SAFE — it never sends — and is visible in the
         // table for a manual nudge; volumes are tiny by design.)
@@ -258,21 +294,42 @@ Deno.serve(async (req) => {
           }
           // 2) Send-time status + suppression (checked HERE, not just at queue time).
           const { data: lead } = await service.from("outreach_leads")
-            .select("id, user_id, status").eq("id", row.lead_id).maybeSingle();
+            .select("id, user_id, status, business_name").eq("id", row.lead_id).maybeSingle();
           if (!lead) { await finish("flagged_error", "lead_missing"); results[row.lead_id] = "flagged_error"; continue; }
           if (["opted_out", "not_interested"].includes(lead.status as string) || (await phoneSuppressed(service, row.phone))) {
             await finish("skipped_suppressed");
             results[row.lead_id] = "skipped_suppressed";
             continue;
           }
-          // 3) The per-lead-safe resolver (same one the Inbox send uses). No completed audit /
-          //    no competitors → flag for a human instead of sending anything.
-          const vars = await resolveAuditReplyVars(service, row.lead_id);
-          if (!vars.ok) { await finish("flagged_no_audit", vars.reason); results[row.lead_id] = "flagged_no_audit"; continue; }
-          // 4) Send via the SHARED template path (identical payload to the Inbox audit_reply).
-          const lang = WA_TEMPLATES["audit_reply"]?.lang ?? "en";
-          const payload = claimTemplatePayload("audit_reply", lang, vars.business, vars.link, { trade: vars.trade, competitors: vars.competitors });
-          const renderedBody = renderTemplateBody("audit_reply", vars.business, vars.link, vars.trade, vars.competitors);
+          // 3) Resolve the template + its variables. Default (and the whole first_reply rule) is
+          //    audit_reply via the per-lead-safe resolver the Inbox uses; audit_complete rows may
+          //    carry any allowlisted template. url-templates need the lead's claim link — missing
+          //    → flagged_no_link, NEVER a broken send.
+          const templateName = row.template_name || "audit_reply";
+          const tmpl = WA_TEMPLATES[templateName];
+          if (!tmpl) { await finish("flagged_error", `unknown_template:${templateName}`); results[row.lead_id] = "flagged_error"; continue; }
+          let payload: Record<string, unknown>;
+          let renderedBody: string;
+          if (tmpl.vars.includes("trade") || tmpl.vars.includes("competitors")) {
+            // audit_reply-class: needs the lead's own completed audit.
+            const vars = await resolveAuditReplyVars(service, row.lead_id);
+            if (!vars.ok) { await finish("flagged_no_audit", vars.reason); results[row.lead_id] = "flagged_no_audit"; continue; }
+            payload = claimTemplatePayload(templateName, tmpl.lang, vars.business, vars.link, { trade: vars.trade, competitors: vars.competitors });
+            renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors);
+          } else {
+            const businessName = ((lead.business_name as string) ?? "").trim();
+            let claimUrl = "";
+            if (tmpl.vars.includes("url")) {
+              const { data: site } = await service.from("generated_sites")
+                .select("share_token").eq("lead_id", row.lead_id)
+                .order("created_at", { ascending: false }).limit(1).maybeSingle();
+              const shareToken = (site?.share_token as string | null) ?? null;
+              if (!shareToken) { await finish("flagged_no_link", "no claim link for a url template"); results[row.lead_id] = "flagged_no_link"; continue; }
+              claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
+            }
+            payload = claimTemplatePayload(templateName, tmpl.lang, businessName, claimUrl);
+            renderedBody = renderTemplateBody(templateName, businessName, claimUrl);
+          }
           let sendStatus = "simulated";
           let messageId: string | null = null;
           let sendErr: string | null = null;
@@ -285,7 +342,7 @@ Deno.serve(async (req) => {
           // Log the outbound row so the send lands in the lead's Inbox thread.
           await service.from("whatsapp_messages").insert({
             direction: "outbound", user_id: (lead.user_id as string | null) ?? null, lead_id: row.lead_id,
-            phone: row.phone, body: renderedBody, message_type: "template", template_name: "audit_reply",
+            phone: row.phone, body: renderedBody, message_type: "template", template_name: templateName,
             wa_message_id: messageId, status: sendStatus, test_mode: !live, error: sendErr,
           });
           if (sendStatus === "failed") {

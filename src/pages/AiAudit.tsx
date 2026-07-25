@@ -696,6 +696,23 @@ const AiAudit = () => {
         },
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'run failed');
+      // Persist the operator's typed audit inputs BACK to the lead, so the next audit / bulk
+      // audit prefills instead of re-asking (~80% of leads have no search_keyword/location).
+      // Write-back only when the audit came from a lead and the value differs (or the lead's is
+      // empty). Best-effort, own catch — a write failure never blocks the run that just started.
+      if (leadId) {
+        try {
+          const lead = leads.find((l) => l.id === leadId) as { search_keyword?: string | null; search_location?: string | null } | undefined;
+          const patch: Record<string, string> = {};
+          const typedType = businessType.trim();
+          const typedLoc = locationText.trim();
+          if (typedType && typedType !== (lead?.search_keyword ?? '').trim()) patch.search_keyword = typedType;
+          if (typedLoc && typedLoc !== (lead?.search_location ?? '').trim()) patch.search_location = typedLoc;
+          if (Object.keys(patch).length) {
+            await (supabase as unknown as SupabaseClient).from('outreach_leads').update(patch).eq('id', leadId);
+          }
+        } catch { /* non-fatal — the audit itself is already running */ }
+      }
       clearWizard(); // audit created successfully → next visit starts clean
       setAuditId(data.audit_id);
       setRunId(data.run_id);
@@ -1306,25 +1323,9 @@ const AiAudit = () => {
     }
   };
 
-  // Auto-generate the playbook ONCE when a COMPLETE audit is opened with no playbook yet, so the
-  // user doesn't have to click "Generate playbook". Website audits wait until SEO data exists
-  // (hasSeo); no-website audits proceed immediately. Fires at most once per runId per session
-  // (autoPlaybookFired) and never while one is already generating — the manual button stays as the
-  // fallback + regenerate path. Reuses the existing generatePlaybook handler (no duplicated logic).
-  const autoPlaybookFired = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!runId || playbookGenerating) return;
-    if (run?.status !== 'complete') return;                       // not draining / capped / cancelled / failed
-    const serverPlaybook = (run?.results as { playbook?: unknown } | null)?.playbook;
-    if (playbooks[runId] || serverPlaybook) return;               // a playbook already exists (local or server)
-    if (!(hasSeo || !resultsHasWebsite)) return;                  // website audits wait for SEO; no-website proceed
-    if (autoPlaybookFired.current.has(runId)) return;             // already auto-fired this run this session
-    autoPlaybookFired.current.add(runId);
-    void generatePlaybook(false, false);   // auto: generate silently, don't navigate
-    // generatePlaybook is intentionally omitted from deps (redefined each render); the fired-set +
-    // playbookGenerating guards make this safe to re-evaluate on the listed state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId, run, playbooks, hasSeo, resultsHasWebsite, playbookGenerating]);
+  // Playbook generation is MANUAL-ONLY (the buttons below). The auto-generate-on-open effect was
+  // removed deliberately: it silently burned a gpt-4o call every time a complete, playbook-less
+  // audit was opened (including old audits browsed for reference) — cost without consent.
 
   // Client-facing report is a separate view (replaces results while open).
   if (reportRunId && openReportData) {
