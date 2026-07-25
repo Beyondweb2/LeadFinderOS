@@ -84,6 +84,21 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Report',
     className: 'bg-sky-500/20 text-sky-400 border-transparent font-semibold',
   },
+  price_given: {
+    label: 'Price Given',
+    shortLabel: 'Price',
+    className: 'bg-indigo-500/20 text-indigo-400 border-transparent font-semibold',
+  },
+  in_delivery: {
+    label: 'In Delivery',
+    shortLabel: 'Delivery',
+    className: 'bg-green-500/20 text-green-400 border-transparent font-semibold',
+  },
+  opted_out: {
+    label: 'Opted Out',
+    shortLabel: 'Opted Out',
+    className: 'bg-red-500/15 text-red-400 border-transparent font-semibold',
+  },
   interested: {
     label: 'Interested',
     shortLabel: 'Interested',
@@ -99,11 +114,11 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Paid',
     className: 'bg-green-500/20 text-green-400 border-transparent font-semibold',
   },
-  // Legacy "Closed" → renders as Paid (green) for any pre-existing row.
+  // Terminal stage of the live pipeline (after in_delivery) — operator-pickable.
   completed: {
-    label: 'Paid',
-    shortLabel: 'Paid',
-    className: 'bg-green-500/20 text-green-400 border-transparent font-semibold',
+    label: 'Completed',
+    shortLabel: 'Done',
+    className: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent font-semibold',
   },
   // Inbox "Remove from inbox" terminal — hidden from the Inbox by default; label so a
   // revealed (Show hidden) row reads "Closed" instead of falling back to "New".

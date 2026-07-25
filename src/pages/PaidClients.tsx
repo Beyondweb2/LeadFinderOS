@@ -504,7 +504,9 @@ const PaidClientsPage = () => {
 
   // Filter to only show completed/paid clients
   const paidClients = useMemo(() => {
-    const paidStatuses = ['completed', 'paid_for_draft', 'payment_received'];
+    // paid_for_draft removed (dead legacy status); in_delivery added — a paid client being
+    // delivered is still a paid client.
+    const paidStatuses = ['completed', 'in_delivery', 'payment_received'];
     
     let result = leads.filter((lead) => paidStatuses.includes(lead.status));
     

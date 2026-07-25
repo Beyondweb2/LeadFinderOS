@@ -375,7 +375,7 @@ Deno.serve(async (req) => {
                 await service.from("outreach_leads")
                   .update({ status: "report_sent" })
                   .eq("id", row.lead_id)
-                  .not("status", "in", "(interested,payment_received,completed)");
+                  .not("status", "in", "(interested,price_given,payment_received,in_delivery,completed)");
               } catch (e) {
                 console.error(`[auto-reply] report_sent status write failed for lead ${row.lead_id}:`, (e as Error).message);
               }

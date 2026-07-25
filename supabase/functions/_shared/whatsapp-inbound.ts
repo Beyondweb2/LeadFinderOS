@@ -16,8 +16,11 @@ import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, isSub
 // A new inbound reply flips the matched lead to 'replied' UNLESS it's already at a
 // protected status. not_interested is deliberately NOT protected: a reply means the
 // prospect is re-engaging, so it should flip to 'replied' (which also un-hides the
-// conversation in the Inbox, where not_interested is hidden by default).
-const NO_DOWNGRADE = "(payment_received,replied)";
+// conversation in the Inbox, where not_interested is hidden by default). report_sent
+// is deliberately NOT protected either — a reply to the pitch flips it to 'replied'.
+// price_given and beyond (interested / paid / in_delivery / completed) ARE protected:
+// an inbound must never wipe quote/deal state.
+const NO_DOWNGRADE = "(payment_received,replied,interested,price_given,in_delivery,completed)";
 
 /** Best text/body for an inbound message. Text → the text body; anything else
  *  (image/audio/document/interactive/button/reaction/…) → a "[type]" placeholder

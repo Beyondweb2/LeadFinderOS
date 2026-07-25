@@ -310,7 +310,9 @@ export function useDashboardMetrics(isAdmin = false) {
     const draftRevenue = 0;
     const completionRevenue = 0;
     const paidForDraftCount = 0;
-    const activeProposals = allLeads.filter(l => ['wants_draft', 'reviewing_draft', 'awaiting_decision'].includes(l.status)).length;
+    // "Active proposals" = a price/quote is out and undecided. (Was keyed on the removed legacy
+    // wants_draft/reviewing_draft/awaiting_decision statuses; price_given is the live equivalent.)
+    const activeProposals = allLeads.filter(l => l.status === 'price_given').length;
 
     // Leads with a next action (non-archived) — feeds the Next Actions card. (The
     // old collapsed pipeline counts were removed; the Pipeline card now computes its

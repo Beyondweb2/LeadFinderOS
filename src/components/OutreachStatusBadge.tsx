@@ -22,11 +22,6 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'WA Failed',
     className: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))] border-transparent font-semibold',
   },
-  sent_initial_text: {
-    label: 'Sent Text / WhatsApp',
-    shortLabel: 'Texted',
-    className: 'bg-[hsl(var(--badge-whatsapp))] text-[hsl(var(--badge-whatsapp-fg))] border-transparent font-semibold',
-  },
   replied: {
     label: 'Replied',
     shortLabel: 'Replied',
@@ -37,6 +32,21 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Report',
     className: 'bg-sky-500/20 text-sky-400 border-transparent font-semibold',
   },
+  price_given: {
+    label: 'Price Given',
+    shortLabel: 'Price',
+    className: 'bg-indigo-500/20 text-indigo-400 border-transparent font-semibold',
+  },
+  in_delivery: {
+    label: 'In Delivery',
+    shortLabel: 'Delivery',
+    className: 'bg-green-500/20 text-green-400 border-transparent font-semibold',
+  },
+  opted_out: {
+    label: 'Opted Out',
+    shortLabel: 'Opted Out',
+    className: 'bg-red-500/15 text-red-400 border-transparent font-semibold',
+  },
   email_sent: {
     label: 'Email Sent',
     shortLabel: 'Email',
@@ -46,41 +56,6 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     label: 'Bounced',
     shortLabel: 'Bounced',
     className: 'bg-red-700 text-white border-transparent font-semibold',
-  },
-  sent_voice_note: {
-    label: 'Sent Voice Note',
-    shortLabel: 'Voice',
-    className: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent font-semibold',
-  },
-  awaiting_decision: {
-    label: 'Awaiting Decision',
-    shortLabel: 'Awaiting',
-    className: 'bg-[hsl(var(--badge-attempted))] text-[hsl(var(--badge-attempted-fg))] border-transparent font-semibold',
-  },
-  contacted: {
-    label: 'Called',
-    shortLabel: 'Called',
-    className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
-  },
-  call_back: {
-    label: 'Call Back',
-    shortLabel: 'Call Back',
-    className: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))] border-transparent font-semibold',
-  },
-  not_answered: {
-    label: 'Not Answered',
-    shortLabel: 'No Answer',
-    className: 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))] border-transparent font-semibold',
-  },
-  on_hold: {
-    label: 'On Hold / Waiting',
-    shortLabel: 'On Hold',
-    className: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent font-semibold',
-  },
-  wants_draft: {
-    label: 'Wants a Draft',
-    shortLabel: 'Wants Draft',
-    className: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent font-semibold',
   },
   interested: {
     label: 'Interested',
@@ -102,40 +77,10 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Needs SMS',
     className: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent font-semibold',
   },
-  waiting: {
-    label: 'Waiting',
-    shortLabel: 'Waiting',
-    className: 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))] border-transparent font-semibold',
-  },
-  reviewing_draft: {
-    label: 'Reviewing Draft',
-    shortLabel: 'Reviewing',
-    className: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent font-semibold',
-  },
-  paid_for_draft: {
-    label: 'Paid for Draft',
-    shortLabel: 'Paid Draft',
-    className: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent font-semibold',
-  },
   completed: {
     label: 'Completed (Client)',
     shortLabel: 'Completed',
     className: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent font-semibold',
-  },
-  sms: {
-    label: 'SMS',
-    shortLabel: 'SMS',
-    className: 'bg-[hsl(var(--badge-sms))] text-[hsl(var(--badge-sms-fg))] border-transparent font-semibold',
-  },
-  whatsapp: {
-    label: 'WhatsApp',
-    shortLabel: 'WhatsApp',
-    className: 'bg-[hsl(var(--badge-whatsapp))] text-[hsl(var(--badge-whatsapp-fg))] border-transparent font-semibold',
-  },
-  facebook_msg: {
-    label: 'FB Messenger',
-    shortLabel: 'FB Msg',
-    className: 'bg-[hsl(var(--badge-facebook))] text-[hsl(var(--badge-facebook-fg))] border-transparent font-semibold',
   },
 };
 

@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
           await service.from("outreach_leads")
             .update({ status: "report_sent" })
             .eq("id", resolvedLeadId)
-            .not("status", "in", "(interested,payment_received,completed)");
+            .not("status", "in", "(interested,price_given,payment_received,in_delivery,completed)");
         } catch (e) {
           console.error(`[send-whatsapp-message] report_sent status write failed for lead ${resolvedLeadId}:`, (e as Error).message);
         }
