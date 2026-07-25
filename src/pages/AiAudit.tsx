@@ -44,10 +44,10 @@ const WIZARD_STEPS = ['source', 'name', 'type', 'location', 'website', 'scope', 
 const REVIEW_INDEX = WIZARD_STEPS.indexOf('review');
 
 // Question-count selector: how many search questions to generate. Range mirrors the
-// create-ai-audit clamp (HARD 3..5, default 4 — unified across wizard/bulk/auto-chain).
+// create-ai-audit clamp (HARD 3..5, default 3 — unified across wizard/bulk/auto-chain).
 const MIN_QUESTION_COUNT = 3;
 const MAX_QUESTION_COUNT = 5;
-const DEFAULT_QUESTION_COUNT = 4;
+const DEFAULT_QUESTION_COUNT = 3;
 const QUESTION_COUNT_OPTIONS = Array.from(
   { length: MAX_QUESTION_COUNT - MIN_QUESTION_COUNT + 1 },
   (_, i) => MIN_QUESTION_COUNT + i,

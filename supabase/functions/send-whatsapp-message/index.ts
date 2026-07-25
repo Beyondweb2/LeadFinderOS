@@ -196,6 +196,23 @@ Deno.serve(async (req) => {
     }).select("id, created_at").maybeSingle();
     if (insErr) console.error("[send-whatsapp-message] log insert failed:", insErr.message);
 
+    // A successful LIVE send of a PITCH-CLASS template (trade/competitors vars — audit_reply today)
+    // moves the lead to report_sent. Forward-only (mirrors the webhook's pattern): never overwrites
+    // the interested/paid-class statuses. Free-form texts and openers don't move the pipeline here.
+    if (env.live && status === "sent" && resolvedLeadId && usedTemplate) {
+      const tvars = WA_TEMPLATES[usedTemplate]?.vars ?? [];
+      if (tvars.includes("trade") || tvars.includes("competitors")) {
+        try {
+          await service.from("outreach_leads")
+            .update({ status: "report_sent" })
+            .eq("id", resolvedLeadId)
+            .not("status", "in", "(interested,payment_received,completed)");
+        } catch (e) {
+          console.error(`[send-whatsapp-message] report_sent status write failed for lead ${resolvedLeadId}:`, (e as Error).message);
+        }
+      }
+    }
+
     return json({
       ok: status !== "failed",
       status,

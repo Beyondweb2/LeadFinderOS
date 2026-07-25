@@ -148,7 +148,7 @@ function AutoReplyToggle() {
 }
 
 const Inbox = () => {
-  const { user, conversations, messagesForKey, leads, sitesByLeadId, auditByLeadId, isLoading, send, refetch, patchLeadStatus } = useInbox();
+  const { user, conversations, messagesForKey, leads, sitesByLeadId, auditByLeadId, auditRunningLeadIds, isLoading, send, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
@@ -364,6 +364,52 @@ const Inbox = () => {
       )}
     </>
   );
+  // ── Inbox audit button: fire the chain's auto-audit path directly (no navigation) ──
+  // Inputs sourced like the wizard's pickLead / the reply chain: type = category||search_keyword,
+  // location = search_location||address. Missing → the button becomes a wizard fallback link.
+  const auditInputs = activeLead
+    ? { type: (activeLead.category || activeLead.search_keyword || '').trim(), loc: (activeLead.search_location || activeLead.address || '').trim() }
+    : null;
+  const auditInputsMissing = !!activeLead && (!auditInputs?.type || !auditInputs?.loc);
+  const [firedAudits, setFiredAudits] = useState<Set<string>>(new Set());
+  const auditInFlight = !!active?.leadId && (auditRunningLeadIds.has(active.leadId) || firedAudits.has(active.leadId));
+
+  const fireAuditFromInbox = async () => {
+    if (!active?.leadId || !activeLead || auditInFlight) return;
+    if (auditInputsMissing) {
+      // Honest fallback: the auto path never guesses garbage inputs — hand over to the wizard.
+      toast({ title: 'Needs business type / location', description: 'This lead is missing audit inputs — opening the full audit page to fill them in.' });
+      navigate(`/ai-audit?leadId=${active.leadId}`);
+      return;
+    }
+    if (!window.confirm(`Run audit for ${activeLead.business_name}? The report pitch auto-sends when it completes.`)) return;
+    setFiredAudits((prev) => new Set(prev).add(active.leadId!));
+    const { data, error } = await supabase.functions.invoke('create-ai-audit', {
+      body: {
+        lead_id: active.leadId,
+        business_name: activeLead.business_name,
+        business_type: auditInputs!.type,
+        location_text: auditInputs!.loc,
+        country: activeLead.country ?? null,
+        website: activeLead.website || undefined,
+        has_website: !!activeLead.website,
+        queue_pitch_on_complete: true,
+      },
+    });
+    if (error || !data?.ok) {
+      setFiredAudits((prev) => { const n = new Set(prev); n.delete(active.leadId!); return n; });
+      toast({ title: "Couldn't start the audit", description: error?.message ?? data?.error ?? 'Try again', variant: 'destructive' });
+      return;
+    }
+    toast({
+      title: 'Audit started',
+      description: data.pitch_queued
+        ? 'The report pitch will auto-send when it completes (~10–15 min; declines cancel it).'
+        : `Audit is running, but the auto-pitch wasn’t queued (${data.pitch_note ?? 'unknown'}) — send manually when it completes.`,
+    });
+    refetch(); // pick up the pending run → spinner state survives reloads
+  };
+
   const mapsUrl = activeLead?.google_maps_url
     || (activeLead?.place_id ? `https://www.google.com/maps/place/?q=place_id:${activeLead.place_id}` : null);
   const websiteUrl = activeLead?.website
@@ -598,11 +644,23 @@ const Inbox = () => {
                       <ListChecks className="h-4 w-4" />
                     </button>
                   )}
-                  {/* Run / re-run the AI-visibility audit for this lead — navigates SAME-TAB to the
-                      audit wizard prefilled (same deep-link as the Outreach button). */}
+                  {/* Run the AI audit WITHOUT leaving the Inbox: confirm → fire the chain's auto-audit
+                      path (create-ai-audit + awaiting_audit pitch row → auto-send on completion).
+                      Missing type/location → dimmed; click falls back to the wizard. In-flight → spinner. */}
                   {active.leadId && (
-                    <button type="button" onClick={() => navigate(`/ai-audit?leadId=${active.leadId}`)} title="Run / re-run AI audit for this lead" aria-label="Run AI audit" className={HEADER_ICON_BTN}>
-                      <Sparkles className="h-4 w-4" />
+                    <button
+                      type="button"
+                      onClick={fireAuditFromInbox}
+                      disabled={auditInFlight}
+                      title={auditInFlight
+                        ? 'Audit running — the pitch auto-sends on completion'
+                        : auditInputsMissing
+                          ? 'Needs business type/location — opens the full audit page'
+                          : 'Run AI audit for this lead (pitch auto-sends on completion)'}
+                      aria-label="Run AI audit"
+                      className={cn(HEADER_ICON_BTN, auditInputsMissing && !auditInFlight && 'opacity-50')}
+                    >
+                      {auditInFlight ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     </button>
                   )}
                   {/* Google Maps — stored URL preferred, else built from place_id. */}

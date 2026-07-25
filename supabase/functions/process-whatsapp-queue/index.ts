@@ -367,6 +367,19 @@ Deno.serve(async (req) => {
             await finish("sent");
             processed++;
             results[row.lead_id] = sendStatus;
+            // The automated pitch went out (LIVE sends only — simulated test sends don't move the
+            // pipeline). Forward-only, mirroring the webhook's pattern: never overwrite the
+            // interested/paid-class statuses; replied → report_sent is the intended transition.
+            if (sendStatus === "sent") {
+              try {
+                await service.from("outreach_leads")
+                  .update({ status: "report_sent" })
+                  .eq("id", row.lead_id)
+                  .not("status", "in", "(interested,payment_received,completed)");
+              } catch (e) {
+                console.error(`[auto-reply] report_sent status write failed for lead ${row.lead_id}:`, (e as Error).message);
+              }
+            }
           }
         } catch (e) {
           await finish("flagged_error", (e as Error).message);

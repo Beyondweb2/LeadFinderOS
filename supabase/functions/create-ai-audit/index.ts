@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
+import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
+import { firstReplyTemplate } from "../_shared/auto-reply-rules.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
 // OpenAI (gpt-4o-mini, tool-calling, mirrors admin-ai-opener), creates the audit +
@@ -18,15 +20,15 @@ const corsHeaders = {
 // Google organic in the same run; those are captured/shown but not queue engines.
 // (Perplexity dropped — kept dormant in ai-search.ts in case it's re-added.)
 const AUDIT_ENGINES = ["chatgpt", "gemini"];
-// How many questions to generate. HARD RULE: 3..5, default 4 — unified across every caller
+// How many questions to generate. HARD RULE: 3..5, default 3 — unified across every caller
 // (wizard, bulk, the auto reply-chain). Always clamped server-side (the count is untrusted
 // client input); the wizard + bulk selectors offer the same 3..5. Fewer, better-targeted
 // buyer-intent questions beat a long generic list.
 const MIN_QUESTION_COUNT = 3;
 const MAX_QUESTION_COUNT = 5;
-const DEFAULT_QUESTION_COUNT = 4;
+const DEFAULT_QUESTION_COUNT = 3;
 
-/** Clamp an untrusted question-count to 3..5, defaulting to 4. */
+/** Clamp an untrusted question-count to 3..5, defaulting to 3. */
 function clampCount(n: unknown): number {
   const v = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : DEFAULT_QUESTION_COUNT;
   return Math.min(MAX_QUESTION_COUNT, Math.max(MIN_QUESTION_COUNT, v));
@@ -192,6 +194,11 @@ Deno.serve(async (req) => {
     // wizard's editable review screen. questions[]: an explicit override (edited list)
     // used instead of generating; capped so a client can't enqueue an unbounded run.
     const preview: boolean = body.preview === true;
+    // Queue the auto-pitch for when this audit completes: park an 'awaiting_audit' row in
+    // whatsapp_auto_replies (service-role — the table is RLS-locked to the server), carrying the
+    // operator's reply template. The completion hook in process-ai-audit-queue upgrades it to
+    // 'pending'. Reproduces the reply-chain semantics for UI-triggered audits (Inbox audit button).
+    const queuePitchOnComplete: boolean = body.queue_pitch_on_complete === true;
     // How many questions to generate (6..12, default 8). Also the cap for an edited
     // list the client submits, so a user who picked 12 can enqueue 12.
     const questionCount = clampCount(body.question_count ?? body.questionCount);
@@ -334,11 +341,42 @@ Deno.serve(async (req) => {
     const { error: qErr } = await service.from("ai_audit_queue").insert(queueRows);
     if (qErr) return json({ ok: false, error: qErr.message }, 500);
 
+    // Optional auto-pitch on completion (Inbox audit button). Best-effort + additive: a failure
+    // here never fails the audit that was just created. 23505 = the lead's once-ever slot is
+    // already owned (e.g. the reply trigger got there first) — first-trigger-wins, fine.
+    let pitchQueued = false;
+    let pitchNote: string | undefined;
+    if (queuePitchOnComplete && leadId) {
+      try {
+        const { data: leadRow } = await service
+          .from("outreach_leads").select("phone, country").eq("id", leadId).maybeSingle();
+        const to = toWhatsAppNumber((leadRow?.phone as string) ?? "", (leadRow?.country as string | null) ?? null);
+        if (!to) {
+          pitchNote = "no_usable_phone";
+        } else {
+          const { error: pErr } = await service.from("whatsapp_auto_replies").insert({
+            lead_id: leadId,
+            phone: to,
+            template_name: await firstReplyTemplate(service),
+            status: "awaiting_audit",
+            fire_after: new Date().toISOString(), // real fire_after set by the completion upgrade
+          });
+          if (!pErr) pitchQueued = true;
+          else if ((pErr as { code?: string }).code === "23505") pitchNote = "slot_already_owned";
+          else pitchNote = (pErr as { message?: string }).message?.slice(0, 200) ?? "insert_failed";
+        }
+      } catch (e) {
+        pitchNote = (e instanceof Error ? e.message : "pitch_queue_failed").slice(0, 200);
+      }
+    }
+
     return json({
       ok: true,
       audit_id: auditId,
       run_id: runId,
       run_number: runNumber,
+      pitch_queued: pitchQueued,
+      ...(pitchNote ? { pitch_note: pitchNote } : {}),
       business_name: auditBusinessName,
       questions,
       // Estimate: question_count × engines × per-question source cost (see sources.ts).
