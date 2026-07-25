@@ -1,5 +1,5 @@
 import { toWhatsAppNumber } from "./whatsapp-send.ts";
-import { autoReplyEnvOn, autoReplyToggleOn, isDecline, isSubstantiveText, looksAutomated, phoneSuppressed } from "./auto-reply-rules.ts";
+import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, phoneSuppressed } from "./auto-reply-rules.ts";
 
 // Inbound WhatsApp message handling — barber replies arriving on the SAME Meta
 // webhook that delivers statuses (Cloud API has ONE callback URL; inbound lives in
@@ -250,14 +250,108 @@ export async function handleInboundMessages(
                 });
                 console.log(`[auto-reply] lead ${leadId}: decline detected — flagged for human.`);
               } else {
-                const { error: qErr } = await service.from("whatsapp_auto_replies").insert({
-                  lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
-                  status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString(),
-                });
-                if (qErr && (qErr as { code?: string }).code !== "23505") {
-                  console.error(`[auto-reply] queue insert failed for lead ${leadId}:`, (qErr as { message?: string }).message);
-                } else if (!qErr) {
-                  console.log(`[auto-reply] lead ${leadId}: audit_reply queued (fires in ~3 min).`);
+                // The reply-trigger template (setting; null → processor defaults to audit_reply).
+                const replyTemplate = await firstReplyTemplate(service);
+                // Does the lead already have a COMPLETED audit (complete/capped — same set the
+                // audit_reply resolver accepts)? Cheap two-step existence check.
+                let hasCompletedAudit = false;
+                const { data: leadAudits } = await service
+                  .from("ai_audits").select("id").eq("lead_id", leadId);
+                const auditIds = ((leadAudits ?? []) as Array<{ id: string }>).map((a) => a.id);
+                if (auditIds.length) {
+                  const { data: doneRun } = await service
+                    .from("ai_audit_runs").select("id").in("audit_id", auditIds)
+                    .in("status", ["complete", "capped"]).limit(1).maybeSingle();
+                  hasCompletedAudit = !!doneRun;
+                }
+
+                if (hasCompletedAudit) {
+                  // Audit ready → queue the delayed pitch as before (template stamped from the setting).
+                  const { error: qErr } = await service.from("whatsapp_auto_replies").insert({
+                    lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
+                    template_name: replyTemplate,
+                    status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString(),
+                  });
+                  if (qErr && (qErr as { code?: string }).code !== "23505") {
+                    console.error(`[auto-reply] queue insert failed for lead ${leadId}:`, (qErr as { message?: string }).message);
+                  } else if (!qErr) {
+                    console.log(`[auto-reply] lead ${leadId}: '${replyTemplate ?? "audit_reply"}' queued (fires in ~3 min).`);
+                  }
+                } else {
+                  // AUTO CHAIN — no completed audit yet. If the lead has usable audit inputs, fire
+                  // create-ai-audit internally and park the pitch as 'awaiting_audit' (claims the
+                  // once-ever slot WITHOUT firing; the completion hook upgrades it to pending when
+                  // the audit completes — capped/failed audits leave it visible for a human). If
+                  // inputs are missing, NEVER guess garbage — flagged_no_inputs for a human (burns
+                  // the slot, correctly: no audit can exist, so no completion will ever fire).
+                  const { data: leadRow } = await service
+                    .from("outreach_leads")
+                    .select("business_name, category, search_keyword, search_location, address, country, website, user_id")
+                    .eq("id", leadId).maybeSingle();
+                  const bizType = ((leadRow?.category as string) || (leadRow?.search_keyword as string) || "").trim();
+                  const locText = ((leadRow?.search_location as string) || (leadRow?.address as string) || "").trim();
+                  if (!leadRow?.business_name || !leadRow?.user_id || !bizType || !locText) {
+                    await service.from("whatsapp_auto_replies").insert({
+                      lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
+                      template_name: replyTemplate,
+                      status: "flagged_no_inputs",
+                      reason: `missing ${[!bizType ? "business_type" : "", !locText ? "location" : ""].filter(Boolean).join("+") || "lead fields"} — run the audit manually`,
+                      fire_after: new Date().toISOString(),
+                    });
+                    console.log(`[auto-reply] lead ${leadId}: no completed audit + missing inputs — flagged_no_inputs.`);
+                  } else {
+                    // Claim the slot FIRST (row = the intent + the template memory); only start the
+                    // audit if we actually own the slot (a 23505 means another trigger got there).
+                    const { error: awaitErr } = await service.from("whatsapp_auto_replies").insert({
+                      lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
+                      template_name: replyTemplate,
+                      status: "awaiting_audit",
+                      fire_after: new Date().toISOString(), // real fire_after is set by the completion upgrade
+                    });
+                    if (awaitErr) {
+                      if ((awaitErr as { code?: string }).code !== "23505") {
+                        console.error(`[auto-reply] awaiting_audit insert failed for lead ${leadId}:`, (awaitErr as { message?: string }).message);
+                      }
+                    } else {
+                      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+                      try {
+                        const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+                            "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+                            "x-internal-job": "1",
+                          },
+                          // No questions[] / question_count → server generates at the hard default (4).
+                          body: JSON.stringify({
+                            user_id: leadRow.user_id,
+                            lead_id: leadId,
+                            business_name: leadRow.business_name,
+                            business_type: bizType,
+                            location_text: locText,
+                            country: leadRow.country ?? null,
+                            website: leadRow.website ?? null,
+                            has_website: !!leadRow.website,
+                          }),
+                        });
+                        if (!res.ok) {
+                          const txt = await res.text().catch(() => "");
+                          await service.from("whatsapp_auto_replies")
+                            .update({ status: "flagged_error", reason: `auto-audit start failed: HTTP ${res.status} ${txt.slice(0, 200)}` })
+                            .eq("lead_id", leadId).eq("status", "awaiting_audit");
+                          console.error(`[auto-reply] chain audit start failed for lead ${leadId}: HTTP ${res.status}`);
+                        } else {
+                          console.log(`[auto-reply] lead ${leadId}: no completed audit — auto-audit started, pitch parked as awaiting_audit.`);
+                        }
+                      } catch (e) {
+                        await service.from("whatsapp_auto_replies")
+                          .update({ status: "flagged_error", reason: `auto-audit start error: ${(e as Error).message}`.slice(0, 300) })
+                          .eq("lead_id", leadId).eq("status", "awaiting_audit");
+                        console.error(`[auto-reply] chain audit start error for lead ${leadId}:`, (e as Error).message);
+                      }
+                    }
+                  }
                 }
               }
             }

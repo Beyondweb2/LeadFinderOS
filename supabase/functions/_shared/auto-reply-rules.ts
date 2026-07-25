@@ -76,3 +76,18 @@ export async function autoReplyToggleOn(service: any): Promise<boolean> {
 export function autoReplyEnvOn(): boolean {
   return (Deno.env.get("AUTO_AUDIT_REPLY_ENABLED") ?? "").trim() === "1";
 }
+
+/** The reply-trigger template setting (whatsapp_outreach_state.first_reply_template).
+ *  null = unset → the processor defaults to audit_reply. Defensive: a missing column /
+ *  failed read returns null (the default), never throws. */
+// deno-lint-ignore no-explicit-any
+export async function firstReplyTemplate(service: any): Promise<string | null> {
+  try {
+    const { data, error } = await service
+      .from("whatsapp_outreach_state").select("first_reply_template").eq("id", 1).maybeSingle();
+    if (error) return null;
+    return (data?.first_reply_template as string | null) ?? null;
+  } catch {
+    return null;
+  }
+}
