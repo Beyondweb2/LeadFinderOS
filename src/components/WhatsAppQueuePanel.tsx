@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MessageSquare, Loader2, Play, Pause, RefreshCw, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import type { OutreachLead } from '@/types/outreach';
+import { WHATSAPP_TEMPLATES, type OutreachLead } from '@/types/outreach';
 
 interface QueueStatus {
   testMode: boolean;
@@ -15,6 +16,8 @@ interface QueueStatus {
   windowOpen: boolean;
   paused: boolean;
   ukTime: string;
+  /** D2 — completion auto-send template (null = off). */
+  auditCompleteTemplate?: string | null;
 }
 
 /**
@@ -101,6 +104,26 @@ export function WhatsAppQueuePanel({
     }
   };
 
+  // D2 — pick the template auto-sent when a lead's audit completes ('off' = feature off).
+  // Server-validated against the shared allowlist; needs the SQL columns + the
+  // AUTO_AUDIT_REPLY_ENABLED master switch before anything actually sends.
+  const setCompleteTemplate = async (value: string) => {
+    const next = value === 'off' ? null : value;
+    try {
+      const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', {
+        body: { mode: 'set_audit_complete_template', template: next },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.detail ?? data?.error ?? 'failed');
+      setStatus(data as QueueStatus);
+      toast({
+        title: next ? 'Audit-complete auto-send ON' : 'Audit-complete auto-send OFF',
+        description: next ? `Leads get "${next}" ~3 min after their audit completes (declines cancel it).` : 'Nothing sends on audit completion.',
+      });
+    } catch (e) {
+      toast({ title: "Couldn't update auto-send", description: (e as Error)?.message ?? 'Failed (has the SQL been run?)', variant: 'destructive' });
+    }
+  };
+
   const removeFromQueue = (id: string) => {
     // Restore the pre-queue status (fallback not_contacted); clear the capture + queued_at.
     const prev = leads.find((l) => l.id === id)?.previous_status;
@@ -125,6 +148,19 @@ export function WhatsAppQueuePanel({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* D2 — completion auto-send template ('Off' = disabled). Sits beside pause by design. */}
+          <div className="flex items-center gap-1.5" title="Auto-send this template ~3 min after a lead's audit completes (first-trigger-wins vs the reply rule; declines cancel; needs the AUTO_AUDIT_REPLY_ENABLED switch)">
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">On audit done:</span>
+            <Select value={status.auditCompleteTemplate ?? 'off'} onValueChange={setCompleteTemplate}>
+              <SelectTrigger className="h-8 w-[170px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">Off (no auto-send)</SelectItem>
+                {WHATSAPP_TEMPLATES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={refresh} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </Button>

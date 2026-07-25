@@ -5,6 +5,7 @@ import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, 
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
+import { autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 // Automation B: reuse the SHARED report aggregation (same buildReportData the SPA + public
 // renderer use) so the WhatsApp {{2}} competitor list matches the report exactly.
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
@@ -415,6 +416,12 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   // Auto-report: audits that just finalised → generate their public /r/ report AFTER extraction (so
   // the report reflects the cleaned competitor list). Collected in the loop; deduped + fired below.
   const reportJobs: { auditId: string }[] = [];
+  // D2 — completion auto-send: audits that just went COMPLETE (never capped) whose lead should be
+  // queued an operator-selected template via whatsapp_auto_replies (trigger 'audit_complete').
+  // Gated by the SAME master kill-switch as the first-reply rule (AUTO_AUDIT_REPLY_ENABLED) plus a
+  // non-null whatsapp_outreach_state.audit_complete_template. The lead_id UNIQUE index gives
+  // first-trigger-wins vs the first-reply rule (23505 → skip, one send per lead ever).
+  const completionSendJobs: { auditId: string }[] = [];
 
   for (const runId of ids) {
     // A cancelled run is terminal — never resurrect it or flip it to 'complete'. Drop any
@@ -548,6 +555,9 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       // the manual button. No lead-id gate; skipped when AUTO_REPORT_ENABLED is off. Existing-report
       // guard + fail-safe wrapping live in the processor below.
       if (autoReportEnabled && !isCapped && runRow?.audit_id) reportJobs.push({ auditId: runRow.audit_id as string });
+      // D2 — completion auto-send candidates (COMPLETE only, like audit_reply/auto-report). The
+      // heavier checks (setting, lead, phone, suppression) run once, after the loop.
+      if (!isCapped && runRow?.audit_id) completionSendJobs.push({ auditId: runRow.audit_id as string });
     }
   }
   // Await the queued extraction calls so the edge runtime doesn't cut them off when we return.
@@ -599,6 +609,53 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       }
     } catch (e) {
       console.error(`[process-ai-audit-queue] auto-report error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // D2 — completion auto-send: queue the operator-selected template for each COMPLETE audit's lead
+  // via whatsapp_auto_replies (processed ≥3 min later by process-whatsapp-queue mode 'auto_replies',
+  // which applies the send-time guards: decline-since, opted_out/not_interested, suppression, and
+  // flagged_no_link for url-templates without a claim link). Everything here is defensive: missing
+  // column/table (SQL not run yet) or a null setting → the whole feature is dormant, nothing throws.
+  if (completionSendJobs.length && autoReplyEnvOn()) {
+    let completeTemplate: string | null = null;
+    try {
+      const { data: st, error: stErr } = await service
+        .from("whatsapp_outreach_state").select("audit_complete_template").eq("id", 1).maybeSingle();
+      if (!stErr) completeTemplate = (st?.audit_complete_template as string | null) ?? null;
+    } catch { /* column missing → dormant */ }
+    if (completeTemplate) {
+      for (const job of completionSendJobs) {
+        try {
+          const { data: audit } = await service
+            .from("ai_audits").select("lead_id").eq("id", job.auditId).maybeSingle();
+          const leadId = (audit?.lead_id as string | null) ?? null;
+          if (!leadId) continue; // manual audit — nobody to message
+          const { data: lead } = await service
+            .from("outreach_leads").select("phone, country, status").eq("id", leadId).maybeSingle();
+          const to = toWhatsAppNumber((lead?.phone as string) ?? "", (lead?.country as string | null) ?? null);
+          if (!to) continue; // no usable phone — nothing to queue
+          // Queue-time suppression/refusal parity with the first-reply trigger: a suppressed or
+          // declined lead burns the once-ever slot with skipped_suppressed instead of pending.
+          const refused = ["opted_out", "not_interested"].includes((lead?.status as string) ?? "") ||
+            (await phoneSuppressed(service, to));
+          const { error: qErr } = await service.from("whatsapp_auto_replies").insert({
+            lead_id: leadId,
+            phone: to,
+            trigger: "audit_complete",
+            template_name: completeTemplate,
+            status: refused ? "skipped_suppressed" : "pending",
+            fire_after: new Date(Date.now() + 3 * 60_000).toISOString(),
+          });
+          if (qErr && (qErr as { code?: string }).code !== "23505") {
+            console.error(`[auto-send] completion queue insert failed for lead ${leadId}:`, (qErr as { message?: string }).message);
+          } else if (!qErr) {
+            console.log(`[auto-send] audit ${job.auditId} complete → queued '${completeTemplate}' for lead ${leadId}${refused ? " (skipped_suppressed)" : ""}.`);
+          } // 23505 = the first-reply trigger already owns this lead — first trigger wins.
+        } catch (e) {
+          console.error(`[auto-send] completion queue error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
+        }
+      }
     }
   }
   return finalised;
