@@ -1,4 +1,5 @@
 import { toWhatsAppNumber } from "./whatsapp-send.ts";
+import { autoReplyEnvOn, autoReplyToggleOn, isDecline, isSubstantiveText, looksAutomated, phoneSuppressed } from "./auto-reply-rules.ts";
 
 // Inbound WhatsApp message handling — barber replies arriving on the SAME Meta
 // webhook that delivers statuses (Cloud API has ONE callback URL; inbound lives in
@@ -119,13 +120,14 @@ export async function handleInboundMessages(
       }
 
       const { userId, leadId } = await resolveOwner(service, waPhone);
+      const body = bodyFor(msg);
 
       const { error: insErr } = await service.from("whatsapp_messages").insert({
         direction: "inbound",
         user_id: userId,
         lead_id: leadId,
         phone: waPhone,
-        body: bodyFor(msg),
+        body,
         message_type: "text", // CHECK allows only text|template; inbound media → text + [type] body
         wa_message_id: wamid || null,
         status: "received",
@@ -210,6 +212,58 @@ export async function handleInboundMessages(
           }
         } catch (e) {
           console.error(`[whatsapp-inbound] reply→audit error for lead ${leadId}:`, (e as Error).message);
+        }
+
+        // Auto audit_reply rule (SEPARATE from the legacy Automation A/B chain above, which stays
+        // gated by AUTO_REPLY_FLOW_ENABLED and untouched): the lead's FIRST substantive human
+        // inbound queues ONE delayed audit_reply, processed ≥3 min later by process-whatsapp-queue
+        // (mode 'auto_replies') so a decline arriving in the meantime cancels it. Hard-gated: the
+        // AUTO_AUDIT_REPLY_ENABLED env kill-switch AND the Inbox UI toggle must BOTH be on.
+        // Queue-time guards here; send-time re-checks live in the processor. The lead_id UNIQUE
+        // index on whatsapp_auto_replies makes "once per lead, ever" structural (23505 → skip).
+        // Own try/catch — a missing table / any failure can never break the inbound webhook.
+        try {
+          if (autoReplyEnvOn() && (await autoReplyToggleOn(service)) &&
+              msg?.type === "text" && isSubstantiveText(body)) {
+            // First-inbound-only: this message is already stored, so "first" = exactly one row.
+            const { count: inboundCount } = await service
+              .from("whatsapp_messages")
+              .select("id", { count: "exact", head: true })
+              .eq("lead_id", leadId).eq("direction", "inbound");
+            if ((inboundCount ?? 0) <= 1) {
+              if (looksAutomated(body)) {
+                // Booking-bot / out-of-office auto-ack — not a human yes. No row, no send; the
+                // thread is already surfaced to the operator (status='replied' + next_action).
+                console.log(`[auto-reply] lead ${leadId}: first inbound looks automated — not queueing.`);
+              } else if (await phoneSuppressed(service, waPhone)) {
+                // Suppressed number → burn the once-ever slot with skipped_suppressed (never pend).
+                await service.from("whatsapp_auto_replies").insert({
+                  lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
+                  status: "skipped_suppressed", fire_after: new Date().toISOString(),
+                });
+                console.log(`[auto-reply] lead ${leadId}: suppressed — recorded skipped_suppressed.`);
+              } else if (isDecline(body)) {
+                // Obvious decline → flag for a human; never auto-send anything.
+                await service.from("whatsapp_auto_replies").insert({
+                  lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
+                  status: "flagged_decline", reason: body.slice(0, 300), fire_after: new Date().toISOString(),
+                });
+                console.log(`[auto-reply] lead ${leadId}: decline detected — flagged for human.`);
+              } else {
+                const { error: qErr } = await service.from("whatsapp_auto_replies").insert({
+                  lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
+                  status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString(),
+                });
+                if (qErr && (qErr as { code?: string }).code !== "23505") {
+                  console.error(`[auto-reply] queue insert failed for lead ${leadId}:`, (qErr as { message?: string }).message);
+                } else if (!qErr) {
+                  console.log(`[auto-reply] lead ${leadId}: audit_reply queued (fires in ~3 min).`);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`[auto-reply] trigger error for lead ${leadId}:`, (e as Error).message);
         }
       }
     } catch (e) {

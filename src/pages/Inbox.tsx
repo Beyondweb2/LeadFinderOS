@@ -17,6 +17,7 @@ import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, type PipelineStatus } from '@/types/outreach';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check } from 'lucide-react';
@@ -60,6 +61,60 @@ function listPreview(m: { body: string | null; template_name: string | null }): 
   const looksRaw = !body || /^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(body);
   if (!looksRaw) return body;
   return `📄 ${friendlyTemplate(m.template_name ?? (body || null))}`;
+}
+
+/** The ONE inbox auto-reply rule's on/off switch (reply → delayed audit_reply). Reads/writes
+ *  whatsapp_outreach_state.auto_reply_enabled via process-whatsapp-queue (admin-gated modes
+ *  'status' / 'set_auto_reply'), so it renders ONLY for admins (a 403 on status hides it).
+ *  The AUTO_AUDIT_REPLY_ENABLED env kill-switch must ALSO be on for sends — shown as a hint. */
+function AutoReplyToggle() {
+  const { toast } = useToast();
+  const [visible, setVisible] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+  const [envOn, setEnvOn] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'status' } });
+      if (cancelled || error || !data?.ok) return; // non-admin (403) or failure → stay hidden
+      setEnabled(data.autoReplyEnabled === true);
+      setEnvOn(data.autoReplyEnvOn === true);
+      setVisible(true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!visible) return null;
+
+  const flip = async (next: boolean) => {
+    setSaving(true);
+    const prev = enabled;
+    setEnabled(next); // optimistic
+    const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', {
+      body: { mode: 'set_auto_reply', enabled: next },
+    });
+    setSaving(false);
+    if (error || !data?.ok) {
+      setEnabled(prev);
+      toast({ title: "Couldn't update auto-reply", description: error?.message ?? data?.detail ?? data?.error ?? 'Toggle failed (has the SQL been run?)', variant: 'destructive' });
+      return;
+    }
+    toast({
+      title: next ? 'Auto audit-reply ON' : 'Auto audit-reply OFF',
+      description: next
+        ? (envOn ? 'First replies now get the audit_reply automatically (3-min cancel window).' : 'Toggle saved — but the AUTO_AUDIT_REPLY_ENABLED secret is off, so nothing sends yet.')
+        : 'Replies are back to manual handling.',
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 h-9" title={envOn ? 'Auto-send audit_reply on a lead’s first reply (delayed 3 min; declines cancel it)' : 'Kill-switch AUTO_AUDIT_REPLY_ENABLED is off — the toggle is saved but nothing sends until it’s set to 1'}>
+      <span className="text-xs font-medium whitespace-nowrap">Auto reply{!envOn && enabled ? ' ⚠' : ''}</span>
+      <Switch checked={enabled} onCheckedChange={flip} disabled={saving} />
+    </div>
+  );
 }
 
 const Inbox = () => {
@@ -368,6 +423,8 @@ const Inbox = () => {
           <p className="text-sm text-muted-foreground">Manage WhatsApp conversations without leaving LeadFinder.</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* The one auto-reply rule's switch (admin-only — hides itself otherwise). */}
+          <AutoReplyToggle />
           {/* Filter conversations by campaign + status. Both keep Unassigned visible. */}
           <CampaignPicker mode="filter" hideCreate value={campaignFilter} onChange={setCampaignFilter} className="h-9 w-[180px]" />
           <Select value={statusFilter ?? '__all__'} onValueChange={(v) => setStatusFilter(v === '__all__' ? null : v)}>
