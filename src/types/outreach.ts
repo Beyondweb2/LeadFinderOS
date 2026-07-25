@@ -11,6 +11,7 @@ export type LeadStatus =
   | 'not_interested'
   | 'delivered'
   | 'site_sent'
+  | 'report_sent'
   | 'sent_initial_text'
   | 'replied'
   | 'sent_voice_note'
@@ -216,6 +217,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'email_sent', label: 'Email Sent' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
+  { value: 'report_sent', label: 'Report Sent' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'no_whatsapp', label: 'No WhatsApp' },
@@ -259,6 +261,7 @@ export type PipelineStatus =
   | 'initial_contact'
   | 'replied'
   | 'site_sent'
+  | 'report_sent'
   | 'interested'
   | 'not_interested'
   | 'no_whatsapp'
@@ -272,6 +275,7 @@ export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[]
   { value: 'initial_contact', label: 'Contacted' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
+  { value: 'report_sent', label: 'Report Sent' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'payment_received', label: 'Paid' },
@@ -293,7 +297,7 @@ export function isSentStatus(status?: string | null): boolean {
 
 // Replied-or-beyond: replied through every later stage. Includes not_interested
 // (they replied to say no — and were sent a site) and the Paid terminals.
-const REPLIED_OR_BEYOND = ['replied', 'site_sent', 'interested', 'not_interested', 'payment_received', 'completed'];
+const REPLIED_OR_BEYOND = ['replied', 'site_sent', 'report_sent', 'interested', 'not_interested', 'payment_received', 'completed'];
 export function isRepliedStatus(status?: string | null): boolean {
   return !!status && REPLIED_OR_BEYOND.includes(status);
 }

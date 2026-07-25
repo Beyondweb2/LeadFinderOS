@@ -293,9 +293,9 @@ export function OutreachTable({
   const [siteGenDialogOpen, setSiteGenDialogOpen] = useState(false);
   const [siteGenChoice, setSiteGenChoice] = useState<string>('barber');
   // Bulk AI-audit question-count + cost-confirm dialog. Count range mirrors the server's
-  // HARD 3..5 clamp (default 4) — unified across wizard/bulk/auto-chain.
+  // HARD 3..5 clamp (default 3) — unified across wizard/bulk/auto-chain.
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
-  const [auditQuestionCount, setAuditQuestionCount] = useState<number>(4);
+  const [auditQuestionCount, setAuditQuestionCount] = useState<number>(3);
   const [sitesByLead, setSitesByLead] = useState<Record<string, { id: string; slug: string; opened: boolean; claimed: boolean; addon: boolean }>>({});
   // Per-lead LATEST audit state (mirrors sitesByLead) — drives the upcoming "Run audit" /
   // "Manage" row control. Keyed by lead_id, newest audit first; each entry carries that

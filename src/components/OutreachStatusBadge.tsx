@@ -32,6 +32,11 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Replied',
     className: 'bg-[hsl(var(--badge-replied))] text-[hsl(var(--badge-replied-fg))] border-transparent font-semibold',
   },
+  report_sent: {
+    label: 'Report Sent',
+    shortLabel: 'Report',
+    className: 'bg-sky-500/20 text-sky-400 border-transparent font-semibold',
+  },
   email_sent: {
     label: 'Email Sent',
     shortLabel: 'Email',

@@ -51,7 +51,7 @@ export interface WaConversation {
   lastInboundAt: string | null;
 }
 
-export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null }
+export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null }
 
 /** Most-recent generated site for a lead — powers the thread's "View site" link and
  *  the engagement pill (opened/claimed/upsell milestones from generated_sites). */
@@ -93,7 +93,7 @@ export function useInbox() {
     setIsLoading(true);
     const [msgRes, leadRes, siteRes, reportRes] = await Promise.all([
       sb.from('whatsapp_messages').select('*').order('created_at', { ascending: true }),
-      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id').not('phone', 'is', null),
+      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address').not('phone', 'is', null),
       // share_token / booking_only aren't in the generated types yet — untyped sb. RLS
       // scopes rows to the operator's own sites (admins see all). Ordered newest-first
       // so the per-lead pick below takes the most recent site.
@@ -141,6 +141,18 @@ export function useInbox() {
       if (runs.some((r) => r.status === 'complete' || r.status === 'capped')) m[a.lead_id] = { auditId: a.id };
     }
     return m;
+  }, [audits]);
+
+  // Lead ids with an audit run currently IN FLIGHT (pending/running) — drives the Inbox audit
+  // button's spinner. Same audits fetch as above; refreshed by refetch() after firing one.
+  const auditRunningLeadIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const a of audits) {
+      if (!a.lead_id) continue;
+      const runs = Array.isArray(a.ai_audit_runs) ? a.ai_audit_runs : [];
+      if (runs.some((r) => r.status === 'pending' || r.status === 'running')) s.add(a.lead_id);
+    }
+    return s;
   }, [audits]);
 
   // Own-lead ids. `leads` is fetched with the user-session client, so RLS ("Users
@@ -222,5 +234,5 @@ export function useInbox() {
   const patchLeadStatus = useCallback((leadId: string, status: string) =>
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status } : l)), []);
 
-  return { user, messages, leads, conversations, messagesForKey, sitesByLeadId, auditByLeadId, isLoading, refetch: fetchAll, send, patchLeadStatus };
+  return { user, messages, leads, conversations, messagesForKey, sitesByLeadId, auditByLeadId, auditRunningLeadIds, isLoading, refetch: fetchAll, send, patchLeadStatus };
 }

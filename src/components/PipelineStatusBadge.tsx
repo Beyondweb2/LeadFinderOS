@@ -79,6 +79,11 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Site Sent',
     className: 'bg-emerald-500/20 text-emerald-400 border-transparent font-semibold',
   },
+  report_sent: {
+    label: 'Report Sent',
+    shortLabel: 'Report',
+    className: 'bg-sky-500/20 text-sky-400 border-transparent font-semibold',
+  },
   interested: {
     label: 'Interested',
     shortLabel: 'Interested',
