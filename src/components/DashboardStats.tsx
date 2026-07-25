@@ -26,17 +26,17 @@ export function DashboardStats({ leads }: DashboardStatsProps) {
       (l) => l.next_action_date && new Date(l.next_action_date) <= today && 
              l.status !== 'interested' && l.status !== 'not_interested'
     ).length,
-    awaitingReplies: leads.filter(
-      (l) => l.status === 'sent_initial_text' || l.status === 'sent_voice_note'
-    ).length,
+    // Post-outreach leads awaiting a reply (was keyed on the removed legacy
+    // sent_initial_text/sent_voice_note statuses; initial_contact is the live equivalent).
+    awaitingReplies: leads.filter((l) => l.status === 'initial_contact').length,
     followUpsDue: leads.filter(
       (l) => l.next_action === 'send_follow_up' || l.next_action === 'follow_up'
     ).length,
     removalCandidates: leads.filter((l) => {
       if (!l.updated_at) return false;
       const lastUpdate = new Date(l.updated_at);
-      return lastUpdate < threeDaysAgo && 
-             (l.status === 'sent_initial_text' || l.status === 'sent_voice_note');
+      // Was keyed on the removed legacy sent_* statuses; initial_contact is the live equivalent.
+      return lastUpdate < threeDaysAgo && l.status === 'initial_contact';
     }).length,
     interested: leads.filter((l) => l.status === 'interested').length,
     totalActive: leads.filter(

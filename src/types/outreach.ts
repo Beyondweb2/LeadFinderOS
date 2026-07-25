@@ -2,23 +2,14 @@ export type LeadStatus =
   | 'not_contacted'
   | 'queued'            // in the WhatsApp outreach queue, not yet sent
   | 'initial_contact'   // unified "I've reached out" (replaces contacted/waiting/delivered)
-  | 'contacted'
-  | 'call_back'
-  | 'not_answered'
-  | 'on_hold'
-  | 'wants_draft'
   | 'interested'
   | 'not_interested'
-  | 'delivered'
   | 'site_sent'
   | 'report_sent'
-  | 'sent_initial_text'
+  | 'price_given'       // quote/price sent (operator-set only — nothing auto-writes it)
+  | 'in_delivery'       // paid & being delivered (operator-set only)
+  | 'opted_out'         // system-written by the suppression paths (drainer/triage) — NOT operator-pickable
   | 'replied'
-  | 'sent_voice_note'
-  | 'awaiting_decision'
-  | 'waiting'
-  | 'reviewing_draft'
-  | 'paid_for_draft'
   | 'payment_received'  // "Paid" — Outreach pipeline terminal (also Track Leads marker)
   | 'completed'
   | 'no_whatsapp'        // number isn't on WhatsApp (permanent — reach via SMS/call/email)
@@ -26,9 +17,6 @@ export type LeadStatus =
   | 'whatsapp_failed'    // WhatsApp send failed after retries (temporary — re-queueable)
   | 'email_sent'         // pushed to an Instantly.ai email campaign
   | 'bounced'            // Instantly reported the email bounced
-  | 'sms'
-  | 'whatsapp'
-  | 'facebook_msg'
   | 'closed';            // removed from the Inbox (set via a button, not manually picked)
 
 export type NextActionType = 
@@ -185,29 +173,6 @@ export interface OutreachActivity {
   created_at: string;
 }
 
-export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
-  { value: 'not_contacted', label: 'Not Contacted' },
-  { value: 'sent_initial_text', label: 'Sent Initial Text' },
-  { value: 'replied', label: 'Replied' },
-  { value: 'sent_voice_note', label: 'Sent Voice Note' },
-  { value: 'awaiting_decision', label: 'Awaiting Decision' },
-  { value: 'contacted', label: 'Contacted' },
-  { value: 'call_back', label: 'Call Back' },
-  { value: 'not_answered', label: 'Not Answered' },
-  { value: 'on_hold', label: 'On Hold / Waiting' },
-  { value: 'wants_draft', label: 'Wants a Draft' },
-  { value: 'interested', label: 'Interested' },
-  { value: 'not_interested', label: 'Not Interested' },
-  { value: 'no_whatsapp', label: 'No WhatsApp' },
-  { value: 'no_whatsapp_needs_sms', label: 'Not Mobile — Needs SMS' },
-  { value: 'email_sent', label: 'Email Sent' },
-  { value: 'bounced', label: 'Bounced' },
-  { value: 'waiting', label: 'Waiting' },
-  { value: 'reviewing_draft', label: 'Reviewing Draft' },
-  { value: 'paid_for_draft', label: 'Paid for Draft' },
-  { value: 'completed', label: 'Completed (Client)' },
-];
-
 // Status FILTER options for the Outreach page — mirrors the 7-status pipeline so
 // the filter and the row/expanded dropdowns are one consistent list.
 export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
@@ -218,6 +183,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'report_sent', label: 'Report Sent' },
+  { value: 'price_given', label: 'Price Given' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'no_whatsapp', label: 'No WhatsApp' },
@@ -225,6 +191,8 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'whatsapp_failed', label: 'WhatsApp Failed' },
   { value: 'bounced', label: 'Bounced' },
   { value: 'payment_received', label: 'Paid' },
+  { value: 'in_delivery', label: 'In Delivery' },
+  { value: 'completed', label: 'Completed' },
 ];
 
 /** Approved WhatsApp outreach templates (Meta). value = template name; both carry
@@ -267,7 +235,11 @@ export type PipelineStatus =
   | 'no_whatsapp'
   | 'no_whatsapp_needs_sms'
   | 'whatsapp_failed'
-  | 'payment_received';
+  | 'payment_received'
+  | 'price_given'
+  | 'in_delivery'
+  | 'completed'
+  | 'opted_out';   // render-only (system-written); not in the pickable options below
 
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },
@@ -276,9 +248,12 @@ export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[]
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'report_sent', label: 'Report Sent' },
+  { value: 'price_given', label: 'Price Given' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'payment_received', label: 'Paid' },
+  { value: 'in_delivery', label: 'In Delivery' },
+  { value: 'completed', label: 'Completed' },
 ];
 
 // ── Status semantics shared by the dashboard (Outreach status = source of truth) ──
@@ -297,7 +272,7 @@ export function isSentStatus(status?: string | null): boolean {
 
 // Replied-or-beyond: replied through every later stage. Includes not_interested
 // (they replied to say no — and were sent a site) and the Paid terminals.
-const REPLIED_OR_BEYOND = ['replied', 'site_sent', 'report_sent', 'interested', 'not_interested', 'payment_received', 'completed'];
+const REPLIED_OR_BEYOND = ['replied', 'site_sent', 'report_sent', 'price_given', 'interested', 'not_interested', 'payment_received', 'in_delivery', 'completed'];
 export function isRepliedStatus(status?: string | null): boolean {
   return !!status && REPLIED_OR_BEYOND.includes(status);
 }

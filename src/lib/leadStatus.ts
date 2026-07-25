@@ -5,7 +5,8 @@ import type { LeadStatus, OutreachLead } from '@/types/outreach';
 // shared by useOutreach.updateStatus (Outreach page) and updateLeadStatus (Inbox),
 // so both write IDENTICALLY. Mirrors the original inline branch logic exactly.
 
-const CONTACT_METHOD_STATUSES: LeadStatus[] = ['whatsapp', 'sms', 'facebook_msg', 'sent_initial_text', 'sent_voice_note'];
+// (The legacy per-channel contact-method statuses — whatsapp/sms/facebook_msg/sent_* — were
+// removed from the vocabulary; contact_method is now written by the send paths directly.)
 
 /** A lead is FRESH/untouched — safe to remove from the CRM (Find Leads Remove
  *  toggle) — only when it's a brand-new add with NO action signals: still
@@ -34,8 +35,6 @@ function ymd(d: Date): string {
 /** The DB patch for a status change (no side-effects, no I/O). */
 export function statusUpdatePatch(status: LeadStatus): Partial<OutreachLead> {
   const updates: Partial<OutreachLead> = { status };
-  // An outreach/contact-method status also records the contact method.
-  if (CONTACT_METHOD_STATUSES.includes(status)) updates.contact_method = status;
   // "Replied" → same-day Send Draft next action (overwrites any existing).
   if (status === 'replied') { updates.next_action = 'send_draft'; updates.next_action_date = ymd(new Date()); }
   // "Site Sent" → next-day Follow-up (overwrites any existing).

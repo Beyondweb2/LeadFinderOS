@@ -7,15 +7,11 @@ import type { Lead } from '@/types/lead';
 import { recordClaimOnAdd, markClaimContacted, releaseClaim } from '@/lib/claims';
 import { statusUpdatePatch, isFreshLead } from '@/lib/leadStatus';
 
-// Statuses that represent an outreach attempt (message/call sent)
-const OUTREACH_STATUSES: LeadStatus[] = [
-  'sms',
-  'whatsapp',
-  'facebook_msg',
-  'contacted',        // Called
-  'sent_initial_text',
-  'sent_voice_note',
-];
+// Statuses that represent an outreach attempt (message/call sent). The legacy per-channel
+// statuses (sms/whatsapp/facebook_msg/contacted/sent_*) were removed from the vocabulary —
+// initial_contact is the unified live equivalent, so the usage-metering + team-claim hooks
+// below fire on a manual move into it.
+const OUTREACH_STATUSES: LeadStatus[] = ['initial_contact'];
 
 interface OutreachHistoryEntry {
   business_name: string;
