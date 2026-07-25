@@ -7,10 +7,13 @@ import { useTemplates } from '@/hooks/useTemplates';
 import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
 import { barberSitePreviewUrl } from '@/config/publicSite';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Card } from '@/components/ui/card';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
@@ -373,23 +376,26 @@ const Inbox = () => {
   const auditInputsMissing = !!activeLead && (!auditInputs?.type || !auditInputs?.loc);
   const [firedAudits, setFiredAudits] = useState<Set<string>>(new Set());
   const auditInFlight = !!active?.leadId && (auditRunningLeadIds.has(active.leadId) || firedAudits.has(active.leadId));
+  // Inline missing-inputs prompt — the inbox is NEVER left to run an audit. Prefilled from
+  // whatever partial lead data exists; values are written back to the lead before running.
+  const [auditPromptOpen, setAuditPromptOpen] = useState(false);
+  const [promptType, setPromptType] = useState('');
+  const [promptLoc, setPromptLoc] = useState('');
+  const hasCompletedAudit = !!activeReport; // auditByLeadId — completed/capped run exists
 
-  const fireAuditFromInbox = async () => {
-    if (!active?.leadId || !activeLead || auditInFlight) return;
-    if (auditInputsMissing) {
-      // Honest fallback: the auto path never guesses garbage inputs — hand over to the wizard.
-      toast({ title: 'Needs business type / location', description: 'This lead is missing audit inputs — opening the full audit page to fill them in.' });
-      navigate(`/ai-audit?leadId=${active.leadId}`);
-      return;
-    }
-    if (!window.confirm(`Run audit for ${activeLead.business_name}? The report pitch auto-sends when it completes.`)) return;
+  // Shared runner: fire create-ai-audit (server defaults: 3 auto-generated questions, no approval
+  // step) with queue_pitch_on_complete, keep the spinner state, and toast the outcome. 23505 on
+  // the pitch row (once-ever slot already used, e.g. a re-run after the pitch went out) is
+  // surfaced honestly, never treated as a failure.
+  const startAudit = async (bizType: string, loc: string) => {
+    if (!active?.leadId || !activeLead) return;
     setFiredAudits((prev) => new Set(prev).add(active.leadId!));
     const { data, error } = await supabase.functions.invoke('create-ai-audit', {
       body: {
         lead_id: active.leadId,
         business_name: activeLead.business_name,
-        business_type: auditInputs!.type,
-        location_text: auditInputs!.loc,
+        business_type: bizType,
+        location_text: loc,
         country: activeLead.country ?? null,
         website: activeLead.website || undefined,
         has_website: !!activeLead.website,
@@ -402,12 +408,50 @@ const Inbox = () => {
       return;
     }
     toast({
-      title: 'Audit started',
+      title: hasCompletedAudit ? 'Audit re-running' : 'Audit started',
       description: data.pitch_queued
         ? 'The report pitch will auto-send when it completes (~10–15 min; declines cancel it).'
-        : `Audit is running, but the auto-pitch wasn’t queued (${data.pitch_note ?? 'unknown'}) — send manually when it completes.`,
+        : data.pitch_note === 'slot_already_owned'
+          ? 'Audit re-running — pitch already sent, so no new pitch will be queued.'
+          : `Audit is running, but the auto-pitch wasn’t queued (${data.pitch_note ?? 'unknown'}) — send manually when it completes.`,
     });
     refetch(); // pick up the pending run → spinner state survives reloads
+  };
+
+  const fireAuditFromInbox = async () => {
+    if (!active?.leadId || !activeLead || auditInFlight) return;
+    if (auditInputsMissing) {
+      // NO navigation — open the inline prompt, prefilled from any partial lead data.
+      setPromptType(auditInputs?.type ?? '');
+      setPromptLoc(auditInputs?.loc ?? '');
+      setAuditPromptOpen(true);
+      return;
+    }
+    const confirmText = hasCompletedAudit
+      ? `Re-run audit for ${activeLead.business_name}?`
+      : `Run audit for ${activeLead.business_name}? The report pitch auto-sends when it completes.`;
+    if (!window.confirm(confirmText)) return;
+    await startAudit(auditInputs!.type, auditInputs!.loc);
+  };
+
+  // Inline-prompt submit: persist the typed inputs to the lead (same write-back convention as
+  // the wizard — search_keyword/search_location), then run. The dialog's Run button IS the
+  // explicit confirmation, so no extra window.confirm here.
+  const runAuditFromPrompt = async () => {
+    const bizType = promptType.trim();
+    const loc = promptLoc.trim();
+    if (!active?.leadId || !bizType || !loc) {
+      toast({ title: 'Both fields needed', description: 'Enter the business type and the town/location.', variant: 'destructive' });
+      return;
+    }
+    setAuditPromptOpen(false);
+    try {
+      await (supabase as unknown as SupabaseClient)
+        .from('outreach_leads')
+        .update({ search_keyword: bizType, search_location: loc })
+        .eq('id', active.leadId);
+    } catch { /* non-fatal — the audit still runs with the typed values */ }
+    await startAudit(bizType, loc);
   };
 
   const mapsUrl = activeLead?.google_maps_url
@@ -655,8 +699,10 @@ const Inbox = () => {
                       title={auditInFlight
                         ? 'Audit running — the pitch auto-sends on completion'
                         : auditInputsMissing
-                          ? 'Needs business type/location — opens the full audit page'
-                          : 'Run AI audit for this lead (pitch auto-sends on completion)'}
+                          ? 'Needs business type/location — click to fill them in here (stays in the Inbox)'
+                          : hasCompletedAudit
+                            ? 'Re-run AI audit for this lead'
+                            : 'Run AI audit for this lead (pitch auto-sends on completion)'}
                       aria-label="Run AI audit"
                       className={cn(HEADER_ICON_BTN, auditInputsMissing && !auditInFlight && 'opacity-50')}
                     >
@@ -799,6 +845,41 @@ const Inbox = () => {
           )}
         </Card>
       </div>
+
+      {/* Inline missing-inputs prompt for the header audit button — the inbox is NEVER left.
+          Prefilled from partial lead data; Run writes the values back to the lead
+          (search_keyword/search_location, the wizard's write-back convention) then fires the
+          audit with the auto-pitch queued. The wizard link stays as a small secondary option. */}
+      <Dialog open={auditPromptOpen} onOpenChange={setAuditPromptOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Run audit for {activeLead?.business_name}</DialogTitle>
+            <DialogDescription className="text-xs">
+              This lead is missing its audit inputs. Fill them in — they're saved to the lead — and
+              the audit runs right here (3 auto-generated questions; the report pitch auto-sends on
+              completion).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Business type</label>
+              <Input value={promptType} onChange={(e) => setPromptType(e.target.value)} placeholder="e.g. plumber, accountant" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Town / location</label>
+              <Input value={promptLoc} onChange={(e) => setPromptLoc(e.target.value)} placeholder="e.g. Wisbech" />
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setAuditPromptOpen(false); navigate(`/ai-audit?leadId=${active?.leadId}`); }}>
+              Open full audit page instead
+            </Button>
+            <Button size="sm" onClick={runAuditFromPrompt} disabled={!promptType.trim() || !promptLoc.trim()}>
+              <Sparkles className="mr-1.5 h-4 w-4" /> Run audit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
