@@ -292,9 +292,10 @@ export function OutreachTable({
   // Bulk site-gen template picker dialog.
   const [siteGenDialogOpen, setSiteGenDialogOpen] = useState(false);
   const [siteGenChoice, setSiteGenChoice] = useState<string>('barber');
-  // Bulk AI-audit question-count + cost-confirm dialog.
+  // Bulk AI-audit question-count + cost-confirm dialog. Count range mirrors the server's
+  // HARD 3..5 clamp (default 4) — unified across wizard/bulk/auto-chain.
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
-  const [auditQuestionCount, setAuditQuestionCount] = useState<number>(3);
+  const [auditQuestionCount, setAuditQuestionCount] = useState<number>(4);
   const [sitesByLead, setSitesByLead] = useState<Record<string, { id: string; slug: string; opened: boolean; claimed: boolean; addon: boolean }>>({});
   // Per-lead LATEST audit state (mirrors sitesByLead) — drives the upcoming "Run audit" /
   // "Manage" row control. Keyed by lead_id, newest audit first; each entry carries that
@@ -932,7 +933,7 @@ export function OutreachTable({
   const auditEligibleIds = useMemo(() => auditEligibleLeads.map((l) => l.id), [auditEligibleLeads]);
   // Cost estimate for the confirm guard: N × Q AI-search runs @ $0.05 + one $0.02 SEO per website lead.
   const auditCostUsd = useMemo(() => {
-    const q = Math.max(1, Math.min(5, auditQuestionCount));
+    const q = Math.max(3, Math.min(5, auditQuestionCount));
     const websites = auditEligibleLeads.filter((l) => (l.website ?? '').trim()).length;
     return auditEligibleIds.length * q * 0.05 + websites * 0.02;
   }, [auditEligibleLeads, auditEligibleIds, auditQuestionCount]);
@@ -953,7 +954,7 @@ export function OutreachTable({
     if (!onBulkJob || bulkJobActive) return;
     const ids = auditEligibleIds;
     if (!ids.length) { setAuditDialogOpen(false); return; }
-    const q = Math.max(1, Math.min(5, auditQuestionCount));
+    const q = Math.max(3, Math.min(5, auditQuestionCount));
     const res = await onBulkJob('audit', ids, { question_count: q });
     if (res.ok) {
       toast({ title: `Bulk audit started (${ids.length} lead${ids.length === 1 ? '' : 's'} × ${q}q)`, description: 'Enqueuing server-side — audits drain through the queue. Safe to leave this page.' });
@@ -2379,7 +2380,7 @@ export function OutreachTable({
             <Select value={String(auditQuestionCount)} onValueChange={(v) => setAuditQuestionCount(Number(v))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {[1, 2, 3, 4, 5].map((n) => (
+                {[3, 4, 5].map((n) => (
                   <SelectItem key={n} value={String(n)}>{n} question{n === 1 ? '' : 's'}</SelectItem>
                 ))}
               </SelectContent>

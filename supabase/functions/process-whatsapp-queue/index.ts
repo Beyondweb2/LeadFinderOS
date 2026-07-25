@@ -3,7 +3,7 @@ import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.t
 import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
-import { autoReplyEnvOn, autoReplyToggleOn, isDecline, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
+import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -195,6 +195,8 @@ Deno.serve(async (req) => {
           return stErr ? null : ((st?.audit_complete_template as string | null) ?? null);
         } catch { return null; }
       })(),
+      // The reply-trigger template (null = default audit_reply). Defensive like the others.
+      firstReplyTemplate: await firstReplyTemplate(service),
     };
 
     // Status-only probe (the dashboard panel).
@@ -234,6 +236,19 @@ Deno.serve(async (req) => {
         .eq("id", 1);
       if (sErr) return json({ ok: false, error: "setting_failed", detail: sErr.message }, 500);
       return json({ ok: true, ...statusPayload, auditCompleteTemplate: next });
+    }
+
+    // Set the REPLY-trigger template (admin-gated). template: null/"" → default audit_reply.
+    // Validated against the shared allowlist so a typo can't queue unsendable rows.
+    if (mode === "set_first_reply_template") {
+      const raw = typeof body.template === "string" ? body.template.trim() : "";
+      const next: string | null = raw ? raw : null;
+      if (next && !WA_TEMPLATES[next]) return json({ ok: false, error: "unknown_template" }, 400);
+      const { error: sErr } = await service.from("whatsapp_outreach_state")
+        .update({ first_reply_template: next, updated_at: new Date().toISOString() })
+        .eq("id", 1);
+      if (sErr) return json({ ok: false, error: "setting_failed", detail: sErr.message }, 500);
+      return json({ ok: true, ...statusPayload, firstReplyTemplate: next });
     }
 
     // ── mode 'auto_replies': drain due whatsapp_auto_replies rows (its own every-minute cron) ──

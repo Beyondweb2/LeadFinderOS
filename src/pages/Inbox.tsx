@@ -15,7 +15,7 @@ import { Card } from '@/components/ui/card';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { updateLeadStatus } from '@/lib/leadStatus';
-import { PIPELINE_STATUS_OPTIONS, type PipelineStatus } from '@/types/outreach';
+import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -73,6 +73,7 @@ function AutoReplyToggle() {
   const [enabled, setEnabled] = useState(false);
   const [envOn, setEnvOn] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [replyTemplate, setReplyTemplate] = useState<string>('audit_reply');
 
   useEffect(() => {
     let cancelled = false;
@@ -81,12 +82,28 @@ function AutoReplyToggle() {
       if (cancelled || error || !data?.ok) return; // non-admin (403) or failure → stay hidden
       setEnabled(data.autoReplyEnabled === true);
       setEnvOn(data.autoReplyEnvOn === true);
+      setReplyTemplate((data.firstReplyTemplate as string | null) ?? 'audit_reply');
       setVisible(true);
     })();
     return () => { cancelled = true; };
   }, []);
 
   if (!visible) return null;
+
+  // Pick the template the reply trigger sends (default audit_reply). Server-validated allowlist.
+  const pickTemplate = async (value: string) => {
+    const prev = replyTemplate;
+    setReplyTemplate(value); // optimistic
+    const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', {
+      body: { mode: 'set_first_reply_template', template: value },
+    });
+    if (error || !data?.ok) {
+      setReplyTemplate(prev);
+      toast({ title: "Couldn't set the reply template", description: error?.message ?? data?.detail ?? data?.error ?? 'Failed (has the SQL been run?)', variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Reply template set', description: `First replies now get "${value}" (guards + 3-min cancel window unchanged).` });
+  };
 
   const flip = async (next: boolean) => {
     setSaving(true);
@@ -110,9 +127,22 @@ function AutoReplyToggle() {
   };
 
   return (
-    <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 h-9" title={envOn ? 'Auto-send audit_reply on a lead’s first reply (delayed 3 min; declines cancel it)' : 'Kill-switch AUTO_AUDIT_REPLY_ENABLED is off — the toggle is saved but nothing sends until it’s set to 1'}>
+    <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 h-9" title={envOn ? 'Auto-send the chosen template on a lead’s first reply (delayed 3 min; declines cancel it; no completed audit → an audit is run automatically and the pitch sends on completion)' : 'Kill-switch AUTO_AUDIT_REPLY_ENABLED is off — the toggle is saved but nothing sends until it’s set to 1'}>
       <span className="text-xs font-medium whitespace-nowrap">Auto reply{!envOn && enabled ? ' ⚠' : ''}</span>
       <Switch checked={enabled} onCheckedChange={flip} disabled={saving} />
+      {enabled && (
+        <>
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">On reply:</span>
+          <Select value={replyTemplate} onValueChange={pickTemplate}>
+            <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {WHATSAPP_TEMPLATES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
+      )}
     </div>
   );
 }

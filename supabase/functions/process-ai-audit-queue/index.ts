@@ -623,38 +623,56 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       const { data: st, error: stErr } = await service
         .from("whatsapp_outreach_state").select("audit_complete_template").eq("id", 1).maybeSingle();
       if (!stErr) completeTemplate = (st?.audit_complete_template as string | null) ?? null;
-    } catch { /* column missing → dormant */ }
-    if (completeTemplate) {
-      for (const job of completionSendJobs) {
+    } catch { /* column missing → the insert path below stays dormant */ }
+    for (const job of completionSendJobs) {
+      try {
+        const { data: audit } = await service
+          .from("ai_audits").select("lead_id").eq("id", job.auditId).maybeSingle();
+        const leadId = (audit?.lead_id as string | null) ?? null;
+        if (!leadId) continue; // manual audit — nobody to message
+
+        // AUTO-CHAIN UPGRADE (runs regardless of the completion-template setting): a reply that
+        // arrived BEFORE the audit completed parked its pitch as 'awaiting_audit' (carrying the
+        // reply template). Now the audit is COMPLETE, arm it — an UPDATE, so the lead_id unique
+        // index is never violated and first-trigger-wins is preserved. Capped/failed runs never
+        // reach here (completionSendJobs is complete-only), so their rows stay visible for a human.
+        // The processor re-checks declines-since-queue-time at fire time, so a "no thanks" sent
+        // during the audit run still cancels the pitch.
         try {
-          const { data: audit } = await service
-            .from("ai_audits").select("lead_id").eq("id", job.auditId).maybeSingle();
-          const leadId = (audit?.lead_id as string | null) ?? null;
-          if (!leadId) continue; // manual audit — nobody to message
-          const { data: lead } = await service
-            .from("outreach_leads").select("phone, country, status").eq("id", leadId).maybeSingle();
-          const to = toWhatsAppNumber((lead?.phone as string) ?? "", (lead?.country as string | null) ?? null);
-          if (!to) continue; // no usable phone — nothing to queue
-          // Queue-time suppression/refusal parity with the first-reply trigger: a suppressed or
-          // declined lead burns the once-ever slot with skipped_suppressed instead of pending.
-          const refused = ["opted_out", "not_interested"].includes((lead?.status as string) ?? "") ||
-            (await phoneSuppressed(service, to));
-          const { error: qErr } = await service.from("whatsapp_auto_replies").insert({
-            lead_id: leadId,
-            phone: to,
-            trigger: "audit_complete",
-            template_name: completeTemplate,
-            status: refused ? "skipped_suppressed" : "pending",
-            fire_after: new Date(Date.now() + 3 * 60_000).toISOString(),
-          });
-          if (qErr && (qErr as { code?: string }).code !== "23505") {
-            console.error(`[auto-send] completion queue insert failed for lead ${leadId}:`, (qErr as { message?: string }).message);
-          } else if (!qErr) {
-            console.log(`[auto-send] audit ${job.auditId} complete → queued '${completeTemplate}' for lead ${leadId}${refused ? " (skipped_suppressed)" : ""}.`);
-          } // 23505 = the first-reply trigger already owns this lead — first trigger wins.
-        } catch (e) {
-          console.error(`[auto-send] completion queue error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
-        }
+          const { data: upgraded } = await service.from("whatsapp_auto_replies")
+            .update({ status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString(), updated_at: new Date().toISOString() })
+            .eq("lead_id", leadId).eq("status", "awaiting_audit")
+            .select("id");
+          if (Array.isArray(upgraded) && upgraded.length > 0) {
+            console.log(`[auto-send] audit ${job.auditId} complete → armed the awaiting_audit pitch for lead ${leadId}.`);
+            continue; // the reply-triggered row owns this lead — no completion insert
+          }
+        } catch { /* table/column missing → fall through to the insert path's own guards */ }
+
+        if (!completeTemplate) continue; // completion auto-send off → only the upgrade path above
+        const { data: lead } = await service
+          .from("outreach_leads").select("phone, country, status").eq("id", leadId).maybeSingle();
+        const to = toWhatsAppNumber((lead?.phone as string) ?? "", (lead?.country as string | null) ?? null);
+        if (!to) continue; // no usable phone — nothing to queue
+        // Queue-time suppression/refusal parity with the first-reply trigger: a suppressed or
+        // declined lead burns the once-ever slot with skipped_suppressed instead of pending.
+        const refused = ["opted_out", "not_interested"].includes((lead?.status as string) ?? "") ||
+          (await phoneSuppressed(service, to));
+        const { error: qErr } = await service.from("whatsapp_auto_replies").insert({
+          lead_id: leadId,
+          phone: to,
+          trigger: "audit_complete",
+          template_name: completeTemplate,
+          status: refused ? "skipped_suppressed" : "pending",
+          fire_after: new Date(Date.now() + 3 * 60_000).toISOString(),
+        });
+        if (qErr && (qErr as { code?: string }).code !== "23505") {
+          console.error(`[auto-send] completion queue insert failed for lead ${leadId}:`, (qErr as { message?: string }).message);
+        } else if (!qErr) {
+          console.log(`[auto-send] audit ${job.auditId} complete → queued '${completeTemplate}' for lead ${leadId}${refused ? " (skipped_suppressed)" : ""}.`);
+        } // 23505 = the first-reply trigger already owns this lead — first trigger wins.
+      } catch (e) {
+        console.error(`[auto-send] completion queue error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
       }
     }
   }

@@ -18,16 +18,15 @@ const corsHeaders = {
 // Google organic in the same run; those are captured/shown but not queue engines.
 // (Perplexity dropped — kept dormant in ai-search.ts in case it's re-added.)
 const AUDIT_ENGINES = ["chatgpt", "gemini"];
-// How many questions to generate. Range 1..12, default 8. Always clamped server-side
-// (the count is untrusted client input). The interactive wizard offers 6..12 (its OWN
-// local QUESTION_COUNT_OPTIONS floor), so this lower 1 floor only ever applies to the
-// bulk-audit path (Outreach → bulk-jobs), which lets an operator run cheaper 1..5-question
-// batches. Fewer questions just means mention_rate is scored over fewer datapoints.
-const MIN_QUESTION_COUNT = 1;
-const MAX_QUESTION_COUNT = 12;
-const DEFAULT_QUESTION_COUNT = 8;
+// How many questions to generate. HARD RULE: 3..5, default 4 — unified across every caller
+// (wizard, bulk, the auto reply-chain). Always clamped server-side (the count is untrusted
+// client input); the wizard + bulk selectors offer the same 3..5. Fewer, better-targeted
+// buyer-intent questions beat a long generic list.
+const MIN_QUESTION_COUNT = 3;
+const MAX_QUESTION_COUNT = 5;
+const DEFAULT_QUESTION_COUNT = 4;
 
-/** Clamp an untrusted question-count to 1..12, defaulting to 8. */
+/** Clamp an untrusted question-count to 3..5, defaulting to 4. */
 function clampCount(n: unknown): number {
   const v = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : DEFAULT_QUESTION_COUNT;
   return Math.min(MAX_QUESTION_COUNT, Math.max(MIN_QUESTION_COUNT, v));
@@ -77,8 +76,9 @@ function hasUsableTown(loc: string): boolean {
 
 /** Deterministic template questions — the fallback when OpenAI is unavailable or returns
  *  something that doesn't validate. Scope-aware: LOCAL uses "[service] in [town]" plus a
- *  single "near me"; NATIONAL uses audience-qualified "[service] for [audience] [country]"
- *  with NO "near me" and NO broad best/top head-terms. Grounded in "known for" when given.
+ *  NEVER any "near me" (banned everywhere — the place is always named); NATIONAL uses
+ *  audience-qualified "[service] for [audience] [country]" with NO broad best/top head-terms.
+ *  Grounded in "known for" when given.
  *  Sliced to `count`. */
 function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number, scope: BusinessScope): string[] {
   const t = type || "business";
@@ -116,7 +116,6 @@ function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, speci
       `top rated ${t}${where}`,
       `which ${t}${where} do people recommend`,
       hasWebsite ? `${t}${where} with online booking` : `${t}${where} that is easy to contact`,
-      `${t} near me${loc ? ` (${loc})` : ""}`,                         // the single allowed near-me
       `affordable ${t}${where}`,
       `${t}${where} with great reviews`,
       `where to find a good ${t}${where}`,
@@ -125,14 +124,20 @@ function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, speci
     ];
   }
 
-  // De-dupe (a niche can echo a template) and slice to the requested count.
+  // De-dupe (a niche can echo a template), ban near-me, slice to the requested count.
   const seen = new Set<string>();
   const out: string[] = [];
   for (const q of base) {
     const k = q.trim();
     if (k && !seen.has(k)) { seen.add(k); out.push(k); }
   }
-  return out.slice(0, Math.min(out.length, Math.max(1, count)));
+  return stripNearMe(out).slice(0, Math.min(out.length, Math.max(1, count)));
+}
+
+/** HARD near-me ban on GENERATED questions (LLM + fallback): drop any question containing a
+ *  "near me" variant, case-insensitive. Operator-typed questions are deliberately not filtered. */
+function stripNearMe(questions: string[]): string[] {
+  return questions.filter((q) => !/near\s*me\b/i.test(q));
 }
 
 Deno.serve(async (req) => {
@@ -394,7 +399,7 @@ async function generateQuestions(
 
   const LOCAL_RULES = `- Local framing is good: "[service] in ${loc}".
 - Broad head-terms are allowed here (a small local pool is winnable): e.g. "best [service] in ${loc}", "top [service] in ${loc}".
-- At most ONE "near me" question in total.`;
+- NEVER use "near me" in any form — always name the actual place (${loc}) instead.`;
 
   const NATIONAL_RULES = `- NEVER use "near me".
 - NEVER use broad head-terms like "best [service] in [country]", "top [service] in [country]", or "leading [service] in [country]". These are dominated by directories and comparison sites, are unwinnable for a single firm, and prove nothing — do not produce any.
@@ -445,7 +450,7 @@ Return EXACTLY ${n} questions (lowercase), spread across the business's services
 Return via the return_questions tool.`;
 
   const userScopeLine = forceLocal
-    ? `This business is LOCAL to ${loc}. Generate ${n} short, single-intent LOCAL phrases ("[service] in ${loc}") — no national/uk terms, at most one "near me".`
+    ? `This business is LOCAL to ${loc}. Generate ${n} short, single-intent LOCAL phrases ("[service] in ${loc}") — no national/uk terms, NEVER "near me" (name the place).`
     : forceNational
     ? `This business is NATIONAL. Generate ${n} short, single-intent phrases qualified by audience + country — no "near me", no broad head-terms.`
     : `First classify this business as NATIONAL or LOCAL from the location, then generate ${n} short, single-intent search phrases under the matching rules.`;
@@ -489,7 +494,7 @@ Return via the return_questions tool.`;
     const parsed = JSON.parse(rawArgs);
     const arr = Array.isArray(parsed?.questions) ? parsed.questions : null;
     if (!arr) return fallback;
-    const cleaned = arr.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim());
+    const cleaned = stripNearMe(arr.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim()));
     return cleaned.length >= n ? cleaned.slice(0, n) : fallback;
   } catch (_e) {
     return fallback;
