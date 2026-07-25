@@ -5,10 +5,9 @@ import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { PipelineCard } from '@/components/dashboard/PipelineCard';
-import { AlertsCard } from '@/components/dashboard/AlertsCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
 import { ChannelPerformanceCard } from '@/components/dashboard/ChannelPerformanceCard';
-import { SiteFunnelCard } from '@/components/dashboard/SiteFunnelCard';
+import { AuditFunnelCard } from '@/components/dashboard/AuditFunnelCard';
 import { CampaignStatsSection } from '@/components/dashboard/CampaignStatsSection';
 import { AdminZone } from '@/components/dashboard/AdminZone';
 
@@ -105,7 +104,13 @@ const Dashboard = () => {
         </p>
       </div>
 
-      {/* Outreach performance — per-channel (what's working) leads the dashboard */}
+      {/* Audit funnel — the current contacted→pitch→pay funnel leads the dashboard */}
+      <section>
+        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Audit funnel</h2>
+        <AuditFunnelCard funnel={metrics.auditFunnel} />
+      </section>
+
+      {/* Outreach performance — per-channel (what's working) + pipeline */}
       <section>
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Outreach performance</h2>
         <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
@@ -116,21 +121,11 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Activity pulse + next steps */}
+      {/* Next steps */}
       <section>
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Activity &amp; next steps</h2>
-        {/* Three equal boxes: contacted | next actions | site funnel. The funnel is
-            scoped per-rep for non-admins (admins see the global funnel). */}
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          <AlertsCard alerts={metrics.recentAlerts} />
+        <div className="grid gap-3 sm:gap-4 grid-cols-1">
           <NextActionsCard trackedLeads={metrics.nextActionLeads} onClearTask={handleClearTask} />
-          <SiteFunnelCard
-            sent={metrics.siteFunnel.sent}
-            opened={metrics.siteFunnel.opened}
-            claimed={metrics.siteFunnel.claimed}
-            addonRequested={metrics.siteFunnel.addonRequested}
-            compact
-          />
         </div>
       </section>
 

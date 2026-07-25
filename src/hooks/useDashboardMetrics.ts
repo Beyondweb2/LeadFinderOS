@@ -2,8 +2,9 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { isSentStatus, isRepliedStatus, type OutreachLead } from '@/types/outreach';
+import type { AuditFunnel } from '@/components/dashboard/AuditFunnelCard';
 
-export interface ChannelStat { sent: number; replied: number; replyRate: number | null; claimed: number; }
+export interface ChannelStat { sent: number; replied: number; replyRate: number | null; }
 export interface ChannelPerformance {
   whatsapp: ChannelStat;
   sms: ChannelStat;
@@ -14,7 +15,16 @@ export interface ChannelPerformance {
    *  shown honestly as a residual rather than mis-assigned to a channel. */
   noMethodSent: number;
 }
-const emptyChannelStat = (): ChannelStat => ({ sent: 0, replied: 0, replyRate: null, claimed: 0 });
+const emptyChannelStat = (): ChannelStat => ({ sent: 0, replied: 0, replyRate: null });
+
+// Cumulative funnel membership — "reached this stage or beyond" in the forward-only pipeline
+// ordering (initial_contact → replied → report_sent → price_given → payment_received → …). The
+// interested/not_interested side branch is intentionally excluded from the report_sent+ stages so
+// an early "interested" reply can't inflate reports-sent. Report opened is layered on top from the
+// audit first_opened_at data, not status.
+const REPORT_SENT_OR_BEYOND = new Set(['report_sent', 'price_given', 'payment_received', 'in_delivery', 'completed']);
+const PRICE_GIVEN_OR_BEYOND = new Set(['price_given', 'payment_received', 'in_delivery', 'completed']);
+const PAID_OR_BEYOND = new Set(['payment_received', 'in_delivery', 'completed']);
 
 // No hardcoded revenue constants — uses actual amount_paid from leads
 
@@ -34,30 +44,16 @@ interface ActivityMetrics {
   totalLeadsContacted: number;
 }
 
-/** A dashboard "Alert" — a site claim or add-on/upsell request, newest-first. */
-export interface SiteAlert {
-  type: 'claim' | 'addon_interest';
-  at: string;
-  businessName: string;
-  leadId: string | null;
-}
-
-
 interface DashboardMetrics {
   // Revenue
   totalRevenue: number;
   revenueThisMonth: number;
   revenueLastMonth: number;
-  draftRevenue: number;
-  completionRevenue: number;
   fullyPaidClients: number;
-  paidForDraftCount: number;
   activeProposals: number;
   totalPotentialRevenue: number;
   closedRevenue: number;
 
-  // Alerts — recent site claims + add-on requests (newest first, capped)
-  recentAlerts: SiteAlert[];
   // All non-archived leads with a next action — feeds the Next Actions card.
   nextActionLeads: OutreachLead[];
   // Raw leads (RLS-scoped) — feeds the campaign-aware Pipeline card.
@@ -86,11 +82,12 @@ interface DashboardMetrics {
   // Tracked leads
   trackedLeads: OutreachLead[];
 
-  // Site funnel — generated_sites tracking (admin-visible; RLS-scoped)
-  siteFunnel: { sent: number; opened: number; claimed: number; addonRequested: number };
+  // Audit funnel — the current funnel (contacted → replied → report sent → opened →
+  // price given → paid). Cumulative from lead status; opened from audit first_opened_at.
+  auditFunnel: AuditFunnel;
 
   // Per-channel performance — Sent/Replied/Reply-rate from outreach_leads
-  // (contact_method + status), Claimed joined from generated_sites.claimed_at.
+  // (contact_method + status).
   channelPerf: ChannelPerformance;
 }
 
@@ -125,12 +122,9 @@ export function useDashboardMetrics(isAdmin = false) {
     totalPhonesCopied: 0, totalLeadsContacted: 0,
   });
   const [outreachEvents7d, setOutreachEvents7d] = useState<{ lead_id: string; created_at: string }[]>([]);
-  const [siteFunnel, setSiteFunnel] = useState({ sent: 0, opened: 0, claimed: 0, addonRequested: 0 });
-  // Recent site claims + add-on requests (newest first, capped) — the Alerts card.
-  const [recentAlerts, setRecentAlerts] = useState<SiteAlert[]>([]);
-  // lead_ids of generated_sites that the barber has CLAIMED — used to attribute
-  // site-claims to the lead's contact channel for the per-channel card.
-  const [claimedLeadIds, setClaimedLeadIds] = useState<string[]>([]);
+  // lead_ids whose audit has been OPENED (ai_audits.first_opened_at set by render-audit-report).
+  // Empty until the open-tracking migration has run + a real human opens a report.
+  const [openedAuditLeadIds, setOpenedAuditLeadIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const hasLoadedOnceRef = useRef(false);
   const { user } = useAuth();
@@ -167,65 +161,26 @@ export function useDashboardMetrics(isAdmin = false) {
     setAllLeads((leadsResult.data || []) as OutreachLead[]);
     setOutreachEvents7d(eventsResult.data || []);
 
-    // Site funnel. ALL four stats derive from generated_sites, deduped by lead_id,
-    // so the open rate (opened ÷ sent) compares like-for-like (sites vs sites).
-    //   sent    = distinct leads that have a generated site. A generated_sites row
-    //             existing is the real "a site went out" signal — generated_sites.
-    //             sent_at / lead.site_sent_at are not reliably populated, so they'd
-    //             undercount badly. NOTE: this counts sites GENERATED, which in this
-    //             workflow ≈ sites sent (you generate in order to send).
-    //   opened/claimed/addon = distinct leads reaching that stage (per-lead, not
-    //             per-row, so a regenerated/duplicated site can't double-count).
-    // This is deliberately SEPARATE from contactedTotal (leads past New), which
-    // stays the source of truth for "# contacted" and is unaffected by this.
-    // Untyped client (tracking cols aren't in the generated types). RLS scopes it.
+    // Audit opens — lead_ids whose audit has a first_opened_at (a human opened the /a/<auditId>
+    // report; render-audit-report writes it, bot UAs excluded). RLS on ai_audits scopes to the
+    // operator's own audits — same scope as allLeads, so the funnel is per-rep like the Pipeline
+    // card. Fully DEFENSIVE: if the open-tracking migration hasn't run yet the first_opened_at
+    // column doesn't exist and the select errors — caught, leaving the set empty (opened shows 0).
     try {
-      // Admins see the GLOBAL funnel (all operators' sites). Non-admins are scoped
-      // to their OWN leads' sites — otherwise the "published sites" RLS policy
-      // (TO authenticated) would inflate a rep's funnel with every published site.
       const sb = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
-      const { data: sites } = isAdmin
-        ? await sb.from('generated_sites').select('lead_id, site_name, first_opened_at, claimed_at, addon_interest_at, outreach_leads(business_name)')
-        : await sb.from('generated_sites')
-            .select('lead_id, site_name, first_opened_at, claimed_at, addon_interest_at, outreach_leads!inner(user_id, business_name)')
-            .eq('outreach_leads.user_id', uid ?? '');
-      const rows = (sites || []) as Array<{
-        lead_id: string | null;
-        site_name: string | null;
-        first_opened_at: string | null;
-        claimed_at: string | null;
-        addon_interest_at: string | null;
-        // to-one embed → object; typed loosely (untyped client) — normalise below.
-        outreach_leads?: { business_name: string | null } | { business_name: string | null }[] | null;
-      }>;
-      const distinctLeads = (pred: (r: typeof rows[number]) => boolean) =>
-        new Set(rows.filter(r => r.lead_id && pred(r)).map(r => r.lead_id as string)).size;
-      setSiteFunnel({
-        sent: distinctLeads(() => true),
-        opened: distinctLeads(r => !!r.first_opened_at),
-        claimed: distinctLeads(r => !!r.claimed_at),
-        addonRequested: distinctLeads(r => !!r.addon_interest_at),
-      });
-      setClaimedLeadIds(rows.filter(r => r.claimed_at && r.lead_id).map(r => r.lead_id as string));
-
-      // Recent alerts: one row per non-null claim/add-on timestamp, newest first, cap 15.
-      // Business name from the joined lead; fall back to the site slug when absent.
-      const nameOf = (r: typeof rows[number]): string => {
-        const ol = Array.isArray(r.outreach_leads) ? r.outreach_leads[0] : r.outreach_leads;
-        return (ol?.business_name || r.site_name || 'Unknown site').toString();
-      };
-      const alerts: SiteAlert[] = [];
-      for (const r of rows) {
-        const businessName = nameOf(r);
-        if (r.claimed_at) alerts.push({ type: 'claim', at: r.claimed_at, businessName, leadId: r.lead_id });
-        if (r.addon_interest_at) alerts.push({ type: 'addon_interest', at: r.addon_interest_at, businessName, leadId: r.lead_id });
+      const { data: opened, error: openErr } = await sb
+        .from('ai_audits')
+        .select('lead_id')
+        .not('first_opened_at', 'is', null);
+      if (openErr) throw openErr;
+      const ids = new Set<string>();
+      for (const r of (opened || []) as Array<{ lead_id: string | null }>) {
+        if (r.lead_id) ids.add(r.lead_id);
       }
-      alerts.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-      setRecentAlerts(alerts.slice(0, 15));
+      setOpenedAuditLeadIds(ids);
     } catch (e) {
-      // No status-based fallback — that mismatched-units fallback was the original
-      // bug. Leave the funnel at its previous value on a transient fetch failure.
-      console.error('Site funnel fetch failed (non-blocking):', e);
+      // Migration not yet applied or a transient failure — opened stays 0, never blocks the rest.
+      console.warn('Audit-open fetch skipped (non-blocking):', e instanceof Error ? e.message : e);
     }
 
     const searchHistory = searchHistoryResult.data || [];
@@ -307,12 +262,26 @@ export function useDashboardMetrics(isAdmin = false) {
       .reduce((sum, l) => sum + (l.amount_paid || 0), 0);
 
     const fullyPaidClients = paidLeads.length;
-    const draftRevenue = 0;
-    const completionRevenue = 0;
-    const paidForDraftCount = 0;
     // "Active proposals" = a price/quote is out and undecided. (Was keyed on the removed legacy
     // wants_draft/reviewing_draft/awaiting_decision statuses; price_given is the live equivalent.)
     const activeProposals = allLeads.filter(l => l.status === 'price_given').length;
+
+    // ── Audit funnel — cumulative "reached this stage or beyond" from lead status, plus the
+    // opened layer from audit first_opened_at. contacted/replied reuse the shared status helpers
+    // (isSentStatus = past New; isRepliedStatus = replied-or-beyond) so the funnel can't drift from
+    // the channel card / Outreach list. Report opened = report-sent-or-beyond leads whose lead has
+    // an opened audit; open rate = opened ÷ reportSent (like-for-like: reports vs reports).
+    const contacted = allLeads.filter(l => isSentStatus(l.status)).length;
+    const replied = allLeads.filter(l => isRepliedStatus(l.status)).length;
+    const reportSentLeads = allLeads.filter(l => REPORT_SENT_OR_BEYOND.has(l.status));
+    const reportSent = reportSentLeads.length;
+    const reportOpened = reportSentLeads.filter(l => openedAuditLeadIds.has(l.id)).length;
+    const priceGiven = allLeads.filter(l => PRICE_GIVEN_OR_BEYOND.has(l.status)).length;
+    const paid = allLeads.filter(l => PAID_OR_BEYOND.has(l.status)).length;
+    const auditFunnel: AuditFunnel = {
+      contacted, replied, reportSent, reportOpened, priceGiven, paid,
+      openRate: reportSent > 0 ? Math.round((reportOpened / reportSent) * 100) : null,
+    };
 
     // Leads with a next action (non-archived) — feeds the Next Actions card. (The
     // old collapsed pipeline counts were removed; the Pipeline card now computes its
@@ -386,7 +355,6 @@ export function useDashboardMetrics(isAdmin = false) {
     // Include archived — a contacted-then-archived lead still counts as contacted via
     // its channel (matches the Outreach list + the per-campaign card).
     const contactedLeads = allLeads;
-    const leadMethodById = new Map<string, string | null>(contactedLeads.map(l => [l.id, l.contact_method ?? null]));
     for (const l of contactedLeads) {
       if (!isSentStatus(l.status)) continue;
       const m = l.contact_method as keyof ChannelPerformance | null;
@@ -398,13 +366,6 @@ export function useDashboardMetrics(isAdmin = false) {
         channelPerf.noMethodSent += 1;
       }
     }
-    // Attribute barber site-claims to the lead's channel.
-    for (const leadId of claimedLeadIds) {
-      const m = leadMethodById.get(leadId) as keyof ChannelPerformance | undefined;
-      if (m && m in channelPerf && m !== 'noMethodSent') {
-        (channelPerf[m] as ChannelStat).claimed += 1;
-      }
-    }
     for (const key of ['whatsapp', 'sms', 'call', 'facebook_msg', 'email'] as const) {
       const stat = channelPerf[key];
       stat.replyRate = stat.sent > 0 ? Math.round((stat.replied / stat.sent) * 100) : null;
@@ -412,18 +373,18 @@ export function useDashboardMetrics(isAdmin = false) {
 
     return {
       totalRevenue, revenueThisMonth, revenueLastMonth,
-      draftRevenue, completionRevenue, fullyPaidClients, paidForDraftCount, activeProposals,
+      fullyPaidClients, activeProposals,
       totalPotentialRevenue, closedRevenue,
-      recentAlerts, nextActionLeads, allLeads,
+      nextActionLeads, allLeads,
       totalBusinessesAdded, noWebsiteBusinesses, addedToday, addedYesterday,
       contactedTotal, contactedToday, contactedYesterday, avg7Day, loggedLeads,
       recordDay, avgPerDayAllTime, avgPerDayLast7Days,
       activity: activityData,
       trackedLeads,
-      siteFunnel,
+      auditFunnel,
       channelPerf,
     };
-  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, siteFunnel, claimedLeadIds, recentAlerts]);
+  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, openedAuditLeadIds]);
 
   return { metrics, isLoading, refetch: fetchAllData };
 }

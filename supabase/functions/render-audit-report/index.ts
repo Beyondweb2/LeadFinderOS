@@ -49,6 +49,26 @@ function unavailable(msg: string): Response {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Link-unfurlers / crawlers that fetch the URL without a human opening it — WhatsApp + Meta
+// preview it the moment the pitch sends, so counting them would inflate every "opened" to 1
+// instantly. Case-insensitive substring match on the User-Agent. Residual imprecision accepted.
+const BOT_UA_RE = /facebookexternalhit|whatsapp|telegrambot|slackbot|bot|crawler|preview|spider/i;
+
+/** Record a genuine human open against the AUDIT (stable /a/<auditId> identity, survives re-runs):
+ *  first_opened_at set once, open_count incremented atomically via the bump_audit_open() RPC.
+ *  NEVER throws and NEVER blocks rendering — a bot UA, a missing migration (RPC 404 until the SQL
+ *  is run), or any DB error is swallowed. Fire-and-forget from the render path. */
+// deno-lint-ignore no-explicit-any
+async function recordAuditOpen(service: any, auditId: string, userAgent: string): Promise<void> {
+  try {
+    if (BOT_UA_RE.test(userAgent)) return;                 // preview/crawler fetch — not a human open
+    const { error } = await service.rpc("bump_audit_open", { p_audit_id: auditId });
+    if (error) console.warn("[render-audit-report] open-tracking skipped:", error.message);
+  } catch (e) {
+    console.warn("[render-audit-report] open-tracking error (non-fatal):", e instanceof Error ? e.message : e);
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
@@ -109,6 +129,9 @@ Deno.serve(async (req) => {
     if (!data) return unavailable("This audit hasn’t completed yet — check back shortly.");
 
     data.shareUrl = `${SITE_ORIGIN}/a/${slug}`; // canonical public URL → "View online" footer
+    // Genuine render succeeded → record the open (non-bot only). Awaited but fully guarded, so a
+    // tracking failure can never break the report the visitor came for.
+    await recordAuditOpen(service, audit.id, req.headers.get("user-agent") ?? "");
     return htmlResponse(renderReportHtml(data));
   } catch (e) {
     console.error("[render-audit-report] error:", e instanceof Error ? e.message : e);

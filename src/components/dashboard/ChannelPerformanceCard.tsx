@@ -18,10 +18,9 @@ function rateColor(rate: number | null): string {
 }
 
 /**
- * Per-channel outreach performance — Sent / Replied / Reply-rate (+ barber
- * site-claims) for each contact channel. All figures derive from the Outreach
- * lead status + contact-method pill (source of truth); claims come from
- * generated_sites. The "no method set" residual is shown honestly — sent leads
+ * Per-channel outreach performance — Sent / Replied / Reply-rate for each contact
+ * channel. All figures derive from the Outreach lead status + contact-method pill
+ * (source of truth). The "no method set" residual is shown honestly — sent leads
  * with no channel pill are never mis-assigned.
  */
 export function ChannelPerformanceCard({ data }: { data: ChannelPerformance }) {
@@ -38,18 +37,17 @@ export function ChannelPerformanceCard({ data }: { data: ChannelPerformance }) {
       </CardHeader>
       <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-5 md:pt-0">
         {/* column headers */}
-        <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 sm:gap-x-4 px-1 pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/50">
+        <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-3 sm:gap-x-4 px-1 pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/50">
           <span>Channel</span>
           <span className="text-right w-10">Sent</span>
           <span className="text-right w-12">Replied</span>
           <span className="text-right w-14">Reply&nbsp;%</span>
-          <span className="text-right w-12">Claimed</span>
         </div>
         <div className="divide-y divide-border/40">
           {rows.map((c) => {
             const s = data[c.key] as ChannelStat;
             return (
-              <div key={c.key} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 sm:gap-x-4 px-1 py-2">
+              <div key={c.key} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-3 sm:gap-x-4 px-1 py-2">
                 <span className="flex items-center gap-2 min-w-0">
                   <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${c.dot}`} />
                   <span className="text-xs sm:text-sm font-medium truncate">{c.label}</span>
@@ -59,7 +57,6 @@ export function ChannelPerformanceCard({ data }: { data: ChannelPerformance }) {
                 <span className={`text-right w-14 text-sm sm:text-base font-bold tabular-nums ${rateColor(s.replyRate)}`}>
                   {s.replyRate === null ? '—' : `${s.replyRate}%`}
                 </span>
-                <span className="text-right w-12 text-xs sm:text-sm tabular-nums text-green-500">{s.claimed}</span>
               </div>
             );
           })}
