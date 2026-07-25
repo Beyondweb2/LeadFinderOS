@@ -1,7 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
-import { renderTemplateBody, templateBodyParams, type TemplateVar } from "../_shared/whatsapp-send.ts";
+import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
+import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
+import { autoReplyEnvOn, autoReplyToggleOn, isDecline, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -181,6 +183,10 @@ Deno.serve(async (req) => {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
       queuedCount: queuedCount ?? 0, nextSendAt, windowOpen, paused,
       ukTime: `${String(uk.hour).padStart(2, "0")}:${String(uk.minute).padStart(2, "0")}`,
+      // Auto audit_reply rule state: BOTH must be on for the rule to run. Toggle read is
+      // defensive (missing column → false), so status works before the SQL has been run.
+      autoReplyEnvOn: autoReplyEnvOn(),
+      autoReplyEnabled: await autoReplyToggleOn(service),
     };
 
     // Status-only probe (the dashboard panel).
@@ -195,6 +201,107 @@ Deno.serve(async (req) => {
         .update({ paused: nextPaused, updated_at: new Date().toISOString() })
         .eq("id", 1);
       return json({ ok: true, ...statusPayload, paused: nextPaused });
+    }
+
+    // Flip the auto audit_reply UI toggle (admin-gated like pause). The env kill-switch
+    // AUTO_AUDIT_REPLY_ENABLED still gates actual sends — both must be on.
+    if (mode === "set_auto_reply") {
+      const enabled = body.enabled === true;
+      const { error: tErr } = await service.from("whatsapp_outreach_state")
+        .update({ auto_reply_enabled: enabled, updated_at: new Date().toISOString() })
+        .eq("id", 1);
+      if (tErr) return json({ ok: false, error: "toggle_failed", detail: tErr.message }, 500);
+      return json({ ok: true, ...statusPayload, autoReplyEnabled: enabled });
+    }
+
+    // ── mode 'auto_replies': drain due whatsapp_auto_replies rows (its own every-minute cron) ──
+    // DELIBERATELY exempt from the outreach pause/window/cap/spacing below: these are replies to
+    // leads who messaged US (template send, deliverable any time), not cold outreach. Controls are
+    // the env kill-switch + the Inbox UI toggle, both re-checked here (send time), not queue time.
+    if (mode === "auto_replies") {
+      if (!autoReplyEnvOn()) return json({ ok: true, mode, skipped: "env_off", processed: 0 });
+      if (!(await autoReplyToggleOn(service))) return json({ ok: true, mode, skipped: "toggle_off", processed: 0 });
+
+      const nowIso = new Date().toISOString();
+      const { data: due, error: dueErr } = await service
+        .from("whatsapp_auto_replies")
+        .select("id, lead_id, phone, created_at")
+        .eq("status", "pending")
+        .lt("fire_after", nowIso)
+        .order("fire_after", { ascending: true })
+        .limit(10);
+      if (dueErr) return json({ ok: true, mode, skipped: "table_unavailable", detail: dueErr.message, processed: 0 });
+
+      let processed = 0;
+      const results: Record<string, string> = {};
+      for (const row of (due ?? []) as Array<{ id: string; lead_id: string; phone: string; created_at: string }>) {
+        // Atomic per-row claim — overlapping ticks can't double-send. (A crash after claiming
+        // leaves the row 'processing', which fails SAFE — it never sends — and is visible in the
+        // table for a manual nudge; volumes are tiny by design.)
+        const { data: claimed } = await service.from("whatsapp_auto_replies")
+          .update({ status: "processing", updated_at: nowIso })
+          .eq("id", row.id).eq("status", "pending").select("id");
+        if (!Array.isArray(claimed) || claimed.length === 0) continue;
+        const finish = (status: string, reason?: string) =>
+          service.from("whatsapp_auto_replies")
+            .update({ status, reason: reason ? reason.slice(0, 300) : null, updated_at: new Date().toISOString() })
+            .eq("id", row.id);
+        try {
+          // 1) A decline arriving AFTER queueing cancels the send — the whole point of the delay.
+          const { data: newer } = await service.from("whatsapp_messages")
+            .select("body").eq("lead_id", row.lead_id).eq("direction", "inbound")
+            .gt("created_at", row.created_at);
+          if (((newer ?? []) as Array<{ body?: string }>).some((m) => isDecline(m.body ?? ""))) {
+            await finish("cancelled_decline");
+            results[row.lead_id] = "cancelled_decline";
+            continue;
+          }
+          // 2) Send-time status + suppression (checked HERE, not just at queue time).
+          const { data: lead } = await service.from("outreach_leads")
+            .select("id, user_id, status").eq("id", row.lead_id).maybeSingle();
+          if (!lead) { await finish("flagged_error", "lead_missing"); results[row.lead_id] = "flagged_error"; continue; }
+          if (["opted_out", "not_interested"].includes(lead.status as string) || (await phoneSuppressed(service, row.phone))) {
+            await finish("skipped_suppressed");
+            results[row.lead_id] = "skipped_suppressed";
+            continue;
+          }
+          // 3) The per-lead-safe resolver (same one the Inbox send uses). No completed audit /
+          //    no competitors → flag for a human instead of sending anything.
+          const vars = await resolveAuditReplyVars(service, row.lead_id);
+          if (!vars.ok) { await finish("flagged_no_audit", vars.reason); results[row.lead_id] = "flagged_no_audit"; continue; }
+          // 4) Send via the SHARED template path (identical payload to the Inbox audit_reply).
+          const lang = WA_TEMPLATES["audit_reply"]?.lang ?? "en";
+          const payload = claimTemplatePayload("audit_reply", lang, vars.business, vars.link, { trade: vars.trade, competitors: vars.competitors });
+          const renderedBody = renderTemplateBody("audit_reply", vars.business, vars.link, vars.trade, vars.competitors);
+          let sendStatus = "simulated";
+          let messageId: string | null = null;
+          let sendErr: string | null = null;
+          if (live) {
+            const r = await sendViaGraph(accessToken, phoneNumberId, row.phone, payload);
+            if (r.ok) { sendStatus = "sent"; messageId = r.messageId; } else { sendStatus = "failed"; sendErr = r.error; }
+          } else {
+            console.log(`[auto-reply] WOULD SEND audit_reply to ${row.phone} (test mode): ${renderedBody.slice(0, 120)}…`);
+          }
+          // Log the outbound row so the send lands in the lead's Inbox thread.
+          await service.from("whatsapp_messages").insert({
+            direction: "outbound", user_id: (lead.user_id as string | null) ?? null, lead_id: row.lead_id,
+            phone: row.phone, body: renderedBody, message_type: "template", template_name: "audit_reply",
+            wa_message_id: messageId, status: sendStatus, test_mode: !live, error: sendErr,
+          });
+          if (sendStatus === "failed") {
+            await finish("flagged_error", sendErr ?? "send_failed");
+            results[row.lead_id] = "failed";
+          } else {
+            await finish("sent");
+            processed++;
+            results[row.lead_id] = sendStatus;
+          }
+        } catch (e) {
+          await finish("flagged_error", (e as Error).message);
+          results[row.lead_id] = "flagged_error";
+        }
+      }
+      return json({ ok: true, mode, processed, results });
     }
 
     // --- Tick: decide whether to send one ---
