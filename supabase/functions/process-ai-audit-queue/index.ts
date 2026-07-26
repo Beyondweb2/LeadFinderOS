@@ -391,7 +391,8 @@ async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolea
     .from("ai_audit_runs").select("id, audit_id, results")
     .in("status", ["pending", "running"]).order("created_at", { ascending: true }).limit(10);
 
-  for (const run of (openRuns ?? []) as Row[]) {
+  const openList = (openRuns ?? []) as Row[];
+  for (const [openIdx, run] of openList.entries()) {
     const results = run.results && typeof run.results === "object" ? run.results : {};
     if (results.seo) continue; // already graded (success or failure marker)
 
@@ -421,6 +422,13 @@ async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolea
       console.log(`[process-ai-audit-queue] run ${run.id}: reused this audit's existing SEO scan (no re-scan)`);
       continue;
     }
+
+    // This tick belongs to the scan: the step returns straight after, so no questions drain.
+    // Say so out loud. A batch of website audits created together therefore sits pending for
+    // roughly one tick per run, which reads exactly like a stalled queue if nothing explains it.
+    console.log(
+      `[process-ai-audit-queue] SEO scan for run ${run.id} (${openIdx + 1} of ${openList.length} open runs) - deferring question draining this tick`,
+    );
 
     const website = String(audit.website);
     let seo: unknown;
