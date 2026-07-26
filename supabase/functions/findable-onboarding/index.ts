@@ -95,6 +95,13 @@ Deno.serve(async (req) => {
       }
       const gbpEmailRaw = clip(a.gbp_manager_email, 200);
       const gbpEmail = gbpEmailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gbpEmailRaw) ? gbpEmailRaw : null;
+      // "Yes to both" exists to collect the address we add as GBP manager. Accepting that
+      // answer without it silently loses the single field the option is for — so require it
+      // for that answer only. The other two consent options don't need an email, and the
+      // escape hatch stays exempt like every other required field.
+      if (!incomplete && gbpConsent === "yes_all" && !gbpEmail) {
+        return json({ ok: false, error: "missing_gbp_email" }, 400);
+      }
       const answers = {
         standout: clip(a.standout, 2000),
         services: clip(a.services, 2000),
@@ -170,15 +177,41 @@ Deno.serve(async (req) => {
         return json({ ok: true, onboarding_id: row.id, audit_id: null, incomplete: true });
       }
 
-      // Lockdown #3b: an audit run created in the last AUDIT_REUSE_MS is reused, not duplicated.
-      const { data: leadAudits } = await service.from("ai_audits").select("id").eq("lead_id", leadId);
-      const auditIds = ((leadAudits ?? []) as Array<{ id: string }>).map((x) => x.id);
-      if (auditIds.length) {
+      // Lockdown #3b: a recent audit is reused rather than duplicated — but ONLY a PAID
+      // BASELINE. An outreach audit is a different animal: 3-5 questions, a single run, no
+      // forced local scope and no repeat chain. Reusing one handed a paying customer exactly
+      // that (measured on the live flow: baseline_target_runs null, business_scope null, 3
+      // questions, 1 run) while the results screen told them their baseline was "the average
+      // of three separate runs" and that the money-back guarantee is measured against it. The
+      // copy was false and this was the likeliest path in: report link, click, onboard inside
+      // the window.
+      //
+      // The distinguishing mark is baseline_target_runs. findable-onboarding is its only
+      // caller (BASELINE_RUNS below) and advanceBaseline only ever chains runs onto an audit
+      // that already has it, so `> 1` means "this audit IS a paid baseline". Outreach audits
+      // leave it null.
+      //
+      // Anti-abuse is unchanged: a double-submit inside SUBMIT_COOLDOWN_MS is already refused
+      // with too_soon above, and from then to AUDIT_REUSE_MS the customer's OWN baseline is
+      // reused instead of a second one firing.
+      const { data: leadAudits, error: auditsErr } = await service
+        .from("ai_audits").select("id, baseline_target_runs").eq("lead_id", leadId);
+      if (auditsErr) {
+        // Column unreadable (migration pending) → a baseline can't be told from an outreach
+        // audit, so reuse nothing. A duplicate baseline costs pennies; a false guarantee
+        // costs trust.
+        console.warn("[findable-onboarding] baseline_target_runs unreadable, reusing nothing:", auditsErr.message);
+      }
+      const baselineAuditIds = ((leadAudits ?? []) as Array<{ id: string; baseline_target_runs: number | null }>)
+        .filter((a) => Number(a.baseline_target_runs ?? 0) > 1)
+        .map((a) => a.id);
+      if (baselineAuditIds.length) {
         const { data: freshRun } = await service
-          .from("ai_audit_runs").select("audit_id, created_at").in("audit_id", auditIds)
+          .from("ai_audit_runs").select("audit_id, created_at").in("audit_id", baselineAuditIds)
           .gte("created_at", new Date(Date.now() - AUDIT_REUSE_MS).toISOString())
           .order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (freshRun) {
+          console.log(`[findable-onboarding] lead ${leadId}: reusing paid baseline ${freshRun.audit_id}`);
           await service.from("onboarding_responses")
             .update({ audit_id: freshRun.audit_id, status: "audit_running", updated_at: new Date().toISOString() })
             .eq("id", row.id);

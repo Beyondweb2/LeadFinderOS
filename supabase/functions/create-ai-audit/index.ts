@@ -459,7 +459,12 @@ async function generateQuestions(
   scope: BusinessScope,
   country: string | null,
 ): Promise<string[]> {
-  const n = clampCount(count);
+  // The CALLER has already applied the right POLICY ceiling: MAX_QUESTION_COUNT for the outreach
+  // hook, BASELINE_MAX_QUESTION_COUNT for a paid baseline. Re-clamping here with clampCount's
+  // default max silently capped every paid baseline at 5 — measured live, a baseline that asked
+  // for 10 got exactly 5. Keep an ABSOLUTE upper bound so an absurd value is still refused, but
+  // never re-apply the outreach policy to a baseline.
+  const n = clampCount(count, MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT);
   const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n, scope, country);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) return fallback;
