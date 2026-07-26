@@ -141,6 +141,8 @@ export interface BaselineAdvanceOutcome {
 }
 
 const MAX_DETAIL_LEN = 400;
+/** How many runs beyond the target the chain may burn before giving up (see the spend bound). */
+const MAX_EXTRA_ATTEMPTS = 2;
 
 /**
  * Record the outcome ON THE AUDIT, so "why is this baseline stuck" is one query.
@@ -214,6 +216,21 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     }
     if (usable.length === 0) {
       await record({ action: "waiting_no_data", detail: "no complete or capped run yet", runs_usable: 0, runs_target: target });
+      return;
+    }
+
+    // SPEND BOUND on the sweep itself. A failed run is neither usable nor in flight, so without
+    // this the sweep would start a replacement every cycle for as long as runs keep failing —
+    // one real Apify run each time, forever. Allow a couple of retries beyond the target, then
+    // stop and say so. A baseline that cannot reach its target is an operator problem, not
+    // something to keep buying.
+    if (usable.length < target && all.length >= target + MAX_EXTRA_ATTEMPTS) {
+      await record({
+        action: "error",
+        detail: `gave up after ${all.length} runs: only ${usable.length}/${target} usable (${all.filter((r) => r.status === "failed").length} failed)`,
+        runs_usable: usable.length,
+        runs_target: target,
+      });
       return;
     }
 
