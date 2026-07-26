@@ -28,10 +28,25 @@ const MIN_QUESTION_COUNT = 3;
 const MAX_QUESTION_COUNT = 5;
 const DEFAULT_QUESTION_COUNT = 3;
 
-/** Clamp an untrusted question-count to 3..5, defaulting to 3. */
-function clampCount(n: unknown): number {
-  const v = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : DEFAULT_QUESTION_COUNT;
-  return Math.min(MAX_QUESTION_COUNT, Math.max(MIN_QUESTION_COUNT, v));
+// PAID BASELINE counts. The outreach hook only has to prove "you're invisible", so 3..5 is
+// plenty there. A paying client's baseline is the measuring stick for the money-back
+// guarantee, and 3..5 is far too noisy for that: observed run-to-run swings on a 5-question
+// audit reach 50+ percentage points, where one flipped cell moves the rate 10 points. These
+// higher bounds apply ONLY to trusted internal callers that ask for purpose='baseline'
+// (see BASELINE_PURPOSE below), so no public caller can raise its own cost ceiling.
+const BASELINE_MIN_QUESTION_COUNT = 6;
+const BASELINE_MAX_QUESTION_COUNT = 12;
+const BASELINE_DEFAULT_QUESTION_COUNT = 10;
+
+/** Clamp an untrusted question-count into [min..max], defaulting to `def`. */
+function clampCount(
+  n: unknown,
+  min = MIN_QUESTION_COUNT,
+  max = MAX_QUESTION_COUNT,
+  def = DEFAULT_QUESTION_COUNT,
+): number {
+  const v = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : def;
+  return Math.min(max, Math.max(min, v));
 }
 
 function json(body: unknown, status = 200): Response {
@@ -207,8 +222,23 @@ Deno.serve(async (req) => {
     const queuePitchOnComplete: boolean = body.queue_pitch_on_complete === true;
     // How many questions to generate (6..12, default 8). Also the cap for an edited
     // list the client submits, so a user who picked 12 can enqueue 12.
-    const questionCount = clampCount(body.question_count ?? body.questionCount);
-    const MAX_QUESTIONS = MAX_QUESTION_COUNT;
+    // purpose='baseline' (paid client) unlocks the wider question bounds. INTERNAL ONLY:
+    // findable-onboarding calls this server-side with the service key, so a public caller
+    // cannot opt itself into 10-12 questions and triple our Apify spend.
+    const isBaseline = isInternal && body.purpose === "baseline";
+    const questionCount = isBaseline
+      ? clampCount(body.question_count ?? body.questionCount,
+          BASELINE_MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT, BASELINE_DEFAULT_QUESTION_COUNT)
+      : clampCount(body.question_count ?? body.questionCount);
+    // The provided-questions cap must match, or a baseline REPEAT run (which passes the first
+    // run's questions verbatim so the three runs are like-for-like) would silently truncate
+    // 10 questions to 5 and average two different question sets.
+    const MAX_QUESTIONS = isBaseline ? BASELINE_MAX_QUESTION_COUNT : MAX_QUESTION_COUNT;
+    // How many runs make up this audit's baseline. Stored on the audit; the queue's completion
+    // hook fires the remaining runs and averages them. Absent/0 → an ordinary single-run audit.
+    const baselineTargetRuns = isBaseline
+      ? Math.min(5, Math.max(1, typeof body.baseline_target_runs === "number" ? Math.round(body.baseline_target_runs) : 1))
+      : 0;
     const providedQuestions: string[] | null = Array.isArray(body.questions)
       ? body.questions.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim()).slice(0, MAX_QUESTIONS)
       : null;
@@ -300,22 +330,30 @@ Deno.serve(async (req) => {
       questions = providedQuestions && providedQuestions.length
         ? providedQuestions
         : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country);
-      const { data: audit, error: insErr } = await service
-        .from("ai_audits")
-        .insert({
-          user_id: userId,
-          lead_id: leadId,
-          business_name: businessName,
-          business_type: businessType || null,
-          location_text: locationText || null,
-          country,
-          has_website: hasWebsite,
-          website,
-          specialism: specialisms || null,
-          business_scope: businessScope,
-        })
-        .select("id, business_name")
-        .single();
+      const auditRow: Record<string, unknown> = {
+        user_id: userId,
+        lead_id: leadId,
+        business_name: businessName,
+        business_type: businessType || null,
+        location_text: locationText || null,
+        country,
+        has_website: hasWebsite,
+        website,
+        specialism: specialisms || null,
+        business_scope: businessScope,
+      };
+      // Mark this as a multi-run paid baseline. Migration-tolerant: if the column is not
+      // there yet the insert is retried without it, so a pending migration degrades to an
+      // ordinary single-run audit instead of failing a paying customer's submission.
+      if (baselineTargetRuns > 1) auditRow.baseline_target_runs = baselineTargetRuns;
+      let { data: audit, error: insErr } = await service
+        .from("ai_audits").insert(auditRow).select("id, business_name").single();
+      if (insErr && /baseline_target_runs/i.test(insErr.message ?? "")) {
+        console.warn("[create-ai-audit] baseline_target_runs column missing — creating a single-run audit");
+        delete auditRow.baseline_target_runs;
+        ({ data: audit, error: insErr } = await service
+          .from("ai_audits").insert(auditRow).select("id, business_name").single());
+      }
       if (insErr || !audit) return json({ ok: false, error: insErr?.message ?? "audit_insert_failed" }, 500);
       auditId = audit.id;
       auditBusinessName = audit.business_name;

@@ -4,6 +4,7 @@ import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
+import { advanceBaseline } from "../_shared/audit-baseline.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
 import { autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 // Automation B: reuse the SHARED report aggregation (same buildReportData the SPA + public
@@ -422,6 +423,10 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   // non-null whatsapp_outreach_state.audit_complete_template. The lead_id UNIQUE index gives
   // first-trigger-wins vs the first-reply rule (23505 → skip, one send per lead ever).
   const completionSendJobs: { auditId: string }[] = [];
+  // PAID BASELINE: a finished run of a multi-run baseline either triggers the next repeat run
+  // or finalises the averaged snapshot. Capped runs count too (they produced partial data and
+  // advanceBaseline treats them as usable), so a capped run cannot stall the chain forever.
+  const baselineJobs: { auditId: string }[] = [];
 
   for (const runId of ids) {
     // A cancelled run is terminal — never resurrect it or flip it to 'complete'. Drop any
@@ -558,10 +563,23 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       // D2 — completion auto-send candidates (COMPLETE only, like audit_reply/auto-report). The
       // heavier checks (setting, lead, phone, suppression) run once, after the loop.
       if (!isCapped && runRow?.audit_id) completionSendJobs.push({ auditId: runRow.audit_id as string });
+      // Baseline chain runs for capped runs as well — see baselineJobs above.
+      if (runRow?.audit_id) baselineJobs.push({ auditId: runRow.audit_id as string });
     }
   }
   // Await the queued extraction calls so the edge runtime doesn't cut them off when we return.
   if (extractionInvokes.length) await Promise.allSettled(extractionInvokes);
+
+  // PAID BASELINE chain. After extraction so a finalised snapshot reflects the cleaned
+  // competitor data. Deduped per audit, and each call is wrapped: a baseline problem must
+  // never break finalisation, the report, or the auto-send below.
+  for (const auditId of new Set(baselineJobs.map((j) => j.auditId))) {
+    try {
+      await advanceBaseline(service, auditId);
+    } catch (e) {
+      console.error(`[process-ai-audit-queue] baseline advance failed for audit ${auditId}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
   // Automation B: NOW that competitors are cleaned, send the audit_reply follow-ups. Each is
   // fully guarded + wrapped so a send failure can never break finalisation.
   for (const job of auditReplyJobs) {
