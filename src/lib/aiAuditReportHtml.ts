@@ -127,6 +127,20 @@ function gradeCircle(grade: string, score: number | null, size: number, label: s
         </figure>`;
 }
 
+/* ── Report contact details ──────────────────────────────────────────────────────
+   The report is Findable-branded, so these should be Findable addresses. They are NOT yet,
+   deliberately: findable.uk does not resolve and returns no MX record (checked 2026-07-26), and
+   it appears in this repo only as an example inside a comment. Pointing report replies at a
+   mailbox that does not exist would lose live leads silently — the same class of failure as a
+   dropped payment, just cheaper to miss.
+
+   So: hoisted out of the markup into one obvious place, still working, ready to switch in one
+   line the moment a Findable inbox exists. The buttons are labelled "Email us"/"WhatsApp us",
+   so neither value is DISPLAYED to the prospect; it is visible only in the link target.
+   TODO(paul): set REPORT_CONTACT_EMAIL to the Findable inbox once findable.uk has mail. */
+const REPORT_CONTACT_EMAIL = "paul@move37.fun";
+const REPORT_CONTACT_WHATSAPP = "447347041545";
+
 const SEV_COLOUR: Record<SeoFinding["severity"], string> = { high: "var(--red)", med: "var(--amber)", low: "var(--muted)" };
 
 /** No website at all: say what we will build, in the SEO slot's place. Distinct from a FAILED
@@ -205,7 +219,9 @@ export function renderReportHtml(d: AiAuditReportData): string {
       if (chips.length === 1) list = more > 0 ? `${chips[0]} and others` : chips[0];
       else if (more > 0) list = `${chips.join(", ")} and others`;
       else list = `${chips.slice(0, -1).join(", ")} and ${chips[chips.length - 1]}`;
-      summary = `When someone searched &ldquo;<span class="gb-q">${esc(g.question)}</span>&rdquo;, AI recommended ${list} &mdash; <b>${esc(d.businessName)}</b> wasn&rsquo;t mentioned at all.`;
+      // "When we asked" not "when someone searched": the question is one WE generated and put to
+      // the engines, so asserting a real customer typed it is a claim we cannot support.
+      summary = `When we asked AI &ldquo;<span class="gb-q">${esc(g.question)}</span>&rdquo;, it recommended ${list} &mdash; <b>${esc(d.businessName)}</b> wasn&rsquo;t mentioned at all.`;
     }
     gutbox = `
     <section class="gutbox">
@@ -236,8 +252,9 @@ export function renderReportHtml(d: AiAuditReportData): string {
 
   // Personalised one-tap contact links. encodeURIComponent for the URL params (spaces, hyphen,
   // apostrophe, &), then esc() for HTML-attribute safety. Single-param each → no & separator.
-  const emailHref = esc(`mailto:paul@move37.fun?subject=${encodeURIComponent(`AI Visibility - ${d.businessName}`)}`);
-  const waHref = esc(`https://wa.me/447347041545?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
+  // Addresses come from REPORT_CONTACT_* at the top of this file — one place to change.
+  const emailHref = esc(`mailto:${REPORT_CONTACT_EMAIL}?subject=${encodeURIComponent(`AI Visibility - ${d.businessName}`)}`);
+  const waHref = esc(`https://wa.me/${REPORT_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
 
   return `<!doctype html>
 <html lang="en">
@@ -458,7 +475,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
       </svg>
     </header>
 
-    <div class="explainer">We asked AI the questions real customers ask when they&rsquo;re looking for a <b>${esc(type)}</b>, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
+    <div class="explainer">We asked AI the kinds of questions customers ask when they&rsquo;re looking for a <b>${esc(type)}</b>, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
 
     <!-- HERO -->
     <div class="hero">
@@ -546,7 +563,7 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
         <span>Prepared for <b>${esc(d.businessName)}</b></span>
         <span>Findable &middot; AI Visibility Audit &middot; ${esc(d.generatedAtLabel)}${shareFoot}</span>
       </div>
-      <div class="note">Example report &mdash; a snapshot of where you stand today. We re-run it after we&rsquo;ve made changes to show your before &amp; after.</div>
+      <div class="note">A snapshot of where you stand today. We re-run it after we&rsquo;ve made changes to show your before &amp; after.</div>
     </footer>
   </div>
 </body>

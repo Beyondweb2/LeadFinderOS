@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     // 3) latest run for the audit.
     const { data: run } = await service
       .from("ai_audit_runs")
-      .select("id, audit_id, run_number, status, mention_rate, results")
+      .select("id, audit_id, run_number, status, mention_rate, results, created_at")
       .eq("audit_id", audit.id).order("run_number", { ascending: false }).limit(1).maybeSingle();
     if (!run) return unavailable("No audit run yet for this business.");
 

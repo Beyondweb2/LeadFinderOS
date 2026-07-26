@@ -39,6 +39,7 @@ const SUBMIT_COOLDOWN_MS = 10 * 60_000;   // one submission per lead per 10 min
 // PAID BASELINE shape — from the shared question-count policy, so this path and the cheap
 // outreach hook cannot drift into each other. See src/lib/auditQuestionCounts.ts for why 10 x 3
 // is not negotiable here.
+const MAX_BASELINES_PER_LEAD = 2;        // lifetime paid baselines per lead (public endpoint)
 const AUDIT_REUSE_MS = 30 * 60_000;       // a run newer than this is reused, never duplicated
 
 const clip = (v: unknown, max: number): string | null => {
@@ -203,6 +204,22 @@ Deno.serve(async (req) => {
       const baselineAuditIds = ((leadAudits ?? []) as Array<{ id: string; baseline_target_runs: number | null }>)
         .filter((a) => Number(a.baseline_target_runs ?? 0) > 1)
         .map((a) => a.id);
+
+      // LIFETIME CEILING on paid baselines for one lead.
+      // This endpoint is public (verify_jwt = false) and the only credential is the lead UUID,
+      // which every prospect is handed in their report link. The cooldown (10 min) and the reuse
+      // window (30 min) only slow repeats down: past 30 minutes a fresh submit bought a whole new
+      // 10-question, 3-run baseline plus its own SEO scan, about $0.20 a time, roughly $9/day per
+      // known lead id - more than DAILY_CAP_USD (8), so one refreshing prospect could exhaust the
+      // day's budget and fail every legitimate audit. Two allows a genuine second attempt if the
+      // first was a mess; beyond that an operator can re-run from the Audit page.
+      if (baselineAuditIds.length >= MAX_BASELINES_PER_LEAD) {
+        console.warn(`[findable-onboarding] lead ${leadId}: baseline cap reached (${baselineAuditIds.length}/${MAX_BASELINES_PER_LEAD}) - saving answers, no new audit`);
+        await service.from("onboarding_responses")
+          .update({ status: "baseline_cap_reached", updated_at: new Date().toISOString() })
+          .eq("id", row.id);
+        return json({ ok: true, onboarding_id: row.id, audit_id: null, note: "baseline_cap_reached" });
+      }
       if (baselineAuditIds.length) {
         const { data: freshRun } = await service
           .from("ai_audit_runs").select("audit_id, created_at").in("audit_id", baselineAuditIds)
@@ -224,6 +241,13 @@ Deno.serve(async (req) => {
       if (!bizType) {
         // No usable business type → an audit would ask garbage questions. Answers are saved;
         // the page falls through to the plan without a report.
+        // Was: ok:true with the row left on 'submitted', indistinguishable from a submission
+        // still waiting to be picked up. Now queryable:
+        //   select * from onboarding_responses where status like '%failed%' or status like 'no_%';
+        console.warn(`[findable-onboarding] lead ${leadId}: no business type, cannot ask sensible questions - answers saved, no audit`);
+        await service.from("onboarding_responses")
+          .update({ status: "no_business_type", updated_at: new Date().toISOString() })
+          .eq("id", row.id);
         return json({ ok: true, onboarding_id: row.id, audit_id: null, note: "no_business_type" });
       }
       // SCOPE. Every onboarding customer so far is a local trade, and leaving scope null let
@@ -276,6 +300,11 @@ Deno.serve(async (req) => {
       const created = await res.json().catch(() => ({}));
       if (!res.ok || !created?.ok || !created?.audit_id) {
         console.error("[findable-onboarding] create-ai-audit failed:", created?.error ?? res.status);
+        // Distinguishable from 'submitted': this customer paid attention, filled the form, and
+        // got no audit. Stays ok:true so the page still offers the plan, but the row now says so.
+        await service.from("onboarding_responses")
+          .update({ status: "audit_failed", updated_at: new Date().toISOString() })
+          .eq("id", row.id);
         return json({ ok: true, onboarding_id: row.id, audit_id: null, note: "audit_failed" });
       }
       await service.from("onboarding_responses")
@@ -296,7 +325,7 @@ Deno.serve(async (req) => {
         .from("ai_audits").select("*").eq("id", auditId).maybeSingle();
       if (!audit || audit.lead_id !== leadId) return json({ ok: false, error: "unknown_audit" }, 404);
       const { data: run } = await service
-        .from("ai_audit_runs").select("id, audit_id, run_number, status, mention_rate, results")
+        .from("ai_audit_runs").select("id, audit_id, run_number, status, mention_rate, results, created_at")
         .eq("audit_id", auditId).order("run_number", { ascending: false }).limit(1).maybeSingle();
       if (!run) return json({ ok: true, status: "pending" });
       if (run.status !== "complete" && run.status !== "capped") {

@@ -154,8 +154,15 @@ Deno.serve(async (req) => {
   const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET") ?? "";
   if (!stripeSecret || !webhookSecret) {
-    // Not wired up yet — acknowledge so Stripe doesn't hammer retries pre-launch.
-    return new Response(JSON.stringify({ received: true, configured: false }), { status: 200 });
+    // WAS: a silent 200. That made a rotated or mistyped secret indistinguishable from "no
+    // sales" - Stripe treats 200 as delivered, never retries, and the payment is gone with no
+    // trace anywhere. Now: shout, and return 500 so Stripe RETRIES (it keeps trying for ~3 days,
+    // long enough to notice and fix a secret) and the failure shows in the Stripe dashboard.
+    console.error(
+      `[stripe-webhook] REFUSING EVENT - secrets missing (STRIPE_SECRET_KEY:${stripeSecret ? "set" : "MISSING"}, ` +
+      `STRIPE_WEBHOOK_SECRET:${webhookSecret ? "set" : "MISSING"}). Returning 500 so Stripe retries rather than dropping the payment.`,
+    );
+    return new Response(JSON.stringify({ received: false, error: "webhook_not_configured" }), { status: 500 });
   }
 
   const signature = req.headers.get("stripe-signature");
@@ -191,6 +198,49 @@ Deno.serve(async (req) => {
   // Idempotent write: set is_paid to a fixed value on the one mapped site. On a
   // paid=true event we read the row first so we can email EXACTLY ONCE on the real
   // false→true upgrade (renewals/re-deliveries set true again but won't re-email).
+  /* Durable record of a payment write that did not land. client_error_reports is a generic
+     jsonb error sink (error_id + context), so this needs no migration and is queryable now:
+       select * from client_error_reports where error_id like 'stripe_%' order by created_at desc;
+     Best-effort by design: if even this insert fails we still log, because the caller is about to
+     throw and Stripe will retry regardless. */
+  const recordPaymentFailure = async (errorId: string, context: Record<string, unknown>) => {
+    try {
+      const { error } = await service.from("client_error_reports").insert({
+        error_id: errorId,
+        context: { ...context, event_id: event.id, event_type: event.type, at: new Date().toISOString() },
+      });
+      if (error) console.error(`[stripe-webhook] could not record ${errorId}:`, error.message);
+    } catch (e) {
+      console.error(`[stripe-webhook] could not record ${errorId}:`, (e as Error).message);
+    }
+  };
+
+  /* A write in the payment path that CANNOT fail quietly.
+     supabase-js resolves with { error } rather than throwing, so the try/catch that used to wrap
+     these updates could never fire: a rejected write still printed the success line and returned
+     200. This checks the error AND that a row actually matched (.select()), records the failure,
+     then throws - the handler's outer catch turns that into a 500, so Stripe retries. The updates
+     set a terminal state, so a retry is safe. */
+  const mustWrite = async (
+    table: string,
+    patch: Record<string, unknown>,
+    id: string,
+    what: string,
+  ): Promise<void> => {
+    const { data, error } = await service.from(table).update(patch).eq("id", id).select("id");
+    if (error) {
+      console.error(`[stripe-webhook] ${what} FAILED (${table} ${id}):`, error.message);
+      await recordPaymentFailure("stripe_write_failed", { what, table, row_id: id, reason: error.message, patch });
+      throw new Error(`${what} failed: ${error.message}`);
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      console.error(`[stripe-webhook] ${what} MATCHED NO ROW (${table} ${id}) - money taken, nothing updated`);
+      await recordPaymentFailure("stripe_write_no_row", { what, table, row_id: id, patch });
+      throw new Error(`${what} matched no row (${table} ${id})`);
+    }
+    console.log(`[stripe-webhook] ${what} ok (${table} ${id})`);
+  };
+
   const setPaid = async (siteId: string, paid: boolean, ownerId?: string | null) => {
     if (!siteId) {
       console.warn(`[stripe-webhook] ${event.type} (${event.id}) had no generated_site_id — skipped`);
@@ -247,24 +297,34 @@ Deno.serve(async (req) => {
           if (s.status === "complete") {
             const findableLeadId = (s.metadata?.lead_id as string) || "";
             const amountGbp = typeof s.amount_total === "number" ? s.amount_total / 100 : 49.99;
-            try {
-              await service.from("onboarding_responses")
-                .update({ status: "paid", updated_at: new Date().toISOString() })
-                .eq("id", onboardingId);
-              if (findableLeadId) {
-                await service.from("outreach_leads")
-                  .update({
-                    status: "payment_received",
-                    amount_paid: amountGbp,
-                    payment_date: new Date().toISOString(),
-                    paid_for: "Findable — Setup + first 2 months",
-                  })
-                  .eq("id", findableLeadId);
-              }
-              console.log(`[stripe-webhook] findable payment: onboarding=${onboardingId} lead=${findableLeadId || "(none)"} £${amountGbp} (${event.id})`);
-            } catch (e) {
-              console.error(`[stripe-webhook] findable payment write failed (${onboardingId}):`, (e as Error).message);
+            // Every write checked. A failure records to client_error_reports and throws, so the
+            // handler returns 500 and Stripe retries. The one thing that must never happen is
+            // taking the money and leaving no trace that we did.
+            await mustWrite(
+              "onboarding_responses",
+              { status: "paid", updated_at: new Date().toISOString() },
+              onboardingId,
+              "findable onboarding -> paid",
+            );
+            if (findableLeadId) {
+              await mustWrite(
+                "outreach_leads",
+                {
+                  status: "payment_received",
+                  amount_paid: amountGbp,
+                  payment_date: new Date().toISOString(),
+                  paid_for: "Findable - Setup + first 2 months",
+                },
+                findableLeadId,
+                "findable lead -> payment_received",
+              );
+            } else {
+              // No lead id on the session: the payment lands on the onboarding row but nothing
+              // links it to the CRM. Worth recording rather than shrugging at.
+              console.warn(`[stripe-webhook] findable payment without lead_id (onboarding=${onboardingId})`);
+              await recordPaymentFailure("stripe_findable_no_lead", { onboarding_id: onboardingId, amount_gbp: amountGbp });
             }
+            console.log(`[stripe-webhook] findable payment recorded: onboarding=${onboardingId} lead=${findableLeadId || "(none)"} amount=${amountGbp} (${event.id})`);
           }
           break;
         }
