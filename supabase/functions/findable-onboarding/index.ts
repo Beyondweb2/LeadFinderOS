@@ -85,7 +85,14 @@ Deno.serve(async (req) => {
       const a = (body.answers ?? {}) as Record<string, unknown>;
       const confirmedLocation = clip(a.confirmed_location, 200);
       const gbpConsent = typeof a.gbp_consent === "string" && GBP_CONSENT.has(a.gbp_consent) ? a.gbp_consent : null;
-      if (!confirmedLocation || !gbpConsent) return json({ ok: false, error: "missing_required" }, 400);
+      // The flow's single escape hatch ("I'll fill this in later") posts whatever exists so
+      // far. Those answers are worth keeping and chasing, so the required-field check is
+      // relaxed for them and the row is flagged instead. A COMPLETE submission still has to
+      // carry the area and the consent answer.
+      const incomplete = body.incomplete === true;
+      if (!incomplete && (!confirmedLocation || !gbpConsent)) {
+        return json({ ok: false, error: "missing_required" }, 400);
+      }
       const gbpEmailRaw = clip(a.gbp_manager_email, 200);
       const gbpEmail = gbpEmailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gbpEmailRaw) ? gbpEmailRaw : null;
       const answers = {
@@ -99,6 +106,7 @@ Deno.serve(async (req) => {
         gbp_consent: gbpConsent,
         gbp_manager_email: gbpEmail,
         business_name: clip(a.business_name, 200),
+        incomplete,
       };
 
       // Save helper. If the areas_wanted migration has not been applied yet, PostgREST
@@ -108,11 +116,15 @@ Deno.serve(async (req) => {
         const attempt = (payload: Record<string, unknown>) =>
           service.from("onboarding_responses").insert(payload).select("id").maybeSingle();
         let res = await attempt({ ...answers, ...extra });
-        if (res.error && /areas_wanted/i.test(res.error.message ?? "")) {
-          console.warn("[findable-onboarding] areas_wanted column missing, saving without it");
-          const withoutAreas = { ...answers };
-          delete (withoutAreas as Record<string, unknown>).areas_wanted;
-          res = await attempt({ ...withoutAreas, ...extra });
+        // Drop whichever optional column the database does not have yet and retry, so a
+        // pending migration can never cost us a real submission.
+        for (const col of ["areas_wanted", "incomplete"]) {
+          if (res.error && new RegExp(col, "i").test(res.error.message ?? "")) {
+            console.warn(`[findable-onboarding] ${col} column missing, saving without it`);
+            const reduced = { ...answers } as Record<string, unknown>;
+            delete reduced[col];
+            res = await attempt({ ...reduced, ...extra });
+          }
         }
         return res;
       };
@@ -150,6 +162,13 @@ Deno.serve(async (req) => {
       try {
         await service.from("outreach_leads").update({ search_location: confirmedLocation }).eq("id", leadId);
       } catch { /* non-fatal — the audit still gets the confirmed value directly */ }
+
+      // An incomplete submission stops here: there is no confirmed area to audit against, and
+      // firing a 3-run paid baseline on a half-answered form would spend real money guessing.
+      // The plan screen still works, so they can pay and we chase the answers.
+      if (incomplete) {
+        return json({ ok: true, onboarding_id: row.id, audit_id: null, incomplete: true });
+      }
 
       // Lockdown #3b: an audit run created in the last AUDIT_REUSE_MS is reused, not duplicated.
       const { data: leadAudits } = await service.from("ai_audits").select("id").eq("lead_id", leadId);
@@ -191,7 +210,7 @@ Deno.serve(async (req) => {
         "wales", "northern ireland", "ireland", "nationwide", "national", "online", "remote",
         "everywhere", "anywhere", "the local area",
       ]);
-      const locKey = confirmedLocation.toLowerCase().trim();
+      const locKey = (confirmedLocation ?? "").toLowerCase().trim();
       const scopeIsLocal = !!locKey && !NON_TOWN.has(locKey);
 
       // areas_wanted is deliberately NOT passed. create-ai-audit takes a single location
