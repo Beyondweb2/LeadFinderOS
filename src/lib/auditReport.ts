@@ -117,6 +117,8 @@ const NOT_COMPETITOR_PHRASES = [
 const NOT_COMPETITOR_TOKENS = new Set([
   'hmrc', 'gov.uk', 'gov', 'vat', 'paye', 'ir35', 'mtd', 'fca', 'ico', 'nino',
   'quickbooks', 'xero', 'sage', 'freeagent', 'kashflow', 'freshbooks', 'clearbooks', 'wave', 'intuit',
+  // payroll/bookkeeping PRODUCTS seen in the corpus — vendors, not competing practices
+  'moorepay', 'brightpay', 'payfit', 'iris payroll', 'payescape', 'pandle',
   // Tax forms/codes + services/tasks — never a competing FIRM ("CT600", "Payroll", "Customs").
   'ct600', 'sa100', 'sa102', 'sa302', 'sa800', 'p11d', 'p60', 'p45', 'p87', 'r40',
   'payroll', 'bookkeeping', 'customs', 'duty', 'duties', 'compliance',
@@ -200,6 +202,47 @@ function isFurnitureOrFranken(name: string): boolean {
 
 /** Keep only things that look like a real business name — drop stopwords, the audit's
  *  location, and short fragments. Bias to precision (better fewer real than lots of noise). */
+// WHOLE-VALUE junk: table headers, template placeholders and capitalised prose fragments the
+// extractor lifts verbatim out of an answer. Real case that shipped to a prospect: 365 Plumbing's
+// gut-punch read "AI recommended Loughborough Emergency Plumbing, Company Name, Key Details and
+// others" — "Company Name" and "Key Details" are column headers from a table in Gemini's answer.
+//
+// The word-by-word `generic` test above cannot catch these: it only drops a phrase when EVERY
+// word is generic, and "name"/"details"/"features" were in none of the lists, so "Company Name"
+// passed. Matching the WHOLE value (case-insensitive, after the leading-"the"/trailing-punctuation
+// strip) is deliberate: a real firm called "Details Ltd" or "Small Business Accounting" contains
+// these words but is never equal to one, so it survives untouched. Equally deliberate: single
+// real brands (Crunch, Azets, IRIS, Mazuma) are NOT in here and keep working.
+//
+// Every entry below was observed surviving the filter in the stored corpus (10,515 values).
+const PLACEHOLDER_VALUES = new Set([
+  // template placeholders / table headers
+  'company name', 'business name', 'key details', 'key features', 'name', 'details', 'detail',
+  'contact', 'contact details', 'phone', 'phone number', 'telephone', 'website', 'address',
+  'services', 'service', 'location', 'locations', 'n/a', 'na', 'example', 'notes', 'note',
+  'summary', 'overview', 'rating', 'ratings', 'reviews', 'hours', 'opening hours', 'price',
+  'cost', 'other', 'others', 'more', 'more info', 'info', 'information',
+  // capitalised prose fragments ("Typical costs are…", "Offers a range of…")
+  'typical', 'offers', 'provides', 'provider', 'specialises', 'specializes', 'keep', 'many',
+  'usually', 'highly', 'once', 'submit', 'prepare', 'must', 'fully', 'managed', 'full', 'give',
+  'check', 'available', 'open', 'closed', 'dedicated', 'established', 'covers', 'only', 'which',
+  'nearly', 'daily', 'always', 'ensure', 'verify', 'compare', 'clarify', 'additional', 'most',
+  'over', 'low', 'quick', 'rapid', 'fast', 'new', 'they', 'you', 'here', 'once again',
+  // market-segment descriptors, never a firm's name alone
+  'smes', 'sme', 'small', 'micro', 'medium', 'business', 'businesses', 'contractors', 'self',
+  'startups', 'landlords', 'sole traders', 'limited companies',
+  // domain nouns lifted from answer prose
+  'accounts', 'profit', 'year', 'annual', 'file', 'dividends', 'balance', 'statutory', 'pension',
+  'pensions', 'cloud', 'fixed', 'association', 'boiler', 'pipework', 'heating', 'plumbing',
+  // professional bodies, standards and statutory forms — credentials, not competing firms
+  'acca', 'icaew', 'cima', 'aat', 'ciot', 'ifrs', 'bacs', 'oftec', 'niceic', 'napit', 'elecsa',
+  'gas safe', 'p60', 'p60s', 'p45', 'p11d', 'trusted trader', 'cipp', 'nest',
+  // second measured pass over the same corpus: more prose fragments and descriptors
+  'while', 'because', 'every', 'large', 'assessment', 'deadline', 'turnover', 'sole',
+  'freelancers', 'chartered', 'import', 'cross', 'tech', 'bank', 'property', 'standard',
+  'uk', 'england', 'scotland', 'wales', 'northern ireland',
+]);
+
 export function isRealCompetitor(name: string, locationText: string): boolean {
   if (isFurnitureOrFranken(name)) return false;          // page furniture / fused link labels
   // Strip trailing fragments the extractor leaves on: punctuation, then a dangling article/
@@ -213,6 +256,7 @@ export function isRealCompetitor(name: string, locationText: string): boolean {
   if (n.length < 3 || n.length > 60) return false;
   if (n.includes('@')) return false;                     // social handle, not a venue ("… (@kava_thailand)")
   const nl = n.toLowerCase();
+  if (PLACEHOLDER_VALUES.has(nl)) return false;          // table header / placeholder / prose fragment
   if (UI_PHRASES.some((p) => nl === p || nl.includes(p))) return false;          // "gemini apps activity" etc.
   const words = nl.split(/\s+/).map((w) => w.replace(/[^a-z0-9.&'-]/g, '')).filter(Boolean);
   if (!words.length) return false;
@@ -607,5 +651,8 @@ export function buildReportData(
     generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
     // Only carry a GRADED seo; drop failure/cap markers so the report never crashes on them.
     seo: (() => { const s = (run?.results as { seo?: unknown } | null)?.seo; return isRenderableSeo(s) ? s : undefined; })(),
+    // No own website → the report offers to build one instead of leaving a gap. Derived from the
+    // website the caller passes, which is the same value that decides whether a scan runs at all.
+    hasWebsite: !!(ctx.ownWebsite && ctx.ownWebsite.trim()),
   };
 }

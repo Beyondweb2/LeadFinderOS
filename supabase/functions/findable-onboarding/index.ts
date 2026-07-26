@@ -334,6 +334,9 @@ Deno.serve(async (req) => {
         named: data.named,
         total: data.total,
         gut_punch: gutPunch,
+        // Lets the results screen tell "no website, we'll build you one" apart from "has a
+        // website but the scan failed", which must stay silent rather than claim anything.
+        has_website: (audit as { has_website?: boolean }).has_website === true,
         // Still returned for operator/debug use, but the customer-facing results screen
         // deliberately does NOT show per-search winnable/locked claims: single-run winnability
         // is unstable (one business swung 0 to 0.6 mention rate across identical runs with no
