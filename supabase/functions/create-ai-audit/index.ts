@@ -261,7 +261,10 @@ Deno.serve(async (req) => {
     }
 
     const estCost = SOURCES.ai_search.estCostUsd;
-    const estimate = (n: number) => Number((n * AUDIT_ENGINES.length * estCost).toFixed(4));
+    // ONE actor run per question covers every engine, so the cost is per QUESTION. Multiplying
+    // by AUDIT_ENGINES.length double-counted it and, on top of the old 20x-high unit price,
+    // made a 10-question audit look like $10 when it is about 2.5 cents.
+    const estimate = (n: number) => Number((n * estCost).toFixed(4));
 
     // Preview: return questions + cost estimate only (no DB writes).
     if (preview) {
