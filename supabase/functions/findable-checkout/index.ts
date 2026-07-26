@@ -24,8 +24,24 @@ const corsHeaders = {
 const FINDABLE_SETUP_PRICE_GBP = 49.99;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
-// Only findable-site (and local dev) may be bounced back to — never an attacker-supplied origin.
-const ALLOWED_ORIGINS = new Set(["https://findable.uk", "https://www.findable.uk", "http://localhost:4321"]);
+// Origins a payer may be bounced back to. Never an attacker-supplied origin.
+//
+// The production domain is CONFIGURABLE, not hardcoded: set FINDABLE_ALLOWED_ORIGINS to a
+// comma-separated list and the FIRST entry becomes canonical (used when a request arrives
+// with no origin, or one we do not trust). That way the real domain can be switched on with
+//   npx supabase secrets set FINDABLE_ALLOWED_ORIGINS=https://findable.uk,https://www.findable.uk
+// the moment it clears registration lock, with no code change and no redeploy of anything else.
+//
+// The Pages project URL and local dev are always allowed so the flow works before the domain
+// lands. Per-commit preview subdomains (<hash>.findable-site.pages.dev) are deliberately NOT
+// allowed: a payment should only ever return to a stable address.
+const BUILT_IN_ORIGINS = ["https://findable-site.pages.dev", "http://localhost:4321"];
+const ENV_ORIGINS = (Deno.env.get("FINDABLE_ALLOWED_ORIGINS") ?? "")
+  .split(",")
+  .map((o) => o.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+const ALLOWED_ORIGINS = new Set([...ENV_ORIGINS, ...BUILT_IN_ORIGINS]);
+const CANONICAL_ORIGIN = ENV_ORIGINS[0] ?? BUILT_IN_ORIGINS[0];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -65,8 +81,11 @@ Deno.serve(async (req) => {
     }
 
     const reqOrigin = req.headers.get("origin") ?? "";
-    const origin = ALLOWED_ORIGINS.has(reqOrigin) ? reqOrigin : "https://findable.uk";
-    const back = `${origin}/onboarding${effectiveLeadId ? `?lead=${effectiveLeadId}` : ""}`;
+    const origin = ALLOWED_ORIGINS.has(reqOrigin) ? reqOrigin : CANONICAL_ORIGIN;
+    // Trailing slash on purpose: the built site serves /onboarding/ and 308-redirects
+    // /onboarding to it. Returning a payer straight to the canonical path avoids an
+    // extra hop on the most important redirect in the product.
+    const back = `${origin}/onboarding/${effectiveLeadId ? `?lead=${effectiveLeadId}` : ""}`;
 
     const form = new URLSearchParams();
     form.set("mode", "payment"); // ONE-OFF — not a subscription

@@ -85,6 +85,9 @@ Deno.serve(async (req) => {
       const answers = {
         standout: clip(a.standout, 2000),
         services: clip(a.services, 2000),
+        // Storage only. `services` is the audit-facing field (it becomes specialisms),
+        // so the areas answer is kept out of it deliberately.
+        areas_wanted: clip(a.areas_wanted, 2000),
         confirmed_location: confirmedLocation,
         accreditations: clip(a.accreditations, 2000),
         gbp_consent: gbpConsent,
@@ -92,11 +95,25 @@ Deno.serve(async (req) => {
         business_name: clip(a.business_name, 200),
       };
 
+      // Save helper. If the areas_wanted migration has not been applied yet, PostgREST
+      // rejects the unknown column: retry without it rather than lose a real submission.
+      // Removes any ordering hazard between deploying this function and running the SQL.
+      const saveAnswers = async (extra: Record<string, unknown>) => {
+        const attempt = (payload: Record<string, unknown>) =>
+          service.from("onboarding_responses").insert(payload).select("id").maybeSingle();
+        let res = await attempt({ ...answers, ...extra });
+        if (res.error && /areas_wanted/i.test(res.error.message ?? "")) {
+          console.warn("[findable-onboarding] areas_wanted column missing, saving without it");
+          const withoutAreas = { ...answers };
+          delete (withoutAreas as Record<string, unknown>).areas_wanted;
+          res = await attempt({ ...withoutAreas, ...extra });
+        }
+        return res;
+      };
+
       // GENERIC MODE (no valid lead): save the answers, NEVER fire an audit (lockdown #1).
       if (!leadId) {
-        const { data: row, error: insErr } = await service
-          .from("onboarding_responses").insert({ ...answers, status: "submitted" })
-          .select("id").maybeSingle();
+        const { data: row, error: insErr } = await saveAnswers({ status: "submitted" });
         if (insErr || !row) return json({ ok: false, error: "save_failed" }, 500);
         return json({ ok: true, onboarding_id: row.id, audit_id: null });
       }
@@ -119,9 +136,7 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "too_soon" }, 429);
       }
 
-      const { data: row, error: insErr } = await service
-        .from("onboarding_responses").insert({ ...answers, lead_id: leadId, status: "submitted" })
-        .select("id").maybeSingle();
+      const { data: row, error: insErr } = await saveAnswers({ lead_id: leadId, status: "submitted" });
       if (insErr || !row) return json({ ok: false, error: "save_failed" }, 500);
 
       // Customer-confirmed location becomes the lead's location of record (the wizard's
