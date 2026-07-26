@@ -1,5 +1,5 @@
 import { toWhatsAppNumber } from "./whatsapp-send.ts";
-import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, phoneSuppressed } from "./auto-reply-rules.ts";
+import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, phoneSuppressed, pitchEverSent } from "./auto-reply-rules.ts";
 
 // Inbound WhatsApp message handling — barber replies arriving on the SAME Meta
 // webhook that delivers statuses (Cloud API has ONE callback URL; inbound lives in
@@ -237,7 +237,7 @@ export async function handleInboundMessages(
               if (looksAutomated(body)) {
                 // Booking-bot / out-of-office auto-ack — not a human yes. No row, no send; the
                 // thread is already surfaced to the operator (status='replied' + next_action).
-                console.log(`[auto-reply] lead ${leadId}: first inbound looks automated — not queueing.`);
+                console.log(`[auto-reply] lead ${leadId}: bot_autoreply_skipped — first inbound matches an auto-responder pattern, not arming a pitch.`);
               } else if (await phoneSuppressed(service, waPhone)) {
                 // Suppressed number → burn the once-ever slot with skipped_suppressed (never pend).
                 await service.from("whatsapp_auto_replies").insert({
@@ -268,7 +268,16 @@ export async function handleInboundMessages(
                   hasCompletedAudit = !!doneRun;
                 }
 
-                if (hasCompletedAudit) {
+                if (hasCompletedAudit && (await pitchEverSent(service, leadId, replyTemplate ?? "audit_reply"))) {
+                  // DURABLE once-ever (arm time): the pitch already went out (message log — covers
+                  // manual sends and survives queue-row deletion). Burn the slot instead of arming.
+                  await service.from("whatsapp_auto_replies").insert({
+                    lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
+                    template_name: replyTemplate,
+                    status: "skipped_already_sent", fire_after: new Date().toISOString(),
+                  });
+                  console.log(`[auto-reply] lead ${leadId}: pitch already sent — recorded skipped_already_sent, not re-arming.`);
+                } else if (hasCompletedAudit) {
                   // Audit ready → queue the delayed pitch as before (template stamped from the setting).
                   const { error: qErr } = await service.from("whatsapp_auto_replies").insert({
                     lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
