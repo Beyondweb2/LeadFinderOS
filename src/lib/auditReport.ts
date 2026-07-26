@@ -3,7 +3,7 @@
 // React, NO browser/DOM deps, so it runs in BOTH the SPA and a Deno edge function (automation
 // B's server-side report renderer). Extracted VERBATIM from src/pages/AiAudit.tsx — logic
 // unchanged; only `export` added to the symbols the app + server consume.
-import type { AiAuditReportData, AiAuditSeo } from './aiAuditReportHtml.ts';
+import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
 
 // Engines shown in results (queue targets chatgpt+gemini; the actor also returns
 // AI Overview + Google organic, shown for context). mention_rate is over chatgpt+gemini.
@@ -414,6 +414,58 @@ export function isRenderableSeo(s: unknown): s is AiAuditSeo {
   return !!c && typeof c === 'object' && !!c.onPage && !!c.contentTechnical;
 }
 
+const SEO_SEV_RANK: Record<SeoFinding['severity'], number> = { high: 0, med: 1, low: 2 };
+
+/**
+ * Fold per-page SEO findings into one line each.
+ *
+ * WHY. The scan actor reports issues PER CRAWLED PAGE and embeds the count in the message, so
+ * a 3-page crawl emits "14 images without alt text" AND "2 images without alt text" carrying
+ * the SAME fixHint. collectIssues (seo-scan-core) dedupes by message, which cannot catch these
+ * because the messages differ only by their number — so a paying customer saw what reads as
+ * the same defect listed twice with different figures. Observed live on a real report.
+ *
+ * Aggregating at DISPLAY time rather than in the scanner fixes the payloads already stored
+ * (every past scan) as well as new ones, with no backfill.
+ *
+ * Grouping key is the message with its digit runs masked, plus the detail — so the two alt-text
+ * lines collapse while genuinely different issues that happen to share a fixHint do not. Counts
+ * are summed and written back into the title. A title with no number, or with more than one, is
+ * still deduped but never rewritten: there would be no unambiguous figure to sum.
+ *
+ * That last case is deliberately LOSSY, and worth knowing about. Measured on stored payloads,
+ * it collapses pairs like "Thin content: only 266 words" + "only 16 words" (keeping 266) and
+ * "Skipped heading level: 2 -> 4" + "1 -> 3" (keeping the first). One line per issue type is the
+ * requirement, the fix we sell is the same either way, and the survivor is chosen by highest
+ * severity then the actor's own order — but the per-page specifics of the other instances do go.
+ * It errs towards understating a problem we are offering to fix, never towards over-claiming.
+ */
+export function aggregateSeoFindings(findings: SeoFinding[]): SeoFinding[] {
+  const groups = new Map<string, { finding: SeoFinding; total: number; numbered: boolean }>();
+  for (const f of findings ?? []) {
+    const title = (f?.title ?? '').trim();
+    if (!title) continue;
+    const detail = (f?.detail ?? '').trim();
+    const severity = f?.severity ?? 'low';
+    const numbers = title.match(/\d+/g) ?? [];
+    const numbered = numbers.length === 1;
+    const key = `${title.toLowerCase().replace(/\d+/g, '#')}|${detail.toLowerCase()}`;
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, { finding: { title, detail, severity }, total: numbered ? Number(numbers[0]) : 0, numbered });
+      continue;
+    }
+    // Same issue from another page: add its count and keep the worst severity seen.
+    if (existing.numbered && numbered) existing.total += Number(numbers[0]);
+    if (SEO_SEV_RANK[severity] < SEO_SEV_RANK[existing.finding.severity]) existing.finding.severity = severity;
+  }
+  return [...groups.values()].map(({ finding, total, numbered }) =>
+    numbered && total > 0
+      ? { ...finding, title: finding.title.replace(/\d+/, String(total)) }
+      : finding
+  );
+}
+
 // ── Per-term winnability: fragmentation + cross-engine consensus ─────────────
 // Reserves 'locked' for a SMALL, CONSISTENT, own-site incumbent set (few firms named on
 // BOTH scored engines, ranking on their own sites, with real citations). Fragmented fields
@@ -650,7 +702,13 @@ export function buildReportData(
     gutPunch: pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
     generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
     // Only carry a GRADED seo; drop failure/cap markers so the report never crashes on them.
-    seo: (() => { const s = (run?.results as { seo?: unknown } | null)?.seo; return isRenderableSeo(s) ? s : undefined; })(),
+    // Findings are folded here, at the one point BOTH the report renderer and the onboarding
+    // results screen read them, so the two can't drift and stored payloads are fixed too.
+    seo: (() => {
+      const s = (run?.results as { seo?: unknown } | null)?.seo;
+      if (!isRenderableSeo(s)) return undefined;
+      return { ...s, leadFindings: aggregateSeoFindings(s.leadFindings ?? []) };
+    })(),
     // No own website → the report offers to build one instead of leaving a gap. Derived from the
     // website the caller passes, which is the same value that decides whether a scan runs at all.
     hasWebsite: !!(ctx.ownWebsite && ctx.ownWebsite.trim()),
