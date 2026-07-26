@@ -299,13 +299,28 @@ Deno.serve(async (req) => {
         };
       }
 
+      // The report's own strongest finding: the single question+engine whose answer is most
+      // damning, and the firms it named instead. pickGutPunch already scores for relevance and
+      // skips junk/near-me answers, so this is the same thing the PDF leads with — no second
+      // opinion to drift from. null when nothing qualified.
+      const gp = data.gutPunch;
+      const gutPunch = gp
+        ? { question: gp.question, engine: gp.engineLabel, rivals: (gp.rivals ?? []).slice(0, 3) }
+        : null;
+
       return json({
         ok: true,
         status: "complete",
         business_name: data.businessName,
         named: data.named,
         total: data.total,
-        winnability: data.winnability, // [{ question, verdict, rivalCount }]
+        gut_punch: gutPunch,
+        // Still returned for operator/debug use, but the customer-facing results screen
+        // deliberately does NOT show per-search winnable/locked claims: single-run winnability
+        // is unstable (one business swung 0 to 0.6 mention rate across identical runs with no
+        // work done), and promising specific winnable searches off one run risks the 3-run
+        // baseline contradicting us.
+        winnability: data.winnability,
         seo,
         baseline,
       });
