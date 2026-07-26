@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, Trash2, CircleStop,
+  Copy, Save, Trash2, CircleStop, ChevronRight,
 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
@@ -27,6 +27,7 @@ import {
   DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, classifyWinnability,
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
 } from '@/lib/auditReport';
+import { tradeWord } from '@/lib/trade';
 import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { renderPlaybookHtml, downloadPlaybookHtml, type PlaybookData, type PlaybookView } from '@/lib/playbookHtml';
 import { buildSchema, normalizeUrl } from '@/lib/schemaType';
@@ -71,9 +72,79 @@ const COUNTRIES: { value: string; label: string }[] = [
 
 
 interface AuditRow { id: string; business_name: string; business_type: string | null; location_text: string | null; country: string | null; has_website: boolean; created_at: string }
+
+/* ── The audit book, grouped ────────────────────────────────────────────────────
+   The list used to be one flat row per AUDIT, which reads as duplicates because the
+   Inbox button, the bulk runner and the wizard each mint a NEW ai_audits row for the
+   same lead (only the wizard's edited re-run and the baseline chain reuse an audit id).
+   That upstream behaviour is deliberately left alone: /a/<auditId> report links are
+   already out with real prospects, and reusing ids would change which run they resolve to.
+
+   So the grouping happens HERE: audits are folded by BUSINESS (lead_id when we have one,
+   else the normalised name), and businesses are folded by TRADE via tradeWord(). One
+   collapsed row per business; every audit and run stays reachable underneath. */
+
+/** One run, with the scalars the list needs pulled out of results so no big JSONB moves. */
+interface RunLite {
+  id: string;
+  audit_id: string;
+  run_number: number;
+  status: string;
+  mention_rate: number | null;
+  created_at: string;
+  actor_cost_usd: number | null;
+  seo_grade: string | null;
+  has_playbook: boolean;
+  /** Live progress, only meaningful while in flight. done counts queue rows that have
+   *  SETTLED — status 'done' or 'failed' (the queue's vocabulary is not 'complete'). */
+  done: number;
+  total: number;
+}
+
+interface AuditLite extends AuditRow {
+  lead_id: string | null;
+  first_opened_at: string | null;
+  open_count: number | null;
+  baseline_target_runs: number | null;
+  baseline_runs_counted: number | null;
+  baseline_completed_at: string | null;
+  baseline_error: string | null;
+  report_slug: string | null;
+  /** Whether the linked lead has paid. The slot the audit asked to keep: nothing qualifies yet
+   *  (amount_paid is null on all 409 leads), so it simply does not render until one does. */
+  lead_paid?: boolean;
+  /** Newest run first. */
+  runs: RunLite[];
+}
+
+interface BusinessGroup {
+  key: string;
+  name: string;
+  trade: string;
+  business_type: string | null;
+  location: string | null;
+  has_website: boolean;
+  /** Newest audit first. */
+  audits: AuditLite[];
+  /** The newest audit and its latest run — what the collapsed row shows. */
+  latestAudit: AuditLite;
+  latestRun: RunLite | null;
+  runningRun: RunLite | null;
+  auditCount: number;
+  runCount: number;
+  cost: number;
+}
 interface LeadOption { id: string; business_name: string; category: string | null; country: string | null; website: string | null; address: string | null; search_keyword?: string | null; search_location?: string | null }
 
 const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
+
+/** How many audits the landing list loads. Was 50, which silently truncated both the list and
+ *  the "Audits" count, so the count stopped telling the truth at 51 audits with no indication.
+ *  Raised, and when the query comes back full the label says so rather than pretending. */
+const AUDIT_FETCH_LIMIT = 300;
+/** Landing-list refresh cadence while ANY run is in flight. The effect is not armed at all when
+ *  nothing is draining, so an idle page makes zero requests. */
+const LIST_POLL_MS = 5000;
 
 
 // Wizard state is persisted to sessionStorage so it survives leaving the page and
@@ -166,9 +237,16 @@ const AiAudit = () => {
 
   // Existing-lead picker + saved audits
   const [leads, setLeads] = useState<LeadOption[]>([]);
-  const [savedAudits, setSavedAudits] = useState<(AuditRow & { latest_mention_rate: number | null; latest_run_id: string | null; latest_has_playbook: boolean; latest_status: string | null; is_running: boolean })[]>([]);
+  const [savedAudits, setSavedAudits] = useState<AuditLite[]>([]);
+  /** True when the audits query came back full, i.e. older audits exist beyond it. Drives an
+   *  honest label instead of a count that silently stops growing. */
+  const [auditsCapped, setAuditsCapped] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null); // audit being deleted (disables its row buttons)
   const [cancellingId, setCancellingId] = useState<string | null>(null); // audit whose run is being cancelled
+  /** Which trade groups / businesses are expanded. Trades default OPEN (the list should read
+   *  as a list), businesses default CLOSED (that is the whole point of collapsing re-runs). */
+  const [closedTrades, setClosedTrades] = useState<Set<string>>(new Set());
+  const [openBusinesses, setOpenBusinesses] = useState<Set<string>>(new Set());
 
   // Review (questions) state
   const [previewing, setPreviewing] = useState(false);
@@ -300,57 +378,104 @@ const AiAudit = () => {
     } catch { /* storage unavailable — persistence is best-effort */ }
   }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, questionCount, questions, unitCost, engineCount]);
 
+  /* SETTLED-QUESTION COUNTS for a set of runs — the ONE implementation of "2 of 3 done".
+     The queue's terminal statuses are 'done' and 'failed' (NOT 'complete', which is a RUN
+     status); counting the wrong word silently reports 0 of N forever. Used by both the
+     in-flight strip on the results step and the landing list's progress bars. */
+  const fetchQueueCounts = useCallback(async (runIds: string[]) => {
+    const counts = new Map<string, { done: number; total: number }>();
+    if (!runIds.length) return counts;
+    const { data } = await (supabase as unknown as SupabaseClient)
+      .from('ai_audit_queue')
+      .select('run_id, status')
+      .in('run_id', runIds);
+    for (const row of ((data ?? []) as Array<{ run_id: string; status: string }>)) {
+      const c = counts.get(row.run_id) ?? { done: 0, total: 0 };
+      c.total++;
+      if (row.status === 'done' || row.status === 'failed') c.done++;
+      counts.set(row.run_id, c);
+    }
+    return counts;
+  }, []);
+
   // ── Initial load: the user's leads (for the picker) + saved audits ──────────
+  // Loads the whole audit book the list needs in four bounded queries: audits, their runs,
+  // published-report slugs, and live queue counts for the runs still in flight. Also the
+  // refresh the landing list polls while anything is draining.
   const loadSaved = useCallback(async () => {
     if (!user) return;
-    const { data: audits } = await supabase
+    const { data: audits } = await (supabase as unknown as SupabaseClient)
       .from('ai_audits')
-      .select('id, business_name, business_type, location_text, country, has_website, created_at')
+      .select('id, business_name, business_type, location_text, country, has_website, created_at, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted')
       .order('created_at', { ascending: false })
-      .limit(50);
-    const auditRows = (audits ?? []) as AuditRow[];
-    // Latest run mention_rate per audit (one query, newest first, reduce client-side).
+      .limit(AUDIT_FETCH_LIMIT);
+    const auditRows = (audits ?? []) as Array<AuditRow & {
+      lead_id: string | null; first_opened_at: string | null; open_count: number | null;
+      baseline_target_runs: number | null; baseline_completed_at: string | null;
+      baseline_error: string | null; baseline_runs_counted: string | null;
+    }>;
+    setAuditsCapped(auditRows.length >= AUDIT_FETCH_LIMIT);
+
     const ids = auditRows.map((a) => a.id);
-    const latestByAudit: Record<string, { rate: number | null; runId: string; status: string | null }> = {};
+    // ALL runs per audit (newest first), not just the latest: the expanded view lists every
+    // run, and the collapsed row's cost is the sum across them.
+    const runsByAudit = new Map<string, RunLite[]>();
+    const inFlightRunIds: string[] = [];
     if (ids.length) {
-      const { data: runs } = await supabase
+      const { data: runs } = await (supabase as unknown as SupabaseClient)
         .from('ai_audit_runs')
-        .select('id, audit_id, mention_rate, run_number, status')
+        .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results->seo->>overallGrade, pb_summary:results->playbook->>summary')
         .in('audit_id', ids)
         .order('run_number', { ascending: false });
-      for (const r of (runs ?? []) as { id: string; audit_id: string; mention_rate: number | null; status: string | null }[]) {
-        // newest first → first seen per audit is the latest run
-        if (!(r.audit_id in latestByAudit)) latestByAudit[r.audit_id] = { rate: r.mention_rate, runId: r.id, status: r.status };
+      for (const r of (runs ?? []) as Array<{
+        id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null;
+        created_at: string; actor_cost_usd: number | null; seo_grade: string | null; pb_summary: string | null;
+      }>) {
+        const list = runsByAudit.get(r.audit_id) ?? [];
+        list.push({
+          id: r.id, audit_id: r.audit_id, run_number: r.run_number, status: r.status,
+          // COERCE. Postgres numeric can arrive as a STRING, and then `sum + rate` concatenates
+          // instead of adding (avg visibility came out NaN) and `rate === 0` is false for "0" (the
+          // invisible tally read 0 while rows plainly showed 0% named). Normalise once, here at
+          // the boundary, so nothing downstream has to care.
+          mention_rate: r.mention_rate === null || r.mention_rate === undefined ? null : Number(r.mention_rate),
+          created_at: r.created_at,
+          actor_cost_usd: r.actor_cost_usd === null || r.actor_cost_usd === undefined ? null : Number(r.actor_cost_usd),
+          seo_grade: r.seo_grade, has_playbook: !!r.pb_summary, done: 0, total: 0,
+        });
+        runsByAudit.set(r.audit_id, list);
+        if (r.status === 'pending' || r.status === 'running') inFlightRunIds.push(r.id);
       }
     }
-    // Best-effort: which latest runs already have a playbook (light scalar existence check —
-    // results.playbook.summary; no big JSONB pulled). If the JSON-path select isn't supported
-    // it returns null/error and we fall back to the localStorage `playbooks` map at render.
-    const latestRunIds = Object.values(latestByAudit).map((x) => x.runId);
-    const playbookRuns = new Set<string>();
-    if (latestRunIds.length) {
-      const { data: flags } = await supabase
-        .from('ai_audit_runs')
-        .select('id, pb_summary:results->playbook->>summary')
-        .in('id', latestRunIds);
-      for (const f of (flags ?? []) as { id: string; pb_summary: string | null }[]) {
-        if (f.pb_summary) playbookRuns.add(f.id);
+
+    // Published report per audit → the "report" pill. One query, existence only.
+    const reportByAudit = new Map<string, string>();
+    if (ids.length) {
+      const { data: reports } = await (supabase as unknown as SupabaseClient)
+        .from('business_reports')
+        .select('audit_id, slug')
+        .in('audit_id', ids);
+      for (const r of (reports ?? []) as Array<{ audit_id: string | null; slug: string }>) {
+        if (r.audit_id && !reportByAudit.has(r.audit_id)) reportByAudit.set(r.audit_id, r.slug);
       }
     }
-    setSavedAudits(auditRows.map((a) => {
-      const runId = latestByAudit[a.id]?.runId ?? null;
-      const status = latestByAudit[a.id]?.status ?? null;
-      return {
-        ...a,
-        latest_mention_rate: latestByAudit[a.id]?.rate ?? null,
-        latest_run_id: runId,
-        latest_has_playbook: !!runId && playbookRuns.has(runId),
-        latest_status: status,
-        // Still in flight (drainable by the queue) — gates the Stop button.
-        is_running: status === 'pending' || status === 'running',
-      };
-    }));
-  }, [user]);
+
+    // Live progress for the runs still draining — nothing fetched when nothing is in flight.
+    const counts = await fetchQueueCounts(inFlightRunIds);
+    for (const list of runsByAudit.values()) {
+      for (const r of list) {
+        const c = counts.get(r.id);
+        if (c) { r.done = c.done; r.total = c.total; }
+      }
+    }
+
+    setSavedAudits(auditRows.map((a) => ({
+      ...a,
+      baseline_runs_counted: a.baseline_runs_counted === null ? null : Number(a.baseline_runs_counted),
+      report_slug: reportByAudit.get(a.id) ?? null,
+      runs: runsByAudit.get(a.id) ?? [],
+    })));
+  }, [user, fetchQueueCounts]);
 
   useEffect(() => {
     if (!user) return;
@@ -365,6 +490,26 @@ const AiAudit = () => {
     })();
     loadSaved();
   }, [user, loadSaved]);
+
+  /* ── Keep the landing list live while audits drain ──────────────────────────────
+     THE BUG THIS FIXES. Both existing pollers are gated on step === 'results', so on the
+     landing page the list never updated: an audit that finished while you watched kept
+     showing a dash and no Report button until a manual reload. Reading that as "stuck" and
+     re-running is rational, and each re-run mints another audit row — which is where the
+     apparent duplicates came from.
+
+     SELF-SUSPENDING: the interval is only created while something is actually in flight.
+     When the last run settles, loadSaved drops inFlightCount to 0, this effect tears the
+     timer down, and an idle page makes zero requests. */
+  // Derived here rather than from the grouped memo below, which is declared further down the
+  // component: this effect must not reference a block-scoped value before its declaration.
+  const anyRunInFlight = savedAudits.some((a) => a.runs.some((r) => r.status === 'pending' || r.status === 'running'));
+  useEffect(() => {
+    if (step === 'results') return;   // the results step has its own pollers
+    if (!anyRunInFlight) return;      // nothing draining → no timer at all
+    const t = setInterval(() => { loadSaved(); }, LIST_POLL_MS);
+    return () => clearInterval(t);
+  }, [step, anyRunInFlight, loadSaved]);
 
   // One-shot fetch of a run's queue rows (used when opening a report for a past audit that
   // has no cached snapshot yet — we need the raw rows to build the report data once).
@@ -469,18 +614,8 @@ const AiAudit = () => {
         .order('created_at', { ascending: true });
       const list = (runs ?? []) as Array<{ id: string; audit_id: string; status: string; ai_audits: { business_name?: string } | { business_name?: string }[] | null }>;
       if (list.length === 0) { if (!stop) setRunningList([]); return; }
-      const runIds = list.map((r) => r.id);
-      const { data: q } = await (supabase as unknown as SupabaseClient)
-        .from('ai_audit_queue')
-        .select('run_id, status')
-        .in('run_id', runIds);
-      const counts = new Map<string, { done: number; total: number }>();
-      for (const row of ((q ?? []) as Array<{ run_id: string; status: string }>)) {
-        const c = counts.get(row.run_id) ?? { done: 0, total: 0 };
-        c.total++;
-        if (row.status === 'done' || row.status === 'failed') c.done++;
-        counts.set(row.run_id, c);
-      }
+      // Shared with the landing list's progress bars — one definition of done/total.
+      const counts = await fetchQueueCounts(list.map((r) => r.id));
       const next = list.map((r) => {
         const a = Array.isArray(r.ai_audits) ? r.ai_audits[0] : r.ai_audits;
         const c = counts.get(r.id) ?? { done: 0, total: 0 };
@@ -491,7 +626,7 @@ const AiAudit = () => {
     load();
     const t = setInterval(load, 8000);
     return () => { stop = true; clearInterval(t); };
-  }, [step, runId]);
+  }, [step, runId, fetchQueueCounts]);
 
   // On mount, if a previously-opened audit was persisted (page was left and returned to),
   // restore it so the user lands back on that audit rather than the list. Runs once; skipped
@@ -564,13 +699,16 @@ const AiAudit = () => {
   };
 
   // Stop a still-running audit FROM THE LIST (per-row Stop button).
-  const cancelAudit = async (a: AuditRow & { latest_run_id: string | null }) => {
-    if (cancellingId || !a.latest_run_id) return;
+  const cancelAudit = async (a: AuditRow, runIdToStop: string) => {
+    if (cancellingId || !runIdToStop) return;
     if (!window.confirm(`Stop the audit for "${a.business_name}"? It won't finish.`)) return;
     setCancellingId(a.id);
     try {
-      await cancelRun(a.latest_run_id);
-      setSavedAudits((prev) => prev.map((x) => x.id === a.id ? { ...x, latest_status: 'cancelled', is_running: false } : x));
+      await cancelRun(runIdToStop);
+      // Reflect it locally, then let the next load settle the real state.
+      setSavedAudits((prev) => prev.map((x) => x.id === a.id
+        ? { ...x, runs: x.runs.map((r) => r.id === runIdToStop ? { ...r, status: 'cancelled' } : r) }
+        : x));
       toast({ title: 'Audit stopped' });
     } catch (e) {
       toast({ title: "Couldn't stop the audit", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
@@ -589,7 +727,7 @@ const AiAudit = () => {
     try {
       await cancelRun(runId);
       await pollRun(runId); // refresh run.status → 'cancelled'
-      setSavedAudits((prev) => prev.map((x) => x.latest_run_id === runId ? { ...x, latest_status: 'cancelled', is_running: false } : x));
+      setSavedAudits((prev) => prev.map((x) => ({ ...x, runs: x.runs.map((r) => r.id === runId ? { ...r, status: 'cancelled' } : r) })));
       toast({ title: 'Audit stopped' });
     } catch (e) {
       toast({ title: "Couldn't stop the audit", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
@@ -955,14 +1093,27 @@ const AiAudit = () => {
     toast({ title: 'Links added', description: 'Review the Link hub rows, then Save links.' });
   };
 
-  const reopenAudit = async (audit: AuditRow) => {
-    const { data: latest } = await supabase
-      .from('ai_audit_runs')
-      .select('id, audit_id, run_number, status, mention_rate, results, created_at')
-      .eq('audit_id', audit.id)
-      .order('run_number', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  /** Open an audit's results. `pickRun` opens THAT run instead of the latest — the expanded
+   *  view lists every run and each one is openable. */
+  const reopenAudit = async (audit: AuditRow, pickRun?: { id: string }) => {
+    let latest: unknown = null;
+    if (pickRun) {
+      const { data } = await supabase
+        .from('ai_audit_runs')
+        .select('id, audit_id, run_number, status, mention_rate, results, created_at')
+        .eq('id', pickRun.id)
+        .maybeSingle();
+      latest = data;
+    } else {
+      const { data } = await supabase
+        .from('ai_audit_runs')
+        .select('id, audit_id, run_number, status, mention_rate, results, created_at')
+        .eq('audit_id', audit.id)
+        .order('run_number', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      latest = data;
+    }
     if (!latest) { toast({ title: 'No runs yet for this audit', variant: 'destructive' }); return null; }
     setAuditId(audit.id);
     setResultsBusinessName(audit.business_name);
@@ -985,7 +1136,7 @@ const AiAudit = () => {
 
   // Open a past audit's PLAYBOOK directly from its row: reopen (loads the run + hydrates the
   // playbook from results.playbook), then show the existing playbook view. No new viewer.
-  const viewPlaybookFromRow = async (audit: AuditRow & { latest_run_id: string | null }) => {
+  const viewPlaybookFromRow = async (audit: AuditRow) => {
     const latest = await reopenAudit(audit);
     if (!latest) return;
     const rid = latest.id;
@@ -998,7 +1149,7 @@ const AiAudit = () => {
   // Open a past audit's report DIRECTLY from its row. Prefers the stored snapshot (shown
   // as-is, never silently regenerated); only builds one if this run has never had a report
   // generated. Loads the run into results state too, so Regenerate has live data to work from.
-  const viewReport = async (audit: AuditRow & { latest_run_id: string | null }) => {
+  const viewReport = async (audit: AuditRow) => {
     const latest = await reopenAudit(audit);
     if (!latest) return;
     const rid = latest.id;
@@ -1089,18 +1240,91 @@ const AiAudit = () => {
     return (s.band === 'winnable' || s.band === 'named') && (s.score ?? 0) >= 6;
   }).length;
 
-  // Landing metrics — derived ONLY from data we already have (no invented numbers).
-  // Average visibility is over audits that have a scored run; invisible = 0% named.
-  const metrics = (() => {
-    const total = savedAudits.length;
-    const rated = savedAudits.filter((a) => a.latest_mention_rate !== null);
+  /* ── Fold the audit book into businesses, then trades ────────────────────────────
+     BUSINESS KEY: lead_id when the audit has one, else the normalised name (2 of 43 audits
+     were started from the wizard with no lead). Re-runs that minted separate audit rows for
+     the same lead therefore collapse into ONE row here without touching the upstream
+     behaviour that /a/<auditId> links depend on.
+     TRADE: tradeWord(), because the raw business_type does not group — plumber/plumbers/
+     Plumber are one trade stored three ways. */
+  const businesses = useMemo<BusinessGroup[]>(() => {
+    const byKey = new Map<string, AuditLite[]>();
+    for (const a of savedAudits) {
+      const key = a.lead_id ?? `name:${(a.business_name ?? '').trim().toLowerCase()}`;
+      const list = byKey.get(key) ?? [];
+      list.push(a);
+      byKey.set(key, list);
+    }
+    const out: BusinessGroup[] = [];
+    for (const [key, auditsRaw] of byKey) {
+      // Newest audit first, so the collapsed row reflects the most recent work.
+      const audits = [...auditsRaw].sort((x, y) => y.created_at.localeCompare(x.created_at));
+      const latestAudit = audits[0];
+      const allRuns = audits.flatMap((a) => a.runs);
+      out.push({
+        key,
+        name: latestAudit.business_name,
+        trade: tradeWord(latestAudit.business_type),
+        business_type: latestAudit.business_type,
+        location: latestAudit.location_text,
+        has_website: latestAudit.has_website,
+        audits,
+        latestAudit,
+        latestRun: latestAudit.runs[0] ?? null,
+        runningRun: allRuns.find((r) => r.status === 'pending' || r.status === 'running') ?? null,
+        auditCount: audits.length,
+        runCount: allRuns.length,
+        cost: allRuns.reduce((sum, r) => sum + (r.actor_cost_usd ?? 0), 0),
+      });
+    }
+    // Most recent activity first within a trade.
+    return out.sort((a, b) => b.latestAudit.created_at.localeCompare(a.latestAudit.created_at));
+  }, [savedAudits]);
+
+  /** Trades, largest group first. */
+  const tradeGroups = useMemo(() => {
+    const byTrade = new Map<string, BusinessGroup[]>();
+    for (const b of businesses) {
+      const list = byTrade.get(b.trade) ?? [];
+      list.push(b);
+      byTrade.set(b.trade, list);
+    }
+    return [...byTrade.entries()]
+      .map(([trade, items]) => ({ trade, items }))
+      .sort((a, b) => b.items.length - a.items.length || a.trade.localeCompare(b.trade));
+  }, [businesses]);
+
+  /** Anything draining? Gates the landing list's poller so an idle page makes no requests. */
+  const inFlightCount = useMemo(
+    () => businesses.reduce((n, b) => n + b.audits.reduce((m, a) => m + a.runs.filter((r) => r.status === 'pending' || r.status === 'running').length, 0), 0),
+    [businesses],
+  );
+
+  /* Landing metrics — derived ONLY from data we already have (no invented numbers), and
+     computed over BUSINESSES rather than audit rows: a business audited twice used to be
+     counted twice in both the average and the invisible tally. "Site · presence" is gone;
+     it counted has_website, a static property of the lead list that says nothing about how
+     an audit turned out. */
+  const metrics = useMemo(() => {
+    const rated = businesses.filter((b) => b.latestRun?.mention_rate !== null && b.latestRun?.mention_rate !== undefined);
     const avgPct = rated.length
-      ? Math.round((rated.reduce((s, a) => s + (a.latest_mention_rate as number), 0) / rated.length) * 100)
+      ? Math.round((rated.reduce((s, b) => s + (b.latestRun!.mention_rate as number), 0) / rated.length) * 100)
       : null;
-    const invisible = savedAudits.filter((a) => a.latest_mention_rate === 0).length;
-    const withSite = savedAudits.filter((a) => a.has_website).length;
-    return { total, avgPct, invisible, withSite, presence: total - withSite };
-  })();
+    const invisible = businesses.filter((b) => b.latestRun?.mention_rate === 0).length;
+    const baselineAudits = savedAudits.filter((a) => Number(a.baseline_target_runs ?? 0) > 1);
+    const baselinesDone = baselineAudits.filter((a) => !!a.baseline_completed_at).length;
+    const spend = businesses.reduce((sum, b) => sum + b.cost, 0);
+    return {
+      businesses: businesses.length,
+      audits: savedAudits.length,
+      avgPct,
+      invisible,
+      inFlight: inFlightCount,
+      baselineTotal: baselineAudits.length,
+      baselinesDone,
+      spend,
+    };
+  }, [businesses, savedAudits, inFlightCount]);
 
   const shown = (name: typeof WIZARD_STEPS[number]) => revealed >= WIZARD_STEPS.indexOf(name);
 
@@ -1400,10 +1624,18 @@ const AiAudit = () => {
       {/* Stacked wizard — answered steps stay visible; each answer reveals the next. */}
       {step !== 'results' && (
         <div className="space-y-4">
-          {/* Metrics strip — a quick read on the whole audit book (only when there are audits) */}
-          {metrics.total > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <MetricCard icon={<FileText className="h-4 w-4" />} label="Audits" value={String(metrics.total)} />
+          {/* Metrics strip - a quick read on the whole audit book (only when there are audits).
+              Computed over BUSINESSES, not audit rows: a business audited twice used to be counted
+              twice in both the average and the invisible tally. "Site . presence" is gone - it
+              counted has_website, a static property of the lead list that says nothing about how
+              any audit turned out. */}
+          {metrics.audits > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <MetricCard
+                icon={<FileText className="h-4 w-4" />}
+                label={auditsCapped ? `Businesses (of latest ${AUDIT_FETCH_LIMIT})` : 'Businesses'}
+                value={String(metrics.businesses)}
+              />
               {metrics.avgPct !== null && (
                 <MetricCard
                   icon={<TrendingUp className="h-4 w-4" />}
@@ -1419,9 +1651,26 @@ const AiAudit = () => {
                 tone={metrics.invisible > 0 ? 'bad' : 'good'}
               />
               <MetricCard
-                icon={<Globe className="h-4 w-4" />}
-                label="Site · presence"
-                value={`${metrics.withSite} · ${metrics.presence}`}
+                icon={<Loader2 className={`h-4 w-4 ${metrics.inFlight > 0 ? 'animate-spin' : ''}`} />}
+                label="In flight"
+                value={String(metrics.inFlight)}
+                tone={metrics.inFlight > 0 ? 'mid' : undefined}
+              />
+              {/* Paid baselines finalised vs started - the guarantee's measuring stick. */}
+              {metrics.baselineTotal > 0 && (
+                <MetricCard
+                  icon={<Check className="h-4 w-4" />}
+                  label="Baselines"
+                  value={`${metrics.baselinesDone}/${metrics.baselineTotal}`}
+                  tone={metrics.baselinesDone === metrics.baselineTotal ? 'good' : 'mid'}
+                />
+              )}
+              {/* Real actor spend, summed from ai_audit_runs.actor_cost_usd. Only runs since that
+                  column started being written carry a figure, so this is a floor, not a total. */}
+              <MetricCard
+                icon={<Download className="h-4 w-4" />}
+                label="Spend (recorded)"
+                value={`$${metrics.spend.toFixed(2)}`}
               />
             </div>
           )}
@@ -1448,56 +1697,163 @@ const AiAudit = () => {
             )}
 
             <div className="pt-4 mt-2 border-t border-border/60 space-y-2">
-              <Label className="text-xs text-muted-foreground">Past audits</Label>
-              {savedAudits.length === 0 ? (
+              <div className="flex items-baseline justify-between gap-2">
+                <Label className="text-xs text-muted-foreground">Past audits</Label>
+                {/* Honest about the window: the count is what was LOADED, and says so when full. */}
+                <span className="text-[11px] text-muted-foreground">
+                  {metrics.businesses} business{metrics.businesses === 1 ? '' : 'es'} · {metrics.audits} audit{metrics.audits === 1 ? '' : 's'}
+                  {auditsCapped ? ` (latest ${AUDIT_FETCH_LIMIT})` : ''}
+                </span>
+              </div>
+              {businesses.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
                   <Sparkles className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
                   <div className="text-sm font-medium">No audits yet</div>
                   <div className="text-[11px] text-muted-foreground">Run your first audit above to see how AI answers for a business.</div>
                 </div>
               ) : (
-                <div className="space-y-1.5">
-                  {savedAudits.map((a) => (
-                    <div key={a.id}
-                      className="group flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2 transition-colors hover:bg-card">
-                      <button onClick={() => reopenAudit(a)} className="min-w-0 flex-1 text-left" title="Open results">
-                        <div className="flex items-center gap-1.5 text-sm font-medium truncate">
-                          {a.has_website ? <Globe className="h-3 w-3 shrink-0 text-muted-foreground" /> : <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />}
-                          <span className="truncate">{a.business_name}</span>
-                        </div>
-                        <div className="text-[11px] text-muted-foreground truncate">{a.business_type || '—'}{a.location_text ? ` · ${a.location_text}` : ''}</div>
-                      </button>
-                      <MentionPill rate={a.latest_mention_rate} />
-                      {/* Report — shown when the audit is complete (finalised = mention_rate set) */}
-                      {a.latest_mention_rate !== null && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={() => viewReport(a)} title="View report">
-                          <FileText className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Report</span>
-                        </Button>
-                      )}
-                      {/* Playbook — shown ONLY when one exists (server flag, or generated in this browser) */}
-                      {(a.latest_has_playbook || (!!a.latest_run_id && !!playbooks[a.latest_run_id])) && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={() => viewPlaybookFromRow(a)} title="View playbook">
-                          <MapIcon className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Playbook</span>
-                        </Button>
-                      )}
-                      {/* Stop — only while the latest run is still in flight (pending/running) */}
-                      {a.is_running && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => cancelAudit(a)} disabled={cancellingId === a.id} title="Stop this audit">
-                          {cancellingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleStop className="h-3.5 w-3.5" />}
-                        </Button>
-                      )}
-                      {/* Delete — always available (cascades to runs + queue) */}
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => deleteAudit(a)} disabled={deletingId === a.id} title="Delete this audit">
-                        {deletingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  {tradeGroups.map(({ trade, items }) => {
+                    const collapsed = closedTrades.has(trade);
+                    const running = items.filter((b) => b.runningRun).length;
+                    return (
+                      <div key={trade} className="space-y-1.5">
+                        {/* Trade header — collapsible, largest trade first */}
+                        <button
+                          onClick={() => setClosedTrades((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(trade)) next.delete(trade); else next.add(trade);
+                            return next;
+                          })}
+                          className="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted/50"
+                        >
+                          {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                          <span className="text-xs font-semibold capitalize">{trade}</span>
+                          <span className="text-[11px] text-muted-foreground">{items.length}</span>
+                          {running > 0 && (
+                            <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-[hsl(var(--badge-waiting))] px-1.5 py-0.5 text-[10px] font-medium text-[hsl(var(--badge-waiting-fg))]">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />{running} running
+                            </span>
+                          )}
+                        </button>
+
+                        {!collapsed && items.map((b) => {
+                          const expanded = openBusinesses.has(b.key);
+                          const nested = b.auditCount > 1 || b.runCount > 1;
+                          const inFlight = b.runningRun;
+                          const a = b.latestAudit;
+                          const run = b.latestRun;
+                          const hasPlaybook = !!run && (run.has_playbook || !!playbooks[run.id]);
+                          return (
+                            <div key={b.key} className="rounded-lg border border-border/60 bg-card/60 transition-colors hover:bg-card">
+                              {/* Collapsed row: ONE per business */}
+                              <div className="flex items-center gap-2 px-3 py-2">
+                                {nested ? (
+                                  <button
+                                    onClick={() => setOpenBusinesses((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(b.key)) next.delete(b.key); else next.add(b.key);
+                                      return next;
+                                    })}
+                                    className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted"
+                                    title={expanded ? 'Hide runs' : `Show ${b.auditCount} audits, ${b.runCount} runs`}
+                                  >
+                                    {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                  </button>
+                                ) : <span className="w-[18px] shrink-0" />}
+
+                                <button onClick={() => reopenAudit(a)} className="min-w-0 flex-1 text-left" title="Open latest results">
+                                  <div className="flex items-center gap-1.5 text-sm font-medium truncate">
+                                    {b.has_website ? <Globe className="h-3 w-3 shrink-0 text-muted-foreground" /> : <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                                    <span className="truncate">{b.name}</span>
+                                    {nested && <span className="shrink-0 text-[10px] font-normal text-muted-foreground">{b.runCount} runs</span>}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                                    <span className="truncate">{b.business_type || '—'}{b.location ? ` · ${b.location}` : ''}</span>
+                                    <AuditPills audit={a} run={run} />
+                                  </div>
+                                </button>
+
+                                {/* State: live progress while draining, else the score */}
+                                {inFlight ? <RunProgress run={inFlight} /> : <MentionPill rate={run?.mention_rate ?? null} />}
+
+                                {/* Report — once the latest run has a score */}
+                                {run?.mention_rate !== null && run?.mention_rate !== undefined && (
+                                  <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={() => viewReport(a)} title="View report">
+                                    <FileText className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Report</span>
+                                  </Button>
+                                )}
+                                {hasPlaybook && (
+                                  <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={() => viewPlaybookFromRow(a)} title="View playbook">
+                                    <MapIcon className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Playbook</span>
+                                  </Button>
+                                )}
+                                {inFlight && (
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => cancelAudit(a, inFlight.id)} disabled={cancellingId === a.id} title="Stop this audit">
+                                    {cancellingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleStop className="h-3.5 w-3.5" />}
+                                  </Button>
+                                )}
+                                {/* Delete stays on the row ONLY for a single-audit business. With several
+                                    audits it would be ambiguous which one goes, so it moves inside. */}
+                                {!nested && (
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => deleteAudit(a)} disabled={deletingId === a.id} title="Delete this audit">
+                                    {deletingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                  </Button>
+                                )}
+                              </div>
+
+                              {/* Expanded: every audit, and every run inside it */}
+                              {expanded && nested && (
+                                <div className="border-t border-border/60 bg-muted/20 px-3 py-2 space-y-2">
+                                  {b.audits.map((au) => (
+                                    <div key={au.id} className="space-y-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-medium text-muted-foreground">
+                                          Audit {new Date(au.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                        </span>
+                                        <AuditPills audit={au} run={au.runs[0] ?? null} />
+                                        <span className="flex-1" />
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => deleteAudit(au)} disabled={deletingId === au.id} title="Delete this audit and its runs">
+                                          {deletingId === au.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                                        </Button>
+                                      </div>
+                                      {au.runs.length === 0 ? (
+                                        <div className="pl-3 text-[11px] text-muted-foreground">No runs</div>
+                                      ) : au.runs.map((r) => {
+                                        const draining = r.status === 'pending' || r.status === 'running';
+                                        return (
+                                          <div key={r.id} className="flex items-center gap-2 pl-3">
+                                            <button onClick={() => reopenAudit(au, r)} className="min-w-0 flex-1 text-left text-[11px] hover:underline" title="Open this run">
+                                              Run {r.run_number}
+                                              <span className="text-muted-foreground"> · {r.status}</span>
+                                              {r.actor_cost_usd !== null && <span className="text-muted-foreground"> · ${r.actor_cost_usd.toFixed(3)}</span>}
+                                            </button>
+                                            {draining ? <RunProgress run={r} /> : <MentionPill rate={r.mention_rate} />}
+                                            {draining && (
+                                              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => cancelAudit(au, r.id)} disabled={cancellingId === au.id} title="Stop this run">
+                                                <CircleStop className="h-3 w-3" />
+                                              </Button>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </StepCard>
 
           {/* Business details — one settled form, all fields visible at once */}
+
           {showForm && (
             <StepCard>
               <StepHeader title="Business details" />
@@ -2323,6 +2679,68 @@ function ChoiceButton({ active, onClick, label, hint, icon }: { active: boolean;
       </div>
     </button>
   );
+}
+/* Live progress for a run still draining. Replaces the bare "-" that made a finishing audit look
+   broken and cost four redundant re-runs. done counts SETTLED queue rows ('done' or 'failed' -
+   the queue's vocabulary, NOT 'complete', which is a RUN status), so a run whose questions all
+   failed still reaches the end of the bar instead of hanging. total 0 means the queue rows are not
+   readable yet (the run was created seconds ago), so it says "starting" rather than "0 of 0". */
+function RunProgress({ run }: { run: RunLite }) {
+  if (!run.total) {
+    return (
+      <Badge variant="secondary" className="shrink-0 gap-1">
+        <Loader2 className="h-2.5 w-2.5 animate-spin" />starting
+      </Badge>
+    );
+  }
+  const pct = Math.min(100, Math.round((run.done / run.total) * 100));
+  return (
+    <div className="flex shrink-0 items-center gap-1.5" title={`${run.done} of ${run.total} questions done`}>
+      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-[hsl(var(--badge-waiting))] transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-[11px] tabular-nums text-muted-foreground">{run.done} of {run.total}</span>
+    </div>
+  );
+}
+
+/* Signals that were already in the database but never surfaced. Deliberately EXCLUDES "pitched":
+   all 41 audits with a lead had an outbound message, so the pill was true for every row and
+   carried no information. The paid slot is kept and simply renders nothing until a lead pays. */
+function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | null }) {
+  const target = Number(audit.baseline_target_runs ?? 0);
+  const counted = audit.baseline_runs_counted;
+  const paid = audit.lead_paid === true;
+  return (
+    <>
+      {/* Report opened by the prospect - first_opened_at, bumped by the report renderer. */}
+      {audit.first_opened_at && (
+        <Pill tone="good" title={`Opened ${new Date(audit.first_opened_at).toLocaleString('en-GB')}${audit.open_count ? ` - ${audit.open_count} views` : ''}`}>
+          opened{audit.open_count && audit.open_count > 1 ? ` x${audit.open_count}` : ''}
+        </Pill>
+      )}
+      {audit.report_slug && <Pill tone="muted" title={`Published at /r/${audit.report_slug}`}>report</Pill>}
+      {/* PAID BASELINE state. Errors win: a stalled chain is the thing worth seeing, because the
+          results screen promises the customer an average of three runs. */}
+      {target > 1 && (
+        audit.baseline_error
+          ? <Pill tone="bad" title={audit.baseline_error}>baseline failed</Pill>
+          : audit.baseline_completed_at
+            ? <Pill tone="good" title={`Baseline finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')}`}>baseline {counted ?? target}/{target}</Pill>
+            : <Pill tone="mid" title="Baseline still being measured">baseline {counted ?? 0}/{target}</Pill>
+      )}
+      {run?.seo_grade && <Pill tone="muted" title="Website SEO grade from the latest run">SEO {run.seo_grade}</Pill>}
+      {paid && <Pill tone="good" title="This lead has paid">paid</Pill>}
+    </>
+  );
+}
+
+function Pill({ children, tone, title }: { children: React.ReactNode; tone: 'good' | 'mid' | 'bad' | 'muted'; title?: string }) {
+  const cls = tone === 'good' ? 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))]'
+    : tone === 'mid' ? 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))]'
+    : tone === 'bad' ? 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))]'
+    : 'bg-muted text-muted-foreground';
+  return <span title={title} className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>{children}</span>;
 }
 // Score badge: colour by band — red for invisible (0%), amber mid, green high.
 function MentionPill({ rate }: { rate: number | null }) {
