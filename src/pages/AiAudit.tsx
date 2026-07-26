@@ -2510,7 +2510,14 @@ const AiAudit = () => {
                 <span className="text-sm font-semibold">
                   Detailed results
                   <span className="ml-1.5 font-normal text-muted-foreground">· {queueRows.length} {queueRows.length === 1 ? 'question' : 'questions'}</span>
-                  {winnableCount > 0 && <span className="ml-1.5 font-normal text-green-500">· {winnableCount} winnable</span>}
+                  {winnableCount > 0 && (
+                    <span
+                      className="ml-1.5 font-normal text-muted-foreground"
+                      title={'OPERATOR VIEW ONLY, AND NOT RELIABLE. Measured over all 402 stored answered questions: 77.6% classify as "winnable" and 0% have ever classified as "locked", because the rule fires on 6+ distinct firms named and the mean is 15.3 - it reads breadth as opportunity. 17.9% of repeated questions changed verdict between identical runs with no work done. Never quote this to a client.'}
+                    >
+                      · {winnableCount} flagged winnable <span className="text-amber-500">(unreliable)</span>
+                    </span>
+                  )}
                 </span>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showDetails ? 'rotate-180' : ''}`} />
               </button>
@@ -2891,12 +2898,17 @@ function ResultsHeadline({ run, live, draining }: { run: RunRow | null; live: { 
   );
 }
 
-// Per-term winnability badge styling (matches the app's soft-badge convention). 'no-local-race' is
-// the new 5th value (neutral grey) for terms where AI gives generic advice and names no local firm.
+/* Per-term winnability badge styling — OPERATOR VIEW ONLY.
+   These verdicts are NOT shown to customers and must not be quoted to one. The rule is currently
+   inverted and noise-driven: it fires "open" on `U >= 6` distinct firms named when the mean U is
+   15.3, so 77.6% of 402 stored questions read winnable and "locked" has never once fired; and
+   17.9% of repeated questions changed verdict between identical runs with no work done. Kept
+   visible here, labelled, so the logic can be worked on with real examples in front of you.
+   Fixing it needs multi-run stability, inverted thresholds and citation-source analysis. */
 const WINNABILITY_BADGE: Record<'open' | 'contested' | 'locked' | 'named' | 'no-local-race', { label: string; cls: string }> = {
-  open:            { label: 'Open',             cls: 'bg-green-500/20 text-green-500 border-transparent' },
-  contested:       { label: 'Contested',        cls: 'bg-amber-500/20 text-amber-500 border-transparent' },
-  locked:          { label: 'Locked',           cls: 'bg-red-500/20 text-red-400 border-transparent' },
+  open:            { label: 'Open?',             cls: 'bg-green-500/20 text-green-500 border-transparent' },
+  contested:       { label: 'Contested?',        cls: 'bg-amber-500/20 text-amber-500 border-transparent' },
+  locked:          { label: 'Locked?',           cls: 'bg-red-500/20 text-red-400 border-transparent' },
   named:           { label: 'Named',            cls: 'bg-blue-500/20 text-blue-400 border-transparent' },
   'no-local-race': { label: 'Not a local race', cls: 'bg-muted text-muted-foreground border-transparent' },
 };

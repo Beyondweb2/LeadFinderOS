@@ -675,20 +675,11 @@ export function buildReportData(
   }
   const competitors = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 4).map((x) => x.name);
 
-  // Per-term winnability — the SHARED fragmentation + cross-engine-consensus rule (same helper
-  // the badge uses, so report and badge can't drift). rivalCount = U (distinct firms across the
-  // scored engines) for backward-compat with the report data shape.
-  const winnability = queueRows
-    .filter((r) => r.status === 'done' && r.result)
-    .map((r) => {
-      const w = classifyWinnability(r.result!, {
-        businessName: ctx.businessName,
-        locationText: ctx.locationText,
-        ownWebsite: ctx.ownWebsite,
-        isAggregatorUrl: ctx.isAggregatorUrl,
-      });
-      return { question: r.question, verdict: w.verdict, rivalCount: w.U };
-    });
+  /* Per-term winnability is NOT built into the customer report's data. The verdict is not
+     defensible yet (77.6% of 402 stored questions read "winnable", 0% ever read "locked", and
+     17.9% of repeated questions flipped verdict with no work done), so nothing that renders to a
+     prospect or client carries it. classifyWinnability stays exported for the operator view in
+     AiAudit.tsx, which labels it unreliable. */
 
   return {
     businessName: ctx.businessName || 'This business',
@@ -698,7 +689,6 @@ export function buildReportData(
     pct: total > 0 ? Math.round((named / total) * 100) : 0,
     perEngine,
     competitors,
-    winnability,
     gutPunch: pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
     // The date the AUDIT WAS MEASURED, not the date someone happened to open the link.
     // render-audit-report rebuilds this on every request, so new Date() re-dated a three-week-old
