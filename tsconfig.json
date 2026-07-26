@@ -1,24 +1,30 @@
 {
-  "compilerOptions": {
-    "allowJs": true,
-    "noImplicitAny": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ]
-    },
-    "skipLibCheck": true,
-    "strictNullChecks": false
-  },
-  "files": [],
-  "references": [
-    {
-      "path": "./tsconfig.app.json"
-    },
-    {
-      "path": "./tsconfig.node.json"
-    }
-  ]
+  // WHY THIS FILE IS ONE LINE OF CONFIG
+  //
+  // It used to be a "solution style" root: `"files": []` plus references to the app and node
+  // projects. The effect is that `npx tsc --noEmit` — the command everybody actually reaches for —
+  // compiles ZERO files and exits 0. Always. It cannot fail, so it proves nothing.
+  //
+  // That is not theoretical. On 2026-07-26 it reported "clean" while src/pages/AiAudit.tsx
+  // referenced two undefined identifiers (ChevronRight, useMemo) and used a block-scoped variable
+  // before its declaration. The page could not have rendered. Only `tsc -b` or an explicit
+  // `-p tsconfig.app.json` would have caught it, and neither was wired to an npm script.
+  //
+  // So the root config now IS the app project: plain `npx tsc --noEmit` type-checks src/ and exits
+  // non-zero when anything is broken. The named gate is `npm run typecheck`, and
+  // `npm run typecheck:node` covers vite.config.ts, which stays in its own project because it
+  // targets Node rather than the DOM.
+  //
+  // Options previously duplicated here (allowJs, noImplicitAny, noUnusedLocals,
+  // noUnusedParameters, paths, skipLibCheck, strictNullChecks) are either already set in
+  // tsconfig.app.json or implied by its "strict": false. allowJs was dropped because src/ contains
+  // zero .js/.jsx files. Nothing was loosened, and the error set is byte-identical to
+  // `tsc --noEmit -p tsconfig.app.json`.
+  // No "references" here any more. They were INVALID and always had been: tsconfig.node.json is
+  // not composite and sets noEmit, so as soon as the root had real files to check, tsc rejected
+  // them outright (TS6306 "must have setting composite: true", TS6310 "may not disable emit") and
+  // aborted before type-checking a single line. `"files": []` was the only reason that never
+  // surfaced — tsc does not validate references it is never asked to build. vite.config.ts is
+  // covered by `npm run typecheck:node` instead.
+  "extends": "./tsconfig.app.json"
 }
