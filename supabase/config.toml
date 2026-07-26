@@ -104,3 +104,9 @@ verify_jwt = false
 
 [functions.render-audit-report]
 verify_jwt = false
+
+[functions.findable-onboarding]
+verify_jwt = false
+
+[functions.findable-checkout]
+verify_jwt = false

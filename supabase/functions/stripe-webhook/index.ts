@@ -237,6 +237,37 @@ Deno.serve(async (req) => {
     switch (event.type) {
       case "checkout.session.completed": {
         const s = event.data.object as Stripe.Checkout.Session;
+        // FINDABLE onboarding payment (mode=payment, £49.99 one-off from findable-checkout):
+        // identified by metadata.onboarding_id — a different product from the barber
+        // subscription, handled first so it never falls into the site-paid path's
+        // "no generated_site_id" warning. Idempotent: payment is terminal, so re-deliveries
+        // just re-write the same values.
+        const onboardingId = (s.metadata?.onboarding_id as string) || "";
+        if (onboardingId) {
+          if (s.status === "complete") {
+            const findableLeadId = (s.metadata?.lead_id as string) || "";
+            const amountGbp = typeof s.amount_total === "number" ? s.amount_total / 100 : 49.99;
+            try {
+              await service.from("onboarding_responses")
+                .update({ status: "paid", updated_at: new Date().toISOString() })
+                .eq("id", onboardingId);
+              if (findableLeadId) {
+                await service.from("outreach_leads")
+                  .update({
+                    status: "payment_received",
+                    amount_paid: amountGbp,
+                    payment_date: new Date().toISOString(),
+                    paid_for: "Findable — Setup + first 2 months",
+                  })
+                  .eq("id", findableLeadId);
+              }
+              console.log(`[stripe-webhook] findable payment: onboarding=${onboardingId} lead=${findableLeadId || "(none)"} £${amountGbp} (${event.id})`);
+            } catch (e) {
+              console.error(`[stripe-webhook] findable payment write failed (${onboardingId}):`, (e as Error).message);
+            }
+          }
+          break;
+        }
         // subscription mode → the session is 'complete' once the first invoice paid.
         if (s.status === "complete") {
           await setPaid(
