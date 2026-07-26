@@ -108,7 +108,7 @@ import { isTestBarberLead, TEST_BARBER_LEAD_ID } from '@/config/testBarber';
 import { clearPendingBarberEdit } from '@/lib/barberEdits';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
-import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES } from '@/types/outreach';
+import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES } from '@/types/outreach';
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { SingleSMSDialog } from '@/components/SingleSMSDialog';
@@ -1945,7 +1945,9 @@ export function OutreachTable({
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                           )}
                           {!!lead.notes && lead.notes.trim().length > 0 && (
-                            <StickyNote className="h-3.5 w-3.5 text-muted-foreground/60 flex-shrink-0" title="Has a note" />
+                            <span title="Has a note" className="inline-flex flex-shrink-0">
+                              <StickyNote className="h-3.5 w-3.5 text-muted-foreground/60" />
+                            </span>
                           )}
                           {isTestBarberLead(lead.id) && (
                             <button

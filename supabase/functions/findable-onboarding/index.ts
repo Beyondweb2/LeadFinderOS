@@ -1,7 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
-import { BASELINE_QUESTIONS, BASELINE_RUNS } from "../../../src/lib/auditQuestionCounts.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Three actions:
@@ -36,16 +35,65 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
 const GBP_CONSENT = new Set(["yes_all", "listings_only", "discuss"]);
 const SUBMIT_COOLDOWN_MS = 10 * 60_000;   // one submission per lead per 10 min
-// PAID BASELINE shape — from the shared question-count policy, so this path and the cheap
-// outreach hook cannot drift into each other. See src/lib/auditQuestionCounts.ts for why 10 x 3
-// is not negotiable here.
-const MAX_BASELINES_PER_LEAD = 2;        // lifetime paid baselines per lead (public endpoint)
-const AUDIT_REUSE_MS = 30 * 60_000;       // a run newer than this is reused, never duplicated
 
 const clip = (v: unknown, max: number): string | null => {
   const s = typeof v === "string" ? v.trim() : "";
   return s ? s.slice(0, max) : null;
 };
+
+/**
+ * The report payload the onboarding page renders: headline counts, the single most damning answer,
+ * the SEO grade, and whether they have a website at all. ONE implementation, used by `submit`
+ * (which now returns it inline from the lead's existing run) and by `status` (kept for any client
+ * still polling). Returns null when the run has not produced renderable data.
+ */
+// deno-lint-ignore no-explicit-any
+async function buildReportPayload(service: any, audit: any, run: RunRow): Promise<Record<string, unknown> | null> {
+  const { data: qrows } = await service
+    .from("ai_audit_queue").select("id, question, status, result")
+    .eq("run_id", run.id).order("created_at", { ascending: true });
+  const data = buildReportData((qrows ?? []) as QueueRow[], run, {
+    businessName: audit.business_name ?? "",
+    businessType: audit.business_type ?? "",
+    locationText: audit.location_text ?? "",
+    specialisms: audit.specialism ?? "",
+    isAggregatorUrl,
+    ownWebsite: audit.website ?? "",
+  });
+  if (!data) return null;
+
+  const seo = data.seo
+    ? {
+        overall_grade: (data.seo as { overallGrade?: string }).overallGrade ?? null,
+        categories: (data.seo as { categories?: unknown }).categories ?? null,
+        findings: ((data.seo as { leadFindings?: unknown[] }).leadFindings ?? [])
+          .slice(0, 4)
+          .map((f) => {
+            const x = f as { title?: string; detail?: string; severity?: string };
+            return { title: x.title ?? "", detail: x.detail ?? "", severity: x.severity ?? "low" };
+          }),
+      }
+    : null;
+
+  const gp = data.gutPunch;
+  const gutPunch = gp
+    ? { question: gp.question, engine: gp.engineLabel, rivals: (gp.rivals ?? []).slice(0, 3) }
+    : null;
+
+  // The date the run was MEASURED, so the page can be honest that this is an earlier check
+  // rather than something happening now.
+  const measuredAt = run.created_at ?? null;
+
+  return {
+    business_name: data.businessName,
+    named: data.named,
+    total: data.total,
+    gut_punch: gutPunch,
+    has_website: audit.has_website === true,
+    seo,
+    measured_at: measuredAt,
+  };
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -176,141 +224,60 @@ Deno.serve(async (req) => {
         return json({ ok: true, onboarding_id: row.id, audit_id: null, incomplete: true });
       }
 
-      // Lockdown #3b: a recent audit is reused rather than duplicated — but ONLY a PAID
-      // BASELINE. An outreach audit is a different animal: 3-5 questions, a single run, no
-      // forced local scope and no repeat chain. Reusing one handed a paying customer exactly
-      // that (measured on the live flow: baseline_target_runs null, business_scope null, 3
-      // questions, 1 run) while the results screen told them their baseline was "the average
-      // of three separate runs" and that the money-back guarantee is measured against it. The
-      // copy was false and this was the likeliest path in: report link, click, onboard inside
-      // the window.
+      // NO AUDIT IS FIRED HERE ANY MORE.
       //
-      // The distinguishing mark is baseline_target_runs. findable-onboarding is its only
-      // caller (BASELINE_RUNS below) and advanceBaseline only ever chains runs onto an audit
-      // that already has it, so `> 1` means "this audit IS a paid baseline". Outreach audits
-      // leave it null.
+      // It used to start a 10-question, 3-run paid baseline and park the customer on a "building
+      // your report" screen for up to five minutes — directly in front of the payment button, for
+      // a measurement they cannot see and do not need in order to decide. They have already read
+      // their report; that link is what brought them to this page.
       //
-      // Anti-abuse is unchanged: a double-submit inside SUBMIT_COOLDOWN_MS is already refused
-      // with too_soon above, and from then to AUDIT_REUSE_MS the customer's OWN baseline is
-      // reused instead of a second one firing.
-      const { data: leadAudits, error: auditsErr } = await service
-        .from("ai_audits").select("id, baseline_target_runs").eq("lead_id", leadId);
-      if (auditsErr) {
-        // Column unreadable (migration pending) → a baseline can't be told from an outreach
-        // audit, so reuse nothing. A duplicate baseline costs pennies; a false guarantee
-        // costs trust.
-        console.warn("[findable-onboarding] baseline_target_runs unreadable, reusing nothing:", auditsErr.message);
-      }
-      const baselineAuditIds = ((leadAudits ?? []) as Array<{ id: string; baseline_target_runs: number | null }>)
-        .filter((a) => Number(a.baseline_target_runs ?? 0) > 1)
-        .map((a) => a.id);
+      // So: save the answers, hand back whatever we ALREADY know from their most recent completed
+      // run, and let them read it and pay. The averaged 3-run baseline starts AFTER payment
+      // (stripe-webhook -> startPaidBaseline, with the queue's ensureBaselinesForPaidOnboardings
+      // as the backstop), so the guarantee is still measured against three runs — just not while
+      // anybody watches.
+      //
+      // Side effect worth knowing: this public endpoint (verify_jwt = false) now triggers ZERO
+      // Apify spend, which removes the "leaked lead id drains the daily cap" exposure entirely.
+      // The per-lead baseline cap that used to guard it lives in startPaidBaseline instead, as an
+      // idempotency check.
+      const { data: leadAudits } = await service
+        .from("ai_audits").select("id").eq("lead_id", leadId);
+      const auditIds = ((leadAudits ?? []) as Array<{ id: string }>).map((a) => a.id);
 
-      // LIFETIME CEILING on paid baselines for one lead.
-      // This endpoint is public (verify_jwt = false) and the only credential is the lead UUID,
-      // which every prospect is handed in their report link. The cooldown (10 min) and the reuse
-      // window (30 min) only slow repeats down: past 30 minutes a fresh submit bought a whole new
-      // 10-question, 3-run baseline plus its own SEO scan, about $0.20 a time, roughly $9/day per
-      // known lead id - more than DAILY_CAP_USD (8), so one refreshing prospect could exhaust the
-      // day's budget and fail every legitimate audit. Two allows a genuine second attempt if the
-      // first was a mess; beyond that an operator can re-run from the Audit page.
-      if (baselineAuditIds.length >= MAX_BASELINES_PER_LEAD) {
-        console.warn(`[findable-onboarding] lead ${leadId}: baseline cap reached (${baselineAuditIds.length}/${MAX_BASELINES_PER_LEAD}) - saving answers, no new audit`);
-        await service.from("onboarding_responses")
-          .update({ status: "baseline_cap_reached", updated_at: new Date().toISOString() })
-          .eq("id", row.id);
-        return json({ ok: true, onboarding_id: row.id, audit_id: null, note: "baseline_cap_reached" });
-      }
-      if (baselineAuditIds.length) {
-        const { data: freshRun } = await service
-          .from("ai_audit_runs").select("audit_id, created_at").in("audit_id", baselineAuditIds)
-          .gte("created_at", new Date(Date.now() - AUDIT_REUSE_MS).toISOString())
-          .order("created_at", { ascending: false }).limit(1).maybeSingle();
-        if (freshRun) {
-          console.log(`[findable-onboarding] lead ${leadId}: reusing paid baseline ${freshRun.audit_id}`);
-          await service.from("onboarding_responses")
-            .update({ audit_id: freshRun.audit_id, status: "audit_running", updated_at: new Date().toISOString() })
-            .eq("id", row.id);
-          return json({ ok: true, onboarding_id: row.id, audit_id: freshRun.audit_id, reused: true });
+      let report: Record<string, unknown> | null = null;
+      let existingAuditId: string | null = null;
+      if (auditIds.length) {
+        // Most recent run that actually produced data, across ALL of this lead's audits.
+        const { data: run } = await service
+          .from("ai_audit_runs")
+          .select("id, audit_id, run_number, status, mention_rate, results, created_at")
+          .in("audit_id", auditIds)
+          .in("status", ["complete", "capped"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (run) {
+          const { data: audit } = await service
+            .from("ai_audits").select("*").eq("id", (run as { audit_id: string }).audit_id).maybeSingle();
+          if (audit) {
+            existingAuditId = (run as { audit_id: string }).audit_id;
+            report = await buildReportPayload(service, audit, run as RunRow);
+          }
         }
       }
 
-      // Fire the audit INTERNALLY (lockdown #4) with the CONFIRMED inputs. No pitch (#5):
-      // queue_pitch_on_complete is simply not sent, and create-ai-audit treats anything
-      // but `=== true` as false.
-      const bizType = ((lead.category as string) || (lead.search_keyword as string) || "").trim();
-      if (!bizType) {
-        // No usable business type → an audit would ask garbage questions. Answers are saved;
-        // the page falls through to the plan without a report.
-        // Was: ok:true with the row left on 'submitted', indistinguishable from a submission
-        // still waiting to be picked up. Now queryable:
-        //   select * from onboarding_responses where status like '%failed%' or status like 'no_%';
-        console.warn(`[findable-onboarding] lead ${leadId}: no business type, cannot ask sensible questions - answers saved, no audit`);
-        await service.from("onboarding_responses")
-          .update({ status: "no_business_type", updated_at: new Date().toISOString() })
-          .eq("id", row.id);
-        return json({ ok: true, onboarding_id: row.id, audit_id: null, note: "no_business_type" });
-      }
-      // SCOPE. Every onboarding customer so far is a local trade, and leaving scope null let
-      // create-ai-audit's classify fallback emit NATIONAL-pattern questions for one-van
-      // plumbers ("plumbing finance options for homeowners UK", "fixed price plumbing quotes
-      // for homeowners uk" — both real, both unwinnable, each wasting a question). Forcing
-      // 'local' removes them by construction.
-      //
-      // Guarded: create-ai-audit rejects scope='local' without a usable town (400
-      // local_scope_needs_town). The customer types this field, so "UK" or "nationwide" is
-      // possible — in that case send no scope and let the classifier decide, rather than
-      // failing a paying customer's audit.
-      const NON_TOWN = new Set([
-        "uk", "u.k.", "united kingdom", "great britain", "britain", "gb", "england", "scotland",
-        "wales", "northern ireland", "ireland", "nationwide", "national", "online", "remote",
-        "everywhere", "anywhere", "the local area",
-      ]);
-      const locKey = (confirmedLocation ?? "").toLowerCase().trim();
-      const scopeIsLocal = !!locKey && !NON_TOWN.has(locKey);
-
-      // areas_wanted is deliberately NOT passed. create-ai-audit takes a single location
-      // string and builds "[service] in [town] UK" from it; there is no multi-area input, and
-      // stuffing a list into location_text or specialisms would corrupt the question shape
-      // (specialisms drives niche keywords). It stays stored for operator use.
-      const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${serviceKey}`,
-          "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
-          "x-internal-job": "1",
-        },
-        body: JSON.stringify({
-          user_id: lead.user_id,
-          lead_id: leadId,
-          business_name: lead.business_name,
-          business_type: bizType,
-          location_text: confirmedLocation,
-          specialisms: (answers.services ?? "").slice(0, 200),
-          country: lead.country ?? null,
-          website: lead.website ?? null,
-          has_website: !!lead.website,
-          ...(scopeIsLocal ? { business_scope: "local" } : {}),
-          // PAID BASELINE: more questions than the outreach hook, measured over repeat runs.
-          purpose: "baseline",
-          question_count: BASELINE_QUESTIONS,
-          baseline_target_runs: BASELINE_RUNS,
-        }),
-      });
-      const created = await res.json().catch(() => ({}));
-      if (!res.ok || !created?.ok || !created?.audit_id) {
-        console.error("[findable-onboarding] create-ai-audit failed:", created?.error ?? res.status);
-        // Distinguishable from 'submitted': this customer paid attention, filled the form, and
-        // got no audit. Stays ok:true so the page still offers the plan, but the row now says so.
-        await service.from("onboarding_responses")
-          .update({ status: "audit_failed", updated_at: new Date().toISOString() })
-          .eq("id", row.id);
-        return json({ ok: true, onboarding_id: row.id, audit_id: null, note: "audit_failed" });
-      }
       await service.from("onboarding_responses")
-        .update({ audit_id: created.audit_id, status: "audit_running", updated_at: new Date().toISOString() })
+        .update({
+          audit_id: existingAuditId,
+          // Distinguishable from 'submitted' (never processed) and from 'paid'. Nothing is
+          // running, so 'audit_running' would have been a lie.
+          status: report ? "answers_saved" : "answers_saved_no_report",
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", row.id);
-      return json({ ok: true, onboarding_id: row.id, audit_id: created.audit_id });
+
+      return json({ ok: true, onboarding_id: row.id, audit_id: existingAuditId, report });
     }
 
     // ── status ──────────────────────────────────────────────────────────────────
@@ -335,77 +302,9 @@ Deno.serve(async (req) => {
       const { data: qrows } = await service
         .from("ai_audit_queue").select("id, question, status, result")
         .eq("run_id", run.id).order("created_at", { ascending: true });
-      const data = buildReportData((qrows ?? []) as QueueRow[], run as RunRow, {
-        businessName: audit.business_name ?? "",
-        businessType: audit.business_type ?? "",
-        locationText: audit.location_text ?? "",
-        specialisms: audit.specialism ?? "",
-        isAggregatorUrl,
-        ownWebsite: audit.website ?? "",
-      });
-      if (!data) return json({ ok: true, status: "running" });
-
-      // SEO. Already computed: process-ai-audit-queue grades the site in its OWN tick before
-      // draining questions, so by the time a run reads 'complete' the grade has been sitting
-      // in results.seo for minutes. buildReportData only carries it through isRenderableSeo,
-      // which drops Apify failure markers (2 of 55 stored runs are failures) — so `seo` here
-      // is either a real grade or undefined, and the page shows nothing rather than an error.
-      const seo = data.seo
-        ? {
-            overall_grade: (data.seo as { overallGrade?: string }).overallGrade ?? null,
-            categories: (data.seo as { categories?: unknown }).categories ?? null,
-            findings: ((data.seo as { leadFindings?: unknown[] }).leadFindings ?? [])
-              .slice(0, 4)  // the page shows the main issues, not the full audit
-              .map((f) => {
-                const x = f as { title?: string; detail?: string; severity?: string };
-                return { title: x.title ?? "", detail: x.detail ?? "", severity: x.severity ?? "low" };
-              }),
-          }
-        : null;
-
-      // Baseline progress, so the page can be honest that measurement continues after the
-      // first result. Absent column (migration pending) → null, and the page just omits it.
-      const targetRuns = Number((audit as { baseline_target_runs?: number }).baseline_target_runs ?? 0);
-      let baseline: { runs_done: number; runs_target: number; complete: boolean } | null = null;
-      if (targetRuns > 1) {
-        const { count } = await service
-          .from("ai_audit_runs").select("id", { count: "exact", head: true })
-          .eq("audit_id", auditId).in("status", ["complete", "capped"]);
-        baseline = {
-          runs_done: Math.min(count ?? 0, targetRuns),
-          runs_target: targetRuns,
-          complete: !!(audit as { baseline?: unknown }).baseline,
-        };
-      }
-
-      // The report's own strongest finding: the single question+engine whose answer is most
-      // damning, and the firms it named instead. pickGutPunch already scores for relevance and
-      // skips junk/near-me answers, so this is the same thing the PDF leads with — no second
-      // opinion to drift from. null when nothing qualified.
-      const gp = data.gutPunch;
-      const gutPunch = gp
-        ? { question: gp.question, engine: gp.engineLabel, rivals: (gp.rivals ?? []).slice(0, 3) }
-        : null;
-
-      return json({
-        ok: true,
-        status: "complete",
-        business_name: data.businessName,
-        named: data.named,
-        total: data.total,
-        gut_punch: gutPunch,
-        // Lets the results screen tell "no website, we'll build you one" apart from "has a
-        // website but the scan failed", which must stay silent rather than claim anything.
-        has_website: (audit as { has_website?: boolean }).has_website === true,
-        // Still returned for operator/debug use, but the customer-facing results screen
-        // deliberately does NOT show per-search winnable/locked claims: single-run winnability
-        // is unstable (one business swung 0 to 0.6 mention rate across identical runs with no
-        // work done), and promising specific winnable searches off one run risks the 3-run
-        // baseline contradicting us.
-        winnability: data.winnability,
-        seo,
-        baseline,
-      });
+      const payload = await buildReportPayload(service, audit, run as RunRow);
+      if (!payload) return json({ ok: true, status: "running" });
+      return json({ ok: true, status: "complete", ...payload });
     }
 
     return json({ ok: false, error: "unknown_action" }, 400);

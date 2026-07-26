@@ -39,6 +39,199 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_audit_queue: {
+        Row: {
+          attempts: number
+          audit_id: string
+          created_at: string
+          engines: string[]
+          id: string
+          question: string
+          result: Json | null
+          run_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          audit_id: string
+          created_at?: string
+          engines?: string[]
+          id?: string
+          question: string
+          result?: Json | null
+          run_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          audit_id?: string
+          created_at?: string
+          engines?: string[]
+          id?: string
+          question?: string
+          result?: Json | null
+          run_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_audit_queue_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "ai_audits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_queue_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_audit_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_audit_runs: {
+        Row: {
+          actor_cost_usd: number | null
+          audit_id: string
+          created_at: string
+          id: string
+          mention_rate: number | null
+          results: Json
+          run_number: number
+          status: string
+          user_id: string
+        }
+        Insert: {
+          actor_cost_usd?: number | null
+          audit_id: string
+          created_at?: string
+          id?: string
+          mention_rate?: number | null
+          results?: Json
+          run_number?: number
+          status?: string
+          user_id: string
+        }
+        Update: {
+          actor_cost_usd?: number | null
+          audit_id?: string
+          created_at?: string
+          id?: string
+          mention_rate?: number | null
+          results?: Json
+          run_number?: number
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_audit_runs_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "ai_audits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_audits: {
+        Row: {
+          baseline: Json | null
+          baseline_completed_at: string | null
+          baseline_error: string | null
+          baseline_last_attempt_at: string | null
+          baseline_target_runs: number | null
+          business_address: string | null
+          business_email: string | null
+          business_name: string
+          business_phone: string | null
+          business_scope: string | null
+          business_type: string | null
+          client_links: Json
+          country: string | null
+          created_at: string
+          credentials: string | null
+          first_opened_at: string | null
+          has_website: boolean
+          id: string
+          lead_id: string | null
+          location_text: string | null
+          open_count: number
+          specialism: string | null
+          updated_at: string
+          user_id: string
+          website: string | null
+        }
+        Insert: {
+          baseline?: Json | null
+          baseline_completed_at?: string | null
+          baseline_error?: string | null
+          baseline_last_attempt_at?: string | null
+          baseline_target_runs?: number | null
+          business_address?: string | null
+          business_email?: string | null
+          business_name: string
+          business_phone?: string | null
+          business_scope?: string | null
+          business_type?: string | null
+          client_links?: Json
+          country?: string | null
+          created_at?: string
+          credentials?: string | null
+          first_opened_at?: string | null
+          has_website?: boolean
+          id?: string
+          lead_id?: string | null
+          location_text?: string | null
+          open_count?: number
+          specialism?: string | null
+          updated_at?: string
+          user_id: string
+          website?: string | null
+        }
+        Update: {
+          baseline?: Json | null
+          baseline_completed_at?: string | null
+          baseline_error?: string | null
+          baseline_last_attempt_at?: string | null
+          baseline_target_runs?: number | null
+          business_address?: string | null
+          business_email?: string | null
+          business_name?: string
+          business_phone?: string | null
+          business_scope?: string | null
+          business_type?: string | null
+          client_links?: Json
+          country?: string | null
+          created_at?: string
+          credentials?: string | null
+          first_opened_at?: string | null
+          has_website?: boolean
+          id?: string
+          lead_id?: string | null
+          location_text?: string | null
+          open_count?: number
+          specialism?: string | null
+          updated_at?: string
+          user_id?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_audits_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_usage_log: {
         Row: {
           api_type: string
@@ -179,26 +372,137 @@ export type Database = {
           },
         ]
       }
-      campaigns: {
+      bulk_jobs: {
         Row: {
           created_at: string
-          created_by: string
-          default_sale_type: string | null
+          done_count: number
+          error: string | null
+          failed_count: number
           id: string
-          name: string
+          items: Json
+          job_type: string
+          locked_until: string | null
+          params: Json | null
+          skipped_count: number
+          status: string
+          total: number
+          updated_at: string
+          user_id: string
         }
         Insert: {
           created_at?: string
-          created_by: string
-          default_sale_type?: string | null
+          done_count?: number
+          error?: string | null
+          failed_count?: number
           id?: string
-          name: string
+          items: Json
+          job_type: string
+          locked_until?: string | null
+          params?: Json | null
+          skipped_count?: number
+          status?: string
+          total: number
+          updated_at?: string
+          user_id: string
         }
         Update: {
           created_at?: string
+          done_count?: number
+          error?: string | null
+          failed_count?: number
+          id?: string
+          items?: Json
+          job_type?: string
+          locked_until?: string | null
+          params?: Json | null
+          skipped_count?: number
+          status?: string
+          total?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      business_reports: {
+        Row: {
+          audit_id: string | null
+          business_name: string
+          created_at: string
+          html_content: string | null
+          id: string
+          json_ld: string | null
+          lead_id: string | null
+          meta_description: string | null
+          report_type: string
+          slug: string
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          audit_id?: string | null
+          business_name: string
+          created_at?: string
+          html_content?: string | null
+          id?: string
+          json_ld?: string | null
+          lead_id?: string | null
+          meta_description?: string | null
+          report_type?: string
+          slug: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audit_id?: string | null
+          business_name?: string
+          created_at?: string
+          html_content?: string | null
+          id?: string
+          json_ld?: string | null
+          lead_id?: string | null
+          meta_description?: string | null
+          report_type?: string
+          slug?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      campaigns: {
+        Row: {
+          campaign_type: string
+          created_at: string
+          created_by: string
+          default_sale_type: string | null
+          default_template: string | null
+          description: string | null
+          id: string
+          method: string | null
+          name: string
+        }
+        Insert: {
+          campaign_type?: string
+          created_at?: string
+          created_by: string
+          default_sale_type?: string | null
+          default_template?: string | null
+          description?: string | null
+          id?: string
+          method?: string | null
+          name: string
+        }
+        Update: {
+          campaign_type?: string
+          created_at?: string
           created_by?: string
           default_sale_type?: string | null
+          default_template?: string | null
+          description?: string | null
           id?: string
+          method?: string | null
           name?: string
         }
         Relationships: []
@@ -292,6 +596,30 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_suppressions: {
+        Row: {
+          created_at: string
+          id: string
+          phone_e164: string
+          reason: string | null
+          source: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          phone_e164: string
+          reason?: string | null
+          source?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          phone_e164?: string
+          reason?: string | null
+          source?: string | null
+        }
+        Relationships: []
+      }
       copied_phones: {
         Row: {
           copied_at: string
@@ -313,40 +641,204 @@ export type Database = {
         }
         Relationships: []
       }
+      directory_businesses: {
+        Row: {
+          address: string | null
+          area: string
+          category: string | null
+          city: string | null
+          created_at: string
+          description: string | null
+          description_generated_at: string | null
+          id: string
+          is_client: boolean
+          lead_id: string | null
+          name: string
+          niche: string
+          phone: string | null
+          place_id: string | null
+          postal_code: string | null
+          rating: number | null
+          review_count: number | null
+          scraped_at: string
+          source: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          area: string
+          category?: string | null
+          city?: string | null
+          created_at?: string
+          description?: string | null
+          description_generated_at?: string | null
+          id?: string
+          is_client?: boolean
+          lead_id?: string | null
+          name: string
+          niche: string
+          phone?: string | null
+          place_id?: string | null
+          postal_code?: string | null
+          rating?: number | null
+          review_count?: number | null
+          scraped_at?: string
+          source?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          area?: string
+          category?: string | null
+          city?: string | null
+          created_at?: string
+          description?: string | null
+          description_generated_at?: string | null
+          id?: string
+          is_client?: boolean
+          lead_id?: string | null
+          name?: string
+          niche?: string
+          phone?: string | null
+          place_id?: string | null
+          postal_code?: string | null
+          rating?: number | null
+          review_count?: number | null
+          scraped_at?: string
+          source?: string | null
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "directory_businesses_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enrichment_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          enrichment_type: string
+          expires_at: string | null
+          id: string
+          result: Json | null
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          enrichment_type: string
+          expires_at?: string | null
+          id?: string
+          result?: Json | null
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          enrichment_type?: string
+          expires_at?: string | null
+          id?: string
+          result?: Json | null
+        }
+        Relationships: []
+      }
+      enrichment_usage: {
+        Row: {
+          cost_usd: number
+          created_at: string
+          enrichment_type: string | null
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          cost_usd?: number
+          created_at?: string
+          enrichment_type?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          cost_usd?: number
+          created_at?: string
+          enrichment_type?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       generated_sites: {
         Row: {
+          addon_interest_at: string | null
+          booking_only: boolean
+          claimed_at: string | null
           content: Json
           created_at: string
+          first_opened_at: string | null
           id: string
           is_paid: boolean
           lead_id: string | null
+          open_count: number
           owner_id: string | null
+          replied_at: string | null
+          segment: string | null
+          sent_at: string | null
+          sent_message: string | null
+          sent_template: string | null
+          share_token: string | null
           site_name: string
           status: Database["public"]["Enums"]["site_status"]
+          subdomain: string | null
           template: string
           updated_at: string
         }
         Insert: {
+          addon_interest_at?: string | null
+          booking_only?: boolean
+          claimed_at?: string | null
           content?: Json
           created_at?: string
+          first_opened_at?: string | null
           id?: string
           is_paid?: boolean
           lead_id?: string | null
+          open_count?: number
           owner_id?: string | null
+          replied_at?: string | null
+          segment?: string | null
+          sent_at?: string | null
+          sent_message?: string | null
+          sent_template?: string | null
+          share_token?: string | null
           site_name: string
           status?: Database["public"]["Enums"]["site_status"]
+          subdomain?: string | null
           template?: string
           updated_at?: string
         }
         Update: {
+          addon_interest_at?: string | null
+          booking_only?: boolean
+          claimed_at?: string | null
           content?: Json
           created_at?: string
+          first_opened_at?: string | null
           id?: string
           is_paid?: boolean
           lead_id?: string | null
+          open_count?: number
           owner_id?: string | null
+          replied_at?: string | null
+          segment?: string | null
+          sent_at?: string | null
+          sent_message?: string | null
+          sent_template?: string | null
+          share_token?: string | null
           site_name?: string
           status?: Database["public"]["Enums"]["site_status"]
+          subdomain?: string | null
           template?: string
           updated_at?: string
         }
@@ -367,6 +859,7 @@ export type Database = {
           lng: number
           location_key: string
           raw_location: string
+          viewport: Json | null
         }
         Insert: {
           created_at?: string
@@ -374,6 +867,7 @@ export type Database = {
           lng: number
           location_key: string
           raw_location: string
+          viewport?: Json | null
         }
         Update: {
           created_at?: string
@@ -381,6 +875,7 @@ export type Database = {
           lng?: number
           location_key?: string
           raw_location?: string
+          viewport?: Json | null
         }
         Relationships: []
       }
@@ -421,6 +916,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      instantly_poll_state: {
+        Row: {
+          id: number
+          last_polled_at: string
+        }
+        Insert: {
+          id?: number
+          last_polled_at?: string
+        }
+        Update: {
+          id?: number
+          last_polled_at?: string
+        }
+        Relationships: []
       }
       lead_claims: {
         Row: {
@@ -532,6 +1042,68 @@ export type Database = {
         }
         Relationships: []
       }
+      onboarding_responses: {
+        Row: {
+          accreditations: string | null
+          areas_wanted: string | null
+          audit_id: string | null
+          business_name: string | null
+          confirmed_location: string | null
+          created_at: string
+          gbp_consent: string | null
+          gbp_manager_email: string | null
+          id: string
+          incomplete: boolean
+          lead_id: string | null
+          services: string | null
+          standout: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          accreditations?: string | null
+          areas_wanted?: string | null
+          audit_id?: string | null
+          business_name?: string | null
+          confirmed_location?: string | null
+          created_at?: string
+          gbp_consent?: string | null
+          gbp_manager_email?: string | null
+          id?: string
+          incomplete?: boolean
+          lead_id?: string | null
+          services?: string | null
+          standout?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          accreditations?: string | null
+          areas_wanted?: string | null
+          audit_id?: string | null
+          business_name?: string | null
+          confirmed_location?: string | null
+          created_at?: string
+          gbp_consent?: string | null
+          gbp_manager_email?: string | null
+          id?: string
+          incomplete?: boolean
+          lead_id?: string | null
+          services?: string | null
+          standout?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_responses_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       outreach_activities: {
         Row: {
           activity_type: string
@@ -629,9 +1201,11 @@ export type Database = {
           address: string | null
           amount_paid: number | null
           business_name: string
+          call_booked_at: string | null
           campaign_id: string | null
           category: string | null
           checkin_notes: string | null
+          confirmed_services: Json | null
           contact_method: string | null
           contact_name: string | null
           country: string | null
@@ -641,22 +1215,27 @@ export type Database = {
           email_last_checked_at: string | null
           email_method: string | null
           email_status: string | null
+          enrichment_source: string | null
           facebook_confidence: number | null
           facebook_last_checked_at: string | null
           facebook_method: string | null
-          facebook_url: string | null
           facebook_status: string | null
-          enrichment_source: string | null
-          instagram_url: string | null
-          instagram_status: string | null
-          instagram_method: string | null
-          instagram_last_checked_at: string | null
+          facebook_url: string | null
           google_maps_url: string | null
           id: string
           image_url: string | null
+          instagram_last_checked_at: string | null
+          instagram_method: string | null
+          instagram_status: string | null
+          instagram_url: string | null
+          instantly_campaign_id: string | null
+          instantly_lead_id: string | null
+          instantly_pushed_at: string | null
           is_archived: boolean
           is_potential_work: boolean
           last_outreach_attempt_at: string | null
+          line_type: string | null
+          line_type_checked_at: string | null
           list_type: string
           next_action: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date: string | null
@@ -668,33 +1247,44 @@ export type Database = {
           phone: string | null
           place_id: string | null
           potential_revenue: number | null
+          previous_status: string | null
           project_duration: string | null
           project_overview: string | null
           project_status: string | null
           project_value: number | null
+          queued_at: string | null
           sale_type: string | null
+          search_keyword: string | null
+          search_location: string | null
           services_included: string[] | null
-          confirmed_services: Json | null
+          site_sent_at: string | null
+          sms_attempts: number
+          sms_delivery_status: string | null
+          sms_message_sid: string | null
+          sms_queued_at: string | null
+          sms_sent_at: string | null
           status: string
           updated_at: string
           user_id: string
           website: string | null
+          whatsapp_attempts: number
           whatsapp_checked_at: string | null
+          whatsapp_delivery_status: string | null
+          whatsapp_ever_delivered: boolean
+          whatsapp_message_id: string | null
+          whatsapp_sent_at: string | null
           whatsapp_status: string | null
           whatsapp_template: string | null
-          queued_at: string | null
-          whatsapp_sent_at: string | null
-          whatsapp_message_id: string | null
-          whatsapp_delivery_status: string | null
-          whatsapp_attempts: number | null
         }
         Insert: {
           address?: string | null
           amount_paid?: number | null
           business_name: string
+          call_booked_at?: string | null
           campaign_id?: string | null
           category?: string | null
           checkin_notes?: string | null
+          confirmed_services?: Json | null
           contact_method?: string | null
           contact_name?: string | null
           country?: string | null
@@ -704,22 +1294,27 @@ export type Database = {
           email_last_checked_at?: string | null
           email_method?: string | null
           email_status?: string | null
+          enrichment_source?: string | null
           facebook_confidence?: number | null
           facebook_last_checked_at?: string | null
           facebook_method?: string | null
-          facebook_url?: string | null
           facebook_status?: string | null
-          enrichment_source?: string | null
-          instagram_url?: string | null
-          instagram_status?: string | null
-          instagram_method?: string | null
-          instagram_last_checked_at?: string | null
+          facebook_url?: string | null
           google_maps_url?: string | null
           id?: string
           image_url?: string | null
+          instagram_last_checked_at?: string | null
+          instagram_method?: string | null
+          instagram_status?: string | null
+          instagram_url?: string | null
+          instantly_campaign_id?: string | null
+          instantly_lead_id?: string | null
+          instantly_pushed_at?: string | null
           is_archived?: boolean
           is_potential_work?: boolean
           last_outreach_attempt_at?: string | null
+          line_type?: string | null
+          line_type_checked_at?: string | null
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
@@ -731,33 +1326,44 @@ export type Database = {
           phone?: string | null
           place_id?: string | null
           potential_revenue?: number | null
+          previous_status?: string | null
           project_duration?: string | null
           project_overview?: string | null
           project_status?: string | null
           project_value?: number | null
+          queued_at?: string | null
           sale_type?: string | null
+          search_keyword?: string | null
+          search_location?: string | null
           services_included?: string[] | null
-          confirmed_services?: Json | null
+          site_sent_at?: string | null
+          sms_attempts?: number
+          sms_delivery_status?: string | null
+          sms_message_sid?: string | null
+          sms_queued_at?: string | null
+          sms_sent_at?: string | null
           status?: string
           updated_at?: string
           user_id: string
           website?: string | null
+          whatsapp_attempts?: number
           whatsapp_checked_at?: string | null
+          whatsapp_delivery_status?: string | null
+          whatsapp_ever_delivered?: boolean
+          whatsapp_message_id?: string | null
+          whatsapp_sent_at?: string | null
           whatsapp_status?: string | null
           whatsapp_template?: string | null
-          queued_at?: string | null
-          whatsapp_sent_at?: string | null
-          whatsapp_message_id?: string | null
-          whatsapp_delivery_status?: string | null
-          whatsapp_attempts?: number | null
         }
         Update: {
           address?: string | null
           amount_paid?: number | null
           business_name?: string
+          call_booked_at?: string | null
           campaign_id?: string | null
           category?: string | null
           checkin_notes?: string | null
+          confirmed_services?: Json | null
           contact_method?: string | null
           contact_name?: string | null
           country?: string | null
@@ -767,22 +1373,27 @@ export type Database = {
           email_last_checked_at?: string | null
           email_method?: string | null
           email_status?: string | null
+          enrichment_source?: string | null
           facebook_confidence?: number | null
           facebook_last_checked_at?: string | null
           facebook_method?: string | null
-          facebook_url?: string | null
           facebook_status?: string | null
-          enrichment_source?: string | null
-          instagram_url?: string | null
-          instagram_status?: string | null
-          instagram_method?: string | null
-          instagram_last_checked_at?: string | null
+          facebook_url?: string | null
           google_maps_url?: string | null
           id?: string
           image_url?: string | null
+          instagram_last_checked_at?: string | null
+          instagram_method?: string | null
+          instagram_status?: string | null
+          instagram_url?: string | null
+          instantly_campaign_id?: string | null
+          instantly_lead_id?: string | null
+          instantly_pushed_at?: string | null
           is_archived?: boolean
           is_potential_work?: boolean
           last_outreach_attempt_at?: string | null
+          line_type?: string | null
+          line_type_checked_at?: string | null
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
@@ -794,25 +1405,34 @@ export type Database = {
           phone?: string | null
           place_id?: string | null
           potential_revenue?: number | null
+          previous_status?: string | null
           project_duration?: string | null
           project_overview?: string | null
           project_status?: string | null
           project_value?: number | null
+          queued_at?: string | null
           sale_type?: string | null
+          search_keyword?: string | null
+          search_location?: string | null
           services_included?: string[] | null
-          confirmed_services?: Json | null
+          site_sent_at?: string | null
+          sms_attempts?: number
+          sms_delivery_status?: string | null
+          sms_message_sid?: string | null
+          sms_queued_at?: string | null
+          sms_sent_at?: string | null
           status?: string
           updated_at?: string
           user_id?: string
           website?: string | null
+          whatsapp_attempts?: number
           whatsapp_checked_at?: string | null
+          whatsapp_delivery_status?: string | null
+          whatsapp_ever_delivered?: boolean
+          whatsapp_message_id?: string | null
+          whatsapp_sent_at?: string | null
           whatsapp_status?: string | null
           whatsapp_template?: string | null
-          queued_at?: string | null
-          whatsapp_sent_at?: string | null
-          whatsapp_message_id?: string | null
-          whatsapp_delivery_status?: string | null
-          whatsapp_attempts?: number | null
         }
         Relationships: [
           {
@@ -994,6 +1614,121 @@ export type Database = {
         }
         Relationships: []
       }
+      site_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          meta: Json | null
+          site_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          meta?: Json | null
+          site_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          meta?: Json | null
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_events_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "generated_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sms_outreach_state: {
+        Row: {
+          id: number
+          next_send_at: string | null
+          paused: boolean
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          next_send_at?: string | null
+          paused?: boolean
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          next_send_at?: string | null
+          paused?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sms_sends: {
+        Row: {
+          body: string | null
+          business_name: string | null
+          claim_url: string | null
+          created_at: string
+          delivery_status: string | null
+          error: string | null
+          error_code: string | null
+          id: string
+          lead_id: string | null
+          message_sid: string | null
+          phone: string | null
+          segments: number | null
+          template: string | null
+          test_mode: boolean
+          user_id: string | null
+        }
+        Insert: {
+          body?: string | null
+          business_name?: string | null
+          claim_url?: string | null
+          created_at?: string
+          delivery_status?: string | null
+          error?: string | null
+          error_code?: string | null
+          id?: string
+          lead_id?: string | null
+          message_sid?: string | null
+          phone?: string | null
+          segments?: number | null
+          template?: string | null
+          test_mode?: boolean
+          user_id?: string | null
+        }
+        Update: {
+          body?: string | null
+          business_name?: string | null
+          claim_url?: string | null
+          created_at?: string
+          delivery_status?: string | null
+          error?: string | null
+          error_code?: string | null
+          id?: string
+          lead_id?: string | null
+          message_sid?: string | null
+          phone?: string | null
+          segments?: number | null
+          template?: string | null
+          test_mode?: boolean
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_sends_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       staff_working_hours: {
         Row: {
           created_at: string
@@ -1028,6 +1763,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      team_feedback: {
+        Row: {
+          author_email: string | null
+          author_name: string | null
+          created_at: string
+          id: string
+          message: string
+          user_id: string
+        }
+        Insert: {
+          author_email?: string | null
+          author_name?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          user_id: string
+        }
+        Update: {
+          author_email?: string | null
+          author_name?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       templates: {
         Row: {
@@ -1143,18 +1905,246 @@ export type Database = {
         }
         Relationships: []
       }
+      website_status_overrides: {
+        Row: {
+          business_name: string | null
+          created_at: string
+          google_maps_url: string
+          id: string
+          updated_at: string
+          user_id: string
+          website_status: string
+        }
+        Insert: {
+          business_name?: string | null
+          created_at?: string
+          google_maps_url: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          website_status: string
+        }
+        Update: {
+          business_name?: string | null
+          created_at?: string
+          google_maps_url?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          website_status?: string
+        }
+        Relationships: []
+      }
+      whatsapp_auto_replies: {
+        Row: {
+          created_at: string
+          fire_after: string
+          id: string
+          lead_id: string
+          phone: string
+          reason: string | null
+          status: string
+          template_name: string | null
+          trigger: string
+          trigger_wa_message_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fire_after: string
+          id?: string
+          lead_id: string
+          phone: string
+          reason?: string | null
+          status?: string
+          template_name?: string | null
+          trigger?: string
+          trigger_wa_message_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fire_after?: string
+          id?: string
+          lead_id?: string
+          phone?: string
+          reason?: string | null
+          status?: string
+          template_name?: string | null
+          trigger?: string
+          trigger_wa_message_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_auto_replies_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_messages: {
+        Row: {
+          body: string | null
+          created_at: string
+          direction: string
+          error: string | null
+          id: string
+          lead_id: string | null
+          message_type: string
+          phone: string
+          status: string
+          template_name: string | null
+          test_mode: boolean
+          user_id: string | null
+          wa_message_id: string | null
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          direction: string
+          error?: string | null
+          id?: string
+          lead_id?: string | null
+          message_type?: string
+          phone: string
+          status?: string
+          template_name?: string | null
+          test_mode?: boolean
+          user_id?: string | null
+          wa_message_id?: string | null
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          direction?: string
+          error?: string | null
+          id?: string
+          lead_id?: string | null
+          message_type?: string
+          phone?: string
+          status?: string
+          template_name?: string | null
+          test_mode?: boolean
+          user_id?: string | null
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_outreach_state: {
+        Row: {
+          audit_complete_template: string | null
+          auto_reply_enabled: boolean
+          first_reply_template: string | null
+          id: number
+          next_send_at: string | null
+          paused: boolean
+          updated_at: string
+        }
+        Insert: {
+          audit_complete_template?: string | null
+          auto_reply_enabled?: boolean
+          first_reply_template?: string | null
+          id?: number
+          next_send_at?: string | null
+          paused?: boolean
+          updated_at?: string
+        }
+        Update: {
+          audit_complete_template?: string | null
+          auto_reply_enabled?: boolean
+          first_reply_template?: string | null
+          id?: number
+          next_send_at?: string | null
+          paused?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      whatsapp_sends: {
+        Row: {
+          business_name: string | null
+          claim_url: string | null
+          created_at: string
+          delivery_status: string | null
+          error: string | null
+          id: string
+          lead_id: string | null
+          message_id: string | null
+          phone: string | null
+          template: string | null
+          test_mode: boolean
+          user_id: string | null
+        }
+        Insert: {
+          business_name?: string | null
+          claim_url?: string | null
+          created_at?: string
+          delivery_status?: string | null
+          error?: string | null
+          id?: string
+          lead_id?: string | null
+          message_id?: string | null
+          phone?: string | null
+          template?: string | null
+          test_mode?: boolean
+          user_id?: string | null
+        }
+        Update: {
+          business_name?: string | null
+          claim_url?: string | null
+          created_at?: string
+          delivery_status?: string | null
+          error?: string | null
+          id?: string
+          lead_id?: string | null
+          message_id?: string | null
+          phone?: string | null
+          template?: string | null
+          test_mode?: boolean
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_sends_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      _reset_account_for: { Args: { v_uid: string }; Returns: undefined }
       bookable_staff: {
         Args: { _site_id: string; _staff_id: string }
         Returns: boolean
       }
+      bump_audit_open: { Args: { p_audit_id: string }; Returns: undefined }
       claim_generated_site: {
         Args: { p_token_hash: string; p_user_id: string }
         Returns: string
+      }
+      edge_internal_keys: {
+        Args: never
+        Returns: {
+          anon_key: string
+          service_key: string
+        }[]
       }
       has_role: {
         Args: {
@@ -1163,13 +2153,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      invoke_ai_audit_queue: { Args: never; Returns: undefined }
+      invoke_bulk_jobs_sweep: { Args: never; Returns: undefined }
       invoke_cron_run: { Args: never; Returns: undefined }
+      invoke_instantly_poll: { Args: never; Returns: undefined }
+      invoke_sms_queue: { Args: never; Returns: undefined }
+      invoke_whatsapp_auto_replies: { Args: never; Returns: undefined }
+      invoke_whatsapp_queue: { Args: never; Returns: undefined }
+      is_operator: { Args: { uid: string }; Returns: boolean }
       log_usage_event: {
         Args: { p_event_type: string; p_meta?: Json }
         Returns: undefined
       }
       owns_site: { Args: { _site_id: string }; Returns: boolean }
       owns_staff: { Args: { _staff_id: string }; Returns: boolean }
+      reset_my_account: { Args: never; Returns: undefined }
       reset_my_metrics: { Args: never; Returns: undefined }
       site_is_published: { Args: { _site_id: string }; Returns: boolean }
       staff_site_published: { Args: { _staff_id: string }; Returns: boolean }
@@ -1205,6 +2203,8 @@ export type Database = {
         | "sms"
         | "whatsapp"
         | "facebook_msg"
+        | "email_sent"
+        | "bounced"
       next_action_type:
         | "call"
         | "follow_up"
@@ -1378,6 +2378,8 @@ export const Constants = {
         "sms",
         "whatsapp",
         "facebook_msg",
+        "email_sent",
+        "bounced",
       ],
       next_action_type: [
         "call",

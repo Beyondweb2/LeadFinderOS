@@ -4,7 +4,7 @@ import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
-import { advanceBaseline, sweepStalledBaselines } from "../_shared/audit-baseline.ts";
+import { advanceBaseline, sweepStalledBaselines, ensureBaselinesForPaidOnboardings } from "../_shared/audit-baseline.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
 import { autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 // Automation B: reuse the SHARED report aggregation (same buildReportData the SPA + public
@@ -163,6 +163,17 @@ Deno.serve(async (req) => {
       await sweepStalledBaselines(service);
     } catch (e) {
       console.error("[process-ai-audit-queue] baseline sweep failed:", e instanceof Error ? e.message : String(e));
+    }
+
+    // 0a3) PAID CLIENT baseline backstop. The stripe webhook starts the baseline on the payment
+    //      event, but that is a single network attempt. This guarantees the outcome: any PAID
+    //      onboarding row whose lead has no baseline gets one started here, every tick, until it
+    //      does. startPaidBaseline is idempotent, so this is one cheap query when there is nothing
+    //      to do. Must also stay ABOVE the SEO step, which returns early on its own ticks.
+    try {
+      await ensureBaselinesForPaidOnboardings(service);
+    } catch (e) {
+      console.error("[process-ai-audit-queue] paid-baseline backstop failed:", e instanceof Error ? e.message : String(e));
     }
 
     // 0b) SEO step — website audits get one on-page SEO grade per run, stored at
