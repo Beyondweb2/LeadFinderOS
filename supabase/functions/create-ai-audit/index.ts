@@ -2,6 +2,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
+import {
+  OUTREACH_HOOK_QUESTIONS,
+  WIZARD_MIN_QUESTIONS,
+  WIZARD_MAX_QUESTIONS,
+  BASELINE_QUESTIONS,
+} from "../../../src/lib/auditQuestionCounts.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
 // OpenAI (gpt-4o-mini, tool-calling, mirrors admin-ai-opener), creates the audit +
@@ -20,13 +26,13 @@ const corsHeaders = {
 // Google organic in the same run; those are captured/shown but not queue engines.
 // (Perplexity dropped — kept dormant in ai-search.ts in case it's re-added.)
 const AUDIT_ENGINES = ["chatgpt", "gemini"];
-// How many questions to generate. HARD RULE: 3..5, default 3 — unified across every caller
-// (wizard, bulk, the auto reply-chain). Always clamped server-side (the count is untrusted
-// client input); the wizard + bulk selectors offer the same 3..5. Fewer, better-targeted
-// buyer-intent questions beat a long generic list.
-const MIN_QUESTION_COUNT = 3;
-const MAX_QUESTION_COUNT = 5;
-const DEFAULT_QUESTION_COUNT = 3;
+// How many questions to generate. Bounds come from the shared policy module so the SPA, the
+// outreach hook and the paid baseline cannot drift apart. Always clamped server-side (the count
+// is untrusted client input). Callers are expected to state their own count explicitly — the
+// default here is a floor for anything that forgets, not a path's intended value.
+const MIN_QUESTION_COUNT = WIZARD_MIN_QUESTIONS;
+const MAX_QUESTION_COUNT = WIZARD_MAX_QUESTIONS;
+const DEFAULT_QUESTION_COUNT = OUTREACH_HOOK_QUESTIONS;
 
 // PAID BASELINE counts. The outreach hook only has to prove "you're invisible", so 3..5 is
 // plenty there. A paying client's baseline is the measuring stick for the money-back
@@ -36,7 +42,7 @@ const DEFAULT_QUESTION_COUNT = 3;
 // (see BASELINE_PURPOSE below), so no public caller can raise its own cost ceiling.
 const BASELINE_MIN_QUESTION_COUNT = 6;
 const BASELINE_MAX_QUESTION_COUNT = 12;
-const BASELINE_DEFAULT_QUESTION_COUNT = 10;
+const BASELINE_DEFAULT_QUESTION_COUNT = BASELINE_QUESTIONS;
 
 /** Clamp an untrusted question-count into [min..max], defaulting to `def`. */
 function clampCount(
@@ -254,9 +260,16 @@ Deno.serve(async (req) => {
     if (!businessName && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
 
     // Forced LOCAL needs a real town — otherwise "[service] in [town]" has no town and we'd
-    // silently drift national. Reject cleanly so the caller supplies one. Only fires when the
-    // caller explicitly sets scope='local' (wizard/bulk); internal automation passes no scope.
-    if (businessScope === "local" && !hasUsableTown(locationText)) {
+    // silently drift national. Reject cleanly so the caller supplies one.
+    //
+    // NOT applied to a re-run. On that path the town comes from the STORED audit, not the
+    // request, and this guard tested the request's location_text — so when advanceBaseline began
+    // forwarding the audit's scope ('local') without re-sending its town, every repeat run of a
+    // paid baseline was refused with local_scope_needs_town. Both baselines created on
+    // 2026-07-26 died here, silently, leaving the customer on 1 run of a promised 3. The re-run
+    // branch validates the stored town itself and degrades to classifier scope instead of
+    // failing a paying customer's chain.
+    if (!reuseAuditId && businessScope === "local" && !hasUsableTown(locationText)) {
       return json({ ok: false, error: "local_scope_needs_town" }, 400);
     }
 
@@ -325,7 +338,12 @@ Deno.serve(async (req) => {
           }
         }
         if (questions.length < MIN_QUESTION_COUNT) {
-          questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms, questionCount, reRunScope, (audit.country as string | null) ?? country);
+          // The stored scope is honoured, but 'local' without a usable stored town would build
+          // town-less "[service] in " questions. Degrade to classifier scope rather than refuse:
+          // this path is a paid baseline's repeat run, and failing it strands the guarantee.
+          const genScope: BusinessScope = reRunScope === "local" && !hasUsableTown((audit.location_text as string) ?? "")
+            ? null : reRunScope;
+          questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms, questionCount, genScope, (audit.country as string | null) ?? country);
         }
       }
     } else {

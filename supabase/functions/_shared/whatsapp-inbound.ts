@@ -1,4 +1,5 @@
 import { toWhatsAppNumber } from "./whatsapp-send.ts";
+import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, phoneSuppressed, pitchEverSent } from "./auto-reply-rules.ts";
 
 // Inbound WhatsApp message handling — barber replies arriving on the SAME Meta
@@ -335,7 +336,10 @@ export async function handleInboundMessages(
                             "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
                             "x-internal-job": "1",
                           },
-                          // No questions[] / question_count → server generates at the hard default (4).
+                          // Outreach hook: the count is STATED, from the shared policy. This used
+                          // to send nothing and inherit create-ai-audit's default — and the
+                          // comment here claimed that default was 4 when it was 3, which is
+                          // exactly how a silent cost drift starts.
                           body: JSON.stringify({
                             user_id: leadRow.user_id,
                             lead_id: leadId,
@@ -345,6 +349,7 @@ export async function handleInboundMessages(
                             country: leadRow.country ?? null,
                             website: leadRow.website ?? null,
                             has_website: !!leadRow.website,
+                            question_count: OUTREACH_HOOK_QUESTIONS,
                           }),
                         });
                         if (!res.ok) {

@@ -128,20 +128,72 @@ export function compareToBaseline(baseline: BaselineSnapshot, later: BaselineSna
   };
 }
 
+/** What the last advance attempt did. Persisted so a stalled chain is diagnosable from a
+ *  query — the first stall cost a day of guessing because console output isn't reachable. */
+export interface BaselineAdvanceOutcome {
+  at: string;
+  source: string;                 // "finalise" (the completion hook) or "sweep" (the safety net)
+  action: "finalised" | "started_run" | "waiting_in_flight" | "waiting_no_data" | "error";
+  detail?: string;
+  runs_usable?: number;
+  runs_target?: number;
+  http_status?: number;
+}
+
+const MAX_DETAIL_LEN = 400;
+
 /**
- * Called when a run finishes. If this audit is a multi-run baseline and runs remain, fire the
- * next one with the SAME questions; once the target is met, write the averaged snapshot to
- * ai_audits.baseline. Fully defensive: any missing column/table or failed call is logged and
- * swallowed, because this must never break run finalisation.
+ * Record the outcome ON THE AUDIT, so "why is this baseline stuck" is one query.
+ * Migration-tolerant: when baseline_error / baseline_last_attempt_at are not there yet, fall
+ * back to the latest run's results jsonb, which always exists. A stalled paid baseline must
+ * never be invisible just because a migration is pending.
  */
-export async function advanceBaseline(service: Client, auditId: string): Promise<void> {
+async function recordOutcome(service: Client, auditId: string, outcome: BaselineAdvanceOutcome): Promise<void> {
+  const summary = `${outcome.action}${outcome.detail ? `: ${outcome.detail}` : ""}`.slice(0, MAX_DETAIL_LEN);
+  const { error } = await service
+    .from("ai_audits")
+    .update({
+      // Cleared on any non-error outcome so a fixed chain doesn't keep showing an old failure.
+      baseline_error: outcome.action === "error" ? summary : null,
+      baseline_last_attempt_at: outcome.at,
+    })
+    .eq("id", auditId);
+  if (!error) return;
+  console.warn(`[baseline] outcome columns unavailable (${error.message}); recording on the run instead`);
+  const { data: run } = await service
+    .from("ai_audit_runs").select("id, results").eq("audit_id", auditId)
+    .order("run_number", { ascending: false }).limit(1).maybeSingle();
+  if (!run) return;
+  const prev = run.results && typeof run.results === "object" ? run.results as Record<string, unknown> : {};
+  await service.from("ai_audit_runs").update({ results: { ...prev, baseline_advance: outcome } }).eq("id", run.id);
+}
+
+/**
+ * Called when a run finishes AND by the periodic sweep. If this audit is a multi-run baseline
+ * and runs remain, fire the next one with the SAME questions; once the target is met, write the
+ * averaged snapshot to ai_audits.baseline. Fully defensive: any missing column/table or failed
+ * call is recorded and swallowed, because this must never break run finalisation.
+ *
+ * SAFE TO CALL REPEATEDLY. It starts a repeat only when nothing is already pending or running
+ * for the audit, which is what lets the sweep run on every cron tick without fanning out a new
+ * run each time.
+ */
+export async function advanceBaseline(service: Client, auditId: string, source = "finalise"): Promise<void> {
+  const at = new Date().toISOString();
+  const record = (o: Omit<BaselineAdvanceOutcome, "at" | "source">) =>
+    recordOutcome(service, auditId, { at, source, ...o })
+      .catch((e) => console.error("[baseline] could not record outcome:", e instanceof Error ? e.message : e));
   try {
     const { data: audit, error: aErr } = await service
       .from("ai_audits")
       .select("id, user_id, lead_id, business_name, business_type, location_text, country, has_website, website, specialism, business_scope, baseline_target_runs, baseline")
       .eq("id", auditId).maybeSingle();
     // Column missing (migration not run) or no audit → nothing to advance.
-    if (aErr) { console.warn("[baseline] skipped:", aErr.message); return; }
+    if (aErr) {
+      console.warn("[baseline] skipped:", aErr.message);
+      await record({ action: "error", detail: `audit read failed: ${aErr.message}` });
+      return;
+    }
     const target = Number(audit?.baseline_target_runs ?? 0);
     if (!audit || !(target > 1)) return;          // not a paid baseline audit
     if (audit.baseline) return;                    // already finalised
@@ -150,9 +202,20 @@ export async function advanceBaseline(service: Client, auditId: string): Promise
     const { data: runs } = await service
       .from("ai_audit_runs").select("id, run_number, status")
       .eq("audit_id", auditId).order("run_number", { ascending: true });
-    const usable = ((runs ?? []) as Array<{ id: string; status: string }>)
-      .filter((r) => r.status === "complete" || r.status === "capped");
-    if (usable.length === 0) return;
+    const all = (runs ?? []) as Array<{ id: string; status: string }>;
+    const usable = all.filter((r) => r.status === "complete" || r.status === "capped");
+    const inFlight = all.filter((r) => r.status === "pending" || r.status === "running");
+
+    if (usable.length < target && inFlight.length > 0) {
+      // IDEMPOTENCY. This is what makes the periodic sweep safe: a repeat is already queued or
+      // draining, so starting another would fan out a fresh run on every cron tick.
+      await record({ action: "waiting_in_flight", detail: `${inFlight.length} run(s) still going`, runs_usable: usable.length, runs_target: target });
+      return;
+    }
+    if (usable.length === 0) {
+      await record({ action: "waiting_no_data", detail: "no complete or capped run yet", runs_usable: 0, runs_target: target });
+      return;
+    }
 
     if (usable.length >= target) {
       // Enough runs: average the FIRST `target` of them and store the snapshot.
@@ -161,11 +224,14 @@ export async function advanceBaseline(service: Client, auditId: string): Promise
         .from("ai_audits")
         .update({ baseline: snapshot, baseline_completed_at: new Date().toISOString() })
         .eq("id", auditId);
-      if (upErr) console.warn("[baseline] snapshot write failed:", upErr.message);
-      else {
+      if (upErr) {
+        console.warn("[baseline] snapshot write failed:", upErr.message);
+        await record({ action: "error", detail: `snapshot write failed: ${upErr.message}`, runs_usable: usable.length, runs_target: target });
+      } else {
         console.log(`[baseline] audit ${auditId}: baseline finalised over ${snapshot.runs_counted} runs — ` +
           `${snapshot.summary.named_cells}/${snapshot.summary.answered_cells} named cells ` +
           `(${(snapshot.summary.named_rate * 100).toFixed(1)}%) across ${snapshot.summary.questions} questions`);
+        await record({ action: "finalised", detail: `${snapshot.runs_counted} runs averaged`, runs_usable: usable.length, runs_target: target });
       }
       return;
     }
@@ -180,7 +246,11 @@ export async function advanceBaseline(service: Client, auditId: string): Promise
       const q = (r.question ?? "").trim();
       if (q && !seen.has(q)) { seen.add(q); questions.push(q); }
     }
-    if (!questions.length) { console.warn(`[baseline] audit ${auditId}: no questions to repeat`); return; }
+    if (!questions.length) {
+      console.warn(`[baseline] audit ${auditId}: no questions to repeat`);
+      await record({ action: "error", detail: `run ${latest.id} has no questions to repeat`, runs_usable: usable.length, runs_target: target });
+      return;
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
@@ -198,15 +268,71 @@ export async function advanceBaseline(service: Client, auditId: string): Promise
         purpose: "baseline",         // keeps the wider provided-question cap
         question_count: questions.length,
         business_scope: audit.business_scope ?? undefined,
+        // MUST accompany business_scope. Sending scope='local' without it is what killed every
+        // repeat run: create-ai-audit's local-scope guard reads the REQUEST's location, so the
+        // call was refused 400 local_scope_needs_town and the chain died at run 1. The guard now
+        // skips re-runs too, but sending the town the audit already has removes the dependency
+        // on that branch entirely.
+        location_text: audit.location_text ?? undefined,
       }),
     });
-    const out = await res.json().catch(() => ({}));
+    const rawBody = await res.text();
+    let out: { ok?: boolean; error?: unknown } = {};
+    try { out = JSON.parse(rawBody); } catch { /* non-JSON body — kept verbatim in the record */ }
     if (!res.ok || !out?.ok) {
-      console.error(`[baseline] audit ${auditId}: repeat run ${usable.length + 1}/${target} failed:`, out?.error ?? res.status);
-    } else {
-      console.log(`[baseline] audit ${auditId}: started repeat run ${usable.length + 1}/${target} with ${questions.length} questions`);
+      // The whole reason this record exists: the previous version logged this to a console we
+      // cannot read, so a refused chain looked identical to a chain that never ran.
+      const why = typeof out?.error === "string" ? out.error : rawBody.slice(0, 200);
+      console.error(`[baseline] audit ${auditId}: repeat run ${usable.length + 1}/${target} failed:`, res.status, why);
+      await record({
+        action: "error",
+        detail: `repeat run ${usable.length + 1}/${target} refused: ${why}`,
+        http_status: res.status,
+        runs_usable: usable.length,
+        runs_target: target,
+      });
+      return;
     }
+    console.log(`[baseline] audit ${auditId}: started repeat run ${usable.length + 1}/${target} with ${questions.length} questions`);
+    await record({
+      action: "started_run",
+      detail: `run ${usable.length + 1}/${target}, ${questions.length} questions`,
+      runs_usable: usable.length,
+      runs_target: target,
+    });
   } catch (e) {
-    console.error("[baseline] advance error:", e instanceof Error ? e.message : e);
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[baseline] advance error:", msg);
+    await record({ action: "error", detail: `threw: ${msg}` });
   }
+}
+
+/**
+ * SAFETY NET. advanceBaseline used to be called only at a run's finalisation transition — a
+ * single shot. Any transient failure there (a cold start, a 500, a network blip) stranded a
+ * PAID baseline at one run forever, with the results screen still promising a 3-run average.
+ * Measured: two baselines created on 2026-07-26 sat at 1 run indefinitely.
+ *
+ * This sweep runs on the queue's existing cron tick and re-drives any baseline below its target.
+ * advanceBaseline is idempotent (it refuses to start a repeat while one is in flight), so calling
+ * it every tick costs one cheap query and cannot fan out duplicate runs. Bounded per tick so a
+ * backlog can never monopolise an invocation.
+ */
+export async function sweepStalledBaselines(service: Client, limit = 5): Promise<number> {
+  const { data, error } = await service
+    .from("ai_audits").select("id, baseline_target_runs")
+    .not("baseline_target_runs", "is", null)
+    .is("baseline", null)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error) {
+    // Columns pending migration → nothing to sweep, and the queue carries on regardless.
+    console.warn("[baseline] sweep skipped:", error.message);
+    return 0;
+  }
+  const pending = ((data ?? []) as Array<{ id: string; baseline_target_runs: number | null }>)
+    .filter((a) => Number(a.baseline_target_runs ?? 0) > 1);
+  for (const a of pending) await advanceBaseline(service, a.id, "sweep");
+  if (pending.length) console.log(`[baseline] sweep drove ${pending.length} unfinished baseline(s)`);
+  return pending.length;
 }

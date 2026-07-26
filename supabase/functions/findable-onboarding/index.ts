@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { BASELINE_QUESTIONS, BASELINE_RUNS } from "../../../src/lib/auditQuestionCounts.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Three actions:
@@ -35,12 +36,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
 const GBP_CONSENT = new Set(["yes_all", "listings_only", "discuss"]);
 const SUBMIT_COOLDOWN_MS = 10 * 60_000;   // one submission per lead per 10 min
-// PAID BASELINE shape. The outreach hook runs 3-5 questions once, which is enough to prove
-// "you're invisible". A paying client's baseline is the money-back guarantee's measuring
-// stick, so it runs more questions over repeated runs and stores the average: measured
-// run-to-run swings on 5-question audits reach 50+ points with no intervention at all.
-const BASELINE_QUESTIONS = 10;
-const BASELINE_RUNS = 3;
+// PAID BASELINE shape — from the shared question-count policy, so this path and the cheap
+// outreach hook cannot drift into each other. See src/lib/auditQuestionCounts.ts for why 10 x 3
+// is not negotiable here.
 const AUDIT_REUSE_MS = 30 * 60_000;       // a run newer than this is reused, never duplicated
 
 const clip = (v: unknown, max: number): string | null => {
