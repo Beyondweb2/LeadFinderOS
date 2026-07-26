@@ -280,7 +280,9 @@ const AiAudit = () => {
   const urlRef = useRef<HTMLInputElement>(null);
   const specialismsRef = useRef<HTMLInputElement>(null);
 
-  const estimatedCost = Number((questions.length * engineCount * unitCost).toFixed(2));
+  // ONE actor run per question covers every engine, so cost is per QUESTION — multiplying by
+  // engineCount double-counted it (the server-side estimate had the same bug).
+  const estimatedCost = Number((questions.length * unitCost).toFixed(2));
 
   // Reveal the next step (monotonic — earlier answers stay revealed/editable).
   const reveal = (i: number) => setRevealed((r) => Math.max(r, i));
@@ -1570,7 +1572,7 @@ const AiAudit = () => {
                     </Select>
                     <span className="text-[11px] text-muted-foreground">
                       We'll generate {questionCount} search question{questionCount === 1 ? '' : 's'}
-                      {unitCost > 0 ? ` · est. cost ~$${(questionCount * engineCount * unitCost).toFixed(2)}` : ''}.
+                      {unitCost > 0 ? ` · est. cost ~$${(questionCount * unitCost).toFixed(2)}` : ''}.
                     </span>
                   </div>
                 </div>

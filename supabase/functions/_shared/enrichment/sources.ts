@@ -42,7 +42,9 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
     key: "maps",
     stage: ["discovery", "enrich"],
     actorId: MAPS_ACTOR_ID,
-    estCostUsd: 0.02, // deep enrich (reviews+images+contacts) for one place
+    // REAL price (Apify dashboard, 2026-07-26): compass/crawler-google-places bills
+    // $3.00 per 1,000 places.
+    estCostUsd: 0.003,
     description: "Google Maps via compass/crawler-google-places",
     enabled: true,
   },
@@ -74,9 +76,12 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
     stage: "enrich",
     actorId: AI_SEARCH_ACTOR,
     // Per QUESTION (one actor run covers ChatGPT+Perplexity+Gemini+AI Overview+organic).
-    // ⚠️ ESTIMATE — verify against the actor's real per-run cost and tune here + the
-    // per-question estimate in create-ai-audit. Drives the runner cap pre-check.
-    estCostUsd: 0.05,
+    // REAL price (Apify dashboard, 2026-07-26): apify/google-search-scraper bills $2.50 per
+    // 1,000 search result pages, so one question is $0.0025 — the previous $0.05 estimate was
+    // 20x too high. Note this is the CEILING the cap pre-check uses; the actual per-run cost is
+    // now recorded from the Apify run itself (ai_audit_runs.actor_cost_usd), so unit economics
+    // come from measurement rather than from this number.
+    estCostUsd: 0.0025,
     description: "AI Visibility Audit multi-engine SERP via apify/google-search-scraper",
     enabled: true,
   },
@@ -84,9 +89,12 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
     key: "seo_audit",
     stage: "enrich",
     actorId: SEO_AUDIT_ACTOR,
-    // Per single-page audit (usage-based, not per-result) — CONSERVATIVE estimate;
-    // verify the real per-run cost on the first live run and tune here.
-    estCostUsd: 0.02,
+    // REAL price (Apify dashboard, 2026-07-26): the SEO scan actually in use is
+    // smart-digital/complete-seo-audit-tool (see seo-scan-core.ts), billed $40 per 1,000 pages
+    // at MAX_PAGES=3, so ~$0.12 per scan — the previous $0.02 was 6x too LOW. NOTE the actorId
+    // below still names the legacy misceres actor used by the older seo-audit.ts path; the live
+    // queue/run-seo-scan path uses SEO_SCAN_ACTOR.
+    estCostUsd: 0.12,
     description: "On-page SEO audit (misceres/seo-audit-tool), graded for the AI-audit report's SEO section",
     enabled: true,
   },

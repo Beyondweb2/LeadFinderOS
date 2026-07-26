@@ -127,7 +127,14 @@ export async function startAiSearch(
 export async function pollAiSearchRun(
   runId: string,
   token: string,
-): Promise<{ status: string; datasetId: string | null; runTimeSecs: number | null }> {
+): Promise<{
+  status: string;
+  datasetId: string | null;
+  runTimeSecs: number | null;
+  /** Apify's own cost figure for this run, available on the SAME poll we already make. */
+  usageTotalUsd: number | null;
+  computeUnits: number | null;
+}> {
   return await getApifyRun(runId, token);
 }
 

@@ -202,11 +202,17 @@ Deno.serve(async (req) => {
         }).eq("id", row.id);
       };
       try {
-        const { status } = await pollAiSearchRun(runId, apifyToken);
+        const { status, usageTotalUsd, computeUnits } = await pollAiSearchRun(runId, apifyToken);
         if (status === "SUCCEEDED") {
           const items = await fetchAiSearchItems(runId, apifyToken);
           const audit = await getAudit(row.audit_id);
-          const result = normalizeAiSearch(items, audit.businessName); // items shape identical to run-sync
+          const result = normalizeAiSearch(items, audit.businessName) as Record<string, unknown>;
+          // What Apify says this question actually cost. Stored under a leading-underscore meta
+          // key (same convention as _apify) so nothing that walks the engine keys trips on it.
+          if (usageTotalUsd != null || computeUnits != null) {
+            result._cost_usd = usageTotalUsd;
+            result._compute_units = computeUnits;
+          }
           await service.from("ai_audit_queue").update({ status: "done", result }).eq("id", row.id);
           return;
         }
@@ -489,6 +495,14 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     const { data: runNow } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
     const existingSeo = runNow?.results && typeof runNow.results === "object" ? (runNow.results as Row).seo : undefined;
 
+    // MEASURED actor spend for this run: the sum of what Apify charged for each question,
+    // not an estimate. null when no question reported a figure (older rows, or all failed).
+    let actorCostUsd: number | null = null;
+    for (const r of rows) {
+      const c = (r.result as Record<string, unknown> | null)?._cost_usd;
+      if (typeof c === "number") actorCostUsd = Number(((actorCostUsd ?? 0) + c).toFixed(6));
+    }
+
     const results = {
       engines: DEFAULT_ENGINES,
       summary: {
@@ -498,6 +512,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         done_questions: doneQuestions,
         failed_questions: failedQuestions,
         total_questions: rows.length,
+        actor_cost_usd: actorCostUsd,
       },
       questions,
       ...(existingSeo ? { seo: existingSeo } : {}),
@@ -529,11 +544,21 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     // flip the same run, so every completion side-effect (extract-competitors, audit_reply, auto-report)
     // fires EXACTLY ONCE — for the winner. A later tick that re-sees a settled run updates 0 rows and
     // skips, which also stops it clobbering extract-competitors' cleaned results.
-    const { data: flipped, error: writeErr } = await service.from("ai_audit_runs")
-      .update({ results, mention_rate: mentionRate, status: runStatus })
-      .eq("id", runId)
-      .in("status", ["pending", "running"])
-      .select("id");
+    // actor_cost_usd is written alongside; migration-tolerant retry below if the column is absent.
+    const flipRun = (extra: Record<string, unknown>) =>
+      service.from("ai_audit_runs")
+        .update({ results, mention_rate: mentionRate, status: runStatus, ...extra })
+        .eq("id", runId)
+        .in("status", ["pending", "running"])
+        .select("id");
+    let { data: flipped, error: writeErr } = await flipRun({ actor_cost_usd: actorCostUsd });
+    // This IS the atomic completion flip, so a missing column must never stall a run: if the
+    // actor_cost_usd migration has not been applied, flip without it rather than retrying
+    // forever and leaving every audit stuck in 'running'.
+    if (writeErr && /actor_cost_usd/i.test(writeErr.message ?? "")) {
+      console.warn("[process-ai-audit-queue] actor_cost_usd column missing — finalising without the cost figure");
+      ({ data: flipped, error: writeErr } = await flipRun({}));
+    }
     if (writeErr) {
       console.error(`[process-ai-audit-queue] finalise write failed for run ${runId}:`, writeErr.message);
       continue; // don't fire side-effects on a failed write — the run retries next tick

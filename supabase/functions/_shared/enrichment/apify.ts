@@ -176,7 +176,15 @@ export async function getApifyRun(
   runId: string,
   token: string,
   timeoutMs = 15_000,
-): Promise<{ status: ApifyRunStatus; datasetId: string | null; runTimeSecs: number | null }> {
+): Promise<{
+  status: ApifyRunStatus;
+  datasetId: string | null;
+  runTimeSecs: number | null;
+  /** Apify's OWN figure for what this run cost, in USD. Present once the run has finished.
+   *  Free to collect: this is the same GET we already make to poll the status. */
+  usageTotalUsd: number | null;
+  computeUnits: number | null;
+}> {
   const { res, body } = await apifyFetch(
     `https://api.apify.com/v2/actor-runs/${runId}`,
     { headers: { Authorization: `Bearer ${token}` } },
@@ -189,6 +197,8 @@ export async function getApifyRun(
     status: (typeof data.status === "string" ? data.status : "") as ApifyRunStatus,
     datasetId: typeof data.defaultDatasetId === "string" ? data.defaultDatasetId : null,
     runTimeSecs: typeof stats.runTimeSecs === "number" ? stats.runTimeSecs : null,
+    usageTotalUsd: typeof data.usageTotalUsd === "number" ? data.usageTotalUsd : null,
+    computeUnits: typeof stats.computeUnits === "number" ? stats.computeUnits : null,
   };
 }
 
