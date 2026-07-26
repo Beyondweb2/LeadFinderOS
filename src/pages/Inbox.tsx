@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check } from 'lucide-react';
 
 // Shared style for the compact thread-header quick-action icon buttons/links.
@@ -400,6 +401,10 @@ const Inbox = () => {
         website: activeLead.website || undefined,
         has_website: !!activeLead.website,
         queue_pitch_on_complete: true,
+        // Stated, not inherited. This used to send nothing and rely on create-ai-audit's shared
+        // default happening to be 3; one edit to that default would have silently multiplied the
+        // cost of the highest-volume path in the system.
+        question_count: OUTREACH_HOOK_QUESTIONS,
       },
     });
     if (error || !data?.ok) {

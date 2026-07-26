@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 
 // bulk-jobs — server-side bulk runner for enrich + site-gen, so an operator can
 // fire a batch, close the browser, and come back to progress / finished results.
@@ -214,7 +215,9 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     // Inputs sourced the SAME way as the wizard's pickLead: type = search_keyword||category,
     // location = search_location||address. Eligibility (client-side) already ensures these exist.
     const website = (lead.website ?? "").trim();
-    const questionCount = Number((job.params as { question_count?: unknown } | null)?.question_count) || 3;
+    // Operator-chosen count from the bulk dialog; falls back to the shared outreach-hook value
+    // rather than a bare literal, so the cheap paths move together or not at all.
+    const questionCount = Number((job.params as { question_count?: unknown } | null)?.question_count) || OUTREACH_HOOK_QUESTIONS;
     const res = await fetch(`${SUPABASE_URL}/functions/v1/create-ai-audit`, {
       method: "POST",
       headers: internalHeaders,

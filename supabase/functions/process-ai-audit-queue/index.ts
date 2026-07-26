@@ -4,7 +4,7 @@ import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
-import { advanceBaseline } from "../_shared/audit-baseline.ts";
+import { advanceBaseline, sweepStalledBaselines } from "../_shared/audit-baseline.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
 import { autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 // Automation B: reuse the SHARED report aggregation (same buildReportData the SPA + public
@@ -151,6 +151,18 @@ Deno.serve(async (req) => {
       }
     } catch (e) {
       console.error("[process-ai-audit-queue] reclaim skipped (updated_at column missing?):", e instanceof Error ? e.message : e);
+    }
+
+    // 0a2) PAID BASELINE safety net. MUST stay above the SEO step: that step returns early on
+    //      its own tick, so anything after it is skipped on those ticks. The completion hook
+    //      below is one-shot, and when its single attempt failed a paid baseline stayed at one
+    //      run forever while the customer was promised a 3-run average. This re-drives any
+    //      baseline below its target. advanceBaseline refuses to start a repeat while one is in
+    //      flight, so running it every tick is one cheap query, not a fan-out.
+    try {
+      await sweepStalledBaselines(service);
+    } catch (e) {
+      console.error("[process-ai-audit-queue] baseline sweep failed:", e instanceof Error ? e.message : String(e));
     }
 
     // 0b) SEO step — website audits get one on-page SEO grade per run, stored at

@@ -27,6 +27,7 @@ import {
   DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, classifyWinnability,
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
 } from '@/lib/auditReport';
+import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { renderPlaybookHtml, downloadPlaybookHtml, type PlaybookData, type PlaybookView } from '@/lib/playbookHtml';
 import { buildSchema, normalizeUrl } from '@/lib/schemaType';
 import { isAggregatorUrl } from '@/lib/aggregators';
@@ -43,11 +44,12 @@ type Step = 'source' | 'name' | 'type' | 'location' | 'website' | 'review' | 're
 const WIZARD_STEPS = ['source', 'name', 'type', 'location', 'website', 'scope', 'specialisms', 'review'] as const;
 const REVIEW_INDEX = WIZARD_STEPS.indexOf('review');
 
-// Question-count selector: how many search questions to generate. Range mirrors the
-// create-ai-audit clamp (HARD 3..5, default 3 — unified across wizard/bulk/auto-chain).
-const MIN_QUESTION_COUNT = 3;
-const MAX_QUESTION_COUNT = 5;
-const DEFAULT_QUESTION_COUNT = 3;
+// Question-count selector: how many search questions to generate. The MANUAL path — operator
+// selectable, from the shared policy module that create-ai-audit clamps against, so the selector
+// and the server bound can't disagree.
+const MIN_QUESTION_COUNT = WIZARD_MIN_QUESTIONS;
+const MAX_QUESTION_COUNT = WIZARD_MAX_QUESTIONS;
+const DEFAULT_QUESTION_COUNT = WIZARD_DEFAULT_QUESTIONS;
 const QUESTION_COUNT_OPTIONS = Array.from(
   { length: MAX_QUESTION_COUNT - MIN_QUESTION_COUNT + 1 },
   (_, i) => MIN_QUESTION_COUNT + i,
