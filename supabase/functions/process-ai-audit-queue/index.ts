@@ -359,8 +359,32 @@ Deno.serve(async (req) => {
  * Returns true if it ran (the caller then ends the tick so a second actor call never
  * stacks). Eligibility: an open run (pending/running) whose audit has a website and whose
  * results.seo is not yet set. On success/failure it writes results.seo (a failure marker
- * counts as "done" so it isn't retried). Cost flows through the runner cache/cap harness.
+ * counts as "done" FOR THAT RUN so it isn't retried within it). Cost flows through the
+ * runner cache/cap harness.
+ *
+ * ONE SCAN PER AUDIT, NOT PER RUN. A paid baseline is three runs of the same questions
+ * minutes apart, and the website cannot have changed in between, so re-scanning it each
+ * time cost $0.36 per client (82% of the total) for no extra information. A run now
+ * inherits a usable scan from a sibling run of the SAME audit when one exists, and only
+ * scans when there is nothing to inherit. Single-run outreach audits have no siblings, so
+ * they behave exactly as before.
  */
+/** How long a sibling run's scan stays reusable. Comfortably covers a baseline's runs (minutes
+ *  apart) while a genuine re-audit weeks later still gets a fresh look at the site. */
+const SEO_REUSE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** A scan worth inheriting: graded, not a failure marker. Mirrors isRenderableSeo in
+ *  src/lib/auditReport.ts — the same test the report uses to decide it can render an SEO block.
+ *  Failure markers ({error, checked_at}, ~2 of 55 stored scans) deliberately fail this, so a
+ *  failed scan never blocks the next run from trying again. */
+function isReusableSeo(seo: unknown): boolean {
+  if (!seo || typeof seo !== "object") return false;
+  const o = seo as Record<string, unknown>;
+  if (o.error) return false;
+  const c = o.categories as Record<string, unknown> | undefined;
+  return !!c && typeof c === "object" && !!c.onPage && !!c.contentTechnical;
+}
+
 // deno-lint-ignore no-explicit-any
 async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolean> {
   const { data: openRuns } = await service
@@ -374,6 +398,29 @@ async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolea
     const { data: audit } = await service
       .from("ai_audits").select("user_id, has_website, website, location_text").eq("id", run.audit_id).maybeSingle();
     if (!audit?.has_website || !audit?.website) continue; // no-website audits get no SEO section
+
+    // INHERIT before scanning. Any OTHER run of this same audit, recent enough, that holds a
+    // GRADED scan (failure markers excluded by isReusableSeo, so a failed scan still retries)
+    // is copied onto this run instead of paying for the same site again. Returns nothing —
+    // copying costs no actor call, so the tick carries on to the next run.
+    const { data: siblings } = await service
+      .from("ai_audit_runs")
+      .select("id, results")
+      .eq("audit_id", run.audit_id)
+      .neq("id", run.id)
+      .gte("created_at", new Date(Date.now() - SEO_REUSE_MAX_AGE_MS).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(5);
+    const inherited = ((siblings ?? []) as Row[])
+      .map((sib) => (sib.results && typeof sib.results === "object" ? (sib.results as Row).seo : undefined))
+      .find(isReusableSeo);
+    if (inherited) {
+      const { data: freshRow } = await service.from("ai_audit_runs").select("results").eq("id", run.id).maybeSingle();
+      const curResults = freshRow?.results && typeof freshRow.results === "object" ? freshRow.results : {};
+      await service.from("ai_audit_runs").update({ results: { ...curResults, seo: inherited } }).eq("id", run.id);
+      console.log(`[process-ai-audit-queue] run ${run.id}: reused this audit's existing SEO scan (no re-scan)`);
+      continue;
+    }
 
     const website = String(audit.website);
     let seo: unknown;
