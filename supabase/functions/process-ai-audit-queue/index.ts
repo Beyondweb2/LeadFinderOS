@@ -502,7 +502,28 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       questions,
       ...(existingSeo ? { seo: existingSeo } : {}),
     };
-    const runStatus = isCapped ? "capped" : "complete";
+    // A run where EVERY question failed is NOT a complete audit. Marking it "complete" is how
+    // an Apify outage looked like working software: on 2026-07-26 the account started returning
+    // HTTP 402 (out of credit) at 08:17, every question failed, and six runs across four
+    // businesses were still stored as complete with mention_rate 0 — indistinguishable from a
+    // real "you are invisible" result. It also poisons everything downstream: an empty public
+    // report gets published, and a 3-run paid baseline would happily average three outages into
+    // the measuring stick behind the money-back guarantee. Fail loudly instead.
+    const allFailed = rows.length > 0 && doneQuestions === 0 && failedQuestions === rows.length;
+    // Surface WHY, so an operator sees "402" rather than an empty audit.
+    const errorCounts = new Map<string, number>();
+    if (allFailed) {
+      for (const r of rows) {
+        const err = String((r.result as Row | null)?.error ?? "").trim();
+        if (err) errorCounts.set(err, (errorCounts.get(err) ?? 0) + 1);
+      }
+    }
+    const dominantError = [...errorCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    if (allFailed && dominantError) {
+      (results as Record<string, unknown>).error = dominantError;
+      console.error(`[process-ai-audit-queue] run ${runId}: ALL ${rows.length} questions failed — ${dominantError}`);
+    }
+    const runStatus = isCapped ? "capped" : allFailed ? "failed" : "complete";
     // ATOMIC completion flip: gate on .in(status,[pending,running]) + .select() so only the tick that
     // actually transitions the run pending/running → terminal "wins". Overlapping pollers can't both
     // flip the same run, so every completion side-effect (extract-competitors, audit_reply, auto-report)
@@ -526,7 +547,8 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     // status write above has RESOLVED, so it can't race the fold that extract-competitors re-reads
     // and rewrites. Fail-safe: never throws; a non-2xx is logged (a 401/403 misconfig is visible,
     // not a silent no-op) and can never flip the run back out of complete.
-    if (prevStatus === "pending" || prevStatus === "running") {
+    // Nothing to extract from a run with no answers, so skip the call entirely.
+    if (!allFailed && (prevStatus === "pending" || prevStatus === "running")) {
       extractionInvokes.push((async () => {
         try {
           const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extract-competitors`, {
@@ -552,19 +574,20 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       // The lead_id gate + idempotency are enforced inside maybeSendAuditReply.
       // Gated OFF by default (same flag as reply→audit). When off, no report row is published and
       // no audit_reply is sent. Set AUTO_REPLY_FLOW_ENABLED=1 to re-enable (no code change).
-      if (Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1" && !isCapped && runRow?.audit_id) auditReplyJobs.push({ runId, auditId: runRow.audit_id as string });
+      if (Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1" && !isCapped && !allFailed && runRow?.audit_id) auditReplyJobs.push({ runId, auditId: runRow.audit_id as string });
       // Auto-report: queue a public /r/ business report for this finalised audit — processed AFTER
       // extraction (below) so it reflects the cleaned competitors. COMPLETE runs only (not capped):
       // the existing-report SELECT guard makes the FIRST report permanent, so a capped run's
       // partial-data report would block the full report from a later re-run — capped audits stay on
       // the manual button. No lead-id gate; skipped when AUTO_REPORT_ENABLED is off. Existing-report
       // guard + fail-safe wrapping live in the processor below.
-      if (autoReportEnabled && !isCapped && runRow?.audit_id) reportJobs.push({ auditId: runRow.audit_id as string });
+      if (autoReportEnabled && !isCapped && !allFailed && runRow?.audit_id) reportJobs.push({ auditId: runRow.audit_id as string });
       // D2 — completion auto-send candidates (COMPLETE only, like audit_reply/auto-report). The
       // heavier checks (setting, lead, phone, suppression) run once, after the loop.
-      if (!isCapped && runRow?.audit_id) completionSendJobs.push({ auditId: runRow.audit_id as string });
+      if (!isCapped && !allFailed && runRow?.audit_id) completionSendJobs.push({ auditId: runRow.audit_id as string });
       // Baseline chain runs for capped runs as well — see baselineJobs above.
-      if (runRow?.audit_id) baselineJobs.push({ auditId: runRow.audit_id as string });
+      // An all-failed run must never count toward a paid baseline.
+      if (!allFailed && runRow?.audit_id) baselineJobs.push({ auditId: runRow.audit_id as string });
     }
   }
   // Await the queued extraction calls so the edge runtime doesn't cut them off when we return.
