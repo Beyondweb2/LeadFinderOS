@@ -1,5 +1,6 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 
 // stripe-webhook — flips generated_sites.is_paid from Stripe subscription events.
 //
@@ -325,6 +326,24 @@ Deno.serve(async (req) => {
               await recordPaymentFailure("stripe_findable_no_lead", { onboarding_id: onboardingId, amount_gbp: amountGbp });
             }
             console.log(`[stripe-webhook] findable payment recorded: onboarding=${onboardingId} lead=${findableLeadId || "(none)"} amount=${amountGbp} (${event.id})`);
+
+            // START THE PAID BASELINE. This is the moment the customer becomes a client, and the
+            // 3-run averaged baseline the money-back guarantee is measured against starts HERE
+            // rather than while they waited in front of the payment button.
+            //
+            // Deliberately NOT allowed to fail the webhook: the payment is already recorded, and
+            // throwing would make Stripe retry an event whose money-writes have landed. Instead the
+            // outcome is recorded, and process-ai-audit-queue's ensureBaselinesForPaidOnboardings
+            // re-attempts every tick for any paid row whose lead still has no baseline. So a failed
+            // start here delays the baseline by ~1 minute; it cannot lose it.
+            const baseline = await startPaidBaseline(service, onboardingId, "stripe-webhook");
+            if (!baseline.ok) {
+              console.error(`[stripe-webhook] baseline start failed for onboarding ${onboardingId}: ${baseline.error ?? baseline.skipped}`);
+              await recordPaymentFailure("baseline_start_failed", {
+                onboarding_id: onboardingId, lead_id: findableLeadId || null,
+                reason: baseline.error ?? baseline.skipped, note: "queue backstop will retry",
+              });
+            }
           }
           break;
         }

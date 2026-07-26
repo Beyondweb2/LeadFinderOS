@@ -143,7 +143,9 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
               <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
             )}
             {!!lead.notes && lead.notes.trim().length > 0 && (
-              <StickyNote className="h-3 w-3 text-muted-foreground/60 flex-shrink-0" title="Has a note" />
+              <span title="Has a note" className="inline-flex flex-shrink-0">
+                <StickyNote className="h-3 w-3 text-muted-foreground/60" />
+              </span>
             )}
             <WhatsAppStatusBadge status={lead.whatsapp_status} compact />
           </div>

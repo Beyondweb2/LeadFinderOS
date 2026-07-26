@@ -38,3 +38,6 @@ email-preview.html
 email-preview.txt
 
 .claude/
+
+# TypeScript incremental build artefacts (written at the repo root by `tsc -b`)
+*.tsbuildinfo

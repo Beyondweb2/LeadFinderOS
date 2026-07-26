@@ -20,6 +20,16 @@
 /** The engines whose named/answered signal counts toward the baseline. Mirrors the report. */
 const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
+/** Paid baseline shape, from the shared question-count policy. */
+import { BASELINE_QUESTIONS, BASELINE_RUNS } from "../../../src/lib/auditQuestionCounts.ts";
+
+/** Towns this is not. Mirrors findable-onboarding: forcing scope='local' needs a real town. */
+const NON_TOWN = new Set([
+  "uk", "u.k.", "united kingdom", "great britain", "britain", "gb", "england", "scotland",
+  "wales", "northern ireland", "ireland", "nationwide", "national", "online", "remote",
+  "everywhere", "anywhere", "the local area",
+]);
+
 export interface BaselineQuestionStat {
   /** How many runs returned an answer for this question on this engine. */
   answered: number;
@@ -352,4 +362,149 @@ export async function sweepStalledBaselines(service: Client, limit = 5): Promise
   for (const a of pending) await advanceBaseline(service, a.id, "sweep");
   if (pending.length) console.log(`[baseline] sweep drove ${pending.length} unfinished baseline(s)`);
   return pending.length;
+}
+
+/**
+ * START a paid client's 3-run baseline. Called AFTER PAYMENT, never while the customer waits.
+ *
+ * WHY IT MOVED. The baseline used to be fired by findable-onboarding on submit, which parked the
+ * customer on a "building your report" screen for up to five minutes directly in front of the
+ * payment button — friction in the worst possible place, for a measurement they cannot see and
+ * do not need before paying. They have already read their report; that link is what brought them.
+ *
+ * IDEMPOTENT. Returns early if the lead already has an audit with baseline_target_runs > 1, so a
+ * Stripe webhook retry, a duplicate event and the queue backstop can all call it freely without
+ * buying a second baseline. That guard also replaces the per-lead cap the public submit path used
+ * to need — the public endpoint no longer starts any audit at all.
+ */
+export async function startPaidBaseline(
+  service: Client,
+  onboardingId: string,
+  source: string,
+): Promise<{ ok: boolean; audit_id?: string; skipped?: string; error?: string }> {
+  try {
+    const { data: row, error: rErr } = await service
+      .from("onboarding_responses")
+      .select("id, lead_id, confirmed_location, services")
+      .eq("id", onboardingId).maybeSingle();
+    if (rErr) return { ok: false, error: `onboarding read failed: ${rErr.message}` };
+    if (!row) return { ok: false, error: "onboarding row not found" };
+    const leadId = row.lead_id as string | null;
+    if (!leadId) return { ok: false, skipped: "no_lead_id" };
+
+    // Already has one? Nothing to do — this is what makes retries safe.
+    const { data: existing, error: eErr } = await service
+      .from("ai_audits").select("id, baseline_target_runs").eq("lead_id", leadId);
+    if (eErr) return { ok: false, error: `audit lookup failed: ${eErr.message}` };
+    const already = ((existing ?? []) as Array<{ id: string; baseline_target_runs: number | null }>)
+      .find((a) => Number(a.baseline_target_runs ?? 0) > 1);
+    if (already) return { ok: true, audit_id: already.id, skipped: "already_has_baseline" };
+
+    const { data: lead, error: lErr } = await service
+      .from("outreach_leads")
+      .select("id, user_id, business_name, category, search_keyword, country, website, search_location")
+      .eq("id", leadId).maybeSingle();
+    if (lErr) return { ok: false, error: `lead read failed: ${lErr.message}` };
+    if (!lead) return { ok: false, error: "lead not found" };
+
+    const bizType = ((lead.category as string) || (lead.search_keyword as string) || "").trim();
+    if (!bizType) return { ok: false, skipped: "no_business_type" };
+    const locationText = ((row.confirmed_location as string) || (lead.search_location as string) || "").trim();
+    if (!locationText) return { ok: false, skipped: "no_location" };
+    const scopeIsLocal = !NON_TOWN.has(locationText.toLowerCase());
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+        "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+        "x-internal-job": "1",
+      },
+      body: JSON.stringify({
+        user_id: lead.user_id,
+        lead_id: leadId,
+        business_name: lead.business_name,
+        business_type: bizType,
+        location_text: locationText,
+        specialisms: ((row.services as string) ?? "").slice(0, 200),
+        country: lead.country ?? null,
+        website: lead.website ?? null,
+        has_website: !!lead.website,
+        ...(scopeIsLocal ? { business_scope: "local" } : {}),
+        purpose: "baseline",
+        question_count: BASELINE_QUESTIONS,
+        baseline_target_runs: BASELINE_RUNS,
+      }),
+    });
+    const body = await res.text();
+    let out: { ok?: boolean; audit_id?: string; error?: unknown } = {};
+    try { out = JSON.parse(body); } catch { /* non-JSON kept verbatim below */ }
+    if (!res.ok || !out?.ok || !out?.audit_id) {
+      const why = typeof out?.error === "string" ? out.error : body.slice(0, 200);
+      console.error(`[baseline] start failed for onboarding ${onboardingId} (${source}): ${res.status} ${why}`);
+      return { ok: false, error: `create-ai-audit refused: ${why}` };
+    }
+    console.log(`[baseline] started paid baseline ${out.audit_id} for onboarding ${onboardingId} (${source})`);
+    await service.from("onboarding_responses")
+      .update({ audit_id: out.audit_id, updated_at: new Date().toISOString() })
+      .eq("id", onboardingId);
+    return { ok: true, audit_id: out.audit_id };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[baseline] start threw for onboarding ${onboardingId} (${source}):`, msg);
+    return { ok: false, error: `threw: ${msg}` };
+  }
+}
+
+/**
+ * BACKSTOP, so a paying client cannot end up without a baseline.
+ *
+ * The Stripe webhook starts the baseline on the payment event, but that is one attempt over the
+ * network: create-ai-audit could be cold, rate-limited or briefly down. This runs on the queue's
+ * existing cron tick and starts a baseline for any PAID onboarding row whose lead still has none.
+ * startPaidBaseline is idempotent, so this costs one cheap query when there is nothing to do.
+ *
+ * Failures are recorded to client_error_reports, but at most once an hour per row, so a sustained
+ * outage leaves a visible trail instead of 60 rows a minute.
+ */
+export async function ensureBaselinesForPaidOnboardings(service: Client, limit = 5): Promise<number> {
+  const { data, error } = await service
+    .from("onboarding_responses")
+    .select("id, lead_id")
+    .eq("status", "paid")
+    .not("lead_id", "is", null)
+    .order("updated_at", { ascending: true })
+    .limit(limit);
+  if (error) {
+    console.warn("[baseline] paid-client backstop skipped:", error.message);
+    return 0;
+  }
+  const rows = (data ?? []) as Array<{ id: string; lead_id: string }>;
+  if (!rows.length) return 0;
+
+  let started = 0;
+  for (const r of rows) {
+    const res = await startPaidBaseline(service, r.id, "paid-backstop");
+    if (res.ok && !res.skipped) started++;
+    if (!res.ok) {
+      // Rate-limited failure record: only if nothing was logged for this row in the last hour.
+      const since = new Date(Date.now() - 60 * 60_000).toISOString();
+      const { data: recent } = await service
+        .from("client_error_reports").select("id")
+        .eq("error_id", "baseline_start_failed")
+        .gte("created_at", since)
+        .contains("context", { onboarding_id: r.id })
+        .limit(1);
+      if (!recent || (recent as unknown[]).length === 0) {
+        await service.from("client_error_reports").insert({
+          error_id: "baseline_start_failed",
+          context: { onboarding_id: r.id, lead_id: r.lead_id, reason: res.error ?? res.skipped, at: new Date().toISOString() },
+        });
+      }
+    }
+  }
+  if (started) console.log(`[baseline] paid-client backstop started ${started} baseline(s)`);
+  return started;
 }
