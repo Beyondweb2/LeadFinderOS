@@ -259,6 +259,45 @@ Deno.serve(async (req) => {
 
     if (!businessName && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
 
+    /* ── REUSE THE LEAD'S EXISTING AUDIT INSTEAD OF MINTING A DUPLICATE ─────────
+       The Inbox audit button, the outreach bulk runner and the wizard's "Run audit" all posted a
+       lead_id but no audit_id, so every press created a brand-new ai_audits row for the same
+       business. Only the wizard's edited re-run and the baseline chain passed audit_id and did it
+       right. Result: 7 leads currently hold duplicate audits, and a re-audit lost its own history.
+       Fixed HERE, server-side, so all three callers (and any future one) get it right rather than
+       three call sites drifting apart again.
+
+       PAID BASELINES ARE DELIBERATELY EXCLUDED. advanceBaseline averages `usable.slice(0, target)`
+       - the first N runs by run_number - so while a baseline is still draining an outreach re-run
+       would land inside that window and pollute a like-for-like average with a different, shorter
+       question set. A FINALISED baseline is protected (advanceBaseline returns early once
+       ai_audits.baseline is set), but the window reopens for as long as each new client's three
+       runs take to drain. So never reuse a paid baseline; if that is all the lead has, create a
+       fresh ordinary audit and leave the paid measurement alone.
+
+       No lead_id (the wizard's "new business" path) still creates a new audit: without one there is
+       no reliable key for "the same business", and name matching would merge the wrong records. */
+    let effectiveReuseId = reuseAuditId;
+    // A PAID BASELINE never resolves onto an existing audit. baseline_target_runs is only written
+    // on the insert path, so reusing here would hand the client a run on their old outreach audit
+    // and NO baseline row - and the paid-client backstop, seeing no baseline, would start another
+    // one every minute forever. A baseline must be its own audit.
+    if (!effectiveReuseId && leadId && !isBaseline) {
+      const { data: candidates } = await service
+        .from("ai_audits")
+        .select("id, baseline_target_runs, created_at")
+        .eq("lead_id", leadId)
+        .order("created_at", { ascending: false });
+      const all = (candidates ?? []) as Array<{ id: string; baseline_target_runs: number | null }>;
+      const reusable = all.find((a) => Number(a.baseline_target_runs ?? 0) <= 1);
+      if (reusable) {
+        effectiveReuseId = reusable.id;
+        console.log(`[create-ai-audit] lead ${leadId}: adding a run to existing audit ${reusable.id} rather than creating a duplicate`);
+      } else if (all.length) {
+        console.log(`[create-ai-audit] lead ${leadId}: only paid-baseline audits exist, creating a separate ordinary audit so the baseline stays clean`);
+      }
+    }
+
     // Forced LOCAL needs a real town — otherwise "[service] in [town]" has no town and we'd
     // silently drift national. Reject cleanly so the caller supplies one.
     //
@@ -269,7 +308,7 @@ Deno.serve(async (req) => {
     // 2026-07-26 died here, silently, leaving the customer on 1 run of a promised 3. The re-run
     // branch validates the stored town itself and degrades to classifier scope instead of
     // failing a paying customer's chain.
-    if (!reuseAuditId && businessScope === "local" && !hasUsableTown(locationText)) {
+    if (!effectiveReuseId && businessScope === "local" && !hasUsableTown(locationText)) {
       return json({ ok: false, error: "local_scope_needs_town" }, 400);
     }
 
@@ -307,12 +346,16 @@ Deno.serve(async (req) => {
     let auditBusinessName = businessName;
     let questions: string[] = [];
 
-    if (reuseAuditId) {
-      // Re-run: load + ownership-check the existing audit, reuse its questions.
+    if (effectiveReuseId) {
+      // Re-run: load + ownership-check the existing audit, reuse its questions. Reusing the STORED
+      // questions is the point of a re-audit - the same questions asked again is what makes two
+      // runs comparable - so an Inbox re-audit repeats the previous set rather than generating a
+      // fresh one. Bounded: baselines are excluded above, so the stored set is an outreach-sized
+      // 3-5 questions, never a 10-question baseline.
       const { data: audit } = await service
         .from("ai_audits")
         .select("id, user_id, business_name, business_type, location_text, country, has_website, business_scope")
-        .eq("id", reuseAuditId)
+        .eq("id", effectiveReuseId)
         .maybeSingle();
       if (!audit || audit.user_id !== userId) return json({ ok: false, error: "audit_not_found" }, 403);
       auditId = audit.id;
