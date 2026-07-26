@@ -16,7 +16,6 @@ import {
   type NormalizedPlace,
 } from "./apify.ts";
 import { AI_SEARCH_ACTOR } from "./ai-search.ts";
-import { SEO_AUDIT_ACTOR } from "./seo-audit.ts";
 
 export type SourceKey = "maps" | "contact_scraper" | "social_images" | "whatsapp" | "ai_search" | "seo_audit";
 export type SourceStage = "discovery" | "enrich";
@@ -88,12 +87,14 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
   seo_audit: {
     key: "seo_audit",
     stage: "enrich",
-    actorId: SEO_AUDIT_ACTOR,
-    // REAL price (Apify dashboard, 2026-07-26): the SEO scan actually in use is
-    // smart-digital/complete-seo-audit-tool (see seo-scan-core.ts), billed $40 per 1,000 pages
-    // at MAX_PAGES=3, so ~$0.12 per scan — the previous $0.02 was 6x too LOW. NOTE the actorId
-    // below still names the legacy misceres actor used by the older seo-audit.ts path; the live
-    // queue/run-seo-scan path uses SEO_SCAN_ACTOR.
+    // The actor the live scan actually runs: seo-scan-core.ts's SEO_SCAN_ACTOR, used by the
+    // queue and run-seo-scan. Named as a literal rather than imported to avoid pulling
+    // seo-scan-core into every consumer of this module; seo-scan-core remains the source of
+    // truth for which actor is CALLED (this field is descriptive — nothing invokes it).
+    // The legacy misceres~seo-audit-tool in seo-audit.ts is no longer the scan in use.
+    actorId: "smart-digital~complete-seo-audit-tool",
+    // REAL price (Apify dashboard, 2026-07-26): $40 per 1,000 pages at MAX_PAGES=3, so ~$0.12
+    // per scan — the previous $0.02 was 6x too LOW, and it is now the dominant cost in an audit.
     estCostUsd: 0.12,
     description: "On-page SEO audit (misceres/seo-audit-tool), graded for the AI-audit report's SEO section",
     enabled: true,
