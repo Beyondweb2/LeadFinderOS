@@ -57,6 +57,9 @@ export interface AiAuditReportData {
   generatedAtLabel: string;      // e.g. "11 Jul 2026"
   shareUrl?: string;             // reserved: future public link (not built yet)
   seo?: AiAuditSeo;              // optional website-SEO section; slot renders only when present
+  /** False when the business has no website at all. The SEO slot then shows what we will BUILD
+   *  them instead of rendering nothing: a site is part of the setup, and silence sells nothing. */
+  hasWebsite?: boolean;
   // Per-term winnability — derived from the stored per-question {named, competitors, citations}.
   // Optional (older snapshots lack it). 'named' = we win/defend; 'open' = winnable (fragmented /
   // directory-driven / no cross-engine consensus); 'contested' = a middling field; 'locked' = a
@@ -125,6 +128,23 @@ function gradeCircle(grade: string, score: number | null, size: number, label: s
 }
 
 const SEV_COLOUR: Record<SeoFinding["severity"], string> = { high: "var(--red)", med: "var(--amber)", low: "var(--muted)" };
+
+/** No website at all: say what we will build, in the SEO slot's place. Distinct from a FAILED
+ *  scan (has a website, grade unavailable) which still renders nothing rather than pretending. */
+function noWebsiteSection(): string {
+  return `
+    <!-- NO WEBSITE &mdash; what we will build, where the SEO grade would be -->
+    <section class="why" style="border-top:1px solid var(--line)">
+      <div class="sec-eyebrow">Your website</div>
+      <div class="sec-title">You don&rsquo;t have a website yet, so we&rsquo;ll build you one.</div>
+      <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.55;color:var(--muted)">
+        AI can&rsquo;t recommend a business it can&rsquo;t read, and right now there&rsquo;s nothing for it to read.
+        We&rsquo;ll build you a simple site that&rsquo;s set up properly for AI from the start: your services,
+        your area, your credentials, all written the way AI quotes them. It&rsquo;s included in your setup,
+        nothing extra to pay.
+      </p>
+    </section>`;
+}
 
 /** Build the whole SEO section, or "" when there's no seo data (slot renders nothing). */
 function seoSection(seo: AiAuditSeo | undefined): string {
@@ -461,7 +481,7 @@ ${gutbox}
          category grades + a radar of the three scores + the lead findings). Renders
          nothing when d.seo is absent, so AI-only audits (e.g. the bar) don't break.
          ============================================================================ -->
-${seoSection(d.seo)}
+${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
 
     <!-- WHY THIS MATTERS (stakes) -->
     <section class="why">
