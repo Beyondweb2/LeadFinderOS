@@ -516,7 +516,7 @@ const AiAudit = () => {
   const rehydrateOpenRun = useCallback(async (rid: string): Promise<boolean> => {
     const { data: latest } = await supabase
       .from('ai_audit_runs')
-      .select('id, audit_id, run_number, status, mention_rate, results')
+      .select('id, audit_id, run_number, status, mention_rate, results, created_at')
       .eq('id', rid)
       .maybeSingle();
     if (!latest) return false;
@@ -547,7 +547,7 @@ const AiAudit = () => {
   const pollRun = useCallback(async (rid: string) => {
     const { data: runRow } = await supabase
       .from('ai_audit_runs')
-      .select('id, audit_id, run_number, status, mention_rate, results')
+      .select('id, audit_id, run_number, status, mention_rate, results, created_at')
       .eq('id', rid)
       .maybeSingle();
     const { data: q } = await supabase
@@ -1083,7 +1083,7 @@ const AiAudit = () => {
   const reopenAudit = async (audit: AuditRow) => {
     const { data: latest } = await supabase
       .from('ai_audit_runs')
-      .select('id, audit_id, run_number, status, mention_rate, results')
+      .select('id, audit_id, run_number, status, mention_rate, results, created_at')
       .eq('audit_id', audit.id)
       .order('run_number', { ascending: false })
       .limit(1)

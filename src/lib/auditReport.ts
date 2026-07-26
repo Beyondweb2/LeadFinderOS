@@ -21,7 +21,7 @@ export interface EngineResult {
 }
 export type EngineMap = Record<string, EngineResult>;
 export interface QueueRow { id: string; question: string; status: string; result: EngineMap | null; }
-export interface RunRow { id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null; results: unknown }
+export interface RunRow { id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null; results: unknown; created_at?: string }
 /* ── Report data hygiene ─────────────────────────────────────────────────────
  * The actor's answer_text and competitor lists are noisy (map/image junk leaks in,
  * and competitor "names" are often generic words or the location). These helpers keep
@@ -700,7 +700,12 @@ export function buildReportData(
     competitors,
     winnability,
     gutPunch: pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
-    generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    // The date the AUDIT WAS MEASURED, not the date someone happened to open the link.
+    // render-audit-report rebuilds this on every request, so new Date() re-dated a three-week-old
+    // report to today every time it was viewed — which also makes it useless as the day-0 artefact
+    // the guarantee's before/after is supposed to rest on. Falls back to now only when the caller
+    // did not select created_at (older call sites), which is the previous behaviour.
+    generatedAtLabel: new Date(run?.created_at ?? Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
     // Only carry a GRADED seo; drop failure/cap markers so the report never crashes on them.
     // Findings are folded here, at the one point BOTH the report renderer and the onboarding
     // results screen read them, so the two can't drift and stored payloads are fixed too.

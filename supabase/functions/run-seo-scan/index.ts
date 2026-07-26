@@ -1,6 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
+// Same shape test the report uses to decide it can render an SEO block, so "we already have
+// a usable scan" means exactly the same thing here as it does downstream.
+import { isRenderableSeo } from "../../../src/lib/auditReport.ts";
 
 // run-seo-scan — run the Apify actor smart-digital/complete-seo-audit-tool for an audit's
 // website, MAP its 9-category output into the report's existing AiAuditSeo shape (3 grades),
@@ -45,6 +48,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const runId: string = typeof body.runId === "string" ? body.runId.trim() : "";
     if (!runId) return json({ ok: false, error: "runId required" }, 400);
+    // Deliberate re-scan (e.g. after the customer fixed their site). Anything but true reuses.
+    const force: boolean = body.force === true;
 
     const { data: run } = await service
       .from("ai_audit_runs").select("id, audit_id, user_id, results").eq("id", runId).maybeSingle();
@@ -57,6 +62,17 @@ Deno.serve(async (req) => {
     if (!audit.has_website || !audit.website) return json({ ok: false, error: "no_website" }, 400);
     if (isAggregatorUrl(String(audit.website))) {
       return json({ ok: false, error: "That website is a booking platform / social / directory page, not an own site." }, 400);
+    }
+
+    // ALREADY SCANNED? Hand back what we paid for last time.
+    // This actor is the most expensive call in the system ($0.12 per run at MAX_PAGES 3) and this
+    // endpoint bypasses runEnrichSource entirely - no cache read, no daily cap, no usage ledger -
+    // so every press bought another crawl of the same URL, invisibly. A failure marker has no
+    // categories and so fails isRenderableSeo, which means a failed scan still retries.
+    const existingSeo = (run.results as { seo?: unknown } | null)?.seo;
+    if (!force && isRenderableSeo(existingSeo)) {
+      console.log(`[run-seo-scan] run ${runId}: returning the existing scan, no actor call (pass force:true to re-scan)`);
+      return json({ ok: true, seo: existingSeo, reused: true });
     }
 
     const apifyToken = Deno.env.get("APIFY_TOKEN") ?? "";

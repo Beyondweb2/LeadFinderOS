@@ -34,7 +34,7 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
   // 1) The lead's newest audit that has a COMPLETE (or capped) run — strictly by lead_id.
   const { data: audits } = await service
     .from("ai_audits")
-    .select("id, business_name, business_type, location_text, specialism, country, created_at, ai_audit_runs(id, run_number, status, mention_rate, results)")
+    .select("id, business_name, business_type, location_text, specialism, country, created_at, ai_audit_runs(id, run_number, status, mention_rate, results, created_at)")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false });
   const list = Array.isArray(audits) ? audits : [];
