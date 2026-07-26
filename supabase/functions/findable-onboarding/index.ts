@@ -35,6 +35,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
 const GBP_CONSENT = new Set(["yes_all", "listings_only", "discuss"]);
 const SUBMIT_COOLDOWN_MS = 10 * 60_000;   // one submission per lead per 10 min
+// PAID BASELINE shape. The outreach hook runs 3-5 questions once, which is enough to prove
+// "you're invisible". A paying client's baseline is the money-back guarantee's measuring
+// stick, so it runs more questions over repeated runs and stores the average: measured
+// run-to-run swings on 5-question audits reach 50+ points with no intervention at all.
+const BASELINE_QUESTIONS = 10;
+const BASELINE_RUNS = 3;
 const AUDIT_REUSE_MS = 30 * 60_000;       // a run newer than this is reused, never duplicated
 
 const clip = (v: unknown, max: number): string | null => {
@@ -170,6 +176,28 @@ Deno.serve(async (req) => {
         // the page falls through to the plan without a report.
         return json({ ok: true, onboarding_id: row.id, audit_id: null, note: "no_business_type" });
       }
+      // SCOPE. Every onboarding customer so far is a local trade, and leaving scope null let
+      // create-ai-audit's classify fallback emit NATIONAL-pattern questions for one-van
+      // plumbers ("plumbing finance options for homeowners UK", "fixed price plumbing quotes
+      // for homeowners uk" — both real, both unwinnable, each wasting a question). Forcing
+      // 'local' removes them by construction.
+      //
+      // Guarded: create-ai-audit rejects scope='local' without a usable town (400
+      // local_scope_needs_town). The customer types this field, so "UK" or "nationwide" is
+      // possible — in that case send no scope and let the classifier decide, rather than
+      // failing a paying customer's audit.
+      const NON_TOWN = new Set([
+        "uk", "u.k.", "united kingdom", "great britain", "britain", "gb", "england", "scotland",
+        "wales", "northern ireland", "ireland", "nationwide", "national", "online", "remote",
+        "everywhere", "anywhere", "the local area",
+      ]);
+      const locKey = confirmedLocation.toLowerCase().trim();
+      const scopeIsLocal = !!locKey && !NON_TOWN.has(locKey);
+
+      // areas_wanted is deliberately NOT passed. create-ai-audit takes a single location
+      // string and builds "[service] in [town] UK" from it; there is no multi-area input, and
+      // stuffing a list into location_text or specialisms would corrupt the question shape
+      // (specialisms drives niche keywords). It stays stored for operator use.
       const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
         method: "POST",
         headers: {
@@ -188,6 +216,11 @@ Deno.serve(async (req) => {
           country: lead.country ?? null,
           website: lead.website ?? null,
           has_website: !!lead.website,
+          ...(scopeIsLocal ? { business_scope: "local" } : {}),
+          // PAID BASELINE: more questions than the outreach hook, measured over repeat runs.
+          purpose: "baseline",
+          question_count: BASELINE_QUESTIONS,
+          baseline_target_runs: BASELINE_RUNS,
         }),
       });
       const created = await res.json().catch(() => ({}));
@@ -207,10 +240,10 @@ Deno.serve(async (req) => {
         typeof body.audit_id === "string" && UUID_RE.test(body.audit_id.trim()) ? body.audit_id.trim() : null;
       if (!leadId || !auditId) return json({ ok: false, error: "bad_request" }, 400);
       // The audit must belong to THIS lead — a random audit UUID gets nothing.
+      // select('*') so the baseline columns come through when present and are simply absent
+      // when the migration has not run — no second query, no failure either way.
       const { data: audit } = await service
-        .from("ai_audits")
-        .select("id, lead_id, business_name, business_type, location_text, specialism, website")
-        .eq("id", auditId).maybeSingle();
+        .from("ai_audits").select("*").eq("id", auditId).maybeSingle();
       if (!audit || audit.lead_id !== leadId) return json({ ok: false, error: "unknown_audit" }, 404);
       const { data: run } = await service
         .from("ai_audit_runs").select("id, audit_id, run_number, status, mention_rate, results")
@@ -232,6 +265,40 @@ Deno.serve(async (req) => {
         ownWebsite: audit.website ?? "",
       });
       if (!data) return json({ ok: true, status: "running" });
+
+      // SEO. Already computed: process-ai-audit-queue grades the site in its OWN tick before
+      // draining questions, so by the time a run reads 'complete' the grade has been sitting
+      // in results.seo for minutes. buildReportData only carries it through isRenderableSeo,
+      // which drops Apify failure markers (2 of 55 stored runs are failures) — so `seo` here
+      // is either a real grade or undefined, and the page shows nothing rather than an error.
+      const seo = data.seo
+        ? {
+            overall_grade: (data.seo as { overallGrade?: string }).overallGrade ?? null,
+            categories: (data.seo as { categories?: unknown }).categories ?? null,
+            findings: ((data.seo as { leadFindings?: unknown[] }).leadFindings ?? [])
+              .slice(0, 4)  // the page shows the main issues, not the full audit
+              .map((f) => {
+                const x = f as { title?: string; detail?: string; severity?: string };
+                return { title: x.title ?? "", detail: x.detail ?? "", severity: x.severity ?? "low" };
+              }),
+          }
+        : null;
+
+      // Baseline progress, so the page can be honest that measurement continues after the
+      // first result. Absent column (migration pending) → null, and the page just omits it.
+      const targetRuns = Number((audit as { baseline_target_runs?: number }).baseline_target_runs ?? 0);
+      let baseline: { runs_done: number; runs_target: number; complete: boolean } | null = null;
+      if (targetRuns > 1) {
+        const { count } = await service
+          .from("ai_audit_runs").select("id", { count: "exact", head: true })
+          .eq("audit_id", auditId).in("status", ["complete", "capped"]);
+        baseline = {
+          runs_done: Math.min(count ?? 0, targetRuns),
+          runs_target: targetRuns,
+          complete: !!(audit as { baseline?: unknown }).baseline,
+        };
+      }
+
       return json({
         ok: true,
         status: "complete",
@@ -239,6 +306,8 @@ Deno.serve(async (req) => {
         named: data.named,
         total: data.total,
         winnability: data.winnability, // [{ question, verdict, rivalCount }]
+        seo,
+        baseline,
       });
     }
 
