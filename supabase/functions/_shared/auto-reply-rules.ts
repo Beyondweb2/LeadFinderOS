@@ -16,13 +16,20 @@ const DECLINE_PATTERNS: RegExp[] = [
 ];
 
 /** Obvious automated responses (booking bots / out-of-office / auto-acks) — not a human
- *  "yes", so they must not trigger the rule. Detection is best-effort by design; the
- *  first-inbound-only gate + delay + human-flag paths are the real safety net. */
+ *  "yes", so they must not arm or fire a pitch. Detection is best-effort by design; the
+ *  first-inbound-only gate + delay + human-flag paths + the pitchEverSent() durable
+ *  once-ever check are the real safety net. Jack The Plumber's bot ("Thanks for
+ *  contacting… We are a little busy… will get back to you") matches several of these. */
 const BOT_PATTERNS: RegExp[] = [
   /auto[-\s]?repl(y|ied)/i,
   /out\s+of\s+(the\s+)?office/i,
   /thank(s| you) for (reaching out|messaging|contacting|getting in touch)/i,
   /would you like to (make|book) an appointment/i,
+  /we are (a little )?busy/i,
+  /will get back to you/i,
+  /leave your (details|job details|postcode)/i,
+  /away from/i,
+  /unavailable right now/i,
 ];
 
 export function isDecline(text: string): boolean {
@@ -42,6 +49,30 @@ export function isSubstantiveText(body: string): boolean {
   if (t.length < 2) return false;
   if (t.startsWith("[") && t.endsWith("]")) return false; // bodyFor()'s non-text placeholder
   return true;
+}
+
+/** Durable once-ever check that SURVIVES whatsapp_auto_replies row deletion: has any live
+ *  (or test-mode simulated) outbound of this template already gone to this lead? The
+ *  MESSAGE LOG is the marker — clearing/deleting queue rows can't erase it, and it also
+ *  covers pitches sent OUTSIDE the auto machinery (manual Inbox sends), which the
+ *  unique-row guard never saw (the Jack/Ben duplicate cause). Failed sends don't count —
+ *  a retry after a hard send failure is legitimate. Best-effort: a query error returns
+ *  FALSE (not sent); callers keep their own structural guards (unique index, 23505). */
+// deno-lint-ignore no-explicit-any
+export async function pitchEverSent(service: any, leadId: string, templateName: string): Promise<boolean> {
+  try {
+    const { data } = await service
+      .from("whatsapp_messages")
+      .select("id")
+      .eq("lead_id", leadId)
+      .eq("direction", "outbound")
+      .eq("template_name", templateName)
+      .neq("status", "failed")
+      .limit(1);
+    return Array.isArray(data) && data.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /** Cross-channel suppression check (contact_suppressions keys by canonical E.164 "+<digits>").

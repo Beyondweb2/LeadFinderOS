@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
-import { firstReplyTemplate } from "../_shared/auto-reply-rules.ts";
+import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
 // OpenAI (gpt-4o-mini, tool-calling, mirrors admin-ai-opener), creates the audit +
@@ -357,13 +357,18 @@ Deno.serve(async (req) => {
         const { data: leadRow } = await service
           .from("outreach_leads").select("phone, country").eq("id", leadId).maybeSingle();
         const to = toWhatsAppNumber((leadRow?.phone as string) ?? "", (leadRow?.country as string | null) ?? null);
+        const parkTemplate = await firstReplyTemplate(service);
         if (!to) {
           pitchNote = "no_usable_phone";
+        } else if (await pitchEverSent(service, leadId, parkTemplate ?? "audit_reply")) {
+          // DURABLE once-ever: the pitch already went to this lead (message log — covers manual
+          // Inbox sends and survives queue-row deletion). Never park a second one.
+          pitchNote = "pitch_already_sent";
         } else {
           const { error: pErr } = await service.from("whatsapp_auto_replies").insert({
             lead_id: leadId,
             phone: to,
-            template_name: await firstReplyTemplate(service),
+            template_name: parkTemplate,
             status: "awaiting_audit",
             fire_after: new Date().toISOString(), // real fire_after set by the completion upgrade
           });

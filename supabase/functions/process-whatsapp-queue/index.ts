@@ -3,7 +3,7 @@ import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.t
 import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
-import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
+import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -321,6 +321,15 @@ Deno.serve(async (req) => {
           //    carry any allowlisted template. url-templates need the lead's claim link — missing
           //    → flagged_no_link, NEVER a broken send.
           const templateName = row.template_name || "audit_reply";
+          // DURABLE once-ever (send time): the MESSAGE LOG is the authoritative "this pitch
+          // already went out" marker — it survives queue-row deletion and covers pitches sent
+          // OUTSIDE this machinery (manual Inbox sends). This is exactly the Jack/Ben duplicate:
+          // a manual audit_reply landed while this row sat pending, then the drainer re-sent it.
+          if (await pitchEverSent(service, row.lead_id, templateName)) {
+            await finish("skipped_already_sent");
+            results[row.lead_id] = "skipped_already_sent";
+            continue;
+          }
           const tmpl = WA_TEMPLATES[templateName];
           if (!tmpl) { await finish("flagged_error", `unknown_template:${templateName}`); results[row.lead_id] = "flagged_error"; continue; }
           let payload: Record<string, unknown>;
