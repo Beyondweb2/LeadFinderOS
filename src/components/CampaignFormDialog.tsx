@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { SALE_TYPES, type SaleType } from '@/lib/saleType';
 import { CAMPAIGN_METHOD_OPTIONS } from '@/lib/campaign';
 import { WHATSAPP_TEMPLATES } from '@/types/outreach';
-import type { Campaign, CampaignInput } from '@/hooks/useCampaigns';
+import { CAMPAIGN_TYPE_OPTIONS, type Campaign, type CampaignInput, type CampaignType } from '@/hooks/useCampaigns';
 
 interface CampaignFormDialogProps {
   open: boolean;
@@ -41,10 +41,12 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
   const [method, setMethod] = useState<string>(NO_METHOD);
   const [saleType, setSaleType] = useState<SaleType>('website');
   const [defaultTemplate, setDefaultTemplate] = useState<string>(NO_TEMPLATE);
+  const [campaignType, setCampaignType] = useState<CampaignType>('audit');
   const [saving, setSaving] = useState(false);
 
   // Re-seed the form whenever it opens (with the campaign's values in edit mode). A
-  // stored default_template that isn't a current allowlist key falls back to "Not set".
+  // stored default_template that isn't a current allowlist key falls back to "Not set";
+  // an unknown/null campaign_type falls back to 'audit' (the column default).
   useEffect(() => {
     if (!open) return;
     setName(campaign?.name ?? '');
@@ -53,6 +55,8 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
     setSaleType((campaign?.default_sale_type as SaleType) ?? 'website');
     const t = campaign?.default_template;
     setDefaultTemplate(t && WHATSAPP_TEMPLATES.some((o) => o.value === t) ? t : NO_TEMPLATE);
+    const ct = campaign?.campaign_type;
+    setCampaignType(CAMPAIGN_TYPE_OPTIONS.some((o) => o.value === ct) ? (ct as CampaignType) : 'audit');
   }, [open, campaign]);
 
   const handleSave = async () => {
@@ -67,6 +71,7 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
       method: method === NO_METHOD ? null : method,
       default_sale_type: saleType,
       default_template: templateValid ? defaultTemplate : null,
+      campaign_type: campaignType,
     });
     setSaving(false);
     if (result) onOpenChange(false);
@@ -91,6 +96,21 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
                 if (e.key === 'Enter' && name.trim() && !saving) handleSave();
               }}
             />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Campaign type</label>
+            <Select value={campaignType} onValueChange={(v) => setCampaignType(v as CampaignType)}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CAMPAIGN_TYPE_OPTIONS.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground/60 mt-1">Drives which metrics this campaign's dashboard card shows.</p>
           </div>
 
           <div>

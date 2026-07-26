@@ -9,13 +9,14 @@ import { isSentStatus, isRepliedStatus, type ContactMethod } from '@/types/outre
 export interface CampaignStats {
   campaign: Campaign | null;   // null = the "Unassigned" bucket
   leadCount: number;
-  // Campaign funnel. sent/replied from lead status; opened/claimed/addon from
+  // Campaign funnel. sent/replied/paid from lead status; opened/claimed/addon from
   // generated_sites (barber-site opens — kept for the barber campaigns); reportOpened
   // from ai_audits.first_opened_at (real AUDIT-report opens, added alongside — a
   // DISTINCT signal from the barber site opens).
-  funnel: { sent: number; opened: number; reportOpened: number; replied: number; claimed: number; addon: number };
-  // Headline (Decision 1): claimed ÷ opened — both automatic, always accurate.
-  conversionPct: number | null;        // null when opened = 0
+  funnel: { sent: number; opened: number; reportOpened: number; replied: number; claimed: number; addon: number; paid: number };
+  // Conversion = Paid ÷ Sent (paid = payment_received-or-beyond status) — the same
+  // definition for EVERY campaign type. Always a number (0 when nothing sent), never null.
+  conversionPct: number;
   // Secondary, only meaningful once sites are marked "sent" (manual admin signal).
   claimedPerSentPct: number | null;    // null when sent = 0
   replyRatePct: number | null;         // null when sent = 0
@@ -49,6 +50,9 @@ const emptyMethods = (): Record<ContactMethod, number> =>
 
 const pct = (num: number, den: number): number | null =>
   den > 0 ? Math.round((num / den) * 100) : null;
+
+// Paid = payment_received-or-beyond in the forward-only pipeline ordering.
+const PAID_OR_BEYOND = new Set(['payment_received', 'in_delivery', 'completed']);
 
 /**
  * Builds per-campaign stat rollups by joining generated_sites → outreach_leads →
@@ -111,8 +115,8 @@ export function useCampaignStats() {
   const seed = (campaign: Campaign | null): CampaignStats => ({
     campaign,
     leadCount: 0,
-    funnel: { sent: 0, opened: 0, reportOpened: 0, replied: 0, claimed: 0, addon: 0 },
-    conversionPct: null,
+    funnel: { sent: 0, opened: 0, reportOpened: 0, replied: 0, claimed: 0, addon: 0, paid: 0 },
+    conversionPct: 0,
     claimedPerSentPct: null,
     replyRatePct: null,
     methods: emptyMethods(),
@@ -140,6 +144,7 @@ export function useCampaignStats() {
     if (m && m in b.methods) b.methods[m] += 1;
     if (isSentStatus(l.status)) b.funnel.sent += 1;
     if (isRepliedStatus(l.status)) b.funnel.replied += 1;
+    if (PAID_OR_BEYOND.has(l.status ?? '')) b.funnel.paid += 1;
     if (openedAuditLeads.has(l.id)) b.funnel.reportOpened += 1;
     // WhatsApp read-status ratchet: 'read' implies delivered, so both count toward
     // delivered; 'read' also counts toward read.
@@ -180,7 +185,8 @@ export function useCampaignStats() {
 
   // Derived rates.
   for (const b of buckets.values()) {
-    b.conversionPct = pct(b.funnel.claimed, b.funnel.opened);
+    // Conversion = Paid ÷ Sent, every type, always a number (0 when nothing sent yet).
+    b.conversionPct = b.funnel.sent > 0 ? Math.round((b.funnel.paid / b.funnel.sent) * 100) : 0;
     b.claimedPerSentPct = pct(b.funnel.claimed, b.funnel.sent);
     b.replyRatePct = pct(b.funnel.replied, b.funnel.sent);
   }

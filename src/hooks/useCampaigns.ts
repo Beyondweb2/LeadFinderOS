@@ -9,6 +9,16 @@ import { useToast } from '@/hooks/use-toast';
 // client (same pattern as the site-tracking columns in useDashboardMetrics).
 const db = supabase as unknown as SupabaseClient;
 
+/** What a campaign sells — drives which metrics its dashboard card shows.
+ *  'audit' = the audit→pitch→pay funnel; 'site' = the legacy barber-site flow;
+ *  'service' = generic (future app/service sells). */
+export type CampaignType = 'audit' | 'site' | 'service';
+export const CAMPAIGN_TYPE_OPTIONS: { value: CampaignType; label: string }[] = [
+  { value: 'audit', label: 'Audit (report → pitch → pay)' },
+  { value: 'site', label: 'Site (barber demo-site flow)' },
+  { value: 'service', label: 'Service (generic sell)' },
+];
+
 export interface Campaign {
   id: string;
   name: string;
@@ -18,6 +28,7 @@ export interface Campaign {
   description: string | null;
   method: string | null;
   default_template: string | null;
+  campaign_type: CampaignType | null; // null/unknown → treated as 'audit'
 }
 
 export interface CampaignInput {
@@ -26,9 +37,15 @@ export interface CampaignInput {
   method?: string | null;
   default_sale_type?: string | null;
   default_template?: string | null;
+  campaign_type?: CampaignType | null;
 }
 
-const CAMPAIGN_COLS = 'id, name, created_by, created_at, default_sale_type, description, method, default_template';
+// select('*') rather than a fixed column list: reads keep working whether or not the
+// campaign_type migration has been applied (the column simply comes back undefined
+// pre-migration and the UI falls back to 'audit'). Writes DO name campaign_type — a
+// pre-migration create/edit surfaces the missing-column error in its toast, which is
+// the honest signal to run the migration.
+const CAMPAIGN_COLS = '*';
 
 /**
  * Thin campaigns hook. Campaigns are a team-readable grouping concept:
@@ -93,6 +110,7 @@ export function useCampaigns() {
         description: input.description?.trim() || null,
         method: input.method || null,
         default_template: input.default_template ?? null,
+        campaign_type: input.campaign_type ?? 'audit',
       })
       .select(CAMPAIGN_COLS)
       .single();
@@ -122,6 +140,7 @@ export function useCampaigns() {
         description: patch.description?.trim() || null,
         method: patch.method || null,
         default_template: patch.default_template ?? null,
+        campaign_type: patch.campaign_type ?? 'audit',
       })
       .eq('id', id)
       .select(CAMPAIGN_COLS)
