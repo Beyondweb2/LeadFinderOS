@@ -60,11 +60,17 @@ export interface AiAuditReportData {
   /** False when the business has no website at all. The SEO slot then shows what we will BUILD
    *  them instead of rendering nothing: a site is part of the setup, and silence sells nothing. */
   hasWebsite?: boolean;
-  // Per-term winnability — derived from the stored per-question {named, competitors, citations}.
-  // Optional (older snapshots lack it). 'named' = we win/defend; 'open' = winnable (fragmented /
-  // directory-driven / no cross-engine consensus); 'contested' = a middling field; 'locked' = a
-  // small, consistent, own-site incumbent set; 'no-local-race' = nobody named, generic advice.
-  winnability?: { question: string; verdict: 'open' | 'contested' | 'locked' | 'named' | 'no-local-race'; rivalCount: number }[];
+  /* NO PER-TERM WINNABILITY HERE, DELIBERATELY.
+     This is the CUSTOMER report's data contract, and a "winnable" verdict is not something we can
+     evidence. Measured over all 402 stored answered questions: 77.6% came back "open" (winnable)
+     and 0% ever came back "locked", because the rule fires on `U >= 6` distinct firms named and
+     the mean U is 15.3 - so it reads breadth as opportunity, which is backwards. It is also
+     noise-driven: 12 of 67 repeated questions (17.9%) changed verdict between identical runs with
+     no work done, because U straddles the threshold of 6.
+     The field is gone from this type so the renderer cannot show it even by accident. The
+     classification still exists (classifyWinnability) and the SPA shows it to the OPERATOR, clearly
+     labelled unreliable, so the logic can be worked on. Fixing that logic - multi-run stability,
+     inverted thresholds, citation-source analysis - is separate, scoped work. */
 }
 
 export function esc(s: string): string {

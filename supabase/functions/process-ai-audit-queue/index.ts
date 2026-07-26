@@ -31,6 +31,21 @@ const corsHeaders = {
 
 // ASYNC model: starts are just ~1s POST /runs calls, so we fan OUT — start many questions per
 // tick and let them scrape concurrently on Apify (Phase-1 confirmed plan concurrency = 32).
+/* GLOBAL IN-FLIGHT CEILING, so the audit queue cannot consume the whole Apify concurrency
+   allowance. Directory scrapes share that allowance and starved on 2026-07-26 while a 6-audit
+   batch was draining: this queue previously started rows up to START_BATCH per tick with no regard
+   for how many actor runs were already live, so a big batch could hold 18+ concurrent runs.
+
+   AUDIT_IN_FLIGHT_CEILING is the most simultaneous question-actors the audit queue may hold. The
+   headroom between it and your Apify plan's limit is what stays available for scrapes and
+   enrichment. Set for a 25-run plan: 16 for audits leaves 9 free. CONFIRM YOUR PLAN'S LIMIT and
+   adjust - if the real ceiling is higher, raise this and audits get faster for free; if it is
+   lower, this must come down or scrapes will starve again. */
+const AUDIT_IN_FLIGHT_CEILING = 16;
+/* How much of a tick may already be spent before the (slow) SEO scan is deferred to the next one.
+   Its actor allows up to 110s, and the cron now fires every 30s, so keep this well under the
+   platform's invocation limit: draining + a scan must still finish comfortably. */
+const SEO_TICK_BUDGET_MS = 20_000;
 const START_BATCH = 12;          // max pending rows to START (claim) per tick — parallel fan-out,
                                  // kept well under the 32 concurrency ceiling to leave headroom for
                                  // other actors (SEO/maps). Total drain time ≈ the SLOWEST question,
@@ -165,6 +180,12 @@ Deno.serve(async (req) => {
       console.error("[process-ai-audit-queue] baseline sweep failed:", e instanceof Error ? e.message : String(e));
     }
 
+    // Wall-clock budget for this invocation. The SEO step at the end is the only genuinely slow
+    // thing in a tick (its actor allows up to 110s), so it is skipped when the draining work has
+    // already used most of the budget. Skipping costs nothing: the next tick picks it up, and the
+    // scan is idempotent (results.seo is the done-marker).
+    const tickStartedAt = Date.now();
+
     // 0a3) PAID CLIENT baseline backstop. The stripe webhook starts the baseline on the payment
     //      event, but that is a single network attempt. This guarantees the outcome: any PAID
     //      onboarding row whose lead has no baseline gets one started here, every tick, until it
@@ -176,14 +197,11 @@ Deno.serve(async (req) => {
       console.error("[process-ai-audit-queue] paid-baseline backstop failed:", e instanceof Error ? e.message : String(e));
     }
 
-    // 0b) SEO step — website audits get one on-page SEO grade per run, stored at
-    //     results.seo. It gets its OWN tick (runs before question draining and returns)
-    //     so a second actor call never stacks into the same invocation and blows the
-    //     wall-clock. Runs once per run (results.seo is the done-marker), only when the
-    //     audit has a website.
-    if (await maybeRunSeoStep(service, apifyToken)) {
-      return json({ ok: true, seo: "ran" });
-    }
+    // NOTE: the SEO step used to live HERE, before question draining, and it returned from the
+    // tick as soon as it scanned one run. That made every website audit cost a whole tick before
+    // any question could start: measured on a 6-audit batch (4 with websites), the first question
+    // did not start for ~4 minutes and the whole batch took 8-10. It now runs at the END of the
+    // tick instead, so questions are always started and polled first. See "SEO STEP LAST" below.
 
     // Shared helpers ────────────────────────────────────────────────────────────
     // Cache audit lookups (country + business name) per audit_id.
@@ -304,6 +322,24 @@ Deno.serve(async (req) => {
         if (remaining === undefined) {
           const spent = await accumulatedCost(row.run_id);
           remaining = Math.max(0, Math.floor((CAP_USD - spent) / estCost + 1e-9));
+
+      // GLOBAL CEILING: count actor runs already live across every audit and every user, and
+      // never start more than the headroom allows. This is what keeps concurrency available for
+      // directory scrapes rather than letting a big audit batch take everything.
+      // Counts every 'running' row, NOT just those carrying result._apify.runId. The actor is
+      // started before that runId is persisted, so a row mid-start is already holding an Apify
+      // slot - and a row whose runId write failed is exactly the leaked run we most want counted.
+      // Filtering on the runId would undercount precisely the dangerous cases. Over-counting a
+      // stale row is self-healing: the reclaim at the top of each tick releases it after 3 min.
+      const { count: liveNow } = await service
+        .from("ai_audit_queue")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "running");
+      const headroom = Math.max(0, AUDIT_IN_FLIGHT_CEILING - (liveNow ?? 0));
+      if (headroom < remaining) {
+        console.log(`[process-ai-audit-queue] in-flight ceiling: ${liveNow ?? 0}/${AUDIT_IN_FLIGHT_CEILING} actor runs live, starting at most ${headroom} this tick (headroom reserved for directory scrapes)`);
+        remaining = headroom;
+      }
           perRunBudget.set(row.run_id, remaining);
         }
         if (remaining > 0) {
@@ -370,7 +406,23 @@ Deno.serve(async (req) => {
     // (polling) row keeps its run open — so a run never finalises while a question is in flight.
     const finalised = await finaliseSettledRuns(service, [...touchedRuns], estCost, cappedRuns);
 
-    return json({ ok: true, started, polled: waiting.length, finalised, capped: [...cappedRuns] });
+    /* SEO STEP LAST. One scan per tick, after every question has been started, polled and
+       finalised, so a website audit never delays its own questions. Skipped when this invocation
+       has already spent most of its budget - the scan can wait a tick, questions cannot, and
+       results.seo being the done-marker makes the deferral free. */
+    let seoRan = false;
+    const elapsedMs = Date.now() - tickStartedAt;
+    if (elapsedMs < SEO_TICK_BUDGET_MS) {
+      try {
+        seoRan = await maybeRunSeoStep(service, apifyToken);
+      } catch (e) {
+        console.error("[process-ai-audit-queue] SEO step failed:", e instanceof Error ? e.message : String(e));
+      }
+    } else {
+      console.log(`[process-ai-audit-queue] skipping the SEO step this tick - ${Math.round(elapsedMs / 1000)}s already spent draining (budget ${SEO_TICK_BUDGET_MS / 1000}s)`);
+    }
+
+    return json({ ok: true, started, polled: waiting.length, finalised, capped: [...cappedRuns], seo: seoRan ? "ran" : "skipped" });
   } catch (e) {
     console.error("[process-ai-audit-queue] error:", e);
     return json({ ok: false, error: e instanceof Error ? e.message : "unknown_error" }, 500);

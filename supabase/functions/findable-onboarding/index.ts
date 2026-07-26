@@ -7,7 +7,8 @@ import { isAggregatorUrl } from "../_shared/aggregators.ts";
 //
 //   prefill  { lead_id }                 → safe prefill fields for a known lead
 //   submit   { lead_id?, answers{...} }  → save answers; for a KNOWN lead also fire the audit
-//   status   { lead_id, audit_id }       → poll the audit → winnability list when complete
+//   status   { lead_id, audit_id }       → the audit's report payload when complete
+//                                          (never winnability: not defensible, see auditReport.ts)
 //
 // COST-TAP LOCKDOWN (this function can trigger Apify/OpenAI spend, so it is deliberately
 // strict — a stranger with a random UUID must get nothing):
@@ -298,7 +299,7 @@ Deno.serve(async (req) => {
       if (run.status !== "complete" && run.status !== "capped") {
         return json({ ok: true, status: "running" });
       }
-      // Complete → the SHARED winnability verdicts (same logic as the report).
+      // Complete → the SHARED report payload (same builder `submit` uses). No winnability.
       const { data: qrows } = await service
         .from("ai_audit_queue").select("id, question, status, result")
         .eq("run_id", run.id).order("created_at", { ascending: true });
