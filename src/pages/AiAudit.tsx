@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, Trash2, CircleStop, ChevronRight,
+  Copy, Save, Trash2, CircleStop, ChevronRight, Eye,
 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
@@ -1763,19 +1763,25 @@ const AiAudit = () => {
                                 ) : <span className="w-[18px] shrink-0" />}
 
                                 <button onClick={() => reopenAudit(a)} className="min-w-0 flex-1 text-left" title="Open latest results">
-                                  <div className="flex items-center gap-1.5 text-sm font-medium truncate">
-                                    {b.has_website ? <Globe className="h-3 w-3 shrink-0 text-muted-foreground" /> : <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                                  {/* PRIMARY: the business. Heavier and darker than everything else on the row. */}
+                                  <div className="flex items-center gap-1.5 truncate text-[0.95rem] font-semibold text-foreground">
+                                    {b.has_website ? <Globe className="h-3 w-3 shrink-0 text-muted-foreground/70" /> : <MapPin className="h-3 w-3 shrink-0 text-muted-foreground/70" />}
                                     <span className="truncate">{b.name}</span>
-                                    {nested && <span className="shrink-0 text-[10px] font-normal text-muted-foreground">{b.runCount} runs</span>}
+                                    {nested && <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground">{b.runCount} runs</span>}
                                   </div>
-                                  <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
-                                    <span className="truncate">{b.business_type || '—'}{b.location ? ` · ${b.location}` : ''}</span>
+                                  {/* SECONDARY: trade and place, deliberately recessive. */}
+                                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
+                                    {b.business_type || '—'}{b.location ? ` · ${b.location}` : ''}
+                                  </div>
+                                  {/* TERTIARY: the pill row gets its own line so it is readable rather than
+                                      squeezed against the location text. */}
+                                  <div className="mt-1 flex flex-wrap items-center gap-1">
                                     <AuditPills audit={a} run={run} />
                                   </div>
                                 </button>
 
                                 {/* State: live progress while draining, else the score */}
-                                {inFlight ? <RunProgress run={inFlight} /> : <MentionPill rate={run?.mention_rate ?? null} />}
+                                {inFlight ? <RunningChip run={inFlight} /> : <MentionPill rate={run?.mention_rate ?? null} />}
 
                                 {/* Report — once the latest run has a score */}
                                 {run?.mention_rate !== null && run?.mention_rate !== undefined && (
@@ -1828,7 +1834,7 @@ const AiAudit = () => {
                                               <span className="text-muted-foreground"> · {r.status}</span>
                                               {r.actor_cost_usd !== null && <span className="text-muted-foreground"> · ${r.actor_cost_usd.toFixed(3)}</span>}
                                             </button>
-                                            {draining ? <RunProgress run={r} /> : <MentionPill rate={r.mention_rate} />}
+                                            {draining ? <RunningChip run={r} /> : <MentionPill rate={r.mention_rate} />}
                                             {draining && (
                                               <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => cancelAudit(au, r.id)} disabled={cancellingId === au.id} title="Stop this run">
                                                 <CircleStop className="h-3 w-3" />
@@ -2685,71 +2691,134 @@ function ChoiceButton({ active, onClick, label, hint, icon }: { active: boolean;
    the queue's vocabulary, NOT 'complete', which is a RUN status), so a run whose questions all
    failed still reaches the end of the bar instead of hanging. total 0 means the queue rows are not
    readable yet (the run was created seconds ago), so it says "starting" rather than "0 of 0". */
-function RunProgress({ run }: { run: RunLite }) {
-  if (!run.total) {
-    return (
-      <Badge variant="secondary" className="shrink-0 gap-1">
-        <Loader2 className="h-2.5 w-2.5 animate-spin" />starting
-      </Badge>
-    );
-  }
-  const pct = Math.min(100, Math.round((run.done / run.total) * 100));
+/* NOTE ON COLOURS: --badge-*-fg is the foreground designed to sit ON that badge's SOLID fill
+   (it is black). Any treatment here that uses a TINT or a transparent frame must colour its text
+   with the BASE variable instead, or it renders black on a dark card and disappears. Measured:
+   the C grade, the client pill and every mid-range score were doing exactly that.
+
+   IN FLIGHT. Deliberately shares NO visual language with the score: the old version drew a
+   progress bar and "0 of 3", which reads as a nil result rather than work in progress. A spinner
+   plus the word "running" plus the question count can only mean one thing, and there is no
+   score-shaped element on the row at all while a run is going. */
+function RunningChip({ run }: { run: RunLite }) {
   return (
-    <div className="flex shrink-0 items-center gap-1.5" title={`${run.done} of ${run.total} questions done`}>
-      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-[hsl(var(--badge-waiting))] transition-all" style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-[11px] tabular-nums text-muted-foreground">{run.done} of {run.total}</span>
-    </div>
+    <span
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[hsl(var(--badge-waiting))]/40 bg-[hsl(var(--badge-waiting))]/15 px-2 py-1 text-[11px] font-semibold text-[hsl(var(--badge-waiting))]"
+      title={run.total ? `${run.done} of ${run.total} questions answered` : 'Starting'}
+    >
+      <Loader2 className="h-3 w-3 animate-spin" />
+      {run.total ? <>running <span className="tabular-nums">{run.done}/{run.total}</span></> : <>starting</>}
+    </span>
   );
 }
 
-/* Signals that were already in the database but never surfaced. Deliberately EXCLUDES "pitched":
-   all 41 audits with a lead had an outbound message, so the pill was true for every row and
-   carried no information. The paid slot is kept and simply renders nothing until a lead pays. */
+/* ── PILL VOCABULARY ────────────────────────────────────────────────────────────────────
+   Four categories, four deliberately different treatments, because they mean different things
+   and previously all read as one thing ("opened" and "baseline 3/3" were both plain green).
+
+     engagement  a PROSPECT ACTED. The most commercially useful signal here, so it gets the only
+                 solid high-contrast fill on the row, and the repeat count is set larger than the
+                 label so "7" is what the eye lands on.
+     client      a PAYING CUSTOMER. Distinct from engagement AND from assets: bordered, tinted,
+                 with a filled dot, so it reads as a status rather than an event.
+     asset       a FACT about what exists (report, playbook). Deliberately recessive - ghost grey.
+     data        a MEASUREMENT (SEO grade). Recessive frame, but the value itself is
+                 colour-coded, since C/D/F is the part worth noticing. */
+
+function EngagementPill({ count, title }: { count: number; title?: string }) {
+  return (
+    <span
+      title={title}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[hsl(var(--badge-closed))] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[hsl(var(--badge-closed-fg))]"
+    >
+      <Eye className="h-3 w-3" />
+      opened
+      {count > 1 && <span className="ml-0.5 text-[12px] font-extrabold leading-none tabular-nums">{count}&times;</span>}
+    </span>
+  );
+}
+
+function ClientPill({ children, title, bad }: { children: React.ReactNode; title?: string; bad?: boolean }) {
+  const tone = bad
+    ? 'border-[hsl(var(--badge-not-interested))]/50 bg-[hsl(var(--badge-not-interested))]/10 text-[hsl(var(--badge-not-interested))]'
+    : 'border-[hsl(var(--badge-closed))]/50 bg-[hsl(var(--badge-closed))]/10 text-[hsl(var(--badge-closed))]';
+  return (
+    <span title={title} className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${tone}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${bad ? 'bg-[hsl(var(--badge-not-interested))]' : 'bg-[hsl(var(--badge-closed))]'}`} />
+      {children}
+    </span>
+  );
+}
+
+function AssetPill({ children, title }: { children: React.ReactNode; title?: string }) {
+  return (
+    <span title={title} className="inline-flex shrink-0 items-center rounded border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
+/** SEO grade: recessive frame, grade-coloured value. A/B fine, C/D/F worth noticing. */
+function GradePill({ grade }: { grade: string }) {
+  const letter = grade.trim().charAt(0).toUpperCase();
+  const cls = letter === 'A' || letter === 'B'
+    ? 'text-[hsl(var(--badge-closed))]'
+    : letter === 'C'
+    ? 'text-[hsl(var(--badge-waiting))]'
+    : 'text-[hsl(var(--badge-not-interested))]';
+  return (
+    <span title="Website SEO grade from the latest run" className="inline-flex shrink-0 items-baseline gap-1 rounded border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+      SEO <span className={`text-[11px] font-bold ${cls}`}>{grade}</span>
+    </span>
+  );
+}
+
 function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | null }) {
   const target = Number(audit.baseline_target_runs ?? 0);
   const counted = audit.baseline_runs_counted;
-  const paid = audit.lead_paid === true;
   return (
     <>
-      {/* Report opened by the prospect - first_opened_at, bumped by the report renderer. */}
+      {/* ENGAGEMENT first: it is the signal most likely to change what the operator does next. */}
       {audit.first_opened_at && (
-        <Pill tone="good" title={`Opened ${new Date(audit.first_opened_at).toLocaleString('en-GB')}${audit.open_count ? ` - ${audit.open_count} views` : ''}`}>
-          opened{audit.open_count && audit.open_count > 1 ? ` x${audit.open_count}` : ''}
-        </Pill>
+        <EngagementPill
+          count={audit.open_count ?? 1}
+          title={`Report opened ${new Date(audit.first_opened_at).toLocaleString('en-GB')}${audit.open_count ? ` - ${audit.open_count} view${audit.open_count === 1 ? '' : 's'}` : ''}`}
+        />
       )}
-      {audit.report_slug && <Pill tone="muted" title={`Published at /r/${audit.report_slug}`}>report</Pill>}
-      {/* PAID BASELINE state. Errors win: a stalled chain is the thing worth seeing, because the
-          results screen promises the customer an average of three runs. */}
+      {/* PAID CLIENT. Errors win: a stalled baseline is what needs attention. */}
       {target > 1 && (
         audit.baseline_error
-          ? <Pill tone="bad" title={audit.baseline_error}>baseline failed</Pill>
-          : audit.baseline_completed_at
-            ? <Pill tone="good" title={`Baseline finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')}`}>baseline {counted ?? target}/{target}</Pill>
-            : <Pill tone="mid" title="Baseline still being measured">baseline {counted ?? 0}/{target}</Pill>
+          ? <ClientPill bad title={audit.baseline_error}>baseline failed</ClientPill>
+          : <ClientPill title={audit.baseline_completed_at ? `Baseline finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')}` : 'Baseline still being measured'}>
+              client &middot; baseline {counted ?? (audit.baseline_completed_at ? target : 0)}/{target}
+            </ClientPill>
       )}
-      {run?.seo_grade && <Pill tone="muted" title="Website SEO grade from the latest run">SEO {run.seo_grade}</Pill>}
-      {paid && <Pill tone="good" title="This lead has paid">paid</Pill>}
+      {audit.lead_paid === true && target <= 1 && <ClientPill title="This lead has paid">client</ClientPill>}
+      {/* ASSETS: facts, not signals. */}
+      {audit.report_slug && <AssetPill title={`Published at /r/${audit.report_slug}`}>report</AssetPill>}
+      {run?.has_playbook && <AssetPill title="A playbook has been generated for this run">playbook</AssetPill>}
+      {/* DATA */}
+      {run?.seo_grade && <GradePill grade={run.seo_grade} />}
     </>
   );
 }
 
-function Pill({ children, tone, title }: { children: React.ReactNode; tone: 'good' | 'mid' | 'bad' | 'muted'; title?: string }) {
-  const cls = tone === 'good' ? 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))]'
-    : tone === 'mid' ? 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))]'
-    : tone === 'bad' ? 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))]'
-    : 'bg-muted text-muted-foreground';
-  return <span title={title} className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>{children}</span>;
-}
-// Score badge: colour by band — red for invisible (0%), amber mid, green high.
 function MentionPill({ rate }: { rate: number | null }) {
-  if (rate === null || rate === undefined) return <Badge variant="secondary" className="shrink-0">—</Badge>;
+  if (rate === null || rate === undefined) {
+    return <span className="shrink-0 text-right text-[13px] tabular-nums text-muted-foreground/50">&mdash;</span>;
+  }
   const pct = Math.round(rate * 100);
-  const cls = pct >= 50 ? 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))]'
-    : pct > 0 ? 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))]'
-    : 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))]';
-  return <Badge className={`shrink-0 border-transparent ${cls}`}>{pct}% named</Badge>;
+  // THE headline number: biggest type on the row, so the eye lands on the result first. Tone
+  // carries the meaning; no pill chrome competing with the pill vocabulary to its left.
+  const cls = pct >= 50 ? 'text-[hsl(var(--badge-closed))]'
+    : pct > 0 ? 'text-[hsl(var(--badge-waiting))]'
+    : 'text-[hsl(var(--badge-not-interested))]';
+  return (
+    <span className="shrink-0 text-right leading-none" title={`${pct}% of AI answers named this business`}>
+      <span className={`font-sans text-[1.05rem] font-bold tabular-nums ${cls}`}>{pct}%</span>
+      <span className="ml-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">named</span>
+    </span>
+  );
 }
 // Small stat tile for the landing metrics strip. `tone` tints the value only.
 function MetricCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone?: 'good' | 'mid' | 'bad' }) {
