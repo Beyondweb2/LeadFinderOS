@@ -883,7 +883,7 @@ async function maybeSendAuditReply(service: any, runId: string, auditId: string)
 
   // 3) Build the report data with the SHARED aggregation (competitors for {{2}} == the report's list).
   const { data: run } = await service.from("ai_audit_runs")
-    .select("id, audit_id, run_number, status, mention_rate, results").eq("id", runId).maybeSingle();
+    .select("id, audit_id, run_number, status, mention_rate, results, created_at").eq("id", runId).maybeSingle();
   const { data: qrows } = await service.from("ai_audit_queue")
     .select("id, question, status, result").eq("run_id", runId).order("created_at", { ascending: true });
   const data = buildReportData((qrows ?? []) as QueueRow[], (run ?? null) as RunRow | null, {
