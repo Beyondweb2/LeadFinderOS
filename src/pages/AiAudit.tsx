@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, Trash2, CircleStop,
+  Copy, Save, Trash2, CircleStop, ChevronRight,
 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
@@ -27,6 +27,7 @@ import {
   DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, classifyWinnability,
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
 } from '@/lib/auditReport';
+import { tradeWord } from '@/lib/trade';
 import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { renderPlaybookHtml, downloadPlaybookHtml, type PlaybookData, type PlaybookView } from '@/lib/playbookHtml';
 import { buildSchema, normalizeUrl } from '@/lib/schemaType';
@@ -109,6 +110,9 @@ interface AuditLite extends AuditRow {
   baseline_completed_at: string | null;
   baseline_error: string | null;
   report_slug: string | null;
+  /** Whether the linked lead has paid. The slot the audit asked to keep: nothing qualifies yet
+   *  (amount_paid is null on all 409 leads), so it simply does not render until one does. */
+  lead_paid?: boolean;
   /** Newest run first. */
   runs: RunLite[];
 }
@@ -400,7 +404,7 @@ const AiAudit = () => {
   // refresh the landing list polls while anything is draining.
   const loadSaved = useCallback(async () => {
     if (!user) return;
-    const { data: audits } = await supabase
+    const { data: audits } = await (supabase as unknown as SupabaseClient)
       .from('ai_audits')
       .select('id, business_name, business_type, location_text, country, has_website, created_at, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted')
       .order('created_at', { ascending: false })
@@ -418,7 +422,7 @@ const AiAudit = () => {
     const runsByAudit = new Map<string, RunLite[]>();
     const inFlightRunIds: string[] = [];
     if (ids.length) {
-      const { data: runs } = await supabase
+      const { data: runs } = await (supabase as unknown as SupabaseClient)
         .from('ai_audit_runs')
         .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results->seo->>overallGrade, pb_summary:results->playbook->>summary')
         .in('audit_id', ids)
@@ -430,7 +434,13 @@ const AiAudit = () => {
         const list = runsByAudit.get(r.audit_id) ?? [];
         list.push({
           id: r.id, audit_id: r.audit_id, run_number: r.run_number, status: r.status,
-          mention_rate: r.mention_rate, created_at: r.created_at, actor_cost_usd: r.actor_cost_usd,
+          // COERCE. Postgres numeric can arrive as a STRING, and then `sum + rate` concatenates
+          // instead of adding (avg visibility came out NaN) and `rate === 0` is false for "0" (the
+          // invisible tally read 0 while rows plainly showed 0% named). Normalise once, here at
+          // the boundary, so nothing downstream has to care.
+          mention_rate: r.mention_rate === null || r.mention_rate === undefined ? null : Number(r.mention_rate),
+          created_at: r.created_at,
+          actor_cost_usd: r.actor_cost_usd === null || r.actor_cost_usd === undefined ? null : Number(r.actor_cost_usd),
           seo_grade: r.seo_grade, has_playbook: !!r.pb_summary, done: 0, total: 0,
         });
         runsByAudit.set(r.audit_id, list);
@@ -441,7 +451,7 @@ const AiAudit = () => {
     // Published report per audit → the "report" pill. One query, existence only.
     const reportByAudit = new Map<string, string>();
     if (ids.length) {
-      const { data: reports } = await supabase
+      const { data: reports } = await (supabase as unknown as SupabaseClient)
         .from('business_reports')
         .select('audit_id, slug')
         .in('audit_id', ids);
@@ -491,12 +501,15 @@ const AiAudit = () => {
      SELF-SUSPENDING: the interval is only created while something is actually in flight.
      When the last run settles, loadSaved drops inFlightCount to 0, this effect tears the
      timer down, and an idle page makes zero requests. */
+  // Derived here rather than from the grouped memo below, which is declared further down the
+  // component: this effect must not reference a block-scoped value before its declaration.
+  const anyRunInFlight = savedAudits.some((a) => a.runs.some((r) => r.status === 'pending' || r.status === 'running'));
   useEffect(() => {
     if (step === 'results') return;   // the results step has its own pollers
-    if (inFlightCount === 0) return;  // nothing draining → no timer at all
+    if (!anyRunInFlight) return;      // nothing draining → no timer at all
     const t = setInterval(() => { loadSaved(); }, LIST_POLL_MS);
     return () => clearInterval(t);
-  }, [step, inFlightCount, loadSaved]);
+  }, [step, anyRunInFlight, loadSaved]);
 
   // One-shot fetch of a run's queue rows (used when opening a report for a past audit that
   // has no cached snapshot yet — we need the raw rows to build the report data once).
@@ -1080,14 +1093,27 @@ const AiAudit = () => {
     toast({ title: 'Links added', description: 'Review the Link hub rows, then Save links.' });
   };
 
-  const reopenAudit = async (audit: AuditRow) => {
-    const { data: latest } = await supabase
-      .from('ai_audit_runs')
-      .select('id, audit_id, run_number, status, mention_rate, results, created_at')
-      .eq('audit_id', audit.id)
-      .order('run_number', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  /** Open an audit's results. `pickRun` opens THAT run instead of the latest — the expanded
+   *  view lists every run and each one is openable. */
+  const reopenAudit = async (audit: AuditRow, pickRun?: { id: string }) => {
+    let latest: unknown = null;
+    if (pickRun) {
+      const { data } = await supabase
+        .from('ai_audit_runs')
+        .select('id, audit_id, run_number, status, mention_rate, results, created_at')
+        .eq('id', pickRun.id)
+        .maybeSingle();
+      latest = data;
+    } else {
+      const { data } = await supabase
+        .from('ai_audit_runs')
+        .select('id, audit_id, run_number, status, mention_rate, results, created_at')
+        .eq('audit_id', audit.id)
+        .order('run_number', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      latest = data;
+    }
     if (!latest) { toast({ title: 'No runs yet for this audit', variant: 'destructive' }); return null; }
     setAuditId(audit.id);
     setResultsBusinessName(audit.business_name);
@@ -1598,10 +1624,18 @@ const AiAudit = () => {
       {/* Stacked wizard — answered steps stay visible; each answer reveals the next. */}
       {step !== 'results' && (
         <div className="space-y-4">
-          {/* Metrics strip — a quick read on the whole audit book (only when there are audits) */}
-          {metrics.total > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <MetricCard icon={<FileText className="h-4 w-4" />} label="Audits" value={String(metrics.total)} />
+          {/* Metrics strip - a quick read on the whole audit book (only when there are audits).
+              Computed over BUSINESSES, not audit rows: a business audited twice used to be counted
+              twice in both the average and the invisible tally. "Site . presence" is gone - it
+              counted has_website, a static property of the lead list that says nothing about how
+              any audit turned out. */}
+          {metrics.audits > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <MetricCard
+                icon={<FileText className="h-4 w-4" />}
+                label={auditsCapped ? `Businesses (of latest ${AUDIT_FETCH_LIMIT})` : 'Businesses'}
+                value={String(metrics.businesses)}
+              />
               {metrics.avgPct !== null && (
                 <MetricCard
                   icon={<TrendingUp className="h-4 w-4" />}
@@ -1617,9 +1651,26 @@ const AiAudit = () => {
                 tone={metrics.invisible > 0 ? 'bad' : 'good'}
               />
               <MetricCard
-                icon={<Globe className="h-4 w-4" />}
-                label="Site · presence"
-                value={`${metrics.withSite} · ${metrics.presence}`}
+                icon={<Loader2 className={`h-4 w-4 ${metrics.inFlight > 0 ? 'animate-spin' : ''}`} />}
+                label="In flight"
+                value={String(metrics.inFlight)}
+                tone={metrics.inFlight > 0 ? 'mid' : undefined}
+              />
+              {/* Paid baselines finalised vs started - the guarantee's measuring stick. */}
+              {metrics.baselineTotal > 0 && (
+                <MetricCard
+                  icon={<Check className="h-4 w-4" />}
+                  label="Baselines"
+                  value={`${metrics.baselinesDone}/${metrics.baselineTotal}`}
+                  tone={metrics.baselinesDone === metrics.baselineTotal ? 'good' : 'mid'}
+                />
+              )}
+              {/* Real actor spend, summed from ai_audit_runs.actor_cost_usd. Only runs since that
+                  column started being written carry a figure, so this is a floor, not a total. */}
+              <MetricCard
+                icon={<Download className="h-4 w-4" />}
+                label="Spend (recorded)"
+                value={`$${metrics.spend.toFixed(2)}`}
               />
             </div>
           )}
@@ -2628,6 +2679,68 @@ function ChoiceButton({ active, onClick, label, hint, icon }: { active: boolean;
       </div>
     </button>
   );
+}
+/* Live progress for a run still draining. Replaces the bare "-" that made a finishing audit look
+   broken and cost four redundant re-runs. done counts SETTLED queue rows ('done' or 'failed' -
+   the queue's vocabulary, NOT 'complete', which is a RUN status), so a run whose questions all
+   failed still reaches the end of the bar instead of hanging. total 0 means the queue rows are not
+   readable yet (the run was created seconds ago), so it says "starting" rather than "0 of 0". */
+function RunProgress({ run }: { run: RunLite }) {
+  if (!run.total) {
+    return (
+      <Badge variant="secondary" className="shrink-0 gap-1">
+        <Loader2 className="h-2.5 w-2.5 animate-spin" />starting
+      </Badge>
+    );
+  }
+  const pct = Math.min(100, Math.round((run.done / run.total) * 100));
+  return (
+    <div className="flex shrink-0 items-center gap-1.5" title={`${run.done} of ${run.total} questions done`}>
+      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-[hsl(var(--badge-waiting))] transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-[11px] tabular-nums text-muted-foreground">{run.done} of {run.total}</span>
+    </div>
+  );
+}
+
+/* Signals that were already in the database but never surfaced. Deliberately EXCLUDES "pitched":
+   all 41 audits with a lead had an outbound message, so the pill was true for every row and
+   carried no information. The paid slot is kept and simply renders nothing until a lead pays. */
+function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | null }) {
+  const target = Number(audit.baseline_target_runs ?? 0);
+  const counted = audit.baseline_runs_counted;
+  const paid = audit.lead_paid === true;
+  return (
+    <>
+      {/* Report opened by the prospect - first_opened_at, bumped by the report renderer. */}
+      {audit.first_opened_at && (
+        <Pill tone="good" title={`Opened ${new Date(audit.first_opened_at).toLocaleString('en-GB')}${audit.open_count ? ` - ${audit.open_count} views` : ''}`}>
+          opened{audit.open_count && audit.open_count > 1 ? ` x${audit.open_count}` : ''}
+        </Pill>
+      )}
+      {audit.report_slug && <Pill tone="muted" title={`Published at /r/${audit.report_slug}`}>report</Pill>}
+      {/* PAID BASELINE state. Errors win: a stalled chain is the thing worth seeing, because the
+          results screen promises the customer an average of three runs. */}
+      {target > 1 && (
+        audit.baseline_error
+          ? <Pill tone="bad" title={audit.baseline_error}>baseline failed</Pill>
+          : audit.baseline_completed_at
+            ? <Pill tone="good" title={`Baseline finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')}`}>baseline {counted ?? target}/{target}</Pill>
+            : <Pill tone="mid" title="Baseline still being measured">baseline {counted ?? 0}/{target}</Pill>
+      )}
+      {run?.seo_grade && <Pill tone="muted" title="Website SEO grade from the latest run">SEO {run.seo_grade}</Pill>}
+      {paid && <Pill tone="good" title="This lead has paid">paid</Pill>}
+    </>
+  );
+}
+
+function Pill({ children, tone, title }: { children: React.ReactNode; tone: 'good' | 'mid' | 'bad' | 'muted'; title?: string }) {
+  const cls = tone === 'good' ? 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))]'
+    : tone === 'mid' ? 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))]'
+    : tone === 'bad' ? 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))]'
+    : 'bg-muted text-muted-foreground';
+  return <span title={title} className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>{children}</span>;
 }
 // Score badge: colour by band — red for invisible (0%), amber mid, green high.
 function MentionPill({ rate }: { rate: number | null }) {
