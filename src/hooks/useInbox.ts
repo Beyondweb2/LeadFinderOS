@@ -212,6 +212,9 @@ export function useInbox() {
 
   const send = useCallback(async (args: {
     phone: string; leadId: string | null; country?: string | null; body?: string; templateName?: string;
+    /** Only true when the operator confirmed a repeat of a pitch this lead already had. The edge
+     *  refuses a duplicate pitch by default; this is the deliberate override, never a default. */
+    allowResend?: boolean;
   }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string }> => {
     const { data, error } = await sb.functions.invoke('send-whatsapp-message', {
       body: {
@@ -220,6 +223,7 @@ export function useInbox() {
         country: args.country ?? null,
         body: args.body,
         template_name: args.templateName,
+        allow_resend: args.allowResend === true,
       },
     });
     if (error) return { ok: false, error: error.message };

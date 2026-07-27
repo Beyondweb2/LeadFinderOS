@@ -61,6 +61,9 @@ Deno.serve(async (req) => {
     const leadId: string | null = typeof body.lead_id === "string" && body.lead_id ? body.lead_id : null;
     const text: string = typeof body.body === "string" ? body.body.trim() : "";
     const templateName: string | null = typeof body.template_name === "string" && body.template_name ? body.template_name : null;
+    // Set by the Inbox ONLY after the operator confirmed a repeat send. Strict === true so a
+    // stray truthy value ("false", 1) can't wave the duplicate guard through.
+    const allowResend: boolean = body.allow_resend === true;
     const country: string | null = typeof body.country === "string" ? body.country : null;
 
     const to = toWhatsAppNumber(rawPhone, country);
@@ -137,12 +140,19 @@ Deno.serve(async (req) => {
         // (report link = /a/<auditId>, competitors from that audit). Refuse (don't send a broken
         // template) when the lead has no completed audit / no competitors.
         if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
-        /* ONCE EVER PER LEAD. The auto path has always had this guard; this path never called it,
-           even though pitchEverSent's own contract is "has this template EVER gone to this lead"
-           and it reads the message log precisely so manual sends are covered. Two leads were
-           pitched twice as a result — a day and an hour apart, so neither was a double-click and
-           no button state could have stopped them. Pitch-class only: openers stay resendable. */
-        if (await pitchEverSent(service, resolvedLeadId, templateName)) {
+        /* ONCE PER LEAD BY DEFAULT, DELIBERATELY OVERRIDABLE. The auto path has always had this
+           guard; this path never called it, even though pitchEverSent's contract is "has this
+           template EVER gone to this lead" and it reads the message log precisely so manual sends
+           are covered. Two leads were pitched twice as a result.
+
+           Not an absolute block: a second pitch is sometimes the right call (they replied and asked
+           for it again, the first went to a dead handset). An absolute block would make the product
+           wrong in those cases. So the refusal is the DEFAULT and the operator can override it by
+           confirming — the UI sends allow_resend only after an explicit yes.
+
+           The guard still stands for anything that does not ask for the override, which is what
+           protects against an accidental repeat or a caller looping over leads. */
+        if (!allowResend && await pitchEverSent(service, resolvedLeadId, templateName)) {
           return json({ ok: false, error: "pitch_already_sent" }, 200);
         }
         const a = await resolveAuditReplyVars(service, resolvedLeadId);
