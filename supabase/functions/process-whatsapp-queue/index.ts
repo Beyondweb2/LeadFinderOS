@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, type TemplateVar } from "../_shared/whatsapp-send.ts";
+import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
@@ -42,8 +43,10 @@ const TZ = "Europe/London";
 // template with a different layout (e.g. URL first) is never sent with the values
 // swapped. The four original templates are {{1}}=name, {{2}}=url — keep that order
 // (they're live). `lang` MUST match the template's registered language in Meta exactly.
-// A name missing from this list SILENTLY falls back to DEFAULT_TEMPLATE — so every new
-// template MUST be added here (and to _shared/whatsapp-send.ts's WA_TEMPLATES).
+// A name missing from this list now REFUSES THE SEND with error "unknown_template" and drops the
+// lead out of the queue with that reason — it no longer falls back to another template. Every new
+// template MUST still be added here (and to _shared/whatsapp-send.ts's WA_TEMPLATES), the
+// difference being that forgetting is now visible instead of silently sending the wrong pitch.
 const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   booking_page_intro: { lang: "en", vars: ["name", "url"] },
   no_website_barbers: { lang: "en", vars: ["name", "url"] }, // renamed from free_website_intro to match Meta
@@ -54,8 +57,19 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   barber_fresha_booksy: { lang: "en", vars: ["url", "name"] },
   // Opener — ONE variable: {{1}} = business name, NO url. vars MUST stay ["name"] (one param).
   initial_contact: { lang: "en", vars: ["name"] },
+  // Was MISSING while being selectable in the bulk picker, so a lead set to audit_reply silently
+  // received booking_page_intro — a barber booking pitch. No lead was ever queued with it, so
+  // nothing mis-sent, but the gap was live.
+  audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
+  // Follow-up to a warm lead after the 24h window: {{1}} business name, {{2}} onboarding URL.
+  onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
 };
-const DEFAULT_TEMPLATE = "booking_page_intro";
+/* NO DEFAULT_TEMPLATE.
+   It used to be booking_page_intro, applied whenever a lead's whatsapp_template was unset or
+   unrecognised. That turned a registration slip into a wrong message: a plumber could receive a
+   barber booking pitch, and nothing in the logs or the UI said so. A prospect getting the wrong
+   message is unrecoverable; a send that fails visibly is a five-minute fix. So an unresolvable
+   template now refuses and says why. */
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -449,9 +463,48 @@ Deno.serve(async (req) => {
     // Resolve the template FIRST so the claim-link requirement can be conditional. A url-less
     // opener (e.g. initial_contact, vars ["name"]) is sent BEFORE any site exists, so it must NOT
     // be gated on a share_token; only templates that actually use a url var need the link.
-    const templateName = lead.whatsapp_template && TEMPLATES[lead.whatsapp_template] ? lead.whatsapp_template : DEFAULT_TEMPLATE;
+    /* STRICT template resolution — no substitution, ever. Same drop-out-of-the-queue shape as the
+       no_claim_link and bad_number guards below, so an operator sees it in the same place: the lead
+       leaves 'queued' (it must never block the single-lead-per-tick drip) and carries a delivery
+       status naming the cause. Re-queue once the template is set or registered.
+       An UNSET template is refused as well as an unrecognised one: defaulting an unset value is how
+       a wrong message got sent in the first place, and no currently-queued lead relies on it. */
+    const requestedTemplate = ((lead.whatsapp_template as string | null) ?? "").trim();
+    if (!requestedTemplate) {
+      await service.from("outreach_leads").update({
+        status: "not_contacted", whatsapp_delivery_status: "no_template", contact_method: null,
+      }).eq("id", lead.id);
+      return json({
+        ok: false,
+        error: "no_template",
+        reason: `${lead.business_name ?? "That lead"} has no WhatsApp template set, so there is nothing to send. Pick one on the lead and re-queue it.`,
+        lead_id: lead.id,
+        business: lead.business_name,
+        ...statusPayload,
+      }, 200);
+    }
+    if (!TEMPLATES[requestedTemplate]) {
+      await service.from("outreach_leads").update({
+        status: "not_contacted", whatsapp_delivery_status: "unknown_template", contact_method: null,
+      }).eq("id", lead.id);
+      return json({
+        ok: false,
+        error: "unknown_template",
+        reason: `Template "${requestedTemplate}" is not registered in the queue's allowlist, so nothing was sent to ${lead.business_name ?? "that lead"}. Nothing else was sent in its place. Register it in process-whatsapp-queue's TEMPLATES (and _shared/whatsapp-send.ts) before re-queueing.`,
+        lead_id: lead.id,
+        business: lead.business_name,
+        ...statusPayload,
+      }, 200);
+    }
+    const templateName = requestedTemplate;
     const lang = TEMPLATES[templateName].lang;
-    const needsUrl = TEMPLATES[templateName].vars.includes("url");
+    const tvars = TEMPLATES[templateName].vars;
+    /* Only templates whose url IS the claim link need a share_token. audit_reply also declares a
+       "url" var, but its link is the lead's AUDIT REPORT, resolved below — gating it on a generated
+       site would refuse a report pitch to any lead that never had a site built, which is most of
+       them. onboarding_followup uses its own var and is never gated here. */
+    const urlIsClaimLink = tvars.includes("url") && !tvars.includes("trade") && !tvars.includes("competitors");
+    const needsUrl = urlIsClaimLink;
     if (needsUrl && !shareToken) {
       // A url template with no claim link → drop it out of the queue so it can't block, and
       // surface why. Operator can re-queue once the site exists. (Unchanged for name+url templates.)
@@ -464,6 +517,46 @@ Deno.serve(async (req) => {
     // "" when there's no token — safe because templateBodyParams only fills the url param for
     // templates whose vars include "url" (url-less templates never reference it).
     const claimUrl = shareToken ? `${CLAIM_ORIGIN}/s/${shareToken}` : "";
+
+    /* PER-LEAD VARIABLES for templates whose content is resolved rather than templated from the
+       lead row. Same refuse-with-a-reason contract as the guards above: a template that cannot be
+       filled correctly does not go out at all, and never goes out as something else.
+       audit_reply and onboarding_followup are both reachable here now that they are registered, so
+       both are resolved before the send rather than sent with empty parameters. */
+    const templateExtra: { trade?: string; competitors?: string; onboardingUrl?: string } = {};
+    // The url actually sent: the claim link by default, overridden by a resolver that owns it.
+    let resolvedUrl = claimUrl;
+    if (tvars.includes("onboarding_url")) {
+      const ob = await resolveOnboardingFollowupVars(service, lead.id as string);
+      if (!ob.ok) {
+        await service.from("outreach_leads").update({
+          status: "not_contacted", whatsapp_delivery_status: "followup_unavailable", contact_method: null,
+        }).eq("id", lead.id);
+        return json({
+          ok: false, error: "followup_unavailable", reason: ob.reason,
+          lead_id: lead.id, business: lead.business_name, ...statusPayload,
+        }, 200);
+      }
+      templateExtra.onboardingUrl = ob.url;
+    }
+    if (tvars.includes("trade") || tvars.includes("competitors")) {
+      const ar = await resolveAuditReplyVars(service, lead.id as string);
+      if (!ar.ok) {
+        await service.from("outreach_leads").update({
+          status: "not_contacted", whatsapp_delivery_status: "audit_reply_unavailable", contact_method: null,
+        }).eq("id", lead.id);
+        return json({
+          ok: false, error: "audit_reply_unavailable", reason: ar.reason,
+          lead_id: lead.id, business: lead.business_name, ...statusPayload,
+        }, 200);
+      }
+      templateExtra.trade = ar.trade;
+      templateExtra.competitors = ar.competitors;
+      // Its "url" var is the AUDIT REPORT link, so it replaces the claim link for this send.
+      // Sending the site claim link under audit_reply's copy ("we ran a full report … <link>")
+      // would point the prospect at the wrong page entirely.
+      resolvedUrl = ar.link;
+    }
     const toNumber = toWhatsAppNumber(lead.phone as string, lead.country as string | null);
     if (!toNumber) {
       await service.from("outreach_leads").update({
@@ -548,7 +641,7 @@ Deno.serve(async (req) => {
             messaging_product: "whatsapp",
             to: toNumber,
             type: "template",
-            template: { name: templateName, language: { code: lang }, components: templateBodyParams(TEMPLATES[templateName].vars, lead.business_name as string, claimUrl) },
+            template: { name: templateName, language: { code: lang }, components: templateBodyParams(tvars, lead.business_name as string, resolvedUrl, templateExtra) },
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -608,7 +701,7 @@ Deno.serve(async (req) => {
           user_id: (lead.user_id as string | null) ?? null, // the lead's owner (inbox ownership + reply attribution)
           lead_id: lead.id,
           phone: toNumber,                                   // the number actually messaged (E.164 digits)
-          body: renderTemplateBody(templateName, lead.business_name as string, claimUrl),
+          body: renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors),
           message_type: "template",
           template_name: templateName,
           wa_message_id: messageId,                          // null on a simulated (TEST_MODE) send

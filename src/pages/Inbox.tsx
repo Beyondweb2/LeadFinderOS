@@ -54,6 +54,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   booking_switch_barbers: 'Booking switch (no commission)',
   barber_fresha_booksy: 'Fresha/Booksy switch',
   audit_reply: 'Audit reply (report)', // was falling through to a bare "Template" in the thread
+  onboarding_followup: 'Onboarding follow-up',
 };
 function friendlyTemplate(name: string | null | undefined): string {
   return (name && TEMPLATE_DISPLAY[name]) || 'Template';

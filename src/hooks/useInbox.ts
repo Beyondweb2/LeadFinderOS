@@ -17,6 +17,7 @@ export const WA_REPLY_TEMPLATES = [
   { name: 'barber_fresha_booksy', label: 'Fresha/Booksy switch (claim link)' },
   { name: 'initial_contact', label: 'Initial contact (opener)' },
   { name: 'audit_reply', label: 'Audit reply (report + competitors)' },
+  { name: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
 ];
 
 export interface WaMessage {
