@@ -21,8 +21,16 @@ export function WhatsAppLeadControls({
   const [busy, setBusy] = useState(false);
   const template = lead.whatsapp_template ?? '';
   const queued = lead.status === 'queued';
+  /* A template must be CHOSEN before this lead can be queued. Only a name that is currently in the
+     allowlist counts: a lead can be carrying a value from a removed or renamed template, and
+     inheriting that silently is the same problem as substituting one. Removing from the queue is
+     always allowed — being unable to cancel because of a bad template would be worse. */
+  const templateChosen = !!template && WHATSAPP_TEMPLATES.some((t) => t.value === template);
 
   const toggleQueue = async () => {
+    // Guard as well as the disabled button: the button can be bypassed by a stale render, and this
+    // write is the thing that decides what a real business receives.
+    if (!queued && !templateChosen) return;
     setBusy(true);
     try {
       if (queued) {
@@ -50,7 +58,14 @@ export function WhatsAppLeadControls({
           status: 'queued',
           previous_status: lead.status, // capture pre-queue status for restore-on-cancel
           queued_at: new Date().toISOString(),
-          whatsapp_template: template || 'booking_page_intro',
+          // The operator's OWN choice, never a substitute. This was
+          //   whatsapp_template: template || 'booking_page_intro'
+          // so queueing without touching the picker wrote a barber booking-page pitch onto the
+          // lead, and the queue would later send it. The picker shows "Choose a template" in that
+          // state, so nothing on screen said a template had been decided — the value appeared out
+          // of nowhere and looked chosen. The button is now disabled until one is picked, and this
+          // write is unreachable without it.
+          whatsapp_template: template,
           whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)
           line_type: lineType, // cache the offline result
           contact_method: 'whatsapp', // attribute to WhatsApp immediately
@@ -107,11 +122,19 @@ export function WhatsAppLeadControls({
             variant={queued ? 'outline' : 'default'}
             className="mt-2.5 h-7 w-full gap-1.5 text-xs"
             onClick={toggleQueue}
-            disabled={busy}
+            disabled={busy || (!queued && !templateChosen)}
+            title={!queued && !templateChosen ? 'Choose a template first' : undefined}
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : queued ? <X className="h-3.5 w-3.5" /> : <MessageSquare className="h-3.5 w-3.5" />}
             {queued ? 'Remove from queue' : 'Add to WhatsApp queue'}
           </Button>
+          {/* Says why the button is dead. A disabled control with no explanation reads as a bug,
+              and the picker's own placeholder is easy to miss. */}
+          {!queued && !templateChosen && (
+            <p className="mt-1.5 text-center text-[10px] text-orange-400">
+              Choose a template above before queueing — nothing is picked by default.
+            </p>
+          )}
           {queued && (
             <p className="mt-1.5 text-center text-[10px] text-sky-400">In the queue — sends within the daily 7am–9:30pm UK window (max 40/day).</p>
           )}
