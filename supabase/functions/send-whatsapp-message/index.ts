@@ -10,6 +10,7 @@ import {
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
+import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -135,7 +136,20 @@ Deno.serve(async (req) => {
       const tvars = WA_TEMPLATES[templateName].vars;
       const lang = WA_TEMPLATES[templateName].lang;
       const needsAudit = tvars.includes("trade") || tvars.includes("competitors");
-      if (needsAudit) {
+      const needsOnboardingUrl = tvars.includes("onboarding_url");
+      if (needsOnboardingUrl) {
+        /* onboarding_followup: {{1}} business name, {{2}} that lead's onboarding URL, both resolved
+           server-side from the lead's own row. Refuses rather than sending a partial — the entire
+           message is a pointer to that link, so a follow-up without a correct one is spam that also
+           burns a warm lead. Same contract as the audit branch below. */
+        if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
+        const f = await resolveOnboardingFollowupVars(service, resolvedLeadId);
+        if (!f.ok) return json({ ok: false, error: "followup_unavailable", reason: f.reason }, 200);
+        payload = claimTemplatePayload(templateName, lang, f.business, "", { onboardingUrl: f.url });
+        storedBody = renderTemplateBody(templateName, f.business, f.url);
+        auditBusinessName = f.business;
+        auditClaimUrl = f.url; // the outbound URL for this send, recorded like any other
+      } else if (needsAudit) {
         // audit_reply: 4 vars resolved server-side STRICTLY from the lead's own completed audit
         // (report link = /a/<auditId>, competitors from that audit). Refuse (don't send a broken
         // template) when the lead has no completed audit / no competitors.

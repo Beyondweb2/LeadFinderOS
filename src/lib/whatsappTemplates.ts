@@ -28,6 +28,11 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },
+  // Follow-up after the 24h window. needsUrl is FALSE: its link is the onboarding URL, built
+  // from the lead id server-side, so it must not be gated on a generated site's share_token.
+  // needsAudit is FALSE too — it pitches the flow, not a report. The only real requirement is a
+  // linked lead, which the picker already enforces for every template.
+  onboarding_followup:    { needsUrl: false, needsAudit: false, group: 'audit' },
 };
 
 export interface SendabilityLead {

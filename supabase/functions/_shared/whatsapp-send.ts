@@ -35,7 +35,11 @@ export function resolveWhatsAppEnv() {
 // the claim/site link. Each template declares its own order so a new template with a
 // different variable layout (e.g. URL first) can't be silently sent with the values
 // swapped — the builder fills {{1}},{{2}},… strictly in this order.
-export type TemplateVar = "name" | "url" | "trade" | "competitors";
+// 'onboarding_url' is DISTINCT from 'url' on purpose. 'url' means the claim/site link and the
+// campaign path gates those templates on the lead having a share_token; the onboarding link is built
+// from the lead id alone and must NOT be blocked by a missing site. Reusing 'url' would have made
+// onboarding_followup unsendable to exactly the leads it is for.
+export type TemplateVar = "name" | "url" | "trade" | "competitors" | "onboarding_url";
 
 /** Approved template allowlist — mirrors process-whatsapp-queue. `vars` is the BODY
  *  variable order for THIS template ({{1}} = vars[0], {{2}} = vars[1], …). The four
@@ -55,6 +59,10 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
   // Reply-to-a-reply: 4 vars — {{1}} trade, {{2}} competitors, {{3}} business name, {{4}} report link.
   // Vars resolved server-side per-lead from the lead's own completed audit (see resolveAuditReplyVars).
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
+  // Follow-up once the 24h window has closed: points a warm lead at the onboarding flow.
+  // {{1}} business name, {{2}} that lead's onboarding URL. Vars resolved server-side per-lead by
+  // resolveOnboardingFollowupVars — never from a caller-supplied link.
+  onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -105,7 +113,17 @@ We ran a full report on your business for AI and SEO visibility: ${u}
 We could get you showing up in those results - it's mostly stuff we handle at our end.
 Want me to explain?`;
 
+/* ⚠️ onboarding_followup's wording here is NOT verified against the approved Meta template — the
+   API never returns template bodies and the copy was not supplied. It is a local PREVIEW only: the
+   real message is rendered by Meta from the approved template plus {{1}}/{{2}}, so a mismatch here
+   cannot affect what the recipient reads, only what the Inbox thread shows for an Inbox-sent
+   follow-up. Replace with the exact approved text. (Campaign sends display via the whatsapp_sends
+   trigger instead, which shows "[onboarding_followup]" until that separate work is done.) */
+const onboardingFollowupBody = (b: string, u: string) =>
+  `Hi ${b || "there"}, here's the link to get started: ${u}`;
+
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string) => string> = {
+  onboarding_followup: onboardingFollowupBody,
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).
   no_website_barbers: noWebsiteBody,
@@ -131,12 +149,25 @@ export function renderTemplateBody(templateName: string, businessName: string, c
  *  'name' → the business name (with the "your business" fallback). For the original
  *  templates (vars ["name","url"]) this returns EXACTLY the previous shape — {{1}}=name,
  *  {{2}}=url — so their live sends are unchanged. */
-export function templateBodyParams(vars: TemplateVar[], businessName: string, claimUrl: string, extra?: { trade?: string; competitors?: string }) {
+export function templateBodyParams(
+  vars: TemplateVar[],
+  businessName: string,
+  claimUrl: string,
+  extra?: { trade?: string; competitors?: string; onboardingUrl?: string },
+) {
   const resolve = (v: TemplateVar) => {
     switch (v) {
       case "url": return claimUrl;
       case "trade": return extra?.trade ?? "";
       case "competitors": return extra?.competitors ?? "";
+      // Resolved per-lead by resolveOnboardingFollowupVars, which refuses rather than returning a
+      // partial — so an empty value here should be unreachable. Throwing rather than sending an
+      // empty {{2}} because the entire message is that link: a follow-up without it is spam.
+      case "onboarding_url": {
+        const u = (extra?.onboardingUrl ?? "").trim();
+        if (!u) throw new Error("onboarding_url variable is empty — refusing to send a follow-up with no link");
+        return u;
+      }
       default: return businessName || "your business"; // "name"
     }
   };
@@ -154,8 +185,22 @@ export function textPayload(body: string) {
 /** A claim-template payload (deliverable any time). Variable order comes from the
  *  template's own `vars` in WA_TEMPLATES (falls back to the original name→url order
  *  for any unknown template, so nothing regresses). */
-export function claimTemplatePayload(templateName: string, lang: string, businessName: string, claimUrl: string, extra?: { trade?: string; competitors?: string }) {
-  const vars = WA_TEMPLATES[templateName]?.vars ?? ["name", "url"];
+export function claimTemplatePayload(
+  templateName: string,
+  lang: string,
+  businessName: string,
+  claimUrl: string,
+  extra?: { trade?: string; competitors?: string; onboardingUrl?: string },
+) {
+  /* THROWS on an unrecognised template rather than assuming ["name","url"].
+     That assumption was a quieter version of the queue's template fallback: an unregistered name got
+     a guessed variable SHAPE, so it either sent with the wrong parameters filled in or was rejected
+     by Meta for a parameter-count mismatch — both indistinguishable from a bug at a glance.
+     Every caller already resolves the template from WA_TEMPLATES first, so this is unreachable in
+     normal operation and exists to keep it that way. */
+  const entry = WA_TEMPLATES[templateName];
+  if (!entry) throw new Error(`unknown_template:${templateName} — not registered in WA_TEMPLATES, refusing to guess its variables`);
+  const vars = entry.vars;
   return {
     type: "template",
     template: { name: templateName, language: { code: lang }, components: templateBodyParams(vars, businessName, claimUrl, extra) },
