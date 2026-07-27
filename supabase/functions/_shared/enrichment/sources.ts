@@ -138,7 +138,7 @@ export async function mapsDiscover(
     scrapeContacts: false,
     skipClosedPlaces: true,
   };
-  const { items, ms } = await runApifyActor(MAPS_ACTOR_ID, body, {
+  const { items, ms, usageTotalUsd } = await runApifyActor(MAPS_ACTOR_ID, body, {
     token: input.token,
     timeoutMs: input.timeoutMs,
   });
@@ -168,7 +168,7 @@ export interface MapsEnrichInput {
 /** Deep ENRICH for ONE picked place: reviews + images + contacts. */
 export async function mapsEnrich(
   input: MapsEnrichInput,
-): Promise<{ place: NormalizedPlace | null; ms: number; raw?: unknown }> {
+): Promise<{ place: NormalizedPlace | null; ms: number; raw?: unknown; usageTotalUsd?: number | null }> {
   // startUrls (the maps place URL) is the most reliable way to pull a single
   // place WITH review/image add-ons; fall back to placeIds if no URL.
   const target = input.googleMapsUrl
@@ -201,11 +201,11 @@ export async function mapsEnrich(
     scrapePlaceDetailPage: true,
     ...addOns,
   };
-  const { items, ms } = await runApifyActor(MAPS_ACTOR_ID, body, {
+  const { items, ms, usageTotalUsd } = await runApifyActor(MAPS_ACTOR_ID, body, {
     token: input.token,
     timeoutMs: input.timeoutMs,
     retry: input.retry,
   });
   const place = items.length ? mapCompassPlace(items[0]) : null;
-  return { place, ms, raw: items[0] ?? null };
+  return { place, ms, raw: items[0] ?? null, usageTotalUsd };
 }

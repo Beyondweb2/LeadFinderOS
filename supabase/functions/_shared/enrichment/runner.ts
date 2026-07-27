@@ -126,3 +126,44 @@ export async function runEnrichSource<T>(args: RunEnrichArgs<T>): Promise<RunEnr
 
   return { result, cached: false, costUsd };
 }
+
+/* BOOK A COST CORRECTION.
+   Some spend cannot be known when it is incurred: an async actor is billed at START but its
+   usageTotalUsd only exists once it finishes. Rather than thread the inserted row's id all the way
+   through the queue, the difference is written as its OWN enrichment_usage row. sum(cost_usd) over
+   the window therefore equals the real spend, deltas can be negative, and the trail shows what was
+   estimated versus what was charged.
+
+   Best-effort by design: a failed correction must never break a finished run. It is logged. */
+// deno-lint-ignore no-explicit-any
+export async function recordCostCorrection(service: any, args: {
+  userId: string | null;
+  type: string;
+  estimatedUsd: number;
+  actualUsd: number;
+  note?: string;
+}): Promise<void> {
+  const delta = Number((args.actualUsd - args.estimatedUsd).toFixed(6));
+  if (!Number.isFinite(delta) || delta === 0) return;
+  try {
+    if (args.userId) {
+      const { error } = await service.from("enrichment_usage").insert({
+        user_id: args.userId,
+        enrichment_type: `${args.type}_correction`,
+        cost_usd: delta,
+      });
+      if (error) console.warn(`[enrich] cost correction not recorded (${args.type}):`, error.message);
+    }
+    await service.from("api_usage_log").insert({
+      user_id: args.userId,
+      function_name: "enrichment",
+      api_type: `apify_${args.type}_correction`,
+      calls_made: 0,
+      cache_hit: false,
+      estimated_cost_usd: delta,
+      trigger_source: args.note ?? "cost_reconciliation",
+    });
+  } catch (e) {
+    console.warn(`[enrich] cost correction threw (${args.type}):`, e instanceof Error ? e.message : String(e));
+  }
+}

@@ -1,9 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
-import { runEnrichSource } from "../_shared/enrichment/runner.ts";
+import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/runner.ts";
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
+import { refreshApifyUsage } from "../_shared/enrichment/apify-usage.ts";
 import { advanceBaseline, sweepStalledBaselines, ensureBaselinesForPaidOnboardings } from "../_shared/audit-baseline.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
 import { autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
@@ -36,12 +37,15 @@ const corsHeaders = {
    batch was draining: this queue previously started rows up to START_BATCH per tick with no regard
    for how many actor runs were already live, so a big batch could hold 18+ concurrent runs.
 
-   AUDIT_IN_FLIGHT_CEILING is the most simultaneous question-actors the audit queue may hold. The
-   headroom between it and your Apify plan's limit is what stays available for scrapes and
-   enrichment. Set for a 25-run plan: 16 for audits leaves 9 free. CONFIRM YOUR PLAN'S LIMIT and
-   adjust - if the real ceiling is higher, raise this and audits get faster for free; if it is
-   lower, this must come down or scrapes will starve again. */
-const AUDIT_IN_FLIGHT_CEILING = 16;
+   MEASURED FROM THE ACCOUNT (Apify STARTER): maxConcurrentActorRuns = 32, memory pool = 64GB.
+   Question actors take 1024MB each and run ~155s; the other actors we use take 4096MB.
+
+   24 for audits leaves 8 free. 8 is comfortably more than directory scrapes and enrichment need at
+   once (a scrape is typically a single crawler run), and 24 is also the largest ceiling that keeps
+   the MEMORY pool safe in the pessimistic mix: 24x1024MB + one 4096MB scan + 8x4096MB of scrapes =
+   61,440MB of 65,536MB. Note that a SMALLER audit ceiling is worse here, not better - reserving 16
+   slots for 4096MB actors would need 86,016MB and overcommit the pool. */
+const AUDIT_IN_FLIGHT_CEILING = 24;
 /* How much of a tick may already be spent before the (slow) SEO scan is deferred to the next one.
    Its actor allows up to 110s, and the cron now fires every 30s, so keep this well under the
    platform's invocation limit: draining + a scan must still finish comfortably. */
@@ -186,6 +190,16 @@ Deno.serve(async (req) => {
     // scan is idempotent (results.seo is the done-marker).
     const tickStartedAt = Date.now();
 
+    /* 0a1) APIFY ACCOUNT USAGE. Reads the real monthly figure and records it where we can see it,
+            throttled to once per 15 min, so the warning arrives before Apify stops serving rather
+            than after. One unbilled API call; never fatal. */
+    let apifyUsage: Awaited<ReturnType<typeof refreshApifyUsage>> = null;
+    try {
+      apifyUsage = await refreshApifyUsage(service, apifyToken);
+    } catch (e) {
+      console.warn("[process-ai-audit-queue] apify usage refresh failed:", e instanceof Error ? e.message : String(e));
+    }
+
     // 0a3) PAID CLIENT baseline backstop. The stripe webhook starts the baseline on the payment
     //      event, but that is a single network attempt. This guarantees the outcome: any PAID
     //      onboarding row whose lead has no baseline gets one started here, every tick, until it
@@ -266,6 +280,18 @@ Deno.serve(async (req) => {
           // key (same convention as _apify) so nothing that walks the engine keys trips on it.
           if (usageTotalUsd != null || computeUnits != null) {
             result._cost_usd = usageTotalUsd;
+            // The cap counted estCost when this row STARTED; book the difference now that Apify has
+            // told us the real figure, so the rolling 24h sum reflects money actually spent.
+            if (usageTotalUsd != null) {
+              const audit = await getAudit(row.audit_id);
+              await recordCostCorrection(service, {
+                userId: audit.userId || row.user_id || null,
+                type: "ai_search",
+                estimatedUsd: estCost,
+                actualUsd: usageTotalUsd,
+                note: "ai_search_poll_reconcile",
+              });
+            }
             result._compute_units = computeUnits;
           }
           await service.from("ai_audit_queue").update({ status: "done", result }).eq("id", row.id);
@@ -422,7 +448,15 @@ Deno.serve(async (req) => {
       console.log(`[process-ai-audit-queue] skipping the SEO step this tick - ${Math.round(elapsedMs / 1000)}s already spent draining (budget ${SEO_TICK_BUDGET_MS / 1000}s)`);
     }
 
-    return json({ ok: true, started, polled: waiting.length, finalised, capped: [...cappedRuns], seo: seoRan ? "ran" : "skipped" });
+    return json({
+      ok: true, started, polled: waiting.length, finalised, capped: [...cappedRuns],
+      seo: seoRan ? "ran" : "skipped",
+      // Present only on the tick that refreshed it (every ~15 min), so the figure is visible
+      // wherever the cron's response is inspected without another query.
+      ...(apifyUsage
+        ? { apify_spend: { used: apifyUsage.monthlyUsageUsd, cap: apifyUsage.maxMonthlyUsageUsd, pct: apifyUsage.usagePct, cycle_ends: apifyUsage.cycleEnd } }
+        : {}),
+    });
   } catch (e) {
     console.error("[process-ai-audit-queue] error:", e);
     return json({ ok: false, error: e instanceof Error ? e.message : "unknown_error" }, 500);
@@ -518,7 +552,11 @@ async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolea
         run: async () => {
           const r = await runSeoScanCore(website, { token: apifyToken });
           if (!r.ok) throw new Error(r.error + (r.detail ? `: ${r.detail}` : ""));
-          return { result: r.seo, costUsd: SOURCES.seo_audit.estCostUsd };
+          // REAL cost when the lookup found the run, estimate only as a fallback. This is the most
+          // expensive actor we run ($0.12-ish a scan), so recording the estimate here was the
+          // single biggest contributor to the cap measuring $1.36 against a $73.55 bill.
+          const seoActual = (r as { usageTotalUsd?: number | null }).usageTotalUsd;
+          return { result: r.seo, costUsd: typeof seoActual === "number" ? seoActual : SOURCES.seo_audit.estCostUsd };
         },
       });
       seo = outcome.capReached
