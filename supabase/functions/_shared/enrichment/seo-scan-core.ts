@@ -151,7 +151,7 @@ export function collectIssues(pages: Record<string, unknown>[], cap: number): Fi
 }
 
 export type SeoScanCoreResult =
-  | { ok: true; seo: Record<string, unknown> }
+  | { ok: true; seo: Record<string, unknown>; usageTotalUsd?: number | null }
   | { ok: false; error: string; detail?: string };
 
 /** Core of the automated SEO scan: resolve the canonical URL, run the actor, and MAP its output
@@ -164,6 +164,8 @@ export async function runSeoScanCore(website: string, opts: { token: string }): 
 
   // --- Run the actor (run-sync-get-dataset-items via the shared runApifyActor) ---
   let items: unknown[];
+  // What Apify actually charged for this scan (null when the lookup could not match a run).
+  let scanUsageUsd: number | null = null;
   try {
     const out = await runApifyActor(
       SEO_SCAN_ACTOR,
@@ -171,7 +173,8 @@ export async function runSeoScanCore(website: string, opts: { token: string }): 
       { token: opts.token, timeoutMs: ACTOR_TIMEOUT_MS, retry: { on429: true } },
     );
     items = out.items;
-    console.log(`[run-seo-scan] actor returned ${out.items.length} items in ${out.ms}ms`);
+    scanUsageUsd = out.usageTotalUsd;
+    console.log(`[run-seo-scan] actor returned ${out.items.length} items in ${out.ms}ms, apify charged ${scanUsageUsd == null ? "unknown" : "$" + scanUsageUsd.toFixed(4)}`);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const aborted = (e as Error)?.name === "AbortError";
@@ -242,5 +245,6 @@ export async function runSeoScanCore(website: string, opts: { token: string }): 
   };
 
   console.log(`[run-seo-scan] mapped ${pages.length} pages in ${Date.now() - mapStart}ms`);
-  return { ok: true, seo };
+  // Real Apify charge for this scan, so callers record actuals rather than the estimate.
+  return { ok: true, seo, usageTotalUsd: scanUsageUsd };
 }

@@ -52,6 +52,63 @@ export interface NormalizedPlace {
  * (≤~50 places discovery; 1 place deep-enrich). Aborts after timeoutMs so a slow
  * run can't hang the edge function. Throws on non-2xx (caller decides fallback).
  */
+/* THE REAL COST OF A run-sync CALL.
+   run-sync-get-dataset-items returns only the dataset items: no run id, no usage. So the actual
+   spend has to be looked up afterwards. Without this, every run-sync actor (SEO scan, maps/places,
+   contact scraper, photo scrapers, directory) recorded only an ESTIMATE, which is why
+   sum(enrichment_usage.cost_usd) read $1.36 against a real Apify bill of $73.55 and the daily cap
+   was measuring a number with almost no relation to the money.
+
+   COST OF THIS: one extra Apify API call per actor call (occasionally two, if the list response
+   omits usageTotalUsd and the run detail has to be fetched). Apify API requests are rate-limited
+   but NOT billed, so this adds latency (~200-400ms), not money.
+
+   ATTRIBUTION CAVEAT: the newest run of that actor started at or after our call is taken to be
+   ours. If two runs of the SAME actor overlap, two rows could swap costs with each other - but the
+   TOTAL stays correct, which is what a spend cap depends on. Returns null rather than guessing when
+   nothing plausible matches, and never throws: cost capture must not break a working scrape. */
+export async function resolveSyncRunCost(
+  actorId: string,
+  token: string,
+  startedAfterMs: number,
+  timeoutMs = 8_000,
+): Promise<number | null> {
+  const get = async (path: string): Promise<Record<string, unknown> | null> => {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`https://api.apify.com/v2${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      if (!res.ok) return null;
+      const body = await res.json();
+      return (body?.data ?? null) as Record<string, unknown> | null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(t);
+    }
+  };
+
+  try {
+    const list = await get(`/acts/${encodeURIComponent(actorId)}/runs?limit=5&desc=1`);
+    const items = (list?.items ?? []) as Array<Record<string, unknown>>;
+    // 5s of slack: our clock and Apify's differ slightly.
+    const floor = startedAfterMs - 5_000;
+    const mine = items.find((r) => {
+      const started = Date.parse(String(r.startedAt ?? ""));
+      return Number.isFinite(started) && started >= floor;
+    });
+    if (!mine) return null;
+    if (typeof mine.usageTotalUsd === "number") return mine.usageTotalUsd;
+    const detail = await get(`/actor-runs/${String(mine.id)}`);
+    return typeof detail?.usageTotalUsd === "number" ? detail.usageTotalUsd : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function runApifyActor(
   actorId: string,
   input: Record<string, unknown>,
@@ -64,13 +121,13 @@ export async function runApifyActor(
      *  (a second full-timeout attempt would stack toward the original 504). */
     retry?: { on429?: boolean; onAbort?: boolean };
   },
-): Promise<{ items: unknown[]; ms: number }> {
+): Promise<{ items: unknown[]; ms: number; usageTotalUsd: number | null }> {
   const url = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items`;
   const BUDGET_MS = opts.timeoutMs ?? 90_000;
   const callStart = Date.now(); // whole-call clock — a retry must fit INSIDE BUDGET_MS, never extend it
 
   // A single attempt, bounded by the REMAINING budget passed in. Throws { retryable } markers so the outer loop can decide.
-  const attempt = async (attemptTimeoutMs: number): Promise<{ items: unknown[]; ms: number }> => {
+  const attempt = async (attemptTimeoutMs: number): Promise<{ items: unknown[]; ms: number; usageTotalUsd: number | null }> => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), attemptTimeoutMs);
     const startedAt = Date.now();
@@ -93,7 +150,9 @@ export async function runApifyActor(
         throw err;
       }
       const data = await res.json();
-      return { items: Array.isArray(data) ? data : [], ms };
+      // Look up what this actually cost. Best-effort and never fatal.
+      const usageTotalUsd = await resolveSyncRunCost(actorId, opts.token, startedAt);
+      return { items: Array.isArray(data) ? data : [], ms, usageTotalUsd };
     } finally {
       clearTimeout(timeout);
     }
