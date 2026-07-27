@@ -20,6 +20,11 @@ import { WHATSAPP_TEMPLATES } from "@/types/outreach";
 import { classifyLineType } from "@/lib/lineType";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
+/* Explicit "nothing chosen" for the WhatsApp template picker. Same sentinel as
+   CampaignFormDialog's NO_TEMPLATE — Radix Select cannot hold "" as a value, so an unset state
+   needs a real one. Queueing is blocked while this is selected. */
+const NO_TEMPLATE = '__none__';
+
 /**
  * Admin-only Manage Site page for a single generated barber site.
  *
@@ -65,7 +70,15 @@ export default function AdminSiteManage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   // Approved WhatsApp template (Meta) used when queueing this barber — distinct
   // from the free-text saved templates above (those drive the SMS/Call composer).
-  const [waTemplate, setWaTemplate] = useState<string>(WHATSAPP_TEMPLATES[0].value);
+  /* Starts UNSET, not at WHATSAPP_TEMPLATES[0] (which is booking_page_intro). Pre-selecting the
+     first entry meant a queue could go out on a template nobody chose — visible in the picker,
+     but never a decision. Same sentinel pattern as CampaignFormDialog's NO_TEMPLATE. */
+  const [waTemplate, setWaTemplate] = useState<string>(NO_TEMPLATE);
+  /* No substitution: a template must be CHOSEN, and must still be in the allowlist — a stored
+     campaign default for a removed template must not be inherited silently. Shared by the queue
+     button's disabled state and the handler's own guard, so the two cannot disagree. Removing
+     from the queue is never blocked, so a bad value cannot trap a lead in it. */
+  const waTemplateChosen = waTemplate !== NO_TEMPLATE && WHATSAPP_TEMPLATES.some((t) => t.value === waTemplate);
   const [queuingWhatsApp, setQueuingWhatsApp] = useState(false);
   // Campaigns (for the per-campaign default WhatsApp template) + a guard so the
   // template selector is seeded ONCE per lead load and never fights a manual change.
@@ -134,7 +147,7 @@ export default function AdminSiteManage() {
       : undefined;
     const campaignDefault = campaign?.default_template;
     const valid = !!campaignDefault && WHATSAPP_TEMPLATES.some((t) => t.value === campaignDefault);
-    setWaTemplate(valid ? (campaignDefault as string) : WHATSAPP_TEMPLATES[0].value);
+    setWaTemplate(valid ? (campaignDefault as string) : NO_TEMPLATE);
     seededTemplateForLeadRef.current = leadId;
   }, [leadInfo, campaigns, campaignsLoading]);
 
@@ -290,6 +303,10 @@ export default function AdminSiteManage() {
       return;
     }
     const queued = leadInfo.status === "queued";
+    if (!queued && !waTemplateChosen) {
+      toast({ title: "Choose a template", description: "Pick the approved template to send before queueing this lead. Nothing is selected by default.", variant: "destructive" });
+      return;
+    }
     setQueuingWhatsApp(true);
     try {
       if (queued) {
@@ -463,9 +480,10 @@ export default function AdminSiteManage() {
               <p className="text-sm font-medium">WhatsApp template <span className="font-normal text-muted-foreground">(approved)</span></p>
               <Select value={waTemplate} onValueChange={setWaTemplate}>
                 <SelectTrigger className="text-sm">
-                  <SelectValue />
+                  <SelectValue placeholder="Not set — choose a template" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NO_TEMPLATE}>Not set</SelectItem>
                   {WHATSAPP_TEMPLATES.map((t) => (
                     <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                   ))}
@@ -495,7 +513,7 @@ export default function AdminSiteManage() {
                   size="sm"
                   variant={leadInfo?.status === "queued" ? "outline" : "default"}
                   onClick={toggleWhatsAppQueue}
-                  disabled={!leadInfo || queuingWhatsApp || leadInfo.status === "no_whatsapp" || leadInfo.status === "no_whatsapp_needs_sms"}
+                  disabled={!leadInfo || queuingWhatsApp || leadInfo.status === "no_whatsapp" || leadInfo.status === "no_whatsapp_needs_sms" || (leadInfo.status !== "queued" && !waTemplateChosen)}
                   title={leadInfo?.status === "no_whatsapp" ? "This number isn't on WhatsApp" : leadInfo?.status === "no_whatsapp_needs_sms" ? "Not a mobile number — flagged for SMS" : leadInfo?.status === "queued" ? "Remove from the WhatsApp queue" : "Add to the live WhatsApp queue"}
                 >
                   {queuingWhatsApp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : leadInfo?.status === "queued" ? <X className="h-4 w-4 mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
