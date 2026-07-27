@@ -141,8 +141,21 @@ Deno.serve(async (req) => {
       if (!incomplete && (!confirmedLocation || !gbpConsent)) {
         return json({ ok: false, error: "missing_required" }, 400);
       }
+      const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       const gbpEmailRaw = clip(a.gbp_manager_email, 200);
-      const gbpEmail = gbpEmailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gbpEmailRaw) ? gbpEmailRaw : null;
+      const gbpEmail = gbpEmailRaw && EMAIL_RE.test(gbpEmailRaw) ? gbpEmailRaw : null;
+      /* CONTACT EMAIL — where the report and documents go. Validated with the same shape the client
+         gates on, so a submission that got past the button is not silently downgraded here. Stored
+         as null when it fails, never as junk: a bad address is worse than a known-missing one,
+         because the Stripe backfill can fill a NULL and cannot tell that "asdf" is unusable.
+         Required on a complete submission for the same reason the area is — without it there is no
+         way to deliver what they just paid for. The escape hatch stays exempt, like every other
+         required field: a partial answer set is still worth keeping and chasing. */
+      const contactEmailRaw = clip(a.contact_email, 200);
+      const contactEmail = contactEmailRaw && EMAIL_RE.test(contactEmailRaw) ? contactEmailRaw : null;
+      if (!incomplete && !contactEmail) {
+        return json({ ok: false, error: "missing_contact_email" }, 400);
+      }
       // "Yes to both" exists to collect the address we add as GBP manager. Accepting that
       // answer without it silently loses the single field the option is for — so require it
       // for that answer only. The other two consent options don't need an email, and the
@@ -160,6 +173,7 @@ Deno.serve(async (req) => {
         accreditations: clip(a.accreditations, 2000),
         gbp_consent: gbpConsent,
         gbp_manager_email: gbpEmail,
+        contact_email: contactEmail,
         business_name: clip(a.business_name, 200),
         incomplete,
       };
@@ -173,7 +187,7 @@ Deno.serve(async (req) => {
         let res = await attempt({ ...answers, ...extra });
         // Drop whichever optional column the database does not have yet and retry, so a
         // pending migration can never cost us a real submission.
-        for (const col of ["areas_wanted", "incomplete"]) {
+        for (const col of ["areas_wanted", "incomplete", "contact_email"]) {
           if (res.error && new RegExp(col, "i").test(res.error.message ?? "")) {
             console.warn(`[findable-onboarding] ${col} column missing, saving without it`);
             const reduced = { ...answers } as Record<string, unknown>;
@@ -217,6 +231,30 @@ Deno.serve(async (req) => {
       try {
         await service.from("outreach_leads").update({ search_location: confirmedLocation }).eq("id", leadId);
       } catch { /* non-fatal — the audit still gets the confirmed value directly */ }
+
+      /* THE LEAD'S EMAIL OF RECORD. outreach_leads.email is where the rest of the system already
+         looks for a way to reach a business (the Stripe webhook's inbox resolution reads it), so an
+         address the owner typed themselves belongs there — it is better than anything enrichment
+         produced, which today is one address across 466 leads.
+         Only fills an EMPTY column: an operator may have corrected it by hand, and a self-reported
+         address should not silently overwrite that. email_method/email_status are the existing
+         provenance columns, so "where did this come from" stays answerable.
+         Non-fatal: the onboarding row already holds the address, so this is a convenience copy. */
+      if (contactEmail) {
+        try {
+          await service.from("outreach_leads")
+            .update({
+              email: contactEmail,
+              email_method: "onboarding",
+              email_status: "found",
+              email_last_checked_at: new Date().toISOString(),
+            })
+            .eq("id", leadId)
+            // .is(null), not an or() that also tests "": every writer normalises a blank to NULL,
+            // and the column was checked for empty strings before this shipped (none).
+            .is("email", null);
+        } catch { /* non-fatal — onboarding_responses.contact_email is the source of truth */ }
+      }
 
       // An incomplete submission stops here: there is no confirmed area to audit against, and
       // firing a 3-run paid baseline on a half-answered form would spend real money guessing.
