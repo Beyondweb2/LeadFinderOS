@@ -104,6 +104,39 @@ Deno.serve(async (req) => {
             // Mirror the status onto the audit row regardless of lead match.
             await service.from("whatsapp_sends").update({ delivery_status: status }).eq("message_id", wamid);
 
+            /* PER-MESSAGE TRUTH. whatsapp_messages was insert-only: every outbound row sat at
+               'sent' forever, so "delivered/read" could only ever be read off the lead-level
+               ratchet — which is set by the campaign path alone and holds ONE message id per lead.
+               The effect was that a pitch's engagement was invisible and the opener's receipt stood
+               in for the whole lead. Writing the status here, keyed on the message's own id, is
+               what makes a receipt attributable to a specific template.
+               Matched via the unique partial index wa_messages_wa_id_uq (wa_message_id where not
+               null), so this touches exactly one row.
+               direction='outbound' is belt and braces: a wamid in statuses[] is always one of ours,
+               but the id column is shared with inbound rows and 'received' must never be clobbered.
+               RATCHET, because Meta does not guarantee webhook ORDER: a late 'sent' arriving after
+               'read' would otherwise walk the status backwards. Expressed as a filter on the
+               allowed prior states rather than read-then-write, so concurrent events can't race. */
+            const PRIOR: Record<string, string[]> = {
+              delivered: ["sent", "simulated", "accepted"],
+              read: ["sent", "simulated", "accepted", "delivered"],
+              // A failure only lands while nothing better has: mirrors the lead ratchet's refusal
+              // to let a late 'failed' overwrite proven reachability.
+              failed: ["sent", "simulated", "accepted"],
+            };
+            const allowedPrior = PRIOR[status];
+            if (allowedPrior) {
+              const { error: msgStatusErr } = await service
+                .from("whatsapp_messages")
+                .update({ status })
+                .eq("wa_message_id", wamid)
+                .eq("direction", "outbound")
+                .in("status", allowedPrior);
+              if (msgStatusErr) {
+                console.error(`[whatsapp-status] per-message status write failed for ${wamid}:`, msgStatusErr.message);
+              }
+            }
+
             const { data: lead } = await service
               .from("outreach_leads")
               .select("id, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered")

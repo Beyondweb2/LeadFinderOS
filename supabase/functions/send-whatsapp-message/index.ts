@@ -9,6 +9,7 @@ import {
   WA_TEMPLATES,
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
+import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -120,6 +121,11 @@ Deno.serve(async (req) => {
     // template copy (real wording + business name + claim URL) so the Inbox shows
     // what the barber actually receives — not the internal template name.
     let storedBody: string | null = null;
+    // What the SEND-AUDIT row records: the business name and the link actually placed in the
+    // template. Hoisted out of the branches below because whatsapp_sends is written after them.
+    // For audit_reply the "claim url" IS the report link — the same column, the send's outbound URL.
+    let auditBusinessName = businessName;
+    let auditClaimUrl = "";
 
     if (templateName) {
       if (!WA_TEMPLATES[templateName]) return json({ ok: false, error: "unknown_template" }, 400);
@@ -131,9 +137,19 @@ Deno.serve(async (req) => {
         // (report link = /a/<auditId>, competitors from that audit). Refuse (don't send a broken
         // template) when the lead has no completed audit / no competitors.
         if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
+        /* ONCE EVER PER LEAD. The auto path has always had this guard; this path never called it,
+           even though pitchEverSent's own contract is "has this template EVER gone to this lead"
+           and it reads the message log precisely so manual sends are covered. Two leads were
+           pitched twice as a result — a day and an hour apart, so neither was a double-click and
+           no button state could have stopped them. Pitch-class only: openers stay resendable. */
+        if (await pitchEverSent(service, resolvedLeadId, templateName)) {
+          return json({ ok: false, error: "pitch_already_sent" }, 200);
+        }
         const a = await resolveAuditReplyVars(service, resolvedLeadId);
         if (!a.ok) return json({ ok: false, error: "audit_reply_unavailable", reason: a.reason }, 200);
         payload = claimTemplatePayload(templateName, lang, a.business, a.link, { trade: a.trade, competitors: a.competitors });
+        auditBusinessName = a.business;
+        auditClaimUrl = a.link;
         storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors);
       } else {
         // Claim/opener template. The claim link is required ONLY for templates that use a url var;
@@ -155,6 +171,7 @@ Deno.serve(async (req) => {
         }
         payload = claimTemplatePayload(templateName, lang, businessName, claimUrl);
         storedBody = renderTemplateBody(templateName, businessName, claimUrl);
+        auditClaimUrl = claimUrl;
       }
       messageType = "template";
       usedTemplate = templateName;
@@ -195,6 +212,34 @@ Deno.serve(async (req) => {
       error: sendError,
     }).select("id, created_at").maybeSingle();
     if (insErr) console.error("[send-whatsapp-message] log insert failed:", insErr.message);
+
+    /* THE SEND AUDIT ROW. Until now only the campaign queue wrote whatsapp_sends, so every send
+       from this path was missing from it — 45 audit_reply sends existed in the message log and
+       nowhere in the audit table. Two things depended on that table and were therefore wrong:
+       the delivery-receipt mirror, and the DAILY CAP (process-whatsapp-queue counts whatsapp_sends
+       rows since the London day start), which was undercounting real volume against Meta.
+
+       Non-blocking, deliberately: the message is already gone by this point, so a failed log must
+       never throw, retry, or double-send. Same contract as the queue's own message-log insert. */
+    try {
+      const { error: sendLogErr } = await service.from("whatsapp_sends").insert({
+        lead_id: resolvedLeadId,
+        user_id: operatorId, // the operator who sent it; the queue writes null for automated sends
+        template: usedTemplate, // null for a free-form text — still a real send against the cap
+        phone: to,
+        business_name: auditBusinessName || null,
+        claim_url: auditClaimUrl,
+        test_mode: env.testMode,
+        message_id: messageId,
+        delivery_status: status,
+        error: sendError,
+      });
+      if (sendLogErr) {
+        console.error("[send-whatsapp-message] send-audit insert failed (non-blocking):", sendLogErr.message);
+      }
+    } catch (e) {
+      console.error("[send-whatsapp-message] send-audit insert threw (non-blocking):", (e as Error).message);
+    }
 
     // A successful LIVE send of a PITCH-CLASS template (trade/competitors vars — audit_reply today)
     // moves the lead to report_sent. Forward-only (mirrors the webhook's pattern): never overwrites

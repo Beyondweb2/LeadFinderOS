@@ -530,6 +530,7 @@ const Inbox = () => {
         forbidden: 'You can only message your own conversations.',
         template_needs_lead: 'A template needs a linked lead.',
         audit_reply_unavailable: 'Audit report not ready for this lead — run an audit first.',
+        pitch_already_sent: 'This lead has already had the pitch. Sending it twice is what we are stopping — reply in the thread instead.',
       };
       toast({ title: 'Not sent', description: res.reason ?? map[res.error ?? ''] ?? res.error ?? 'Send failed.', variant: 'destructive' });
       return;
