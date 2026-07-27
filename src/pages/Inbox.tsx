@@ -53,6 +53,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   barber_poor_website: 'Updated website intro',
   booking_switch_barbers: 'Booking switch (no commission)',
   barber_fresha_booksy: 'Fresha/Booksy switch',
+  audit_reply: 'Audit reply (report)', // was falling through to a bare "Template" in the thread
 };
 function friendlyTemplate(name: string | null | undefined): string {
   return (name && TEMPLATE_DISPLAY[name]) || 'Template';
@@ -502,6 +503,11 @@ const Inbox = () => {
 
   const doSend = async (asTemplate?: boolean) => {
     if (!active) return;
+    // IN-FLIGHT GUARD. The buttons are disabled while `sending`, but that only covers the buttons:
+    // the composer's Enter key and the template picker can both reach here, and two taps inside the
+    // same tick would both pass a disabled check that has not re-rendered yet. A template send is
+    // not repeatable-for-free, so the guard lives at the top of the action itself.
+    if (sending) return;
     // Explicit template send (asTemplate=true, from the WhatsApp-template picker) works in ANY
     // window state; otherwise fall back to the window default (out-of-window → template, in → text).
     const useTemplate = asTemplate ?? !win.open;
@@ -515,12 +521,32 @@ const Inbox = () => {
       if (!s.ok) { toast({ title: 'Template not available for this lead', description: s.reason, variant: 'destructive' }); return; }
     }
     if (!useTemplate && !text.trim()) return;
+    /* CONFIRM A TEMPLATE SEND. A template goes to a real business the moment it is tapped and
+       cannot be recalled, so it gets the same treatment as the audit button above: a plain
+       window.confirm naming exactly what is about to happen and to whom.
+       Free-form replies are NOT confirmed — they are inside an open conversation, cheap to correct,
+       and a prompt on every message would be noise people learn to dismiss. */
+    let allowResend = false;
+    if (useTemplate) {
+      const label = WA_REPLY_TEMPLATES.find((t) => t.name === template)?.label ?? template;
+      const who = activeLead?.business_name || active.label;
+      // Already had THIS template? The thread is already loaded, so this needs no extra query.
+      // A repeat is legitimate (they asked again, the first went to a dead handset) but it must be
+      // a decision, not a slip — so the wording says so, and only then is the override sent.
+      const alreadySent = thread.some((m) => m.direction === 'outbound' && m.template_name === template);
+      const question = alreadySent
+        ? `${who} has already had "${label}".\n\nSend it AGAIN?`
+        : `Send "${label}" to ${who}?`;
+      if (!window.confirm(question)) return;
+      allowResend = alreadySent;
+    }
     setSending(true);
     const res = await send({
       phone: active.phone,
       leadId: active.leadId,
       body: useTemplate ? undefined : text.trim(),
       templateName: useTemplate ? template : undefined,
+      allowResend,
     });
     setSending(false);
     if (!res.ok) {
@@ -530,7 +556,10 @@ const Inbox = () => {
         forbidden: 'You can only message your own conversations.',
         template_needs_lead: 'A template needs a linked lead.',
         audit_reply_unavailable: 'Audit report not ready for this lead — run an audit first.',
-        pitch_already_sent: 'This lead has already had the pitch. Sending it twice is what we are stopping — reply in the thread instead.',
+        // Reachable only if the override did not accompany a confirmed repeat — i.e. not the
+        // operator's normal path, which now asks and then sends. So it reads as the unexpected
+        // state it is, rather than as a policy the operator has already been asked about.
+        pitch_already_sent: 'Already sent to this lead, and the repeat was not confirmed. Try again — you will be asked to confirm.',
       };
       toast({ title: 'Not sent', description: res.reason ?? map[res.error ?? ''] ?? res.error ?? 'Send failed.', variant: 'destructive' });
       return;
