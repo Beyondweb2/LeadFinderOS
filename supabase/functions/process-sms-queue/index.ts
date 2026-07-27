@@ -1,5 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { renderTemplateBody, WA_TEMPLATES, WA_DEFAULT_TEMPLATE } from "../_shared/whatsapp-send.ts";
+// WA_DEFAULT_TEMPLATE deliberately NOT imported any more — see the strict resolution below. The
+// export still exists in _shared/whatsapp-send.ts and is now unused by anything; removing it would
+// change a shared module and so force a redeploy of all six importers, which is not worth it for
+// hygiene alone. Flagged for a future pass.
+import { renderTemplateBody, WA_TEMPLATES } from "../_shared/whatsapp-send.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
 
 // process-sms-queue — the SMS fallback processor. Mirrors process-whatsapp-queue.
@@ -215,8 +219,52 @@ Deno.serve(async (req) => {
     }
     const claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
 
-    // SAME template the WhatsApp attempt used + ONE minimal opt-out line.
-    const templateName = lead.whatsapp_template && WA_TEMPLATES[lead.whatsapp_template as string] ? (lead.whatsapp_template as string) : WA_DEFAULT_TEMPLATE;
+    /* SAME template the WhatsApp attempt used + ONE minimal opt-out line.
+       STRICT resolution — no substitution, ever. This line used to read
+         lead.whatsapp_template && WA_TEMPLATES[...] ? lead.whatsapp_template : WA_DEFAULT_TEMPLATE
+       so an unset or unregistered template silently became booking_page_intro, a barber
+       booking-page pitch, sent by SMS. 212 of the 214 leads sitting at no_whatsapp_needs_sms have no
+       template set, so enabling this queue would have texted a barber pitch to 212 businesses.
+       Unlike the WhatsApp path there is nothing downstream to catch it: the message is plain text
+       assembled here, so there is no approved-template check at Meta and no parameter-count
+       rejection. A wrong template here just sends. */
+    const requestedTemplate = ((lead.whatsapp_template as string | null) ?? "").trim();
+    if (!requestedTemplate) {
+      await service.from("outreach_leads").update({ status: "not_contacted", sms_delivery_status: "no_template", contact_method: null }).eq("id", lead.id);
+      return json({
+        ok: false, error: "no_template",
+        reason: `${lead.business_name ?? "That lead"} has no template set, so there is no message to send by SMS. Pick one on the lead and re-queue it.`,
+        lead_id: lead.id, business: lead.business_name, ...statusPayload,
+      });
+    }
+    const tmpl = WA_TEMPLATES[requestedTemplate];
+    if (!tmpl) {
+      await service.from("outreach_leads").update({ status: "not_contacted", sms_delivery_status: "unknown_template", contact_method: null }).eq("id", lead.id);
+      return json({
+        ok: false, error: "unknown_template",
+        reason: `Template "${requestedTemplate}" is not registered, so nothing was sent to ${lead.business_name ?? "that lead"}. Nothing else was sent in its place.`,
+        lead_id: lead.id, business: lead.business_name, ...statusPayload,
+      });
+    }
+    /* NOT EVERY WHATSAPP TEMPLATE IS SENDABLE AS SMS. Two kinds are refused rather than guessed:
+       a template whose url is owned by a resolver (audit_reply's audit report, onboarding_followup's
+       onboarding link) would be handed the CLAIM link below, because claimUrl is all this path
+       builds — a plausible message pointing at the wrong page. And audit_reply's copy needs
+       per-lead trade/competitor values this path never resolves, so it would render "recommend a
+       provider in your area, it's naming other firms".
+       Refusing rather than resolving is deliberate: their bodies are WhatsApp copy, multi-line and
+       written for a channel with no segment cost, and inventing SMS wording for them is a content
+       decision, not a code one. */
+    const resolverOwnedUrl = tmpl.vars.includes("onboarding_url") || tmpl.vars.includes("trade") || tmpl.vars.includes("competitors");
+    if (resolverOwnedUrl) {
+      await service.from("outreach_leads").update({ status: "not_contacted", sms_delivery_status: "template_not_sms_safe", contact_method: null }).eq("id", lead.id);
+      return json({
+        ok: false, error: "template_not_sms_safe",
+        reason: `Template "${requestedTemplate}" builds its own link and copy per lead, which this SMS path cannot do — it would send the claim link instead. Nothing was sent to ${lead.business_name ?? "that lead"}. Use WhatsApp for this template, or set an SMS-safe one.`,
+        lead_id: lead.id, business: lead.business_name, ...statusPayload,
+      });
+    }
+    const templateName = requestedTemplate;
     const messageBody = `${renderTemplateBody(templateName, lead.business_name as string, claimUrl)}\n\n${STOP_LINE}`;
     const segments = smsSegments(messageBody);
 
