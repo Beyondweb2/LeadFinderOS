@@ -307,6 +307,43 @@ Deno.serve(async (req) => {
               onboardingId,
               "findable onboarding -> paid",
             );
+
+            /* THE PAYER'S EMAIL, FOR FREE. Checkout collects an address for the receipt, so a
+               completed session always carries one — and it is verified in the only sense that
+               matters: the receipt reached it. We were discarding it.
+               Written as a FALLBACK only, never over the top of an answer: the form asks for a
+               contact email and that is the address they chose for their documents, which may
+               deliberately differ from the card's billing address. So this fills a gap and nothing
+               more, and it means a payer's address is never lost even if the form was escaped.
+               Separate from the payment writes above and non-fatal by design: this must never be
+               the reason a recorded payment gets retried. */
+            const payerEmail = (s.customer_details?.email ?? "").trim().toLowerCase();
+            if (payerEmail && payerEmail.includes("@")) {
+              try {
+                // .is(null) rather than an or() that also tests for "": every writer of these two
+                // columns normalises a blank to NULL, and both columns were checked for empty
+                // strings before this shipped (none). A single unambiguous filter beats an or()
+                // whose empty-value syntax could be rejected and turn the whole thing into a
+                // silent no-op — the one failure mode nothing here would surface.
+                await service.from("onboarding_responses")
+                  .update({ contact_email: payerEmail })
+                  .eq("id", onboardingId)
+                  .is("contact_email", null);
+                if (findableLeadId) {
+                  await service.from("outreach_leads")
+                    .update({
+                      email: payerEmail,
+                      email_method: "stripe",
+                      email_status: "found",
+                      email_last_checked_at: new Date().toISOString(),
+                    })
+                    .eq("id", findableLeadId)
+                    .is("email", null);
+                }
+              } catch (e) {
+                console.error(`[stripe-webhook] payer email capture failed (non-fatal, onboarding=${onboardingId}):`, (e as Error).message);
+              }
+            }
             if (findableLeadId) {
               await mustWrite(
                 "outreach_leads",
