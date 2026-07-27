@@ -334,15 +334,19 @@ Deno.serve(async (req) => {
           if (!tmpl) { await finish("flagged_error", `unknown_template:${templateName}`); results[row.lead_id] = "flagged_error"; continue; }
           let payload: Record<string, unknown>;
           let renderedBody: string;
+          // Hoisted for the send-audit row below: the name and the outbound link actually used.
+          // For audit_reply-class the link IS the report link — the same "outbound URL" column.
+          let businessName = ((lead.business_name as string) ?? "").trim();
+          let claimUrl = "";
           if (tmpl.vars.includes("trade") || tmpl.vars.includes("competitors")) {
             // audit_reply-class: needs the lead's own completed audit.
             const vars = await resolveAuditReplyVars(service, row.lead_id);
             if (!vars.ok) { await finish("flagged_no_audit", vars.reason); results[row.lead_id] = "flagged_no_audit"; continue; }
             payload = claimTemplatePayload(templateName, tmpl.lang, vars.business, vars.link, { trade: vars.trade, competitors: vars.competitors });
             renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors);
+            businessName = vars.business;
+            claimUrl = vars.link;
           } else {
-            const businessName = ((lead.business_name as string) ?? "").trim();
-            let claimUrl = "";
             if (tmpl.vars.includes("url")) {
               const { data: site } = await service.from("generated_sites")
                 .select("share_token").eq("lead_id", row.lead_id)
@@ -369,6 +373,20 @@ Deno.serve(async (req) => {
             phone: row.phone, body: renderedBody, message_type: "template", template_name: templateName,
             wa_message_id: messageId, status: sendStatus, test_mode: !live, error: sendErr,
           });
+          /* And the send-audit row. This branch wrote only the message log, so auto-replies were
+             invisible to whatsapp_sends — including to the DAILY CAP counted a few hundred lines
+             up, which meant automated pitches never counted against the day's Meta volume.
+             Non-blocking: the send already happened. */
+          try {
+            const { error: sendLogErr } = await service.from("whatsapp_sends").insert({
+              lead_id: row.lead_id, user_id: null, template: templateName, phone: row.phone,
+              business_name: businessName || null, claim_url: claimUrl, test_mode: !live,
+              message_id: messageId, delivery_status: sendStatus, error: sendErr,
+            });
+            if (sendLogErr) console.error(`[auto-reply] send-audit insert failed (non-blocking, ${row.lead_id}):`, sendLogErr.message);
+          } catch (e) {
+            console.error(`[auto-reply] send-audit insert threw (non-blocking, ${row.lead_id}):`, (e as Error).message);
+          }
           if (sendStatus === "failed") {
             await finish("flagged_error", sendErr ?? "send_failed");
             results[row.lead_id] = "failed";

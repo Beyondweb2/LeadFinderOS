@@ -147,7 +147,7 @@ export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide }
         {/* WhatsApp delivery receipts — the message read-status ratchet (historical
             engagement). DISTINCT from "Report opened": this is the WhatsApp receipt
             (did the message land / get read), not a report view. */}
-        <div className="border-t border-border/50 pt-2.5" title="WhatsApp read-status ratchet from whatsapp_delivery_status — the message receipt, not a report view">
+        <div className="border-t border-border/50 pt-2.5" title="Per-message WhatsApp receipts (whatsapp_messages.status, webhook-written) — distinct leads with a delivered/read message. Not a report view.">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Message receipts (WhatsApp)</p>
           <div className="flex flex-wrap gap-1.5">
             <Badge variant="outline" className="text-[11px] font-medium">
@@ -193,6 +193,10 @@ export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide }
                     <span className="text-[11px] font-medium text-foreground/90 truncate">{TEMPLATE_LABEL[key] ?? key}</span>
                     <span className="text-[11px] text-muted-foreground tabular-nums">
                       Reached <span className="font-bold text-foreground/90">{f.leads}</span>
+                      {/* This template's OWN read receipt. Only messages sent after per-message
+                          status shipped can carry one, so a template whose whole history predates
+                          it shows "—" rather than a misleading 0%. */}
+                      {' · '}<span className="font-bold text-foreground/90">{f.delivered === 0 ? '—' : `${Math.round((f.read / f.delivered) * 100)}%`}</span> read
                       {' · '}Opened <span className="font-bold text-foreground/90">{f.opened}</span>
                       {' · '}Replied <span className="font-bold text-foreground/90">{f.replied}</span>
                       {' · '}<span className="font-bold text-foreground/90">{replyRate === null ? '—' : `${replyRate}%`}</span> reply
