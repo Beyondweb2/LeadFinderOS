@@ -90,7 +90,22 @@ Deno.serve(async (req) => {
     const form = new URLSearchParams();
     form.set("mode", "payment"); // ONE-OFF — not a subscription
     form.set("success_url", `${back}${back.includes("?") ? "&" : "?"}paid=1`);
-    form.set("cancel_url", `${back}${back.includes("?") ? "&" : "?"}cancelled=1`);
+    // The cancel URL carries the onboarding row, the success URL deliberately does not.
+    //
+    // A payer who backs out has to be able to try again, and the plan screen's button is dead
+    // without this id. The client also keeps it in sessionStorage, but storage is unavailable in
+    // private mode and gone if the tab was replaced - and that customer must not be the one who
+    // cannot buy. Re-answering is not a fallback: the questionnaire refuses a second submit inside
+    // ten minutes.
+    //
+    // Safe to expose: this endpoint already accepts onboarding_id from the client, checks the row
+    // exists, and takes the lead FROM THE ROW rather than from the caller, so a substituted id
+    // cannot attach a payment to someone else's lead. Kept off success_url so a paid receipt does
+    // not carry a live retry token.
+    form.set(
+      "cancel_url",
+      `${back}${back.includes("?") ? "&" : "?"}cancelled=1&onboarding=${onboardingId}`,
+    );
     form.set("metadata[onboarding_id]", onboardingId);
     if (effectiveLeadId) form.set("metadata[lead_id]", effectiveLeadId);
     const priceId = Deno.env.get("FINDABLE_SETUP_PRICE_ID") ?? "";
