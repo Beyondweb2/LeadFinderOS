@@ -207,7 +207,7 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   { value: 'initial_contact', label: 'Initial contact (opener)' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
   { value: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
-  { value: 'call_arrange', label: 'Arrange a call' },
+  { value: 'book_call', label: 'Arrange a call' },
 ];
 
 // Contact method options (how the business was contacted)
