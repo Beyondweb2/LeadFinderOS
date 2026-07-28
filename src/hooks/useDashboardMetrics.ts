@@ -46,7 +46,6 @@ const emptyChannelStat = (tracking: ChannelStat['tracking']): ChannelStat => ({ 
 // audit first_opened_at data, not status.
 const REPORT_SENT_OR_BEYOND = new Set(['report_sent', 'price_given', 'payment_received', 'in_delivery', 'completed']);
 const PRICE_GIVEN_OR_BEYOND = new Set(['price_given', 'payment_received', 'in_delivery', 'completed']);
-const PAID_OR_BEYOND = new Set(['payment_received', 'in_delivery', 'completed']);
 /** The report pitch, matching useCampaignStats. */
 const PITCH_TEMPLATES = new Set(['audit_reply']);
 
@@ -393,7 +392,7 @@ export function useDashboardMetrics(isAdmin = false) {
     for (const l of funnelLeads) {
       const ms = msgsByLeadId.get(l.id);
       if (!ms) {
-        if ((l.amount_paid ?? 0) > 0 || PAID_OR_BEYOND.has(l.status)) funnelPaid += 1;
+        if ((l.amount_paid ?? 0) > 0) funnelPaid += 1;
         continue;
       }
       const outTemplated = ms.filter(m => m.direction === 'outbound' && m.template_name);
@@ -407,8 +406,8 @@ export function useDashboardMetrics(isAdmin = false) {
         const newestInboundAt = humanInbound.length ? humanInbound[humanInbound.length - 1].created_at : null;
         if (newestInboundAt && newestInboundAt > lastPitchAt) pitchReplied += 1;
       }
-      // Money in the bank beats a status someone forgot to move.
-      if ((l.amount_paid ?? 0) > 0 || PAID_OR_BEYOND.has(l.status)) funnelPaid += 1;
+      // Money in the bank, and nothing else. A status someone moved by hand is not a payment.
+      if ((l.amount_paid ?? 0) > 0) funnelPaid += 1;
     }
     const auditFunnel: AuditFunnel = {
       contacted, replied, pitched, pitchReplied, paid: funnelPaid,

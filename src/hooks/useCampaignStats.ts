@@ -30,7 +30,6 @@ const PITCH_TEMPLATES = new Set(['audit_reply']);
 /** The sign-up link. */
 const SIGNUP_TEMPLATES = new Set(['onboarding_followup']);
 /** Paid = payment_received-or-beyond in the forward-only pipeline ordering. */
-const PAID_OR_BEYOND = new Set(['payment_received', 'in_delivery', 'completed']);
 
 /** A receipt on the message itself: 'read' implies delivered, so both count as delivered. */
 const isDeliveredStatus = (s: string | null | undefined) => s === 'delivered' || s === 'read';
@@ -201,7 +200,9 @@ export function useCampaignStats() {
 
     if (outTemplated.some((m) => SIGNUP_TEMPLATES.has(m.template_name!))) b.signupSent += 1;
     if (startedLeadIds.has(l.id)) b.started += 1;
-    if (PAID_OR_BEYOND.has(l.status ?? '') || Number(l.amount_paid ?? 0) > 0) b.paid += 1;
+    /* amount_paid only, so `paid` and `moneyIn` below can no longer disagree on the same card — the
+       status half used to let a £0 lead in in_delivery count as paid while contributing £0. */
+    if (Number(l.amount_paid ?? 0) > 0) b.paid += 1;
     b.moneyIn += Number(l.amount_paid ?? 0);
 
     // Per-template rows: distinct leads, plus that template's own receipts.

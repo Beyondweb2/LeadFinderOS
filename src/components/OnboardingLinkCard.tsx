@@ -13,8 +13,6 @@ import type { OutreachLead } from '@/types/outreach';
  * cannot be measured. So the link is generated, shown, and copied — never retyped.
  */
 
-/** Statuses that mean the money has already landed. Mirrors the edge functions' PAID_OR_BEYOND. */
-const PAID_OR_BEYOND = new Set(['payment_received', 'in_delivery', 'completed']);
 
 /**
  * What the sign-up flow needs from a lead, and what degrades without it. Deliberately split into
@@ -22,7 +20,9 @@ const PAID_OR_BEYOND = new Set(['payment_received', 'in_delivery', 'completed'])
  * downstream suffers), because those want different words on screen.
  */
 function assess(lead: OutreachLead) {
-  const paid = PAID_OR_BEYOND.has(lead.status) || ((lead.amount_paid ?? 0) > 0);
+  /* amount_paid only. Previously a £0 lead in in_delivery was treated as paid and the copy button
+     was hidden, withholding the sign-up link from someone who had not actually paid. */
+  const paid = (lead.amount_paid ?? 0) > 0;
 
   const trade = (lead.category ?? lead.search_keyword ?? '').trim();
   const town = (lead.search_location ?? lead.address ?? '').trim();

@@ -121,7 +121,6 @@ const DEAD = new Set(['not_interested', 'opted_out', 'closed']);
    - queued: the drip sends these on a timer, so there is nothing for a human to do. */
 const NOT_ACTIONABLE = new Set(['no_whatsapp', 'no_whatsapp_needs_sms', 'queued']);
 
-const PAID_OR_BEYOND = new Set(['payment_received', 'in_delivery', 'completed']);
 
 /* How long a quoted lead may stay silent before it becomes a task. Three days: long enough that a
    quote sent Friday is not chased over the weekend, short enough that a warm lead cannot rot. */
@@ -137,7 +136,11 @@ export function agoPhrase(days: number): string {
   return `${days} days ago`;
 }
 
-const isPaid = (l: OutreachLead) => PAID_OR_BEYOND.has(l.status) || ((l.amount_paid ?? 0) > 0);
+/* Money in the bank is the only test. The status half of this used to be OR'd in, so a £0 lead an
+   operator dragged to in_delivery or completed counted as paid — the mirror of the bug on the
+   revenue page, which counted status and ignored money. A manual/offline sale must therefore have
+   amount_paid filled in to register; a status move alone no longer implies payment. */
+const isPaid = (l: OutreachLead) => (l.amount_paid ?? 0) > 0;
 
 /** A reply is outstanding when their newest message is newer than our newest. */
 export function awaitingReply(t: LeadMessageTimes | undefined): boolean {

@@ -502,13 +502,14 @@ const PaidClientsPage = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter to only show completed/paid clients
+  /* Who has ACTUALLY paid. This used to filter on status in
+     ('completed','in_delivery','payment_received') and then sum amount_paid over that gated set, so
+     it was wrong in both directions on the one page whose entire job is showing revenue: a lead with
+     money banked but a status nobody moved was invisible, and a £0 lead an operator dragged to
+     in_delivery counted as a client. Money in the bank is the only thing that makes someone a paying
+     client, so amount_paid > 0 is the whole test. */
   const paidClients = useMemo(() => {
-    // paid_for_draft removed (dead legacy status); in_delivery added — a paid client being
-    // delivered is still a paid client.
-    const paidStatuses = ['completed', 'in_delivery', 'payment_received'];
-    
-    let result = leads.filter((lead) => paidStatuses.includes(lead.status));
+    let result = leads.filter((lead) => (lead.amount_paid ?? 0) > 0);
     
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
