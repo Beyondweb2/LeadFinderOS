@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 
 // findable-checkout — Stripe Checkout for the Findable onboarding plan (verify_jwt = false;
 // called by the public findable-site with the anon apikey — the visitor has no app account).
@@ -156,7 +157,11 @@ Deno.serve(async (req) => {
     // Trailing slash on purpose: the built site serves /onboarding/ and 308-redirects
     // /onboarding to it. Returning a payer straight to the canonical path avoids an
     // extra hop on the most important redirect in the product.
-    const back = `${origin}/onboarding/${effectiveLeadId ? `?lead=${effectiveLeadId}` : ""}`;
+    /* Cosmetic name segment, matching the links we send. The lead param is unchanged; the segment is
+       dropped when there is no name, which also keeps the no-lead case identical to before. */
+    const backSlug = slugifyBusinessName((lead?.business_name as string | null) ?? "");
+    const backSegment = effectiveLeadId && backSlug !== "business" ? `${backSlug}/` : "";
+    const back = `${origin}/onboarding/${effectiveLeadId ? `${backSegment}?lead=${effectiveLeadId}` : ""}`;
 
     const form = new URLSearchParams();
     form.set("mode", "payment"); // ONE-OFF — not a subscription
