@@ -103,12 +103,40 @@ Deno.serve(async (req) => {
     }
     if (effectiveLeadId) {
       const { data: lead } = await service
-        .from("outreach_leads").select("id, status, amount_paid").eq("id", effectiveLeadId).maybeSingle();
+        .from("outreach_leads")
+        .select("id, business_name, status, amount_paid, category, search_keyword")
+        .eq("id", effectiveLeadId).maybeSingle();
       if (lead && (PAID_OR_BEYOND.has(lead.status as string) || ((lead.amount_paid as number) ?? 0) > 0)) {
         await recordRefusal("checkout_refused_already_client", {
           lead_id: effectiveLeadId, lead_status: lead.status, amount_paid: lead.amount_paid,
         });
         return json({ ok: false, error: "already_client" }, 403);
+      }
+      /* NO TRADE — the last line of defence, and the reason this check lives HERE rather than only
+         in the senders. Every route to a Stripe session for this product passes through this
+         function: the two WhatsApp templates, the copy-link button, a link pasted by hand, and a
+         bare visit. Guarding the senders closes some of those; guarding this closes all of them.
+
+         Without a trade on the LEAD, startPaidBaseline returns skipped:"no_business_type" and no
+         baseline is ever created — so the 8-week money-back guarantee this £49.99 buys has nothing
+         to measure against, and that only surfaces at week eight in front of the customer. Refusing
+         a payment is recoverable in a minute; selling an unmeasurable guarantee is not.
+
+         MIRRORS audit-baseline.ts's own bizType line character for character, deliberately:
+           ((lead.category) || (lead.search_keyword) || "").trim()
+         Nominally the trade is `category`, but that column has never once been populated across 628
+         leads, so a check on `category` alone would refuse every payment. If the baseline's
+         expression changes, this must change with it.
+
+         NOTHING is inferred. A business name that obviously implies a trade still refuses: a wrong
+         trade would measure the guarantee against searches the customer never chose, which is worse
+         than a refusal an operator fixes by hand. */
+      const bizType = ((lead?.category as string) || (lead?.search_keyword as string) || "").trim();
+      if (!bizType) {
+        await recordRefusal("checkout_refused_no_trade", {
+          lead_id: effectiveLeadId, business_name: (lead?.business_name as string | null) ?? null,  // so the log names who to fix
+        });
+        return json({ ok: false, error: "needs_trade" }, 403);
       }
     } else {
       /* NO ATTRIBUTION — refuse rather than take the money.

@@ -85,5 +85,23 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
   const business = (audit.business_name ?? "").trim();
   if (!trade || !business) return { ok: false, reason: "Audit is missing the business name or type." };
 
+  /* THE LEAD'S TRADE, NOT JUST THE AUDIT'S. This guard used to check only audit.business_type, which
+     is a different field with a different history: an audit created through the wizard carries the
+     trade that was typed into it, while the LEAD row can still have none. Three leads are in exactly
+     that state, so this pitch could be sent, followed, and paid for — and then startPaidBaseline
+     would refuse with skipped:"no_business_type", leaving an 8-week guarantee with no baseline.
+     findable-checkout refuses that payment as a last line of defence, but this is the common path
+     and it should fail here, before a prospect is ever pointed at a report.
+     Mirrors audit-baseline.ts's bizType expression character for character. Nothing is inferred. */
+  const { data: leadRow } = await service
+    .from("outreach_leads").select("category, search_keyword").eq("id", leadId).maybeSingle();
+  const leadTrade = ((leadRow?.category as string) || (leadRow?.search_keyword as string) || "").trim();
+  if (!leadTrade) {
+    return {
+      ok: false,
+      reason: "That lead has no trade stored, so no baseline could run if they paid — add the trade on the lead and try again.",
+    };
+  }
+
   return { ok: true, trade, competitors, business, link: `${REPORT_SITE_ORIGIN}/a/${audit.id}`, auditId: audit.id };
 }
