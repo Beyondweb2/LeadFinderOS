@@ -37,7 +37,10 @@ export interface OnboardingLinkLead {
  * "already paid" (the link is pointless) and "will half-work" (the link functions but something
  * downstream suffers), because those want different words on screen.
  */
-function assess(lead: OnboardingLinkLead) {
+/* Exported so the Inbox's compact icon shares this exact judgement. Two copies of "is this lead
+   ready for the sign-up link" would drift, and the one that matters most - no trade, so no baseline
+   can run - is the one you least want drifting. */
+export function assessOnboardingLink(lead: OnboardingLinkLead) {
   /* amount_paid only. Previously a £0 lead in in_delivery was treated as paid and the copy button
      was hidden, withholding the sign-up link from someone who had not actually paid. */
   const paid = (lead.amount_paid ?? 0) > 0;
@@ -61,7 +64,7 @@ function assess(lead: OnboardingLinkLead) {
 
 export function OnboardingLinkCard({ lead }: { lead: OnboardingLinkLead }) {
   const [copied, setCopied] = useState(false);
-  const { paid, warnings, blocking } = assess(lead);
+  const { paid, warnings, blocking } = assessOnboardingLink(lead);
   const url = onboardingUrl(lead.id);
 
   const copy = async () => {
