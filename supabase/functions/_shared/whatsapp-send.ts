@@ -124,14 +124,19 @@ We ran a full report on your business for AI and SEO visibility: ${u}
 We could get you showing up in those results - it's mostly stuff we handle at our end.
 Want me to explain?`;
 
-/* ⚠️ onboarding_followup's wording here is NOT verified against the approved Meta template — the
-   API never returns template bodies and the copy was not supplied. It is a local PREVIEW only: the
-   real message is rendered by Meta from the approved template plus {{1}}/{{2}}, so a mismatch here
-   cannot affect what the recipient reads, only what the Inbox thread shows for an Inbox-sent
-   follow-up. Replace with the exact approved text. (Campaign sends display via the whatsapp_sends
-   trigger instead, which shows "[onboarding_followup]" until that separate work is done.) */
+/* onboarding_followup - the APPROVED wording, supplied 2026-07-28. Display-only, like every body
+   in this map: Meta renders what the customer actually reads from the approved template, so the
+   whitespace here cannot affect a send. It only decides what the Inbox thread shows for a
+   follow-up sent from the Inbox. (A campaign send displays via the whatsapp_sends trigger instead,
+   which shows "[onboarding_followup]" until that separate work is done.)
+   No "there" fallback on the name: resolveOnboardingFollowupVars refuses outright when the lead has
+   no business name, so an empty {{1}} cannot reach this function. */
 const onboardingFollowupBody = (b: string, u: string) =>
-  `Hi ${b || "there"}, here's the link to get started: ${u}`;
+  `Hi ${b}, following up on your AI visibility report. If you'd like to go ahead, you can get set up here:
+
+${u}
+
+Takes about two minutes and we handle the rest. Any questions, let me know`;
 
 // call_arrange - exact approved wording. No link, so the claimUrl arg is unused.
 const callArrangeBody = (b: string, _u: string) =>
