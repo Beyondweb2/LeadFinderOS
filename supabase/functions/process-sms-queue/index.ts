@@ -151,8 +151,16 @@ Deno.serve(async (req) => {
     const nowMin = uk.hour * 60 + uk.minute;
     const windowOpen = nowMin >= WINDOW_START * 60 && nowMin < WINDOW_END_MIN;
 
+    /* How many SMS-eligible leads the archive filter is holding back — reported so a quiet queue can
+       be told apart from a queue full of withdrawn leads. */
+    const { count: archivedEligibleCount } = await service
+      .from("outreach_leads").select("id", { count: "exact", head: true })
+      .in("status", ["no_whatsapp", "whatsapp_failed", "sms_queued"])
+      .eq("is_archived", true).not("phone", "is", null).is("sms_sent_at", null);
+
     const statusPayload = {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
+      archivedEligibleCount: archivedEligibleCount ?? 0,
       nextSendAt, windowOpen, paused,
       ukTime: `${String(uk.hour).padStart(2, "0")}:${String(uk.minute).padStart(2, "0")}`,
     };
@@ -174,10 +182,15 @@ Deno.serve(async (req) => {
 
     // Oldest SMS-eligible lead: WhatsApp path exhausted, has a phone, not yet SMS'd,
     // under the retry cap. Ordered by when it entered the SMS queue (fallback: created).
+    /* ...and NOT archived. Same reasoning as process-whatsapp-queue: archiving means stop contacting
+       this business, and none of these statuses changes when a lead is archived. This cron is not
+       scheduled today (the pg_cron block in the sms_queue migration was never run), so the guard is
+       pre-emptive — it must be here before anyone enables it, not after. */
     const { data: lead } = await service
       .from("outreach_leads")
       .select("id, business_name, phone, country, whatsapp_template, sms_attempts, user_id, status")
       .in("status", ["no_whatsapp", "whatsapp_failed", "sms_queued"])
+      .eq("is_archived", false)
       .not("phone", "is", null)
       .is("sms_sent_at", null)
       .lt("sms_attempts", MAX_SMS_ATTEMPTS)
@@ -185,7 +198,13 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: true })
       .limit(1)
       .maybeSingle();
-    if (!lead) return json({ ok: true, skipped: "empty_queue", ...statusPayload });
+    if (!lead) {
+      return json({
+        ok: true,
+        skipped: (archivedEligibleCount ?? 0) > 0 ? "empty_queue_archived_skipped" : "empty_queue",
+        ...statusPayload,
+      });
+    }
 
     const e164 = toE164(lead.phone as string);
     if (!e164 || e164.replace(/\D/g, "").length < 8) {

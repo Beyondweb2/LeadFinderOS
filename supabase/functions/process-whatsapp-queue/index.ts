@@ -198,8 +198,16 @@ Deno.serve(async (req) => {
     const dayStart = londonDayStartUtcIso();
     const { count: sentToday } = await service
       .from("whatsapp_sends").select("id", { count: "exact", head: true }).gte("created_at", dayStart);
+    /* Queue depth counts what this processor will ACTUALLY send: archived leads are excluded here
+       for the same reason they are excluded from the selection below. The archived-but-queued count
+       is reported alongside it rather than silently dropped, so "nothing to send" and "skipping N
+       archived" are distinguishable from the outside. */
     const { count: queuedCount } = await service
-      .from("outreach_leads").select("id", { count: "exact", head: true }).eq("status", "queued");
+      .from("outreach_leads").select("id", { count: "exact", head: true })
+      .eq("status", "queued").eq("is_archived", false);
+    const { count: archivedQueuedCount } = await service
+      .from("outreach_leads").select("id", { count: "exact", head: true })
+      .eq("status", "queued").eq("is_archived", true);
     const { data: stateRow } = await service
       .from("whatsapp_outreach_state").select("next_send_at, paused").eq("id", 1).maybeSingle();
     const nextSendAt: string | null = stateRow?.next_send_at ?? null;
@@ -211,7 +219,7 @@ Deno.serve(async (req) => {
 
     const statusPayload = {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
-      queuedCount: queuedCount ?? 0, nextSendAt, windowOpen, paused,
+      queuedCount: queuedCount ?? 0, archivedQueuedCount: archivedQueuedCount ?? 0, nextSendAt, windowOpen, paused,
       ukTime: `${String(uk.hour).padStart(2, "0")}:${String(uk.minute).padStart(2, "0")}`,
       // Auto audit_reply rule state: BOTH must be on for the rule to run. Toggle read is
       // defensive (missing column → false), so status works before the SQL has been run.
@@ -339,8 +347,17 @@ Deno.serve(async (req) => {
           }
           // 2) Send-time status + suppression (checked HERE, not just at queue time).
           const { data: lead } = await service.from("outreach_leads")
-            .select("id, user_id, status, business_name").eq("id", row.lead_id).maybeSingle();
+            .select("id, user_id, status, business_name, is_archived").eq("id", row.lead_id).maybeSingle();
           if (!lead) { await finish("flagged_error", "lead_missing"); results[row.lead_id] = "flagged_error"; continue; }
+          /* Archived at send time — e.g. armed by a reply, then archived during the ~3 minute delay,
+             which is exactly the window an operator would use to stop it. Recorded rather than
+             dropped so the row shows WHY it never sent. Not "cancelled_decline": the business did
+             not decline, the operator withdrew. */
+          if (lead.is_archived === true) {
+            await finish("skipped_archived", "lead archived before send");
+            results[row.lead_id] = "skipped_archived";
+            continue;
+          }
           if (["opted_out", "not_interested"].includes(lead.status as string) || (await phoneSuppressed(service, row.phone))) {
             await finish("skipped_suppressed");
             results[row.lead_id] = "skipped_suppressed";
@@ -455,16 +472,30 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: "not_due", ...statusPayload });
     }
 
-    // Oldest queued lead with a phone.
+    /* Oldest queued, UNARCHIVED lead with a phone. Archiving is the operator saying "stop
+       contacting this business"; before this filter it only hid the lead from the SPA's lists while
+       this query happily sent to it. Note the archived rows keep status='queued' — archiving
+       deliberately writes is_archived and nothing else — so the status filter alone never excluded
+       them. Un-archiving restores the lead to the queue exactly where its queued_at puts it. */
     const { data: lead } = await service
       .from("outreach_leads")
       .select("id, business_name, phone, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id")
       .eq("status", "queued")
+      .eq("is_archived", false)
       .not("phone", "is", null)
       .order("queued_at", { ascending: true })
       .limit(1)
       .maybeSingle();
-    if (!lead) return json({ ok: true, skipped: "empty_queue", ...statusPayload });
+    /* "empty_queue" and "nothing left but archived leads" are different facts, so they get different
+       skip codes. Without this, pulling 17 leads out of the queue by archiving them would look
+       identical to having genuinely finished the list. */
+    if (!lead) {
+      return json({
+        ok: true,
+        skipped: (archivedQueuedCount ?? 0) > 0 ? "empty_queue_archived_skipped" : "empty_queue",
+        ...statusPayload,
+      });
+    }
 
     // Resolve the lead's claim link (the {{2}} variable). Also pull first_opened_at
     // (no extra round-trip) as durable proof-of-reach for the no_whatsapp guard below.
