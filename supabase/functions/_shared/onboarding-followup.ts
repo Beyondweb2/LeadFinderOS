@@ -67,7 +67,7 @@ export async function resolveOnboardingFollowupVars(service: any, leadId: string
 
   const { data: lead, error } = await service
     .from("outreach_leads")
-    .select("id, business_name, status, amount_paid")
+    .select("id, business_name, status, amount_paid, category, search_keyword")
     .eq("id", id)
     .maybeSingle();
   if (error) return { ok: false, reason: `Could not read that lead: ${error.message}` };
@@ -83,6 +83,30 @@ export async function resolveOnboardingFollowupVars(service: any, leadId: string
   const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
   if (PAID_OR_BEYOND.has((lead.status as string) ?? "") || (((lead.amount_paid as number) ?? 0) > 0)) {
     return { ok: false, reason: "That lead has already paid — the onboarding follow-up would send them back to checkout." };
+  }
+
+  /* NO TRADE, NO SEND — the worst failure in the funnel, so it is refused rather than warned about.
+     This template's whole job is to walk someone into paying. If they pay without a trade on the
+     lead, startPaidBaseline returns skipped:"no_business_type" and no baseline is ever created — so
+     an 8-week money-back guarantee has been sold with nothing to measure it against, and that only
+     surfaces at week 8, in front of the customer.
+
+     The expression MIRRORS audit-baseline.ts's own bizType line exactly:
+       ((lead.category) || (lead.search_keyword) || "").trim()
+     deliberately, not something equivalent-looking. Nominally the trade is `category`, but that
+     column has never once been populated in 628 leads, so a check on `category` alone would pass
+     nothing and a check on the wrong field would refuse sends the baseline would actually have
+     handled. If the baseline's expression ever changes, this must change with it.
+
+     NOT inferred from the business name. "Grays Plumbing and Heating" is obviously a plumber to a
+     human, but guessing here would measure the guarantee against searches the customer never chose,
+     which is a worse outcome than a refusal an operator can fix in ten seconds. */
+  const bizType = ((lead.category as string) || (lead.search_keyword as string) || "").trim();
+  if (!bizType) {
+    return {
+      ok: false,
+      reason: "That lead has no trade stored, so no baseline could run if they paid — add the trade on the lead and try again.",
+    };
   }
 
   return { ok: true, business, url: onboardingUrl(origin, id) };
