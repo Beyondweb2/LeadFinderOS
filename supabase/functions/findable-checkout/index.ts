@@ -71,13 +71,56 @@ Deno.serve(async (req) => {
     const { data: ob } = await service
       .from("onboarding_responses").select("id, lead_id, status").eq("id", onboardingId).maybeSingle();
     if (!ob) return json({ ok: false, error: "unknown_onboarding" }, 404);
+
+    /* One place to record a refusal, mirroring stripe-webhook's recordPaymentFailure so both ends of
+       the payment path land in the same table. Never throws: a logging failure must not turn a
+       correct refusal into a 500 that the customer sees as a broken page. */
+    const recordRefusal = async (errorId: string, context: Record<string, unknown>) => {
+      try {
+        const { error } = await service.from("client_error_reports").insert({
+          error_id: errorId,
+          context: { ...context, onboarding_id: onboardingId, at: new Date().toISOString() },
+        });
+        if (error) console.error(`[findable-checkout] could not record ${errorId}:`, error.message);
+      } catch (e) {
+        console.error(`[findable-checkout] could not record ${errorId}:`, (e as Error).message);
+      }
+    };
+
     const effectiveLeadId = (ob.lead_id as string | null) ?? leadId;
+
+    /* ALREADY PAID — checked on the ROW first, which needs no lead attribution at all.
+       The lead-level check below can only run when we know which lead this is, so it was blind
+       exactly when it mattered: an existing client whose prefill failed lost their attribution, got
+       a fresh generic onboarding row, and reached a Stripe session with nothing to check them
+       against. The row's own status closes that: a row that has already been paid for can never
+       start another session, however the visitor arrived. */
+    if ((ob.status as string) === "paid") {
+      await recordRefusal("checkout_refused_row_already_paid", {
+        lead_id: effectiveLeadId, row_status: ob.status,
+      });
+      return json({ ok: false, error: "already_client" }, 403);
+    }
     if (effectiveLeadId) {
       const { data: lead } = await service
         .from("outreach_leads").select("id, status, amount_paid").eq("id", effectiveLeadId).maybeSingle();
       if (lead && (PAID_OR_BEYOND.has(lead.status as string) || ((lead.amount_paid as number) ?? 0) > 0)) {
+        await recordRefusal("checkout_refused_already_client", {
+          lead_id: effectiveLeadId, lead_status: lead.status, amount_paid: lead.amount_paid,
+        });
         return json({ ok: false, error: "already_client" }, 403);
       }
+    } else {
+      /* NO ATTRIBUTION — refuse rather than take the money.
+         Without a lead there is no baseline (startPaidBaseline returns skipped:no_lead_id) and
+         therefore no way to measure the 8-week guarantee this payment buys. Taking £49.99 for a
+         promise that cannot be assessed is the wrong side of the trade, so the session is not
+         created. The site turns this into an instruction to use their own link, never an error.
+         Safe to enforce now that the client falls back to the URL's ?lead=, so a failed prefill no
+         longer strips attribution from a real link - a missing lead here means there genuinely
+         wasn't one. */
+      await recordRefusal("checkout_refused_no_lead", { client_sent_lead_id: leadId });
+      return json({ ok: false, error: "no_lead_attribution" }, 403);
     }
 
     const reqOrigin = req.headers.get("origin") ?? "";
