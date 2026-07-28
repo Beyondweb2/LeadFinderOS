@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -2804,9 +2804,20 @@ function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | null }) {
       {target > 1 && (
         audit.baseline_error
           ? <ClientPill bad title={audit.baseline_error}>baseline failed</ClientPill>
-          : <ClientPill title={audit.baseline_completed_at ? `Baseline finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')}` : 'Baseline still being measured'}>
-              client &middot; baseline {counted ?? (audit.baseline_completed_at ? target : 0)}/{target}
-            </ClientPill>
+          /* A FINISHED baseline links to the operator view, because until now it was measured and
+             then invisible. Still-measuring stays a plain pill — there is nothing to read yet. */
+          : audit.baseline_completed_at
+            ? <Link
+                to={`/baseline/${audit.id}`}
+                onClick={(e) => e.stopPropagation()}
+                title={`Baseline finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')} — open the operator view`}
+                className="underline decoration-dotted underline-offset-2 hover:no-underline"
+              >
+                <ClientPill>client &middot; baseline {counted ?? target}/{target}</ClientPill>
+              </Link>
+            : <ClientPill title="Baseline still being measured">
+                client &middot; baseline {counted ?? 0}/{target}
+              </ClientPill>
       )}
       {audit.lead_paid === true && target <= 1 && <ClientPill title="This lead has paid">client</ClientPill>}
       {/* ASSETS: facts, not signals. */}
