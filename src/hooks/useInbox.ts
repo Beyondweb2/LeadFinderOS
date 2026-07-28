@@ -95,7 +95,10 @@ export function useInbox() {
     setIsLoading(true);
     const [msgRes, leadRes, siteRes, reportRes] = await Promise.all([
       sb.from('whatsapp_messages').select('*').order('created_at', { ascending: true }),
-      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address').not('phone', 'is', null),
+      // is_archived = false: an archived lead is one the operator has stopped working, so its thread
+      // leaves the Inbox and it also leaves the "start a conversation" picker below. Un-archiving
+      // brings the whole thread back — nothing is deleted, and the messages are untouched.
+      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address').eq('is_archived', false).not('phone', 'is', null),
       // share_token / booking_only aren't in the generated types yet — untyped sb. RLS
       // scopes rows to the operator's own sites (admins see all). Ordered newest-first
       // so the per-lead pick below takes the most recent site.
@@ -157,9 +160,10 @@ export function useInbox() {
     return s;
   }, [audits]);
 
-  // Own-lead ids. `leads` is fetched with the user-session client, so RLS ("Users
-  // can view their own leads") already scopes it to the current user's leads —
-  // this set is the ownership source of truth used to keep the Inbox to OWN leads.
+  // Own, UNARCHIVED lead ids. `leads` is fetched with the user-session client, so RLS ("Users
+  // can view their own leads") already scopes it to the current user's leads, and the query above
+  // excludes archived ones — so the `continue` in `conversations` drops an archived lead's thread
+  // through the same path it drops another rep's.
   const ownLeadIds = useMemo(() => new Set(leads.map((l) => l.id)), [leads]);
 
   // Most-recent generated site per lead (sites are ordered newest-first, so the

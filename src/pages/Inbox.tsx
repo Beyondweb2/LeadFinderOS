@@ -419,9 +419,13 @@ const Inbox = () => {
       title: hasCompletedAudit ? 'Audit re-running' : 'Audit started',
       description: data.pitch_queued
         ? 'The report pitch will auto-send when it completes (~10–15 min; declines cancel it).'
-        : data.pitch_note === 'slot_already_owned'
-          ? 'Audit re-running — pitch already sent, so no new pitch will be queued.'
-          : `Audit is running, but the auto-pitch wasn’t queued (${data.pitch_note ?? 'unknown'}) — send manually when it completes.`,
+        : data.pitch_note === 'lead_archived'
+          // Its own line: the generic note ends with "send manually when it completes", which is
+          // exactly the wrong advice for a lead the operator has withdrawn.
+          ? 'Audit is running. No pitch was queued because this lead is archived — un-archive them if you want the pitch to send.'
+          : data.pitch_note === 'slot_already_owned'
+            ? 'Audit re-running — pitch already sent, so no new pitch will be queued.'
+            : `Audit is running, but the auto-pitch wasn’t queued (${data.pitch_note ?? 'unknown'}) — send manually when it completes.`,
     });
     refetch(); // pick up the pending run → spinner state survives reloads
   };

@@ -457,10 +457,18 @@ Deno.serve(async (req) => {
     if (queuePitchOnComplete && leadId) {
       try {
         const { data: leadRow } = await service
-          .from("outreach_leads").select("phone, country").eq("id", leadId).maybeSingle();
+          .from("outreach_leads").select("phone, country, is_archived").eq("id", leadId).maybeSingle();
         const to = toWhatsAppNumber((leadRow?.phone as string) ?? "", (leadRow?.country as string | null) ?? null);
         const parkTemplate = await firstReplyTemplate(service);
-        if (!to) {
+        /* Archived → park NOTHING, and say so. Checked FIRST so it wins over the phone/already-sent
+           notes: "we won't pitch them" is the operative fact, not which other condition also held.
+           Same reasoning as the other two arm points — lead_id is UNIQUE on whatsapp_auto_replies, so
+           any row permanently spends the lead's once-ever slot, including a row that only records a
+           refusal. The audit itself still runs: an operator asking what a business looks like in AI
+           search is not contacting that business. */
+        if (leadRow?.is_archived === true) {
+          pitchNote = "lead_archived";
+        } else if (!to) {
           pitchNote = "no_usable_phone";
         } else if (await pitchEverSent(service, leadId, parkTemplate ?? "audit_reply")) {
           // DURABLE once-ever: the pitch already went to this lead (message log — covers manual
