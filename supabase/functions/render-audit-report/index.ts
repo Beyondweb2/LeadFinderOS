@@ -17,6 +17,8 @@ import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 
 // The public origin the clean URL will live at (Stage 3 can front this fn at /a/<slug>); used for
 // the report's canonical "View online" footer link.
+import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
+
 const SITE_ORIGIN = "https://yoursites.uk";
 
 function htmlResponse(html: string, status = 200): Response {
@@ -80,20 +82,33 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // 1) Resolve the audit id. A UUID path segment IS the audit id — the report is built LIVE from
-    //    the linked audit, no stored business_reports row required (this is what the Inbox report
-    //    pill uses: /a/<auditId>). A non-UUID slug is a published business_reports mapping row
-    //    (backward compat for older published reports + the audit_reply link's slug).
+    /* 1) Resolve the audit id.
+       A UUID path segment IS the audit id, resolved directly — every pitch link ever sent is that
+       form (64 of them) and must never stop working.
+       Otherwise the slug must END in the 8-hex audit code; the business-name part is cosmetic and is
+       NOT matched. That is the security fix: this used to look the slug up by exact string, so the
+       bare slugified name resolved and /a/dan-electrician served that report to anyone who could
+       guess a company name. Matching on the code suffix also means renaming a business cannot break
+       a link already sent — the stored slug keeps the old name, the code does not change. */
     let auditId: string;
     if (UUID_RE.test(slug)) {
       auditId = slug;
     } else {
-      const { data: rep } = await service
+      const code = auditCodeFromSlug(slug);
+      // No code → a bare name, or junk. Either way there is nothing to resolve.
+      if (!code) return unavailable("This report link is no longer valid.");
+      const { data: reps } = await service
         .from("business_reports")
-        .select("audit_id, status")
-        .eq("slug", slug).eq("status", "published").maybeSingle();
-      if (!rep || !rep.audit_id) return unavailable("This report doesn’t exist or isn’t published.");
-      auditId = rep.audit_id as string;
+        .select("audit_id")
+        .like("slug", `%-${code}`).eq("status", "published").limit(2);
+      const matches = (reps ?? []) as Array<{ audit_id: string | null }>;
+      /* Exactly one, or nothing. On a code collision we refuse rather than pick: handing someone a
+         stranger's report would be far worse than a dead link. See the note in reportSlug.ts. */
+      if (matches.length !== 1 || !matches[0].audit_id) {
+        if (matches.length > 1) console.error(`[render-audit-report] code ${code} matched ${matches.length} reports — refusing to guess.`);
+        return unavailable("This report doesn’t exist or isn’t published.");
+      }
+      auditId = matches[0].audit_id as string;
     }
 
     // 2) audit_id → ai_audits (business context for the report copy).

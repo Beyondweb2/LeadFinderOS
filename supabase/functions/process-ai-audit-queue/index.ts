@@ -11,6 +11,7 @@ import { autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts"
 // Automation B: reuse the SHARED report aggregation (same buildReportData the SPA + public
 // renderer use) so the WhatsApp {{2}} competitor list matches the report exactly.
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
+import { buildReportSlug } from "../../../src/lib/reportSlug.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
@@ -957,7 +958,10 @@ function formatCompetitors(list: string[]): string {
  *  render-audit-report) and the once-per-audit idempotency marker. */
 // deno-lint-ignore no-explicit-any
 async function insertAuditReportRow(service: any, businessName: string, auditId: string, leadId: string): Promise<string | null> {
-  const base = slugify(businessName);
+  /* buildReportSlug appends the 8-hex audit code. The name alone no longer resolves, so the code is
+     what makes the link work — see src/lib/reportSlug.ts. The -N retry below is kept as a belt on an
+     essentially-impossible collision (same name AND same code). */
+  const base = buildReportSlug(businessName, auditId);
   for (let attempt = 1; attempt <= 50; attempt++) {
     const slug = attempt === 1 ? base : `${base}-${attempt}`;
     const { data, error } = await service.from("business_reports").insert({
