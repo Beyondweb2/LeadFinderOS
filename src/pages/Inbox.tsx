@@ -7,6 +7,7 @@ import { useTemplates } from '@/hooks/useTemplates';
 import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
+import { PUBLIC_SITE_ORIGIN } from '@/config/publicSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
 import { barberSitePreviewUrl } from '@/config/publicSite';
@@ -316,7 +317,14 @@ const Inbox = () => {
   // (strictly the lead's own audit id, never another's). Drives the report-ready pill + Copy/Open,
   // and the audit_reply guard's report identifier.
   const activeReport = active?.leadId ? auditByLeadId[active.leadId] : undefined;
-  const reportUrl = activeReport?.auditId ? `https://yoursites.uk/a/${activeReport.auditId}` : null;
+  /* PUBLIC_SITE_ORIGIN, not a literal — this was the one place the report origin was hardcoded, so
+     it would have survived a domain move that changed every other link.
+     Deliberately the raw audit id and NOT the pretty name-plus-code slug: a pretty link only
+     resolves when a PUBLISHED business_reports row exists, and 14 of 74 audits have none, so
+     building one here would 404 for about a fifth of leads. The id always resolves directly. The
+     prospect-facing pitch link does use the pretty slug — audit-reply.ts reads the stored row and
+     falls back to the id, so it can never send a dead link either. */
+  const reportUrl = activeReport?.auditId ? `${PUBLIC_SITE_ORIGIN}/a/${activeReport.auditId}` : null;
   const [reportCopied, setReportCopied] = useState(false);
   const copyReportUrl = () => {
     if (!reportUrl) return;
