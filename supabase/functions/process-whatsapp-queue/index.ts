@@ -78,7 +78,7 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   // Follow-up to a warm lead after the 24h window: {{1}} business name, {{2}} onboarding URL.
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
   // "You said a call works" nudge. ONE variable: {{1}} = business name. No url.
-  call_arrange: { lang: "en", vars: ["name"] },
+  book_call: { lang: "en", vars: ["name"] },
 };
 /* NO DEFAULT_TEMPLATE.
    It used to be booking_page_intro, applied whenever a lead's whatsapp_template was unset or

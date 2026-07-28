@@ -35,7 +35,7 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   onboarding_followup:    { needsUrl: false, needsAudit: false, group: 'audit' },
   // No link and no audit — the only real requirement is a linked lead with a business name,
   // which the edge refuses without (no_business_name).
-  call_arrange:           { needsUrl: false, needsAudit: false, group: 'opener' },
+  book_call:              { needsUrl: false, needsAudit: false, group: 'opener' },
 };
 
 export interface SendabilityLead {

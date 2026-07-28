@@ -65,7 +65,7 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
   // Follow-up to a warm lead who said a call works and then went quiet. ONE variable:
   // {{1}} = business name. No url, so nothing to resolve and nothing to gate on a site.
-  call_arrange: { lang: "en", vars: ["name"] },
+  book_call: { lang: "en", vars: ["name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -75,7 +75,7 @@ export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
    "Hi your business, Paul here from findable" is worse than sending nothing, because it is
    visibly automated in a message whose whole purpose is to sound like a person. For these,
    an empty name refuses rather than degrades. */
-export const TEMPLATES_NEEDING_REAL_NAME = new Set(["call_arrange"]);
+export const TEMPLATES_NEEDING_REAL_NAME = new Set(["book_call"]);
 
 // Human-readable copies of the Meta-registered template BODIES, purely so the Inbox
 // can show what the barber actually receives (the real wording lives in Meta and is
@@ -138,12 +138,25 @@ ${u}
 
 Takes about two minutes and we handle the rest. Any questions, let me know`;
 
-// call_arrange - exact approved wording. No link, so the claimUrl arg is unused.
-const callArrangeBody = (b: string, _u: string) =>
-  `Hi ${b}, Paul here from findable. You mentioned a call would work - what time suits you best? Happy to fit around you.`;
+/* book_call - the wording Meta approved, line breaks included, so the Inbox preview matches what
+   the customer actually reads. Display-only like every body here: Meta renders the real message from
+   its own copy of the template, so nothing in this string can change a send.
+   Trailing spaces shown in the Meta editor are not reproduced - invisible, cannot affect the send,
+   and any linter would strip them. No link, so the claimUrl arg is unused.
+
+   NAME NOTE: `book_call` also exists as a next-action label in LeadDetailDialog (dbValue 'call').
+   Different namespace - template names never mix with next-action values - but a grep for book_call
+   now hits both. */
+const bookCallBody = (b: string, _u: string) =>
+  `Hi ${b},
+Paul here from Findable.
+
+You mentioned a call would work - what time suits you best?
+
+Happy to fit around you.`;
 
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string) => string> = {
-  call_arrange: callArrangeBody,
+  book_call: bookCallBody,
   onboarding_followup: onboardingFollowupBody,
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).

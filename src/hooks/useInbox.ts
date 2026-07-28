@@ -18,7 +18,7 @@ export const WA_REPLY_TEMPLATES = [
   { name: 'initial_contact', label: 'Initial contact (opener)' },
   { name: 'audit_reply', label: 'Audit reply (report + competitors)' },
   { name: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
-  { name: 'call_arrange', label: 'Arrange a call' },
+  { name: 'book_call', label: 'Arrange a call' },
 ];
 
 export interface WaMessage {
