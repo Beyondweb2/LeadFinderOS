@@ -210,7 +210,13 @@ const Inbox = () => {
   const [removingKey, setRemovingKey] = useState<string | null>(null);
   const [removedKeys, setRemovedKeys] = useState<Set<string>>(new Set());
   const [text, setText] = useState('');
-  const [template, setTemplate] = useState(WA_REPLY_TEMPLATES[0].name);
+  /* Starts UNSELECTED, deliberately. This used to default to WA_REPLY_TEMPLATES[0], which is
+     booking_page_intro — the barber booking pitch — so every thread opened with a barber template
+     armed regardless of trade. On an accountant thread only the "no site link yet" guard stood
+     between that default and a real send. Same defaulting was removed from WhatsAppLeadControls and
+     AdminSiteManage earlier; this was the last one. '' means "not set" and the send button stays
+     disabled until the operator picks. */
+  const [template, setTemplate] = useState('');
   const [sending, setSending] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -340,7 +346,10 @@ const Inbox = () => {
   // the lead's own completed audit (reportSlug = its auditId → /a/<auditId>). Nothing is auto-hidden
   // — invalid templates render disabled with a clear reason.
   const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: activeSite?.shareToken ?? null }, { reportSlug: activeReport?.auditId ?? null });
-  const selectedSendability = templateSendability(template);
+  /* getTemplateSendability('') returns ok:true, because an unknown name is not its business to
+     block — so "nothing selected" has to be refused here or the button would be live with no
+     template chosen. */
+  const selectedSendability = template ? templateSendability(template) : { ok: false as const, reason: 'Choose a template first.' };
 
   // Approved WhatsApp-template picker — SEPARATE from the free-text "Quick reply" snippets. Shown in
   // both window states (below). Each option is enabled/disabled by the SHARED getTemplateSendability
@@ -350,7 +359,7 @@ const Inbox = () => {
     <>
       <div className="flex items-center gap-2">
         <Select value={template} onValueChange={setTemplate}>
-          <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="flex-1"><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
           <SelectContent>
             {WA_REPLY_TEMPLATES.map((t) => {
               const s = templateSendability(t.name);
@@ -367,12 +376,12 @@ const Inbox = () => {
             })}
           </SelectContent>
         </Select>
-        <Button onClick={() => doSend(true)} disabled={sending || !active?.leadId || !selectedSendability.ok} className="shrink-0">
+        <Button onClick={() => doSend(true)} disabled={sending || !active?.leadId || !template || !selectedSendability.ok} className="shrink-0">
           {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
           Send template
         </Button>
       </div>
-      {active?.leadId && !selectedSendability.ok && (
+      {active?.leadId && !!template && !selectedSendability.ok && (
         <p className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-600">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           {selectedSendability.reason}
@@ -532,6 +541,10 @@ const Inbox = () => {
     }
     // Per-lead validity guard — never send a template whose required data this lead lacks.
     if (useTemplate) {
+      /* Nothing chosen. The button is already disabled for this, but the out-of-window path can reach
+         doSend with asTemplate undefined, and templateSendability('') reports ok — so refuse here
+         too rather than relying on the UI being the only way in. */
+      if (!template) { toast({ title: 'No template chosen', description: 'Pick a template before sending.', variant: 'destructive' }); return; }
       const s = templateSendability(template);
       if (!s.ok) { toast({ title: 'Template not available for this lead', description: s.reason, variant: 'destructive' }); return; }
     }
