@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { isSentStatus, isRepliedStatus, type OutreachLead } from '@/types/outreach';
 import type { AuditFunnel } from '@/components/dashboard/AuditFunnelCard';
-import { buildDashTasks, type DashTask, type LeadMessageTimes, type LeadOnboarding } from '@/lib/dashboardTasks';
+import { buildDashTasks, foldMessageTimes, type DashTask, type LeadMessageTimes, type LeadOnboarding } from '@/lib/dashboardTasks';
 
 export interface ChannelStat { sent: number; replied: number; replyRate: number | null; }
 export interface ChannelPerformance {
@@ -163,7 +163,9 @@ export function useDashboardMetrics(isAdmin = false) {
       supabase.from('lead_contacts').select('contacted_at').eq('user_id', uid),
       supabase.from('search_history').select('no_website_count').eq('user_id', uid),
       supabase.from('outreach_events').select('lead_id, created_at').eq('user_id', uid).gte('created_at', sevenDaysAgo.toISOString()),
-      sbAny.from('whatsapp_messages').select('lead_id, direction, created_at').not('lead_id', 'is', null),
+      // body is fetched so foldMessageTimes can drop auto-responder inbound — a booking bot's
+      // auto-ack is not a person waiting on a reply.
+      sbAny.from('whatsapp_messages').select('lead_id, direction, created_at, body').not('lead_id', 'is', null),
       sbAny.from('onboarding_responses').select('lead_id, status, created_at').not('lead_id', 'is', null),
       sbAny.from('ai_audits').select('lead_id, baseline_target_runs').not('lead_id', 'is', null),
     ]);
@@ -183,15 +185,9 @@ export function useDashboardMetrics(isAdmin = false) {
        that ONE rule to silence rather than emptying the card - the same defensive posture the
        audit-open fetch below already takes. */
     try {
-      const times = new Map<string, LeadMessageTimes>();
-      for (const m of ((msgResult?.data ?? []) as Array<{ lead_id: string; direction: string; created_at: string }>)) {
-        const t = new Date(m.created_at).getTime();
-        const cur = times.get(m.lead_id) ?? { lastInbound: null, lastOutbound: null };
-        if (m.direction === 'inbound') cur.lastInbound = Math.max(cur.lastInbound ?? 0, t);
-        else cur.lastOutbound = Math.max(cur.lastOutbound ?? 0, t);
-        times.set(m.lead_id, cur);
-      }
-      setMsgTimes(times);
+      setMsgTimes(foldMessageTimes(
+        (msgResult?.data ?? []) as Array<{ lead_id: string; direction: string; created_at: string; body?: string | null }>,
+      ));
     } catch (e) {
       console.warn('Message-time fold skipped (reply tasks hidden):', e instanceof Error ? e.message : e);
     }

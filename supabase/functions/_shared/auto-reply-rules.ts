@@ -4,43 +4,12 @@
 // keyword lists live in exactly one place. Deliberately NOT a rules engine — one rule, one
 // toggle; a rules table can earn its way in later.
 
-/** Obvious declines — a match means: flag for a human, never auto-send anything. */
-const DECLINE_PATTERNS: RegExp[] = [
-  /\bno,?\s*thanks?\b/i,
-  /\bno\s+thank\s+you\b/i,
-  /\bnot\s+interested\b/i,
-  /\bstop\b/i,
-  /\bremove\s*(me|us)?\b/i,
-  /\bunsubscribe\b/i,
-  /\bwrong\s+number\b/i,
-];
-
-/** Obvious automated responses (booking bots / out-of-office / auto-acks) — not a human
- *  "yes", so they must not arm or fire a pitch. Detection is best-effort by design; the
- *  first-inbound-only gate + delay + human-flag paths + the pitchEverSent() durable
- *  once-ever check are the real safety net. Jack The Plumber's bot ("Thanks for
- *  contacting… We are a little busy… will get back to you") matches several of these. */
-const BOT_PATTERNS: RegExp[] = [
-  /auto[-\s]?repl(y|ied)/i,
-  /out\s+of\s+(the\s+)?office/i,
-  /thank(s| you) for (reaching out|messaging|contacting|getting in touch)/i,
-  /would you like to (make|book) an appointment/i,
-  /we are (a little )?busy/i,
-  /will get back to you/i,
-  /leave your (details|job details|postcode)/i,
-  /away from/i,
-  /unavailable right now/i,
-];
-
-export function isDecline(text: string): boolean {
-  const t = (text || "").trim();
-  return !!t && DECLINE_PATTERNS.some((re) => re.test(t));
-}
-
-export function looksAutomated(text: string): boolean {
-  const t = (text || "").trim();
-  return !!t && BOT_PATTERNS.some((re) => re.test(t));
-}
+/* isDecline / looksAutomated and their keyword lists now live in src/lib/inboundClassify.ts and
+   are re-exported here unchanged. The SPA cannot import this module (Deno.env.get below), so the
+   dashboard had no way to agree with the pitch rule about what a human reply is — campaign
+   "Replied" was counting booking bots as replies. One definition, both sides, rather than two
+   keyword lists drifting apart. Call sites keep importing them from here; nothing else changed. */
+export { isDecline, looksAutomated } from "../../../src/lib/inboundClassify.ts";
 
 /** A real, human-typed text worth reacting to: non-empty, not a media/reaction placeholder
  *  ("[image]", "[reaction]", …) and at least a couple of characters. */

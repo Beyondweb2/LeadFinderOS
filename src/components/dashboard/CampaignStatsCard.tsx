@@ -1,58 +1,56 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Send, Eye, EyeOff, CheckCircle2, Sparkles, Reply, Pencil, Target, FileText, BadgePoundSterling } from 'lucide-react';
+import { Eye, EyeOff, Pencil, ChevronRight, ChevronDown } from 'lucide-react';
 import { CAMPAIGN_METHOD_LABELS } from '@/lib/campaign';
 import { WHATSAPP_TEMPLATES } from '@/types/outreach';
 import type { CampaignStats } from '@/hooks/useCampaignStats';
 import type { CampaignType } from '@/hooks/useCampaigns';
 
-const METHOD_PILL: { key: keyof CampaignStats['methods']; label: string }[] = [
-  { key: 'call', label: 'Call' },
-  { key: 'sms', label: 'SMS' },
-  { key: 'whatsapp', label: 'WhatsApp' },
-  { key: 'facebook_msg', label: 'Messenger' },
-];
-
-// Pretty template names for the "Templates used" rows. Falls back to the raw
-// template key if it isn't in the allowlist (e.g. a renamed/legacy template).
+// Pretty template names for the per-message rows. Falls back to the raw template key if it isn't in
+// the allowlist (e.g. a renamed/legacy template).
 const TEMPLATE_LABEL: Record<string, string> = Object.fromEntries(
   WHATSAPP_TEMPLATES.map((t) => [t.value, t.label]),
 );
 
 const TYPE_BADGE: Record<CampaignType, string> = { audit: 'Audit', site: 'Site', service: 'Service' };
 
-function Count({ icon: Icon, value, label, color }: { icon: typeof Send; value: number; label: string; color: string }) {
+/**
+ * A headline figure. Three of these carry the card: what we actually did, who answered, and whether
+ * the pitch worked. Everything else is detail underneath them.
+ */
+function Big({ value, label, sub, tone = 'default', title }: {
+  value: string | number;
+  label: string;
+  sub?: string | null;
+  tone?: 'default' | 'good' | 'muted';
+  title?: string;
+}) {
+  const colour = tone === 'good' ? 'text-green-600 dark:text-green-500'
+    : tone === 'muted' ? 'text-muted-foreground'
+    : 'text-foreground';
   return (
-    <div className="space-y-0.5">
-      <div className="flex items-center gap-1.5">
-        <Icon className={`h-3.5 w-3.5 ${color}`} />
-        <span className="text-lg sm:text-xl font-bold tabular-nums">{value}</span>
-      </div>
-      <p className="text-[10px] sm:text-xs text-muted-foreground">{label}</p>
-    </div>
-  );
-}
-
-function Rate({ value, label, hint }: { value: number | null; label: string; hint?: string }) {
-  return (
-    <div className="space-y-0.5">
-      <span className="text-lg sm:text-xl font-bold tabular-nums">{value === null ? '—' : `${value}%`}</span>
-      <p className="text-[10px] sm:text-xs text-muted-foreground" title={hint}>{label}</p>
+    <div className="min-w-0" title={title}>
+      <div className={`text-2xl sm:text-3xl font-bold tabular-nums leading-none ${colour}`}>{value}</div>
+      <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">{label}</p>
+      {/* Small print sits under its own number rather than competing as a tile of its own. */}
+      {sub && <p className="text-[10px] text-muted-foreground/60 tabular-nums">{sub}</p>}
     </div>
   );
 }
 
 /**
- * One campaign's monitoring card. Every figure comes from real tracked data.
- * The campaign's TYPE picks WHICH metrics show; the layout structure (counts row →
- * rates row → receipts → methods → templates) is IDENTICAL for every type so cards
- * read consistently side by side.
- *   audit   → Sent · Report opened · Replied · Paid | Reply rate · Conversion
- *   site    → Sent · Site opened · Claimed · Add-on | Reply rate · Conversion · Claimed/Sent
- *   service → Sent · Replied · Paid                 | Reply rate · Conversion
- * Conversion = Paid ÷ Sent for every type. The Unassigned bucket (no campaign row to
- * carry a type) renders the generic service layout.
+ * One campaign's monitoring card.
+ *
+ * Every figure is derived from whatsapp_messages — see the header of useCampaignStats for what each
+ * one replaced and why the old ones were wrong. Three numbers are big because they are the three
+ * questions worth asking: did we reach anyone, did they answer, and did the pitch land. Lead count
+ * and delivery receipts are small print under Reached, because they qualify it rather than rival it.
+ *
+ * Same figures for every campaign type. The type-specific sets went with the metrics they showed:
+ * site-row Claimed/Sent divided site rows by leads, and Report opened could not tell the operator's
+ * own opens from a prospect's.
  */
 export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide }: {
   stat: CampaignStats;
@@ -61,37 +59,15 @@ export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide }
   hidden?: boolean;
   onToggleHide?: (s: CampaignStats) => void;
 }) {
-  const { campaign, funnel, methods, conversionPct, claimedPerSentPct, replyRatePct, leadCount } = stat;
+  const { campaign, replyRatePct, pitchReplyRatePct, leadCount } = stat;
+  const [expanded, setExpanded] = useState(false);
   const name = campaign?.name ?? 'Unassigned';
   const method = campaign?.method ? CAMPAIGN_METHOD_LABELS[campaign.method] ?? campaign.method : null;
   // Unknown/null type → 'audit' (the column default); the Unassigned bucket → 'service'.
   const rawType = campaign?.campaign_type;
   const type: CampaignType = !campaign ? 'service' : (rawType === 'site' || rawType === 'service') ? rawType : 'audit';
-  const methodTotal = METHOD_PILL.reduce((n, m) => n + methods[m.key], 0);
-  // Per-template mini-funnels, most-reached first. Driven by the real per-send template
-  // (whatsapp_messages.template_name) — every template that sent, incl. audit_reply.
-  const templateFunnels = Object.entries(stat.byTemplate).sort((a, b) => b[1].leads - a[1].leads);
-
-  // Type-specific tiles, same positions across cards (Sent always first, money last).
-  const counts = type === 'site'
-    ? [
-        { icon: Send, value: funnel.sent, label: 'Sent', color: 'text-blue-500' },
-        { icon: Eye, value: funnel.opened, label: 'Site opened', color: 'text-purple-500' },
-        { icon: CheckCircle2, value: funnel.claimed, label: 'Claimed', color: 'text-green-500' },
-        { icon: Sparkles, value: funnel.addon, label: 'Add-on', color: 'text-amber-500' },
-      ]
-    : type === 'audit'
-      ? [
-          { icon: Send, value: funnel.sent, label: 'Sent', color: 'text-blue-500' },
-          { icon: FileText, value: funnel.reportOpened, label: 'Report opened', color: 'text-purple-500' },
-          { icon: Reply, value: funnel.replied, label: 'Replied', color: 'text-cyan-500' },
-          { icon: BadgePoundSterling, value: funnel.paid, label: 'Paid', color: 'text-green-600' },
-        ]
-      : [
-          { icon: Send, value: funnel.sent, label: 'Sent', color: 'text-blue-500' },
-          { icon: Reply, value: funnel.replied, label: 'Replied', color: 'text-cyan-500' },
-          { icon: BadgePoundSterling, value: funnel.paid, label: 'Paid', color: 'text-green-600' },
-        ];
+  // Most-reached first.
+  const templateRows = Object.entries(stat.byTemplate).sort((a, b) => b[1].leads - a[1].leads);
 
   return (
     <Card className="bg-gradient-to-br from-primary/5 to-transparent border-border/60">
@@ -125,88 +101,81 @@ export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide }
           </div>
         </div>
       </CardHeader>
+
       <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 space-y-3">
-        {/* Counts row — type-specific tiles, identical grid across cards */}
-        <div className="grid grid-cols-4 gap-1.5">
-          {counts.map((c) => <Count key={c.label} icon={c.icon} value={c.value} label={c.label} color={c.color} />)}
+        {/* The three that matter, with their qualifiers as small print underneath. */}
+        <div className="grid grid-cols-3 gap-2">
+          <Big
+            value={stat.reached}
+            label="Reached"
+            sub={`${leadCount} ${leadCount === 1 ? 'lead' : 'leads'}${stat.delivered > 0 ? ` · ${stat.delivered} delivered` : ''}`}
+            title="Leads actually sent a templated message. The base for every rate on this card — not the old 'Sent', which counted leads that were merely queued or unreachable."
+          />
+          <Big
+            value={stat.replied}
+            label="Replied"
+            sub={replyRatePct === null ? null : `${replyRatePct}%${stat.declined > 0 ? ` · ${stat.declined} said no` : ''}`}
+            title="Leads who sent a real inbound message that is not an auto-responder. Declines count as replies — they did answer — and are shown separately."
+          />
+          <Big
+            value={stat.pitchReplied}
+            label="Pitch reply"
+            sub={stat.pitched === 0 ? 'none pitched' : `${pitchReplyRatePct}% of ${stat.pitched}`}
+            tone={stat.pitched > 0 && stat.pitchReplied > 0 ? 'good' : 'muted'}
+            title="Of the leads sent the report pitch, how many wrote back AFTER it was sent. Attributed by timestamp against the newest pitch — this is whether the report and pitch actually work."
+          />
         </div>
 
-        {/* Rates row */}
-        <div className="grid grid-cols-3 gap-1.5 border-t border-border/50 pt-2.5">
-          <Rate value={replyRatePct} label="Reply rate" hint="Replied ÷ Sent" />
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1">
-              <Target className="h-3.5 w-3.5 text-primary" />
-              <span className="text-lg sm:text-xl font-bold tabular-nums">{conversionPct}%</span>
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground" title="Paid ÷ Sent (paid = payment received or beyond)">Conversion</p>
-          </div>
-          {type === 'site' && <Rate value={claimedPerSentPct} label="Claimed/Sent" hint="Claimed ÷ Sent" />}
-        </div>
-
-        {/* WhatsApp delivery receipts — the message read-status ratchet (historical
-            engagement). DISTINCT from "Report opened": this is the WhatsApp receipt
-            (did the message land / get read), not a report view. */}
-        <div className="border-t border-border/50 pt-2.5" title="Per-message WhatsApp receipts (whatsapp_messages.status, webhook-written) — distinct leads with a delivered/read message. Not a report view.">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Message receipts (WhatsApp)</p>
-          <div className="flex flex-wrap gap-1.5">
-            <Badge variant="outline" className="text-[11px] font-medium">
-              Delivered: <span className="ml-1 tabular-nums font-bold">{stat.receipts.delivered}</span>
-            </Badge>
-            <Badge variant="outline" className="text-[11px] font-medium">
-              Read: <span className="ml-1 tabular-nums font-bold">{stat.receipts.read}</span>
-            </Badge>
-          </div>
-        </div>
-
-        {/* Contact-method breakdown (real pill values) */}
-        <div className="border-t border-border/50 pt-2.5">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Contact method ({leadCount} {leadCount === 1 ? 'lead' : 'leads'})</p>
-          {methodTotal === 0 ? (
-            <p className="text-xs text-muted-foreground/60">No contact method set yet</p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {METHOD_PILL.filter((m) => methods[m.key] > 0).map((m) => (
-                <Badge key={m.key} variant="outline" className="text-[11px] font-medium">
-                  {m.label}: <span className="ml-1 tabular-nums font-bold">{methods[m.key]}</span>
-                </Badge>
-              ))}
-            </div>
+        {/* Money row — the end of the funnel in real numbers, not a percentage. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/50 pt-2.5 text-[11px] text-muted-foreground">
+          <span>Sign-up sent <span className="font-bold tabular-nums text-foreground/90">{stat.signupSent}</span></span>
+          <span className="text-muted-foreground/40">·</span>
+          <span>started <span className="font-bold tabular-nums text-foreground/90">{stat.started}</span></span>
+          <span className="text-muted-foreground/40">·</span>
+          <span>paid <span className="font-bold tabular-nums text-foreground/90">{stat.paid}</span></span>
+          {stat.moneyIn > 0 && (
+            <span className="ml-auto font-bold tabular-nums text-green-600 dark:text-green-500">£{stat.moneyIn.toFixed(2)} in</span>
           )}
         </div>
 
-        {/* Templates used — per-template mini-funnel from the REAL per-send tag
-            (whatsapp_messages.template_name). Every template that actually sent gets a row,
-            incl. the audit_reply pitch; "Reached" = distinct leads that template reached
-            (a lead reached by both opener AND pitch appears in both rows). Freeform (no
-            template) sends carry no row. Opened = that template's leads whose report was opened. */}
-        <div className="border-t border-border/50 pt-2.5">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Templates used</p>
-          {templateFunnels.length === 0 ? (
-            <p className="text-xs text-muted-foreground/60">No templated sends yet</p>
-          ) : (
-            <div className="space-y-1.5">
-              {templateFunnels.map(([key, f]) => {
-                const replyRate = f.leads > 0 ? Math.round((f.replied / f.leads) * 100) : null;
-                return (
+        {/* Per-message detail, collapsed. Reached and read receipts only — see the note below. */}
+        {templateRows.length > 0 && (
+          <div className="border-t border-border/50 pt-2">
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="flex w-full items-center gap-1 text-left text-[10px] uppercase tracking-wide text-muted-foreground/70 transition-colors hover:text-muted-foreground"
+            >
+              {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              By message ({templateRows.length})
+            </button>
+            {expanded && (
+              <div className="mt-1.5 space-y-1">
+                {templateRows.map(([key, f]) => (
                   <div key={key} className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                    <span className="text-[11px] font-medium text-foreground/90 truncate">{TEMPLATE_LABEL[key] ?? key}</span>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                    <span className="truncate text-[11px] font-medium text-foreground/90">{TEMPLATE_LABEL[key] ?? key}</span>
+                    <span className="text-[11px] tabular-nums text-muted-foreground">
                       Reached <span className="font-bold text-foreground/90">{f.leads}</span>
                       {/* This template's OWN read receipt. Only messages sent after per-message
-                          status shipped can carry one, so a template whose whole history predates
-                          it shows "—" rather than a misleading 0%. */}
-                      {' · '}<span className="font-bold text-foreground/90">{f.delivered === 0 ? '—' : `${Math.round((f.read / f.delivered) * 100)}%`}</span> read
-                      {' · '}Opened <span className="font-bold text-foreground/90">{f.opened}</span>
-                      {' · '}Replied <span className="font-bold text-foreground/90">{f.replied}</span>
-                      {' · '}<span className="font-bold text-foreground/90">{replyRate === null ? '—' : `${replyRate}%`}</span> reply
+                          status shipped can carry one, so a template whose whole history predates it
+                          shows "—" rather than a misleading 0%. */}
+                      {' · '}
+                      <span className="font-bold text-foreground/90">
+                        {f.delivered === 0 ? '—' : `${Math.round((f.read / f.delivered) * 100)}%`}
+                      </span> read
                     </span>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                ))}
+                {/* Stated rather than silently absent, because its disappearance is the point. */}
+                <p className="pt-1 text-[10px] leading-snug text-muted-foreground/50">
+                  No per-message reply count: the old one meant “this lead replied at some point,
+                  ever”, so every row claimed the same replies. Pitch reply above is the
+                  send-attributed one.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

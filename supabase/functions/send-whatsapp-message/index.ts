@@ -90,19 +90,29 @@ Deno.serve(async (req) => {
       if (!resolvedLeadId) resolvedLeadId = (existing[0] as { lead_id: string | null }).lead_id;
     }
 
+    /* is_archived comes back so an archived lead can be refused below. Archiving means "stop
+       contacting this business"; the Inbox no longer lists archived leads, so the UI route is
+       already closed, but this function is callable directly and was the last path that would
+       still send to one. */
+    let leadArchived = false;
     if (resolvedLeadId) {
       const { data: lead } = await service
         .from("outreach_leads")
-        .select("id, user_id, business_name, phone, country")
+        .select("id, user_id, business_name, phone, country, is_archived")
         .eq("id", resolvedLeadId)
         .maybeSingle();
-      const l = lead as { user_id: string; business_name: string; phone: string; country: string | null } | null;
+      const l = lead as { user_id: string; business_name: string; phone: string; country: string | null; is_archived: boolean | null } | null;
       if (l && l.user_id === operatorId && toWhatsAppNumber(l.phone, l.country) === to) {
         ownsConversation = true;
         businessName = l.business_name ?? "";
+        leadArchived = l.is_archived === true;
       }
     }
     if (!ownsConversation) return json({ ok: false, error: "forbidden" }, 403);
+    /* Checked AFTER ownership so an outsider probing lead ids still gets 403 rather than learning
+       which ids exist and are archived. 409, not 403: the caller is allowed here, the lead's state
+       is what refuses. */
+    if (leadArchived) return json({ ok: false, error: "lead_archived" }, 409);
 
     // --- 24h customer-service window (from the operator's own inbound rows) ---
     const { data: lastIn } = await service
