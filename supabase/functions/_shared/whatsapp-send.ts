@@ -63,8 +63,19 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
   // {{1}} business name, {{2}} that lead's onboarding URL. Vars resolved server-side per-lead by
   // resolveOnboardingFollowupVars — never from a caller-supplied link.
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
+  // Follow-up to a warm lead who said a call works and then went quiet. ONE variable:
+  // {{1}} = business name. No url, so nothing to resolve and nothing to gate on a site.
+  call_arrange: { lang: "en", vars: ["name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
+
+/* TEMPLATES WHOSE COPY BREAKS WITHOUT A REAL NAME.
+   The "name" variable normally degrades to "your business", which reads acceptably mid-sentence
+   ("is this the right number for your business?"). It does NOT read acceptably as a salutation:
+   "Hi your business, Paul here from findable" is worse than sending nothing, because it is
+   visibly automated in a message whose whole purpose is to sound like a person. For these,
+   an empty name refuses rather than degrades. */
+export const TEMPLATES_NEEDING_REAL_NAME = new Set(["call_arrange"]);
 
 // Human-readable copies of the Meta-registered template BODIES, purely so the Inbox
 // can show what the barber actually receives (the real wording lives in Meta and is
@@ -122,7 +133,12 @@ Want me to explain?`;
 const onboardingFollowupBody = (b: string, u: string) =>
   `Hi ${b || "there"}, here's the link to get started: ${u}`;
 
+// call_arrange - exact approved wording. No link, so the claimUrl arg is unused.
+const callArrangeBody = (b: string, _u: string) =>
+  `Hi ${b}, Paul here from findable. You mentioned a call would work - what time suits you best? Happy to fit around you.`;
+
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string) => string> = {
+  call_arrange: callArrangeBody,
   onboarding_followup: onboardingFollowupBody,
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).
@@ -153,8 +169,14 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; onboardingUrl?: string },
+  extra?: { trade?: string; competitors?: string; onboardingUrl?: string; templateName?: string },
 ) {
+  /* Last line of defence for a template whose copy needs a real name. Callers check first and
+     return a readable refusal; this throws so a new caller that forgets cannot quietly send
+     "Hi your business, Paul here". Same shape as the onboarding_url guard below. */
+  if (extra?.templateName && TEMPLATES_NEEDING_REAL_NAME.has(extra.templateName) && !businessName.trim()) {
+    throw new Error(`${extra.templateName} needs a real business name — refusing to send a greeting with a placeholder`);
+  }
   const resolve = (v: TemplateVar) => {
     switch (v) {
       case "url": return claimUrl;
@@ -203,7 +225,7 @@ export function claimTemplatePayload(
   const vars = entry.vars;
   return {
     type: "template",
-    template: { name: templateName, language: { code: lang }, components: templateBodyParams(vars, businessName, claimUrl, extra) },
+    template: { name: templateName, language: { code: lang }, components: templateBodyParams(vars, businessName, claimUrl, { ...extra, templateName }) },
   };
 }
 

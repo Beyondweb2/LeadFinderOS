@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
-import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, type TemplateVar } from "../_shared/whatsapp-send.ts";
+import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
@@ -63,6 +63,8 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
   // Follow-up to a warm lead after the 24h window: {{1}} business name, {{2}} onboarding URL.
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
+  // "You said a call works" nudge. ONE variable: {{1}} = business name. No url.
+  call_arrange: { lang: "en", vars: ["name"] },
 };
 /* NO DEFAULT_TEMPLATE.
    It used to be booking_page_intro, applied whenever a lead's whatsapp_template was unset or
@@ -523,6 +525,19 @@ Deno.serve(async (req) => {
        filled correctly does not go out at all, and never goes out as something else.
        audit_reply and onboarding_followup are both reachable here now that they are registered, so
        both are resolved before the send rather than sent with empty parameters. */
+    /* A template whose copy opens with the name cannot go out without one. Same drop-out-of-the-queue
+       shape as the guards above, so it surfaces where the operator already looks. */
+    if (TEMPLATES_NEEDING_REAL_NAME.has(templateName) && !((lead.business_name as string) ?? "").trim()) {
+      await service.from("outreach_leads").update({
+        status: "not_contacted", whatsapp_delivery_status: "no_business_name", contact_method: null,
+      }).eq("id", lead.id);
+      return json({
+        ok: false, error: "no_business_name",
+        reason: `Template "${templateName}" opens with the business name and this lead has none, so nothing was sent. Add the name on the lead and re-queue it.`,
+        lead_id: lead.id, business: lead.business_name, ...statusPayload,
+      }, 200);
+    }
+
     const templateExtra: { trade?: string; competitors?: string; onboardingUrl?: string } = {};
     // The url actually sent: the claim link by default, overridden by a resolver that owns it.
     let resolvedUrl = claimUrl;
