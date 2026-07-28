@@ -33,6 +33,9 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   // needsAudit is FALSE too — it pitches the flow, not a report. The only real requirement is a
   // linked lead, which the picker already enforces for every template.
   onboarding_followup:    { needsUrl: false, needsAudit: false, group: 'audit' },
+  // No link and no audit — the only real requirement is a linked lead with a business name,
+  // which the edge refuses without (no_business_name).
+  call_arrange:           { needsUrl: false, needsAudit: false, group: 'opener' },
 };
 
 export interface SendabilityLead {

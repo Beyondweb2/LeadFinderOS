@@ -7,6 +7,7 @@ import {
   claimTemplatePayload,
   renderTemplateBody,
   WA_TEMPLATES,
+  TEMPLATES_NEEDING_REAL_NAME,
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
@@ -135,6 +136,11 @@ Deno.serve(async (req) => {
       if (!WA_TEMPLATES[templateName]) return json({ ok: false, error: "unknown_template" }, 400);
       const tvars = WA_TEMPLATES[templateName].vars;
       const lang = WA_TEMPLATES[templateName].lang;
+      /* Refuse before building anything: this template greets by name, so a blank name would send
+         "Hi your business, Paul here" - visibly automated in the one message meant to sound human. */
+      if (TEMPLATES_NEEDING_REAL_NAME.has(templateName) && !businessName.trim()) {
+        return json({ ok: false, error: "no_business_name" }, 200);
+      }
       const needsAudit = tvars.includes("trade") || tvars.includes("competitors");
       const needsOnboardingUrl = tvars.includes("onboarding_url");
       if (needsOnboardingUrl) {
