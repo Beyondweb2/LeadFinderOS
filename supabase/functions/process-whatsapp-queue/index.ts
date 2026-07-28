@@ -32,7 +32,21 @@ const corsHeaders = {
 };
 
 const GRAPH_VERSION = "v21.0";
-const DAILY_CAP = 40;
+/* THE DAILY BRAKE. Change this one number to change the cap — it is read in three places (the
+   status payload, the tick's cap check, and the pacing calculation below) and nowhere else.
+   Counted as a CALENDAR DAY IN EUROPE/LONDON, not a rolling 24 hours and not the operator's local
+   time: `sentToday` counts whatsapp_sends rows since londonDayStartUtcIso(). It resets at London
+   midnight, which is 07:00 in Bangkok.
+   It counts EVERY row in whatsapp_sends, which since the send-logging fix includes Inbox replies and
+   auto-replies, not just this campaign. On 2026-07-27 that mattered: 40 sends hit the cap exactly,
+   13 of them automated audit_reply pitches rather than campaign sends.
+
+   ⚠️ RAISING THIS DOES NOT RAISE THROUGHPUT ONE-FOR-ONE. The pacing gap below is
+   minutesUntilWindowEnd() / (DAILY_CAP - sentToday), clamped to a 20-minute FLOOR. Past roughly 43
+   the floor binds before the cap does, so the real ceiling is the window length divided by 20
+   minutes — about 43 sends across the 07:00–21:30 London window. The cap is a brake, not a target.
+   process-sms-queue has its OWN separate DAILY_CAP; this constant does not affect it. */
+const DAILY_CAP = 100;
 const WINDOW_START = 7;              // 07:00 Europe/London (inclusive)
 const WINDOW_END_MIN = 21 * 60 + 30; // 21:30 Europe/London (exclusive) — minutes-from-midnight so the :30 is honoured
 const CLAIM_ORIGIN = "https://yoursites.uk"; // claim links live at /s/<share_token>
