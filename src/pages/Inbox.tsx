@@ -8,6 +8,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
 import { PUBLIC_SITE_ORIGIN } from '@/config/publicSite';
+import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
 import { barberSitePreviewUrl } from '@/config/publicSite';
@@ -880,6 +881,14 @@ const Inbox = () => {
                       <p className="mb-1 text-[11px] text-muted-foreground">Or send an approved WhatsApp template:</p>
                       {templatePicker}
                     </div>
+                    {/* The sign-up link, in the composer footer so it is to hand WHILE typing rather
+                        than a trip out to the lead. The SAME component the lead-detail dialog uses —
+                        one implementation, so the no-trade warning cannot drift between the two. */}
+                    {activeLead && (
+                      <div className="border-t border-border/60 pt-2">
+                        <OnboardingLinkCard lead={activeLead} />
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">

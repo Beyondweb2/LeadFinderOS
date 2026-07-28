@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
@@ -385,11 +386,18 @@ const AiAudit = () => {
   const fetchQueueCounts = useCallback(async (runIds: string[]) => {
     const counts = new Map<string, { done: number; total: number }>();
     if (!runIds.length) return counts;
-    const { data } = await (supabase as unknown as SupabaseClient)
-      .from('ai_audit_queue')
-      .select('run_id, status')
-      .in('run_id', runIds);
-    for (const row of ((data ?? []) as Array<{ run_id: string; status: string }>)) {
+    /* Paginated: this is questions x runs, so 40 in-flight runs at 25 questions each already reaches
+       the 1000-row cap PostgREST truncates at silently — and a truncated page here does not shrink a
+       number, it makes running audits look permanently stalled. .order('id') is the unique tiebreaker
+       page boundaries need. */
+    const { rows: data } = await fetchAllRows<{ run_id: string; status: string }>('AiAudit (queue)', (from, to) =>
+      (supabase as unknown as SupabaseClient)
+        .from('ai_audit_queue')
+        .select('run_id, status')
+        .in('run_id', runIds)
+        .order('id', { ascending: true })
+        .range(from, to));
+    for (const row of data) {
       const c = counts.get(row.run_id) ?? { done: 0, total: 0 };
       c.total++;
       if (row.status === 'done' || row.status === 'failed') c.done++;
