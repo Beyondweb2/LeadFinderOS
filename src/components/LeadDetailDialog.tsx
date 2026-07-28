@@ -35,6 +35,7 @@ import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, isSentStatus, isReplie
 import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
 import { BookingServicesEditor } from '@/components/BookingServicesEditor';
 import { WhatsAppLeadControls } from '@/components/WhatsAppLeadControls';
+import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { cn } from '@/lib/utils';
 
@@ -882,6 +883,10 @@ function LeadDetailBody({
 
             {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}
             {!isDemoLead(lead.id) && <WhatsAppLeadControls lead={lead} onUpdate={onUpdateLead} />}
+
+            {/* Sign-up link. Sits directly under the WhatsApp controls because that is where the
+                decision to message someone gets made — the link is needed in the same breath. */}
+            {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
           </div>
 
           {/* Right: Notes + Activity */}
