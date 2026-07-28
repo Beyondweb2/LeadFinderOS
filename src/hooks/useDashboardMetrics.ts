@@ -1,13 +1,30 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { isSentStatus, isRepliedStatus, type OutreachLead } from '@/types/outreach';
+import { isSentStatus, type OutreachLead } from '@/types/outreach';
 import type { AuditFunnel } from '@/components/dashboard/AuditFunnelCard';
 import { buildDashTasks, foldMessageTimes, type DashTask, type LeadMessageTimes, type LeadOnboarding } from '@/lib/dashboardTasks';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { looksAutomated } from '@/lib/inboundClassify';
 
-export interface ChannelStat { sent: number; replied: number; replyRate: number | null; }
+/**
+ * One channel's outreach performance.
+ *
+ * `tracking` says how much of this channel is actually recorded, because that differs per channel
+ * and pretending otherwise is what made this card wrong:
+ *   'full'       sends AND replies are logged (WhatsApp: whatsapp_messages, both directions)
+ *   'sends-only' sends are logged but nothing records an inbound (SMS: sms_sends exists, and
+ *                twilio-inbound only updates delivery status — there is no inbound SMS table)
+ *   'none'       nothing anywhere records a send on this channel, so no honest number exists
+ * `replied` is null when it cannot be known, rather than 0 — "nobody replied" and "we do not record
+ * replies" are different facts and the card must not merge them.
+ */
+export interface ChannelStat {
+  sent: number;
+  replied: number | null;
+  replyRate: number | null;
+  tracking: 'full' | 'sends-only' | 'none';
+}
 export interface ChannelPerformance {
   whatsapp: ChannelStat;
   sms: ChannelStat;
@@ -16,9 +33,11 @@ export interface ChannelPerformance {
   email: ChannelStat;
   /** Leads that count as sent (past New) but have no contact-method pill set —
    *  shown honestly as a residual rather than mis-assigned to a channel. */
-  noMethodSent: number;
+  /* noMethodSent is gone. It counted 398 leads as "sent but no channel pill set" — an artefact of
+     the old status test, since almost none of them had been messaged at all. The channel is now
+     read from the evidence of the send itself, so an untagged contact_method changes nothing. */
 }
-const emptyChannelStat = (): ChannelStat => ({ sent: 0, replied: 0, replyRate: null });
+const emptyChannelStat = (tracking: ChannelStat['tracking']): ChannelStat => ({ sent: 0, replied: null, replyRate: null, tracking });
 
 // Cumulative funnel membership — "reached this stage or beyond" in the forward-only pipeline
 // ordering (initial_contact → replied → report_sent → price_given → payment_received → …). The
@@ -147,6 +166,8 @@ export function useDashboardMetrics(isAdmin = false) {
      funnel needs the messages themselves (which template, which direction, what the text was), and
      they are already fetched, so index them rather than querying twice. */
   const [msgsByLeadId, setMsgsByLeadId] = useState<Map<string, FunnelMsg[]>>(new Map());
+  /** Leads with a real sms_sends row. The pill says 15 leads are "SMS"; this says how many were sent. */
+  const [smsSentLeadIds, setSmsSentLeadIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const hasLoadedOnceRef = useRef(false);
   const { user } = useAuth();
@@ -199,6 +220,10 @@ export function useDashboardMetrics(isAdmin = false) {
       fetchAllRows<{ lead_id: string; baseline_target_runs: number | null }>('Dashboard (audits)', (f, t) =>
         sbAny.from('ai_audits').select('lead_id, baseline_target_runs').not('lead_id', 'is', null)
           .order('id', { ascending: true }).range(f, t)),
+      // The only record that an SMS was really sent. Currently empty — no SMS has ever gone out —
+      // which is precisely why the card must read this rather than the contact_method pill.
+      fetchAllRows<{ lead_id: string | null }>('Dashboard (sms sends)', (f, t) =>
+        sbAny.from('sms_sends').select('lead_id').order('id', { ascending: true }).range(f, t)),
     ]).catch((e: unknown) => {
       /* fetchAllRows throws rather than returning an error, so the failure surfaces HERE. The old
          code only guarded the leads query and returned; this covers all nine the same way, and
@@ -211,7 +236,7 @@ export function useDashboardMetrics(isAdmin = false) {
       setIsLoading(false);
       return;
     }
-    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult, msgResult, obResult, baselineResult] = all;
+    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult, msgResult, obResult, baselineResult, smsResult] = all;
 
     hasLoadedOnceRef.current = true;
     setIsLoading(false);
@@ -231,6 +256,7 @@ export function useDashboardMetrics(isAdmin = false) {
         if (arr) arr.push(row); else idx.set(m.lead_id, [row]);
       }
       setMsgsByLeadId(idx);
+      setSmsSentLeadIds(new Set(smsResult.rows.map((r) => r.lead_id).filter((v): v is string => !!v)));
     } catch (e) {
       console.warn('Message-time fold skipped (reply tasks hidden):', e instanceof Error ? e.message : e);
     }
@@ -455,33 +481,44 @@ export function useDashboardMetrics(isAdmin = false) {
     // Closed revenue: actual amount_paid from paid clients
     const closedRevenue = totalRevenue;
 
-    // ── Per-channel performance (source of truth: lead contact_method + status) ──
+    /* ── Per-channel performance, derived from the record of each SEND.
+       It used to read the contact_method pill and the lead's status, which was wrong twice over.
+       The WhatsApp row showed Sent 240 / Replied 73 / 30% where the truth is 157 / 59 / 38%: "Sent"
+       counted any status past New (so queued and unreachable leads counted), "Replied" was the
+       lifetime replied-or-beyond test (so leads with no inbound at all counted, as did
+       not_interested), and archived leads were included deliberately — on a comment claiming it
+       matched the per-campaign card, which stopped being true when that card started excluding them.
+       SMS was worse than wrong: 15 leads carry the SMS pill and sms_sends is EMPTY, so the card
+       claimed 15 sends that never happened.
+
+       The channel now comes from the evidence, not from the pill. A lead with an outbound WhatsApp
+       message was contacted on WhatsApp whatever its contact_method says, which is also why the
+       "no method set" residual is gone. Channels with no send record anywhere report 'none' rather
+       than a number invented from status. */
     const channelPerf: ChannelPerformance = {
-      whatsapp: emptyChannelStat(),
-      sms: emptyChannelStat(),
-      call: emptyChannelStat(),
-      facebook_msg: emptyChannelStat(),
-      email: emptyChannelStat(),
-      noMethodSent: 0,
+      whatsapp: emptyChannelStat('full'),
+      sms: emptyChannelStat('sends-only'),
+      call: emptyChannelStat('none'),
+      facebook_msg: emptyChannelStat('none'),
+      email: emptyChannelStat('none'),
     };
-    // Include archived — a contacted-then-archived lead still counts as contacted via
-    // its channel (matches the Outreach list + the per-campaign card).
-    const contactedLeads = allLeads;
-    for (const l of contactedLeads) {
-      if (!isSentStatus(l.status)) continue;
-      const m = l.contact_method as keyof ChannelPerformance | null;
-      if (m && m in channelPerf && m !== 'noMethodSent') {
-        const stat = channelPerf[m] as ChannelStat;
-        stat.sent += 1;
-        if (isRepliedStatus(l.status)) stat.replied += 1;
-      } else {
-        channelPerf.noMethodSent += 1;
+    let waSent = 0, waReplied = 0, smsSent = 0;
+    for (const l of funnelLeads) {
+      const ms = msgsByLeadId.get(l.id);
+      if (ms) {
+        // Templated outbound = we opened a conversation. Freeform is us answering them, which would
+        // count a lead as "contacted" for a message they started — same basis as Reached elsewhere.
+        if (ms.some(m => m.direction === 'outbound' && m.template_name)) waSent += 1;
+        // Same bot filter as everywhere else. It is a filter, not proof of humanity: the patterns are
+        // English-only, so non-English promotional spam still reads as a human reply.
+        if (ms.some(m => m.direction === 'inbound' && !looksAutomated(m.body ?? ''))) waReplied += 1;
       }
+      if (smsSentLeadIds.has(l.id)) smsSent += 1;
     }
-    for (const key of ['whatsapp', 'sms', 'call', 'facebook_msg', 'email'] as const) {
-      const stat = channelPerf[key];
-      stat.replyRate = stat.sent > 0 ? Math.round((stat.replied / stat.sent) * 100) : null;
-    }
+    channelPerf.whatsapp.sent = waSent;
+    channelPerf.whatsapp.replied = waReplied;
+    channelPerf.whatsapp.replyRate = waSent > 0 ? Math.round((waReplied / waSent) * 100) : null;
+    channelPerf.sms.sent = smsSent;   // replied stays null: nothing records an inbound SMS.
 
     return {
       totalRevenue, revenueThisMonth, revenueLastMonth,
@@ -496,7 +533,7 @@ export function useDashboardMetrics(isAdmin = false) {
       auditFunnel,
       channelPerf,
     };
-  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, msgTimes, msgsByLeadId, onboardingByLead, baselineLeadIds]);
+  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, msgTimes, msgsByLeadId, smsSentLeadIds, onboardingByLead, baselineLeadIds]);
 
   return { metrics, isLoading, refetch: fetchAllData };
 }

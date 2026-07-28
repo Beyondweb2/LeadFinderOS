@@ -18,13 +18,18 @@ function rateColor(rate: number | null): string {
 }
 
 /**
- * Per-channel outreach performance — Sent / Replied / Reply-rate for each contact
- * channel. All figures derive from the Outreach lead status + contact-method pill
- * (source of truth). The "no method set" residual is shown honestly — sent leads
- * with no channel pill are never mis-assigned.
+ * Per-channel outreach performance: Sent / Replied / Reply rate.
+ *
+ * Every figure comes from the record of the SEND, not from the lead's status or its contact_method
+ * pill — see the note in useDashboardMetrics for what each number used to claim. A channel whose
+ * sends are not recorded anywhere says so instead of showing a number, and SMS shows a dash under
+ * Replied because sms_sends logs what we send while nothing logs an inbound SMS.
  */
 export function ChannelPerformanceCard({ data }: { data: ChannelPerformance }) {
-  const rows = CHANNELS.filter((c) => c.alwaysShow || (data[c.key] as ChannelStat).sent > 0);
+  // An untracked channel has no meaningful `sent`, so keep it listed rather than hiding it — the
+  // "not tracked" row is the useful information.
+  const rows = CHANNELS.filter((c) => c.alwaysShow || (data[c.key] as ChannelStat).sent > 0
+    || (data[c.key] as ChannelStat).tracking === 'none');
 
   return (
     <Card className="bg-gradient-to-br from-primary/10 via-primary/[0.04] to-transparent border-primary/20">
@@ -46,6 +51,19 @@ export function ChannelPerformanceCard({ data }: { data: ChannelPerformance }) {
         <div className="divide-y divide-border/40">
           {rows.map((c) => {
             const s = data[c.key] as ChannelStat;
+            // Nothing records a send on this channel, so there is no honest number to show. Saying
+            // so beats a 0 that reads as "we tried and nobody answered".
+            if (s.tracking === 'none') {
+              return (
+                <div key={c.key} className="grid grid-cols-[1fr_auto] items-center gap-x-3 px-1 py-2">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${c.dot} opacity-40`} />
+                    <span className="text-xs sm:text-sm font-medium truncate text-muted-foreground/60">{c.label}</span>
+                  </span>
+                  <span className="text-right text-[10px] text-muted-foreground/50">not tracked</span>
+                </div>
+              );
+            }
             return (
               <div key={c.key} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-3 sm:gap-x-4 px-1 py-2">
                 <span className="flex items-center gap-2 min-w-0">
@@ -53,7 +71,12 @@ export function ChannelPerformanceCard({ data }: { data: ChannelPerformance }) {
                   <span className="text-xs sm:text-sm font-medium truncate">{c.label}</span>
                 </span>
                 <span className="text-right w-10 text-xs sm:text-sm tabular-nums">{s.sent}</span>
-                <span className="text-right w-12 text-xs sm:text-sm tabular-nums">{s.replied}</span>
+                <span
+                  className="text-right w-12 text-xs sm:text-sm tabular-nums"
+                  title={s.replied === null ? 'Nothing records an inbound on this channel, so replies cannot be counted' : undefined}
+                >
+                  {s.replied === null ? '—' : s.replied}
+                </span>
                 <span className={`text-right w-14 text-sm sm:text-base font-bold tabular-nums ${rateColor(s.replyRate)}`}>
                   {s.replyRate === null ? '—' : `${s.replyRate}%`}
                 </span>
@@ -61,11 +84,10 @@ export function ChannelPerformanceCard({ data }: { data: ChannelPerformance }) {
             );
           })}
         </div>
-        {data.noMethodSent > 0 && (
-          <p className="mt-2 text-[10px] text-muted-foreground/50">
-            {data.noMethodSent} sent lead{data.noMethodSent === 1 ? '' : 's'} have no contact method set — set the pill on Outreach to count them by channel.
-          </p>
-        )}
+        <p className="mt-2 text-[10px] leading-snug text-muted-foreground/50">
+          Counted from messages actually sent, not from the contact-method pill. Archived leads are
+          excluded.
+        </p>
       </CardContent>
     </Card>
   );
