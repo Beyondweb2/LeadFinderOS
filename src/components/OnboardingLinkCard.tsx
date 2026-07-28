@@ -65,7 +65,7 @@ export function assessOnboardingLink(lead: OnboardingLinkLead) {
 export function OnboardingLinkCard({ lead }: { lead: OnboardingLinkLead }) {
   const [copied, setCopied] = useState(false);
   const { paid, warnings, blocking } = assessOnboardingLink(lead);
-  const url = onboardingUrl(lead.id);
+  const url = onboardingUrl(lead.id, lead.business_name);
 
   const copy = async () => {
     try {
@@ -97,7 +97,7 @@ export function OnboardingLinkCard({ lead }: { lead: OnboardingLinkLead }) {
           {/* The link, visible before it goes anywhere. Shown scheme-less because the https:// is
               noise, and break-all so a long uuid wraps rather than stretching the dialog. */}
           <p className="mb-2 break-all rounded-md bg-muted/40 px-2 py-1.5 font-mono text-[10.5px] leading-relaxed text-muted-foreground">
-            {onboardingUrlLabel(lead.id)}
+            {onboardingUrlLabel(lead.id, lead.business_name)}
           </p>
 
           <Button

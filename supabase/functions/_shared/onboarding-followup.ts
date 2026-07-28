@@ -1,3 +1,4 @@
+import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 // Per-lead resolution of the onboarding_followup template's variables — the SINGLE source used by
 // any sender, mirroring _shared/audit-reply.ts's contract exactly:
 //   {{1}} = the lead's business name
@@ -36,7 +37,12 @@ export function resolveSiteOrigin(): string | null {
 export function onboardingUrl(origin: string, leadId: string): string {
   // Trailing slash on /onboarding/ matches the built site's canonical path (it 308-redirects
   // /onboarding), so the payer does not eat a redirect on the most important link in the product.
-  return `${origin}/onboarding/?lead=${leadId}`;
+  /* Cosmetic name segment; the ?lead= value is unchanged, and findable-site serves /onboarding/ for
+     any segment via a Pages rewrite without reading it. Same slugifier as the report URLs. An empty
+     or emoji-only name falls back to the bare /onboarding/?lead= form rather than a "business" slug. */
+  const slug = slugifyBusinessName(business);
+  const segment = business && slug !== "business" ? `${slug}/` : "";
+  return `${origin}/onboarding/${segment}?lead=${leadId}`;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

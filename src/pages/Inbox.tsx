@@ -406,13 +406,13 @@ const Inbox = () => {
   const copySignupLink = async () => {
     if (!activeLead) return;
     try {
-      await navigator.clipboard.writeText(onboardingUrl(activeLead.id));
+      await navigator.clipboard.writeText(onboardingUrl(activeLead.id, activeLead.business_name));
       setSignupCopied(true);
       setTimeout(() => setSignupCopied(false), 1500);
     } catch {
       /* Clipboard refused (insecure context / denied). Show the link so there is still a way to get
          it, rather than the click appearing to do nothing. */
-      window.prompt('Copy the sign-up link:', onboardingUrl(activeLead.id));
+      window.prompt('Copy the sign-up link:', onboardingUrl(activeLead.id, activeLead.business_name));
     }
   };
 
@@ -822,7 +822,7 @@ const Inbox = () => {
                         : 'Copy sign-up link'}
                       title={[
                         signupCopied ? 'Copied' : 'Copy sign-up link',
-                        onboardingUrlLabel(activeLead.id),
+                        onboardingUrlLabel(activeLead.id, activeLead.business_name),
                         ...(signupLink.warnings.length ? signupLink.warnings.map((w) => `! ${w}`) : []),
                       ].join('\n')}
                       className={cn(HEADER_ICON_BTN, 'relative', signupLink.blocking && 'text-orange-400 hover:text-orange-300')}

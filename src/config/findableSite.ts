@@ -1,3 +1,4 @@
+import { slugifyBusinessName } from "@/lib/reportSlug";
 /**
  * Origin that serves the FINDABLE sign-up flow (the /onboarding/ route on findable-site).
  *
@@ -28,8 +29,25 @@ export const FINDABLE_SITE_ORIGIN = "https://findable-site.pages.dev";
  * Trailing slash on /onboarding/ matches the built site's canonical path (it 308-redirects
  * /onboarding), so the prospect does not eat a redirect on the most important link in the product.
  */
-export const onboardingUrl = (leadId: string) => `${FINDABLE_SITE_ORIGIN}/onboarding/?lead=${leadId}`;
+/**
+ * The name segment is COSMETIC and the ?lead= value is byte-identical to what it always was, so a
+ * wrong, odd or absent name cannot change who a payment is attributed to. findable-site serves
+ * /onboarding/ for any segment via a Pages 200 rewrite and never reads the segment at all — the
+ * alternative (putting a code in the lead param itself) was declined because it would have put new
+ * failure modes on the checkout path.
+ *
+ * No name → the bare /onboarding/?lead=<uuid> form, i.e. exactly the URL sent until now.
+ * slugifyBusinessName is the SAME helper the report URLs use, so apostrophes, ampersands and emoji
+ * are handled once rather than twice.
+ */
+export const onboardingUrl = (leadId: string, businessName?: string | null) => {
+  const slug = slugifyBusinessName(businessName ?? '');
+  // 'business' is slugifyBusinessName's fallback for an empty/emoji-only name — no point putting
+  // that in a URL, so drop the segment entirely and fall back to the previous shape.
+  const segment = businessName && slug !== 'business' ? `${slug}/` : '';
+  return `${FINDABLE_SITE_ORIGIN}/onboarding/${segment}?lead=${leadId}`;
+};
 
 /** Same link without the scheme, for showing on screen where the https:// is just noise. */
-export const onboardingUrlLabel = (leadId: string) =>
-  onboardingUrl(leadId).replace(/^https?:\/\//, "");
+export const onboardingUrlLabel = (leadId: string, businessName?: string | null) =>
+  onboardingUrl(leadId, businessName).replace(/^https?:\/\//, "");
