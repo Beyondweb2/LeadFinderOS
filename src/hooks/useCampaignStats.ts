@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useCampaigns, type Campaign } from '@/hooks/useCampaigns';
 import { looksAutomated, isDecline } from '@/lib/inboundClassify';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 
 /* ============================================================
    CAMPAIGN METRICS, DERIVED FROM MESSAGES
@@ -86,37 +87,6 @@ const pct = (num: number, den: number): number | null =>
   den > 0 ? Math.round((num / den) * 100) : null;
 
 /**
- * Fetch every row of a table, a page at a time.
- *
- * PostgREST caps a single response at the project's `db-max-rows` (default 1000) and returns the
- * truncated page with NO error and no indication it was cut — so an unpaginated select silently
- * starts under-reporting once a table crosses the cap. outreach_leads is at 689.
- *
- * The loop advances by the number of rows actually RETURNED rather than by the requested page size,
- * so it stays correct even if the server's cap is lower than PAGE. It ends when a page comes back
- * empty. MAX_PAGES is a runaway guard, not an expected limit; hitting it sets `truncated`.
- */
-const PAGE = 1000;
-const MAX_PAGES = 50;
-async function fetchAll<T>(
-  client: SupabaseClient,
-  build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
-): Promise<{ rows: T[]; truncated: boolean }> {
-  const rows: T[] = [];
-  let from = 0;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const { data, error } = await build(from, from + PAGE - 1);
-    if (error) throw error;
-    const batch = (data ?? []) as T[];
-    rows.push(...batch);
-    if (batch.length === 0) return { rows, truncated: false };
-    from += batch.length;
-  }
-  console.warn(`Campaign stats: stopped paging at ${MAX_PAGES} pages (${rows.length} rows) — numbers may be incomplete.`);
-  return { rows, truncated: true };
-}
-
-/**
  * Per-campaign rollups derived from whatsapp_messages. Leads are the caller's own (RLS).
  * Best-effort: a failure logs and leaves the previous numbers rather than blanking the page.
  */
@@ -134,15 +104,19 @@ export function useCampaignStats() {
     try {
       const client = supabase as unknown as SupabaseClient;
       const [leadsRes, msgsRes] = await Promise.all([
-        fetchAll<LeadRow>(client, (from, to) =>
+        fetchAllRows<LeadRow>('Campaign stats (leads)', (from, to) =>
           client.from('outreach_leads').select('id, campaign_id, status, amount_paid')
-            .eq('is_archived', false).range(from, to)),
+            .eq('is_archived', false).order('id', { ascending: true }).range(from, to)),
         // BOTH directions now: inbound is what makes a reply a reply. Freeform outbound (null
         // template) is fetched too — it does not create a template row, but an operator's freeform
         // message still counts as us having written to them for the pitch-reply ordering.
-        fetchAll<MsgRow>(client, (from, to) =>
+        /* .order('id') is a TIEBREAKER, not decoration: 3 groups of rows currently share a
+           created_at, and ordering by a non-unique key makes page boundaries unstable — a tied row
+           can be fetched twice and another missed. created_at still leads, so the per-lead arrays
+           stay in send order, which is what the pitch-reply comparison depends on. */
+        fetchAllRows<MsgRow>('Campaign stats (messages)', (from, to) =>
           client.from('whatsapp_messages').select('lead_id, direction, template_name, status, created_at, body')
-            .order('created_at', { ascending: true }).range(from, to)),
+            .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)),
       ]);
       setLeads(leadsRes.rows);
       setMessages(msgsRes.rows);
@@ -155,8 +129,9 @@ export function useCampaignStats() {
        0 rather than taking the whole card down. */
     try {
       const client = supabase as unknown as SupabaseClient;
-      const { rows } = await fetchAll<{ lead_id: string | null }>(client, (from, to) =>
-        client.from('onboarding_responses').select('lead_id').not('lead_id', 'is', null).range(from, to));
+      const { rows } = await fetchAllRows<{ lead_id: string | null }>('Campaign stats (onboarding)', (from, to) =>
+        client.from('onboarding_responses').select('lead_id').not('lead_id', 'is', null)
+          .order('id', { ascending: true }).range(from, to));
       setStartedLeadIds(new Set(rows.map((r) => r.lead_id).filter((v): v is string => !!v)));
     } catch (e) {
       console.warn('Onboarding starts unavailable (started shows 0):', e instanceof Error ? e.message : e);

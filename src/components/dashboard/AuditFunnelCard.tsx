@@ -1,22 +1,28 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Filter, MessageCircle, Reply, FileText, Eye, Tag, BadgePoundSterling } from 'lucide-react';
+import { Filter, MessageCircle, Reply, FileText, Eye, BadgePoundSterling } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export interface AuditFunnel {
-  contacted: number;    // initial_contact or beyond (past New)
-  replied: number;      // replied or beyond
-  reportSent: number;   // report_sent or beyond
-  reportOpened: number; // report_sent-or-beyond leads whose audit has first_opened_at
-  priceGiven: number;   // price_given or beyond
-  paid: number;         // payment_received or beyond
-  openRate: number | null; // reportOpened / reportSent, %
+  /** Leads actually sent a templated message. This was a lead-status test that read 653 when 196
+   *  had been messaged. See useDashboardMetrics for what every stage replaced. */
+  contacted: number;
+  /** Leads with a real inbound message that is not an auto-responder. */
+  replied: number;
+  /** Leads actually sent the report pitch (audit_reply). */
+  pitched: number;
+  /** Of `pitched`, leads whose newest real message arrived AFTER the pitch. */
+  pitchReplied: number;
+  /** Leads with money in, from amount_paid or a paid-or-beyond status. */
+  paid: number;
+  replyRate: number | null;      // replied / contacted
+  pitchReplyRate: number | null; // pitchReplied / pitched
 }
 
-function Stat({ icon: Icon, value, label, color, sub }: {
-  icon: LucideIcon; value: number; label: string; color: string; sub?: string;
+function Stat({ icon: Icon, value, label, color, sub, title }: {
+  icon: LucideIcon; value: number; label: string; color: string; sub?: string; title?: string;
 }) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-1" title={title}>
       <div className="flex items-center gap-1.5">
         <Icon className={`h-3.5 w-3.5 ${color}`} />
         <span className="text-lg sm:text-2xl font-bold tabular-nums">{value}</span>
@@ -28,11 +34,14 @@ function Stat({ icon: Icon, value, label, color, sub }: {
 }
 
 /**
- * The current audit → pitch → pay funnel. Contacted → Replied → Report sent →
- * Report opened → Price given → Paid. All stages are cumulative ("reached this
- * stage or beyond") from outreach_leads.status except Report opened, which counts
- * report-sent-or-beyond leads whose audit has a first_opened_at (tracked by
- * render-audit-report). Opened shows count + % of reports sent.
+ * The audit funnel: Reached, Replied, Pitched, Pitch reply, Paid.
+ *
+ * Every stage is derived from whatsapp_messages, so each is something that demonstrably happened
+ * rather than a status someone set. Two stages are gone:
+ *   Report opened - ai_audits records only first_opened_at and open_count, with no viewer, IP or
+ *     user agent, so our own views counted as a prospect's and could never be separated out.
+ *   Price given   - the price_given status has never been set on any lead, so the tile was
+ *     structurally always 0.
  */
 export function AuditFunnelCard({ funnel, compact = false }: { funnel: AuditFunnel; compact?: boolean }) {
   return (
@@ -44,19 +53,29 @@ export function AuditFunnelCard({ funnel, compact = false }: { funnel: AuditFunn
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
-        <div className={`grid gap-2 sm:gap-4 ${compact ? 'grid-cols-3' : 'grid-cols-3 lg:grid-cols-6'}`}>
-          <Stat icon={MessageCircle} value={funnel.contacted} label="Contacted" color="text-blue-500" />
-          <Stat icon={Reply} value={funnel.replied} label="Replied" color="text-emerald-500" />
-          <Stat icon={FileText} value={funnel.reportSent} label="Report sent" color="text-emerald-400" />
+        <div className={`grid gap-2 sm:gap-4 ${compact ? 'grid-cols-3' : 'grid-cols-3 lg:grid-cols-5'}`}>
           <Stat
-            icon={Eye}
-            value={funnel.reportOpened}
-            label="Report opened"
-            color="text-purple-500"
-            sub={funnel.openRate === null ? undefined : `${funnel.openRate}% of sent`}
+            icon={MessageCircle} value={funnel.contacted} label="Reached" color="text-blue-500"
+            title="Leads actually sent a templated message. The old status test counted leads that were only queued, unreachable on WhatsApp, or archived."
           />
-          <Stat icon={Tag} value={funnel.priceGiven} label="Price given" color="text-sky-500" />
-          <Stat icon={BadgePoundSterling} value={funnel.paid} label="Paid" color="text-green-600" />
+          <Stat
+            icon={Reply} value={funnel.replied} label="Replied" color="text-emerald-500"
+            sub={funnel.replyRate === null ? undefined : `${funnel.replyRate}% of reached`}
+            title="Leads who sent a real inbound message that is not an auto-responder."
+          />
+          <Stat
+            icon={FileText} value={funnel.pitched} label="Pitched" color="text-emerald-400"
+            title="Leads actually sent the report pitch (audit_reply)."
+          />
+          <Stat
+            icon={Eye} value={funnel.pitchReplied} label="Pitch reply" color="text-purple-500"
+            sub={funnel.pitchReplyRate === null ? undefined : `${funnel.pitchReplyRate}% of pitched`}
+            title="Of the leads pitched, how many wrote back AFTER the pitch. This is whether the report and pitch actually work."
+          />
+          <Stat
+            icon={BadgePoundSterling} value={funnel.paid} label="Paid" color="text-green-600"
+            title="Leads with money in, read from amount_paid rather than only from a status someone remembered to move."
+          />
         </div>
       </CardContent>
     </Card>

@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { isSentStatus, isRepliedStatus, type OutreachLead } from '@/types/outreach';
 import type { AuditFunnel } from '@/components/dashboard/AuditFunnelCard';
 import { buildDashTasks, foldMessageTimes, type DashTask, type LeadMessageTimes, type LeadOnboarding } from '@/lib/dashboardTasks';
+import { fetchAllRows } from '@/lib/fetchAllRows';
+import { looksAutomated } from '@/lib/inboundClassify';
 
 export interface ChannelStat { sent: number; replied: number; replyRate: number | null; }
 export interface ChannelPerformance {
@@ -26,6 +28,13 @@ const emptyChannelStat = (): ChannelStat => ({ sent: 0, replied: 0, replyRate: n
 const REPORT_SENT_OR_BEYOND = new Set(['report_sent', 'price_given', 'payment_received', 'in_delivery', 'completed']);
 const PRICE_GIVEN_OR_BEYOND = new Set(['price_given', 'payment_received', 'in_delivery', 'completed']);
 const PAID_OR_BEYOND = new Set(['payment_received', 'in_delivery', 'completed']);
+/** The report pitch, matching useCampaignStats. */
+const PITCH_TEMPLATES = new Set(['audit_reply']);
+
+/** The message fields the audit funnel reads. Order is the query's: created_at, then id. */
+interface FunnelMsg {
+  direction: string; created_at: string; body: string | null; template_name: string | null;
+}
 
 // No hardcoded revenue constants — uses actual amount_paid from leads
 
@@ -128,12 +137,16 @@ export function useDashboardMetrics(isAdmin = false) {
   const [outreachEvents7d, setOutreachEvents7d] = useState<{ lead_id: string; created_at: string }[]>([]);
   // lead_ids whose audit has been OPENED (ai_audits.first_opened_at set by render-audit-report).
   // Empty until the open-tracking migration has run + a real human opens a report.
-  const [openedAuditLeadIds, setOpenedAuditLeadIds] = useState<Set<string>>(new Set());
+
   // Evidence for the derived task list: who wrote last, who filled the questionnaire, whose setup
   // has begun. State, so the list recomputes on the same refetch as everything else.
   const [msgTimes, setMsgTimes] = useState<Map<string, LeadMessageTimes>>(new Map());
   const [onboardingByLead, setOnboardingByLead] = useState<Map<string, LeadOnboarding>>(new Map());
   const [baselineLeadIds, setBaselineLeadIds] = useState<Set<string>>(new Set());
+  /* Raw per-lead messages, in send order. The task rules only need folded timestamps, but the audit
+     funnel needs the messages themselves (which template, which direction, what the text was), and
+     they are already fetched, so index them rather than querying twice. */
+  const [msgsByLeadId, setMsgsByLeadId] = useState<Map<string, FunnelMsg[]>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const hasLoadedOnceRef = useRef(false);
   const { user } = useAuth();
@@ -156,45 +169,75 @@ export function useDashboardMetrics(isAdmin = false) {
        onboarding_responses are not in the generated types; RLS scopes them as it scopes allLeads. */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sbAny = supabase as unknown as { from: (t: string) => any };
-    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult, msgResult, obResult, baselineResult] = await Promise.all([
-      supabase.from('outreach_leads').select('*').order('created_at', { ascending: true }),
-      supabase.from('copied_phones').select('copied_at').eq('user_id', uid),
-      supabase.from('outreach_activities').select('created_at').eq('user_id', uid),
-      supabase.from('lead_contacts').select('contacted_at').eq('user_id', uid),
-      supabase.from('search_history').select('no_website_count').eq('user_id', uid),
-      supabase.from('outreach_events').select('lead_id, created_at').eq('user_id', uid).gte('created_at', sevenDaysAgo.toISOString()),
-      // body is fetched so foldMessageTimes can drop auto-responder inbound — a booking bot's
-      // auto-ack is not a person waiting on a reply.
-      sbAny.from('whatsapp_messages').select('lead_id, direction, created_at, body').not('lead_id', 'is', null),
-      sbAny.from('onboarding_responses').select('lead_id, status, created_at').not('lead_id', 'is', null),
-      sbAny.from('ai_audits').select('lead_id, baseline_target_runs').not('lead_id', 'is', null),
-    ]);
+    /* Every read is paginated. None of these was, and PostgREST truncates at db-max-rows (default
+       1000) with no error and no signal — outreach_leads is at 689 and whatsapp_messages at 403, so
+       this dashboard was one growth spurt away from quietly showing smaller numbers than the truth.
+       Each carries `.order('id')` as a unique tiebreaker, without which page boundaries are unstable
+       on a non-unique sort key. */
+    const all = await Promise.all([
+      fetchAllRows<OutreachLead>('Dashboard (leads)', (f, t) =>
+        sbAny.from('outreach_leads').select('*').order('created_at', { ascending: true }).order('id', { ascending: true }).range(f, t)),
+      fetchAllRows<{ copied_at: string }>('Dashboard (copied phones)', (f, t) =>
+        sbAny.from('copied_phones').select('copied_at').eq('user_id', uid).order('copied_at', { ascending: true }).range(f, t)),
+      fetchAllRows<{ created_at: string }>('Dashboard (activities)', (f, t) =>
+        sbAny.from('outreach_activities').select('created_at').eq('user_id', uid).order('created_at', { ascending: true }).range(f, t)),
+      fetchAllRows<{ contacted_at: string }>('Dashboard (contacts)', (f, t) =>
+        sbAny.from('lead_contacts').select('contacted_at').eq('user_id', uid).order('contacted_at', { ascending: true }).range(f, t)),
+      fetchAllRows<{ no_website_count: number | null }>('Dashboard (search history)', (f, t) =>
+        sbAny.from('search_history').select('no_website_count').eq('user_id', uid).order('id', { ascending: true }).range(f, t)),
+      fetchAllRows<{ lead_id: string | null; created_at: string }>('Dashboard (events)', (f, t) =>
+        sbAny.from('outreach_events').select('lead_id, created_at').eq('user_id', uid)
+          .gte('created_at', sevenDaysAgo.toISOString()).order('created_at', { ascending: true }).order('id', { ascending: true }).range(f, t)),
+      // body → foldMessageTimes drops auto-responder inbound (a booking bot's auto-ack is not a
+      // person waiting on a reply). template_name → the audit funnel's pitch stage, no extra query.
+      fetchAllRows<{ lead_id: string; direction: string; created_at: string; body: string | null; template_name: string | null; status: string | null }>('Dashboard (messages)', (f, t) =>
+        sbAny.from('whatsapp_messages').select('lead_id, direction, created_at, body, template_name, status')
+          .not('lead_id', 'is', null).order('created_at', { ascending: true }).order('id', { ascending: true }).range(f, t)),
+      fetchAllRows<{ lead_id: string; status: string | null; created_at: string }>('Dashboard (onboarding)', (f, t) =>
+        sbAny.from('onboarding_responses').select('lead_id, status, created_at').not('lead_id', 'is', null)
+          .order('id', { ascending: true }).range(f, t)),
+      fetchAllRows<{ lead_id: string; baseline_target_runs: number | null }>('Dashboard (audits)', (f, t) =>
+        sbAny.from('ai_audits').select('lead_id, baseline_target_runs').not('lead_id', 'is', null)
+          .order('id', { ascending: true }).range(f, t)),
+    ]).catch((e: unknown) => {
+      /* fetchAllRows throws rather than returning an error, so the failure surfaces HERE. The old
+         code only guarded the leads query and returned; this covers all nine the same way, and
+         still clears isLoading so the dashboard renders empty rather than spinning forever. */
+      console.error('Error fetching dashboard metrics:', e);
+      return null;
+    });
+    if (!all) {
+      hasLoadedOnceRef.current = true;
+      setIsLoading(false);
+      return;
+    }
+    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult, msgResult, obResult, baselineResult] = all;
 
     hasLoadedOnceRef.current = true;
     setIsLoading(false);
 
-    if (leadsResult.error) {
-      console.error('Error fetching leads for metrics:', leadsResult.error);
-      return;
-    }
-
-    setAllLeads((leadsResult.data || []) as OutreachLead[]);
-    setOutreachEvents7d(eventsResult.data || []);
+    setAllLeads(leadsResult.rows);
+    setOutreachEvents7d(eventsResult.rows);
 
     /* Fold the evidence into per-lead maps. Each is wrapped so a missing table or column degrades
        that ONE rule to silence rather than emptying the card - the same defensive posture the
        audit-open fetch below already takes. */
     try {
-      setMsgTimes(foldMessageTimes(
-        (msgResult?.data ?? []) as Array<{ lead_id: string; direction: string; created_at: string; body?: string | null }>,
-      ));
+      setMsgTimes(foldMessageTimes(msgResult.rows));
+      const idx = new Map<string, FunnelMsg[]>();
+      for (const m of msgResult.rows) {
+        const row: FunnelMsg = { direction: m.direction, created_at: m.created_at, body: m.body, template_name: m.template_name };
+        const arr = idx.get(m.lead_id);
+        if (arr) arr.push(row); else idx.set(m.lead_id, [row]);
+      }
+      setMsgsByLeadId(idx);
     } catch (e) {
       console.warn('Message-time fold skipped (reply tasks hidden):', e instanceof Error ? e.message : e);
     }
 
     try {
       const obs = new Map<string, LeadOnboarding>();
-      for (const r of ((obResult?.data ?? []) as Array<{ lead_id: string; status: string | null; created_at: string }>)) {
+      for (const r of obResult.rows) {
         const at = new Date(r.created_at).getTime();
         const prev = obs.get(r.lead_id);
         // Newest row wins for the date; paid is STICKY across rows, so a later unpaid retry cannot
@@ -210,7 +253,7 @@ export function useDashboardMetrics(isAdmin = false) {
 
     try {
       const withBaseline = new Set<string>();
-      for (const a of ((baselineResult?.data ?? []) as Array<{ lead_id: string; baseline_target_runs: number | null }>)) {
+      for (const a of baselineResult.rows) {
         if (Number(a.baseline_target_runs ?? 0) > 1) withBaseline.add(a.lead_id);
       }
       setBaselineLeadIds(withBaseline);
@@ -218,34 +261,12 @@ export function useDashboardMetrics(isAdmin = false) {
       console.warn('Baseline fold skipped (deliver tasks may over-report):', e instanceof Error ? e.message : e);
     }
 
-    // Audit opens — lead_ids whose audit has a first_opened_at (a human opened the /a/<auditId>
-    // report; render-audit-report writes it, bot UAs excluded). RLS on ai_audits scopes to the
-    // operator's own audits — same scope as allLeads, so the funnel is per-rep like the Pipeline
-    // card. Fully DEFENSIVE: if the open-tracking migration hasn't run yet the first_opened_at
-    // column doesn't exist and the select errors — caught, leaving the set empty (opened shows 0).
-    try {
-      const sb = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
-      const { data: opened, error: openErr } = await sb
-        .from('ai_audits')
-        .select('lead_id')
-        .not('first_opened_at', 'is', null);
-      if (openErr) throw openErr;
-      const ids = new Set<string>();
-      for (const r of (opened || []) as Array<{ lead_id: string | null }>) {
-        if (r.lead_id) ids.add(r.lead_id);
-      }
-      setOpenedAuditLeadIds(ids);
-    } catch (e) {
-      // Migration not yet applied or a transient failure — opened stays 0, never blocks the rest.
-      console.warn('Audit-open fetch skipped (non-blocking):', e instanceof Error ? e.message : e);
-    }
-
-    const searchHistory = searchHistoryResult.data || [];
+    const searchHistory = searchHistoryResult.rows;
     setTotalNoWebsiteFound(searchHistory.reduce((sum, s) => sum + (s.no_website_count || 0), 0));
 
-    const copiedPhones = copiedPhonesResult.data || [];
-    const activities = activitiesResult.data || [];
-    const contacts = contactsResult.data || [];
+    const copiedPhones = copiedPhonesResult.rows;
+    const activities = activitiesResult.rows;
+    const contacts = contactsResult.rows;
 
     setActivityData({
       phonesCopiedToday: copiedPhones.filter(p => p.copied_at >= dates.todayStr).length,
@@ -323,21 +344,50 @@ export function useDashboardMetrics(isAdmin = false) {
     // wants_draft/reviewing_draft/awaiting_decision statuses; price_given is the live equivalent.)
     const activeProposals = allLeads.filter(l => l.status === 'price_given').length;
 
-    // ── Audit funnel — cumulative "reached this stage or beyond" from lead status, plus the
-    // opened layer from audit first_opened_at. contacted/replied reuse the shared status helpers
-    // (isSentStatus = past New; isRepliedStatus = replied-or-beyond) so the funnel can't drift from
-    // the channel card / Outreach list. Report opened = report-sent-or-beyond leads whose lead has
-    // an opened audit; open rate = opened ÷ reportSent (like-for-like: reports vs reports).
-    const contacted = allLeads.filter(l => isSentStatus(l.status)).length;
-    const replied = allLeads.filter(l => isRepliedStatus(l.status)).length;
-    const reportSentLeads = allLeads.filter(l => REPORT_SENT_OR_BEYOND.has(l.status));
-    const reportSent = reportSentLeads.length;
-    const reportOpened = reportSentLeads.filter(l => openedAuditLeadIds.has(l.id)).length;
-    const priceGiven = allLeads.filter(l => PRICE_GIVEN_OR_BEYOND.has(l.status)).length;
-    const paid = allLeads.filter(l => PAID_OR_BEYOND.has(l.status)).length;
+    /* ── Audit funnel — now derived from MESSAGES, for the same reasons the campaign card was.
+       Every stage used to be a cumulative lead-status test, which measured intent rather than what
+       happened, and it was wrong in both directions at once:
+         Contacted   653 vs 196 truly messaged — it counted 358 no_whatsapp_needs_sms leads that
+                     are unreachable on WhatsApp, 53 still queued, and 97 archived.
+         Replied      74 vs  59 — a lifetime status test, so leads with no inbound at all counted,
+                     as did not_interested.
+         Report sent  50 vs  59 — UNDERSTATED, because the status is operator-set and lags the send.
+         Price given   0 — the price_given status has never been set on any lead, so the tile was
+                     structurally always zero. Dropped rather than shown as a permanent 0.
+         Paid          0 while £49.99 was banked — status-only, so it missed a lead that paid
+                     without its status being moved.
+         Report opened — REMOVED. ai_audits stores only first_opened_at and open_count: no viewer,
+                     no IP, no user agent, no per-open log, and render-audit-report filters nothing
+                     but a bot user-agent. Our own opens are indistinguishable from a prospect's and
+                     always will be for existing rows, because first_opened_at is coalesced — for
+                     any report previewed before sending, the recorded "first open" is ours.
+       Archived leads are excluded here now, matching the rest of the dashboard. */
+    const funnelLeads = allLeads.filter(l => !l.is_archived);
+    let contacted = 0, replied = 0, pitched = 0, pitchReplied = 0, funnelPaid = 0;
+    for (const l of funnelLeads) {
+      const ms = msgsByLeadId.get(l.id);
+      if (!ms) {
+        if ((l.amount_paid ?? 0) > 0 || PAID_OR_BEYOND.has(l.status)) funnelPaid += 1;
+        continue;
+      }
+      const outTemplated = ms.filter(m => m.direction === 'outbound' && m.template_name);
+      const humanInbound = ms.filter(m => m.direction === 'inbound' && !looksAutomated(m.body ?? ''));
+      if (outTemplated.length > 0) contacted += 1;
+      if (humanInbound.length > 0) replied += 1;
+      const pitches = outTemplated.filter(m => PITCH_TEMPLATES.has(m.template_name as string));
+      if (pitches.length > 0) {
+        pitched += 1;
+        const lastPitchAt = pitches[pitches.length - 1].created_at;
+        const newestInboundAt = humanInbound.length ? humanInbound[humanInbound.length - 1].created_at : null;
+        if (newestInboundAt && newestInboundAt > lastPitchAt) pitchReplied += 1;
+      }
+      // Money in the bank beats a status someone forgot to move.
+      if ((l.amount_paid ?? 0) > 0 || PAID_OR_BEYOND.has(l.status)) funnelPaid += 1;
+    }
     const auditFunnel: AuditFunnel = {
-      contacted, replied, reportSent, reportOpened, priceGiven, paid,
-      openRate: reportSent > 0 ? Math.round((reportOpened / reportSent) * 100) : null,
+      contacted, replied, pitched, pitchReplied, paid: funnelPaid,
+      replyRate: contacted > 0 ? Math.round((replied / contacted) * 100) : null,
+      pitchReplyRate: pitched > 0 ? Math.round((pitchReplied / pitched) * 100) : null,
     };
 
     // Leads with a next action (non-archived) — feeds the Next Actions card. (The
@@ -446,7 +496,7 @@ export function useDashboardMetrics(isAdmin = false) {
       auditFunnel,
       channelPerf,
     };
-  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, openedAuditLeadIds, msgTimes, onboardingByLead, baselineLeadIds]);
+  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, msgTimes, msgsByLeadId, onboardingByLead, baselineLeadIds]);
 
   return { metrics, isLoading, refetch: fetchAllData };
 }
