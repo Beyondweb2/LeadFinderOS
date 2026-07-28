@@ -1015,8 +1015,17 @@ async function maybeSendAuditReply(service: any, runId: string, auditId: string)
     return;
   }
 
-  // 6) Lead phone.
-  const { data: lead } = await service.from("outreach_leads").select("phone, country").eq("id", audit.lead_id).maybeSingle();
+  // 6) Lead phone — and whether the operator has withdrawn this business.
+  const { data: lead } = await service.from("outreach_leads")
+    .select("phone, country, is_archived").eq("id", audit.lead_id).maybeSingle();
+  /* This path is a DIRECT Graph send: it does not go through whatsapp_auto_replies, so the
+     send-time archived guard in process-whatsapp-queue cannot cover it. Checked here instead.
+     Gated by AUTO_REPLY_FLOW_ENABLED, which is currently unset — so this is pre-emptive, exactly
+     like the process-sms-queue guard: it has to be in place BEFORE the flag is turned on. */
+  if (lead?.is_archived === true) {
+    console.log(`[audit-reply] audit ${auditId}: lead ${audit.lead_id} is archived — report published (${slug}) but send skipped.`);
+    return;
+  }
   const to = toWhatsAppNumber(lead?.phone ?? "", lead?.country ?? null);
   if (!to) {
     console.log(`[audit-reply] audit ${auditId}: report published (${slug}) but lead ${audit.lead_id} has no usable phone — send skipped.`);

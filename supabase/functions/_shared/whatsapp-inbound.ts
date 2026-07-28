@@ -169,6 +169,29 @@ export async function handleInboundMessages(
           console.error(`[whatsapp-inbound] lead status→replied failed (${leadId}):`, (e as Error).message);
         }
 
+        /* Is this business archived? Archiving is the operator saying "stop contacting them", so it
+           must stop the AUTOMATIC consequences of an inbound reply — the audit and the pitch — not
+           just hide the lead from the SPA. Read once here and used by both automations below.
+           Deliberately narrow: the reply is still stored and the lead still flips to 'replied' above,
+           because recording what a business said is not the same as contacting them, and an operator
+           un-archiving later should see the full history.
+           Only queried when at least one automation could act on it, so the normal inbound path pays
+           nothing. A failed read leaves this false: the individual send paths re-check archived at
+           send time, so failing open here cannot produce a send. */
+        let leadArchived = false;
+        if (autoReplyEnvOn() || Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1") {
+          try {
+            const { data: archRow } = await service
+              .from("outreach_leads").select("is_archived").eq("id", leadId).maybeSingle();
+            leadArchived = archRow?.is_archived === true;
+            if (leadArchived) {
+              console.log(`[whatsapp-inbound] lead ${leadId}: archived — skipping auto-audit and auto-pitch (reply still stored).`);
+            }
+          } catch (e) {
+            console.error(`[whatsapp-inbound] archived check failed (${leadId}):`, (e as Error).message);
+          }
+        }
+
         // Automation A: a reply auto-triggers an AI-visibility audit for this lead. Fired at most
         // ONCE per lead — idempotency guard: skip if an ai_audits row already exists for the lead,
         // so repeat replies never spawn duplicate audits. Own try/catch: a failure to start the
@@ -179,7 +202,7 @@ export async function handleInboundMessages(
             .from("ai_audits").select("id").eq("lead_id", leadId).limit(1).maybeSingle();
           // Automation A gated OFF by default while audit_reply is in Meta review / replies are
           // handled manually. Set AUTO_REPLY_FLOW_ENABLED=1 to re-enable (no code change).
-          if (Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1" && !existingAudit) {
+          if (Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1" && !existingAudit && !leadArchived) {
             const { data: lead } = await service
               .from("outreach_leads")
               .select("business_name, category, search_keyword, search_location, address, country, website, user_id")
@@ -227,7 +250,12 @@ export async function handleInboundMessages(
         // index on whatsapp_auto_replies makes "once per lead, ever" structural (23505 → skip).
         // Own try/catch — a missing table / any failure can never break the inbound webhook.
         try {
-          if (autoReplyEnvOn() && (await autoReplyToggleOn(service)) &&
+          /* !leadArchived: an archived lead's reply arms NOTHING — no whatsapp_auto_replies row at
+             all, rather than a skipped_* one. The lead_id UNIQUE index makes any row a once-ever
+             claim, so recording a skip here would silently burn the slot and mean an un-archived
+             lead could never be pitched. Nothing is lost by not writing: the reply is stored, the
+             lead shows as 'replied', and the operator sees the thread in the Inbox. */
+          if (autoReplyEnvOn() && (await autoReplyToggleOn(service)) && !leadArchived &&
               msg?.type === "text" && isSubstantiveText(body)) {
             // First-inbound-only: this message is already stored, so "first" = exactly one row.
             const { count: inboundCount } = await service

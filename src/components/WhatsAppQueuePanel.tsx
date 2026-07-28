@@ -11,6 +11,9 @@ interface QueueStatus {
   sentToday: number;
   cap: number;
   queuedCount: number;
+  /** Queued leads the processor will NOT send to because they are archived. Reported so a stalled
+   *  queue can be told apart from one holding withdrawn leads. */
+  archivedQueuedCount?: number;
   nextSendAt: string | null;
   windowOpen: boolean;
   paused: boolean;
@@ -182,6 +185,14 @@ export function WhatsAppQueuePanel({
         <Stat label="UK time" value={`${status.ukTime} ${status.windowOpen ? '· open' : '· closed'}`} />
         <Stat label="Next send" value={status.nextSendAt ? new Date(status.nextSendAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'} />
       </div>
+
+      {/* Archived leads still sitting at status='queued'. The processor skips them; saying so here
+          stops "the queue looks stuck" being confused with "these were withdrawn". */}
+      {(status.archivedQueuedCount ?? 0) > 0 && (
+        <p className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+          {status.archivedQueuedCount} archived {status.archivedQueuedCount === 1 ? 'lead is' : 'leads are'} still marked queued and will <strong>not</strong> be sent to. Archiving stops contact.
+        </p>
+      )}
 
       {expanded && (
         <div className="mt-2 rounded-lg border border-border/40 bg-background/40 p-2">
