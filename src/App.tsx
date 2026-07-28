@@ -30,6 +30,7 @@ const Outreach = lazy(() => import("./pages/Outreach"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Templates = lazy(() => import("./pages/Templates"));
 const PaidClientsPage = lazy(() => import("./pages/PaidClients"));
+const BaselinePage = lazy(() => import("./pages/Baseline"));
 const HowToUse = lazy(() => import("./pages/HowToUse"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const AdminClients = lazy(() => import("./pages/AdminClients"));
@@ -313,6 +314,21 @@ const App = () => {
             />
             {/* Archive route removed - merged into Outreach */}
             {/* Track Leads route removed - folded into Outreach (row-click detail modal) */}
+            {/* OPERATOR baseline view. Inside ProtectedRoute + SubscriptionGate like every other
+                operator page - deliberately NOT public: the client gets a week-8 before-and-after,
+                not the working detail. */}
+            <Route
+              path="/baseline/:auditId"
+              element={
+                <ProtectedRoute>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <BaselinePage />
+                     </AppLayout>
+                   </SubscriptionGate>
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/paid-clients"
               element={
