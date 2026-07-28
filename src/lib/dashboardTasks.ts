@@ -1,4 +1,5 @@
 import type { OutreachLead } from '@/types/outreach';
+import { looksAutomated } from '@/lib/inboundClassify';
 
 /* ============================================================
    NEXT ACTIONS, WORKED OUT LIVE
@@ -62,10 +63,39 @@ export interface DashTask {
   count?: number;
 }
 
-/** Per-lead message timestamps, the evidence that decides whether a reply is outstanding. */
+/** Per-lead message timestamps, the evidence that decides whether a reply is outstanding.
+ *  lastInbound counts only inbound that is NOT an auto-responder — see the note on
+ *  buildDashTasks' reply rule for why, and for what that filter does and doesn't catch. */
 export interface LeadMessageTimes {
   lastInbound: number | null;
   lastOutbound: number | null;
+}
+
+/** Fold a lead's messages into the timestamps the rules need, dropping auto-responder inbound.
+ *  Callers should use this rather than folding by hand, so the bot filter can't be forgotten:
+ *  on 2026-07-28 the card said a barber was "awaiting a reply" when the only inbound was a
+ *  booking bot's auto-ack. looksAutomated is the SAME check the auto-pitch rule uses.
+ *
+ *  It is a filter, not proof of humanity: the patterns are English-only, so non-English
+ *  promotional spam still reads as a human reply. Measured against all 111 real inbound
+ *  messages it removes 15. */
+export function foldMessageTimes(
+  rows: Array<{ lead_id: string; direction: string; created_at: string; body?: string | null }>,
+): Map<string, LeadMessageTimes> {
+  const out = new Map<string, LeadMessageTimes>();
+  for (const m of rows) {
+    const t = new Date(m.created_at).getTime();
+    if (!Number.isFinite(t)) continue;
+    const cur = out.get(m.lead_id) ?? { lastInbound: null, lastOutbound: null };
+    if (m.direction === 'inbound') {
+      if (looksAutomated(m.body ?? '')) continue; // a bot's auto-ack is not someone waiting on you
+      cur.lastInbound = Math.max(cur.lastInbound ?? 0, t);
+    } else {
+      cur.lastOutbound = Math.max(cur.lastOutbound ?? 0, t);
+    }
+    out.set(m.lead_id, cur);
+  }
+  return out;
 }
 
 /** The one onboarding row that matters per lead: the newest, and whether it was paid. */
