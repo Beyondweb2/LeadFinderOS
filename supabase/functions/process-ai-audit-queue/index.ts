@@ -899,7 +899,17 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
 
         if (!completeTemplate) continue; // completion auto-send off → only the upgrade path above
         const { data: lead } = await service
-          .from("outreach_leads").select("phone, country, status").eq("id", leadId).maybeSingle();
+          .from("outreach_leads").select("phone, country, status, is_archived").eq("id", leadId).maybeSingle();
+        /* Archived → arm NOTHING. Deliberately a `continue` and not a skipped_* row: lead_id is
+           UNIQUE on whatsapp_auto_replies, so ANY row is a permanent once-ever claim. Writing a skip
+           row here would look tidy and would quietly mean that un-archiving the lead later could
+           never pitch them — the slot would already be spent. The send-point guard in
+           process-whatsapp-queue stays as the second line for a lead archived AFTER arming; this one
+           stops the row existing in the first place. */
+        if (lead?.is_archived === true) {
+          console.log(`[auto-send] audit ${job.auditId}: lead ${leadId} is archived — not arming an audit_complete pitch (no row written, once-ever slot left intact).`);
+          continue;
+        }
         const to = toWhatsAppNumber((lead?.phone as string) ?? "", (lead?.country as string | null) ?? null);
         if (!to) continue; // no usable phone — nothing to queue
         // Queue-time suppression/refusal parity with the first-reply trigger: a suppressed or
