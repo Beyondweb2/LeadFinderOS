@@ -425,7 +425,11 @@ export function OutreachTable({
   const [resetFreshOpen, setResetFreshOpen] = useState(false);
   // Bulk WhatsApp-queue template picker (chosen at queue-time).
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
-  const [queueTemplate, setQueueTemplate] = useState<string>(WHATSAPP_TEMPLATES[0].value);
+  /* Unselected by default. This pre-selected WHATSAPP_TEMPLATES[0] = booking_page_intro, the barber
+     booking pitch, and line ~2428 applies the choice to EVERY selected lead — so bulk-queueing a
+     batch of accountants without touching the dropdown stamped a barber template on all of them.
+     Same class of bug as the Inbox picker; '' means not set and the Queue button stays disabled. */
+  const [queueTemplate, setQueueTemplate] = useState<string>('');
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
   // Dialog state for WhatsApp/SMS template pages
   const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
@@ -980,6 +984,9 @@ export function OutreachTable({
   // selected lead (overrides any per-lead template).
   const handleQueueForWhatsApp = async (template: string) => {
     if (selectedIds.size === 0 || !onUpdateLead) return;
+    /* Refuse an unset template here as well as disabling the button. Stamping '' on a batch of leads
+       would queue them with no template, and the drainer would then flag every one of them. */
+    if (!template) { toast({ title: 'No template chosen', description: 'Pick a template before queueing.', variant: 'destructive' }); return; }
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
     const leadOf = (id: string) => leads.find((l) => l.id === id);
@@ -2415,7 +2422,7 @@ export function OutreachTable({
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Template</label>
             <Select value={queueTemplate} onValueChange={setQueueTemplate}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
               <SelectContent>
                 {WHATSAPP_TEMPLATES.map((t) => (
                   <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
@@ -2425,7 +2432,7 @@ export function OutreachTable({
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setQueueDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" onClick={() => handleQueueForWhatsApp(queueTemplate)}>
+            <Button size="sm" disabled={!queueTemplate} onClick={() => handleQueueForWhatsApp(queueTemplate)}>
               <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
               Queue {selectedIds.size}
             </Button>
