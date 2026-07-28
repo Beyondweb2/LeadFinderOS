@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { isSentStatus, isRepliedStatus, type OutreachLead } from '@/types/outreach';
 import type { AuditFunnel } from '@/components/dashboard/AuditFunnelCard';
+import { buildDashTasks, type DashTask, type LeadMessageTimes, type LeadOnboarding } from '@/lib/dashboardTasks';
 
 export interface ChannelStat { sent: number; replied: number; replyRate: number | null; }
 export interface ChannelPerformance {
@@ -56,6 +57,9 @@ interface DashboardMetrics {
 
   // All non-archived leads with a next action — feeds the Next Actions card.
   nextActionLeads: OutreachLead[];
+  /** The Next Actions card's list, DERIVED live (see lib/dashboardTasks.ts). Replaces the stored
+   *  next_action field as the card's source; nextActionLeads is kept for anything still reading it. */
+  dashTasks: DashTask[];
   // Raw leads (RLS-scoped) — feeds the campaign-aware Pipeline card.
   allLeads: OutreachLead[];
 
@@ -125,6 +129,11 @@ export function useDashboardMetrics(isAdmin = false) {
   // lead_ids whose audit has been OPENED (ai_audits.first_opened_at set by render-audit-report).
   // Empty until the open-tracking migration has run + a real human opens a report.
   const [openedAuditLeadIds, setOpenedAuditLeadIds] = useState<Set<string>>(new Set());
+  // Evidence for the derived task list: who wrote last, who filled the questionnaire, whose setup
+  // has begun. State, so the list recomputes on the same refetch as everything else.
+  const [msgTimes, setMsgTimes] = useState<Map<string, LeadMessageTimes>>(new Map());
+  const [onboardingByLead, setOnboardingByLead] = useState<Map<string, LeadOnboarding>>(new Map());
+  const [baselineLeadIds, setBaselineLeadIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const hasLoadedOnceRef = useRef(false);
   const { user } = useAuth();
@@ -141,13 +150,22 @@ export function useDashboardMetrics(isAdmin = false) {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult] = await Promise.all([
+    /* The three extra reads for the derived task list ride along in this SAME Promise.all, so they
+       cost one round-trip of wall-clock rather than three sequential ones. All are narrow column
+       selects, and all go through an untyped client because whatsapp_messages and
+       onboarding_responses are not in the generated types; RLS scopes them as it scopes allLeads. */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sbAny = supabase as unknown as { from: (t: string) => any };
+    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult, msgResult, obResult, baselineResult] = await Promise.all([
       supabase.from('outreach_leads').select('*').order('created_at', { ascending: true }),
       supabase.from('copied_phones').select('copied_at').eq('user_id', uid),
       supabase.from('outreach_activities').select('created_at').eq('user_id', uid),
       supabase.from('lead_contacts').select('contacted_at').eq('user_id', uid),
       supabase.from('search_history').select('no_website_count').eq('user_id', uid),
       supabase.from('outreach_events').select('lead_id, created_at').eq('user_id', uid).gte('created_at', sevenDaysAgo.toISOString()),
+      sbAny.from('whatsapp_messages').select('lead_id, direction, created_at').not('lead_id', 'is', null),
+      sbAny.from('onboarding_responses').select('lead_id, status, created_at').not('lead_id', 'is', null),
+      sbAny.from('ai_audits').select('lead_id, baseline_target_runs').not('lead_id', 'is', null),
     ]);
 
     hasLoadedOnceRef.current = true;
@@ -160,6 +178,49 @@ export function useDashboardMetrics(isAdmin = false) {
 
     setAllLeads((leadsResult.data || []) as OutreachLead[]);
     setOutreachEvents7d(eventsResult.data || []);
+
+    /* Fold the evidence into per-lead maps. Each is wrapped so a missing table or column degrades
+       that ONE rule to silence rather than emptying the card - the same defensive posture the
+       audit-open fetch below already takes. */
+    try {
+      const times = new Map<string, LeadMessageTimes>();
+      for (const m of ((msgResult?.data ?? []) as Array<{ lead_id: string; direction: string; created_at: string }>)) {
+        const t = new Date(m.created_at).getTime();
+        const cur = times.get(m.lead_id) ?? { lastInbound: null, lastOutbound: null };
+        if (m.direction === 'inbound') cur.lastInbound = Math.max(cur.lastInbound ?? 0, t);
+        else cur.lastOutbound = Math.max(cur.lastOutbound ?? 0, t);
+        times.set(m.lead_id, cur);
+      }
+      setMsgTimes(times);
+    } catch (e) {
+      console.warn('Message-time fold skipped (reply tasks hidden):', e instanceof Error ? e.message : e);
+    }
+
+    try {
+      const obs = new Map<string, LeadOnboarding>();
+      for (const r of ((obResult?.data ?? []) as Array<{ lead_id: string; status: string | null; created_at: string }>)) {
+        const at = new Date(r.created_at).getTime();
+        const prev = obs.get(r.lead_id);
+        // Newest row wins for the date; paid is STICKY across rows, so a later unpaid retry cannot
+        // un-pay someone who has already bought.
+        const paid = (r.status === 'paid') || (prev?.paid ?? false);
+        if (!prev || at > prev.createdAt) obs.set(r.lead_id, { createdAt: at, paid });
+        else if (paid) obs.set(r.lead_id, { ...prev, paid: true });
+      }
+      setOnboardingByLead(obs);
+    } catch (e) {
+      console.warn('Onboarding fold skipped (chase tasks hidden):', e instanceof Error ? e.message : e);
+    }
+
+    try {
+      const withBaseline = new Set<string>();
+      for (const a of ((baselineResult?.data ?? []) as Array<{ lead_id: string; baseline_target_runs: number | null }>)) {
+        if (Number(a.baseline_target_runs ?? 0) > 1) withBaseline.add(a.lead_id);
+      }
+      setBaselineLeadIds(withBaseline);
+    } catch (e) {
+      console.warn('Baseline fold skipped (deliver tasks may over-report):', e instanceof Error ? e.message : e);
+    }
 
     // Audit opens — lead_ids whose audit has a first_opened_at (a human opened the /a/<auditId>
     // report; render-audit-report writes it, bot UAs excluded). RLS on ai_audits scopes to the
@@ -287,6 +348,11 @@ export function useDashboardMetrics(isAdmin = false) {
     // old collapsed pipeline counts were removed; the Pipeline card now computes its
     // own per-status counts from allLeads with a campaign filter.)
     const nextActionLeads = allLeads.filter(l => !l.is_archived && l.next_action && l.next_action !== 'none');
+    // The card's real list now. A pure function of the state above, so it recomputes on every
+    // refetch and can never describe work that is already done.
+    const dashTasks = buildDashTasks({
+      leads: allLeads, times: msgTimes, onboarding: onboardingByLead, leadsWithBaseline: baselineLeadIds,
+    });
 
     // HERO — businesses contacted = leads past "New" (status, source of truth).
     // INCLUDES archived: a lead you contacted then archived was still contacted, and
@@ -375,7 +441,7 @@ export function useDashboardMetrics(isAdmin = false) {
       totalRevenue, revenueThisMonth, revenueLastMonth,
       fullyPaidClients, activeProposals,
       totalPotentialRevenue, closedRevenue,
-      nextActionLeads, allLeads,
+      nextActionLeads, dashTasks, allLeads,
       totalBusinessesAdded, noWebsiteBusinesses, addedToday, addedYesterday,
       contactedTotal, contactedToday, contactedYesterday, avg7Day, loggedLeads,
       recordDay, avgPerDayAllTime, avgPerDayLast7Days,
@@ -384,7 +450,7 @@ export function useDashboardMetrics(isAdmin = false) {
       auditFunnel,
       channelPerf,
     };
-  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, openedAuditLeadIds]);
+  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, openedAuditLeadIds, msgTimes, onboardingByLead, baselineLeadIds]);
 
   return { metrics, isLoading, refetch: fetchAllData };
 }

@@ -125,7 +125,7 @@ const Dashboard = () => {
       <section>
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Activity &amp; next steps</h2>
         <div className="grid gap-3 sm:gap-4 grid-cols-1">
-          <NextActionsCard trackedLeads={metrics.nextActionLeads} onClearTask={handleClearTask} />
+          <NextActionsCard tasks={metrics.dashTasks} onClearTask={handleClearTask} />
         </div>
       </section>
 
