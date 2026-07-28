@@ -170,6 +170,11 @@ Deno.serve(async (req) => {
         // so the areas answer is kept out of it deliberately.
         areas_wanted: clip(a.areas_wanted, 2000),
         confirmed_location: confirmedLocation,
+        /* Full postal address, SEPARATE from confirmed_location on purpose: that value is what
+           create-ai-audit builds "[service] in [town]" from, so an address in it would generate
+           questions like "plumber in 12 High Street, Wisbech PE13 1AB". Directories need this;
+           the question generator needs the bare town. */
+        business_address: clip(a.business_address, 300),
         accreditations: clip(a.accreditations, 2000),
         gbp_consent: gbpConsent,
         gbp_manager_email: gbpEmail,
@@ -187,7 +192,7 @@ Deno.serve(async (req) => {
         let res = await attempt({ ...answers, ...extra });
         // Drop whichever optional column the database does not have yet and retry, so a
         // pending migration can never cost us a real submission.
-        for (const col of ["areas_wanted", "incomplete", "contact_email"]) {
+        for (const col of ["areas_wanted", "incomplete", "contact_email", "business_address"]) {
           if (res.error && new RegExp(col, "i").test(res.error.message ?? "")) {
             console.warn(`[findable-onboarding] ${col} column missing, saving without it`);
             const reduced = { ...answers } as Record<string, unknown>;
