@@ -8,7 +8,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
 import { PUBLIC_SITE_ORIGIN } from '@/config/publicSite';
-import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
+import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
+import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
 import { barberSitePreviewUrl } from '@/config/publicSite';
@@ -26,7 +27,7 @@ import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
-import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check } from 'lucide-react';
+import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2 } from 'lucide-react';
 
 // Shared style for the compact thread-header quick-action icon buttons/links.
 const HEADER_ICON_BTN = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
@@ -397,6 +398,24 @@ const Inbox = () => {
     : null;
   const auditInputsMissing = !!activeLead && (!auditInputs?.type || !auditInputs?.loc);
   const [firedAudits, setFiredAudits] = useState<Set<string>>(new Set());
+  /* SIGN-UP LINK, compact. The full card lives on in the lead-detail dialog, which has room; here it
+     is one toolbar icon, because the Inbox is for reading conversations. Same assessment function as
+     the card, so the no-trade warning cannot differ between them. */
+  const signupLink = activeLead ? assessOnboardingLink(activeLead) : null;
+  const [signupCopied, setSignupCopied] = useState(false);
+  const copySignupLink = async () => {
+    if (!activeLead) return;
+    try {
+      await navigator.clipboard.writeText(onboardingUrl(activeLead.id));
+      setSignupCopied(true);
+      setTimeout(() => setSignupCopied(false), 1500);
+    } catch {
+      /* Clipboard refused (insecure context / denied). Show the link so there is still a way to get
+         it, rather than the click appearing to do nothing. */
+      window.prompt('Copy the sign-up link:', onboardingUrl(activeLead.id));
+    }
+  };
+
   const auditInFlight = !!active?.leadId && (auditRunningLeadIds.has(active.leadId) || firedAudits.has(active.leadId));
   // Inline missing-inputs prompt — the inbox is NEVER left to run an audit. Prefilled from
   // whatever partial lead data exists; values are written back to the lead before running.
@@ -788,6 +807,38 @@ const Inbox = () => {
                       <Mail className="h-4 w-4" />
                     </a>
                   )}
+                  {/* Sign-up link. Hidden entirely for a lead who has actually paid - same rule as the
+                      card: sending an existing client back to checkout wastes their time, and
+                      findable-checkout refuses it as already_client anyway.
+                      The dot is NOT decoration. It is the only always-visible sign that this lead has
+                      no trade stored, which means no baseline can run after they pay and the 8-week
+                      guarantee cannot be measured. Orange for that; amber for the cosmetic warnings. */}
+                  {activeLead && signupLink && !signupLink.paid && (
+                    <button
+                      type="button"
+                      onClick={copySignupLink}
+                      aria-label={signupLink.blocking
+                        ? `Copy sign-up link. Warning: ${signupLink.warnings.join('; ')}`
+                        : 'Copy sign-up link'}
+                      title={[
+                        signupCopied ? 'Copied' : 'Copy sign-up link',
+                        onboardingUrlLabel(activeLead.id),
+                        ...(signupLink.warnings.length ? signupLink.warnings.map((w) => `! ${w}`) : []),
+                      ].join('\n')}
+                      className={cn(HEADER_ICON_BTN, 'relative', signupLink.blocking && 'text-orange-400 hover:text-orange-300')}
+                    >
+                      {signupCopied ? <Check className="h-4 w-4 text-green-500" /> : <Link2 className="h-4 w-4" />}
+                      {signupLink.warnings.length > 0 && (
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'absolute right-0.5 top-0.5 h-2 w-2 rounded-full ring-1 ring-background',
+                            signupLink.blocking ? 'bg-orange-500' : 'bg-amber-400',
+                          )}
+                        />
+                      )}
+                    </button>
+                  )}
                   {/* Secondary fallback: open the chat in the WhatsApp app (wa.me). */}
                   <a href={`https://wa.me/${active.phone}`} target="_blank" rel="noreferrer" title="Open this chat in the WhatsApp app" aria-label="Open in WhatsApp app" className={HEADER_ICON_BTN}>
                     <MessageCircle className="h-4 w-4" />
@@ -894,14 +945,6 @@ const Inbox = () => {
                       <p className="mb-1 text-[11px] text-muted-foreground">Or send an approved WhatsApp template:</p>
                       {templatePicker}
                     </div>
-                    {/* The sign-up link, in the composer footer so it is to hand WHILE typing rather
-                        than a trip out to the lead. The SAME component the lead-detail dialog uses —
-                        one implementation, so the no-trade warning cannot drift between the two. */}
-                    {activeLead && (
-                      <div className="border-t border-border/60 pt-2">
-                        <OnboardingLinkCard lead={activeLead} />
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
