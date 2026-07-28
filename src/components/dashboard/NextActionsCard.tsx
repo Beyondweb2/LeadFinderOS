@@ -1,7 +1,7 @@
 import { useMemo, useState, type MouseEvent } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarClock, CheckCircle, X, PackageCheck, MessageSquare, HandCoins, ListTodo, Tag } from 'lucide-react';
+import { CalendarClock, CheckCircle, X, PackageCheck, MessageSquare, HandCoins, ListTodo, Tag, Receipt } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { getLeadCustomAction } from '@/hooks/useCustomNextActions';
@@ -19,6 +19,7 @@ interface NextActionsCardProps {
 const KIND_ICON: Record<TaskKind, typeof MessageSquare> = {
   deliver: PackageCheck,
   chase: HandCoins,
+  quoted: Receipt,
   reply: MessageSquare,
   manual: ListTodo,
   fix_trades: Tag,
@@ -28,6 +29,7 @@ const KIND_ICON: Record<TaskKind, typeof MessageSquare> = {
 const KIND_COLOUR: Record<TaskKind, string> = {
   deliver: 'text-red-500',
   chase: 'text-amber-500',
+  quoted: 'text-orange-500',
   reply: 'text-sky-500',
   manual: 'text-muted-foreground',
   fix_trades: 'text-muted-foreground/70',
@@ -63,7 +65,7 @@ export function NextActionsCard({ tasks, onClearTask }: NextActionsCardProps) {
 
   // Summary counts the work on real businesses. The aggregate row is admin, not a task each.
   const leadTasks = visible.filter((t) => t.kind !== 'fix_trades');
-  const urgent = leadTasks.filter((t) => t.kind === 'deliver' || t.kind === 'chase').length;
+  const urgent = leadTasks.filter((t) => t.kind === 'deliver' || t.kind === 'chase' || t.kind === 'quoted').length;
 
   const handleJump = (task: DashTask) => {
     if (!task.leadId) return; // aggregate row: nowhere single to go

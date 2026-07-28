@@ -16,7 +16,7 @@ import type { OutreachLead } from '@/types/outreach';
    and clear it by hand. The one exception is documented on isRedundantAutoReply below.
    ============================================================ */
 
-export type TaskKind = 'deliver' | 'chase' | 'reply' | 'manual' | 'fix_trades';
+export type TaskKind = 'deliver' | 'chase' | 'quoted' | 'reply' | 'manual' | 'fix_trades';
 
 /** 'open' = show the lead on Outreach; the rest open that channel's composer. */
 export type JumpTarget = 'sms' | 'whatsapp' | 'call' | 'open';
@@ -93,6 +93,10 @@ const NOT_ACTIONABLE = new Set(['no_whatsapp', 'no_whatsapp_needs_sms', 'queued'
 
 const PAID_OR_BEYOND = new Set(['payment_received', 'in_delivery', 'completed']);
 
+/* How long a quoted lead may stay silent before it becomes a task. Three days: long enough that a
+   quote sent Friday is not chased over the weekend, short enough that a warm lead cannot rot. */
+const QUOTED_QUIET_DAYS = 3;
+
 const DAY = 24 * 60 * 60 * 1000;
 const daysSince = (t: number, now: number) => Math.floor((now - t) / DAY);
 
@@ -116,7 +120,7 @@ export function awaitingReply(t: LeadMessageTimes | undefined): boolean {
    It is the only next_action nobody chose, and it is the one that piles up, because answering
    someone never cleared it. Where the lead has inbound history, rule 3 above decides the same thing
    from evidence and decides it better, so the stored copy is pure duplication:
-     - still awaiting a reply  -> rule 3 already shows the row; a second row would say it twice
+     - still awaiting a reply  -> the reply rule already shows the row; a second would say it twice
      - already answered        -> the task is done, which is the bug that put nine dead rows on the card
    The exception preserves deliberate work: with NO inbound message ever, the value cannot have been
    auto-written, so a human chose it and it stays. Every other next_action shows regardless. */
@@ -168,31 +172,59 @@ export function buildDashTasks(input: TaskInputs): DashTask[] {
       }
     }
 
-    /* 3 — REPLY. They wrote and we have not written back. Derived from message timestamps, so it
+    /* 3 — QUOTED AND GONE QUIET. They have a price and stopped talking. Sits above a general reply
+       because a quote is the last step before money, and below Chase because someone mid-checkout is
+       closer still.
+
+       Deliberately requires !awaitingReply: "gone quiet" means the ball is in THEIR court. If they
+       wrote and we have not written back then WE went quiet, and rule 4 says so more accurately, so
+       the two can never both fire on one lead.
+
+       The clock is the last time we heard from them; failing that the last time we wrote; failing
+       that when the row was last touched, which is when the status was set. That last fallback is
+       noisy — any edit bumps updated_at — but it only ever DELAYS the task, never loses it, which is
+       the safe direction for a rule whose whole job is catching leads that fall through. */
+    if (l.status === 'price_given' && !DEAD.has(l.status) && !isPaid(l) && !awaitingReply(t)) {
+      const heardFrom = t?.lastInbound ?? null;
+      const clock = heardFrom ?? t?.lastOutbound ?? (l.updated_at ? new Date(l.updated_at).getTime() : null);
+      const d = clock === null ? -1 : daysSince(clock, now);
+      if (d >= QUOTED_QUIET_DAYS) {
+        tasks.push({
+          key: `quoted:${l.id}`, kind: 'quoted', leadId: l.id, business: l.business_name,
+          label: 'Follow up', priority: 3, clearable: false, jump: jumpFor(l, false),
+          reason: heardFrom === null
+            ? `${l.business_name} was quoted ${d} days ago and hasn't replied at all`
+            : `${l.business_name} was quoted and hasn't been in touch for ${d} days`,
+          campaignId: l.campaign_id ?? null, contactMethod: l.contact_method ?? null,
+        });
+      }
+    }
+
+    /* 4 — REPLY. They wrote and we have not written back. Derived from message timestamps, so it
        clears itself the moment you answer. */
     if (awaitingReply(t) && !DEAD.has(l.status) && !NOT_ACTIONABLE.has(l.status)) {
       const d = daysSince(t!.lastInbound!, now);
       tasks.push({
         key: `reply:${l.id}`, kind: 'reply', leadId: l.id, business: l.business_name,
-        label: 'Reply', priority: 3, clearable: false, jump: jumpFor(l, false),
+        label: 'Reply', priority: 4, clearable: false, jump: jumpFor(l, false),
         reason: `${l.business_name} replied ${agoPhrase(d)} and hasn't been answered`,
         campaignId: l.campaign_id ?? null, contactMethod: l.contact_method ?? null,
       });
     }
 
-    /* 4 — MANUAL. Kept, because an operator setting a task by hand is a deliberate act. Suppressed
-       only for the auto-written send_draft that rule 3 already decides from evidence. */
+    /* 5 — MANUAL. Kept, because an operator setting a task by hand is a deliberate act. Suppressed
+       only for the auto-written send_draft that the reply rule already decides from evidence. */
     if (l.next_action && l.next_action !== 'none' && !isRedundantAutoReply(l, t)) {
       tasks.push({
         key: `manual:${l.id}`, kind: 'manual', leadId: l.id, business: l.business_name,
-        label: 'Your task', priority: 4, clearable: true, jump: jumpFor(l, true),
+        label: 'Your task', priority: 5, clearable: true, jump: jumpFor(l, true),
         reason: `${l.business_name} — task you set${l.next_action_date ? `, due ${l.next_action_date}` : ''}`,
         campaignId: l.campaign_id ?? null, contactMethod: l.contact_method ?? null,
       });
     }
   }
 
-  /* 5 — FIX TRADES, as ONE line. Individually these would be 78 rows of admin burying the four
+  /* 6 — FIX TRADES, as ONE line. Individually these would be 78 rows of admin burying the four
      rules above, which is how the old card became unreadable. A lead with no trade cannot be sold
      to: checkout refuses the payment, because no baseline could run to measure the guarantee. */
   const noTrade = live.filter(
@@ -202,7 +234,7 @@ export function buildDashTasks(input: TaskInputs): DashTask[] {
   if (noTrade.length > 0) {
     tasks.push({
       key: 'fix_trades', kind: 'fix_trades', leadId: null, business: '',
-      label: 'Fix', priority: 5, clearable: false, jump: 'open', count: noTrade.length,
+      label: 'Fix', priority: 6, clearable: false, jump: 'open', count: noTrade.length,
       /* No link: Outreach only accepts a single-lead launch intent, and "no trade stored" is not one
          of its filter dimensions, so a filtered view would mean new filter plumbing. Say so on the
          line rather than offering a click that goes nowhere useful. */
