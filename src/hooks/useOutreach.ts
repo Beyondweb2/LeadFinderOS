@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -158,19 +159,24 @@ export function useOutreach() {
       setIsLoading(true);
     }
     
-    // Fetch active leads
-    const { data: activeData, error: activeError } = await supabase
-      .from('outreach_leads')
-      .select('*')
-      .eq('is_archived', false)
-      .order('created_at', { ascending: false });
-
-    // Fetch archived leads
-    const { data: archivedData, error: archivedError } = await supabase
-      .from('outreach_leads')
-      .select('*')
-      .eq('is_archived', true)
-      .order('updated_at', { ascending: false });
+    /* Paginated. Neither of these was, and they feed the whole /outreach table plus every number on
+       /paid-clients — at ~592 active leads a silent truncation at the 1000-row cap would quietly
+       shrink both. fetchAllRows throws on error, so the two error variables below stay for the
+       existing handling and are only ever set by the catch. .order('id') is the unique tiebreaker. */
+    let activeData: OutreachLead[] = [];
+    let archivedData: OutreachLead[] = [];
+    let activeError: { message?: string } | null = null;
+    let archivedError: { message?: string } | null = null;
+    try {
+      activeData = (await fetchAllRows<OutreachLead>('Outreach (active leads)', (from, to) => supabase
+        .from('outreach_leads').select('*').eq('is_archived', false)
+        .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to))).rows;
+    } catch (e) { activeError = { message: e instanceof Error ? e.message : String(e) }; }
+    try {
+      archivedData = (await fetchAllRows<OutreachLead>('Outreach (archived leads)', (from, to) => supabase
+        .from('outreach_leads').select('*').eq('is_archived', true)
+        .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to))).rows;
+    } catch (e) { archivedError = { message: e instanceof Error ? e.message : String(e) }; }
 
     hasLoadedOnceRef.current = true;
     setIsLoading(false);

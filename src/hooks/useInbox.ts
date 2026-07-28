@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -53,7 +54,7 @@ export interface WaConversation {
   lastInboundAt: string | null;
 }
 
-export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null }
+export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null }
 
 /** Most-recent generated site for a lead — powers the thread's "View site" link and
  *  the engagement pill (opened/claimed/upsell milestones from generated_sites). */
@@ -94,11 +95,16 @@ export function useInbox() {
   const fetchAll = useCallback(async () => {
     setIsLoading(true);
     const [msgRes, leadRes, siteRes, reportRes] = await Promise.all([
-      sb.from('whatsapp_messages').select('*').order('created_at', { ascending: true }),
+      /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
+         on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
+         This is the fastest-growing table in the system — every send and every reply. */
+      fetchAllRows<WaMessage>('Inbox (messages)', (from, to) =>
+        sb.from('whatsapp_messages').select('*')
+          .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)),
       // is_archived = false: an archived lead is one the operator has stopped working, so its thread
       // leaves the Inbox and it also leaves the "start a conversation" picker below. Un-archiving
       // brings the whole thread back — nothing is deleted, and the messages are untouched.
-      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address').eq('is_archived', false).not('phone', 'is', null),
+      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid').eq('is_archived', false).not('phone', 'is', null),
       // share_token / booking_only aren't in the generated types yet — untyped sb. RLS
       // scopes rows to the operator's own sites (admins see all). Ordered newest-first
       // so the per-lead pick below takes the most recent site.
@@ -108,7 +114,7 @@ export function useInbox() {
       // RLS scopes to the operator's own audits.
       sb.from('ai_audits').select('id, lead_id, created_at, ai_audit_runs(status)').order('created_at', { ascending: false }),
     ]);
-    setMessages(((msgRes.data ?? []) as WaMessage[]));
+    setMessages(msgRes.rows);
     setLeads(((leadRes.data ?? []) as LeadLite[]).filter((l) => (l.phone ?? '').trim()));
     setSites((siteRes.data ?? []) as Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>);
     setAudits((reportRes.data ?? []) as Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>);

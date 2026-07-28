@@ -73,52 +73,12 @@ interface ActivityMetrics {
 }
 
 interface DashboardMetrics {
-  // Revenue
-  totalRevenue: number;
-  revenueThisMonth: number;
-  revenueLastMonth: number;
-  fullyPaidClients: number;
-  activeProposals: number;
-  totalPotentialRevenue: number;
-  closedRevenue: number;
-
-  // All non-archived leads with a next action — feeds the Next Actions card.
-  nextActionLeads: OutreachLead[];
-  /** The Next Actions card's list, DERIVED live (see lib/dashboardTasks.ts). Replaces the stored
-   *  next_action field as the card's source; nextActionLeads is kept for anything still reading it. */
+  /* Only what the dashboard renders. 22 further fields were returned and read by nobody -- the
+     revenue/outreach half, all of it derived from lead status, plus the two components that would
+     have displayed them (OutreachCard, DashboardStats), neither of which had an importer. */
   dashTasks: DashTask[];
-  // Raw leads (RLS-scoped) — feeds the campaign-aware Pipeline card.
   allLeads: OutreachLead[];
-
-  // Outreach
-  totalBusinessesAdded: number;
-  noWebsiteBusinesses: number;
-  addedToday: number;
-  addedYesterday: number;
-  // HERO: businesses contacted = leads past "New" (status, source of truth). Reconciles with Sent.
-  contactedTotal: number;
-  // Daily activity pulse — DISTINCT businesses per day from the send log (deduped, never per-press).
-  contactedToday: number;
-  contactedYesterday: number;
-  avg7Day: number;
-  // How many of the contacted businesses have a logged send (for the honest "X of Y logged" note).
-  loggedLeads: number;
-
-  // Activity (legacy)
-  recordDay: { date: string; count: number } | null;
-  avgPerDayAllTime: number;
-  avgPerDayLast7Days: number;
-  activity: ActivityMetrics;
-
-  // Tracked leads
-  trackedLeads: OutreachLead[];
-
-  // Audit funnel — the current funnel (contacted → replied → report sent → opened →
-  // price given → paid). Cumulative from lead status; opened from audit first_opened_at.
   auditFunnel: AuditFunnel;
-
-  // Per-channel performance — Sent/Replied/Reply-rate from outreach_leads
-  // (contact_method + status).
   channelPerf: ChannelPerformance;
 }
 
@@ -328,8 +288,6 @@ export function useDashboardMetrics(isAdmin = false) {
   }, [user]);
 
   const metrics = useMemo<DashboardMetrics>(() => {
-    const totalBusinessesAdded = allLeads.length;
-    const noWebsiteBusinesses = totalNoWebsiteFound;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -338,8 +296,6 @@ export function useDashboardMetrics(isAdmin = false) {
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    const addedToday = allLeads.filter(l => l.created_at.split('T')[0] === todayStr).length;
-    const addedYesterday = allLeads.filter(l => l.created_at.split('T')[0] === yesterdayStr).length;
 
     // Revenue - this month vs last month
     const now = new Date();
@@ -347,27 +303,10 @@ export function useDashboardMetrics(isAdmin = false) {
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // Real revenue: sum of amount_paid from all leads that have payments
-    const getPaymentDate = (lead: OutreachLead) => {
-      if (lead.payment_date) return new Date(lead.payment_date);
-      return new Date(lead.updated_at);
-    };
 
-    const paidLeads = allLeads.filter(l => (l.amount_paid || 0) > 0);
-    const totalRevenue = paidLeads.reduce((sum, l) => sum + (l.amount_paid || 0), 0);
 
-    const revenueThisMonth = paidLeads
-      .filter(l => getPaymentDate(l) >= thisMonthStart)
-      .reduce((sum, l) => sum + (l.amount_paid || 0), 0);
 
-    const revenueLastMonth = paidLeads
-      .filter(l => { const d = getPaymentDate(l); return d >= lastMonthStart && d <= lastMonthEnd; })
-      .reduce((sum, l) => sum + (l.amount_paid || 0), 0);
 
-    const fullyPaidClients = paidLeads.length;
-    // "Active proposals" = a price/quote is out and undecided. (Was keyed on the removed legacy
-    // wants_draft/reviewing_draft/awaiting_decision statuses; price_given is the live equivalent.)
-    const activeProposals = allLeads.filter(l => l.status === 'price_given').length;
 
     /* ── Audit funnel — now derived from MESSAGES, for the same reasons the campaign card was.
        Every stage used to be a cumulative lead-status test, which measured intent rather than what
@@ -415,22 +354,12 @@ export function useDashboardMetrics(isAdmin = false) {
       pitchReplyRate: pitched > 0 ? Math.round((pitchReplied / pitched) * 100) : null,
     };
 
-    // Leads with a next action (non-archived) — feeds the Next Actions card. (The
-    // old collapsed pipeline counts were removed; the Pipeline card now computes its
-    // own per-status counts from allLeads with a campaign filter.)
-    const nextActionLeads = allLeads.filter(l => !l.is_archived && l.next_action && l.next_action !== 'none');
     // The card's real list now. A pure function of the state above, so it recomputes on every
     // refetch and can never describe work that is already done.
     const dashTasks = buildDashTasks({
       leads: allLeads, times: msgTimes, onboarding: onboardingByLead, leadsWithBaseline: baselineLeadIds,
     });
 
-    // HERO — businesses contacted = leads past "New" (status, source of truth).
-    // INCLUDES archived: a lead you contacted then archived was still contacted, and
-    // it shows on the Outreach list + the per-campaign card (both archive-inclusive),
-    // so the channel "Sent" total reconciles here. (The Pipeline card stays active-
-    // only — archived aren't "active" — so it can be lower than this by the archived count.)
-    const contactedTotal = allLeads.filter(l => isSentStatus(l.status)).length;
 
     // Daily activity pulse — DISTINCT businesses per day from the send log
     // (outreach_events deduped by lead_id). Pressing WhatsApp then SMS for one
@@ -445,13 +374,8 @@ export function useDashboardMetrics(isAdmin = false) {
       if (!leadsByDay.has(d)) leadsByDay.set(d, new Set());
       leadsByDay.get(d)!.add(e.lead_id);
     }
-    const contactedToday = leadsByDay.get(dayKey(todayISO))?.size ?? 0;
-    const contactedYesterday = leadsByDay.get(dayKey(yesterdayISO))?.size ?? 0;
     // Avg businesses contacted per day = total distinct (business, day) pairs / 7.
     const distinctBusinessDayPairs = [...leadsByDay.values()].reduce((sum, set) => sum + set.size, 0);
-    const avg7Day = Math.round((distinctBusinessDayPairs / 7) * 10) / 10;
-    // Distinct businesses with any logged send (for the honest "X of Y logged" note).
-    const loggedLeads = new Set(outreachEvents7d.map(e => e.lead_id).filter(Boolean)).size;
 
     // Legacy activity metrics
     const dailyCounts: Record<string, number> = {};
@@ -460,25 +384,14 @@ export function useDashboardMetrics(isAdmin = false) {
       dailyCounts[date] = (dailyCounts[date] || 0) + 1;
     });
     const dailyCountsArray = Object.entries(dailyCounts).map(([date, count]) => ({ date, count })).sort((a, b) => b.count - a.count);
-    const recordDay = dailyCountsArray.length > 0 ? dailyCountsArray[0] : null;
     const uniqueDays = Object.keys(dailyCounts).length;
-    const avgPerDayAllTime = uniqueDays > 0 ? totalBusinessesAdded / uniqueDays : 0;
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
-    const last7DaysLeads = allLeads.filter(l => l.created_at.split('T')[0] >= sevenDaysAgoStr);
-    const avgPerDayLast7Days = last7DaysLeads.length / 7;
 
-    const trackedLeads = allLeads.filter(l => l.is_potential_work && !l.is_archived);
 
-    // Potential revenue: sum of potential_revenue from tracked leads (is_potential_work)
-    const totalPotentialRevenue = allLeads
-      .filter(l => l.is_potential_work && !l.is_archived)
-      .reduce((sum, l) => sum + ((l as any).potential_revenue || 0), 0);
 
-    // Closed revenue: actual amount_paid from paid clients
-    const closedRevenue = totalRevenue;
 
     /* ── Per-channel performance, derived from the record of each SEND.
        It used to read the contact_method pill and the lead's status, which was wrong twice over.
@@ -519,18 +432,12 @@ export function useDashboardMetrics(isAdmin = false) {
     channelPerf.whatsapp.replyRate = waSent > 0 ? Math.round((waReplied / waSent) * 100) : null;
     channelPerf.sms.sent = smsSent;   // replied stays null: nothing records an inbound SMS.
 
+    /* Only what the dashboard actually renders. 22 other fields used to be returned and read by
+       nobody: the whole revenue/outreach half, plus the two components that would have shown them
+       (OutreachCard, DashboardStats) which had no importer either. They were computed from lead
+       status, so deleting them removed the wrong numbers rather than fixing them. */
     return {
-      totalRevenue, revenueThisMonth, revenueLastMonth,
-      fullyPaidClients, activeProposals,
-      totalPotentialRevenue, closedRevenue,
-      nextActionLeads, dashTasks, allLeads,
-      totalBusinessesAdded, noWebsiteBusinesses, addedToday, addedYesterday,
-      contactedTotal, contactedToday, contactedYesterday, avg7Day, loggedLeads,
-      recordDay, avgPerDayAllTime, avgPerDayLast7Days,
-      activity: activityData,
-      trackedLeads,
-      auditFunnel,
-      channelPerf,
+      dashTasks, allLeads, auditFunnel, channelPerf,
     };
   }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, msgTimes, msgsByLeadId, smsSentLeadIds, onboardingByLead, baselineLeadIds]);
 

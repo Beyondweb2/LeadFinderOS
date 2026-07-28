@@ -2,7 +2,25 @@ import { useState } from 'react';
 import { Copy, Check, Link2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
-import type { OutreachLead } from '@/types/outreach';
+
+/**
+ * Exactly the fields this card reads — nothing more. Declared structurally rather than as
+ * OutreachLead so the Inbox can pass its own narrow lead row without a cast and without a second
+ * copy of this component: the Inbox fetches a slim projection, not the full lead. OutreachLead
+ * satisfies this shape, so the lead-detail call site is unchanged.
+ */
+export interface OnboardingLinkLead {
+  id: string;
+  business_name?: string | null;
+  /* Optional to match OutreachLead, where these are optional. assess() already treats every one of
+     them as possibly absent, so widening the type changes no behaviour — it just lets both the full
+     lead and the Inbox projection satisfy it without a cast. */
+  amount_paid?: number | null;
+  category?: string | null;
+  search_keyword?: string | null;
+  search_location?: string | null;
+  address?: string | null;
+}
 
 /**
  * COPY THE SIGN-UP LINK for one lead.
@@ -19,7 +37,7 @@ import type { OutreachLead } from '@/types/outreach';
  * "already paid" (the link is pointless) and "will half-work" (the link functions but something
  * downstream suffers), because those want different words on screen.
  */
-function assess(lead: OutreachLead) {
+function assess(lead: OnboardingLinkLead) {
   /* amount_paid only. Previously a £0 lead in in_delivery was treated as paid and the copy button
      was hidden, withholding the sign-up link from someone who had not actually paid. */
   const paid = (lead.amount_paid ?? 0) > 0;
@@ -41,7 +59,7 @@ function assess(lead: OutreachLead) {
   return { paid, warnings, blocking: !trade };
 }
 
-export function OnboardingLinkCard({ lead }: { lead: OutreachLead }) {
+export function OnboardingLinkCard({ lead }: { lead: OnboardingLinkLead }) {
   const [copied, setCopied] = useState(false);
   const { paid, warnings, blocking } = assess(lead);
   const url = onboardingUrl(lead.id);
