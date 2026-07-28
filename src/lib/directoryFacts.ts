@@ -9,13 +9,25 @@
 
    Keeping them apart means growing evidence can never silently invent a signup URL.
 
-   ⚠️ URL VERIFICATION STATUS: every URL below is marked urlVerified: false. I attempted an
-   automated check on 2026-07-29 and could not verify any of them — these sites block automated
-   requests (Checkatrade, Yell, MyBuilder, 192, Cylex, ICAEW returned 403; TrustATrader 429) and two
-   paths returned 404, suggesting they are actually wrong (unbiased.co.uk/for-professionals,
-   bark.com/en/gb/sellers). A 403 says nothing about whether a path is correct, so none of these
-   should be treated as confirmed until a human has clicked it. The DOMAINS are evidenced — they come
-   from real citations — it is only the signup PATHS that are unverified.
+   URL VERIFICATION STATUS — last checked 2026-07-29.
+
+   VERIFIED (4). Yell, MyBuilder and 192.com were confirmed by the operator clicking them; the
+   MyBuilder and 192 paths in the original file were WRONG and are corrected here. Checkatrade was
+   verified by fetch: join.checkatrade.com returns 200 without redirecting and its title is "Join
+   Checkatrade | Get More Leads & Grow Your Trade Business", with 153 occurrences of "join" and zero
+   "login"/"sign in" — the opposite of the old /join-us path, which redirects to a login page.
+   Verified means "this is the right page to start from", not "someone completed a signup".
+
+   STILL UNVERIFIED (the rest). Two reasons this matters less than it looks:
+     - Almost all of them are actor: 'client-only', so they never appear as a link the operator
+       clicks mid-task. They land in the CLIENT pack as "apply here", where the client is going to
+       navigate the site themselves anyway and a slightly wrong deep link costs nothing.
+     - The DOMAINS are all evidenced from real citations. Only the signup PATHS are uncertain.
+   ⚠️ THE ONE THAT DOES MATTER: cylex-uk.co.uk is the only UNVERIFIED entry on the operator's own
+   doable list, so it is the only unverified URL anyone will actually click during the hour. Check it
+   before relying on it — see the flag on that entry.
+
+   trustatrader.com could not be checked at all: the site was down when the operator looked.
    ============================================================ */
 
 /** Who is actually able to complete this listing. */
@@ -45,7 +57,8 @@ export interface DirectoryFact {
 export const DIRECTORY_FACTS: DirectoryFact[] = [
   {
     host: 'checkatrade.com', label: 'Checkatrade',
-    signupUrl: 'https://www.checkatrade.com/join-us', urlVerified: false,
+    // /join-us redirects to a LOGIN page. join.checkatrade.com is the actual trade join page.
+    signupUrl: 'https://join.checkatrade.com/', urlVerified: true,
     actor: 'client-only', cost: 'membership',
     blockedReason: 'Paid 12-month membership plus identity vetting — photo ID, selfie, address confirmation and a CCJ check. Confirmed by the operator, not inferrable from the site.',
     clientParagraph: `When someone asks ChatGPT or Gemini for a {trade} in {town}, the answer is very often built from Checkatrade. Across the businesses we have measured it came up more than any other source, by a wide margin.
@@ -60,13 +73,14 @@ We are not going to tell you this guarantees you will be named. We are telling y
   },
   {
     host: 'yell.com', label: 'Yell',
-    signupUrl: 'https://www.yell.com/free-listing/', urlVerified: false,
+    signupUrl: 'https://www.yell.com/free-listing/', urlVerified: true,
     actor: 'operator-start', cost: 'free',
     notes: 'A free basic listing exists. Ownership verification normally sends a code to the business, so the client has to finish it.',
   },
   {
     host: 'mybuilder.com', label: 'MyBuilder',
-    signupUrl: 'https://www.mybuilder.com/tradesmen/join', urlVerified: false,
+    // Was /tradesmen/join, which is wrong.
+    signupUrl: 'https://www.mybuilder.com/tradesperson/register', urlVerified: true,
     actor: 'client-only', cost: 'pay-per-lead',
     blockedReason: 'Pay-per-lead. Signing a business up commits them to spending money per enquiry — their commercial decision, not ours.',
     clientParagraph: `MyBuilder is the third most common source we see for {trade} work. It is a pay-per-lead site: listing is free but you pay for each enquiry you choose to respond to.
@@ -78,6 +92,7 @@ That makes it your decision rather than ours — we are not going to commit you 
     signupUrl: 'https://www.trustatrader.com/join-us', urlVerified: false,
     actor: 'client-only', cost: 'membership',
     blockedReason: 'Paid membership with vetting, same model as Checkatrade.',
+    notes: 'URL unchecked — the site was down when the operator looked (2026-07-29). Client-only, so it appears in the client pack rather than as a link we click.',
     clientParagraph: `TrustATrader works the same way as Checkatrade — a paid membership with checks on who you are. We see it far less often than Checkatrade, so if you are only going to do one, do Checkatrade first.
 
 Only you can apply. If you are already a member, let us know and we will line the details up with everywhere else.`,
@@ -93,15 +108,19 @@ Only you can apply.`,
   },
   {
     host: '192.com', label: '192.com',
-    signupUrl: 'https://www.192.com/addbusiness/', urlVerified: false,
+    // Was www.192.com/addbusiness/, which is wrong — registration lives on the secure subdomain.
+    signupUrl: 'https://secure.192.com/registration/', urlVerified: true,
     actor: 'operator', cost: 'free',
-    notes: 'Free listing. Whether it verifies ownership is unconfirmed — if it does, this becomes operator-start.',
+    notes: 'Free listing, URL confirmed. Whether it verifies ownership is still unconfirmed — if it does, this becomes operator-start.',
   },
   {
     host: 'cylex-uk.co.uk', label: 'Cylex UK',
     signupUrl: 'https://www.cylex-uk.co.uk/addcompany.html', urlVerified: false,
     actor: 'operator', cost: 'free',
-    notes: 'Free listing, appears on town subdomains. Verification method unconfirmed.',
+    /* ⚠️ THE ONLY UNVERIFIED URL ON THE OPERATOR'S OWN DOABLE LIST. Everything else still unverified
+       is client-only, so it is never a link clicked mid-task — this one is. Check the path before
+       relying on it; if it is wrong you lose time inside the hour rather than in the client pack. */
+    notes: '⚠ URL UNVERIFIED and this one is on YOUR list — check it before you rely on it. Free listing, appears on town subdomains. Verification method also unconfirmed.',
   },
   {
     host: 'icaew.com', label: 'ICAEW — Find a Chartered Accountant',
