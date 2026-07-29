@@ -71,6 +71,68 @@ async function resolveBarberEmail(service: any, site: PaidSite): Promise<string 
   return email;
 }
 
+/** ONE address for anything this system tells the operator, matching notify-onboarding-submit.
+ *  The barber notifier below keeps its own paul@yoursites.uk deliberately — it is a working,
+ *  money-verified path and changing where its mail lands is not worth the risk today. */
+const ADMIN_EMAIL = "paul@move37.fun";
+
+/**
+ * Best-effort: tell the operator a FINDABLE payment landed.
+ *
+ * Deliberately SEPARATE from notifyOfPayment rather than an adaptation of it. That function takes a
+ * PaidSite, builds bookmybarber/yoursites URLs and a barber dashboard link, and emails the CUSTOMER
+ * as well as the admin. None of that applies here, and bending it would put findable logic inside
+ * the one notification path already verified with real money. This reuses the mechanism that matters
+ * — postResend, and the "every step guarded, never affects the 200" contract — and nothing else.
+ *
+ * Admin only. No customer email is sent on this path.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function notifyOfFindablePayment(opts: {
+  businessName: string; amountGbp: number; paidFor: string;
+  trade: string | null; town: string | null; phone: string | null; email: string | null;
+  note?: string | null;
+}): Promise<void> {
+  try {
+    const name = opts.businessName.trim() || "A client";
+    const amount = `£${opts.amountGbp.toFixed(2)}`;
+    /* contact_email has NEVER been populated in this table, so "(not given)" is the expected
+       reading rather than a fault — the questionnaire only began asking recently. Every optional
+       line is omitted entirely when absent, so the email never shows a dangling empty label. */
+    const line = (k: string, v: string | null) => (v && v.trim() ? `  ${k.padEnd(8)}${v.trim()}\n` : "");
+    const text =
+      `${name} has paid.\n\n` +
+      `  Amount: ${amount}\n` +
+      `  For:    ${opts.paidFor}\n` +
+      line("Trade:", opts.trade) + line("Town:", opts.town) +
+      line("Phone:", opts.phone) + line("Email:", opts.email ?? "(not given)") +
+      (opts.note ? `\n${opts.note}\n` : "") +
+      `\nSetup is promised within two working days.\n`;
+    const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const row = (k: string, v: string | null) =>
+      v && v.trim() ? `<p style="margin:0 0 2px"><strong>${k}</strong> ${esc(v.trim())}</p>` : "";
+    const html =
+      `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1e293b">` +
+      `<h2 style="margin:0 0 12px">${esc(name)} has paid</h2>` +
+      row("Amount:", amount) + row("For:", opts.paidFor) +
+      row("Trade:", opts.trade) + row("Town:", opts.town) +
+      row("Phone:", opts.phone) + row("Email:", opts.email ?? "(not given)") +
+      (opts.note ? `<p style="margin:10px 0 0;color:#b45309"><strong>${esc(opts.note)}</strong></p>` : "") +
+      `<p style="margin:10px 0 0;color:#475569">Setup is promised within two working days.</p>` +
+      `</div>`;
+    await postResend({
+      from: "LeadFinder Pro <noreply@lead-finder-app.com>",
+      to: [ADMIN_EMAIL],
+      subject: `PAID ${amount} — ${name}${opts.note ? " (NOT LINKED)" : ""}`,
+      text, html,
+    });
+    console.log(`[stripe-webhook] findable payment email sent for ${name}`);
+  } catch (e) {
+    // NEVER affects the webhook's 200. The money is already written by the time this runs.
+    console.error("[stripe-webhook] notifyOfFindablePayment failed (non-blocking):", (e as Error).message);
+  }
+}
+
 /** Best-effort: on the FIRST upgrade to paid, email the admin + (if a real inbox) the
  *  barber, with wording branched on booking_only. Every step is guarded so a Resend or
  *  lookup failure NEVER affects the webhook's 200 response. */
@@ -344,6 +406,26 @@ Deno.serve(async (req) => {
                 console.error(`[stripe-webhook] payer email capture failed (non-fatal, onboarding=${onboardingId}):`, (e as Error).message);
               }
             }
+            /* Read-only pre-check, purely so the email can be sent once. Stripe RETRIES webhooks,
+               and a retry would re-run the write below and email again. Mirrors the barber branch's
+               own `paid && !wasPaid` idiom: if the lead already carried money before this event, the
+               payment is not new and no second email goes out. This adds a SELECT and changes
+               nothing about the write that follows — same fields, same order, same behaviour. */
+            let alreadyPaid = false;
+            let leadForEmail: Record<string, unknown> | null = null;
+            if (findableLeadId) {
+              try {
+                const { data: pre } = await service
+                  .from("outreach_leads")
+                  .select("business_name, amount_paid, status, phone, category, search_keyword, search_location, email")
+                  .eq("id", findableLeadId).maybeSingle();
+                leadForEmail = (pre as Record<string, unknown> | null) ?? null;
+                alreadyPaid = Number(leadForEmail?.amount_paid ?? 0) > 0;
+              } catch (e) {
+                // A failed pre-read must not touch the payment. Worst case: a retry emails twice.
+                console.error("[stripe-webhook] pre-payment read failed (non-blocking):", (e as Error).message);
+              }
+            }
             if (findableLeadId) {
               await mustWrite(
                 "outreach_leads",
@@ -363,6 +445,29 @@ Deno.serve(async (req) => {
               await recordPaymentFailure("stripe_findable_no_lead", { onboarding_id: onboardingId, amount_gbp: amountGbp });
             }
             console.log(`[stripe-webhook] findable payment recorded: onboarding=${onboardingId} lead=${findableLeadId || "(none)"} amount=${amountGbp} (${event.id})`);
+
+            /* Email AFTER the payment is written and logged — the money landing can never depend on
+               Resend being up. Skipped when the lead already had money against it, which is what
+               makes a Stripe retry silent. */
+            if (!alreadyPaid) {
+              await notifyOfFindablePayment({
+                businessName: ((leadForEmail?.business_name as string) ?? "").trim(),
+                amountGbp,
+                paidFor: "Findable - Setup + first 2 months",
+                trade: (((leadForEmail?.category as string) || (leadForEmail?.search_keyword as string) || "").trim()) || null,
+                town: ((leadForEmail?.search_location as string) ?? "").trim() || null,
+                phone: ((leadForEmail?.phone as string) ?? "").trim() || null,
+                email: ((leadForEmail?.email as string) ?? "").trim() || null,
+                /* A payment with no lead_id is the one you most need to see: the money landed but
+                   nothing in the CRM points at it, so it will not appear in Paid Clients and no
+                   baseline starts. recordPaymentFailure already logs it; this makes it arrive. */
+                note: findableLeadId
+                  ? null
+                  : `No CRM lead is linked to this payment (onboarding ${onboardingId}). It will not show in Paid Clients and no baseline has started — link it by hand.`,
+              });
+            } else {
+              console.log(`[stripe-webhook] findable payment email skipped: lead ${findableLeadId} already had a payment (retry?)`);
+            }
 
             // START THE PAID BASELINE. This is the moment the customer becomes a client, and the
             // 3-run averaged baseline the money-back guarantee is measured against starts HERE
