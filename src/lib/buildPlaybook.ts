@@ -89,6 +89,11 @@ const norm = (t: string | null | undefined) => {
   return s.trim();
 };
 
+/** Town comparison for `townOnly`. Punctuation and the trailing country word are noise: stored towns
+ *  include values like "Bourne uk", and "Chiang Mai" must match "chiang mai". */
+const townKey = (t: string | null | undefined) =>
+  (t ?? '').toLowerCase().replace(/\b(uk|england|scotland|wales|united kingdom)\b/g, '').replace(/[^a-z]/g, '');
+
 /** Rough minutes per step. Deliberately generous — an underestimate makes the hour a lie. */
 const MINUTES: Record<string, number> = { 'yell.com': 10, '192.com': 5, 'cylex-uk.co.uk': 5, 'thomsonlocal.com': 5, 'yelp.com': 5 };
 
@@ -112,6 +117,9 @@ export function buildPlaybook(
   const notListings: Playbook['notListings'] = [];
   const whoIsWinning: Playbook['whoIsWinning'] = [];
   const steps: PlaybookStep[] = [];
+  /* Prompts replacing town-specific hosts this business cannot join. Collected separately so they
+     land after the real directory tasks rather than interleaved by citation count. */
+  const townPrompts: PlaybookStep[] = [];
 
   for (const e of forTrade) {
     const f: DirectoryFact | undefined = factFor(e.host);
@@ -129,6 +137,29 @@ export function buildPlaybook(
       notListings.push({ label: f.label, citations: e.citations, audits: e.audits, why: f.notes ?? 'Not a listing anyone can join.' });
       continue;
     }
+
+    /* TOWN-SPECIFIC HOST IN THE WRONG TOWN. Evidence is per TRADE, so a town portal cited across 10
+       plumber audits is offered to every plumber — including Macca-Gas in Kettering, who cannot list
+       on Loughborough's directory. The fact knows the town; the citations never could.
+
+       It becomes a PROMPT, not a task, and deliberately not a silent drop: the citation count is the
+       evidence that town portals are worth chasing at all, and that finding survives only if the
+       operator is told to go looking for the local equivalent. */
+    if (f.townOnly && townKey(f.townOnly) !== townKey(town)) {
+      townPrompts.push({
+        key: `town-portal:${e.host}`, section: 'do_now',
+        label: town ? `Check whether ${town} has an equivalent town portal` : 'Check whether this town has an equivalent town portal',
+        host: null, signupUrl: null, urlVerified: true, fields: [], minutes: 10,
+        citations: 0, audits: 0, strength: 'evidenced',
+        notes: `${f.label} covers ${f.townOnly} only, so ${lead.business_name ?? 'this business'} cannot be listed on it — `
+          + `but it is cited in ${e.audits} of ${tradeAudits} ${trade || 'measured'} audits, which is why this is worth 10 minutes. `
+          + `Look for a ${town ?? 'client town'} equivalent: a <town>.org.uk or <town>.co.uk portal carrying a business directory. `
+          + `If one exists and gets cited, it earns its own entry in directoryFacts.`,
+        done: false, verified: false, listingUrl: null,
+      });
+      continue;
+    }
+
     const r = rec.get(e.host);
     const strength: PlaybookStep['strength'] = e.audits >= EVIDENCE_MIN_AUDITS ? 'evidenced' : 'thin';
     const section: Section = f.actor === 'client-only' ? 'blocked' : 'do_now';
@@ -154,6 +185,8 @@ export function buildPlaybook(
       done: !!r?.done_at, verified: !!r?.verified_at, listingUrl: r?.listing_url ?? null,
     });
   }
+
+  steps.push(...townPrompts);
 
   // Fixed steps that are not directory-dependent.
   steps.unshift({

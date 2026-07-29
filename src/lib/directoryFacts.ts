@@ -97,6 +97,25 @@ export interface DirectoryFact {
   clientParagraph?: string;
   /** Not a listing you can join (e.g. a statutory register) — never appears as a task. */
   notAListing?: boolean;
+  /* ══════════════════════════════════════════════════════════════════════════
+     TOWN-SPECIFIC. The town this host's directory actually covers, when it covers only one.
+     Set it and the host can only become a task for a business IN that town; anywhere else it
+     becomes a prompt to go and find the local equivalent.
+
+     WHY THIS IS NOT THE BANNED `trade` FIELD, which is a distinction worth being precise about:
+     a `trade` field would answer "which hosts matter for plumbers" — the question the evidence
+     layer exists to answer from citations, which is why hardcoding it is forbidden. `townOnly`
+     answers "what IS this host", exactly like `kind`, `actor` and `signupUrl`: a property of the
+     site that you can only learn by looking at it and that no amount of citation data can reveal.
+     It never decides which hosts surface — citations still do that, unchanged. It only constrains
+     a host the evidence has ALREADY surfaced.
+
+     THE BUG THIS FIXES. loughborough.org.uk is cited across 10 plumber audits, so the trade
+     derivation offered it to Macca-Gas Ltd — who are in KETTERING. You cannot list a Kettering
+     business on Loughborough's local directory. Correct behaviour for Checkatrade, wrong for a
+     town portal, and the evidence alone cannot tell the two apart.
+     ══════════════════════════════════════════════════════════════════════════ */
+  townOnly?: string;
   notes?: string;
 }
 
@@ -388,7 +407,11 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
   },
   {
     host: 'cnxlocal.com', label: 'CNX Local', signupUrl: 'https://cnxlocal.com/', urlVerified: false,
-    kind: 'directory', actor: 'operator', cost: 'free', notes: 'Chiang Mai local listing site. Everything INFERRED.',
+    /* TOWN-SPECIFIC, the second of only two in this file. CNX is Chiang Mai's airport code and the
+       site is a Chiang Mai listing site, so it is no more joinable from another city than
+       Loughborough's portal is from Kettering. Flagged before it could bite. */
+    kind: 'directory', actor: 'operator', cost: 'free', townOnly: 'Chiang Mai',
+    notes: 'Chiang Mai local listing site. Everything INFERRED.',
   },
   {
     host: 'timeout.com', label: 'Time Out', signupUrl: '', urlVerified: false,
@@ -449,7 +472,7 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
        financial and local services". Cited in 10 of 58 plumber audits. See the note at the top of
        this file — there is probably an equivalent for every town a client operates in, and this one
        surfaced only because the derivation reads real citations. */
-    kind: 'directory', actor: 'operator', cost: 'free',
+    kind: 'directory', actor: 'operator', cost: 'free', townOnly: 'Loughborough',
     notes: 'TOWN PORTAL with a local business directory. Check for an equivalent in every client town.',
   },
   {
