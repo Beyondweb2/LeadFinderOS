@@ -91,7 +91,7 @@ export const DIRECTORY_FACTS: DirectoryFact[] = [
   {
     host: 'checkatrade.com', label: 'Checkatrade',
     // /join-us redirects to a LOGIN page. join.checkatrade.com is the actual trade join page.
-    signupUrl: 'https://join.checkatrade.com/', urlVerified: true,
+    signupUrl: 'https://join.checkatrade.com/', urlVerified: true, kind: 'directory',
     actor: 'client-only', cost: 'membership',
     blockedReason: 'Paid 12-month membership plus identity vetting — photo ID, selfie, address confirmation and a CCJ check. Confirmed by the operator, not inferrable from the site.',
     clientParagraph: `When someone asks ChatGPT or Gemini for a {trade} in {town}, the answer is very often built from Checkatrade. Across the businesses we have measured it came up more than any other source, by a wide margin.
@@ -106,14 +106,14 @@ We are not going to tell you this guarantees you will be named. We are telling y
   },
   {
     host: 'yell.com', label: 'Yell',
-    signupUrl: 'https://www.yell.com/free-listing/', urlVerified: true,
+    signupUrl: 'https://www.yell.com/free-listing/', urlVerified: true, kind: 'directory',
     actor: 'operator-start', cost: 'free',
     notes: 'A free basic listing exists. Ownership verification normally sends a code to the business, so the client has to finish it.',
   },
   {
     host: 'mybuilder.com', label: 'MyBuilder',
     // Was /tradesmen/join, which is wrong.
-    signupUrl: 'https://www.mybuilder.com/tradesperson/register', urlVerified: true,
+    signupUrl: 'https://www.mybuilder.com/tradesperson/register', urlVerified: true, kind: 'directory',
     actor: 'client-only', cost: 'pay-per-lead',
     blockedReason: 'Pay-per-lead. Signing a business up commits them to spending money per enquiry — their commercial decision, not ours.',
     clientParagraph: `MyBuilder is the third most common source we see for {trade} work. It is a pay-per-lead site: listing is free but you pay for each enquiry you choose to respond to.
@@ -122,7 +122,7 @@ That makes it your decision rather than ours — we are not going to commit you 
   },
   {
     host: 'trustatrader.com', label: 'TrustATrader',
-    signupUrl: 'https://www.trustatrader.com/join-us', urlVerified: false,
+    signupUrl: 'https://www.trustatrader.com/join-us', urlVerified: false, kind: 'directory',
     actor: 'client-only', cost: 'membership',
     blockedReason: 'Paid membership with vetting, same model as Checkatrade.',
     notes: 'URL unchecked — the site was down when the operator looked (2026-07-29). Client-only, so it appears in the client pack rather than as a link we click.',
@@ -132,7 +132,7 @@ Only you can apply. If you are already a member, let us know and we will line th
   },
   {
     host: 'trustedtraders.which.co.uk', label: 'Which? Trusted Traders',
-    signupUrl: 'https://trustedtraders.which.co.uk/businesses/', urlVerified: false,
+    signupUrl: 'https://trustedtraders.which.co.uk/businesses/', urlVerified: false, kind: 'directory',
     actor: 'client-only', cost: 'membership',
     blockedReason: 'Paid, with an assessment. Only the business can apply.',
     clientParagraph: `Which? Trusted Traders is a paid scheme with an assessment. We only see it cited by Gemini, and less often than the others — so treat it as a later step, not a first one.
@@ -140,15 +140,15 @@ Only you can apply. If you are already a member, let us know and we will line th
 Only you can apply.`,
   },
   {
-    host: '192.com', label: '192.com',
-    // Was www.192.com/addbusiness/, which is wrong — registration lives on the secure subdomain.
-    signupUrl: 'https://secure.192.com/registration/', urlVerified: true,
-    actor: 'operator', cost: 'free',
-    notes: 'Free listing, URL confirmed. Whether it verifies ownership is still unconfirmed — if it does, this becomes operator-start.',
+    host: '192.com', label: '192.com', signupUrl: 'https://secure.192.com/registration/', urlVerified: true,
+    /* Researched: confirmed UK business directory; a registered user can add details to business
+       listings, so this is operator-actionable start to finish. URL previously verified by hand. */
+    kind: 'directory', actor: 'operator', cost: 'free',
+    notes: 'Registered users can add details to business listings. Free.',
   },
   {
     host: 'cylex-uk.co.uk', label: 'Cylex UK',
-    signupUrl: 'https://www.cylex-uk.co.uk/addcompany.html', urlVerified: false,
+    signupUrl: 'https://www.cylex-uk.co.uk/addcompany.html', urlVerified: false, kind: 'directory',
     actor: 'operator', cost: 'free',
     /* ⚠️ THE ONLY UNVERIFIED URL ON THE OPERATOR'S OWN DOABLE LIST. Everything else still unverified
        is client-only, so it is never a link clicked mid-task — this one is. Check the path before
@@ -157,7 +157,7 @@ Only you can apply.`,
   },
   {
     host: 'icaew.com', label: 'ICAEW — Find a Chartered Accountant',
-    signupUrl: 'https://find.icaew.com/', urlVerified: false,
+    signupUrl: 'https://find.icaew.com/', urlVerified: false, kind: 'directory',
     actor: 'client-only', cost: 'membership',
     blockedReason: 'Only ICAEW member firms are listed. Cannot be added by us, and cannot be added at all unless the practice is a member.',
     clientParagraph: `ICAEW's "Find a Chartered Accountant" directory comes up when AI tools are asked about accountants, and it is the only accountancy-specific source we see with any regularity.
@@ -166,7 +166,7 @@ It only lists ICAEW member firms, so this one depends entirely on whether you ar
   },
   {
     host: 'unbiased.co.uk', label: 'Unbiased',
-    signupUrl: 'https://www.unbiased.co.uk/', urlVerified: false,
+    signupUrl: 'https://www.unbiased.co.uk/', urlVerified: false, kind: 'directory',
     actor: 'client-only', cost: 'paid',
     blockedReason: 'Paid adviser subscription. Inferred from how the site works, not confirmed — check before relying on it.',
     clientParagraph: `Unbiased is the one accountancy listing we see cited by BOTH ChatGPT and Gemini, which is unusual and makes it more interesting than its small numbers suggest.
@@ -175,40 +175,40 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
   },
   {
     host: 'bark.com', label: 'Bark',
-    signupUrl: 'https://www.bark.com/', urlVerified: false,
+    signupUrl: 'https://www.bark.com/', urlVerified: false, kind: 'directory',
     actor: 'client-only', cost: 'pay-per-lead',
     blockedReason: 'Free to register but leads are paid for — a commercial commitment only the business should make.',
     clientParagraph: `Bark appears occasionally. Registering is free but you pay for leads, so it is your decision. We would not put it near the top of the list.`,
   },
   {
     host: 'thomsonlocal.com', label: 'Thomson Local',
-    signupUrl: 'https://www.thomsonlocal.com/', urlVerified: false,
+    signupUrl: 'https://www.thomsonlocal.com/', urlVerified: false, kind: 'directory',
     actor: 'operator', cost: 'free',
     notes: 'Barely appears in our data — 3 citations. Listed for completeness only.',
   },
   {
     host: 'yelp.com', label: 'Yelp',
-    signupUrl: 'https://biz.yelp.co.uk/', urlVerified: false,
+    signupUrl: 'https://biz.yelp.co.uk/', urlVerified: false, kind: 'directory',
     actor: 'operator-start', cost: 'free',
     notes: 'Business owner normally claims the page. Barely appears in our data.',
   },
   {
     host: 'uk.trustpilot.com', label: 'Trustpilot',
-    signupUrl: 'https://uk.business.trustpilot.com/', urlVerified: false,
+    signupUrl: 'https://uk.business.trustpilot.com/', urlVerified: false, kind: 'directory',
     actor: 'client-only', cost: 'free',
     blockedReason: 'The business claims its own profile and invites reviews. Nothing useful we can do on their behalf.',
     clientParagraph: `Trustpilot shows up rarely in what we measure, so this is optional. If you already collect reviews there, keep doing it; we would not start it just for AI visibility.`,
   },
   {
     host: 'threebestrated.co.uk', label: 'Three Best Rated',
-    signupUrl: 'https://threebestrated.co.uk/', urlVerified: false,
+    signupUrl: 'https://threebestrated.co.uk/', urlVerified: false, kind: 'directory',
     actor: 'client-only', cost: 'n/a',
     blockedReason: 'Editorially selected — you cannot apply to be listed.',
     clientParagraph: `Three Best Rated picks businesses itself; there is no way to apply. Mentioned only so you know we looked at it.`,
   },
   {
     host: 'ratedpeople.com', label: 'Rated People',
-    signupUrl: 'https://www.ratedpeople.com/', urlVerified: false,
+    signupUrl: 'https://www.ratedpeople.com/', urlVerified: false, kind: 'directory',
     actor: 'client-only', cost: 'pay-per-lead',
     blockedReason: 'Pay-per-lead — the business decides.',
     clientParagraph: `Rated People is another pay-per-lead site. Rare in our data. Your call, low priority.`,
@@ -216,19 +216,19 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
   // ── NOT LISTINGS. Present so nothing tries to turn them into a task. ─────────────────
   {
     host: 'find-and-update.company-information.service.gov.uk', label: 'Companies House',
-    signupUrl: 'https://find-and-update.company-information.service.gov.uk/', urlVerified: false,
+    signupUrl: 'https://find-and-update.company-information.service.gov.uk/', urlVerified: false, kind: 'register',
     actor: 'client-only', cost: 'n/a', notAListing: true,
     notes: 'A statutory register, not a directory — you are on it automatically. Appeared in only ONE audit despite 32 citations, so it is one business cited repeatedly, not a pattern. Deliberately never a task.',
   },
   {
     host: 'findanifa.org', label: 'Find an IFA',
-    signupUrl: 'https://www.findanifa.org/', urlVerified: false,
+    signupUrl: 'https://www.findanifa.org/', urlVerified: false, kind: 'directory',
     actor: 'client-only', cost: 'membership', notAListing: true,
     notes: 'IFA register — wrong profession for an accountancy practice, and seen in only ONE audit. Excluded from tasks.',
   },
   {
     host: 'gov.uk', label: 'GOV.UK',
-    signupUrl: '', urlVerified: false, actor: 'client-only', cost: 'n/a', notAListing: true,
+    signupUrl: '', urlVerified: false, kind: 'register', actor: 'client-only', cost: 'n/a', notAListing: true,
     notes: 'Government guidance. The single biggest source for accountancy questions, and nothing anyone can act on — its presence means the QUESTION was about tax rules rather than hiring someone.',
   },
 
@@ -243,8 +243,11 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
   // ── plumbing-side gaps (biggest first by audit breadth) ──
   {
     host: 'hamuch.com', label: 'Hamuch', signupUrl: 'https://www.hamuch.com/', urlVerified: false,
+    /* Researched: UK trades directory built around pricing and quotes. Free profile, services and
+       areas listed, links back to the business's own site. 18 of 58 plumber audits — the largest
+       actionable gap in the evidence. Nature confirmed; the signup URL itself is still unclicked. */
     kind: 'directory', actor: 'operator', cost: 'free',
-    notes: 'Cited in 18 plumber audits — the largest gap in this file. Price/quote comparison listing. Free and operator-actionable INFERRED, not checked.',
+    notes: 'Free profile: list services and areas served, link back to their own site. Cited in 18 of 58 plumber audits.',
   },
   {
     host: 'myjobquote.co.uk', label: 'MyJobQuote', signupUrl: 'https://www.myjobquote.co.uk/tradesmen', urlVerified: false,
@@ -282,9 +285,11 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
   // ── accountancy-side gaps ──
   {
     host: 'handpickedaccountants.co.uk', label: 'Handpicked Accountants', signupUrl: 'https://www.handpickedaccountants.co.uk/', urlVerified: false,
-    kind: 'directory', actor: 'client-only', cost: 'free',
-    blockedReason: 'Curated — the operator vets and selects firms rather than accepting signups.',
-    notes: 'Curation INFERRED from the name and positioning.',
+    /* Researched: run by Begbies Traynor, 1,000+ UK accountants, with a "for accountants" signup.
+       Firms APPLY and acceptance is not guaranteed, so this is operator-start rather than operator —
+       we can submit, but being accepted is out of our hands. 5 of 12 accountant audits. */
+    kind: 'directory', actor: 'operator-start', cost: 'free',
+    notes: 'CURATED — we apply rather than simply list, and acceptance is not guaranteed. Run by Begbies Traynor.',
   },
   {
     host: 'legaldirectorate.co.uk', label: 'Legal Directorate', signupUrl: 'https://www.legaldirectorate.co.uk/', urlVerified: false,
@@ -293,7 +298,8 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
   {
     host: 'vouchedfor.co.uk', label: 'VouchedFor', signupUrl: 'https://www.vouchedfor.co.uk/', urlVerified: false,
     kind: 'directory', actor: 'client-only', cost: 'paid',
-    blockedReason: 'Paid professional listing with verified client reviews — the firm must sign up and be verified.',
+    blockedReason: 'Paid subscription, and reviews are collected from the firm\'s own verified clients — only the firm can sign up and run that.',
+    notes: 'Researched: a genuine accountant and adviser directory. Paid model CONFIRMED as likely, subscription tier unchecked.',
   },
   {
     host: 'companiesup.co.uk', label: 'CompaniesUp', signupUrl: '', urlVerified: false,
@@ -350,9 +356,14 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
     notes: 'Trip-planning app that pulls places from other sources. Whether a business can add or claim itself is UNCHECKED.',
   },
   {
-    host: 'discoverkava.com', label: 'Discover Kava', signupUrl: 'https://discoverkava.com/', urlVerified: false,
-    kind: 'directory', actor: 'operator', cost: 'free',
-    notes: 'Niche kava-venue directory — 26 citations in the single kava audit. Everything here is INFERRED from one run.',
+    host: 'discoverkava.com', label: 'Discover Kava (coffee app)', signupUrl: '', urlVerified: false,
+    /* CORRECTED. Previously classified directory/operator on the assumption that 26 citations in the
+       kava audit meant a kava-venue directory. It is not one: it is a EUROPEAN SPECIALTY-COFFEE
+       rating app, and AI cites it for "kava" because the brand name collides with the drink.
+       A textbook reason the data cannot classify itself — it could say the host was cited, never
+       what it is. actor is client-only + notAListing so it can never become a task. */
+    kind: 'aggregator', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'NOT a kava directory. European specialty-coffee rating app; the brand name collides with the drink, which is why it is cited. Never a task.',
   },
   {
     host: 'restaurantguru.com', label: 'Restaurant Guru', signupUrl: 'https://restaurantguru.com/', urlVerified: false,
@@ -382,6 +393,41 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
     host: 'reddit.com', label: 'Reddit', signupUrl: '', urlVerified: false,
     kind: 'community', actor: 'client-only', cost: 'n/a', notAListing: true,
     notes: 'NEVER A CLIENT TASK. Cited for plumbers (7 audits) and accountants (4), so it matters — but posting on behalf of a client is astroturfing, and Reddit punishes it. The operator posts only as himself, about his own business. Present here so it is classified rather than silently dropped.',
+  },
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     CLASSIFIED AFTER RESEARCH. These are NOT directories, so they can never be tasks. They are here
+     purely so whoIsWinning labels them properly instead of showing 'unclassified'. */
+  {
+    host: 'draindoctor.co.uk', label: 'Drain Doctor', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'National plumbing/drainage franchise, ~80 locations, owned by Neighborly. A competitor, not a listing.',
+  },
+  {
+    host: 'rotorooter.com', label: 'Roto-Rooter', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'US brand in the same franchise group as Drain Doctor. Intelligence only.',
+  },
+  {
+    host: 'aspect.co.uk', label: 'Aspect', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'National London property-services firm. A competitor, not a listing.',
+  },
+  {
+    host: 'theguardian.com', label: 'The Guardian', signupUrl: '', urlVerified: false,
+    /* EDITORIAL, not own-site. The own-site heuristic flagged it only because the string matched
+       "guardian" — a good reminder that name-matching is a time-saver, not a classifier. */
+    kind: 'editorial', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'National press. Coverage is earned or pitched, never listed. Cited in 5 of 5 locksmith audits.',
+  },
+  {
+    host: 'accaglobal.com', label: 'ACCA member firm directory', signupUrl: 'https://www.accaglobal.com/', urlVerified: false,
+    /* NOT PRESENT IN ANY CITATION DATA. Added because ABLM are ACCA members and the listing is free,
+       so it is a free bet — NOT an evidenced lever. The evidence layer will never surface it until
+       it actually appears in citations, which is the correct behaviour: this entry only says what it
+       is, never that it matters. */
+    kind: 'trade-body', actor: 'operator-start', cost: 'free',
+    notes: 'DOES NOT APPEAR IN CITATION DATA — a free bet, not an evidenced lever. Free for member firms; the firm must hold ACCA membership, so they confirm.',
   },
 ];
 
