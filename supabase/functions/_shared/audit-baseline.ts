@@ -413,6 +413,47 @@ export async function startPaidBaseline(
     if (!locationText) return { ok: false, skipped: "no_location" };
     const scopeIsLocal = !NON_TOWN.has(locationText.toLowerCase());
 
+    /* SEED FROM THE AUDIT THE PROSPECT ACTUALLY READ.
+       The outreach audit's questions are the report that sold them. Generating ten fresh ones here
+       meant the numbers that closed the sale were not the numbers the money-back guarantee is
+       measured on — while the pitch says, in writing, that we re-measure the same way at 8 weeks.
+       These are a SEED, not the set: create-ai-audit guards each one and generates the rest up to
+       BASELINE_QUESTIONS. A lead with no earlier audit sends nothing and gets all ten generated,
+       exactly as before.
+
+       Best-effort throughout. A failure here must never stop a paid client's baseline starting; the
+       worst case is the old behaviour, which is a working baseline on freshly generated questions. */
+    let seedQuestions: string[] = [];
+    try {
+      const { data: priorAudits } = await service
+        .from("ai_audits").select("id, baseline_target_runs, created_at")
+        .eq("lead_id", leadId).order("created_at", { ascending: false });
+      // <= 1 target run is an ORDINARY audit. Never seed from another baseline: those questions are
+      // already a measurement, and copying them would chain one guarantee onto another.
+      const outreach = ((priorAudits ?? []) as Array<{ id: string; baseline_target_runs: number | null }>)
+        .find((a) => Number(a.baseline_target_runs ?? 0) <= 1);
+      if (outreach) {
+        const { data: latestRun } = await service
+          .from("ai_audit_runs").select("id").eq("audit_id", outreach.id)
+          .order("run_number", { ascending: false }).limit(1).maybeSingle();
+        if (latestRun) {
+          const { data: qRows } = await service
+            .from("ai_audit_queue").select("question").eq("run_id", (latestRun as { id: string }).id)
+            .order("created_at", { ascending: true });
+          const seen = new Set<string>();
+          for (const r of qRows ?? []) {
+            const q = String((r as { question?: string }).question ?? "").trim();
+            const key = q.toLowerCase();
+            if (q && !seen.has(key)) { seen.add(key); seedQuestions.push(q); }
+          }
+        }
+      }
+      console.log(`[audit-baseline] lead ${leadId}: seeding baseline with ${seedQuestions.length} outreach question(s)`);
+    } catch (e) {
+      seedQuestions = [];
+      console.error(`[audit-baseline] seed lookup failed for lead ${leadId} (non-blocking):`, (e as Error).message);
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
       method: "POST",
@@ -436,6 +477,9 @@ export async function startPaidBaseline(
         purpose: "baseline",
         question_count: BASELINE_QUESTIONS,
         baseline_target_runs: BASELINE_RUNS,
+        // Omitted entirely when there is nothing to seed, so a lead with no earlier audit takes the
+        // untouched generate-all-ten path rather than an empty-array edge case.
+        ...(seedQuestions.length ? { questions: seedQuestions } : {}),
       }),
     });
     const body = await res.text();
