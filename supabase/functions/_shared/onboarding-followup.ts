@@ -33,15 +33,19 @@ export function resolveSiteOrigin(): string | null {
   return origin;
 }
 
-/** The onboarding link for a lead. Kept separate so the URL shape lives in exactly one place. */
-export function onboardingUrl(origin: string, leadId: string): string {
+/** The onboarding link for a lead. Kept separate so the URL shape lives in exactly one place.
+ *  businessName is TAKEN AS AN ARGUMENT, matching src/config/findableSite.ts and findable-checkout.
+ *  It was previously read from a free variable that does not exist in this scope, which made every
+ *  call throw ReferenceError and stopped onboarding_followup sending entirely. */
+export function onboardingUrl(origin: string, leadId: string, businessName?: string | null): string {
   // Trailing slash on /onboarding/ matches the built site's canonical path (it 308-redirects
   // /onboarding), so the payer does not eat a redirect on the most important link in the product.
   /* Cosmetic name segment; the ?lead= value is unchanged, and findable-site serves /onboarding/ for
      any segment via a Pages rewrite without reading it. Same slugifier as the report URLs. An empty
      or emoji-only name falls back to the bare /onboarding/?lead= form rather than a "business" slug. */
-  const slug = slugifyBusinessName(business);
-  const segment = business && slug !== "business" ? `${slug}/` : "";
+  const name = (businessName ?? "").trim();
+  const slug = slugifyBusinessName(name);
+  const segment = name && slug !== "business" ? `${slug}/` : "";
   return `${origin}/onboarding/${segment}?lead=${leadId}`;
 }
 
@@ -115,5 +119,5 @@ export async function resolveOnboardingFollowupVars(service: any, leadId: string
     };
   }
 
-  return { ok: true, business, url: onboardingUrl(origin, id) };
+  return { ok: true, business, url: onboardingUrl(origin, id, business) };
 }
