@@ -41,7 +41,12 @@ const DEFAULT_QUESTION_COUNT = OUTREACH_HOOK_QUESTIONS;
 // higher bounds apply ONLY to trusted internal callers that ask for purpose='baseline'
 // (see BASELINE_PURPOSE below), so no public caller can raise its own cost ceiling.
 const BASELINE_MIN_QUESTION_COUNT = 6;
-const BASELINE_MAX_QUESTION_COUNT = 12;
+/* 20, raised from 12. A re-measurement supplies its OWN question set so the before and after
+   compare like with like, and ABLM's set was 16 — at 12 the last four were dropped SILENTLY,
+   including a core Wisbech question, producing a comparison built on three quarters of the set with
+   nothing on screen to say so. The DEFAULT is untouched at BASELINE_QUESTIONS (10): this raises the
+   ceiling for a caller that explicitly asks for more, not the cost of a normal paid baseline. */
+const BASELINE_MAX_QUESTION_COUNT = 20;
 const BASELINE_DEFAULT_QUESTION_COUNT = BASELINE_QUESTIONS;
 
 /** Clamp an untrusted question-count into [min..max], defaulting to `def`. */
@@ -245,9 +250,29 @@ Deno.serve(async (req) => {
     const baselineTargetRuns = isBaseline
       ? Math.min(5, Math.max(1, typeof body.baseline_target_runs === "number" ? Math.round(body.baseline_target_runs) : 1))
       : 0;
-    const providedQuestions: string[] | null = Array.isArray(body.questions)
-      ? body.questions.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim()).slice(0, MAX_QUESTIONS)
+    /* SILENT TRUNCATION WAS THE REAL BUG, not the number. The cap is a cost ceiling and stays, but
+       quietly returning fewer questions than were asked for is how a before/after ends up built on a
+       subset with nothing to say so. Whatever falls off the end is captured, logged, and reported on
+       every response. */
+    const suppliedQuestions: string[] | null = Array.isArray(body.questions)
+      ? body.questions.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim())
       : null;
+    const providedQuestions: string[] | null = suppliedQuestions ? suppliedQuestions.slice(0, MAX_QUESTIONS) : null;
+    const droppedQuestions: string[] = suppliedQuestions ? suppliedQuestions.slice(MAX_QUESTIONS) : [];
+    if (droppedQuestions.length) {
+      console.error(`[create-ai-audit] TRUNCATED: ${suppliedQuestions!.length} supplied, cap ${MAX_QUESTIONS}, DROPPED ${droppedQuestions.length}: ${droppedQuestions.join(" | ")}`);
+    }
+    /* Spread into both responses. Conditional so a clean call stays clean — the keys are absent
+       entirely when nothing was dropped, rather than a truncated:false a caller learns to ignore. */
+    const truncationReport = droppedQuestions.length
+      ? {
+          truncated: true,
+          question_cap: MAX_QUESTIONS,
+          supplied_count: suppliedQuestions!.length,
+          dropped_count: droppedQuestions.length,
+          dropped_questions: droppedQuestions,
+        }
+      : {};
     // Optional free-text specialisms ("kava, pool tables"). Weights the niche/differentiator
     // questions; blank → the generator infers the specialism from the name + type.
     const specialisms: string = typeof body.specialisms === "string" ? body.specialisms.trim().slice(0, 200) : "";
@@ -327,9 +352,11 @@ Deno.serve(async (req) => {
         ok: true,
         preview: true,
         questions: qs,
+        question_count: qs.length,
         estimated_cost_usd: estimate(qs.length),
         unit_cost_usd: estCost,
         engines: AUDIT_ENGINES,
+        ...truncationReport,
       });
     }
 
@@ -500,10 +527,12 @@ Deno.serve(async (req) => {
       ...(pitchNote ? { pitch_note: pitchNote } : {}),
       business_name: auditBusinessName,
       questions,
+      question_count: questions.length,
       // Estimate: question_count × engines × per-question source cost (see sources.ts).
       estimated_cost_usd: estimate(questions.length),
       unit_cost_usd: estCost,
       engines: AUDIT_ENGINES,
+      ...truncationReport,
     });
   } catch (e) {
     console.error("[create-ai-audit] error:", e);
