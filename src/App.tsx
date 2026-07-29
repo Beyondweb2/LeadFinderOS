@@ -31,6 +31,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Templates = lazy(() => import("./pages/Templates"));
 const PaidClientsPage = lazy(() => import("./pages/PaidClients"));
 const BaselinePage = lazy(() => import("./pages/Baseline"));
+const PlaybookPage = lazy(() => import("./pages/Playbook"));
 const HowToUse = lazy(() => import("./pages/HowToUse"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const AdminClients = lazy(() => import("./pages/AdminClients"));
@@ -324,6 +325,21 @@ const App = () => {
                    <SubscriptionGate>
                      <AppLayout>
                        <BaselinePage />
+                     </AppLayout>
+                   </SubscriptionGate>
+                </ProtectedRoute>
+              }
+            />
+            {/* OPERATOR delivery checklist. Same shell as /baseline/:auditId and for the same reason:
+                WHO'S WINNING is the client's competitor list, which is working intelligence, not
+                something the client is shown. The id resolves as an AUDIT id first — see usePlaybook. */}
+            <Route
+              path="/playbook/:id"
+              element={
+                <ProtectedRoute>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <PlaybookPage />
                      </AppLayout>
                    </SubscriptionGate>
                 </ProtectedRoute>
