@@ -30,6 +30,19 @@
    trustatrader.com could not be checked at all: the site was down when the operator looked.
    ============================================================ */
 
+/* TOWN PORTALS — A CATEGORY THE DERIVATION FOUND AND RESEARCH WOULD NOT HAVE.
+   loughborough.org.uk is a town portal carrying a local business directory, cited in 10 of 58
+   plumber audits. It is not a trades directory and no "best directories for plumbers" guide would
+   ever list it — it was found only because the evidence layer reads what AI actually cites.
+
+   So: for each client town, CHECK whether a <town>.org.uk or <town>.co.uk portal exists with a
+   business directory. Wisbech, Kettering, Stamford, Chatteris and anywhere else clients operate.
+
+   Deliberately NOT hardcoded. Adding towns that have never appeared in citations would be guesses
+   dressed as evidence, and this file's whole job is to avoid exactly that. A portal earns an entry
+   when it shows up in the data, not before.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
 /* ══════════════════════════════════════════════════════════════════════════════
    GUARDRAIL — READ BEFORE ADDING A FIELD.
 
@@ -428,6 +441,81 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
        is, never that it matters. */
     kind: 'trade-body', actor: 'operator-start', cost: 'free',
     notes: 'DOES NOT APPEAR IN CITATION DATA — a free bet, not an evidenced lever. Free for member firms; the firm must hold ACCA membership, so they confirm.',
+  },
+
+  {
+    host: 'loughborough.org.uk', label: 'Loughborough town portal', signupUrl: 'https://www.loughborough.org.uk/', urlVerified: false,
+    /* A TOWN PORTAL, not a trades directory: "a Loughborough business directory including legal,
+       financial and local services". Cited in 10 of 58 plumber audits. See the note at the top of
+       this file — there is probably an equivalent for every town a client operates in, and this one
+       surfaced only because the derivation reads real citations. */
+    kind: 'directory', actor: 'operator', cost: 'free',
+    notes: 'TOWN PORTAL with a local business directory. Check for an equivalent in every client town.',
+  },
+  {
+    host: 'moneyweek.com', label: 'MoneyWeek', signupUrl: '', urlVerified: false,
+    kind: 'editorial', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Personal-finance magazine. Coverage is earned, never listed.',
+  },
+  {
+    host: 'fenpropertyservices.uk', label: 'fenpropertyservices.uk', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'owardillservices.co.uk', label: 'owardillservices.co.uk', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'normz.co.uk', label: 'normz.co.uk', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'watertightpe.co.uk', label: 'watertightpe.co.uk', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'no1phd.co.uk', label: 'no1phd.co.uk', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'rkm247.co.uk', label: 'rkm247.co.uk', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'jnsjetting.com', label: 'jnsjetting.com', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'rjhitchcock.co.uk', label: 'rjhitchcock.co.uk', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'midlandscoolingservices.co.uk', label: 'midlandscoolingservices.co.uk', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'shearsphg.com', label: 'shearsphg.com', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'tjgelec.co.uk', label: 'tjgelec.co.uk', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
+  },
+  {
+    host: 'hsmps.co.uk', label: 'hsmps.co.uk', signupUrl: '', urlVerified: false,
+    kind: 'own-site', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Classified as a single firm BY NAME PATTERN, not by visiting the site. If it turns out to be a directory the cost is nil — unknown hosts already route to whoIsWinning either way.',
   },
 ];
 
