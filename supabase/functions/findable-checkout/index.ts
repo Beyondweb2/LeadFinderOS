@@ -102,11 +102,16 @@ Deno.serve(async (req) => {
       });
       return json({ ok: false, error: "already_client" }, 403);
     }
+    /* Hoisted so the back-URL below can read it. `lead` itself is block-scoped to the check that
+       follows and MUST stay that way — it carries status and amount_paid, which have no business
+       being live further down. Only the display name escapes, and only as a string. */
+    let leadBusinessName: string | null = null;
     if (effectiveLeadId) {
       const { data: lead } = await service
         .from("outreach_leads")
         .select("id, business_name, status, amount_paid, category, search_keyword")
         .eq("id", effectiveLeadId).maybeSingle();
+      leadBusinessName = (lead?.business_name as string | null) ?? null;
       if (lead && (PAID_OR_BEYOND.has(lead.status as string) || ((lead.amount_paid as number) ?? 0) > 0)) {
         await recordRefusal("checkout_refused_already_client", {
           lead_id: effectiveLeadId, lead_status: lead.status, amount_paid: lead.amount_paid,
@@ -159,7 +164,11 @@ Deno.serve(async (req) => {
     // extra hop on the most important redirect in the product.
     /* Cosmetic name segment, matching the links we send. The lead param is unchanged; the segment is
        dropped when there is no name, which also keeps the no-lead case identical to before. */
-    const backSlug = slugifyBusinessName((lead?.business_name as string | null) ?? "");
+    /* Reads the hoisted name, NOT `lead` — which is not in scope here. It never was: this line
+       shipped referencing a binding declared inside the block above, and optional chaining does not
+       save an UNDECLARED name the way it saves a null one, so every call threw ReferenceError
+       before the Stripe session was created. That took checkout down completely. */
+    const backSlug = slugifyBusinessName(leadBusinessName ?? "");
     const backSegment = effectiveLeadId && backSlug !== "business" ? `${backSlug}/` : "";
     const back = `${origin}/onboarding/${effectiveLeadId ? `${backSegment}?lead=${effectiveLeadId}` : ""}`;
 
