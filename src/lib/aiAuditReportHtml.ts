@@ -513,11 +513,7 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
       <div class="stats">
         <div class="stat">
           <span class="big">45%</span>
-          <p>of people used AI like ChatGPT and Gemini to find a local business last year &mdash; up from just <span class="was">6%</span> the year before.</p>
-        </div>
-        <div class="stat">
-          <span class="big">37%</span>
-          <p>now start their search with AI instead of Google.</p>
+          <p>of people used AI like ChatGPT and Gemini to find a local business last year &mdash; up from just <span class="was">6%</span> the year before. That is a sevenfold rise in twelve months.</p>
         </div>
       </div>
       <p class="why-frame">This is where your customers are <span class="hl">already going</span> &mdash; and it&rsquo;s growing fast.</p>
@@ -556,7 +552,7 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
     <!-- CTA -->
     <section class="cta">
       <h3>Ready to get <span class="y">found</span>?</h3>
-      <p><b>This is your starting point.</b> We fix what AI says about you &mdash; then re-run this exact audit so you see the before &amp; after in black and white.</p>
+      <p><b>This is your starting point.</b> We fix what AI says about you &mdash; then re-ask the questions from this report, plus more, three times each, so you see the before &amp; after in black and white.</p>
       <div class="close">Let&rsquo;s get ${esc(d.businessName)} named when your customers ask.</div>
       <div class="cta-actions">
         <a class="cta-btn email" href="${emailHref}" target="_blank" rel="noopener noreferrer">Email us</a>
@@ -569,7 +565,7 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
         <span>Prepared for <b>${esc(d.businessName)}</b></span>
         <span>Findable &middot; AI Visibility Audit &middot; ${esc(d.generatedAtLabel)}${shareFoot}</span>
       </div>
-      <div class="note">A snapshot of where you stand today. We re-run it after we&rsquo;ve made changes to show your before &amp; after.</div>
+      <div class="note">A snapshot of where you stand today. After we&rsquo;ve made changes we ask these questions again, alongside others, to show your before &amp; after.</div>
     </footer>
   </div>
 </body>
