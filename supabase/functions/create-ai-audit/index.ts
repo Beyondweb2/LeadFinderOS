@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
+import { applySeed } from "../../../src/lib/seedGuard.ts";
 import {
   OUTREACH_HOOK_QUESTIONS,
   WIZARD_MIN_QUESTIONS,
@@ -372,6 +373,12 @@ Deno.serve(async (req) => {
     let auditId: string;
     let auditBusinessName = businessName;
     let questions: string[] = [];
+    /* Populated only on the baseline seeding path. Surfaced on the response so a rejected seed is
+       VISIBLE rather than a silent fallback — the whole failure this guards against is a bad
+       question entering the guarantee unnoticed, and a guard you cannot see firing is barely a
+       guard. Empty arrays here mean "not a seeded call", not "nothing rejected". */
+    let seededQuestions: string[] = [];
+    let rejectedSeeds: Array<{ question: string; reason: string }> = [];
 
     if (effectiveReuseId) {
       // Re-run: load + ownership-check the existing audit, reuse its questions. Reusing the STORED
@@ -417,10 +424,30 @@ Deno.serve(async (req) => {
         }
       }
     } else {
-      // New audit: use the edited questions if provided, else generate them.
-      questions = providedQuestions && providedQuestions.length
-        ? providedQuestions
-        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country);
+      /* New audit: edited questions verbatim if a FULL set was provided, else generate.
+         BETWEEN those two sits the paid baseline's first run, which now arrives with the outreach
+         audit's 3 questions and a question_count of 10. Those 3 are a SEED, not the set: they are
+         guarded, kept, and topped up to 10 by the generator.
+
+         The `>= questionCount` test is what keeps runs 2 and 3 byte-for-byte unchanged — they send
+         the full stored set, so they take the verbatim branch exactly as before. Only a SHORT
+         supplied set on a baseline is treated as a seed, which no existing caller sends. */
+      const isSeeding = isBaseline && !!providedQuestions?.length && providedQuestions.length < questionCount;
+      if (isSeeding) {
+        const generated = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country);
+        const outcome = applySeed(providedQuestions!, generated, questionCount, businessType, locationText);
+        questions = outcome.questions;
+        seededQuestions = outcome.seeded;
+        rejectedSeeds = outcome.rejected;
+        if (outcome.rejected.length) {
+          console.error(`[create-ai-audit] SEED REJECTED ${outcome.rejected.length}: ${outcome.rejected.map((r) => `"${r.question}" (${r.reason})`).join(" | ")}`);
+        }
+        console.log(`[create-ai-audit] baseline seeded with ${outcome.seeded.length} of ${providedQuestions!.length} outreach questions, topped up to ${questions.length}`);
+      } else {
+        questions = providedQuestions && providedQuestions.length
+          ? providedQuestions
+          : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country);
+      }
       const auditRow: Record<string, unknown> = {
         user_id: userId,
         lead_id: leadId,
@@ -533,6 +560,17 @@ Deno.serve(async (req) => {
       unit_cost_usd: estCost,
       engines: AUDIT_ENGINES,
       ...truncationReport,
+      /* Mirrors truncationReport's shape: absent entirely on a normal call, so a caller cannot
+         learn to ignore a permanently-present "seeded: false". */
+      ...(seededQuestions.length || rejectedSeeds.length
+        ? {
+            seeded: true,
+            seeded_count: seededQuestions.length,
+            seeded_questions: seededQuestions,
+            rejected_seed_count: rejectedSeeds.length,
+            rejected_seeds: rejectedSeeds,
+          }
+        : {}),
     });
   } catch (e) {
     console.error("[create-ai-audit] error:", e);
