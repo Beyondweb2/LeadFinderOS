@@ -30,6 +30,36 @@
    trustatrader.com could not be checked at all: the site was down when the operator looked.
    ============================================================ */
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   GUARDRAIL — READ BEFORE ADDING A FIELD.
+
+   NEVER add a `trade` (or `trades`) field to DirectoryFact.
+
+   The moment a fact says "Checkatrade is for plumbers", this file becomes the hardcoded list the
+   evidence layer exists to replace — and it would be wrong by construction: Checkatrade has 657
+   citations across 57 of 58 plumber audits and appears ZERO times for accountants, which is a fact
+   about the evidence, not about Checkatrade.
+
+   WHICH hosts matter for a trade is decided ONLY by citations in ai_audit_queue, in
+   buildPlaybook.ts. This file answers a different question: given that a host came up, what IS it
+   and who can action it. Keyed by host, never by trade.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/** What a cited host actually IS. Decides whether it can ever become a task.
+ *
+ *  This exists because most top-cited hosts are NOT directories. For plumbers, able-group.co.uk is
+ *  cited in 58 of 58 audits and dyno.com in 50 — both national operators' own websites. A client
+ *  cannot be listed on a competitor's site, so those must never become work; they are intelligence
+ *  about who keeps getting named. */
+export type HostKind =
+  | 'directory'      // a listing site a business can appear on — the only kind that becomes a task
+  | 'trade-body'     // register/scheme; joining needs qualifications or membership, not just signup
+  | 'own-site'       // a business's OWN website (competitor or national operator) — never a task
+  | 'editorial'      // press, magazines, blogs — earned coverage, not a listing
+  | 'community'      // forums and social threads (Reddit) — never a client task
+  | 'aggregator'     // auto-generated from public data; usually nothing to join
+  | 'register';      // statutory (Companies House, GOV.UK) — listing is automatic
+
 /** Who is actually able to complete this listing. */
 export type Actor =
   | 'operator'        // you can do it start to finish
@@ -43,6 +73,9 @@ export interface DirectoryFact {
   signupUrl: string;
   /** false everywhere until a human has clicked it. See the warning above. */
   urlVerified: boolean;
+  /** What this host IS. Absent means 'directory' — every entry predating this field is one.
+   *  Anything that is NOT 'directory' or 'trade-body' can never become a task. */
+  kind?: HostKind;
   actor: Actor;
   cost: 'free' | 'paid' | 'pay-per-lead' | 'membership' | 'n/a';
   /** Shown to the operator so they never waste time attempting a blocked one. */
@@ -197,6 +230,158 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
     host: 'gov.uk', label: 'GOV.UK',
     signupUrl: '', urlVerified: false, actor: 'client-only', cost: 'n/a', notAListing: true,
     notes: 'Government guidance. The single biggest source for accountancy questions, and nothing anyone can act on — its presence means the QUESTION was about tax rules rather than hiring someone.',
+  },
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     ADDED FROM THE FIRST FULL DERIVATION RUN. Every signupUrl below is UNVERIFIED —
+     nobody has clicked one. `actor` and `cost` are a best read of each site's model and are
+     flagged in `notes` where inferred; treat both as provisional until checked.
+
+     Presence here is NOT a recommendation. It says "if this host shows up in citations, here is
+     what it is". Whether it shows up, and for which trade, is the evidence layer's call. */
+
+  // ── plumbing-side gaps (biggest first by audit breadth) ──
+  {
+    host: 'hamuch.com', label: 'Hamuch', signupUrl: 'https://www.hamuch.com/', urlVerified: false,
+    kind: 'directory', actor: 'operator', cost: 'free',
+    notes: 'Cited in 18 plumber audits — the largest gap in this file. Price/quote comparison listing. Free and operator-actionable INFERRED, not checked.',
+  },
+  {
+    host: 'myjobquote.co.uk', label: 'MyJobQuote', signupUrl: 'https://www.myjobquote.co.uk/tradesmen', urlVerified: false,
+    kind: 'directory', actor: 'client-only', cost: 'pay-per-lead',
+    blockedReason: 'Pay-per-lead: the business buys each enquiry, so only they can agree to the spend.',
+    notes: 'Lead-generation rather than a listing. Model INFERRED from the sector norm.',
+  },
+  {
+    host: 'top5trades.co.uk', label: 'Top5Trades', signupUrl: 'https://top5trades.co.uk/', urlVerified: false,
+    kind: 'directory', actor: 'operator', cost: 'free', notes: 'Free/operator-actionable INFERRED.',
+  },
+  {
+    host: 'ratingsnearme.com', label: 'Ratings Near Me', signupUrl: 'https://ratingsnearme.com/', urlVerified: false,
+    kind: 'aggregator', actor: 'operator-start', cost: 'free',
+    notes: 'Appears to auto-generate profiles from public data; claiming may be the only action. INFERRED.',
+  },
+  {
+    host: 'angi.com', label: 'Angi', signupUrl: 'https://www.angi.com/', urlVerified: false,
+    kind: 'directory', actor: 'client-only', cost: 'paid',
+    blockedReason: 'US-run, paid pro membership with identity checks. UK coverage is thin.',
+    notes: 'Only 6 citations across 3 audits — low priority even if it becomes actionable.',
+  },
+  {
+    host: 'local-quotes.co.uk', label: 'Local Quotes', signupUrl: 'https://www.local-quotes.co.uk/', urlVerified: false,
+    kind: 'directory', actor: 'client-only', cost: 'pay-per-lead',
+    blockedReason: 'Lead-buying model — the business pays per enquiry.',
+    notes: '16 citations but from ONE audit. Breadth, not volume: treat as noise until it recurs.',
+  },
+  {
+    host: 'trustmark.org.uk', label: 'TrustMark', signupUrl: 'https://www.trustmark.org.uk/tradespeople', urlVerified: false,
+    kind: 'trade-body', actor: 'client-only', cost: 'membership',
+    blockedReason: 'Government-endorsed scheme: registration runs through an approved scheme provider and requires the business\'s own insurance and workmanship evidence.',
+  },
+
+  // ── accountancy-side gaps ──
+  {
+    host: 'handpickedaccountants.co.uk', label: 'Handpicked Accountants', signupUrl: 'https://www.handpickedaccountants.co.uk/', urlVerified: false,
+    kind: 'directory', actor: 'client-only', cost: 'free',
+    blockedReason: 'Curated — the operator vets and selects firms rather than accepting signups.',
+    notes: 'Curation INFERRED from the name and positioning.',
+  },
+  {
+    host: 'legaldirectorate.co.uk', label: 'Legal Directorate', signupUrl: 'https://www.legaldirectorate.co.uk/', urlVerified: false,
+    kind: 'directory', actor: 'operator', cost: 'free', notes: 'Free/operator-actionable INFERRED.',
+  },
+  {
+    host: 'vouchedfor.co.uk', label: 'VouchedFor', signupUrl: 'https://www.vouchedfor.co.uk/', urlVerified: false,
+    kind: 'directory', actor: 'client-only', cost: 'paid',
+    blockedReason: 'Paid professional listing with verified client reviews — the firm must sign up and be verified.',
+  },
+  {
+    host: 'companiesup.co.uk', label: 'CompaniesUp', signupUrl: '', urlVerified: false,
+    kind: 'aggregator', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Mirrors Companies House data automatically. Nothing to join — the entry exists so it is never mistaken for a task.',
+  },
+  {
+    host: 'accountantsup.co.uk', label: 'AccountantsUp', signupUrl: '', urlVerified: false,
+    kind: 'aggregator', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Same auto-generated pattern as CompaniesUp. INFERRED.',
+  },
+  {
+    host: 'accountingfirms.co.uk', label: 'AccountingFirms', signupUrl: 'https://www.accountingfirms.co.uk/', urlVerified: false,
+    kind: 'directory', actor: 'operator-start', cost: 'free', notes: 'Free listing with owner confirmation INFERRED.',
+  },
+  {
+    host: 'clutch.co', label: 'Clutch', signupUrl: 'https://clutch.co/', urlVerified: false,
+    kind: 'directory', actor: 'operator-start', cost: 'free',
+    notes: 'B2B directory. Free profile; reviews are collected from clients directly, which only the business can arrange.',
+  },
+  {
+    host: 'uk.linkedin.com', label: 'LinkedIn company page', signupUrl: 'https://www.linkedin.com/company/setup/new/', urlVerified: false,
+    kind: 'directory', actor: 'operator-start', cost: 'free',
+    notes: 'A company page needs an admin with a personal LinkedIn account, so the business must at minimum grant access.',
+  },
+
+  // ── electrical / locksmith ──
+  {
+    host: 'electricalsafetyfirst.org.uk', label: 'Electrical Safety First', signupUrl: 'https://www.electricalsafetyfirst.org.uk/', urlVerified: false,
+    kind: 'trade-body', actor: 'client-only', cost: 'membership',
+    blockedReason: 'Charity that lists registered competent-person-scheme electricians. Listing follows registration, which the business must hold.',
+  },
+  {
+    host: 'locksmiths.co.uk', label: 'Locksmiths.co.uk', signupUrl: 'https://www.locksmiths.co.uk/', urlVerified: false,
+    kind: 'directory', actor: 'operator', cost: 'free', notes: 'Free/operator-actionable INFERRED.',
+  },
+  {
+    host: 'erahomesecurity.com', label: 'ERA approved installer', signupUrl: 'https://www.erahomesecurity.com/', urlVerified: false,
+    kind: 'trade-body', actor: 'client-only', cost: 'membership',
+    blockedReason: 'A lock manufacturer\'s approved-installer network — the business must be accepted as an installer.',
+    notes: 'Cited in 5 of 5 locksmith audits. High breadth, entirely client-gated.',
+  },
+
+  // ── hospitality. ENTRIES ONLY. One audit is not a trade profile; whether any of
+  //    these are recommended is the evidence layer\'s call, gated on audit count. ──
+  {
+    host: 'tripadvisor.com', label: 'Tripadvisor', signupUrl: 'https://www.tripadvisor.com/Owners', urlVerified: false,
+    kind: 'directory', actor: 'operator-start', cost: 'free',
+    notes: 'Free to claim; claiming requires an email at the venue\'s domain or a postcard, so the client is needed to finish.',
+  },
+  {
+    host: 'wanderlog.com', label: 'Wanderlog', signupUrl: 'https://wanderlog.com/', urlVerified: false,
+    kind: 'aggregator', actor: 'operator-start', cost: 'free',
+    notes: 'Trip-planning app that pulls places from other sources. Whether a business can add or claim itself is UNCHECKED.',
+  },
+  {
+    host: 'discoverkava.com', label: 'Discover Kava', signupUrl: 'https://discoverkava.com/', urlVerified: false,
+    kind: 'directory', actor: 'operator', cost: 'free',
+    notes: 'Niche kava-venue directory — 26 citations in the single kava audit. Everything here is INFERRED from one run.',
+  },
+  {
+    host: 'restaurantguru.com', label: 'Restaurant Guru', signupUrl: 'https://restaurantguru.com/', urlVerified: false,
+    kind: 'aggregator', actor: 'operator-start', cost: 'free', notes: 'Auto-generated profiles, claimable. INFERRED.',
+  },
+  {
+    host: 'wongnai.com', label: 'Wongnai', signupUrl: 'https://www.wongnai.com/', urlVerified: false,
+    kind: 'directory', actor: 'operator-start', cost: 'free', notes: 'Thai review platform. Claim process UNCHECKED.',
+  },
+  {
+    host: 'cnxlocal.com', label: 'CNX Local', signupUrl: 'https://cnxlocal.com/', urlVerified: false,
+    kind: 'directory', actor: 'operator', cost: 'free', notes: 'Chiang Mai local listing site. Everything INFERRED.',
+  },
+  {
+    host: 'timeout.com', label: 'Time Out', signupUrl: '', urlVerified: false,
+    kind: 'editorial', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'Editorial. You cannot list yourself — coverage is earned or pitched. Never a task.',
+  },
+  {
+    host: 'facebook.com', label: 'Facebook Page', signupUrl: 'https://www.facebook.com/pages/create', urlVerified: false,
+    kind: 'directory', actor: 'operator-start', cost: 'free',
+    notes: 'A Page needs a personal account to administer it, so the business must own or delegate it.',
+  },
+
+  // ── community ──
+  {
+    host: 'reddit.com', label: 'Reddit', signupUrl: '', urlVerified: false,
+    kind: 'community', actor: 'client-only', cost: 'n/a', notAListing: true,
+    notes: 'NEVER A CLIENT TASK. Cited for plumbers (7 audits) and accountants (4), so it matters — but posting on behalf of a client is astroturfing, and Reddit punishes it. The operator posts only as himself, about his own business. Present here so it is classified rather than silently dropped.',
   },
 ];
 

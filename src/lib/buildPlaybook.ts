@@ -74,6 +74,11 @@ export interface Playbook {
   operatorMinutes: number;
   /** Sources that are cited but deliberately never become tasks. */
   notListings: Array<{ label: string; citations: number; audits: number; why: string }>;
+  /* WHO KEEPS GETTING NAMED. Most top-cited hosts are not directories at all: for plumbers,
+     able-group.co.uk is cited in 58 of 58 audits and dyno.com in 50 — national operators' own
+     sites. A client cannot be listed on a competitor's website, so these must never be tasks. They
+     were previously DROPPED, which threw away the most useful intelligence in the data. */
+  whoIsWinning: Array<{ host: string; citations: number; audits: number; kind: string }>;
 }
 
 const norm = (t: string | null | undefined) => {
@@ -105,11 +110,21 @@ export function buildPlaybook(
     .sort((a, b) => b.citations - a.citations);
 
   const notListings: Playbook['notListings'] = [];
+  const whoIsWinning: Playbook['whoIsWinning'] = [];
   const steps: PlaybookStep[] = [];
 
   for (const e of forTrade) {
     const f: DirectoryFact | undefined = factFor(e.host);
-    if (!f) continue;                       // an unknown host is never invented into a task
+    /* UNKNOWN HOST. Still never a task — we know nothing about it, so inventing one would be
+       guessing. But it is almost always a competitor's own site, and those are the answer key to
+       "who keeps getting named". Surfaced as intelligence rather than discarded. Treating unknown
+       as intelligence also means a NEW competitor appears automatically, with no entry to write. */
+    if (!f) { whoIsWinning.push({ host: e.host, citations: e.citations, audits: e.audits, kind: 'unclassified' }); continue; }
+    /* Classified as something that cannot be joined. Same destination, better label. */
+    if (f.kind && f.kind !== 'directory' && f.kind !== 'trade-body') {
+      whoIsWinning.push({ host: e.host, citations: e.citations, audits: e.audits, kind: f.kind });
+      continue;
+    }
     if (f.notAListing) {
       notListings.push({ label: f.label, citations: e.citations, audits: e.audits, why: f.notes ?? 'Not a listing anyone can join.' });
       continue;
@@ -181,6 +196,7 @@ export function buildPlaybook(
     trade: lead.trade, town, tradeAudits,
     tradeTooThin: tradeAudits < TRADE_MIN_AUDITS,
     hasWebsite, missingAddress, steps, operatorMinutes, notListings,
+    whoIsWinning: whoIsWinning.sort((a, b) => b.audits - a.audits || b.citations - a.citations),
   };
 }
 
