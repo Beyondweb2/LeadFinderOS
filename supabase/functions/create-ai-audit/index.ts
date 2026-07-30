@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
+import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { applySeed } from "../../../src/lib/seedGuard.ts";
@@ -215,7 +216,10 @@ Deno.serve(async (req) => {
     }
     const businessName: string = typeof body.business_name === "string" ? body.business_name.trim() : "";
     const businessType: string = typeof body.business_type === "string" ? body.business_type.trim() : "";
-    const locationText: string = typeof body.location_text === "string" ? body.location_text.trim() : "";
+    // `let`, not `const`: the real town OVERRIDES this below. Reassigning the one variable every
+    // downstream reader already uses is deliberate — a parallel `effectiveLocation` would leave any
+    // usage I failed to spot still on the searched town.
+    let locationText: string = typeof body.location_text === "string" ? body.location_text.trim() : "";
     const country: string | null = typeof body.country === "string" ? body.country : null;
     const website: string | null = typeof body.website === "string" && body.website.trim() ? body.website.trim() : null;
     const hasWebsite: boolean = body.has_website === true;
@@ -321,6 +325,54 @@ Deno.serve(async (req) => {
         console.log(`[create-ai-audit] lead ${leadId}: adding a run to existing audit ${reusable.id} rather than creating a duplicate`);
       } else if (all.length) {
         console.log(`[create-ai-audit] lead ${leadId}: only paid-baseline audits exist, creating a separate ordinary audit so the baseline stays clean`);
+      }
+    }
+
+    /* ── THE REAL TOWN, not the searched one ────────────────────────────────────────────────────
+       Lead search has a radius, so the town I searched is not where the business is. A Huntingdon
+       locksmith came back from a Wisbech search and was told AI does not know he exists; he is top of
+       his own patch and said so. 37 reports went out with that fault.
+
+       PRECEDENCE: confirmed_location (a human said it) || derived_town (Google's address) ||
+       search_location (my query). See pickAuditTown.
+
+       THIS IS AN OVERRIDE, NOT A FALLBACK, and that is the whole point. bulk-jobs:229 and
+       _shared/whatsapp-inbound.ts (:226, and :376 which is the LIVE auto-audit chain) each BUILD
+       location_text themselves as `search_location || address` and pass it in. Code that only filled a
+       BLANK location_text would fix the wizard alone and leave the two highest-volume paths — the ones
+       that produced eight Wisbech locksmiths — still asking about the wrong town.
+
+       Placed BEFORE the local-scope guard below on purpose: a derived town can satisfy a guard that
+       the searched town fails.
+
+       SKIPPED on the reuse path — a re-run must repeat the stored audit's town, like-for-like, or the
+       before/after stops comparing the same thing.
+
+       ONE try/catch, and it never rethrows: enrichment must not be able to block an audit. On any
+       failure the searched town is used and location_source records that it was not verified. */
+    let locationSource: "confirmed" | "derived" | "search" | "none" = locationText ? "search" : "none";
+    let townNote: string | null = null;
+    if (!effectiveReuseId && leadId) {
+      try {
+        const [onbRes, derived] = await Promise.all([
+          service.from("onboarding_responses").select("confirmed_location")
+            .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+          resolveDerivedTown(service, leadId),
+        ]);
+        const picked = pickAuditTown({
+          confirmedLocation: onbRes?.data?.confirmed_location ?? null,
+          derivedTown: derived.town,
+          searchLocation: locationText,
+        });
+        if (picked.town) { locationText = picked.town; locationSource = picked.source; }
+        townNote = derived.error;
+        console.log(
+          `[create-ai-audit] lead ${leadId}: town "${locationText}" via ${locationSource}`
+          + ` (derive: ${derived.source}${derived.error ? ` — ${derived.error}` : ""})`,
+        );
+      } catch (e) {
+        townNote = e instanceof Error ? e.message : String(e);
+        console.warn(`[create-ai-audit] town derivation failed, proceeding on the searched town: ${townNote}`);
       }
     }
 
@@ -459,6 +511,11 @@ Deno.serve(async (req) => {
         website,
         specialism: specialisms || null,
         business_scope: businessScope,
+        /* WHICH TOWN AND WHY. Without this a wrong-town audit is undiagnosable after the fact — you
+           cannot tell a verified Huntingdon from a searched Wisbech that happened to be right.
+           'search' means UNVERIFIED: nothing confirmed it. */
+        location_source: locationSource,
+        location_note: townNote,
       };
       // Mark this as a multi-run paid baseline. Migration-tolerant: if the column is not
       // there yet the insert is retried without it, so a pending migration degrades to an

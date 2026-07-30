@@ -135,7 +135,7 @@ interface BusinessGroup {
   runCount: number;
   cost: number;
 }
-interface LeadOption { id: string; business_name: string; category: string | null; country: string | null; website: string | null; address: string | null; search_keyword?: string | null; search_location?: string | null }
+interface LeadOption { id: string; business_name: string; category: string | null; country: string | null; website: string | null; address: string | null; search_keyword?: string | null; search_location?: string | null; derived_town?: string | null }
 
 const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
 
@@ -496,11 +496,15 @@ const AiAudit = () => {
     (async () => {
       const { data } = await supabase
         .from('outreach_leads')
-        .select('id, business_name, category, country, website, address, search_keyword, search_location')
+        .select('id, business_name, category, country, website, address, search_keyword, search_location, derived_town')
         .eq('is_archived', false)
         .order('created_at', { ascending: false })
         .limit(500);
-      setLeads((data ?? []) as LeadOption[]);
+      /* `as unknown as` because `derived_town` is not in the generated types yet — the column is added
+         by the migration Paul applies by hand, and types are regenerated after that. Without the
+         double cast this is a 16th typecheck error against a baseline of 15. Once the column is live
+         and types are regenerated, the plain `as LeadOption[]` cast will work again. */
+      setLeads((data ?? []) as unknown as LeadOption[]);
     })();
     loadSaved();
   }, [user, loadSaved]);
@@ -756,7 +760,12 @@ const AiAudit = () => {
     if (lead) {
       setBusinessName(lead.business_name ?? '');
       setBusinessType(lead.search_keyword || lead.category || '');
-      setLocationText(lead.search_location || lead.address || '');
+      /* derived_town FIRST — the town Google says the business is in, ahead of the town I searched.
+         Lead search has a radius, so search_location is a property of my query, not of the business.
+         The server applies the full precedence (confirmed || derived || search) and OVERRIDES whatever
+         this box contains, so this is about showing the operator the right town before they press go,
+         not about being the thing that fixes the bug. */
+      setLocationText(lead.derived_town || lead.search_location || lead.address || '');
       if (lead.country) setCountry(lead.country as Country);
       setHasWebsite(!!lead.website);
       setWebsite(lead.website ?? '');

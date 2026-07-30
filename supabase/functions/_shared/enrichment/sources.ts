@@ -17,7 +17,7 @@ import {
 } from "./apify.ts";
 import { AI_SEARCH_ACTOR } from "./ai-search.ts";
 
-export type SourceKey = "maps" | "contact_scraper" | "social_images" | "whatsapp" | "ai_search" | "seo_audit";
+export type SourceKey = "maps" | "contact_scraper" | "social_images" | "whatsapp" | "ai_search" | "seo_audit" | "place_details";
 export type SourceStage = "discovery" | "enrich";
 
 export interface EnrichmentSourceDef {
@@ -68,6 +68,20 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
     stage: "enrich",
     estCostUsd: 0.005, // Twilio Lookup line_type_intelligence (HLR proxy)
     description: "HLR line-type (mobile/landline) via Twilio Lookup — WhatsApp-capable proxy",
+    enabled: true,
+  },
+  place_details: {
+    key: "place_details",
+    stage: "enrich",
+    actorId: "",  // NOT an Apify actor — a direct Google Places API v1 call.
+    /* Google Places API v1, "Place Details (Essentials)" SKU: formattedAddress + addressComponents +
+       location only, at $5 per 1,000 calls = $0.005 per call. Asking for rating/userRatingCount would
+       move it to the Pro SKU at ~4x the price, which is why those fields are deliberately excluded
+       (see _shared/place-town.ts).
+       Cached 30 days per lead, so the steady-state cost is far below this: a lead is charged once and
+       then re-used by every later audit of that business. */
+    estCostUsd: 0.005,
+    description: "Real town + address from Google Place Details, keyed on the lead's place_id",
     enabled: true,
   },
   ai_search: {

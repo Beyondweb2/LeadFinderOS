@@ -22,6 +22,7 @@ const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
 /** Paid baseline shape, from the shared question-count policy. */
 import { BASELINE_QUESTIONS, BASELINE_RUNS } from "../../../src/lib/auditQuestionCounts.ts";
+import { pickAuditTown } from "./place-town.ts";
 
 /** Towns this is not. Mirrors findable-onboarding: forcing scope='local' needs a real town. */
 const NON_TOWN = new Set([
@@ -402,15 +403,29 @@ export async function startPaidBaseline(
 
     const { data: lead, error: lErr } = await service
       .from("outreach_leads")
-      .select("id, user_id, business_name, category, search_keyword, country, website, search_location")
+      .select("id, user_id, business_name, category, search_keyword, country, website, search_location, derived_town")
       .eq("id", leadId).maybeSingle();
     if (lErr) return { ok: false, error: `lead read failed: ${lErr.message}` };
     if (!lead) return { ok: false, error: "lead not found" };
 
     const bizType = ((lead.category as string) || (lead.search_keyword as string) || "").trim();
     if (!bizType) return { ok: false, skipped: "no_business_type" };
-    const locationText = ((row.confirmed_location as string) || (lead.search_location as string) || "").trim();
+    /* THE GUARANTEE PATH. This is the measurement the money-back promise is settled against, so the
+       town must be the one the business is actually in — a baseline measured on the searched town
+       would settle the guarantee against a question no real customer asks.
+
+       Precedence now matches create-ai-audit: confirmed_location || derived_town || search_location.
+       derived_town is read rather than fetched here: the outreach audit that preceded this baseline
+       already paid for it and cached it on the lead for 30 days, so a paying customer's chain never
+       waits on a Google call or fails because one errored. */
+    const picked = pickAuditTown({
+      confirmedLocation: row.confirmed_location as string | null,
+      derivedTown: lead.derived_town as string | null,
+      searchLocation: lead.search_location as string | null,
+    });
+    const locationText = picked.town;
     if (!locationText) return { ok: false, skipped: "no_location" };
+    console.log(`[baseline] lead ${leadId}: town "${locationText}" via ${picked.source}`);
     const scopeIsLocal = !NON_TOWN.has(locationText.toLowerCase());
 
     /* SEED FROM THE AUDIT THE PROSPECT ACTUALLY READ.
