@@ -919,12 +919,21 @@ const AiAudit = () => {
      mark a PAID measurement; copying them onto an "after" audit would make it look like a second
      paid baseline, and the paid-client backstop would start topping it up every minute. */
 
-  /** Ceiling used for the pre-confirm estimate, matching the server's own constant.
-   *  ⚠️ UNRESOLVED — see CLAUDE.md §8. `_shared/enrichment/sources.ts` says $0.0025 per question and
-   *  states the older $0.05 figure was 20x too high, but other notes still quote $0.0498. Actual
-   *  spend is recorded per run in `ai_audit_runs.actor_cost_usd`; until that is read this is an
-   *  ESTIMATE and is labelled as one on screen, never a promise. */
-  const RE_AUDIT_EST_USD_PER_QUESTION = 0.0025;
+  /** MEASURED, not estimated from a price list. Settled 2026-07-30 from `ai_audit_runs.actor_cost_usd`:
+   *  **81 runs, mean $0.04207 per run, $3.41 total, 26–30 July.** The runs behind that average are the
+   *  3–5 question outreach size that dominates the table, which puts a question at roughly $0.0125 —
+   *  and that reproduces both real-world anchors: a 3-question re-audit ≈ 3p, a 10-question × 3-run
+   *  baseline ≈ 30p.
+   *
+   *  This replaces two wrong numbers. The old $0.0025 here was ~5x too LOW; the £1.50 baseline figure
+   *  quoted in earlier notes was ~4x too HIGH.
+   *
+   *  ⚠️ THE SERVER CONSTANT IS STILL WRONG. `_shared/enrichment/sources.ts` has `estCostUsd: 0.0025`,
+   *  used by create-ai-audit's cap pre-check and by process-ai-audit-queue. It under-counts spend
+   *  against the cap by ~5x. Fixing it means editing a shared module and redeploying every function
+   *  that imports it — including the paid-baseline path — so it is deliberately NOT touched here.
+   *  Still an ESTIMATE on screen: cost varies per run and the actual figure is recorded afterwards. */
+  const RE_AUDIT_EST_USD_PER_QUESTION = 0.0125;
 
   const startReAudit = () => {
     if (!auditId || isDraining) return;
@@ -2267,15 +2276,16 @@ const AiAudit = () => {
                         {reAuditQuestions.filter((q) => q.trim()).length} question{reAuditQuestions.filter((q) => q.trim()).length === 1 ? '' : 's'}
                       </span>
                       {' · '}
-                      {/* ESTIMATE, said plainly. See RE_AUDIT_EST_USD_PER_QUESTION — the per-question
-                          price is unresolved between two figures, so this must not read as a quote. */}
+                      {/* Estimate, said plainly — the per-question rate is derived from measured spend
+                          (see RE_AUDIT_EST_USD_PER_QUESTION) but a given run still varies. */}
                       estimated cost{' '}
                       <span className="font-medium text-foreground">
                         ${(reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION).toFixed(4)}
                       </span>
                       {' '}(~{Math.round(reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION * 80)}p)
                       <span className="block text-[10px] text-muted-foreground/70">
-                        Estimate at ${RE_AUDIT_EST_USD_PER_QUESTION}/question × 1 run. Actual is recorded per run once it finishes.
+                        ${RE_AUDIT_EST_USD_PER_QUESTION}/question × 1 run, from measured spend (81 runs, mean
+                        $0.042/run). Varies per run — the actual figure is recorded when it finishes.
                       </span>
                     </div>
                     <Button size="sm" onClick={confirmReAudit}

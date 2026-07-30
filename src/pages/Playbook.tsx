@@ -162,15 +162,13 @@ export default function Playbook() {
   const steps: PlaybookStep[] = pb.tradeTooThin
     ? [{
         key: 'measure-trade', section: 'do_now',
-        /* ⚠️ COST DELIBERATELY NOT STATED. This used to read "about 15p", which came from a
-           per-question figure that is unresolved: the constant the code uses is $0.0025 and says the
-           older $0.05 was 20x too high, which would make this under 1p rather than 15p. Rather than
-           print either number on an operator checklist, it says pennies and points at the source of
-           truth. See CLAUDE.md §8 — settle it from ai_audit_runs.actor_cost_usd. */
-        label: 'Run one audit on this business type and read which sources get cited — a few pence.',
+        /* COST IS NOW MEASURED, not guessed. Settled 2026-07-30 from ai_audit_runs.actor_cost_usd:
+           81 runs, mean $0.042 per run ≈ 3.4p, so a 3-question audit is about 3p. This line has said
+           two wrong things before — "about 15p" (~5x too high) and then a hedged "a few pence". */
+        label: 'Run one audit on this business type and read which sources get cited — about 3p.',
         host: null, signupUrl: null, urlVerified: true, fields: [], minutes: 15,
         citations: 0, audits: 0, strength: 'evidenced',
-        notes: 'Nothing below is a measured list for this trade. One audit turns this page from an inference into evidence. Cost is pennies but the exact per-question price is unconfirmed — check the run cost afterwards rather than quoting it.',
+        notes: 'Nothing below is a measured list for this trade. One audit turns this page from an inference into evidence. About 3p, from measured spend across 81 runs.',
         done: false, verified: false, listingUrl: null,
       }, ...pb.steps]
     : pb.steps;
