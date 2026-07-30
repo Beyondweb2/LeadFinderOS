@@ -1,7 +1,8 @@
 import { useParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ArrowLeft, ExternalLink, AlertTriangle, Clock, Trophy, Ban, Globe, ArrowDownToLine, CheckCircle2, Printer } from 'lucide-react';
+import { Loader2, ExternalLink, AlertTriangle, Clock, Trophy, Ban, Globe, ArrowDownToLine, CheckCircle2, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { BackLink } from '@/components/BackLink';
 import { SEOHead } from '@/components/SEOHead';
 import { usePlaybook } from '@/hooks/usePlaybook';
 import { thinTradeMessage, type PlaybookStep, type Section } from '@/lib/buildPlaybook';
@@ -151,9 +152,7 @@ export default function Playbook() {
     return (
       <div className="mx-auto max-w-2xl py-12 text-center">
         <p className="text-sm text-muted-foreground">{error ?? 'No playbook to show.'}</p>
-        <Link to="/paid-clients" className="mt-3 inline-flex items-center gap-1.5 text-xs text-primary hover:underline">
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to Paid Clients
-        </Link>
+        <div className="mt-3"><BackLink /></div>
       </div>
     );
   }
@@ -186,6 +185,7 @@ export default function Playbook() {
         noindex
       />
       <div className="mx-auto max-w-4xl space-y-4 py-4">
+        <BackLink />
         {/* CLIENT CARD */}
         <Card>
           <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-2">

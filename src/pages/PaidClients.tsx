@@ -28,6 +28,7 @@ import {
   Pencil,
   Check,
   X,
+  ClipboardList,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -37,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { format, isPast, isToday, differenceInDays } from 'date-fns';
+import { Link } from 'react-router-dom';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import type { OutreachLead } from '@/types/outreach';
 
@@ -221,6 +223,18 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
                 <Check className="h-3 w-3 mr-0.5" />
                 Paid
               </span>
+              {/* DELIVERY CHECKLIST. These are the people the playbook is actually for, so it sits
+                  beside the Paid badge rather than inside the overflow menu. The lead id resolves
+                  via usePlaybook's lead fallback. */}
+              <Link
+                to={`/playbook/${lead.id}`}
+                state={{ from: '/paid-clients', fromLabel: 'Paid Clients' }}
+                className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary hover:bg-primary/20"
+                title="Open the delivery checklist for this client"
+              >
+                <ClipboardList className="h-3 w-3" />
+                Playbook
+              </Link>
               {lead.payment_date && (
                 <span className="text-[10px] text-muted-foreground/50">
                   {format(new Date(lead.payment_date), 'MMM d, yyyy')}

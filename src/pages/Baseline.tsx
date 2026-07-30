@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { BackLink } from '@/components/BackLink';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Target, ArrowLeft } from 'lucide-react';
+import { Loader2, Target } from 'lucide-react';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import {
   buildBaselineView, BANDS, BAND_LABEL, BAND_MEANING,
@@ -97,9 +98,9 @@ export default function Baseline() {
     return (
       <div className="mx-auto max-w-2xl py-12 text-center">
         <p className="text-sm text-muted-foreground">{error ?? 'No baseline to show.'}</p>
-        <Link to="/paid-clients" className="mt-3 inline-flex items-center gap-1.5 text-xs text-primary hover:underline">
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to Paid Clients
-        </Link>
+        {/* Same component as the success state below and as /playbook/:id — one pattern, three
+            places, so they cannot drift apart. */}
+        <div className="mt-3"><BackLink /></div>
       </div>
     );
   }
@@ -114,6 +115,8 @@ export default function Baseline() {
         noindex
       />
       <div className="mx-auto max-w-5xl space-y-4 py-4">
+        {/* Was missing entirely — this view was reachable only by URL and had no way out. */}
+        <BackLink />
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold">{audit.business_name ?? 'Baseline'}</h1>
