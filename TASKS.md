@@ -91,6 +91,27 @@ Removing it is a separate call.
 | `postal_town` coarseness (Dodworth → Barnsley) | Undecided, CLAUDE.md §8 |
 | Repeating print headers | Paul: cosmetics wait until he has read it |
 
+### Fifth brief, 2026-07-30 — "audit questions failing" regression ✅ (`89181dbe`)
+**Not a regression in our code.** Apify's monthly account cap was exhausted ($90.02 of $90.00); the
+questions failed with `HTTP 402` then `403`, and the UI mislabelled it "term too broad". Full detail
+in CLAUDE.md §4 and §8. Paul raised the cap to $100.
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Real stored error shown in plain English + raw string, "term too broad" deleted | ✅ deployed, live-verified |
+| 2 | Apify spend line on `/ai-audit`, amber 75% / red 90% | ✅ deployed, live-verified |
+| 3 | Fail fast on 402/403 instead of burning 3 attempts | ⏸️ **Paul deferred** — live-queue change, wait until he has finished testing |
+
+**Unverified and worth one look:** the failed-question card itself was never seen rendering the new
+message — the harness returned no queue rows for that run. The mapper is verified against both real
+stored strings; the three lines of JSX that display it are not. Open a failed audit's **Detailed
+results** to confirm.
+
+**Also never confirmed:** that a question completes again now the cap is raised. Nothing has been
+attempted since 14:25. `create-ai-audit`'s internal path (service key + `x-internal-job`) returned
+401 from this environment — the CLI's legacy service_role key is evidently not what the function
+holds in its env, so a run could not be triggered from outside the browser.
+
 ### Still to do after the test passes
 - [ ] `npx supabase gen types typescript --project-ref ruusxpkkmwtljxxulhbq > src/integrations/supabase/types.ts`
       — Paul approved. Lets the `as unknown as` casts in `AiAudit.tsx` and the `as never` in

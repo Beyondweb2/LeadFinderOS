@@ -125,6 +125,25 @@ below, and it bit twice tonight:
 - Use word boundaries (`/\bACCA\b/`) or match a distinctive full token. When a check comes back positive,
   print the surrounding characters before you believe it.
 
+**A CATCH-ALL ERROR MESSAGE IS WORSE THAN NO MESSAGE.** The AI Audit page printed one hardcoded line
+for every failed question — *"Couldn't check — term too broad to complete. Retry or narrow it."* — while
+the real error sat unread in `ai_audit_queue.result.error` AND `ai_audit_runs.results.error`. On
+2026-07-30 it displayed that for `Apify start apify~google-search-scraper HTTP 402` (account out of
+money) and sent Paul off to rewrite questions that had worked two hours earlier. **There was never any
+breadth detection in the codebase** — the phrase existed only in that JSX string. Fixed in
+`src/lib/auditErrors.ts` (`explainAuditFailure`), which always prints the raw string too. When a UI
+explains a failure, check the explanation is derived from the failure.
+
+**An end-of-day-UTC timestamp formats as the NEXT DAY in British Summer Time.** Apify's cycle end is
+`2026-08-03T23:59:59.999+00:00`; `toLocaleDateString('en-GB')` without a `timeZone` rendered
+"4 Aug" — a day late, on the one date the operator was waiting for. Always pass `timeZone: 'UTC'`
+when formatting a stored UTC instant that represents a *day*.
+
+**RLS-enabled-with-NO-policies reads as "no data", not as "denied".** `apify_account_usage` is
+service-role-only by design, so a SPA read returns **HTTP 200 with `[]`** — indistinguishable from a
+healthy empty table. Its own migration comment says "so the figure is visible in the app" and the
+policy was never added, so nothing ever displayed it. Route such reads through an edge function.
+
 **Not being able to see something is not evidence it isn't there.**
 - The **anon key cannot read most tables** — RLS returns **HTTP 200 with `[]`**, not an error. An empty result
   proves nothing about the data.
@@ -311,6 +330,24 @@ Facts with numbers. These are measured, and several contradict the older docs.
   ⚠️ Consequence for any cost query you write: **you must include the `*_correction` rows.** Filtering
   `enrichment_type = 'ai_search'` alone reads ~5× too low, and filtering lifetime rows reads too HIGH for the
   older ones that were estimated at $0.05. Sum everything, or use `ai_audit_runs.actor_cost_usd`.
+- 🔴 **APIFY IS A SINGLE POINT OF FAILURE FOR THE WHOLE PRODUCT, AND IT HAS A MONTHLY CAP.** Every
+  AI-visibility question check *and* every SEO scan runs through it, so at 100% **both stop at the
+  same moment**. Incident 2026-07-30: the account hit **$90.02 of a $90.00 cap** and audits failed
+  with `HTTP 402` (then `403`). Cycle runs **4 July → 3 August**; Paul raised the cap to **$100** the
+  same day (90.0% used, ~$10 headroom).
+  - **It was not caused by that day's audits.** The account was already at **$89.78 (99.8%) by
+    12:38**; the day's own audit spend was **$0.67**. It crossed 90% on **28 July**.
+  - `apify-usage.ts` had logged `CRITICAL` **170 times over two days** — into edge-function logs
+    nobody reads. Now surfaced on `/ai-audit` via the **`apify-usage-status`** function +
+    `useApifyUsage` + `ApifyUsageLine`. Amber ≥75%, red ≥90%, thresholds shared with that module.
+  - ⚠️ **Recompute the percentage from used/cap; never trust `usage_pct`.** The cap can be RAISED
+    mid-cycle, and the stored figure is only true for the cap in force when the row was written —
+    after the rise it still read 100% while the truth was 90.0%.
+  - Distinguishing OUR cap from THEIRS: the queue writes the exact tokens `capped` and `daily_cap`.
+    Anything else — including a raw `Apify start … HTTP nnn` — is the vendor, not us.
+  - ⚠️ **Still outstanding:** the queue spends **`MAX_ATTEMPTS = 3`** attempts per question against a
+    402/403 hard stop. Failing fast on those is deliberately **not built** — Paul deferred it as a
+    live-queue behaviour change while he was testing.
 - **No Baseline Test button.** Baselines are gated to internal callers (cron secret or service role +
   `x-internal-job`) and currently only start from `stripe-webhook` after payment. A button needs an
   authenticated path. Cost ≈ **30p** (measured — see above).
