@@ -21,7 +21,7 @@ import {
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
 import type { Country } from '@/types/outreach';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
@@ -2031,6 +2031,11 @@ const AiAudit = () => {
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" /> New audit
             </DialogTitle>
+            {/* Required by Radix: DialogContent without a description logs an a11y warning, and it
+                is what a screen reader announces after the title. */}
+            <DialogDescription>
+              Pick a business, check the details, then review the questions before anything is spent.
+            </DialogDescription>
           </DialogHeader>
 
           {/* SOURCE — moved in with the form. Without it the dialog could not switch to a different
@@ -2123,7 +2128,9 @@ const AiAudit = () => {
                   <p className="text-[11px] text-muted-foreground">Optional — helps ground the questions.</p>
                 </div>
 
-                {/* Number of questions to generate (6–12, default 8) */}
+                {/* Number of questions to generate. The real range is WIZARD_MIN/MAX_QUESTIONS =
+                    3–5, default 3 (src/lib/auditQuestionCounts.ts). This comment said "6–12, default
+                    8" — stale, and wrong in a way that would mislead anyone estimating cost from it. */}
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">How many questions?</Label>
                   <div className="flex items-center gap-3">
