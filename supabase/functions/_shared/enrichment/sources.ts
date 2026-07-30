@@ -85,12 +85,14 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
        so erring high fails safe, and it matches RE_AUDIT_EST_USD_PER_QUESTION in AiAudit.tsx so the
        operator's estimate and the cap agree.
 
-       WHY THIS MATTERED. It was 0.0025, derived from a price-list reading ($2.50 per 1,000 result
-       pages) rather than from a bill — but a question returns SEVERAL result pages, so the real cost
-       is ~4.6x that. The cap accounting logs this estimate as the spend for each ai_search row
-       (startRow passes costUsd: estCost), so enrichment_usage under-recorded by ~5x and the rolling
-       24h cap let roughly 5x more real money through than DAILY_CAP_USD names. Apify is a shared
-       account and exhausting it took the audit engine down for five hours once.
+       WHY THIS MATTERED, AND WHY IT WAS NOT AN EMERGENCY. It was 0.0025, read off a price list ($2.50
+       per 1,000 result pages) rather than a bill — but a question returns SEVERAL result pages, so the
+       real cost is ~4.6x that.
+       It did NOT corrupt the spend accounting, which is what it first looked like: recordCostCorrection
+       (runner.ts) writes a second enrichment_usage row for `actual - estimated` once the actor
+       finishes, so sum(cost_usd) already equalled real spend at any estimate. What a wrong estimate
+       DID distort is the reservation in the cap pre-check and how many rows a tick is allowed to
+       start — under-reserving by ~$0.01 per question. Worth fixing, not a fire.
 
        DO NOT re-derive this from a price list again. actor_cost_usd is the bill; use it. */
     estCostUsd: 0.0125,
