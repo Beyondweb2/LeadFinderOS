@@ -128,6 +128,27 @@ failed-question card renders the real 403 with the reset date and the raw string
 | Cannot re-enrich an existing lead | Retry buttons are gated on in-session `phoneFetchStatus`; bulk skips leads that have a phone |
 | Queue burns 3 attempts on a 402/403 | Still deferred by Paul |
 
+### Seventh brief, 2026-07-30 — client request form ✅ built, ⏳ NOT YET LIVE (`56134630`)
+The first client-facing document. Two files: `clientRequestDoc.ts` (renderer, imports only
+`playbookDocStyle`, structurally cannot see the ranking) and `clientRequestSelect.ts` (the only side
+that does). `buildClientDoc` deleted. Two labelled buttons on `/playbook/:id`. Detail in CLAUDE.md §9.
+
+Verified against the real Macca-Gas data in a harness: three asks (Checkatrade 59/62, MyBuilder 32/62,
+TrustATrader 17/62), address shown MISSING with its why, **zero of 20 non-ask plumber hosts present**
+while the operator doc from the same fold contains them, 2.5 A4 pages, and the `naming=null` variant
+omits the measurement line without inventing a figure.
+
+🔴 **DEPLOY PENDING.** `origin/main` has it; Cloudflare was still serving commit `1715a294`
+(`AiAudit-C55Dvb4S.js`) after 15 minutes of polling. **Check the Pages dashboard** — if the build
+failed it needs a retry. The check: open `/playbook/<audit id>` and look for two buttons.
+
+| Open, reported not built | Note |
+|---|---|
+| MyBuilder's client wording says "the third most common source" | Implies an unnamed #2. Leaks no host; one-word edit if wanted |
+| Google Business Profile access | `buildClientDoc` asked for it; the new form does not. Out of the stated scope — say if wanted |
+| Nothing tickable | `client_listings` is read-only on `/playbook/:id` |
+| Cannot re-enrich an existing lead | The form is currently the only route to Macca-Gas's address |
+
 ### Still to do after the test passes
 - [ ] `npx supabase gen types typescript --project-ref ruusxpkkmwtljxxulhbq > src/integrations/supabase/types.ts`
       — Paul approved. Lets the `as unknown as` casts in `AiAudit.tsx` and the `as never` in

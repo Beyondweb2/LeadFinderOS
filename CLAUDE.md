@@ -131,6 +131,14 @@ below, and it bit twice tonight:
 - Use word boundaries (`/\bACCA\b/`) or match a distinctive full token. When a check comes back positive,
   print the surrounding characters before you believe it.
 
+**CLOUDFLARE PAGES CAN SIT ON A PUSH FOR 15+ MINUTES — that is not the ~90-second lag §4 describes.**
+Commit `56134630` was verified on `origin/main`, built clean locally, and the live site still served the
+PREVIOUS `AiAudit-C55Dvb4S.js` after 15 minutes of polling. Before concluding a deploy failed, prove
+where live actually IS: read the entry chunk, then check a marker from the **previous** confirmed
+deploy. If the old markers are present and the new ones absent, it is the pipeline, not the code — say
+so rather than claiming success or hunting a phantom bug. Also confirm which chunk your marker lands in
+locally (`grep -l <marker> dist/assets/*.js`) before trusting a False.
+
 **A CATCH-ALL ERROR MESSAGE IS WORSE THAN NO MESSAGE.** The AI Audit page printed one hardcoded line
 for every failed question — *"Couldn't check — term too broad to complete. Retry or narrow it."* — while
 the real error sat unread in `ai_audit_queue.result.error` AND `ai_audit_runs.results.error`. On
@@ -412,14 +420,31 @@ Facts with numbers. These are measured, and several contradict the older docs.
   deleted, so the prompt stays readable as the record of what went wrong. Don't "tidy" them away.
   The button is gated on `auditId` **alone** — not on a completed run — because the ranking is
   trade-level, so the document is right even when that run failed at the Apify cap.
-  🔴 **TWO GAPS THIS EXPOSED, both pre-existing:**
-  - **There is NO client-facing playbook.** `buildClientDoc()` exists in `buildPlaybook.ts` and
-    **nothing renders it** — dead code. The only reachable document is the operator copy, headed
-    "Internal — execution copy, not for the client". The removed LLM viewer's Internal/Client toggle
-    was the only client-view UI that ever existed.
-  - **Nothing is tickable.** The `DeliveryChecklist` ticked per run into localStorage.
-    `/playbook/:id` displays `client_listings.done_at`/`verified_at` but **cannot set them** (read-only
-    there), so there is nowhere to mark delivery work done.
+  🔴 **ONE GAP STILL OPEN:** **nothing is tickable.** The `DeliveryChecklist` ticked per run into
+  localStorage. `/playbook/:id` displays `client_listings.done_at`/`verified_at` but **cannot set
+  them** (read-only there), so there is nowhere to mark delivery work done.
+- ✅ **THE CLIENT REQUEST FORM — the only client-facing document** (`56134630`, 2026-07-30). Reached
+  by **`Print client request`** on `/playbook/:id`, beside **`Print operator copy`**. Labelled by who
+  each is FOR, with "Operator copy contains their competitors — never send it" under them.
+  - **THE LEAK BOUNDARY IS STRUCTURAL, and must stay that way.** `clientRequestDoc.ts` (the renderer)
+    imports **only** `playbookDocStyle` — never `buildPlaybook`, `directoryFacts` or the selector — so
+    it is never handed the ranking and cannot print it. `clientRequestSelect.ts` is the only side that
+    sees the `Playbook`. If the sheet ever needs more, widen `ClientRequestInput` deliberately; do
+    **not** pass the Playbook through.
+  - **Which asks: 4 filters.** `blocked` only → not `thin` → **has a hand-written `clientParagraph`**
+    → top **`CLIENT_ASK_LIMIT` (3)** by **breadth**. For plumbers: Checkatrade 59/62, MyBuilder 32/62,
+    TrustATrader 17/62. **MyJobQuote is excluded despite 11/62** because nobody wrote client wording
+    for it *and* its notes record the pay-per-lead model as "INFERRED" — never ask a client to spend
+    money on an inferred model, and never write generic filler to fill the gap.
+  - **No completed run → the measurement line is OMITTED**, replaced by an honest substitute. It does
+    not refuse to render: the address ask is valid regardless, and refusing would block the one field
+    holding up all the work.
+  - ⚠️ **`buildClientDoc` was DELETED** — written, never rendered, and it leaked the measurement
+    METHOD verbatim plus every blocked host uncapped. Its a/an helper, `{trade}`/`{town}` fill and
+    "Being straight with you" wording were lifted first.
+  - ⚠️ **MyBuilder's hand-written client paragraph still opens "MyBuilder is the third most common
+    source we see for plumber work."** That ordinal implies a #2 the document never names. It leaks no
+    host, so it passes the rule, but it is worth a one-word edit. Paul's call, not changed.
 - ⚠️ **ENRICHMENT CANNOT BE RE-TRIGGERED ON AN EXISTING LEAD FROM THE UI.** `retryPhoneFetch` exists,
   force-refreshes Google and (since 2026-07-30) writes address/rating/reviews/town — but the only
   buttons that call it (`OutreachTable.tsx:2018` and `:2165`) render **only when
