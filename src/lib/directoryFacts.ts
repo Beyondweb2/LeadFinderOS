@@ -98,6 +98,17 @@ export interface DirectoryFact {
   /** Not a listing you can join (e.g. a statutory register) — never appears as a task. */
   notAListing?: boolean;
   /* ══════════════════════════════════════════════════════════════════════════
+     HAND-WRITTEN SUB-STEPS for the printed document. Yell's steps are always Yell's steps: this is
+     a property of the host, learned by looking at its signup flow, exactly like `signupUrl` and
+     `blockedReason`. It is NOT the banned `trade` field and never decides which hosts surface.
+
+     DELIBERATELY ABSENT ON MOST HOSTS, AND THERE IS NO GENERIC FALLBACK. Invented generic steps
+     ("create an account, fill in your details, submit") are precisely what made the LLM document
+     useless, so a host with no written steps prints an explicit "no written steps yet" line rather
+     than filler or a silent gap. Only write these from a flow someone has actually looked at.
+     ══════════════════════════════════════════════════════════════════════════ */
+  steps?: string[];
+  /* ══════════════════════════════════════════════════════════════════════════
      TOWN-SPECIFIC. The town this host's directory actually covers, when it covers only one.
      Set it and the host can only become a task for a business IN that town; anywhere else it
      becomes a prompt to go and find the local equivalent.
@@ -126,6 +137,17 @@ export const DIRECTORY_FACTS: DirectoryFact[] = [
     signupUrl: 'https://join.checkatrade.com/', urlVerified: true, kind: 'directory',
     actor: 'client-only', cost: 'membership',
     blockedReason: 'Paid 12-month membership plus identity vetting — photo ID, selfie, address confirmation and a CCJ check. Confirmed by the operator, not inferrable from the site.',
+    /* CLIENT-ONLY, so these are instructions for the CLIENT PACK, not for the operator's hour.
+       Written as what the client will be asked for, because the value of listing them is that the
+       client can gather the documents before they start rather than abandoning it half way. */
+    steps: [
+      'THE CLIENT MUST DO THIS ONE — we cannot, and should not try. Everything below goes in the client pack.',
+      'They start at the join URL below and choose their trade category.',
+      'They will be asked for photo ID and a selfie to match it, so tell them to have a passport or driving licence to hand.',
+      'They will be asked to confirm their address, and a credit/CCJ check is run as part of vetting.',
+      'It is a PAID 12-month membership. Do not imply to the client that it is free, and do not commit them to the cost.',
+      'Once they are live, ask them for the listing URL so it can be recorded against this business.',
+    ],
     clientParagraph: `When someone asks ChatGPT or Gemini for a {trade} in {town}, the answer is very often built from Checkatrade. Across the businesses we have measured it came up more than any other source, by a wide margin.
 
 We cannot sign you up, and we would not want to. Checkatrade verifies that you are who you say you are — photo ID, a selfie, your address and a credit check — and it is a paid annual membership. That verification is exactly why AI tools lean on it, so a listing someone else created on your behalf would be worth less even if it were possible.
@@ -141,6 +163,13 @@ We are not going to tell you this guarantees you will be named. We are telling y
     signupUrl: 'https://www.yell.com/free-listing/', urlVerified: true, kind: 'directory',
     actor: 'operator-start', cost: 'free',
     notes: 'A free basic listing exists. Ownership verification normally sends a code to the business, so the client has to finish it.',
+    steps: [
+      'Open the free-listing URL below. It is the FREE listing form — do not follow any "advertise with us" upsell, which is a paid product.',
+      'Paste the business name, trade, town, phone and address from the field list below, exactly as written. Same wording everywhere is the whole point.',
+      'Set the category to the trade word from the field list, not a broader one. "Plumber" beats "Home services".',
+      'Add the website if there is one. Leave it blank rather than putting a Facebook page in the website box.',
+      'Submit. STOP HERE — the ownership check sends a code to the business, so you cannot finish it. Add it to the client pack with the code recipient named.',
+    ],
   },
   {
     host: 'mybuilder.com', label: 'MyBuilder',
@@ -148,6 +177,13 @@ We are not going to tell you this guarantees you will be named. We are telling y
     signupUrl: 'https://www.mybuilder.com/tradesperson/register', urlVerified: true, kind: 'directory',
     actor: 'client-only', cost: 'pay-per-lead',
     blockedReason: 'Pay-per-lead. Signing a business up commits them to spending money per enquiry — their commercial decision, not ours.',
+    steps: [
+      'THE CLIENT MUST DO THIS ONE. Registering is free, but responding to an enquiry costs them money, so the decision is theirs to make.',
+      'They register at the URL below as a tradesperson and pick their trade and working radius.',
+      'Explain the model plainly before they sign up: the listing costs nothing, each lead they choose to answer is charged.',
+      'They control their own spend from there — do not set a budget on their behalf.',
+      'Once live, ask them for the profile URL so it can be recorded against this business.',
+    ],
     clientParagraph: `MyBuilder is the third most common source we see for {trade} work. It is a pay-per-lead site: listing is free but you pay for each enquiry you choose to respond to.
 
 That makes it your decision rather than ours — we are not going to commit you to a per-lead cost. If you already use it, tell us and we will make sure the details match your other listings. If you do not, it is worth a look, but we would not push you onto it.`,
@@ -177,6 +213,12 @@ Only you can apply.`,
        listings, so this is operator-actionable start to finish. URL previously verified by hand. */
     kind: 'directory', actor: 'operator', cost: 'free',
     notes: 'Registered users can add details to business listings. Free.',
+    steps: [
+      'Register a user account at the URL below if there is not one already, then search 192.com for the business name and town first — a stub listing often already exists.',
+      'If a listing exists, add the missing details to it rather than creating a duplicate. Two half-listings are worse than one complete one.',
+      'If nothing exists, add the business and paste the name, trade, town, phone and address from the field list below.',
+      'Save. This one completes start to finish without the client — no code is sent.',
+    ],
   },
   {
     host: 'cylex-uk.co.uk', label: 'Cylex UK',
@@ -186,6 +228,12 @@ Only you can apply.`,
        is client-only, so it is never a link clicked mid-task — this one is. Check the path before
        relying on it; if it is wrong you lose time inside the hour rather than in the client pack. */
     notes: '⚠ URL UNVERIFIED and this one is on YOUR list — check it before you rely on it. Free listing, appears on town subdomains. Verification method also unconfirmed.',
+    steps: [
+      'CHECK THE URL FIRST. This is the only unverified link on the operator\'s own list — if the path has moved, find the "add company" page from the Cylex UK homepage before spending any more time.',
+      'Add the company and paste the name, trade, town, phone and address from the field list below.',
+      'Pick the town subdomain matching the business\'s town if it offers one.',
+      'Save, then note whether a confirmation email or code was required — that step is unconfirmed in our notes, so record what actually happened.',
+    ],
   },
   {
     host: 'icaew.com', label: 'ICAEW — Find a Chartered Accountant',
@@ -217,12 +265,24 @@ It is a paid subscription for advisers, so it is your call and your signup. We w
     signupUrl: 'https://www.thomsonlocal.com/', urlVerified: false, kind: 'directory',
     actor: 'operator', cost: 'free',
     notes: 'Barely appears in our data — 3 citations. Listed for completeness only.',
+    steps: [
+      'LOWEST PRIORITY ON THE SHEET — 3 citations in all our data. Do the higher-cited ones first and only come back to this if the hour is not used up.',
+      'The URL below is the homepage, not a verified signup path: find the "add your business" link from there.',
+      'Paste the name, trade, town, phone and address from the field list below.',
+      'Save. If it demands a phone or email confirmation, stop and note it rather than chasing it — this one is not worth a callback.',
+    ],
   },
   {
     host: 'yelp.com', label: 'Yelp',
     signupUrl: 'https://biz.yelp.co.uk/', urlVerified: false, kind: 'directory',
     actor: 'operator-start', cost: 'free',
     notes: 'Business owner normally claims the page. Barely appears in our data.',
+    steps: [
+      'Search Yelp for the business and town first — Yelp auto-creates pages, so one may already exist and need claiming rather than adding.',
+      'If a page exists, start the claim from it. If not, add the business from the URL below.',
+      'Paste the name, trade, town, phone and address from the field list below.',
+      'STOP BEFORE THE FINAL CLAIM — Yelp verifies the owner by phone call or code to the business, so the client finishes this. Add it to the client pack.',
+    ],
   },
   {
     host: 'uk.trustpilot.com', label: 'Trustpilot',

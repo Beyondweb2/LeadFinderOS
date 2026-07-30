@@ -143,7 +143,7 @@ function StepRow({ step }: { step: PlaybookStep }) {
 
 export default function Playbook() {
   const { id } = useParams<{ id: string }>();
-  const { playbook: pb, ownCitations: oc, resolvedAs, auditId, isLoading, error } = usePlaybook(id);
+  const { playbook: pb, ownCitations: oc, seo, naming, resolvedAs, auditId, isLoading, error } = usePlaybook(id);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -208,9 +208,11 @@ export default function Playbook() {
                   <div className="text-2xl font-bold tabular-nums">{doNowMinutes}</div>
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70">operator minutes</p>
                 </div>
-                {/* Prints the same fold through the old document's stylesheet. Browser print dialog,
-                    no PDF library — see playbookDoc.ts. */}
-                <Button size="sm" variant="outline" onClick={() => printPlaybookDoc({ ...pb, steps })}>
+                {/* Prints the same fold in the old document's layout. Browser print dialog, no PDF
+                    library — see playbookDoc.ts. `seo` and `naming` are passed straight through for the
+                    add-on section and the summary line; the SCREEN renders neither, and this is the only
+                    change on this page. */}
+                <Button size="sm" variant="outline" onClick={() => printPlaybookDoc({ ...pb, steps }, seo, naming)}>
                   <Printer className="mr-1.5 h-3.5 w-3.5" /> Print
                 </Button>
               </div>

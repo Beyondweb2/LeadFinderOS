@@ -6,7 +6,8 @@ import {
   type EvidenceRow, type ListingRecord, type Playbook, type PlaybookLead,
 } from '@/lib/buildPlaybook';
 import { buildOwnCitations, type OwnCitations } from '@/lib/ownCitations';
-import type { QueueRow } from '@/lib/auditReport';
+import { aggregateSeoFindings, isRenderableSeo, SCORED_ENGINES, type QueueRow } from '@/lib/auditReport';
+import type { AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 
 /**
@@ -57,6 +58,24 @@ export interface UsePlaybookResult {
   /** What the engines cited when asked about THIS business. Null when the id resolved to a lead with
    *  no audit — there are no citations to read without an audit. */
   ownCitations: OwnCitations | null;
+  /* THE REAL SEO SCAN for this audit's latest scanned run, or null when no scan has been run.
+     Read straight off ai_audit_runs.results.seo — the SAME stored object the customer report renders,
+     so the document cannot show a grade the report disagrees with.
+
+     Findings go through aggregateSeoFindings, exactly as buildReportData does. The scan actor reports
+     per CRAWLED PAGE, so a 3-page crawl emits "6 images without alt text", "5 images…" and "4 images…"
+     as three separate findings of the same fault — Macca-Gas has precisely that. Printing them raw
+     would pad the sheet with the same issue three times.
+
+     NOT fed into buildPlaybook, deliberately. It changes no ranking, no priority and no task: it is a
+     separately-charged add-on rendered in its own section. Website quality is measured NOT to be why a
+     business goes unnamed, so letting it touch the fold would be wrong as well as unnecessary. */
+  seo: AiAuditSeo | null;
+  /* HOW OFTEN THE ENGINES NAMED THEM, for the document's summary line. Null when no question has
+     completed. Derived by the SAME rule as the customer report (buildReportData:636-649): one
+     datapoint per SCORED engine per DONE question, preferring the run's stored summary counts when
+     present so the sheet and the report cannot disagree. */
+  naming: { named: number; total: number } | null;
   /** Which row the id resolved to — printed on the page so the audit-first path is never a mystery. */
   resolvedAs: 'audit' | 'lead' | null;
   auditId: string | null;
@@ -75,6 +94,8 @@ const leadTrade = (l: LeadRow) => (l.search_keyword ?? '').trim() || (l.category
 export function usePlaybook(id: string | undefined): UsePlaybookResult {
   const [playbook, setPlaybook] = useState<Playbook | null>(null);
   const [ownCitations, setOwnCitations] = useState<OwnCitations | null>(null);
+  const [seo, setSeo] = useState<AiAuditSeo | null>(null);
+  const [naming, setNaming] = useState<{ named: number; total: number } | null>(null);
   const [resolvedAs, setResolvedAs] = useState<'audit' | 'lead' | null>(null);
   const [auditId, setAuditId] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
@@ -162,13 +183,52 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
             .order('id', { ascending: true })
             .range(from, to));
         setOwnCitations(buildOwnCitations(qRows, pbLead.business_name ?? ''));
+
+        /* 6. THE SEO SCAN, if one has ever been run for this audit. Newest run first, and the first
+           one carrying a RENDERABLE scan wins — a later run without a scan must not blank a scan an
+           earlier run produced. isRenderableSeo is the report's own guard (needs both category
+           grades), so a half-written or failed scan object is treated as no scan at all rather than
+           rendering an empty grade box. Failure here is non-fatal: the document simply omits the
+           section, because a missing add-on must never cost the operator the directory list. */
+        try {
+          const { data: runRows } = await client
+            .from('ai_audit_runs').select('id, results, created_at')
+            .eq('audit_id', audit.id).order('created_at', { ascending: false });
+          const rows = (runRows ?? []) as Array<{ results?: { seo?: unknown; summary?: { named_datapoints?: number; total_datapoints?: number } } | null }>;
+          const withSeo = rows.map((r) => r.results?.seo).find((s) => isRenderableSeo(s));
+          setSeo(withSeo
+            ? { ...(withSeo as AiAuditSeo), leadFindings: aggregateSeoFindings((withSeo as AiAuditSeo).leadFindings ?? []) }
+            : null);
+
+          /* Stored summary counts win, exactly as buildReportData prefers them; otherwise count live
+             off the queue rows already fetched above. One datapoint per SCORED engine per DONE row. */
+          const stored = rows.map((r) => r.results?.summary)
+            .find((s) => typeof s?.named_datapoints === 'number' && typeof s?.total_datapoints === 'number');
+          if (stored) {
+            setNaming({ named: stored.named_datapoints!, total: stored.total_datapoints! });
+          } else {
+            let n = 0, t = 0;
+            for (const r of qRows) {
+              if (r.status !== 'done' || !r.result) continue;
+              for (const e of SCORED_ENGINES) { t++; if (r.result[e]?.named) n++; }
+            }
+            setNaming(t > 0 ? { named: n, total: t } : null);
+          }
+        } catch {
+          setSeo(null);
+          setNaming(null);
+        }
       } else {
         setOwnCitations(null);
+        setSeo(null);
+        setNaming(null);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not build that playbook.');
       setPlaybook(null);
       setOwnCitations(null);
+      setSeo(null);
+      setNaming(null);
     } finally {
       setIsLoading(false);
     }
@@ -176,5 +236,5 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
 
   useEffect(() => { load(); }, [load]);
 
-  return { playbook, ownCitations, resolvedAs, auditId, leadId, isLoading, error, reload: load };
+  return { playbook, ownCitations, seo, naming, resolvedAs, auditId, leadId, isLoading, error, reload: load };
 }
