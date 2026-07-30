@@ -70,14 +70,18 @@ const CAP_USD = 1.0;             // per-RUN Apify cost ceiling (this audit run)
    a scan = $0.1575 each) is $4.73, plus three paid baselines (3 runs x (10 questions + scan) =
    $0.735 each) at $2.21 — a busy day lands near $6.94.
 
-   ⚠️ $8 no longer "clears that comfortably": the margin is ~15%, where the old (wrong) arithmetic
-   put a busy day at $5.15 and made $8 look like 55% headroom. Left at 8.0 deliberately rather than
-   raised, because raising a safety ceiling is Paul's call and a cap that occasionally trips is a
-   better failure than a shared Apify account exhausted — that took the audit engine down for five
-   hours once. If genuinely busy days start hitting it, $12 restores the original intent.
-   Note the SEO scan is ~76% of the outreach figure, so days dominated by no-website leads (which
-   skip the scan) cost far less. */
-const DAILY_CAP_USD = 8.0;       // per-USER rolling-24h ceiling (across audits) via the runner
+   RAISED 8.0 -> 12.0 on 2026-07-30, on Paul's decision. At $8 a busy day left only ~15% margin, and
+   the failure mode of tripping is worse than the failure mode of spending: the cap stops a run
+   part-drained, which leaves an audit with some questions answered and some 'capped' — broken data on
+   the measurement the guarantee is settled against. $12 restores roughly the 55% headroom the original
+   $8 was believed to have before the per-question cost was corrected.
+
+   This is a per-USER rolling-24h ceiling this app enforces on ITSELF. It says nothing about the shared
+   Apify account's own balance, which is what actually took the audit engine down for five hours — that
+   is only visible in the Apify dashboard.
+   Note the SEO scan is ~76% of an outreach audit, so days dominated by no-website leads (which skip
+   the scan) cost far less. */
+const DAILY_CAP_USD = 12.0;      // per-USER rolling-24h ceiling (across audits) via the runner
 const MAX_ATTEMPTS = 3;          // per queue row (= actor runs STARTED) before it's marked failed
 // Async guards (RUN_TIMEOUT_MS is gone — nothing blocks on the scrape any more):
 const MAX_RUN_AGE_MS = 12 * 60 * 1000;  // a started run must reach terminal within 12 min, else the
