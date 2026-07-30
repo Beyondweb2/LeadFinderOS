@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin } from 'lucide-react';
+import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, ClipboardList } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { TeamNotes } from '@/components/TeamNotes';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
@@ -627,6 +628,20 @@ function LeadDetailBody({
               {CONTACT_METHOD_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
             </SelectContent>
           </Select>
+
+          {/* DELIVERY CHECKLIST — /playbook/:id, resolved from this LEAD id. onClose fires alongside
+              the navigation: this is a modal, and leaving it mounted over the new route would trap
+              the operator behind an overlay. */}
+          <Link
+            to={`/playbook/${lead.id}`}
+            state={{ from: '/outreach', fromLabel: 'Outreach' }}
+            onClick={onClose}
+            className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary hover:bg-primary/20"
+            title="Open the delivery checklist for this lead"
+          >
+            <ClipboardList className="h-3 w-3" />
+            Playbook
+          </Link>
 
           <div className="relative ml-auto">
             <PoundSterling className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
