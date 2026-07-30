@@ -32,6 +32,14 @@ Facts and warnings, not prose. Keep it that way. If it grows too long to read, i
 - **Screenshots need him.** The in-app Browser pane does not display in this environment (`the Browser pane is
   not displayed, so the page is not compositing frames`). `read_page`, `get_page_text` and `javascript_tool`
   work fine without it — use text proof and say plainly that nobody has *seen* the thing.
+- **There is no browser session at `localhost:8080`**, and RLS blocks the anon key, so an authed page cannot be
+  loaded the normal way. What works: pull the service-role key from the linked Supabase CLI
+  (`npx supabase projects api-keys --project-ref ruusxpkkmwtljxxulhbq --output json`), run a **throwaway Vite
+  harness** that patches `window.fetch` to attach it for Supabase URLs only, and mount the real page in a
+  `MemoryRouter`. Real hook, real component, real rows; only auth and the router shell are substituted.
+  Read-only, delete the harness before committing, and **tell Paul you used the service key**.
+  If the harness fakes router history, make the fake previous entry match the case under test — a hardcoded one
+  gives a real-looking but wrong destination.
 
 ---
 
@@ -85,6 +93,17 @@ And the traps around it:
   in its own chunk — check the one your code is actually in.
 - Chunk *byte size* changing is decent evidence; identical size with a new hash usually means only the
   referenced child-chunk hashes moved.
+- **A shared component gets its OWN chunk**, so its strings are **absent from the chunks that use it**. Looking
+  for `Back to ` in `Playbook-*.js` returns False even though the feature shipped. Check the shared chunk for
+  the string, then check the consumer chunk for `import…from"./Shared-<hash>.js"`. Absence in the consumer is
+  the *expected* result and is itself evidence the component is shared rather than duplicated.
+
+**A negative result can also be your own check's fault, not the code's.** The mirror of the false positives
+below, and it bit twice tonight:
+- `SECTION 1 OF 2` was False because the source says `Section 1 of 2` — **CSS `text-transform` uppercased it**,
+  the string never existed.
+- `thin &middot;` was False because the markup uses a literal `·`, not the HTML entity.
+- Before reporting a missing marker, grep the **source** for your own search string.
 
 **Substring false positives. You have been fooled by both of these twice each:**
 - `"bing"` matches **plum*bing***.
@@ -182,12 +201,23 @@ Facts with numbers. These are measured, and several contradict the older docs.
   back from a Wisbech search and was told AI doesn't know he exists — he ranks first in his own town. He caught
   it. Spec is ready; **not built**.
   - `outreach_leads.place_id` is populated on **758/758**; `address` on **0**.
-  - `getPlaceDetails()` is restorable from `a8fd7003^`.
+  - `getPlaceDetails()` is restorable from **`a8fd7003^:supabase/functions/search-leads/index.ts`** — verified
+    2026-07-30: `a8fd7003` is the commit that deleted it. Not in `_shared/`; don't go looking there.
   - Town extraction is reusable as-is at `generate-barber-site:307-310` (UK `postal_town` → `locality` →
     `administrative_area_level_2`).
-  - **`bulk-jobs:229` and `whatsapp-inbound:226` BUILD `location_text` themselves and pass it in**, so
-    `create-ai-audit` must treat an incoming value as **overridable**, not merely fall back when absent.
-    Intended precedence: `confirmed_location || derived_town || search_location`.
+  - **THREE callers BUILD `location_text` themselves and pass it in**, so `create-ai-audit` must treat an
+    incoming value as **overridable**, not merely fall back when absent. Verified by grep 2026-07-30:
+    | Caller | Line | Expression |
+    |---|---|---|
+    | `bulk-jobs` | 229 | `lead.search_location \|\| lead.address` |
+    | `_shared/whatsapp-inbound` | 226 | `lead.search_location ?? lead.address` |
+    | `_shared/whatsapp-inbound` | 333 → 376 | `locText`, same expression, **the live auto-audit chain** |
+    ⚠️ **Earlier briefs listed only the first two.** The third is a separate call site in the same file and is
+    on the `AUTO_AUDIT_REPLY_ENABLED` path that is ON in production — miss it and the highest-volume path keeps
+    using the searched town. A textbook case of §4's "check the next layer".
+    Also a setter: `_shared/audit-baseline.ts:412` — `confirmed_location || search_location`, **the paid
+    baseline, i.e. the guarantee path.** And `src/pages/AiAudit.tsx:753` for the wizard.
+    Intended precedence everywhere: `confirmed_location || derived_town || search_location`.
 - **37 reports already went out with the wrong-town problem.**
 - **No Baseline Test button.** Baselines are gated to internal callers (cron secret or service role +
   `x-internal-job`) and currently only start from `stripe-webhook` after payment. A button needs an
@@ -196,9 +226,12 @@ Facts with numbers. These are measured, and several contradict the older docs.
 - **Lead type/location are NOT reliably on the lead.** No `business_type`/`city` columns; audits read
   `search_keyword||category` and `search_location||address`, populated on only **~20%** of leads.
 - **The Browser pane doesn't display** — screenshots need Paul (see §2).
-- **`/playbook/:id` is not linked from anywhere yet** and has no back link. Partial work is stashed:
-  `git stash list` → *"WIP playbook nav links"*.
-- **WHO'S WINNING** is capped at top 20 with a count of the rest; uncapped it was 181 rows for a plumber.
+- **Nobody has ever *looked* at the printed playbook document.** Its structure and every value are verified from
+  text; its appearance is not. Worth one `Ctrl+P` before working a client off it.
+- **The sidebar highlights nothing** on `/playbook/:id` or `/baseline/:auditId` — `isActive` is exact path
+  equality (`location.pathname === item.url`). Consistent between the two, so left alone deliberately.
+- **Back from the lead dialog returns to the Outreach LIST, not the reopened dialog.** Accepted limit: the
+  dialog's open state is component state in `OutreachTable`, not in the URL, so there is nothing to restore.
 
 ---
 
@@ -207,17 +240,32 @@ Facts with numbers. These are measured, and several contradict the older docs.
 | Thing | Path |
 |---|---|
 | Evidence fold (pure, no LLM) | `src/lib/buildPlaybook.ts` |
-| Host facts, hand-maintained | `src/lib/directoryFacts.ts` (66 hosts) |
+| Host facts, hand-maintained | `src/lib/directoryFacts.ts` (**64** entries — see the count note below) |
 | Per-trade citation fold | `supabase/functions/playbook-evidence/` |
 | Operator checklist page | `src/pages/Playbook.tsx` + `src/hooks/usePlaybook.ts` |
 | Printable document | `src/lib/playbookDoc.ts` + `src/lib/playbookDocStyle.ts` |
 | Baseline operator view | `src/pages/Baseline.tsx` + `src/lib/baselineView.ts` |
+| Back link, shared by both views | `src/components/BackLink.tsx` |
 | Audit UI (large) | `src/pages/AiAudit.tsx` |
+
+- **Entry points to `/playbook/:id`:** lead detail dialog (`Playbook` pill), Paid Clients row (`Playbook`
+  pill), AI Audit row (**`checklist`** pill, beside the baseline pill). It is called `checklist` there because
+  that row already has a `playbook` pill meaning the **LLM** document at `results.playbook` — different thing.
+  Each passes `state={{ from, fromLabel }}` so `BackLink` can name where it is returning to.
 
 - Thresholds: `EVIDENCE_MIN_AUDITS 5`, `THIN_MIN_AUDITS 2`, `TRADE_MIN_AUDITS 5`.
 - **`usePlaybook` resolves an id as an AUDIT id first, then a lead.** ABLM has an audit and no
   `outreach_leads` row; lead-first would 404 the only delivery client.
-- **63 of 66 signup URLs are unverified.** Only Yell, MyBuilder, 192.com and Checkatrade have been checked.
+- **`directoryFacts` holds 64 entries, not 66.** Counted 2026-07-30: `host: '` appears 64 times; a naive grep
+  for `host:` returns 66 because it also hits the `DirectoryFact` interface and `factFor`. "66" was repeated
+  across several sessions and briefs and was never true. Task-capable (`kind: 'directory' | 'trade-body'`, plus
+  the one entry with no `kind`, which defaults to directory): **38**.
+- **60 of the 64 signup URLs are unverified — only 4 are checked:** Yell, MyBuilder, 192.com (clicked by Paul)
+  and Checkatrade (verified by fetch). Earlier notes said "63 of 66" and "only 3 checked"; both were wrong.
+  ⚠️ The doc comment at the top of `src/pages/Playbook.tsx` still says "63 of 66" — a comment only, nothing
+  depends on it, but correct it when you are next in that file.
+- **2 hosts are `townOnly`:** `loughborough.org.uk` (Loughborough) and `cnxlocal.com` (Chiang Mai). In any other
+  town they become a prompt to find the local equivalent, never a task.
 - **`playbookDoc.ts` must never touch the `generate-playbook` LLM path.** That pipeline recommended ICAEW to an
   ACCA firm, ACCA's own zero-citation directory, and Bing Places. Styling is shared; the data path is not.
 - Live operator app: **`https://leadfinderos.pages.dev`**. Supabase ref **`ruusxpkkmwtljxxulhbq`**.
@@ -229,7 +277,8 @@ Facts with numbers. These are measured, and several contradict the older docs.
 - **`ONBOARDING.md`** and **`HANDOFF.md`** (untracked, never stage them) describe the **older
   website-generation product line** — barber/salon/plumber site generation, WhatsApp claim flow, Stripe
   add-ons. Still accurate for that machinery, and the best map of it.
-- ⚠️ **`HANDOFF.md` §5 is superseded.** It calls Bing Places "foundational" and recommends it. Bing Places has
-  **zero citations across 8,913**. §5 of this file wins.
+- ✅ **`HANDOFF.md` §5 has been marked superseded in the file itself** (2026-07-30). It used to recommend Bing
+  Places as "foundational"; Bing Places has **zero citations across 8,913**. The original text is preserved
+  there in a collapsed block so the reasoning that went wrong stays visible. §5 of this file is the truth.
 - Both name `Claude Opus 4.8` in the co-author trailer. **Use Opus 5** (§3).
 - There is **no `DEPLOY.md`** in this repo. Deploy rules are §3 and §4 here.
