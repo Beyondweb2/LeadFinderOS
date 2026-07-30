@@ -1,9 +1,11 @@
 import { useParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ArrowLeft, ExternalLink, AlertTriangle, Clock, Trophy, Ban, Globe, ArrowDownToLine, CheckCircle2 } from 'lucide-react';
+import { Loader2, ArrowLeft, ExternalLink, AlertTriangle, Clock, Trophy, Ban, Globe, ArrowDownToLine, CheckCircle2, Printer } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { SEOHead } from '@/components/SEOHead';
 import { usePlaybook } from '@/hooks/usePlaybook';
 import { thinTradeMessage, type PlaybookStep, type Section } from '@/lib/buildPlaybook';
+import { printPlaybookDoc } from '@/lib/playbookDoc';
 
 /**
  * OPERATOR DELIVERY CHECKLIST — /playbook/:id.
@@ -171,6 +173,11 @@ export default function Playbook() {
 
   const doNowMinutes = steps.filter((s) => s.section === 'do_now').reduce((n, s) => n + s.minutes, 0);
 
+  /* Capped at the same 20 the printed sheet uses. Uncapped this was 181 rows for a plumber, which
+     drowned the four or five incumbents actually worth studying. */
+  const shownWinners = pb.whoIsWinning.slice(0, 20);
+  const hiddenWinners = pb.whoIsWinning.length - shownWinners.length;
+
   return (
     <>
       <SEOHead
@@ -192,9 +199,16 @@ export default function Playbook() {
                   {resolvedAs && ` · resolved by ${resolvedAs} id`}
                 </p>
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold tabular-nums">{doNowMinutes}</div>
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70">operator minutes</p>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <div className="text-2xl font-bold tabular-nums">{doNowMinutes}</div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70">operator minutes</p>
+                </div>
+                {/* Prints the same fold through the old document's stylesheet. Browser print dialog,
+                    no PDF library — see playbookDoc.ts. */}
+                <Button size="sm" variant="outline" onClick={() => printPlaybookDoc({ ...pb, steps })}>
+                  <Printer className="mr-1.5 h-3.5 w-3.5" /> Print
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -263,7 +277,7 @@ export default function Playbook() {
                 <Trophy className="h-4 w-4 text-sky-400" />
                 <span className="font-semibold tracking-wide text-sky-400">WHO’S WINNING</span>
                 <span className="text-[11px] font-normal tabular-nums text-muted-foreground/70">
-                  {pb.whoIsWinning.length} hosts
+                  top {shownWinners.length} of {pb.whoIsWinning.length} hosts
                 </span>
               </CardTitle>
               <p className="text-[11px] leading-relaxed text-muted-foreground/80">
@@ -273,7 +287,7 @@ export default function Playbook() {
             </CardHeader>
             <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0">
               <div className="space-y-1">
-                {pb.whoIsWinning.map((w) => (
+                {shownWinners.map((w) => (
                   <div key={w.host} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b border-border/30 py-1 last:border-0">
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate text-[12px] font-medium">{w.host}</span>
@@ -287,6 +301,13 @@ export default function Playbook() {
                   </div>
                 ))}
               </div>
+              {/* NEVER a silent truncation. 181 rows for a plumber buries the handful that matter,
+                  but hiding the count would read as "this is all of them". */}
+              {hiddenWinners > 0 && (
+                <p className="mt-2 text-[11px] font-semibold text-muted-foreground/70">
+                  + {hiddenWinners} more cited host{hiddenWinners === 1 ? '' : 's'} below these, not shown.
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
