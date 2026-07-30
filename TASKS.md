@@ -14,10 +14,37 @@ mid-run leaves broken data, which is the exact failure Item 4 exists to prevent.
 
 | # | Item | Status | Commit |
 |---|---|---|---|
-| 4 | Raise `DAILY_CAP_USD` 8 → 12 | ☐ not started | |
-| 1 | Fetch the real address (`getPlaceDetails`) | ☐ not started | |
-| 2 | Use it — town precedence + override | ☐ not started | |
-| 3 | Active directory check (Apify search) | ☐ not started | |
+| 4 | Raise `DAILY_CAP_USD` 8 → 12 | ✅ **done, deployed** | `d9aa0559` |
+| 1 | Fetch the real address (`getPlaceDetails`) | ✅ **done, deployed** | `ef86c9bf` |
+| 2 | Use it — town precedence + override | ✅ **done, deployed** | `ef86c9bf` |
+| — | Migration-tolerance fix (regression caught in test) | ✅ **done, deployed** | `3b93284d` |
+| 3 | Active directory check (Apify search) | ☐ **NOT STARTED — resume here** | |
+
+## 🔴 BLOCKING: the SQL must be applied before Items 1+2 do anything
+
+Until Paul runs this, the town fix is **inert** — audits keep using the searched town, exactly as
+before, and nothing is broken (both call sites fall back when the columns are missing). It starts
+working the moment the columns exist.
+
+```sql
+alter table public.outreach_leads
+  add column if not exists derived_town     text,
+  add column if not exists town_fetched_at  timestamptz;
+
+alter table public.ai_audits
+  add column if not exists location_source  text,
+  add column if not exists location_note    text;
+
+comment on column public.outreach_leads.derived_town is
+  'Town from Google Place Details addressComponents (postal_town > locality > admin_area_2). The town the business is IN, as opposed to search_location which is the town I SEARCHED.';
+comment on column public.outreach_leads.town_fetched_at is
+  'When Place Details was last fetched for this lead. 30-day cache key.';
+comment on column public.ai_audits.location_source is
+  'confirmed | derived | search | none — which town this audit used and why. "search" means UNVERIFIED.';
+```
+
+After applying it, regenerate types so the two `as unknown as` casts can go back to plain casts:
+`npx supabase gen types typescript --project-ref ruusxpkkmwtljxxulhbq > src/integrations/supabase/types.ts`
 
 ---
 
