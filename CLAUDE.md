@@ -345,10 +345,36 @@ Facts with numbers. These are measured, and several contradict the older docs.
 | Back link, shared by both views | `src/components/BackLink.tsx` |
 | Audit UI (large) | `src/pages/AiAudit.tsx` |
 
-- **Entry points to `/playbook/:id`:** lead detail dialog (`Playbook` pill), Paid Clients row (`Playbook`
-  pill), AI Audit row (**`checklist`** pill, beside the baseline pill). It is called `checklist` there because
-  that row already has a `playbook` pill meaning the **LLM** document at `results.playbook` — different thing.
-  Each passes `state={{ from, fromLabel }}` so `BackLink` can name where it is returning to.
+- **Entry points to `/playbook/:id` — exactly three, re-verified by grep 2026-07-30:**
+  `LeadDetailDialog.tsx:636` (`Playbook` pill), `PaidClients.tsx:230` (`Playbook` pill), and the AI Audit row's
+  **`checklist`** pill. Each passes `state={{ from, fromLabel }}` so `BackLink` can name where it returns to.
+  **The first two are keyed on a LEAD id.** So for a business with an audit and no `outreach_leads` row — ABLM,
+  the only delivery client — the AI Audit row's `checklist` pill is the **ONLY** route. Don't remove it.
+
+- 🔴 **TWO DIFFERENT DOCUMENTS ARE BOTH CALLED "PLAYBOOK". This has now caused a near-miss.**
+  | | What it is | Where |
+  |---|---|---|
+  | **`checklist` pill** → `/playbook/:id` | **Evidence-derived.** Citations decide the directories. The document a client receives | `buildPlaybook.ts`, `playbookDoc.ts` |
+  | **"playbook"** (LLM) | `generate-playbook` LLM output at `results.playbook`. **This is the broken one** | `supabase/functions/generate-playbook/` |
+
+  Paul pasted an ABLM playbook recommending **Bing Places as a High-priority quick win** with **no Yell**, and
+  assumed it came from the evidence pipeline — he was one step from deleting the good one and keeping the
+  broken one. **It was the LLM pipeline.** Two independent fingerprints, both checked:
+  1. `quickWins` is a field in the LLM function's own output schema (`generate-playbook/index.ts:75`). The
+     phrase appears **nowhere** in the evidence path.
+  2. The LLM prompt *instructs* it: "Bing Places — foundational" (`:254`), "Bing Places is foundational, not
+     optional… a first-tier task" (`:285`). The evidence path mentions Bing **only** in comments explaining
+     its removal, and `yell.com` **is** in `directoryFacts` (`:140`, `urlVerified: true`) with the fold sorted
+     by citation count — so 6 Yell citations would have surfaced it.
+  ⚠️ Searching `-i bing` in the evidence path returns 3 hits that are all literally **plum·BING·**. §4's trap,
+  live again. Print the surrounding characters.
+- ✅ **AI Audit page decluttered 2026-07-30** (`4fa0246c`). The new-audit form (source picker + business details
+  + question review) is now a **modal**; the page is the list plus a "New audit" button. The row's **`Playbook`
+  button and grey `playbook` asset pill are GONE** — both were the LLM document. `checklist` KEPT (see above).
+  The LLM document is still reachable from an audit's **results** view. `formOpen` is deliberately **not**
+  persisted, or a modal would spring open on every page load.
+  ⚠️ **`/ai-audit?leadId=…` MUST open that modal.** `setFormOpen(true)` sits in the same branch as `pickLead`
+  in the deep-link effect. Break that and the Outreach audit pill lands on a page with no form.
 
 - Thresholds: `EVIDENCE_MIN_AUDITS 5`, `THIN_MIN_AUDITS 2`, `TRADE_MIN_AUDITS 5`.
 - **`usePlaybook` resolves an id as an AUDIT id first, then a lead.** ABLM has an audit and no

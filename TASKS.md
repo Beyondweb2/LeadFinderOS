@@ -55,6 +55,24 @@ box is prefilled. A blank box was the original bug, so that is the test.
 hand first.** Until then the code is inert but harmless — every path is migration-tolerant.
 Rollback point if it fails: `ce59f40f` (the commit before this work).
 
+### Third brief, 2026-07-30 — AI Audit page UI ✅ done, deployed, live-verified (`4fa0246c`)
+| # | Item | Status |
+|---|---|---|
+| 1 | New-audit form → modal, deep link must still prefill | ✅ verified in a harness |
+| 2 | LLM playbook off the audit rows, `checklist` pill kept | ✅ |
+| — | Which pipeline made the Bing Places doc? | ✅ **the LLM one** — see CLAUDE.md §9 |
+
+**`derived_town` is confirmed working live:** lead `c477e56c` reads `derived_town = "Barnsley"` with a
+full address, and the modal prefilled its town from it. Item 1+2 of the second brief are proven.
+⚠️ It also proves the coarseness caveat: "…of **Dodworth**" derived **Barnsley** (Dodworth's
+`postal_town`). Still undecided — see CLAUDE.md §8.
+
+### Still open on the AI Audit page (not defects, decisions)
+- [ ] Item 5 from the second brief — share ONE input-resolution path across the three audit entry
+      points. Still **deferred** by Paul until he has used the modal.
+- [ ] `resetWizard` does not reset `businessScope` or `questionCount`; they carry over from the last
+      audit. Pre-existing, and more visible now the form opens and closes as a modal.
+
 ### Still to do after the test passes
 - [ ] `npx supabase gen types typescript --project-ref ruusxpkkmwtljxxulhbq > src/integrations/supabase/types.ts`
       — Paul approved. Lets the `as unknown as` casts in `AiAudit.tsx` and the `as never` in
