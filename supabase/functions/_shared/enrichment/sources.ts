@@ -76,8 +76,13 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
     actorId: "",  // NOT an Apify actor — a direct Google Places API v1 call.
     /* Google Places API v1, "Place Details (Essentials)" SKU: formattedAddress + addressComponents +
        location only, at $5 per 1,000 calls = $0.005 per call. Asking for rating/userRatingCount would
-       move it to the Pro SKU at ~4x the price, which is why those fields are deliberately excluded
-       (see _shared/place-town.ts).
+       re-price this call, which is why those fields are excluded HERE (see _shared/place-town.ts).
+       ⚠️ CORRECTED 2026-07-30: this comment used to say rating moves it to "the Pro SKU at ~4x". Wrong
+       tier — rating and userRatingCount are ENTERPRISE, alongside phone and websiteUri. The
+       conclusion still holds for THIS call (Essentials → Enterprise is dearer), but the corollary is
+       the useful part: the lead-creation call in `google-place-details` already asks for a phone, so
+       it is ALREADY Enterprise and gets rating + reviews + address for nothing. Google bills one
+       request once, at the highest tier it touches. Verified against Google's docs, not assumed.
        Cached 30 days per lead, so the steady-state cost is far below this: a lead is charged once and
        then re-used by every later audit of that business. */
     estCostUsd: 0.005,

@@ -22,6 +22,118 @@ interface OutreachHistoryEntry {
 
 export type PhoneFetchStatus = 'pending' | 'success' | 'no_phone' | 'failed';
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   WHAT THE LEAD-CREATION ENRICHMENT WRITES, and why this is one function used by three call sites.
+
+   THE BUG. `google-place-details` used to ask Google for phone + website only, on the strength of a
+   comment saying Text Search already returned the address. It hadn't for a long time (search-leads'
+   field mask is id/displayName/googleMapsUri/websiteUri), so `address` was null on every
+   search-added lead — and with no address there were no addressComponents, hence no derived_town.
+   The audit location chain is confirmed_location || derived_town || search_location, so a lead could
+   reach the audit button with nothing at all to say where the business is.
+
+   The call now returns address, rating, review count and the derived town as well, at NO extra cost
+   (phone is an Enterprise-tier field, so the request was already billed at the tier that contains
+   rating and userRatingCount — see _shared/place-details.ts for Google's rule, quoted).
+
+   THREE CALL SITES used to each hand-roll their own update, and two of them only wrote anything at
+   all when a phone came back — so a business Google has no phone for would silently lose the address
+   and rating we had just paid for. One function now, so that cannot drift again.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+interface PlaceDetailsResponse {
+  phone?: string | null;
+  website?: string | null;
+  address?: string | null;
+  category?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  derivedTown?: string | null;
+  /** null = a town was found. Absent entirely = the edge function predates this change. */
+  townNote?: string | null;
+}
+
+/** Columns added by SQL Paul applies BY HAND. PostgREST rejects the WHOLE update for one unknown
+ *  column, so the write is attempted in full and retried without these. Losing the rating must never
+ *  cost us the phone number — the same trap that produced the migration-tolerance fix in 3b93284d. */
+const HAND_MIGRATED_LEAD_COLS = ['rating', 'review_count', 'derived_town', 'town_fetched_at', 'town_fetch_note'] as const;
+
+/**
+ * Write everything a Place Details lookup returned onto the lead. Returns the updated row, or null
+ * if there was nothing to write or the write failed.
+ *
+ * Only fields that actually came back are written, so a legacy cache row (which carries no address
+ * or rating) can never blank a value we already hold. The town block is the exception: a null
+ * derived_town IS written, together with the note explaining why, because "ran and found nothing"
+ * has to be distinguishable from "never ran" — that distinction is the only reason this bug was
+ * findable at all.
+ */
+async function applyPlaceDetailsToLead(
+  leadId: string,
+  details: PlaceDetailsResponse,
+): Promise<OutreachLead | null> {
+  const updates: Record<string, unknown> = {};
+  if (details.phone != null) updates.phone = details.phone;
+  if (details.website != null) updates.website = details.website;
+  if (details.address != null) updates.address = details.address;
+  if (details.category != null) updates.category = details.category;
+  if (details.rating != null) updates.rating = details.rating;
+  if (details.reviewCount != null) updates.review_count = details.reviewCount;
+
+  /* Stamp the town ONLY when the server actually reported on it. `townNote === undefined` means the
+     edge function has not been redeployed yet, and stamping town_fetched_at from an old response
+     would claim the fetch ran when it never asked for an address — poisoning the 30-day cache in
+     place-town.ts with a permanent "we looked, there's nothing there". */
+  if (details.townNote !== undefined) {
+    updates.derived_town = details.derivedTown ?? null;
+    updates.town_fetched_at = new Date().toISOString();
+    updates.town_fetch_note = details.townNote;
+  }
+
+  if (Object.keys(updates).length === 0) return null;
+
+  const { data, error } = await supabase
+    .from('outreach_leads')
+    .update(updates as never)
+    .eq('id', leadId)
+    .select()
+    .single();
+
+  if (!error) return data as OutreachLead;
+
+  /* Retry without the hand-migrated columns. Detected by name in the error rather than by probing the
+     schema, matching how audit-baseline.ts and AiAudit.tsx handle the same situation.
+
+     QUOTED name + a schema-shaped message, deliberately. A bare substring test for 'rating' is the
+     trap CLAUDE.md §4 keeps catching us on — the same class of bug as "bing" matching plumbing. The
+     PostgREST message is: Could not find the 'rating' column of 'outreach_leads' in the schema cache.
+     Requiring the quotes AND the column/schema wording means an unrelated failure that happens to
+     contain the word cannot silently drop five columns and report success. */
+  const msg = error.message ?? '';
+  const looksLikeMissingColumn = /column|schema cache/i.test(msg);
+  const missing = looksLikeMissingColumn
+    ? HAND_MIGRATED_LEAD_COLS.filter((c) => msg.includes(`'${c}'`) || msg.includes(`"${c}"`))
+    : [];
+  if (missing.length === 0) {
+    console.error('Place details write failed:', msg);
+    return null;
+  }
+  console.warn(`Place details write: columns not present yet (${missing.join(', ')}) — retrying without them. Run the SQL to store these.`);
+  for (const c of HAND_MIGRATED_LEAD_COLS) delete updates[c];
+  if (Object.keys(updates).length === 0) return null;
+  const retry = await supabase
+    .from('outreach_leads')
+    .update(updates as never)
+    .eq('id', leadId)
+    .select()
+    .single();
+  if (retry.error) {
+    console.error('Place details write failed on retry:', retry.error.message);
+    return null;
+  }
+  return retry.data as OutreachLead;
+}
+
 export function useOutreach() {
   const [leads, setLeads] = useState<OutreachLead[]>([]);
   const [archivedLeads, setArchivedLeads] = useState<OutreachLead[]>([]);
@@ -77,6 +189,15 @@ export function useOutreach() {
         return;
       }
 
+      /* WRITE FIRST, decide about the phone SECOND. This used to be the other way round: the no-phone
+         branch below returned early, so the address, town and rating we had just paid Google for were
+         thrown away for any business with no listed phone number. The lookup is one call covering all
+         of it — whatever came back gets stored. */
+      const updated = await applyPlaceDetailsToLead(item.outreachLeadId, details as PlaceDetailsResponse);
+      if (updated) {
+        setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? updated : l));
+      }
+
       if (!details.phone) {
         // Enrichment succeeded but Google has no phone for this business. Keep the
         // lead if it still has an email (email-only outreach is workable); drop it
@@ -92,19 +213,6 @@ export function useOutreach() {
         return;
       }
 
-      const updates: Record<string, string | null> = { phone: details.phone };
-      if (details.website) updates.website = details.website;
-
-      const { data: updated } = await supabase
-        .from('outreach_leads')
-        .update(updates)
-        .eq('id', item.outreachLeadId)
-        .select()
-        .single();
-
-      if (updated) {
-        setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? (updated as OutreachLead) : l));
-      }
       setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'success' }));
     } catch (e) {
       console.error('Phone enrichment failed (non-blocking):', e);
@@ -279,26 +387,19 @@ export function useOutreach() {
         return;
       }
 
+      // Store everything the lookup returned before branching on the phone — same reason as
+      // fetchOnePhone: the address, town and rating are paid for whether or not there is a phone.
+      const updated = await applyPlaceDetailsToLead(outreachLeadId, details as PlaceDetailsResponse);
+      if (updated) {
+        setLeads(prev => prev.map(l => l.id === outreachLeadId ? updated : l));
+        setArchivedLeads(prev => prev.map(l => l.id === outreachLeadId ? updated : l));
+      }
+
       if (!details.phone) {
         // No phone available even after force-refresh. Keep the lead.
         setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'no_phone' }));
         toast({ title: 'No phone available', description: 'Google has no phone number for this business.' });
         return;
-      }
-
-      const updates: Record<string, string | null> = { phone: details.phone };
-      if (details.website) updates.website = details.website;
-
-      const { data: updated } = await supabase
-        .from('outreach_leads')
-        .update(updates)
-        .eq('id', outreachLeadId)
-        .select()
-        .single();
-
-      if (updated) {
-        setLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
-        setArchivedLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
       }
 
       setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'success' }));
@@ -456,14 +557,22 @@ export function useOutreach() {
 
     // Lead added — no toast
 
-    // Skip enrichment entirely when the search result already gave us a phone.
-    // Otherwise enqueue a single Place Details lookup (server-side cache + single-flight).
-    if (lead.id && !lead.phone) {
+    /* Enqueue a single Place Details lookup (server-side cache + single-flight).
+       GATED ON EVERYTHING THE LOOKUP PROVIDES, not on the phone alone. It used to skip whenever the
+       search result carried a phone — and the phone was the only thing it fetched, so that was
+       consistent. It no longer is: the same call now returns the address, the derived town, the
+       rating and the review count. Keeping the old test would mean that the day anyone adds
+       `places.nationalPhoneNumber` to search-leads' field mask, every new lead silently loses its
+       town again and the audit box goes blank exactly as it did before this fix. The search mask
+       returns none of these today, so in practice this always fires — the point is that it stays
+       correct if that changes. */
+    const needsLookup = !lead.phone || !lead.address || lead.rating == null || lead.reviewCount == null;
+    if (lead.id && needsLookup) {
       // Pass the lead's email (carried enrichment lands on newLead.email) so a
       // no-phone lead with an email is KEPT, not dropped.
       enqueuePhoneFetch(newLead.id, lead.id, lead.name, newLead.email);
-    } else if (lead.id && lead.phone) {
-      console.log(`Skipping enrichment for ${lead.name}: phone already present from search result`);
+    } else if (lead.id) {
+      console.log(`Skipping enrichment for ${lead.name}: search result already carried phone, address, rating and reviews`);
     }
 
     return newLead;
@@ -1173,29 +1282,27 @@ export function useOutreach() {
               body: { placeId, triggerSource: 'bulk_recover' },
            });
 
-           if (detailsError) {
+           if (detailsError || !details) {
              failedCount++;
              console.error(`Bulk enrich failed for ${lead.business_name}:`, detailsError);
-           } else if (details?.phone) {
-             // Phone found — update DB
-             const updates: Record<string, string | null> = { phone: details.phone };
-             if (details.address) updates.address = details.address;
-             if (details.category) updates.category = details.category;
-
-             const { error: updateError } = await supabase
-               .from('outreach_leads')
-               .update(updates)
-               .eq('id', lead.id);
-
-             if (updateError) {
-               failedCount++;
-               console.error(`DB update failed for ${lead.business_name}:`, updateError);
-             } else {
-               updatedCount++;
-             }
            } else {
-             // No phone found — count as skipped, do NOT remove lead
-             skippedCount++;
+             /* Store whatever came back BEFORE judging the phone. This branch used to be
+                `else if (details?.phone)`, so a business with no listed phone had its address, town,
+                rating and review count discarded even though the call had already been paid for.
+                A no-phone result is still "skipped" for the operator-facing counts — that is what the
+                button promises to recover — but the data is kept. */
+             const written = await applyPlaceDetailsToLead(lead.id, details as PlaceDetailsResponse);
+             if (details.phone) {
+               if (written) {
+                 updatedCount++;
+               } else {
+                 failedCount++;
+                 console.error(`DB update failed for ${lead.business_name}`);
+               }
+             } else {
+               // No phone found — count as skipped, do NOT remove lead
+               skippedCount++;
+             }
            }
          } catch (e) {
            failedCount++;
