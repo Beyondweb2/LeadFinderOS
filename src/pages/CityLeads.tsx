@@ -48,7 +48,7 @@ const CityLeads = () => {
     '@type': 'WebPage',
     name: title,
     description,
-    url: `https://leadfinderapp.lovable.app/find-clients/${city}`,
+    url: `https://leadfinderos.pages.dev/find-clients/${city}`,
     mainEntity: {
       '@type': 'SoftwareApplication',
       name: 'LeadFinder Pro',

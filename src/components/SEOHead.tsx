@@ -8,7 +8,10 @@ interface SEOHeadProps {
   jsonLd?: Record<string, unknown>;
 }
 
-const BASE_URL = 'https://leadfinderapp.lovable.app';
+/* The operator app's real host. Was leadfinderapp.lovable.app, a dead Lovable preview URL, which
+   pointed every canonical and og:url tag on the site at a domain that is not this app. See
+   functions/_middleware.ts, which states the operator host explicitly. */
+const BASE_URL = 'https://leadfinderos.pages.dev';
 
 export function SEOHead({ title, description, canonical, noindex, jsonLd }: SEOHeadProps) {
   const fullCanonical = canonical ? `${BASE_URL}${canonical}` : undefined;
