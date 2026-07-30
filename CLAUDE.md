@@ -55,6 +55,12 @@ Git:
 - [ ] Prove every git step with **real command output**, using **variables** (`$o = (git rev-parse origin/main)`)
       — never a hand-typed hash.
 - [ ] Prove `origin` is still unmoved immediately **before** pushing.
+- [ ] **NEVER edit a source file with a PowerShell `Get-Content` / `Set-Content` round-trip.** Proven
+      2026-07-30: removing a block from `AiAudit.tsx` that way double-encoded **194 lines** of
+      non-ASCII (em dashes, curly quotes) — `Get-Content` decoded UTF-8 as cp1252 and `Set-Content`
+      re-encoded the mojibake, also adding a BOM. Caught by the diff jumping to 296/465 and a
+      `Select-String 'â€|â”€'` grep. Reversible (`GetEncoding(1252).GetBytes` → `UTF8.GetString`,
+      write with `UTF8Encoding($false)`) but do not create the problem: use the Edit tool.
 - [ ] Commit with `-F <file>` (PowerShell mis-parses multi-line `-m`). End with:
       `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
 - [ ] Merge `--no-ff`.
@@ -396,6 +402,33 @@ Facts with numbers. These are measured, and several contradict the older docs.
   **`checklist`** pill. Each passes `state={{ from, fromLabel }}` so `BackLink` can name where it returns to.
   **The first two are keyed on a LEAD id.** So for a business with an audit and no `outreach_leads` row — ABLM,
   the only delivery client — the AI Audit row's `checklist` pill is the **ONLY** route. Don't remove it.
+
+- ✅ **THE LLM PLAYBOOK IS NOW UNREACHABLE FROM THE APP** (`1715a294`, 2026-07-30). The audit results
+  screen has **ONE** button, `Playbook`, linking to `/playbook/:auditId`. Gone: both old buttons, the
+  viewer (iframe + Internal/Client toggle + Regenerate + Download), `generatePlaybook` (the app's only
+  caller of the edge function), the `DeliveryChecklist` card and component, the `playbooks` snapshot
+  cache, the checklist tick state, and `RunRow.has_playbook`.
+  **`src/lib/playbookHtml.ts` and `supabase/functions/generate-playbook/` are KEPT** — unreachable, not
+  deleted, so the prompt stays readable as the record of what went wrong. Don't "tidy" them away.
+  The button is gated on `auditId` **alone** — not on a completed run — because the ranking is
+  trade-level, so the document is right even when that run failed at the Apify cap.
+  🔴 **TWO GAPS THIS EXPOSED, both pre-existing:**
+  - **There is NO client-facing playbook.** `buildClientDoc()` exists in `buildPlaybook.ts` and
+    **nothing renders it** — dead code. The only reachable document is the operator copy, headed
+    "Internal — execution copy, not for the client". The removed LLM viewer's Internal/Client toggle
+    was the only client-view UI that ever existed.
+  - **Nothing is tickable.** The `DeliveryChecklist` ticked per run into localStorage.
+    `/playbook/:id` displays `client_listings.done_at`/`verified_at` but **cannot set them** (read-only
+    there), so there is nowhere to mark delivery work done.
+- ⚠️ **ENRICHMENT CANNOT BE RE-TRIGGERED ON AN EXISTING LEAD FROM THE UI.** `retryPhoneFetch` exists,
+  force-refreshes Google and (since 2026-07-30) writes address/rating/reviews/town — but the only
+  buttons that call it (`OutreachTable.tsx:2018` and `:2165`) render **only when
+  `phoneFetchStatus[lead.id] === 'failed'`**, which is in-memory session state. And bulk "recover
+  phones" **skips any lead that already has a phone** (`useOutreach.ts:1250`). So a lead like
+  Macca-Gas — phone present, address null, `place_id` present — is reachable by neither.
+- ✅ **AUDIT-ONLY BUSINESSES WORK.** ABLM (`d2008327`) has `lead_id = NULL` and its address lives on
+  `ai_audits.business_address`. Paul viewed and printed its playbook. `usePlaybook`'s audit-first
+  resolution is what makes this work — do not reorder it.
 
 - 🔴 **TWO DIFFERENT DOCUMENTS ARE BOTH CALLED "PLAYBOOK". This has now caused a near-miss.**
   | | What it is | Where |

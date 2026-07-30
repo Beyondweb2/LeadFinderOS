@@ -112,6 +112,22 @@ attempted since 14:25. `create-ai-audit`'s internal path (service key + `x-inter
 401 from this environment — the CLI's legacy service_role key is evidently not what the function
 holds in its env, so a run could not be triggered from outside the browser.
 
+### Sixth brief, 2026-07-30 — one Playbook button, LLM playbook unreachable ✅ (`1715a294`)
+Paul printed `/playbook/:id` and approved the document, so the results screen now has ONE `Playbook`
+button linking to `/playbook/:auditId`. Every UI route to the LLM playbook is gone; the LLM files are
+kept but unreachable. Detail in CLAUDE.md §9.
+
+Verified in a harness against the real failed Macca-Gas run: one `Playbook` link, correct href, route
+reached, no Generate/View buttons, no checklist card. Also closed the previous brief's open item — the
+failed-question card renders the real 403 with the reset date and the raw string.
+
+| Open, reported not built | Note |
+|---|---|
+| No client-facing playbook | `buildClientDoc()` is dead code; only the operator copy is reachable |
+| Nothing tickable | `client_listings` is read-only on `/playbook/:id` |
+| Cannot re-enrich an existing lead | Retry buttons are gated on in-session `phoneFetchStatus`; bulk skips leads that have a phone |
+| Queue burns 3 attempts on a 402/403 | Still deferred by Paul |
+
 ### Still to do after the test passes
 - [ ] `npx supabase gen types typescript --project-ref ruusxpkkmwtljxxulhbq > src/integrations/supabase/types.ts`
       — Paul approved. Lets the `as unknown as` casts in `AiAudit.tsx` and the `as never` in
