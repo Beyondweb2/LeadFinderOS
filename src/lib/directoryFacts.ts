@@ -184,7 +184,10 @@ We are not going to tell you this guarantees you will be named. We are telling y
       'They control their own spend from there — do not set a budget on their behalf.',
       'Once live, ask them for the profile URL so it can be recorded against this business.',
     ],
-    clientParagraph: `MyBuilder is the third most common source we see for {trade} work. It is a pay-per-lead site: listing is free but you pay for each enquiry you choose to respond to.
+    /* "another source we see often" — NOT "the third most common". An ordinal implies a number two
+       the client document deliberately never names, which is the one thing this document must not
+       hint at. Changed 2026-07-30. */
+    clientParagraph: `MyBuilder is another source we see often for {trade} work. It is a pay-per-lead site: listing is free but you pay for each enquiry you choose to respond to.
 
 That makes it your decision rather than ours — we are not going to commit you to a per-lead cost. If you already use it, tell us and we will make sure the details match your other listings. If you do not, it is worth a look, but we would not push you onto it.`,
   },
