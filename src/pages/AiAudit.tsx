@@ -21,6 +21,7 @@ import {
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
 import type { Country } from '@/types/outreach';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
@@ -219,6 +220,22 @@ const AiAudit = () => {
   const [persisted] = useState<PersistedWizard | null>(() => loadWizard());
   const [step, setStep] = useState<Step>('source');
   const [revealed, setRevealed] = useState<number>(() => initialRevealed(persisted));
+
+  /* ── THE NEW-AUDIT DIALOG ─────────────────────────────────────────────────────────────────────
+     The source picker, the business-details form and the question-review step all live in a modal
+     now; the page itself is just the list of past audits. Nothing about the form's own logic moved
+     — same fields, same `canGenerate` validation, same `confirmAndRun`.
+
+     DELIBERATELY NOT PERSISTED, unlike every other wizard field. The form state IS restored from
+     sessionStorage on mount, so if this flag were restored too, a modal would spring open over the
+     list every time the page loaded — which is worse than the clutter it replaces. The state
+     survives; pressing "New audit" brings it back exactly where it was.
+
+     ⚠️ THE DEEP LINK DEPENDS ON THIS. /ai-audit?leadId=… must OPEN this dialog, prefilled. See the
+     deep-link effect below — it sets this true in the same branch that calls pickLead, so the
+     prefill path is untouched. If this is ever gated on anything other than that effect, the audit
+     pill on an Outreach row lands on a page with no form and the lead's details are unreachable. */
+  const [formOpen, setFormOpen] = useState(false);
 
   // Wizard form state — no defaults on a fresh start (mode/country unselected, website unknown).
   const [mode, setMode] = useState<'new' | 'existing' | null>(persisted?.mode ?? null);
@@ -690,7 +707,15 @@ const AiAudit = () => {
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
     setOpenRunId(null); setShowDetails(false);
     setRevealed(0); setStep('source');
+    // Close the dialog: deleteAudit calls this, and leaving an emptied form open over the list
+    // after deleting the audit you were viewing would look like a bug.
+    setFormOpen(false);
   };
+
+  /** "New audit" from the RESULTS view: clear everything, land on the list, open a fresh dialog.
+   *  Matches what this button did before the form became a modal (reset → back to the source step),
+   *  with the dialog standing in for the form that used to be sitting on the page. */
+  const startNewAudit = () => { resetWizard(); setFormOpen(true); };
 
   // Delete an audit + all its children (ai_audit_runs / ai_audit_queue cascade from the FK).
   // Owner RLS lets the browser delete its own row. Mirrors AdminSitesList: confirm → delete →
@@ -813,6 +838,10 @@ const AiAudit = () => {
       setMode('existing');
       pickLead(lid!);
       setStep('source');
+      /* OPEN THE DIALOG. The form is no longer on the page, so without this the pill on an Outreach
+         row would land on the list with the lead silently prefilled into an invisible form. Set in
+         the SAME branch as pickLead, on purpose: the two cannot drift apart. */
+      setFormOpen(true);
     } else {
       toast({ title: 'Lead not found', variant: 'destructive' });
     }
@@ -895,6 +924,7 @@ const AiAudit = () => {
       setResultsBusinessName(data.business_name ?? businessName);
       setResultsHasWebsite(hasWebsite === true);
       setRun(null); setQueueRows([]);
+      setFormOpen(false);   // the audit is away — close the dialog so the results view is not behind it
       setStep('results');
     } catch (e) {
       toast({ title: "Couldn't start the audit", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
@@ -1258,17 +1288,10 @@ const AiAudit = () => {
     return latest as RunRow;
   };
 
-  // Open a past audit's PLAYBOOK directly from its row: reopen (loads the run + hydrates the
-  // playbook from results.playbook), then show the existing playbook view. No new viewer.
-  const viewPlaybookFromRow = async (audit: AuditRow) => {
-    const latest = await reopenAudit(audit);
-    if (!latest) return;
-    const rid = latest.id;
-    const pb = playbooks[rid] ?? (latest as { results?: { playbook?: unknown } }).results?.playbook;
-    if (!pb || typeof pb !== 'object') { toast({ title: 'No playbook yet for this audit', variant: 'destructive' }); return; }
-    if (!playbooks[rid]) setPlaybooks((prev) => ({ ...prev, [rid]: pb as PlaybookData }));
-    setPlaybookRunId(rid);
-  };
+  /* REMOVED 2026-07-30: viewPlaybookFromRow. It backed the row's "Playbook" button, which opened the
+     generate-playbook LLM document — the one that recommends Bing Places (zero citations across
+     8,913) and omits Yell. The button is gone from the row; the LLM document is still reachable from
+     an audit's results view. Recoverable from git if the row button is ever wanted back. */
 
   // Open a past audit's report DIRECTLY from its row. Prefers the stored snapshot (shown
   // as-is, never silently regenerated); only builds one if this run has never had a report
@@ -1803,41 +1826,37 @@ const AiAudit = () => {
             </div>
           )}
 
-          {/* Step 1 — source */}
+          {/* THE PAGE IS NOW JUST THE LIST. The source picker and the whole business-details form
+              moved into the dialog at the bottom of this component — they used to sit in this same
+              card, above the list, which is what made the page feel cluttered. */}
           <StepCard>
-            <StepHeader title="Audit a new business, or an existing lead?" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <ChoiceButton active={mode === 'new'} onClick={() => { setMode('new'); setLeadId(null); reveal(WIZARD_STEPS.indexOf('name')); }} icon={<Building2 className="h-4 w-4" />} label="New business" hint="Enter the details yourself" />
-              <ChoiceButton active={mode === 'existing'} onClick={() => setMode('existing')} icon={<Users className="h-4 w-4" />} label="Existing lead" hint="Pick from your CRM" />
-            </div>
-            {mode === 'existing' && (
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Choose a lead</Label>
-                <Select value={leadId ?? undefined} onValueChange={pickLead}>
-                  <SelectTrigger><SelectValue placeholder="Select a lead…" /></SelectTrigger>
-                  <SelectContent>
-                    {leads.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>{l.business_name}{l.address ? ` — ${l.address}` : ''}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="pt-4 mt-2 border-t border-border/60 space-y-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <Label className="text-xs text-muted-foreground">Past audits</Label>
-                {/* Honest about the window: the count is what was LOADED, and says so when full. */}
-                <span className="text-[11px] text-muted-foreground">
-                  {metrics.businesses} business{metrics.businesses === 1 ? '' : 'es'} · {metrics.audits} audit{metrics.audits === 1 ? '' : 's'}
-                  {auditsCapped ? ` (latest ${AUDIT_FETCH_LIMIT})` : ''}
-                </span>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-baseline gap-2">
+                  <Label className="text-sm font-semibold text-foreground">Past audits</Label>
+                  {/* Honest about the window: the count is what was LOADED, and says so when full. */}
+                  <span className="text-[11px] text-muted-foreground">
+                    {metrics.businesses} business{metrics.businesses === 1 ? '' : 'es'} · {metrics.audits} audit{metrics.audits === 1 ? '' : 's'}
+                    {auditsCapped ? ` (latest ${AUDIT_FETCH_LIMIT})` : ''}
+                  </span>
+                </div>
+                {/* Opens the dialog WITHOUT resetting, so this is a pure relocation of what the page
+                    did before: any form state restored from sessionStorage is still there, exactly as
+                    it would have been sitting on the page. Choosing "New business" or a different
+                    lead inside the dialog is what changes the subject, same as it always was. */}
+                <Button size="sm" onClick={() => setFormOpen(true)}>
+                  <Plus className="mr-1.5 h-4 w-4" /> New audit
+                </Button>
               </div>
               {businesses.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
                   <Sparkles className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
                   <div className="text-sm font-medium">No audits yet</div>
-                  <div className="text-[11px] text-muted-foreground">Run your first audit above to see how AI answers for a business.</div>
+                  {/* "above" was correct when the form sat at the top of this card. It doesn't now. */}
+                  <div className="text-[11px] text-muted-foreground">Run your first audit to see how AI answers for a business.</div>
+                  <Button size="sm" className="mt-3" onClick={() => setFormOpen(true)}>
+                    <Plus className="mr-1.5 h-4 w-4" /> New audit
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1871,7 +1890,6 @@ const AiAudit = () => {
                           const inFlight = b.runningRun;
                           const a = b.latestAudit;
                           const run = b.latestRun;
-                          const hasPlaybook = !!run && (run.has_playbook || !!playbooks[run.id]);
                           return (
                             <div key={b.key} className="rounded-lg border border-border/60 bg-card/60 transition-colors hover:bg-card">
                               {/* Collapsed row: ONE per business */}
@@ -1917,11 +1935,14 @@ const AiAudit = () => {
                                     <FileText className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Report</span>
                                   </Button>
                                 )}
-                                {hasPlaybook && (
-                                  <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={() => viewPlaybookFromRow(a)} title="View playbook">
-                                    <MapIcon className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Playbook</span>
-                                  </Button>
-                                )}
+                                {/* REMOVED 2026-07-30: the row's "Playbook" button. It opened the
+                                    generate-playbook LLM document, which is NOT the same thing as the
+                                    `checklist` pill beside it — that one links to /playbook/:id, the
+                                    evidence-derived document a client actually receives.
+                                    Still reachable: open the audit's results and use View playbook.
+                                    The LLM document is also the one with the known content problem
+                                    (recommends Bing Places, which has zero citations across 8,913;
+                                    omits Yell, which is cited). CLAUDE.md §5 and §9. */}
                                 {inFlight && (
                                   <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => cancelAudit(a, inFlight.id)} disabled={cancellingId === a.id} title="Stop this audit">
                                     {cancellingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleStop className="h-3.5 w-3.5" />}
@@ -1987,11 +2008,57 @@ const AiAudit = () => {
               )}
             </div>
           </StepCard>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════════════════════
+          NEW-AUDIT DIALOG — the source picker, the business-details form and the question review,
+          all of which used to sit on the page itself.
+
+          RELOCATED, NOT REWRITTEN. Same fields in the same order, the same `canGenerate` rule, the
+          same `runPreview` / `confirmAndRun`, the same write-back of the typed type + town to the
+          lead. `StepCard` (a Card wrapper) became a plain divided block because a card inside a
+          modal is a box inside a box.
+
+          ⚠️ THE OUTREACH DEEP LINK OPENS THIS. /ai-audit?leadId=… sets `formOpen` in the very same
+          branch that calls `pickLead`, so the prefill cannot silently stop reaching the operator.
+          If this dialog is ever moved back inside the `step !== 'results'` block above, check that
+          case again — it would unmount the moment an audit starts.
+          ═══════════════════════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" /> New audit
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* SOURCE — moved in with the form. Without it the dialog could not switch to a different
+              lead once open, which the page could always do. */}
+          <div className="space-y-3">
+            <StepHeader title="Audit a new business, or an existing lead?" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <ChoiceButton active={mode === 'new'} onClick={() => { setMode('new'); setLeadId(null); reveal(WIZARD_STEPS.indexOf('name')); }} icon={<Building2 className="h-4 w-4" />} label="New business" hint="Enter the details yourself" />
+              <ChoiceButton active={mode === 'existing'} onClick={() => setMode('existing')} icon={<Users className="h-4 w-4" />} label="Existing lead" hint="Pick from your CRM" />
+            </div>
+            {mode === 'existing' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Choose a lead</Label>
+                <Select value={leadId ?? undefined} onValueChange={pickLead}>
+                  <SelectTrigger><SelectValue placeholder="Select a lead…" /></SelectTrigger>
+                  <SelectContent>
+                    {leads.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.business_name}{l.address ? ` — ${l.address}` : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
 
           {/* Business details — one settled form, all fields visible at once */}
-
           {showForm && (
-            <StepCard>
+            <div className="space-y-4 border-t border-border/60 pt-4">
               <StepHeader title="Business details" />
               <div className="space-y-4">
                 {/* Name */}
@@ -2081,12 +2148,14 @@ const AiAudit = () => {
                   )}
                 </div>
               </div>
-            </StepCard>
+            </div>
           )}
 
-          {/* Step 7 — review questions + cost */}
+          {/* Review the questions + cost — second stage of the same dialog. Kept in here rather than
+              left on the page: it is part of creating an audit, and leaving it outside would put form
+              content back on the list page, which is the thing this change set out to remove. */}
           {shown('review') && (
-            <StepCard>
+            <div className="space-y-4 border-t border-border/60 pt-4">
               <div className="flex items-center justify-between gap-2">
                 <StepHeader title="Review the questions" />
                 <Button variant="ghost" size="sm" onClick={runPreview} disabled={previewing} title="Regenerate questions">
@@ -2126,10 +2195,10 @@ const AiAudit = () => {
                   </div>
                 </>
               )}
-            </StepCard>
+            </div>
           )}
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {step === 'results' && (
         <div className="space-y-4">
@@ -2220,7 +2289,9 @@ const AiAudit = () => {
                       {reextracting ? 'Re-extracting…' : 'Re-extract competitors'}
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" onClick={resetWizard}>New audit</Button>
+                  {/* startNewAudit = resetWizard (what this did before) + open the dialog, since the
+                      form it used to reveal on the page is now in the modal. */}
+                  <Button variant="outline" size="sm" onClick={startNewAudit}>New audit</Button>
                   {/* RE-AUDIT — a NEW audit row, prefilled. The measurement you want at week 8:
                       "Re-run" would add runs to THIS row and mix the after into the before. */}
                   {!isDraining && auditId && (
@@ -3043,7 +3114,12 @@ function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | null }) {
       {audit.lead_paid === true && target <= 1 && <ClientPill title="This lead has paid">client</ClientPill>}
       {/* ASSETS: facts, not signals. */}
       {audit.report_slug && <AssetPill title={`Published at /r/${audit.report_slug}`}>report</AssetPill>}
-      {run?.has_playbook && <AssetPill title="A playbook has been generated for this run">playbook</AssetPill>}
+      {/* REMOVED 2026-07-30: the `playbook` asset pill. It was never a link — just a marker saying an
+          LLM playbook existed for the run — and sitting one pill away from `checklist` it read as a
+          duplicate of it when the two are different documents entirely. `checklist` above is the one
+          that opens /playbook/:id and is KEPT: for a business with an audit but no outreach_leads row
+          (ABLM, the only delivery client) it is the ONLY route to that document, because the other two
+          entry points — the lead detail dialog and the Paid Clients row — are keyed on a LEAD id. */}
       {/* DATA */}
       {run?.seo_grade && <GradePill grade={run.seo_grade} />}
     </>
