@@ -144,10 +144,32 @@ failed it needs a retry. The check: open `/playbook/<audit id>` and look for two
 
 | Open, reported not built | Note |
 |---|---|
-| MyBuilder's client wording says "the third most common source" | Implies an unnamed #2. Leaks no host; one-word edit if wanted |
-| Google Business Profile access | `buildClientDoc` asked for it; the new form does not. Out of the stated scope — say if wanted |
 | Nothing tickable | `client_listings` is read-only on `/playbook/:id` |
 | Cannot re-enrich an existing lead | The form is currently the only route to Macca-Gas's address |
+
+### Eighth brief, 2026-07-30 — client form wording + the free ask (`62c4eb29`)
+✅ MyBuilder's "third most common source" → "another source we see often" (the ordinal implied an
+unnamed #2). ✅ Google Business Profile added back as a FIXED free ask, placed first.
+
+⚠️ **The GBP ask is justified by GOOGLE'S published guidance, NOT our data**, and the document says
+so in as many words. Measured before writing it: `google.com` is cited **twice, across 2 of 62
+plumber audits, out of 10,672 citations**. `ClientAsk.evidenceNote` exists to carry that kind of
+externally-sourced justification, and its type comment requires the source to be named — so a future
+ask cannot borrow the phrasing of a measurement it does not have. It does not count against
+`CLIENT_ASK_LIMIT`, which caps the citation-derived directory asks.
+
+⏳ **DEPLOY PENDING AGAIN** — live was still on `Playbook-D5RFG2k8.js` after ~8 minutes. Same
+behaviour as `56134630`, which landed on its own. See CLAUDE.md §4 on the 15-minute Pages lag.
+
+☐ **REPORTED, NOT BUILT: client request as a tracked LINK rather than a PDF.** The recommended route
+is the SNAPSHOT approach — the SPA already renders the HTML, so store that string with an opaque
+token and have a public edge function serve it and bump a counter. That avoids re-implementing the
+Playbook fold in Deno, which is the expensive half. Needs: a table + an atomic bump function (SQL for
+Paul, mirroring `bump_audit_open()`), one edge function, and a "Copy client link" button. ⚠️ The
+token must be OPAQUE — `render-audit-report` had a real hole where the bare slugified business name
+resolved, fixed by requiring an 8-hex code suffix. Known limits inherited from the existing report:
+no viewer/IP/user-agent, no per-open log, cannot tell Paul's own views from the client's, and email
+scanners can register a false open.
 
 ### Still to do after the test passes
 - [ ] `npx supabase gen types typescript --project-ref ruusxpkkmwtljxxulhbq > src/integrations/supabase/types.ts`
