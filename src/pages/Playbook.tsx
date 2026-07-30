@@ -1,11 +1,12 @@
 import { useParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ExternalLink, AlertTriangle, Clock, Trophy, Ban, Globe, ArrowDownToLine, CheckCircle2, Printer } from 'lucide-react';
+import { Loader2, ExternalLink, AlertTriangle, Clock, Trophy, Ban, Globe, ArrowDownToLine, CheckCircle2, Printer, Quote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BackLink } from '@/components/BackLink';
 import { SEOHead } from '@/components/SEOHead';
 import { usePlaybook } from '@/hooks/usePlaybook';
 import { thinTradeMessage, type PlaybookStep, type Section } from '@/lib/buildPlaybook';
+import { ABSENCE_CAVEAT } from '@/lib/ownCitations';
 import { printPlaybookDoc } from '@/lib/playbookDoc';
 
 /**
@@ -142,7 +143,7 @@ function StepRow({ step }: { step: PlaybookStep }) {
 
 export default function Playbook() {
   const { id } = useParams<{ id: string }>();
-  const { playbook: pb, resolvedAs, auditId, isLoading, error } = usePlaybook(id);
+  const { playbook: pb, ownCitations: oc, resolvedAs, auditId, isLoading, error } = usePlaybook(id);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -270,6 +271,101 @@ export default function Playbook() {
             </Card>
           );
         })}
+
+        {/* ALREADY LISTED — the free qualification signal. If their own listing page on a directory was
+            cited and they are STILL not being named, that directory is not a lever for them and the
+            sale may not be there. Costs nothing: it is the audit we already ran. */}
+        {oc && oc.alreadyListedOn.length > 0 && (
+          <Card className="border-green-500/30">
+            <CardHeader className="p-3 pb-1.5 sm:p-4 sm:pb-2">
+              <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <span className="font-semibold tracking-wide text-green-500">ALREADY LISTED — {oc.alreadyListedOn.length} found free</span>
+              </CardTitle>
+              <p className="text-[11px] leading-relaxed text-muted-foreground/80">
+                A page that looks like <span className="font-medium text-foreground">{pb.businessName}</span>’s own
+                listing was cited on these hosts, so they are already on them. Click through and confirm — this is
+                matched on the URL, so treat it as a strong hint rather than a fact.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-1.5 p-3 pt-0 sm:p-4 sm:pt-0">
+              {oc.alreadyListedOn.map((h) => (
+                <div key={h.host} className="rounded-md border border-green-500/20 bg-green-500/5 p-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <span className="text-[12px] font-semibold">{h.label}</span>
+                    <span className="text-[11px] tabular-nums text-muted-foreground">
+                      cited in {h.questions} of {oc.questionsCounted} questions
+                    </span>
+                  </div>
+                  <a href={h.ownListingUrl ?? '#'} target="_blank" rel="noreferrer noopener"
+                     className="mt-0.5 inline-flex items-center gap-1 break-all text-[11px] text-primary hover:underline">
+                    <ExternalLink className="h-3 w-3 shrink-0" /> {h.ownListingUrl}
+                  </a>
+                </div>
+              ))}
+              {/* Stated on screen, not just in a comment: the asymmetry is the whole risk here. */}
+              <p className="pt-1 text-[11px] leading-relaxed text-amber-400/90">{ABSENCE_CAVEAT}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* THIS AUDIT'S OWN CITATIONS — separate from the trade list above, and labelled so the two
+            cannot be confused. The trade fold says what generally works across many audits; this says
+            what was actually read for THIS business in THIS town. One audit, so it is never presented
+            as evidence of what works — only as what was read. */}
+        {oc && oc.hosts.length > 0 && (
+          <Card className="border-sky-500/30">
+            <CardHeader className="p-3 pb-1.5 sm:p-4 sm:pb-2">
+              <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
+                <Quote className="h-4 w-4 text-sky-400" />
+                <span className="font-semibold tracking-wide text-sky-400">CITED IN THIS BUSINESS’S OWN AUDIT</span>
+                <span className="text-[11px] font-normal tabular-nums text-muted-foreground/70">
+                  {oc.hosts.length} hosts · {oc.totalCitations} citations
+                </span>
+              </CardTitle>
+              <p className="text-[11px] leading-relaxed text-muted-foreground/80">
+                What {oc.engines.join(' and ') || 'the engines'} actually read when asked about{' '}
+                {pb.town ? `${pb.trade ?? 'this business'} in ${pb.town}` : 'this business'} —{' '}
+                {oc.questionsWithCitations} of {oc.questionsCounted} questions returned citations. This is{' '}
+                <span className="font-medium text-foreground">one audit</span>, so it shows what was read for this
+                client, not what works in general. The DO NOW list above is the cross-audit view.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-1 p-3 pt-0 sm:p-4 sm:pt-0">
+              {oc.hosts.map((h) => (
+                <div key={h.host} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b border-border/30 py-1.5 last:border-0">
+                  <span className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="truncate text-[12px] font-medium">{h.label}</span>
+                    {h.label !== h.host && <span className="text-[10px] text-muted-foreground/60">{h.host}</span>}
+                    {/* C3: a known directory is marked as actionable; anything else is intelligence. */}
+                    {h.actionable ? (
+                      <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                        {h.kind === 'trade-body' ? 'trade body' : 'directory'}
+                      </span>
+                    ) : (
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+                            title={h.kind === 'unclassified' ? 'No fact held for this host — almost always a competitor’s own site' : undefined}>
+                        {h.kind === 'unclassified' ? 'intelligence' : h.kind}
+                      </span>
+                    )}
+                    {h.ownListingUrl && (
+                      <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-500">
+                        already listed
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
+                    <span className="font-semibold text-foreground/80">{h.questions}/{oc.questionsCounted} questions</span>
+                    <span className="text-muted-foreground/40">·</span>
+                    <span>{h.mentions} citation{h.mentions === 1 ? '' : 's'}</span>
+                    <span className="text-muted-foreground/40">·</span>
+                    <span className="text-[10px]">{h.engines.join(', ')}</span>
+                  </span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* WHO'S WINNING — the most useful intelligence in the data, and it used to be discarded.
             These are never tasks: a client cannot be listed on a competitor's own website. */}

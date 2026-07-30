@@ -5,6 +5,9 @@ import {
   buildPlaybook,
   type EvidenceRow, type ListingRecord, type Playbook, type PlaybookLead,
 } from '@/lib/buildPlaybook';
+import { buildOwnCitations, type OwnCitations } from '@/lib/ownCitations';
+import type { QueueRow } from '@/lib/auditReport';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 
 /**
  * usePlaybook(id) — loads everything buildPlaybook needs and folds it.
@@ -51,6 +54,9 @@ interface EvidenceResponse {
 
 export interface UsePlaybookResult {
   playbook: Playbook | null;
+  /** What the engines cited when asked about THIS business. Null when the id resolved to a lead with
+   *  no audit — there are no citations to read without an audit. */
+  ownCitations: OwnCitations | null;
   /** Which row the id resolved to — printed on the page so the audit-first path is never a mystery. */
   resolvedAs: 'audit' | 'lead' | null;
   auditId: string | null;
@@ -68,6 +74,7 @@ const leadTrade = (l: LeadRow) => (l.search_keyword ?? '').trim() || (l.category
 
 export function usePlaybook(id: string | undefined): UsePlaybookResult {
   const [playbook, setPlaybook] = useState<Playbook | null>(null);
+  const [ownCitations, setOwnCitations] = useState<OwnCitations | null>(null);
   const [resolvedAs, setResolvedAs] = useState<'audit' | 'lead' | null>(null);
   const [auditId, setAuditId] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
@@ -142,9 +149,26 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
       }
 
       setPlaybook(buildPlaybook(pbLead, evidence, tradeAuditTotals, listings));
+
+      /* 5. THIS AUDIT'S OWN CITATIONS — a second, sharper signal alongside the trade fold, never a
+         replacement for it. Only possible when the id resolved to an audit: without one there are no
+         answers to read. Paginated, because ai_audit_queue is questions x runs and PostgREST
+         truncates at db-max-rows silently — a short page here would quietly shrink a host's count. */
+      if (audit) {
+        const { rows: qRows } = await fetchAllRows<QueueRow>('Playbook (own citations)', (from, to) =>
+          client.from('ai_audit_queue')
+            .select('id, question, status, result')
+            .eq('audit_id', audit.id)
+            .order('id', { ascending: true })
+            .range(from, to));
+        setOwnCitations(buildOwnCitations(qRows, pbLead.business_name ?? ''));
+      } else {
+        setOwnCitations(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not build that playbook.');
       setPlaybook(null);
+      setOwnCitations(null);
     } finally {
       setIsLoading(false);
     }
@@ -152,5 +176,5 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
 
   useEffect(() => { load(); }, [load]);
 
-  return { playbook, resolvedAs, auditId, leadId, isLoading, error, reload: load };
+  return { playbook, ownCitations, resolvedAs, auditId, leadId, isLoading, error, reload: load };
 }
