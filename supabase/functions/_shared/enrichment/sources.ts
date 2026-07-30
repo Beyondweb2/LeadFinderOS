@@ -74,13 +74,28 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
     key: "ai_search",
     stage: "enrich",
     actorId: AI_SEARCH_ACTOR,
-    // Per QUESTION (one actor run covers ChatGPT+Perplexity+Gemini+AI Overview+organic).
-    // REAL price (Apify dashboard, 2026-07-26): apify/google-search-scraper bills $2.50 per
-    // 1,000 search result pages, so one question is $0.0025 — the previous $0.05 estimate was
-    // 20x too high. Note this is the CEILING the cap pre-check uses; the actual per-run cost is
-    // now recorded from the Apify run itself (ai_audit_runs.actor_cost_usd), so unit economics
-    // come from measurement rather than from this number.
-    estCostUsd: 0.0025,
+    /* Per QUESTION — one queue row, one actor run, covering ChatGPT + Gemini + AI Overview +
+       organic. NOT per audit run: process-ai-audit-queue charges this once per row in startRow(),
+       and create-ai-audit multiplies it by the question count.
+
+       MEASURED 2026-07-30 from ai_audit_runs.actor_cost_usd, which records what Apify actually
+       billed: 81 runs, $3.4075 total, 295 questions across those runs = **$0.01155 per question**
+       (mean $0.04207 per run, at a mean 3.64 questions per run; the runs are 70x3q, 5x5q, 6x10q).
+       Window 26-30 July. Stored as 0.0125 — rounded UP, deliberately: this figure is a spend CEILING,
+       so erring high fails safe, and it matches RE_AUDIT_EST_USD_PER_QUESTION in AiAudit.tsx so the
+       operator's estimate and the cap agree.
+
+       WHY THIS MATTERED, AND WHY IT WAS NOT AN EMERGENCY. It was 0.0025, read off a price list ($2.50
+       per 1,000 result pages) rather than a bill — but a question returns SEVERAL result pages, so the
+       real cost is ~4.6x that.
+       It did NOT corrupt the spend accounting, which is what it first looked like: recordCostCorrection
+       (runner.ts) writes a second enrichment_usage row for `actual - estimated` once the actor
+       finishes, so sum(cost_usd) already equalled real spend at any estimate. What a wrong estimate
+       DID distort is the reservation in the cap pre-check and how many rows a tick is allowed to
+       start — under-reserving by ~$0.01 per question. Worth fixing, not a fire.
+
+       DO NOT re-derive this from a price list again. actor_cost_usd is the bill; use it. */
+    estCostUsd: 0.0125,
     description: "AI Visibility Audit multi-engine SERP via apify/google-search-scraper",
     enabled: true,
   },

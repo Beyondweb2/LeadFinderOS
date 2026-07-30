@@ -56,21 +56,27 @@ const START_BATCH = 12;          // max pending rows to START (claim) per tick �
                                  // other actors (SEO/maps). Total drain time ≈ the SLOWEST question,
                                  // not the sum — the key to sub-10-min audits.
 const POLL_BATCH = 32;           // max in-flight 'running' rows to POLL per tick (across all runs).
-// SPEND CAPS, sized against MEASURED costs (see SOURCES): $0.0025 per question and $0.12 per
-// SEO scan. Both were set when a question was estimated at $0.05 — 20x high — so they used to
-// permit roughly 20x more real spend than intended.
-//
-// CAP_USD: the worst LEGITIMATE run is 12 questions plus one SEO scan = $0.03 + $0.12 = $0.15.
-// $1.00 leaves ~7x headroom, which matters because google-search-scraper bills per search
-// RESULT PAGE and one question may return several: even if a question really costs the old
-// $0.05, a full 12-question run is $0.72 and still passes. So a paying client's baseline can
-// never be truncated by the cap, while a runaway run stops at $1 instead of $3.
+/* SPEND CAPS. Re-costed 2026-07-30 against BILLED spend (ai_audit_runs.actor_cost_usd), not a price
+   list: $0.0125 per question — see SOURCES.ai_search, measured at $0.01155 and rounded up — plus
+   $0.12 per SEO scan. The previous arithmetic here used $0.0025 per question, which was ~4.6x low, so
+   every figure below moved. VALUES ARE UNCHANGED; only the sums they were justified by are corrected.
+
+   CAP_USD: the worst LEGITIMATE run is 12 questions plus one SEO scan = $0.15 + $0.12 = $0.27
+   (previously believed $0.15). $1.00 leaves ~3.7x headroom, not the ~7x this comment used to claim.
+   A paid baseline run is 10 questions = $0.125, or $0.245 with a scan, so it still cannot be
+   truncated by the cap — the guarantee path is unaffected. A runaway run stops at $1. */
 const CAP_USD = 1.0;             // per-RUN Apify cost ceiling (this audit run)
-// DAILY_CAP_USD: a normal day is ~30 outreach audits (3 questions + a scan = $0.1275 each,
-// $3.83) plus a few paid baselines (3 runs x (10 questions + scan) = $0.435 each). Three of
-// those is $1.31, so a busy day lands near $5.15. $8 clears that comfortably and stops a loop
-// several dollars sooner than $15. Note the SEO scan is ~94% of the outreach figure, so days
-// dominated by no-website leads (which skip the scan) cost far less.
+/* DAILY_CAP_USD: recomputed at the measured rate. A normal day of ~30 outreach audits (3 questions +
+   a scan = $0.1575 each) is $4.73, plus three paid baselines (3 runs x (10 questions + scan) =
+   $0.735 each) at $2.21 — a busy day lands near $6.94.
+
+   ⚠️ $8 no longer "clears that comfortably": the margin is ~15%, where the old (wrong) arithmetic
+   put a busy day at $5.15 and made $8 look like 55% headroom. Left at 8.0 deliberately rather than
+   raised, because raising a safety ceiling is Paul's call and a cap that occasionally trips is a
+   better failure than a shared Apify account exhausted — that took the audit engine down for five
+   hours once. If genuinely busy days start hitting it, $12 restores the original intent.
+   Note the SEO scan is ~76% of the outreach figure, so days dominated by no-website leads (which
+   skip the scan) cost far less. */
 const DAILY_CAP_USD = 8.0;       // per-USER rolling-24h ceiling (across audits) via the runner
 const MAX_ATTEMPTS = 3;          // per queue row (= actor runs STARTED) before it's marked failed
 // Async guards (RUN_TIMEOUT_MS is gone — nothing blocks on the scrape any more):

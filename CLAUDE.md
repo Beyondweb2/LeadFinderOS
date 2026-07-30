@@ -231,10 +231,21 @@ Facts with numbers. These are measured, and several contradict the older docs.
   **Both previous figures were wrong, in opposite directions.** `$0.0025`/question was ~5× too LOW; the
   `$0.0498`/question and £1.50 baseline quoted in earlier briefs were ~4× too HIGH. Neither had a cited source.
   Never quote a cost from a constant again — `actor_cost_usd` is the only measured number.
-  ⚠️ **The SERVER constant is still $0.0025** (`_shared/enrichment/sources.ts:83`), used by create-ai-audit's
-  cap pre-check and by process-ai-audit-queue, so **the spend cap under-counts by ~5×**. Not fixed yet because
-  it is a shared module: correcting it means redeploying every importer, including the paid-baseline path.
-  The SPA-side estimate in `AiAudit.tsx` (`RE_AUDIT_EST_USD_PER_QUESTION`) is correct at $0.0125.
+  ✅ Server constant corrected to **$0.0125** 2026-07-30 (`_shared/enrichment/sources.ts`) and all 7 importers
+  redeployed. It is **per QUESTION**, not per run — `startRow()` charges it once per queue row and
+  `create-ai-audit` multiplies by question count. Setting it to the per-run $0.042 would over-count ~3.6×.
+- 🟢 **THE SPEND CAP WAS NEVER ACTUALLY UNDER-COUNTING — don't "fix" it again.** This was assumed twice (once
+  in this file) and it is wrong. `recordCostCorrection` in `_shared/enrichment/runner.ts:139` writes a SECOND
+  `enrichment_usage` row holding `delta = actual − estimated` once an async actor finishes, so
+  **`sum(cost_usd)` over the window already equals real billed spend whatever the estimate was.** Deltas may be
+  negative. Measured 2026-07-30: in one 24h window, `ai_search` logged $0.22 across 88 questions and
+  `ai_search_correction` added $0.743 — $0.963 total, i.e. $0.0109/question, the real figure.
+  So `estCostUsd` only governs the *reservation* in the pre-check and how many rows a tick starts; it never
+  distorted the accounting. Correcting it is still right (a realistic reservation, a realistic UI estimate, a
+  smaller correction delta) but it was not the emergency it looked like.
+  ⚠️ Consequence for any cost query you write: **you must include the `*_correction` rows.** Filtering
+  `enrichment_type = 'ai_search'` alone reads ~5× too low, and filtering lifetime rows reads too HIGH for the
+  older ones that were estimated at $0.05. Sum everything, or use `ai_audit_runs.actor_cost_usd`.
 - **No Baseline Test button.** Baselines are gated to internal callers (cron secret or service role +
   `x-internal-job`) and currently only start from `stripe-webhook` after payment. A button needs an
   authenticated path. Cost ≈ **30p** (measured — see above).
