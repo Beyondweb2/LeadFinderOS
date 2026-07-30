@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus,
+  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle,
 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
@@ -30,6 +30,8 @@ import {
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
 } from '@/lib/auditReport';
 import { tradeWord } from '@/lib/trade';
+import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
+import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
 import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { renderPlaybookHtml, downloadPlaybookHtml, type PlaybookData, type PlaybookView } from '@/lib/playbookHtml';
 import { buildSchema, normalizeUrl } from '@/lib/schemaType';
@@ -236,6 +238,11 @@ const AiAudit = () => {
      prefill path is untouched. If this is ever gated on anything other than that effect, the audit
      pill on an Outreach row lands on a page with no form and the lead's details are unreachable. */
   const [formOpen, setFormOpen] = useState(false);
+
+  /* APIFY'S MONTHLY SPEND. Every question check and every SEO scan runs through Apify, so when its
+     cap is reached BOTH stop at once — and the page previously said "term too broad". Surfaced here
+     because this is the page where the spending happens. Never blocks: null renders nothing. */
+  const { usage: apifyUsage } = useApifyUsage();
 
   // Wizard form state — no defaults on a fresh start (mode/country unselected, website unknown).
   const [mode, setMode] = useState<'new' | 'existing' | null>(persisted?.mode ?? null);
@@ -1772,6 +1779,10 @@ const AiAudit = () => {
         </p>
       </div>
 
+      {/* APIFY SPEND — outside the step blocks on purpose, so it shows on the list, the results view
+          and the empty state alike. It is the thing that silently stops every audit working. */}
+      <ApifyUsageLine usage={apifyUsage} />
+
       {/* Stacked wizard — answered steps stay visible; each answer reveals the next. */}
       {step !== 'results' && (
         <div className="space-y-4">
@@ -2823,6 +2834,8 @@ const AiAudit = () => {
                   businessName={resultsBusinessName}
                   locationText={locationText}
                   ownWebsite={ownWebsite}
+                  /* So an Apify cap failure can say WHEN it clears rather than just that it happened. */
+                  apifyCycleEnd={apifyUsage?.cycleEnd ?? null}
                 />
               ))}
             </div>
@@ -2947,6 +2960,48 @@ function DeliveryChecklist({ playbook, hasWebsite, hasSeo, state, onToggle, onGe
 }
 
 /* ── Small presentational helpers ─────────────────────────────────────────── */
+
+/* ── APIFY MONTHLY SPEND ─────────────────────────────────────────────────────────────────────────
+   One line, always in the same place. Apify runs every question check and every SEO scan, so at 100%
+   both stop dead — which is what happened on 2026-07-30, when the account had been at 99.8% since
+   lunchtime and the page blamed the question wording.
+
+   Amber at 75%, red at 90%, matching apify-usage.ts's own WARN/CRITICAL thresholds so the log line
+   and this line can never disagree. Renders NOTHING when there is no snapshot or no cap recorded:
+   an empty gap is honest, a "0%" would be a lie about a number we do not have. */
+function ApifyUsageLine({ usage }: { usage: ApifyUsage | null }) {
+  if (!usage || usage.monthlyUsageUsd == null || !usage.maxMonthlyUsageUsd) return null;
+  const used = usage.monthlyUsageUsd;
+  const cap = usage.maxMonthlyUsageUsd;
+  const pct = usage.usagePct ?? used / cap;
+  const tone = apifyTone(pct);
+  // shortDate formats in UTC — the cycle end is 23:59:59.999Z, which in BST would render as the
+  // NEXT day and tell the operator the wrong reset date. See the note on shortDate.
+  const resets = shortDate(usage.cycleEnd);
+
+  const cls = tone === 'critical'
+    ? 'border-destructive/40 bg-destructive/10 text-destructive'
+    : tone === 'warn'
+      ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-500'
+      : 'border-border/60 bg-card/60 text-muted-foreground';
+
+  return (
+    <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-3 py-2 text-[12px] ${cls}`}>
+      {tone === 'ok' ? <Check className="h-3.5 w-3.5 shrink-0" /> : <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}
+      <span className="font-semibold">Apify ${used.toFixed(2)} of ${cap.toFixed(2)}</span>
+      <span className="tabular-nums">({(pct * 100).toFixed(1)}%)</span>
+      <span>this billing cycle{resets ? `, resets ${resets}` : ''}.</span>
+      {/* The consequence, stated only when it is actually near — no crying wolf at 40%. */}
+      {tone !== 'ok' && (
+        <span className="font-medium">
+          {pct >= 1
+            ? 'At the cap: audit questions and SEO scans will both fail until it is raised or the cycle rolls.'
+            : 'At 100% audit questions and SEO scans both stop.'}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function StepCard({ children }: { children: React.ReactNode }) {
   return <Card><CardContent className="p-4 sm:p-5 space-y-4">{children}</CardContent></Card>;
@@ -3269,10 +3324,16 @@ function bandVerdict(band: ScoreBand, score: number | null): 'open' | 'contested
   return (score ?? 0) >= 7 ? 'open' : 'contested'; // winnable
 }
 
-function QuestionCard({ row, businessName, locationText, ownWebsite }: { row: QueueRow; businessName: string; locationText: string; ownWebsite: string }) {
+function QuestionCard({ row, businessName, locationText, ownWebsite, apifyCycleEnd }: { row: QueueRow; businessName: string; locationText: string; ownWebsite: string; apifyCycleEnd?: string | null }) {
   const pending = row.status === 'pending' || row.status === 'running';
   // Failed rows store { error } (not an engine map). They have NO answer data, so no score.
   const failed = row.status === 'failed';
+  /* THE REAL REASON, not a guess. This used to print one hardcoded line — "term too broad to
+     complete" — for every failure, while the actual error sat unread in row.result.error. On
+     2026-07-30 that line was shown for an Apify HTTP 402 (monthly spend cap exhausted) and sent the
+     operator off to rewrite questions that had worked two hours earlier. There is no breadth
+     detection anywhere in this codebase, so that sentence was never a real diagnosis. */
+  const failure = failed ? explainAuditFailure(row.result, { apifyCycleEnd }) : null;
   // The plain-English verdict + /10 score, computed from THIS question's real answer data.
   const s = row.status === 'done' && row.result ? scoreQuestion(row.result, businessName, locationText, ownWebsite) : null;
   const verdict = s ? bandVerdict(s.band, s.score) : null;
@@ -3292,8 +3353,21 @@ function QuestionCard({ row, businessName, locationText, ownWebsite }: { row: Qu
             </div>
             {/* The upgrade: a one-line plain-English read of WHY + who's named + how hard. */}
             {s && <p className="text-[13px] leading-relaxed text-foreground/90">{s.reason}</p>}
-            {failed && (
-              <p className="text-[13px] leading-relaxed text-amber-500">Couldn’t check — term too broad to complete. Retry or narrow it.</p>
+            {failure && (
+              <div className="space-y-1">
+                {/* Our-cap stops are deliberate, not faults — amber. A vendor refusing is red. */}
+                <p className={`text-[13px] font-medium leading-relaxed ${failure.kind === 'our_cap' ? 'text-amber-500' : 'text-destructive'}`}>
+                  {failure.headline}
+                </p>
+                {failure.detail && (
+                  <p className="text-[12px] leading-relaxed text-muted-foreground">{failure.detail}</p>
+                )}
+                {/* THE RAW STORED ERROR, ALWAYS. Shown for mapped cases too: the plain-English line is
+                    our interpretation, and the operator must be able to see the string it came from. */}
+                {failure.raw && (
+                  <p className="font-mono text-[11px] leading-relaxed text-muted-foreground/70 break-all">{failure.raw}</p>
+                )}
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
