@@ -68,6 +68,12 @@ Checks:
       **Compare the error LISTS, not the counts.** A count that matches can still hide one new error
       masking one removed one. `... | Select-String "error TS" | ForEach-Object {...} | Sort-Object`
       into a file for each side, then `Compare-Object`.
+- [ ] **`npm run typecheck` PASSING AT BASELINE DOES NOT MEAN IT COMPILES.** Proven 2026-07-30: a
+      stray backtick inside `playbookDoc.ts`'s CSS template literal terminated the string early and
+      broke the Vite build outright — and `tsc` still reported exactly 14, the clean baseline. Vite
+      (SWC) said "Expected a semicolon"; tsc recovered and reported the same 14 semantic errors.
+      **Always run `npm run build` as well** — it is the only check that catches this class of fault.
+      Related: never put a backtick inside a template literal, even in a comment inside one.
 - [ ] **`deno check --sloppy-imports` on EVERY changed edge function file.** Capture the exit code
       **directly**, not through a pipe — a pipe reports the pipe's status, not Deno's.
       **`npm run typecheck` does NOT cover `supabase/functions`.** That gap put checkout down for 15 hours.
@@ -160,7 +166,10 @@ Facts with numbers. These are measured, and several contradict the older docs.
 - **Being cited is not being named.** ABLM is on Yell's Wisbech page and was named **0 times in 80
   measurements**.
 - **Directories are trade-specific, and only citations can tell you which:**
-  - Checkatrade — **657 citations across 57 of 58 plumber audits**, and **ZERO** for accountants.
+  - Checkatrade — **662 citations across 58 of 59 plumber audits**, and **ZERO** for accountants.
+    (Was "657 across 57 of 58"; re-measured live 2026-07-30 — the data grows, so re-read it rather
+    than quoting this line. The whole fold: **109 audits, 10,615 citations, 1,275 hosts**; trade
+    totals plumber **59**, locksmiths 25, accountant **12**, electrician 12.)
   - Yell works for **both**.
   - Hospitality is **Tripadvisor and Wanderlog**.
 - **A business with no website cannot be named by Gemini at all** — it has nothing of theirs to read.
@@ -172,7 +181,7 @@ Facts with numbers. These are measured, and several contradict the older docs.
 | Website quality | Firms Gemini names have **WORSE** sites than our clients |
 | Schema markup | **35% vs 32%** — no difference |
 | Reviews | Three named businesses have **0–1 reviews** |
-| Bing Places | **Zero citations across all 8,913** |
+| Bing Places | **Zero citations across all 10,615** (re-measured 2026-07-30; `bingplaces.com` and `bing.com` appear in NONE of the 1,275 hosts) |
 
 - **The only supported lever:** presence in the sources AI reads **for that trade**, plus **a website where
   there isn't one**.
@@ -376,7 +385,42 @@ Facts with numbers. These are measured, and several contradict the older docs.
   ⚠️ **`/ai-audit?leadId=…` MUST open that modal.** `setFormOpen(true)` sits in the same branch as `pickLead`
   in the deep-link effect. Break that and the Outreach audit pill lands on a page with no form.
 
+- ✅ **THE PRINTED EVIDENCE DOC NOW MATCHES THE LLM DOC'S LAYOUT** (`a1cc31cc`, 2026-07-30). Section
+  order: header → THE PLAN (grouped) → SEO Improvement (add-on) → QUICK WINS → WHERE AI READS → who
+  keeps getting named → EFFORT → Timeline & Our promise. Reached by the **Print** button on
+  `/playbook/:id`, which existed long before anyone pressed it.
+  - **The styling was already shared** — `playbookDocStyle.ts` was extracted VERBATIM from
+    `playbookHtml.ts`, and `.prio` / `.lead` / `.pillar` / `.act-steps` / `.qw` were already defined
+    and merely unused. Restyling was populating existing classes, not writing CSS. Check before
+    assuming a visual difference means the stylesheets differ.
+  - **Priority is derived from BREADTH and prints the fact beside it**: "HIGH · 58 of 59 plumber
+    audits". HIGH ≥60% of the trade's audits, MEDIUM ≥`EVIDENCE_MIN_AUDITS`, LOW = thin. Paul's rule:
+    a badge must be a summary of a visible fact, never a judgement he cannot audit.
+  - **`DirectoryFact.steps` — hand-written sub-steps, and NO GENERIC FALLBACK.** A host without steps
+    prints an explicit "no written steps yet" line. Generic filler is what made the LLM document
+    useless. 7 written (Checkatrade, Yell, MyBuilder, 192.com, Cylex, Thomson Local, Yelp); only 5 of
+    them are cited for plumbers, so a trade shows fewer.
+  - **The doc says out loud that the ranking is TRADE-LEVEL**, from all audits of the trade, and that
+    this business's own citations do not feed it. Two businesses in one trade get the same list.
+  - **The SEO section is built from the real stored scan** (`ai_audit_runs.results.seo`) and carries
+    **no AI claim at all** — it states the counter-evidence instead. `usePlaybook` now fetches it via
+    the report's own `isRenderableSeo` + `aggregateSeoFindings`. The real shape is **2** categories
+    (`onPage`, `contentTechnical`), not 9; Macca-Gas's three "N images without alt text" findings fold
+    to one "15 images" line.
+  - ⚠️ **`.plan` is ~4.5 A4 pages and the shared CSS marks it `break-inside:avoid`.** A browser cannot
+    honour that and may push the whole section to a fresh sheet, leaving page 1 half empty. Overridden
+    in `playbookDoc.ts`'s own `EXTRA_CSS` (containers flow, atoms protected) — **not** in the shared
+    file, so the LLM document is untouched. ~7 pages for 17 tasks, against the LLM doc's 4.
+  - **The promise wording is the Stripe line-item, verbatim in scope** — `findable-checkout:204`:
+    "named in more AI answers within 8 weeks or a full refund". Phrased "Our promise is to". The LLM's
+    "We guarantee that…" and "Expect initial visibility improvements within a few weeks" are both
+    model output (`guaranteeNote`/`timelineNote`), so they vary per generation and cannot be fixed in
+    that pipeline — only replaced by template text in this one.
 - Thresholds: `EVIDENCE_MIN_AUDITS 5`, `THIN_MIN_AUDITS 2`, `TRADE_MIN_AUDITS 5`.
+- **The ranking is per-TRADE, from every audit of that trade.** `playbook-evidence` folds ALL audits;
+  `buildPlaybook` filters to the trade and sorts by citations. `ownCitations` (this audit's own) is a
+  separate display-only signal and feeds **nothing**. So a thin trade gets thin evidence, guarded by
+  the three thresholds above — not rescued by the business's own audit.
 - **`usePlaybook` resolves an id as an AUDIT id first, then a lead.** ABLM has an audit and no
   `outreach_leads` row; lead-first would 404 the only delivery client.
 - **`directoryFacts` holds 64 entries, not 66.** Counted 2026-07-30: `host: '` appears 64 times; a naive grep

@@ -73,6 +73,24 @@ full address, and the modal prefilled its town from it. Item 1+2 of the second b
 - [ ] `resetWizard` does not reset `businessScope` or `questionCount`; they carry over from the last
       audit. Pre-existing, and more visible now the form opens and closes as a modal.
 
+### Fourth brief, 2026-07-30 — restyle the evidence playbook to the LLM layout ✅ (`a1cc31cc`)
+Done, deployed, live-verified. Reached via **Print** on `/playbook/:id`. Details in CLAUDE.md §9.
+Acceptance test on Macca-Gas (`18159c6f`) passed against the rendered document:
+Checkatrade **#1, 662 citations / 58 of 59 audits, flagged CLIENT MUST DO THIS**; Bing Places absent;
+"review" appears **0 times**; SEO section shows real grades (B / on-page B 74 / content A+ 98) with
+no AI claims; every protected atom fits one page.
+
+**Deliberately NOT done — Paul wants the two documents side by side first:** the LLM playbook is
+still fully reachable (results view → Generate/View playbook, plus its delivery-checklist card).
+Removing it is a separate call.
+
+| Still open on the playbook | Note |
+|---|---|
+| Compare the two documents, then decide whether to delete the LLM one | Paul's next step |
+| Sub-steps for the other ~31 task-capable hosts | Deliberate gap; they print "no written steps yet" |
+| `postal_town` coarseness (Dodworth → Barnsley) | Undecided, CLAUDE.md §8 |
+| Repeating print headers | Paul: cosmetics wait until he has read it |
+
 ### Still to do after the test passes
 - [ ] `npx supabase gen types typescript --project-ref ruusxpkkmwtljxxulhbq > src/integrations/supabase/types.ts`
       — Paul approved. Lets the `as unknown as` casts in `AiAudit.tsx` and the `as never` in
