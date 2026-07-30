@@ -62,12 +62,20 @@ Git:
       `git add -A` blind.
 
 Checks:
-- [ ] `npm run typecheck` — **baseline is 15 errors.** Flag any change from 15. Do not "fix" the 15.
+- [ ] `npm run typecheck` — **baseline is 14 errors** (was 15 until 2026-07-30; one `TS2352` cast in
+      `useOutreach.ts` went away when three hand-rolled lead updates became one function). Flag any
+      change from 14. Do not "fix" the 14.
+      **Compare the error LISTS, not the counts.** A count that matches can still hide one new error
+      masking one removed one. `... | Select-String "error TS" | ForEach-Object {...} | Sort-Object`
+      into a file for each side, then `Compare-Object`.
 - [ ] **`deno check --sloppy-imports` on EVERY changed edge function file.** Capture the exit code
       **directly**, not through a pipe — a pipe reports the pipe's status, not Deno's.
       **`npm run typecheck` does NOT cover `supabase/functions`.** That gap put checkout down for 15 hours.
 - [ ] `generate-barber-site` has 3 **pre-existing** supabase-js generics errors (~lines 59/693/895). Prove
       pre-existing with `git stash` + re-check. Don't fix them.
+- [ ] `google-place-details` has **4 pre-existing** errors (1 × `TS2353` on `logUsage`'s insert, 3 ×
+      `TS2345` passing the client to `logUsage`). Proven by `git stash` 2026-07-30. Line numbers move
+      as the file changes — **match on the message, not the line.**
 
 Deploy:
 - [ ] Edge functions **do not auto-deploy**: `npx supabase functions deploy <name>` by hand.
@@ -117,6 +125,21 @@ below, and it bit twice tonight:
 - Grep output in this environment sometimes **path-mangles matched lines** — `path="/playbook/:id"` displayed as
   `path="\playbook:id"`, and `{/*` as `{\*`. **Never conclude code is broken from grep output alone.** `Read`
   the file.
+
+**`grep -l <module-name>` finds COMMENTS, not just imports.** Building the redeploy list 2026-07-30,
+`grep -rln "place-details"` returned `generate-barber-site` and `grep -rln "audit-baseline"` returned
+`findable-checkout`. **Neither imports either module** — both merely mention the name in a comment
+("Mirrors google-place-details", "MIRRORS audit-baseline.ts's own bizType line"). Two unnecessary
+deploys, avoided only by re-grepping for a real `import ... from "…"` line. Match the import
+statement, then read it.
+
+**A stale COMMENT is a load-bearing bug.** `google-place-details` fetched phone + website only,
+justified by a comment saying the address "is already returned by Text Search at lead-creation time".
+`search-leads`' field mask had since been slimmed to
+`places.id,places.displayName,places.googleMapsUri,places.websiteUri` — no address. So `address` was
+null on **every** search-added lead, and with no address there were no `addressComponents`, so no
+`derived_town`. Nobody re-checked the layer the comment was asserting about. When a comment explains
+why something is safe to skip, **verify the claim, don't inherit it.**
 
 **The mistake you keep making: reasoning from one layer without checking the next.** Real examples:
 - "No address is stored" — the insert writes one.
@@ -197,10 +220,43 @@ Facts with numbers. These are measured, and several contradict the older docs.
 
 ## 8. Known open problems — don't rediscover these
 
+- ✅ **GOOGLE PLACE DETAILS COST — SETTLED 2026-07-30 against Google's docs.** A Place Details request is
+  billed **ONCE, at the highest SKU tier any requested field touches** ("if you select fields in both the
+  Essentials and the Pro SKUs, you are billed based on the Pro SKU").
+  | Field | Tier |
+  |---|---|
+  | `formattedAddress`, `addressComponents`, `location` | **Essentials** |
+  | `internationalPhoneNumber`, `nationalPhoneNumber`, `websiteUri`, `rating`, `userRatingCount` | **Enterprise** |
+
+  So **rating and review count are FREE on any call that already asks for a phone number** — same tier.
+  And adding one Enterprise field to an Essentials-only call re-prices the whole thing, which is why
+  `place-town.ts`'s audit-time call deliberately stays address-only.
+  ⚠️ An earlier comment in `sources.ts` said rating moves a call to "the **Pro** SKU at ~4x" — **wrong
+  tier**, now corrected in the file. The `$0.017` in `google-place-details`' `logUsage` is an inherited
+  constant, **never verified against a bill.** Don't quote it as fact.
+- ✅ **LEAD-CREATION ENRICHMENT — FIXED + DEPLOYED 2026-07-30** (`80efe108`). The phone lookup that
+  already runs on add now also returns **address, rating, review count and the derived town**, at no
+  extra cost, and `useOutreach.ts` writes all of them. Consequences worth knowing:
+  - `resolveDerivedTown` at audit time now normally hits a fresh 30-day stamp and calls Google **zero**
+    times. It is the backstop, not the main path.
+  - **`phone_cache.details_version`** gates pre-v2 rows as a MISS. Without it every already-cached lead
+    would have stayed unenriched for 30 days.
+  - **⚠️ `postal_town` can be COARSER than the name a customer would use.** "Dogs of Southsea" derives
+    **Portsmouth**, because Southsea's `postal_town` *is* Portsmouth (it's `locality` that says
+    Southsea). The precedence `postal_town > locality > admin_2` is unchanged and still correct for the
+    Huntingdon-from-a-Wisbech-search bug it was built for, but for a district of a larger city it will
+    ask AI about the city. **Not yet decided whether that's right.** Verified by unit test, not guessed.
+  - Still outstanding: **`search_keyword`/`search_location` can be written as null.** `addLead` writes
+    them, and `Index.tsx` passes them, but they live in page state (`Index.tsx:41-42`) set only by
+    pressing Search — while the RESULTS are restored from `sessionStorage`
+    (`LeadSearchContext.tsx:150-168`, filters persisted only on the demo path). So search → leave the
+    page or reload → come back → Add writes nulls, with results still on screen. **Paul is testing the
+    exact trigger before this is fixed.**
 - **Audits use the SEARCHED town, not the real town.** Lead search has a radius, so a Huntingdon locksmith came
   back from a Wisbech search and was told AI doesn't know he exists — he ranks first in his own town. He caught
   it. Spec is ready; **not built**.
-  - `outreach_leads.place_id` is populated on **758/758**; `address` on **0**.
+  - `outreach_leads.place_id` is populated on **758/758**; `address` was on **0** — fixed for NEW leads
+    2026-07-30 (above). **Existing 758 are not backfilled**; Paul said backfill isn't needed.
   - `getPlaceDetails()` is restorable from **`a8fd7003^:supabase/functions/search-leads/index.ts`** — verified
     2026-07-30: `a8fd7003` is the commit that deleted it. Not in `_shared/`; don't go looking there.
   - Town extraction is reusable as-is at `generate-barber-site:307-310` (UK `postal_town` → `locality` →
@@ -249,6 +305,20 @@ Facts with numbers. These are measured, and several contradict the older docs.
 - **No Baseline Test button.** Baselines are gated to internal callers (cron secret or service role +
   `x-internal-job`) and currently only start from `stripe-webhook` after payment. A button needs an
   authenticated path. Cost ≈ **30p** (measured — see above).
+- **THREE audit entry points, not two, and they resolve inputs differently.** Compared 2026-07-30;
+  unifying them is **deliberately deferred** until Paul has verified the enrichment fix.
+  | | Outreach row pill | Inbox button | Outreach bulk "Run audits" |
+  |---|---|---|---|
+  | What it does | `navigate('/ai-audit?leadId=…')` — **no server call** | calls `create-ai-audit` at once | `bulk-jobs` |
+  | Location sent | wizard box, prefilled `derived_town \|\| search_location \|\| address` (`AiAudit.tsx:778`) | `search_location \|\| address` — **no `derived_town`** (`Inbox.tsx:397`) | `search_location \|\| address` (`bulk-jobs:229`) |
+  | Business type | `search_keyword \|\| category` | `category \|\| search_keyword` — **reversed** | — |
+  | Missing inputs | blank box, **no warning** | inline prompt, never leaves the Inbox | — |
+  | Auto-pitch | no | **`queue_pitch_on_complete: true`** | no |
+
+  **Do NOT merge the flows.** Paul's reason, and it settles it: the Inbox path auto-sends a pitch, and
+  he has live prospects mid-conversation. Share the *input resolution* only. The server overrides
+  location anyway (`create-ai-audit:353-377`), so the client differences decide what the operator SEES
+  and what is used if derivation fails.
 - **The three-question-type split isn't built** (own town / what makes them unique / surrounding towns).
 - **Lead type/location are NOT reliably on the lead.** No `business_type`/`city` columns; audits read
   `search_keyword||category` and `search_location||address`, populated on only **~20%** of leads.
