@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, Trash2, CircleStop, ChevronRight, Eye,
+  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus,
 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
@@ -262,6 +262,12 @@ const AiAudit = () => {
   const [reRunForRunId, setReRunForRunId] = usePersistedState<string | null>(
     'ai-audit-rerun-run', null, { tier: 'session', scope: user?.id ?? null, version: 1 },
   );
+  // RE-AUDIT (a NEW audit row for the same business) — transient, unlike the re-run editor: it is
+  // confirmed or abandoned in one sitting, and a stale persisted copy pointing at a previous audit
+  // is a worse failure than losing a few typed edits.
+  const [reAuditOpen, setReAuditOpen] = useState(false);
+  const [reAuditQuestions, setReAuditQuestions] = useState<string[]>([]);
+  const [reAuditBusy, setReAuditBusy] = useState(false);
   const [reRunQuestions, setReRunQuestions] = usePersistedState<string[]>(
     'ai-audit-rerun-questions', [], { tier: 'session', scope: user?.id ?? null, version: 1 },
   );
@@ -895,6 +901,88 @@ const AiAudit = () => {
 
   const cancelReRun = () => { setReRunEditing(false); setReRunForRunId(null); setReRunQuestions([]); };
 
+  /* ── RE-AUDIT: a NEW ai_audits row for the same business ──────────────────────────────────────
+     Distinct from Re-run, which adds a run to the SAME audit row. Mixing post-work runs into the
+     original row would destroy the only before-and-after measurement that exists, so this mints a
+     separate audit and leaves the old one completely untouched.
+
+     WHY THE ROW IS INSERTED HERE rather than by create-ai-audit. Two reasons, both load-bearing:
+       1. create-ai-audit deliberately REUSES an existing audit when handed a lead_id and no
+          audit_id — its duplicate guard. Posting the business details plus lead_id would add a run
+          to the original row, i.e. precisely the thing this button exists to avoid.
+       2. its insert writes ten columns and `credentials` is NOT one of them, so the ACCA/CTA field
+          that generate-report and generate-playbook both read would be silently dropped.
+     So the row is copied field-for-field here, then create-ai-audit is called with the NEW audit id,
+     which takes its reuse branch and honours the supplied questions verbatim.
+
+     BASELINE COLUMNS ARE DELIBERATELY NOT COPIED. `baseline`, `baseline_target_runs` and friends
+     mark a PAID measurement; copying them onto an "after" audit would make it look like a second
+     paid baseline, and the paid-client backstop would start topping it up every minute. */
+
+  /** Ceiling used for the pre-confirm estimate, matching the server's own constant.
+   *  ⚠️ UNRESOLVED — see CLAUDE.md §8. `_shared/enrichment/sources.ts` says $0.0025 per question and
+   *  states the older $0.05 figure was 20x too high, but other notes still quote $0.0498. Actual
+   *  spend is recorded per run in `ai_audit_runs.actor_cost_usd`; until that is read this is an
+   *  ESTIMATE and is labelled as one on screen, never a promise. */
+  const RE_AUDIT_EST_USD_PER_QUESTION = 0.0025;
+
+  const startReAudit = () => {
+    if (!auditId || isDraining) return;
+    const seen = new Set<string>();
+    /* VERBATIM, deliberately — including misspellings. "accoutnant in wisbech" asked again is a
+       valid like-for-like comparison; a tidied-up version silently measures something else. Only
+       exact repeats are dropped, and the first occurrence's original text is what survives. */
+    const seed = queueRows
+      .map((r) => (r.question ?? '').trim())
+      .filter((q) => { if (!q) return false; const k = q.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+    setReAuditQuestions(seed.length ? seed : ['']);
+    setReAuditOpen(true);
+  };
+
+  const cancelReAudit = () => { setReAuditOpen(false); setReAuditQuestions([]); };
+
+  const confirmReAudit = async () => {
+    if (!auditId || !user) return;
+    const clean = reAuditQuestions.map((q) => q.trim()).filter(Boolean);
+    if (clean.length === 0) { toast({ title: 'Add at least one question', variant: 'destructive' }); return; }
+    setReAuditBusy(true);
+    try {
+      /* Columns listed explicitly rather than select('*') so a column added later cannot silently
+         join the copy without someone deciding that it should — which is exactly how a baseline
+         marker or a stale timestamp would end up cloned. */
+      const { data: src, error: readErr } = await supabase
+        .from('ai_audits')
+        .select('lead_id, business_name, business_type, location_text, country, has_website, website, business_scope, specialism, credentials, business_phone, business_address, business_email, client_links')
+        .eq('id', auditId)
+        .maybeSingle();
+      if (readErr || !src) throw new Error(readErr?.message ?? 'could not read the audit to copy');
+
+      const { data: created, error: insErr } = await supabase
+        .from('ai_audits')
+        .insert({ ...src, user_id: user.id })
+        .select('id')
+        .single();
+      if (insErr || !created) throw new Error(insErr?.message ?? 'could not create the new audit');
+
+      // The NEW audit id — so create-ai-audit's reuse branch runs against the copy, never the original.
+      const { data, error } = await supabase.functions.invoke('create-ai-audit', {
+        body: { audit_id: created.id, questions: clean },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 're-audit failed');
+
+      setReAuditOpen(false); setReAuditQuestions([]);
+      setAuditId(created.id);
+      setRunId(data.run_id); setOpenRunId(data.run_id);
+      setRun(null); setQueueRows([]);
+      toast({ title: 'Re-audit started', description: 'New audit row created — the original is untouched.' });
+      loadSaved();
+    } catch (e) {
+      toast({ title: "Couldn't re-audit", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setReAuditBusy(false);
+    }
+  };
+
   const confirmReRun = async () => {
     if (!auditId) return;
     const clean = reRunQuestions.map((q) => q.trim()).filter(Boolean);
@@ -1191,6 +1279,10 @@ const AiAudit = () => {
     { named: 0, total: 0, failed: 0, done: 0 },
   );
   const isDraining = !!runId && !(run && TERMINAL.has(run.status));
+  /** The open audit's own list row, for its created_at. A business can hold several audits now, so
+   *  the results view has to say which one it is showing. */
+  const openAuditRow = savedAudits.find((a) => a.id === auditId) ?? null;
+
   // The re-run editor is open only for the run it was opened for (persisted flag is run-scoped),
   // so a stale editor can't reopen over a different audit after a tab-away/reload.
   const reRunOpen = reRunEditing && !!runId && reRunForRunId === runId;
@@ -1823,7 +1915,9 @@ const AiAudit = () => {
                                     <div key={au.id} className="space-y-1">
                                       <div className="flex items-center gap-2">
                                         <span className="text-[11px] font-medium text-muted-foreground">
-                                          Audit {new Date(au.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                          {/* Year included: a before/after pair can straddle a year end,
+                                              and "21 Jul" alone would not distinguish them. */}
+                                          Audit {new Date(au.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                                         </span>
                                         <AuditPills audit={au} run={au.runs[0] ?? null} />
                                         <span className="flex-1" />
@@ -2099,6 +2193,15 @@ const AiAudit = () => {
                     </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={resetWizard}>New audit</Button>
+                  {/* RE-AUDIT — a NEW audit row, prefilled. The measurement you want at week 8:
+                      "Re-run" would add runs to THIS row and mix the after into the before. */}
+                  {!isDraining && auditId && (
+                    <Button variant="outline" size="sm" onClick={startReAudit}
+                      disabled={running || isDraining || reAuditOpen || reAuditBusy}
+                      title="Create a NEW audit for this business, prefilled from this one. Leaves this audit untouched as your before.">
+                      <CopyPlus className="mr-2 h-4 w-4" /> Re-audit
+                    </Button>
+                  )}
                   <Button size="sm" onClick={startReRun} disabled={running || isDraining || reRunOpen}>
                     {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                     Re-run
@@ -2121,6 +2224,66 @@ const AiAudit = () => {
                     </Button>
                   </div>
                   <p className="text-[11px] text-muted-foreground">Set before generating the listing — it's surfaced as a trust signal.</p>
+                </div>
+              )}
+
+              {/* RE-AUDIT confirmation — questions prefilled VERBATIM from the audit being re-audited,
+                  editable, with the cost stated before anything is created. Nothing is written until
+                  Start re-audit is pressed. */}
+              {reAuditOpen && (
+                <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold">Re-audit — creates a NEW audit</span>
+                    <Button variant="ghost" size="sm" onClick={cancelReAudit} disabled={reAuditBusy}>Cancel</Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    A separate audit row for <span className="font-medium text-foreground">{resultsBusinessName || 'this business'}</span>,
+                    carrying over the business details and credentials. <span className="font-medium text-foreground">This audit is not
+                    modified</span> — it stays as your before.
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Questions are copied exactly as they were asked, including any misspellings, so the
+                    comparison is like-for-like. Edit them only if you want to measure something different.
+                  </p>
+                  <div className="space-y-2">
+                    {reAuditQuestions.map((q, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Input value={q} disabled={reAuditBusy}
+                          onChange={(e) => setReAuditQuestions((prev) => prev.map((x, xi) => xi === i ? e.target.value : x))} />
+                        <Button variant="ghost" size="icon" disabled={reAuditBusy} title="Remove"
+                          onClick={() => setReAuditQuestions((prev) => prev.filter((_, xi) => xi !== i))}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button variant="outline" size="sm" disabled={reAuditBusy}
+                    onClick={() => setReAuditQuestions((prev) => [...prev, ''])}>
+                    <Plus className="mr-2 h-4 w-4" /> Add question
+                  </Button>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {reAuditQuestions.filter((q) => q.trim()).length} question{reAuditQuestions.filter((q) => q.trim()).length === 1 ? '' : 's'}
+                      </span>
+                      {' · '}
+                      {/* ESTIMATE, said plainly. See RE_AUDIT_EST_USD_PER_QUESTION — the per-question
+                          price is unresolved between two figures, so this must not read as a quote. */}
+                      estimated cost{' '}
+                      <span className="font-medium text-foreground">
+                        ${(reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION).toFixed(4)}
+                      </span>
+                      {' '}(~{Math.round(reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION * 80)}p)
+                      <span className="block text-[10px] text-muted-foreground/70">
+                        Estimate at ${RE_AUDIT_EST_USD_PER_QUESTION}/question × 1 run. Actual is recorded per run once it finishes.
+                      </span>
+                    </div>
+                    <Button size="sm" onClick={confirmReAudit}
+                      disabled={reAuditBusy || reAuditQuestions.filter((q) => q.trim()).length === 0}>
+                      {reAuditBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CopyPlus className="mr-2 h-4 w-4" />}
+                      {reAuditBusy ? 'Creating…' : 'Start re-audit'}
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -2161,11 +2324,23 @@ const AiAudit = () => {
                 </div>
               )}
 
-              {/* Business name — large + bold */}
+              {/* Business name — large + bold. The audit DATE is shown here because a business can now
+                  have several audits (before / after), and without it there is no way to tell from this
+                  screen which one is open. Full year: a before/after can straddle a year boundary. */}
               <div>
                 <h2 className="text-2xl font-bold tracking-tight leading-tight">{resultsBusinessName || 'Audit'}</h2>
-                {(businessType || locationText) && (
-                  <div className="mt-0.5 text-sm text-muted-foreground">{[businessType, locationText].filter(Boolean).join(' · ')}</div>
+                {(businessType || locationText || openAuditRow) && (
+                  <div className="mt-0.5 text-sm text-muted-foreground">
+                    {[businessType, locationText].filter(Boolean).join(' · ')}
+                    {openAuditRow && (
+                      <>
+                        {(businessType || locationText) && ' · '}
+                        <span className="font-medium text-foreground/80">
+                          audit of {new Date(openAuditRow.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
 

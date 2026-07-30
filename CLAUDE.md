@@ -219,9 +219,26 @@ Facts with numbers. These are measured, and several contradict the older docs.
     baseline, i.e. the guarantee path.** And `src/pages/AiAudit.tsx:753` for the wizard.
     Intended precedence everywhere: `confirmed_location || derived_town || search_location`.
 - **37 reports already went out with the wrong-town problem.**
+- 🔴 **UNRESOLVED — the per-question audit cost is two different numbers, 20× apart.** Everything costed in
+  this repo depends on which is right, so settle it before quoting a price to anyone.
+  | Figure | Where it comes from |
+  |---|---|
+  | **$0.0025** / question | `_shared/enrichment/sources.ts:83` — the constant the code actually uses. Its own comment says it was corrected from the Apify dashboard on 2026-07-26 and that "the previous $0.05 estimate was 20x too high". |
+  | **$0.0498** / question | Repeated in earlier briefs and in this file. No source was ever cited. Suspiciously close to the superseded $0.05. |
+
+  Consequences of the difference: a 10×3 baseline is either **≈7p** or **≈£1.50**. A one-off 3-question audit is
+  either **0.6p** or **15p** — and "about 15p" is currently printed on the playbook's thin-trade step.
+  **The tie-breaker is measured data, not either constant:** actual spend is recorded per run in
+  `ai_audit_runs.actor_cost_usd`. Hand Paul this and replace both figures with the answer:
+  ```sql
+  select count(*) runs, round(avg(actor_cost_usd)::numeric, 5) avg_cost_per_run,
+         round(sum(actor_cost_usd)::numeric, 2) total_spend
+  from ai_audit_runs where actor_cost_usd is not null;
+  ```
+  Until then, label every cost on screen as an **estimate**, never a quote. The Re-audit confirmation does this.
 - **No Baseline Test button.** Baselines are gated to internal callers (cron secret or service role +
   `x-internal-job`) and currently only start from `stripe-webhook` after payment. A button needs an
-  authenticated path. Cost: 10 questions × 3 runs × $0.0498 ≈ **$1.50**.
+  authenticated path. Cost: 10 questions × 3 runs × **(see the unresolved figure above)**.
 - **The three-question-type split isn't built** (own town / what makes them unique / surrounding towns).
 - **Lead type/location are NOT reliably on the lead.** No `business_type`/`city` columns; audits read
   `search_keyword||category` and `search_location||address`, populated on only **~20%** of leads.
