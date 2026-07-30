@@ -401,10 +401,28 @@ export async function startPaidBaseline(
       .find((a) => Number(a.baseline_target_runs ?? 0) > 1);
     if (already) return { ok: true, audit_id: already.id, skipped: "already_has_baseline" };
 
-    const { data: lead, error: lErr } = await service
+    // deno-lint-ignore no-explicit-any
+    let lead: any; // eslint-disable-line
+    // deno-lint-ignore no-explicit-any
+    let lErr: any;
+    ({ data: lead, error: lErr } = await service
       .from("outreach_leads")
       .select("id, user_id, business_name, category, search_keyword, country, website, search_location, derived_town")
-      .eq("id", leadId).maybeSingle();
+      .eq("id", leadId).maybeSingle());
+    /* MIGRATION-TOLERANT, and this is not theoretical: derived_town is added by a migration Paul
+       applies BY HAND, so between this deploy and that SQL the column does not exist and PostgREST
+       fails the whole select with a 400. Without this retry the paid baseline — the guarantee path —
+       would abort on "lead read failed" for every client in that window. Same pattern
+       create-ai-audit already uses for baseline_target_runs. */
+    if (lErr && /derived_town/i.test(lErr.message ?? "")) {
+      console.warn("[baseline] derived_town column not present yet — reading without it");
+      const retry = await service
+        .from("outreach_leads")
+        .select("id, user_id, business_name, category, search_keyword, country, website, search_location")
+        .eq("id", leadId).maybeSingle();
+      lead = retry.data;
+      lErr = retry.error;
+    }
     if (lErr) return { ok: false, error: `lead read failed: ${lErr.message}` };
     if (!lead) return { ok: false, error: "lead not found" };
 
