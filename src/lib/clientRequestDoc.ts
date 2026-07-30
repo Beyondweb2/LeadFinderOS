@@ -34,9 +34,21 @@ export interface ClientAsk {
   /** Human name, e.g. "Checkatrade". */
   label: string;
   /** How many audits of this trade it appeared in, and out of how many. The justification for the
-   *  ask, and safe to print: it says this source matters without saying what else does. */
-  audits: number;
-  tradeAudits: number;
+   *  ask, and safe to print: it says this source matters without saying what else does.
+   *  OPTIONAL because not every ask is justified by our citation data — see evidenceNote. */
+  audits?: number;
+  tradeAudits?: number;
+  /* WHERE THE JUSTIFICATION COMES FROM, when it is not our own measurement. Overrides the
+     measured-breadth line entirely.
+
+     THIS EXISTS SO WE CANNOT ACCIDENTALLY CLAIM TO HAVE MEASURED SOMETHING WE HAVEN'T. Google
+     Business Profile is the case it was added for: Google publishes guidance that a complete profile
+     helps a business appear in AI-powered results, and that is a perfectly good reason to ask a client
+     to do a free thing they own. But in OUR data google.com is cited twice across 2 of 62 plumber
+     audits out of 10,672 citations — nowhere near a measured lever. So the ask is made on Google's
+     authority, attributed to Google, and the note says which it is. Anything put here must name its
+     source. */
+  evidenceNote?: string;
   cost: AskCost;
   /** Hand-written client-facing wording, {trade}/{town} already substituted. Null is allowed but
    *  the selector will not choose a host without one — see the note there. */
@@ -132,10 +144,13 @@ const EXTRA_CSS = `
 `;
 
 /** The evidence for ONE ask, stated so it justifies the request and reveals nothing else. Says how
- *  broadly this source appears; says nothing about what else appears, or in what order. */
+ *  broadly this source appears; says nothing about what else appears, or in what order.
+ *  A hand-written evidenceNote wins, because an ask justified from outside our data must say so
+ *  rather than borrow the phrasing of a measurement. */
 function askEvidence(a: ClientAsk, trade: string): string {
+  if (a.evidenceNote) return a.evidenceNote;
   const t = trade || 'businesses';
-  if (a.tradeAudits > 0 && a.audits > 0) {
+  if (a.tradeAudits && a.audits) {
     return `${a.label} appears in ${a.audits} of the ${a.tradeAudits} ${t} businesses we have measured.`;
   }
   return `${a.label} comes up in the answers we measured.`;
@@ -196,8 +211,8 @@ ${docBand('What we need from you')}
       <div class="sec-eyebrow">Step two</div>
       <div class="sec-title">What only you can do</div>
       <p class="wk-client" style="margin-bottom:12px">These are the ones we cannot complete on your
-      behalf, because each needs you personally — your identity, your money, or your decision. For each
-      one we have said why we are asking and what it costs.</p>
+      behalf, because each needs you personally — your access, your identity, your money, or your
+      decision. For each one we have said why we are asking and what it costs.</p>
       <ul class="asks">${input.asks.map((a) => {
         const costLine = COST_SENTENCE[a.cost] ?? '';
         const costLabel = a.cost === 'membership' ? 'Paid membership'

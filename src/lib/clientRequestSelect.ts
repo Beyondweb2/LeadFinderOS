@@ -31,6 +31,37 @@ import {
    TrustMark as thin at 3 audits each.
    ============================================================ */
 
+/* ── GOOGLE BUSINESS PROFILE: a FIXED ask, not an evidence-derived one ───────────────────────────
+   Added back 2026-07-30. It is the only ask that costs the client nothing, and a form where all
+   three asks cost money reads worse than it should.
+
+   ⚠️ ITS JUSTIFICATION IS GOOGLE'S, NOT OURS, AND THE WORDING SAYS SO. Google publishes guidance
+   that a complete Business Profile helps a business appear in AI-powered results. Our own data does
+   NOT support it as a lever: google.com is cited twice, across 2 of 62 plumber audits, out of 10,672
+   citations. So this is asked on Google's authority, attributed to Google, and flagged as not
+   something we have measured. Presenting it as a measured finding would be the exact failure the
+   evidence pipeline exists to prevent — see the Bing Places entry in CLAUDE.md §5, which is the same
+   shape of claim and is comprehensively false.
+
+   It does NOT count against CLIENT_ASK_LIMIT, which caps the DIRECTORY asks derived from citations.
+   Placed FIRST so the form opens with the free, easy one the client already owns rather than three
+   requests for money in a row; Checkatrade follows immediately and is still clearly the strongest. */
+const GOOGLE_BUSINESS_PROFILE_ASK: ClientAsk = {
+  label: 'Your Google Business Profile',
+  cost: 'free',
+  evidenceNote: 'Google publishes guidance that keeping your Business Profile complete and accurate '
+    + 'helps your services show up in AI-powered results. To be straight with you: that is Google’s '
+    + 'guidance rather than something we have measured ourselves, and we would rather tell you which '
+    + 'it is. We are including it because it is free, it is already yours, and it costs you nothing '
+    + 'but a few minutes.',
+  clientParagraph: `This is the listing that shows on Google Maps and on the right-hand side of Google when someone searches for you. You already own it — nothing needs buying.
+
+Only you can give us access, because it is verified against your business. Either add us as a manager from the Users section of your profile, or keep it yourself and we will tell you exactly what to change.
+
+Either way, the details need to match everything else: same business name, same trade wording, same phone number, same address.`,
+  blockedReason: null,
+};
+
 /** Why each missing detail is needed, in plain terms. A client reads a bare "address: missing" as
  *  admin; it is actually the thing blocking every signup, and it has to say so. */
 const WHY_MISSING: Record<string, string> = {
@@ -90,7 +121,7 @@ export function buildClientRequest(
      from the deleted buildClientDoc, which was the only thing that ever performed it. */
   const fill = (s: string) => s.replace(/\{trade\}/g, trade || 'business').replace(/\{town\}/g, town || 'your area');
 
-  const asks: ClientAsk[] = pb.steps
+  const directoryAsks: ClientAsk[] = pb.steps
     .filter((s) => s.section === 'blocked' && !!s.host && s.strength !== 'thin')
     .map((s) => ({ step: s, fact: factFor(s.host as string) }))
     .filter((x) => !!x.fact?.clientParagraph)
@@ -110,7 +141,8 @@ export function buildClientRequest(
     trade: pb.trade,
     town: pb.town,
     fields: heldFields(pb),
-    asks,
+    // Free-and-already-theirs first, then the evidenced directory asks in breadth order.
+    asks: [GOOGLE_BUSINESS_PROFILE_ASK, ...directoryAsks],
     naming,
   };
 }
