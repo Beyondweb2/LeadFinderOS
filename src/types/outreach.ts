@@ -93,6 +93,22 @@ export interface OutreachLead {
   // (search_keyword||category, search_location||address) — mirrors the wizard's pickLead.
   search_keyword?: string | null;
   search_location?: string | null;
+  /* ── FROM GOOGLE PLACE DETAILS, fetched once at lead creation ──────────────────────────────────
+     All four ride along on the phone lookup that already ran, at no extra cost (phone is an
+     Enterprise-tier field and so are rating/userRatingCount — see _shared/place-details.ts).
+     Optional because the columns are added by SQL applied BY HAND; code must tolerate their absence. */
+  rating?: number | null;
+  review_count?: number | null;
+  /** The town the business IS in, from Google's structured address. NOT search_location, which is the
+   *  town that was SEARCHED — lead search has a radius, so the two often differ. First real term in
+   *  the audit chain: confirmed_location || derived_town || search_location. */
+  derived_town?: string | null;
+  /** When a town fetch last COMPLETED. Set even when no town was found, so "never ran" and "ran and
+   *  found nothing" stay distinguishable. Null here means the lookup has never run for this lead. */
+  town_fetched_at?: string | null;
+  /** Why derived_town is null despite town_fetched_at being set. Null = a town WAS found. See
+   *  TownFetchNote in supabase/functions/_shared/place-details.ts for the values. */
+  town_fetch_note?: string | null;
   status: LeadStatus;
   next_action: NextActionType | null;
   next_action_date: string | null;

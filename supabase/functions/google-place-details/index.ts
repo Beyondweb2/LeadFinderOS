@@ -1,6 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, rateLimitHeaders } from "../_shared/rate-limiter.ts";
+import {
+  ENTERPRISE_FIELDS,
+  ESSENTIALS_FIELDS,
+  fetchPlaceDetails,
+  type TownFetchNote,
+  townFromComponents,
+} from "../_shared/place-details.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +18,14 @@ const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60000;
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const NULL_PHONE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (matches positive cache to stop expensive re-checks)
+
+/* CACHE SHAPE VERSION. Bumped to 2 when address/addressComponents/rating/userRatingCount joined the
+   field mask below. Rows written by the old code hold NO address, rating, review count or town, and
+   an "address is null" test cannot tell those apart from a place Google has no address for — so the
+   version is explicit rather than inferred. A v1 row is treated as a MISS and re-fetched once.
+   Without this, every lead already in phone_cache (most of them) would stay unenriched for 30 days
+   and the fix would look broken on exactly the leads that exposed the bug. */
+const CACHE_VERSION = 2;
 
 // In-memory single-flight: collapse concurrent requests for the same place_id
 // within the same edge isolate down to one upstream Google call.
@@ -100,17 +115,28 @@ serve(async (req) => {
       if (cached) {
         const cacheAge = Date.now() - new Date(cached.created_at).getTime();
         const isNullPhone = !cached.phone;
+        // A pre-v2 row predates address/rating/reviews/town being fetched at all. Serving it would
+        // hand the caller nulls that look like "Google has no address" — re-fetch once instead.
+        const isStaleShape = Number(cached.details_version ?? 1) < CACHE_VERSION;
 
-        if (!isNullPhone || cacheAge < NULL_PHONE_TTL_MS) {
+        if (isStaleShape) {
+          console.log(`Cache shape v${cached.details_version ?? 1} < v${CACHE_VERSION} for ${placeId}, re-fetching for address/rating/reviews/town`);
+        } else if (!isNullPhone || cacheAge < NULL_PHONE_TTL_MS) {
           console.log(`Cache hit for place ${placeId} (phone=${cached.phone ? 'found' : 'none'}, age=${Math.round(cacheAge / 60000)}min)`);
           logUsage(supabase, userId, true, 0, triggerSource);
           return new Response(
             JSON.stringify({
               placeId,
               phone: cached.phone,
+              website: cached.website,
               address: cached.address,
               category: cached.category,
               googleMapsUri: cached.google_maps_uri,
+              rating: cached.rating,
+              reviewCount: cached.review_count,
+              derivedTown: cached.derived_town,
+              // A cached row was a completed Google answer, so a null town is settled, not untried.
+              townNote: (cached.derived_town ? null : 'no_town_in_address') as TownFetchNote,
               cached: true,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -143,38 +169,49 @@ serve(async (req) => {
         );
       }
 
-      // Slim mask: phone + website only. Address/category/maps URI are already
-      // returned by Text Search at lead-creation time, so re-fetching them
-      // here was paying Enterprise prices for data we already have.
-      const fieldMask = 'internationalPhoneNumber,nationalPhoneNumber,websiteUri';
-      const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
-        headers: {
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': fieldMask,
-        },
-      });
+      /* ── THE FIELD MASK, and the comment that used to be here ──────────────────────────────────
+         It said: "Slim mask: phone + website only. Address/category/maps URI are already returned by
+         Text Search at lead-creation time." That was true once and then quietly stopped being true —
+         search-leads' mask is `places.id,places.displayName,places.googleMapsUri,places.websiteUri`
+         (see search-leads:408) and has no address in it. Nobody re-checked the other layer, so
+         `address` was null on EVERY lead that ever came from a search, and with no address there were
+         no addressComponents, so no derived_town either. That stale comment was the whole bug.
 
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error(`Place Details failed for ${placeId}: ${res.status}`, errText);
+         Both tiers are requested together, and that is FREE, not a splurge: phone is an Enterprise
+         field, so this request is billed at Enterprise whatever else rides along. rating and
+         userRatingCount are Enterprise too — same tier, no change. formattedAddress and
+         addressComponents are Essentials, i.e. cheaper than what we were already buying. One request,
+         billed once, at the highest tier it touches. See place-details.ts for the quoted rule. */
+      const details = await fetchPlaceDetails(placeId, apiKey, [...ESSENTIALS_FIELDS, ...ENTERPRISE_FIELDS]);
+
+      if (!details) {
         return new Response(
-          JSON.stringify({ placeId, phone: null, error: 'Lookup failed' }),
+          JSON.stringify({ placeId, phone: null, townNote: 'place_details_unavailable' as TownFetchNote, error: 'Lookup failed' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      const data = await res.json();
-      const phone = data.internationalPhoneNumber || data.nationalPhoneNumber || null;
-      const website = data.websiteUri || null;
+      const { phone, website, rating, reviewCount, formattedAddress: address } = details;
+      // Same extraction the audit path uses, from the same module — UK postal_town > locality >
+      // administrative_area_level_2. The town the business IS in, not the town that was searched.
+      const derivedTown = townFromComponents(details.addressComponents);
+      const townNote: TownFetchNote = derivedTown ? null : 'no_town_in_address';
 
-      console.log(`Place ${placeId}: phone=${phone ? 'found' : 'none'}, website=${website ? 'found' : 'none'}`);
+      console.log(
+        `Place ${placeId}: phone=${phone ? 'found' : 'none'}, website=${website ? 'found' : 'none'}`
+        + `, address=${address ? 'found' : 'none'}, town=${derivedTown ?? 'none'}`
+        + `, rating=${rating ?? 'none'}, reviews=${reviewCount ?? 'none'}`
+      );
 
-      // Log API miss (best-effort) — $0.017 per Place Details call
+      // Log API miss (best-effort). NOTE: 0.017 is an inherited constant, NOT a measured or verified
+      // price, and this change does not alter it — the call was already Enterprise-tier before the
+      // extra fields were added, so whatever it truly costs, it costs the same as it did.
       logUsage(supabase, userId, false, 0.017, triggerSource);
 
       // ─── CACHE STORE ─────────────────────────
-      // Only write the columns we actually fetched. Don't overwrite existing
-      // address/category/google_maps_uri that may have been seeded earlier.
+      // Write what we fetched; preserve category/google_maps_uri, which come from Text Search and are
+      // NOT in this mask, so blanking them would lose data. address IS ours now, but fall back to any
+      // existing value rather than overwriting a good address with a null.
       try {
         const { data: existingRow } = await supabase
           .from('phone_cache')
@@ -182,23 +219,31 @@ serve(async (req) => {
           .eq('place_id', placeId)
           .maybeSingle();
 
-        await supabase.from('phone_cache').upsert(
-          {
-            place_id: placeId,
-            phone,
-            address: existingRow?.address ?? null,
-            category: existingRow?.category ?? null,
-            google_maps_uri: existingRow?.google_maps_uri ?? null,
-            created_at: new Date().toISOString(),
-          },
+        const row: Record<string, unknown> = {
+          place_id: placeId,
+          phone,
+          address: address ?? existingRow?.address ?? null,
+          category: existingRow?.category ?? null,
+          google_maps_uri: existingRow?.google_maps_uri ?? null,
+          created_at: new Date().toISOString(),
+        };
+        // MIGRATION-TOLERANT: these columns are added by SQL Paul applies BY HAND, and PostgREST
+        // rejects the whole upsert for one unknown column. Losing the cache write would mean paying
+        // Google again on the next add, so retry with the columns that have always existed.
+        const { error: cacheErr } = await supabase.from('phone_cache').upsert(
+          { ...row, website, rating, review_count: reviewCount, derived_town: derivedTown, details_version: CACHE_VERSION },
           { onConflict: 'place_id' }
         );
+        if (cacheErr) {
+          console.warn('Cache store: new columns absent, storing legacy shape only:', cacheErr.message);
+          await supabase.from('phone_cache').upsert(row, { onConflict: 'place_id' });
+        }
       } catch (e) {
         console.error('Cache store failed:', e);
       }
 
       return new Response(
-        JSON.stringify({ placeId, phone, website, cached: false }),
+        JSON.stringify({ placeId, phone, website, address, rating, reviewCount, derivedTown, townNote, cached: false }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     })();
