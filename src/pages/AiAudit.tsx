@@ -33,7 +33,9 @@ import { tradeWord } from '@/lib/trade';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
 import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS } from '@/lib/auditQuestionCounts';
-import { renderPlaybookHtml, downloadPlaybookHtml, type PlaybookData, type PlaybookView } from '@/lib/playbookHtml';
+/* playbookHtml.ts (the LLM document renderer) is NO LONGER IMPORTED HERE — that was the last import
+   of it from any page, so the LLM playbook is now unreachable from the app. The file and the
+   generate-playbook edge function both stay in the repo on purpose. */
 import { buildSchema, normalizeUrl } from '@/lib/schemaType';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';
@@ -98,7 +100,6 @@ interface RunLite {
   created_at: string;
   actor_cost_usd: number | null;
   seo_grade: string | null;
-  has_playbook: boolean;
   /** Live progress, only meaningful while in flight. done counts queue rows that have
    *  SETTLED — status 'done' or 'failed' (the queue's vocabulary is not 'complete'). */
   done: number;
@@ -334,13 +335,10 @@ const AiAudit = () => {
     'ai-audit-reports', {}, { tier: 'local', scope: user?.id ?? null, version: 1 },
   );
 
-  // ── Delivery playbook (8-week Sprint plan) — same persistence pattern as the report. ──
-  const [playbookRunId, setPlaybookRunId] = useState<string | null>(null);   // which run's playbook is open
-  const [playbookView, setPlaybookView] = useState<PlaybookView>('internal'); // Internal | Client toggle
-  const [playbookGenerating, setPlaybookGenerating] = useState(false);
-  const [playbooks, setPlaybooks] = usePersistedState<Record<string, PlaybookData>>(
-    'ai-audit-playbooks', {}, { tier: 'local', scope: user?.id ?? null, version: 1 },
-  );
+  /* REMOVED 2026-07-30: playbookRunId / playbookView / playbookGenerating / the `playbooks` snapshot
+     cache. All four existed only to hold and display the generate-playbook LLM document. Note the
+     cache was persisted under 'ai-audit-playbooks' in localStorage — old snapshots may still be on
+     this machine, and are now simply never read. */
 
   // Detailed per-question results are collapsed by default — the opened audit reads as a
   // command centre, not a raw dump. Toggled open on demand.
@@ -378,11 +376,10 @@ const AiAudit = () => {
   const [openRunId, setOpenRunId] = usePersistedState<string | null>(
     'ai-audit-open-run', null, { tier: 'session', scope: user?.id ?? null, version: 1 },
   );
-  // Delivery-checklist tick state, keyed runId → { itemKey: boolean }. Persisted locally
-  // (survives refresh/navigation); no DB migration needed.
-  const [checklist, setChecklist] = usePersistedState<Record<string, Record<string, boolean>>>(
-    'ai-audit-checklist', {}, { tier: 'local', scope: user?.id ?? null, version: 1 },
-  );
+  /* REMOVED 2026-07-30: the delivery-checklist tick state ('ai-audit-checklist', localStorage). It
+     keyed off the LLM playbook's action list, which no longer renders. Existing ticks stay on the
+     machine, unread — deliberately not cleared, in case the tickable list comes back somewhere that
+     can persist it properly (client_listings, which /playbook/:id already reads). */
 
   // Refs to move focus to a newly-revealed step (accessibility).
   const nameRef = useRef<HTMLInputElement>(null);
@@ -462,12 +459,14 @@ const AiAudit = () => {
     if (ids.length) {
       const { data: runs } = await (supabase as unknown as SupabaseClient)
         .from('ai_audit_runs')
-        .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results->seo->>overallGrade, pb_summary:results->playbook->>summary')
+        // pb_summary (results->playbook->>summary) dropped 2026-07-30: it only fed has_playbook, which
+        // only fed the LLM playbook pill and button, both now gone.
+        .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results->seo->>overallGrade')
         .in('audit_id', ids)
         .order('run_number', { ascending: false });
       for (const r of (runs ?? []) as Array<{
         id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null;
-        created_at: string; actor_cost_usd: number | null; seo_grade: string | null; pb_summary: string | null;
+        created_at: string; actor_cost_usd: number | null; seo_grade: string | null;
       }>) {
         const list = runsByAudit.get(r.audit_id) ?? [];
         list.push({
@@ -479,7 +478,7 @@ const AiAudit = () => {
           mention_rate: r.mention_rate === null || r.mention_rate === undefined ? null : Number(r.mention_rate),
           created_at: r.created_at,
           actor_cost_usd: r.actor_cost_usd === null || r.actor_cost_usd === undefined ? null : Number(r.actor_cost_usd),
-          seo_grade: r.seo_grade, has_playbook: !!r.pb_summary, done: 0, total: 0,
+          seo_grade: r.seo_grade, done: 0, total: 0,
         });
         runsByAudit.set(r.audit_id, list);
         if (r.status === 'pending' || r.status === 'running') inFlightRunIds.push(r.id);
@@ -598,13 +597,10 @@ const AiAudit = () => {
     setLocationText(audit.location_text ?? '');
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
-    const serverPb = (latest as { results?: { playbook?: unknown } } | null)?.results?.playbook;
-    if (serverPb && typeof serverPb === 'object') {
-      setPlaybooks((prev) => (prev[rid] ? prev : { ...prev, [rid]: serverPb as PlaybookData }));
-    }
+    // (Was: hydrate the LLM playbook snapshot from results.playbook — nothing reads it now.)
     setStep('results');
     return true;
-  }, [setPlaybooks]);
+  }, []);
 
   // ── Poll the active run while it drains ─────────────────────────────────────
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1284,13 +1280,8 @@ const AiAudit = () => {
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
     setOpenRunId((latest as RunRow).id);
-    // Hydrate the local playbook cache from the server so the opened-audit + row playbook
-    // buttons and the delivery checklist reflect a playbook made on any device.
-    const serverPb = (latest as { results?: { playbook?: unknown } } | null)?.results?.playbook;
-    if (serverPb && typeof serverPb === 'object') {
-      const rid = (latest as RunRow).id;
-      setPlaybooks((prev) => (prev[rid] ? prev : { ...prev, [rid]: serverPb as PlaybookData }));
-    }
+    // (Was: hydrate the LLM playbook cache from results.playbook so the row buttons and the delivery
+    // checklist could show it. All three are gone; the Playbook button opens /playbook/:auditId.)
     setStep('results');
     return latest as RunRow;
   };
@@ -1599,37 +1590,12 @@ const AiAudit = () => {
     }
   };
 
-  // ── Playbook: generate/open/regenerate (mirrors the report's working pattern) ──
-  const openPlaybookData: PlaybookData | null = playbookRunId ? (playbooks[playbookRunId] ?? null) : null;
-  // Generate the playbook via the edge fn, snapshot it, and open. If a snapshot already
-  // exists and this isn't an explicit regenerate, just open it (no re-generation).
-  const generatePlaybook = async (regenerate = false, autoOpen = true) => {
-    if (!runId || playbookGenerating) return;
-    if (!regenerate && playbooks[runId]) { setPlaybookRunId(runId); return; }
-    // Warn (don't block) when a website audit is about to build a playbook with NO SEO data.
-    // Only on manual generation (autoOpen) — the silent auto-fire already waits for SEO. An
-    // ERRORED SEO block counts as "attempted" (present-but-not-renderable) → no warning, proceed;
-    // we only warn when SEO is genuinely absent, so a permanently-failing scan can't hard-block.
-    const seoAttempted = ((run?.results as { seo?: unknown } | null)?.seo) != null;
-    if (autoOpen && resultsHasWebsite && !hasSeo && !seoAttempted) {
-      if (!window.confirm('No SEO scan data yet — the playbook won’t include website SEO findings. Generate anyway?')) return;
-    }
-    const rid = runId;
-    setPlaybookGenerating(true);
-    try {
-      // Pass the already-cleaned competitor list (isRealCompetitor) so the playbook never
-      // sees junk rivals (HMRC, Xero, tax terms); the edge fn uses this verbatim.
-      const { data, error } = await supabase.functions.invoke('generate-playbook', { body: { runId: rid, competitors: topCompetitors } });
-      if (error || !data?.ok || !data.playbook) throw new Error(error?.message ?? data?.error ?? 'generation failed');
-      setPlaybooks((prev) => ({ ...prev, [rid]: data.playbook as PlaybookData }));
-      if (autoOpen) setPlaybookRunId(rid);   // manual button opens the view; auto-trigger stays silent
-      toast({ title: regenerate ? 'Playbook regenerated' : 'Playbook ready', description: 'Tailored 8-week Sprint plan built from this audit.' });
-    } catch (e) {
-      toast({ title: "Couldn't generate the playbook", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
-    } finally {
-      setPlaybookGenerating(false);
-    }
-  };
+  /* REMOVED 2026-07-30: generatePlaybook. It was the ONLY caller of the generate-playbook edge
+     function from the app, so that function is now unreachable — left in the repo on purpose, not
+     deleted. It also carried the "no SEO scan yet, generate anyway?" confirm, which has no
+     equivalent here and needs none: the evidence document reads the stored scan if one exists and
+     prints its own honest line when it does not. Nothing is generated, so nothing can be generated
+     prematurely. */
 
   // ── Public report page (/r/[slug]) ──────────────────────────────────────────
   // Look up the newest business_reports row for the OPEN audit, so the action row can show
@@ -1709,9 +1675,17 @@ const AiAudit = () => {
     }
   };
 
-  // Playbook generation is MANUAL-ONLY (the buttons below). The auto-generate-on-open effect was
-  // removed deliberately: it silently burned a gpt-4o call every time a complete, playbook-less
-  // audit was opened (including old audits browsed for reference) — cost without consent.
+  /* REMOVED 2026-07-30: the LLM playbook viewer (iframe preview + Internal/Client toggle + Regenerate
+     + Download PDF) and generatePlaybook alongside it. It rendered the generate-playbook document,
+     which recommended Bing Places (zero citations in 10,615) and omitted Checkatrade (662 across 58
+     of 59 plumber audits). The single Playbook button in the action bar now opens /playbook/:auditId
+     instead — evidence-derived, no model, nothing to generate.
+
+     THE EDGE FUNCTION IS DELIBERATELY LEFT IN PLACE and is now simply unreachable from the app. It is
+     not deleted, so the prompt and its output schema stay readable as the record of what went wrong.
+     ⚠️ The Internal/Client toggle went with it — see the note on buildClientDoc in buildPlaybook.ts:
+     the evidence path has a client-document BUILDER but nothing renders it, so there is currently no
+     client-facing version of the playbook. That is a known gap, not an oversight of this change. */
 
   // Client-facing report is a separate view (replaces results while open).
   if (reportRunId && openReportData) {
@@ -1726,46 +1700,6 @@ const AiAudit = () => {
     );
   }
 
-  // Delivery playbook is a separate view (iframe preview + Download + Regenerate + view toggle).
-  if (playbookRunId && openPlaybookData) {
-    const pbHtml = renderPlaybookHtml(openPlaybookData, playbookView);
-    return (
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setPlaybookRunId(null)}>
-            <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to results
-          </Button>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Internal | Client view toggle — re-renders from the SAME stored data, no re-gen */}
-            <div className="inline-flex rounded-lg border border-border/60 p-0.5">
-              <button onClick={() => setPlaybookView('internal')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${playbookView === 'internal' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                Internal
-              </button>
-              <button onClick={() => setPlaybookView('client')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${playbookView === 'client' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                Client
-              </button>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => generatePlaybook(true)} disabled={playbookGenerating} title="Rebuild the playbook from the latest audit data">
-              {playbookGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              {playbookGenerating ? 'Regenerating…' : 'Regenerate'}
-            </Button>
-            <Button size="sm" onClick={() => downloadPlaybookHtml(openPlaybookData, playbookView)}>
-              <Download className="mr-2 h-4 w-4" /> Download PDF
-            </Button>
-          </div>
-        </div>
-        <iframe
-          title="Delivery Playbook preview"
-          srcDoc={pbHtml}
-          onLoad={(e) => { const el = e.currentTarget; const doc = el.contentWindow?.document; if (doc) el.style.height = `${doc.documentElement.scrollHeight}px`; }}
-          className="w-full rounded-xl border border-border bg-white"
-          style={{ height: 1200 }}
-        />
-      </div>
-    );
-  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -2285,18 +2219,28 @@ const AiAudit = () => {
                       </Button>
                     )
                   )}
-                  {/* Generate playbook — shown until one exists; flips to "View playbook" below.
-                      Exact inverse condition, so exactly one of the two ever shows. */}
-                  {!isDraining && liveTally.done > 0 && runId && !playbooks[runId] && (
-                    <Button variant="outline" size="sm" onClick={() => generatePlaybook(false)} disabled={playbookGenerating}>
-                      {playbookGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapIcon className="mr-2 h-4 w-4" />}
-                      {playbookGenerating ? 'Generating…' : 'Generate playbook'}
-                    </Button>
-                  )}
-                  {/* View playbook — only when one exists; generation lives in the checklist below. */}
-                  {!isDraining && liveTally.done > 0 && runId && playbooks[runId] && (
-                    <Button variant="outline" size="sm" onClick={() => generatePlaybook(false)}>
-                      <MapIcon className="mr-2 h-4 w-4" /> View playbook
+                  {/* ── PLAYBOOK. ONE BUTTON, ONE DOCUMENT. ────────────────────────────────────────
+                      Was TWO buttons ("Generate playbook" / "View playbook"), both opening the
+                      generate-playbook LLM document — the one that recommends Bing Places (zero
+                      citations in 10,615) and never mentions Checkatrade (662 citations across 58 of
+                      59 plumber audits). This goes to /playbook/:auditId, the evidence-derived
+                      document, which is the actual deliverable.
+
+                      NOTHING TO GENERATE ANY MORE, WHICH IS WHY THE VERB IS GONE. The evidence
+                      document is a pure fold over stored citations — it exists the moment the audit
+                      does. There is no model call, no cost, and no "generate" step to wait for.
+
+                      GATED ON auditId ALONE, deliberately not on liveTally.done or !isDraining: the
+                      ranking is trade-level, so the document is complete even when THIS run failed or
+                      is still going. Macca-Gas's run failed at the Apify cap and its playbook is still
+                      correct — locking the deliverable behind a successful run would have hidden it
+                      exactly when it was needed. */}
+                  {auditId && (
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={`/playbook/${auditId}`} state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}
+                        title="Open the delivery playbook — directories evidenced from citations for this trade">
+                        <MapIcon className="mr-2 h-4 w-4" /> Playbook
+                      </Link>
                     </Button>
                   )}
                   {/* Re-extract competitors — FREE/instant: recompute from stored answers, no re-scrape. */}
@@ -2572,21 +2516,15 @@ const AiAudit = () => {
             </CardContent>
           </Card>
 
-          {/* Delivery checklist — progressive, ordered, derived from the playbook */}
-          {!isDraining && runId && (
-            <DeliveryChecklist
-              playbook={playbooks[runId] ?? ((run?.results as { playbook?: PlaybookData } | null)?.playbook ?? null)}
-              hasWebsite={resultsHasWebsite}
-              hasSeo={hasSeo}
-              state={checklist[runId] ?? {}}
-              onToggle={(key) => setChecklist((prev) => {
-                const cur = prev[runId] ?? {};
-                return { ...prev, [runId]: { ...cur, [key]: !(cur[key] ?? false) } };
-              })}
-              onGeneratePlaybook={() => generatePlaybook(false)}
-              generating={playbookGenerating}
-            />
-          )}
+          {/* REMOVED 2026-07-30: the Delivery checklist card. Every item in it came from
+              `playbook.actions` — the generate-playbook LLM output — and its empty state was a
+              "Generate playbook" button, i.e. another route into that document. The evidence-derived
+              checklist at /playbook/:auditId is the same job done from citations, and the Playbook
+              button above now opens it.
+              ⚠️ ONE THING GENUINELY LOST: this card's items were TICKABLE and the ticks persisted per
+              run. /playbook/:id shows done/verified flags from client_listings but cannot SET them
+              (that table is read-only there). So there is currently nowhere to tick delivery work off.
+              Flagged rather than quietly dropped. */}
 
           {/* Scan site & autofill — pull NAP + links off the client's own site to review, then
               apply into the Schema-markup fields + Link hub below (via their existing save paths). */}
@@ -2849,115 +2787,11 @@ const AiAudit = () => {
   );
 };
 
-/* ── Delivery checklist — one ordered, tickable action list from the playbook ──────
- * A system "Setup" group (audit run; SEO added when the business has a website), then the
- * playbook's single ordered action list — shown ALL AT ONCE (no week-by-week gating), already
- * sorted highest-leverage first (slow-burn start-now work at the top of each tier). Each item
- * ticks independently; progress = ticked / total. */
-type ChecklistItem = { key: string; text: string; autoDone?: boolean; priority?: 'high' | 'medium' | 'low'; leadTime?: 'fast' | 'medium' | 'slow'; steps?: string[] };
-
-function DeliveryChecklist({ playbook, hasWebsite, hasSeo, state, onToggle, onGeneratePlaybook, generating }: {
-  playbook: PlaybookData | null;
-  hasWebsite: boolean;
-  hasSeo: boolean;
-  state: Record<string, boolean>;
-  onToggle: (key: string) => void;
-  onGeneratePlaybook: () => void;
-  generating: boolean;
-}) {
-  // Setup group (system-known items). "SEO data added" only when the business has a website;
-  // audit-run + SEO auto-tick from known state (autoDone) until the user overrides them.
-  const setupItems: ChecklistItem[] = [{ key: 'sys:auditrun', text: 'AI visibility audit run', autoDone: true }];
-  if (hasWebsite) setupItems.push({ key: 'sys:seo', text: 'Website SEO data added', autoDone: hasSeo });
-
-  // The single ordered action list (code-sorted by the generator: priority then leadTime).
-  const actionItems: ChecklistItem[] = (playbook?.actions ?? []).map((a, i) => ({
-    key: `act:${i}`, text: a.action, priority: a.priority, leadTime: a.leadTime, steps: a.steps,
-  }));
-
-  const isTicked = (it: ChecklistItem) => state[it.key] ?? it.autoDone ?? false;
-  const allItems = [...setupItems, ...actionItems];
-  const doneCount = allItems.filter(isTicked).length;
-  const allDone = !!playbook && allItems.length > 0 && doneCount === allItems.length;
-
-  const leadLabel: Record<string, string> = { fast: 'Fast', medium: 'Weeks', slow: 'Slow-burn · start now' };
-  const renderRow = (it: ChecklistItem, showTags: boolean) => {
-    const done = isTicked(it);
-    const steps = (it.steps ?? []).filter(Boolean); // null-safe: older playbooks have no steps
-    return (
-      <div key={it.key}>
-        <button onClick={() => onToggle(it.key)}
-          className="w-full flex items-start gap-2.5 text-left rounded-md px-1 py-1 hover:bg-muted/50 transition-colors">
-          <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${done ? 'bg-[hsl(var(--badge-closed))] border-transparent' : 'border-border'}`}>
-            {done && <Check className="h-3 w-3 text-white" />}
-          </span>
-          <span className={`flex-1 text-sm ${done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{it.text}</span>
-          {showTags && (it.leadTime === 'slow' || it.priority === 'high') && (
-            <span className="mt-0.5 flex shrink-0 items-center gap-1">
-              {it.leadTime === 'slow' && (
-                <span className="rounded-full bg-[hsl(var(--badge-waiting))]/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[hsl(var(--badge-waiting))] whitespace-nowrap">{leadLabel.slow}</span>
-              )}
-              {it.priority === 'high' && (
-                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">High</span>
-              )}
-            </span>
-          )}
-        </button>
-        {showTags && steps.length > 0 && (
-          <ol className="ml-10 mr-1 mb-1 list-decimal space-y-0.5 text-[11px] text-muted-foreground">
-            {steps.map((s, si) => <li key={si} className="pl-0.5">{s}</li>)}
-          </ol>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <Card>
-      <CardContent className="p-4 sm:p-5 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Delivery</div>
-          {playbook && <div className="text-[11px] text-muted-foreground">{doneCount}/{allItems.length} done</div>}
-        </div>
-
-        {/* Setup (baseline) — always shown */}
-        <div className="rounded-lg border border-border/60 bg-card/60 px-3 py-3 space-y-2">
-          <div className="text-sm font-semibold">Setup<span className="text-muted-foreground font-normal"> · Baseline captured</span></div>
-          <div className="space-y-1">{setupItems.map((it) => renderRow(it, false))}</div>
-        </div>
-
-        {/* Ordered delivery actions — ALL shown at once, highest-leverage first */}
-        {playbook && actionItems.length > 0 && (
-          <div className="rounded-lg border border-primary/50 bg-card/60 px-3 py-3 space-y-2">
-            <div>
-              <div className="text-sm font-semibold">Delivery plan</div>
-              <div className="text-[11px] text-muted-foreground">Ordered by leverage — highest-impact first</div>
-            </div>
-            <div className="space-y-1">{actionItems.map((it) => renderRow(it, true))}</div>
-          </div>
-        )}
-
-        {!playbook && (
-          <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-4 text-center space-y-2">
-            <div className="text-sm font-medium">Generate the playbook to build the delivery checklist</div>
-            <div className="text-[11px] text-muted-foreground">The prioritised action list becomes your tickable delivery steps.</div>
-            <Button size="sm" onClick={onGeneratePlaybook} disabled={generating}>
-              {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapIcon className="mr-2 h-4 w-4" />}
-              {generating ? 'Generating…' : 'Generate playbook'}
-            </Button>
-          </div>
-        )}
-
-        {allDone && (
-          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2">
-            <Check className="h-4 w-4 text-[hsl(var(--badge-closed))]" />
-            <span className="text-sm font-medium">All delivery actions complete.</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+/* REMOVED 2026-07-30: the DeliveryChecklist component (and its ChecklistItem type). It rendered the
+ * generate-playbook LLM document's action list as a tickable checklist. The evidence-derived
+ * checklist at /playbook/:auditId does the same job from citations, and the Playbook button in the
+ * action bar opens it. Recoverable from git if the tickable behaviour is wanted back � but it should
+ * then persist to client_listings rather than localStorage. */
 
 /* ── Small presentational helpers ─────────────────────────────────────────── */
 
