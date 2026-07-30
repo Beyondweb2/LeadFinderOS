@@ -233,55 +233,26 @@ export function buildPlaybook(
   };
 }
 
-/** The client document. A template with values substituted — no model, so it cannot drift into a promise. */
-export function buildClientDoc(pb: Playbook): { heading: string; sections: Array<{ title: string; body: string[] }> } {
-  const trade = (pb.trade ?? 'business').toLowerCase();
-  // "a accountant" reads as carelessness in a document a client pays for.
-  const aTrade = /^[aeiou]/.test(trade) ? `an ${trade}` : `a ${trade}`;
-  const town = pb.town ?? 'your area';
-  const fill = (s: string) => s.replace(/\{trade\}/g, trade).replace(/\{town\}/g, town);
+/* REMOVED 2026-07-30: buildClientDoc. It was written and NEVER RENDERED — dead code for its whole
+   life — and it was dangerous dead code, because a future session could have wired it up in good
+   faith. Two documents claiming to be "the client document" is the same trap the LLM playbook was,
+   and Paul has already read the wrong document three times in one day.
 
-  const doing: string[] = [
-    `We measure where you currently stand. We ask ChatGPT and Gemini the questions a real customer would type when looking for ${aTrade} in ${town}, three times each, and record whether you get named and who gets named instead.`,
-    'We do the listings we are able to do on your behalf, and we make sure the details match everywhere — same business name, same trade wording, same phone, same area.',
-    'We tell you exactly which things only you can do, and why they matter, so you can decide.',
-    'We measure again after eight weeks, on the same questions, so the comparison is like for like.',
-  ];
-  if (!pb.hasWebsite) {
-    doing.push('You do not currently have a website. That matters more than it sounds: Gemini builds its answers largely from businesses’ own websites, so without one it has nothing of yours to read. We can talk about that separately.');
-  }
+   What it leaked, had it ever shipped:
+     • THE METHOD. "We ask ChatGPT and Gemini the questions a real customer would type ... three times
+       each, and record whether you get named and who gets named instead." That is the measurement
+       handed over.
+     • It dumped EVERY blocked host with no cap and no thin filter — eight of them for a plumber,
+       three of those resting on 3 audits.
+     • It asked for the address unconditionally, claiming "we do not have it on file" even for a
+       client whose address we hold.
 
-  const need: string[] = [
-    'Your full business address. Every directory asks for it and we do not have it on file.',
-    'Access to your Google Business Profile, if you want us to work on it.',
-    ...(pb.hasWebsite ? ['Access to your website, if you want us to change anything on it. This is the lowest priority of the three — see below.'] : []),
-  ];
-
-  const onlyYou = pb.steps
-    .filter((s) => s.section === 'blocked' && s.host)
-    .map((s) => {
-      const f = factFor(s.host as string);
-      const para = f?.clientParagraph ? fill(f.clientParagraph) : `${s.label} can only be actioned by you. ${s.blockedReason ?? ''}`;
-      return `### ${s.label}\n${para}`;
-    });
-
-  /* Stated plainly and last, because it is the part that keeps this honest: nothing here is a
-     promise about outcomes. No client has completed a full eight-week cycle yet. */
-  const limits = [
-    'What we are not going to tell you: that this guarantees you will be named. No client has completed a full eight-week cycle with us yet, so we have no results to point at, and we would rather say that than imply otherwise.',
-    'What we can tell you is what we measured, what we did, and what changed when we measured again.',
-  ];
-
-  return {
-    heading: `${pb.businessName} — what happens next`,
-    sections: [
-      { title: 'What we are doing', body: doing },
-      { title: 'What we need from you', body: need },
-      { title: 'What only you can do, and why it matters', body: onlyYou.length ? onlyYou : ['Nothing on your list right now requires anything only you can do.'] },
-      { title: 'Being straight with you', body: limits },
-    ],
-  };
-}
+   WHAT WAS WORTH KEEPING WAS LIFTED, not discarded:
+     • the a/an grammar helper           → aOrAn() in clientRequestDoc.ts
+     • the {trade}/{town} substitution   → fill() in clientRequestSelect.ts
+     • the "Being straight with you" wording, close to verbatim → the notes block of the client doc
+   The replacement is clientRequestDoc.ts (renderer, cannot see the ranking) plus
+   clientRequestSelect.ts (selection, the only side that can). */
 
 /** Wording when the trade itself is too thinly measured. Must never print a confident list. */
 export function thinTradeMessage(trade: string | null, audits: number): string {

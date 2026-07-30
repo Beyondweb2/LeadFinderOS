@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ExternalLink, AlertTriangle, Clock, Trophy, Ban, Globe, ArrowDownToLine, CheckCircle2, Printer, Quote } from 'lucide-react';
+import { Loader2, ExternalLink, AlertTriangle, Clock, Trophy, Ban, Globe, ArrowDownToLine, CheckCircle2, Printer, Quote, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BackLink } from '@/components/BackLink';
 import { SEOHead } from '@/components/SEOHead';
@@ -8,6 +8,8 @@ import { usePlaybook } from '@/hooks/usePlaybook';
 import { thinTradeMessage, type PlaybookStep, type Section } from '@/lib/buildPlaybook';
 import { ABSENCE_CAVEAT } from '@/lib/ownCitations';
 import { printPlaybookDoc } from '@/lib/playbookDoc';
+import { printClientRequestDoc } from '@/lib/clientRequestDoc';
+import { buildClientRequest } from '@/lib/clientRequestSelect';
 
 /**
  * OPERATOR DELIVERY CHECKLIST — /playbook/:id.
@@ -208,13 +210,26 @@ export default function Playbook() {
                   <div className="text-2xl font-bold tabular-nums">{doNowMinutes}</div>
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70">operator minutes</p>
                 </div>
-                {/* Prints the same fold in the old document's layout. Browser print dialog, no PDF
-                    library — see playbookDoc.ts. `seo` and `naming` are passed straight through for the
-                    add-on section and the summary line; the SCREEN renders neither, and this is the only
-                    change on this page. */}
-                <Button size="sm" variant="outline" onClick={() => printPlaybookDoc({ ...pb, steps }, seo, naming)}>
-                  <Printer className="mr-1.5 h-3.5 w-3.5" /> Print
-                </Button>
+                {/* TWO DOCUMENTS, LABELLED SO THE WRONG ONE CANNOT BE SENT BY ACCIDENT.
+                    Sending the operator copy to a client would hand over the full citation ranking and
+                    their competitors, so the labels say who each one is FOR rather than what it is, the
+                    internal one is visually recessive with an explicit warning line beneath, and the
+                    client one is the primary action. Both are generated for THIS business from the data
+                    already on the page — neither is a blank template. */}
+                <div className="flex flex-col items-end gap-1.5">
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:text-destructive"
+                      onClick={() => printPlaybookDoc({ ...pb, steps }, seo, naming)}>
+                      <Printer className="mr-1.5 h-3.5 w-3.5" /> Print operator copy
+                    </Button>
+                    <Button size="sm" onClick={() => printClientRequestDoc(buildClientRequest({ ...pb, steps }, naming))}>
+                      <Send className="mr-1.5 h-3.5 w-3.5" /> Print client request
+                    </Button>
+                  </div>
+                  <p className="text-[10px] leading-tight text-destructive/80">
+                    Operator copy contains their competitors — never send it
+                  </p>
+                </div>
               </div>
             </div>
           </CardHeader>
