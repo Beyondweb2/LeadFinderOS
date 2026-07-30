@@ -494,17 +494,27 @@ const AiAudit = () => {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase
+      const LEAD_COLS = 'id, business_name, category, country, website, address, search_keyword, search_location';
+      /* MIGRATION-TOLERANT. derived_town is added by a migration Paul applies BY HAND, so until that
+         SQL runs PostgREST fails the WHOLE select with a 400 and the lead picker would come back
+         empty — breaking the wizard for a cosmetic prefill. Try with it, fall back without it.
+         `as unknown as` because the column is not in the generated types yet either; once it is live
+         and types are regenerated the plain cast works again. */
+      let rows = (await supabase
         .from('outreach_leads')
-        .select('id, business_name, category, country, website, address, search_keyword, search_location, derived_town')
+        .select(`${LEAD_COLS}, derived_town`)
         .eq('is_archived', false)
         .order('created_at', { ascending: false })
-        .limit(500);
-      /* `as unknown as` because `derived_town` is not in the generated types yet — the column is added
-         by the migration Paul applies by hand, and types are regenerated after that. Without the
-         double cast this is a 16th typecheck error against a baseline of 15. Once the column is live
-         and types are regenerated, the plain `as LeadOption[]` cast will work again. */
-      setLeads((data ?? []) as unknown as LeadOption[]);
+        .limit(500)).data as unknown as LeadOption[] | null;
+      if (!rows) {
+        rows = (await supabase
+          .from('outreach_leads')
+          .select(LEAD_COLS)
+          .eq('is_archived', false)
+          .order('created_at', { ascending: false })
+          .limit(500)).data as unknown as LeadOption[] | null;
+      }
+      setLeads(rows ?? []);
     })();
     loadSaved();
   }, [user, loadSaved]);
