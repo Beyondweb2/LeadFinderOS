@@ -6,7 +6,7 @@ import {
   type EvidenceRow, type ListingRecord, type Playbook, type PlaybookLead,
 } from '@/lib/buildPlaybook';
 import { buildOwnCitations, type OwnCitations } from '@/lib/ownCitations';
-import { foundHostMap, type DirectoryCheck } from '@/lib/directoryHosts';
+import { directoryCheckFold, type DirectoryCheck } from '@/lib/directoryHosts';
 import { aggregateSeoFindings, isRenderableSeo, SCORED_ENGINES, type QueueRow } from '@/lib/auditReport';
 import type { AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { fetchAllRows } from '@/lib/fetchAllRows';
@@ -217,9 +217,9 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
       }
       setDirectoryCheck(dirCheck);
 
-      /* foundHostMap returns an EMPTY map for anything other than an 'ok' check, so a refused,
+      /* directoryCheckFold returns EMPTY sets for anything other than an 'ok' check, so a refused,
          errored or empty search can never suppress a task the operator still needs to do. */
-      setPlaybook(buildPlaybook(pbLead, evidence, tradeAuditTotals, listings, foundHostMap(dirCheck)));
+      setPlaybook(buildPlaybook(pbLead, evidence, tradeAuditTotals, listings, directoryCheckFold(dirCheck)));
 
       /* 5. THIS AUDIT'S OWN CITATIONS — a second, sharper signal alongside the trade fold, never a
          replacement for it. Only possible when the id resolved to an audit: without one there are no

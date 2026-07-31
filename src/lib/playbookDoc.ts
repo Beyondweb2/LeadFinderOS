@@ -295,6 +295,10 @@ export function renderPlaybookDoc(
   const blocked = pb.steps.filter((s) => s.section === 'blocked' && !s.alreadyListed);
   const noWebsite = pb.steps.filter((s) => s.section === 'no_website' && !s.alreadyListed);
   const deprioritised = pb.steps.filter((s) => s.section === 'deprioritised');
+  /* Cited, searched for, not found, and NOT in directoryFacts. Excluded from BOTH counters below:
+     we do not know whether it can be joined at all, so calling it work — mine or the client's —
+     would be a guess dressed as a task. */
+  const needsClassification = pb.steps.filter((s) => s.section === 'needs_classification' && !s.alreadyListed);
   const nowMinutes = now.reduce((n, s) => n + s.minutes, 0);
   const vert = [pb.trade, pb.town].filter(Boolean).join(' · ');
   const trade = (pb.trade ?? '').trim().toLowerCase();
@@ -328,6 +332,10 @@ export function renderPlaybookDoc(
   // Counted separately and named, so the drop in the numbers above is explained rather than mysterious.
   if (alreadyListed.length) {
     summaryBits.push(`${alreadyListed.length} already listed and excluded from those counts.`);
+  }
+  if (needsClassification.length) {
+    summaryBits.push(`${needsClassification.length} cited host${needsClassification.length === 1 ? '' : 's'} `
+      + `need${needsClassification.length === 1 ? 's' : ''} classifying before ${needsClassification.length === 1 ? 'it counts' : 'they count'} as work either way.`);
   }
   const summary = summaryBits.join(' ');
 
@@ -383,6 +391,21 @@ ${pb.missingAddress ? `    <div class="warn">No address on file — every signup
             ${why(s, pb)}
             <div class="url">${esc(s.alreadyListed!.url)}</div>
             ${s.alreadyListed!.title ? `<div class="act-dep">${esc(s.alreadyListed!.title)}</div>` : ''}
+          </li>`).join('')}
+        </ul>
+      </div>` : ''}
+      ${needsClassification.length ? `
+      <div class="act-group">
+        <div class="act-group-h">Cited, searched for, not found — and not yet classified</div>
+        <div class="act-group-sub">These are cited for this trade and the search did not surface a listing, but they have no entry in our host facts — so it is not known whether they can be joined, by whom, or at what cost. NOT counted as work in either direction until they are classified. Some will be competitors' own sites, which is exactly why they need a human eye rather than being dropped.</div>
+        <ul class="acts">${needsClassification.map((s) => `
+          <li class="act">
+            <div class="act-top">
+              <span class="act-do">${esc(s.label)}</span>
+              <span class="act-tags"><span class="flag flag-thin">needs classification</span></span>
+            </div>
+            ${why(s, pb)}
+            ${s.notes ? `<div class="act-dep">${esc(s.notes)}</div>` : ''}
           </li>`).join('')}
         </ul>
       </div>` : ''}

@@ -36,9 +36,11 @@ const corsHeaders = {
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-/** Hard ceiling on hosts per check. More than this and the search results stop covering them all
- *  anyway — one page of organic results is finite. */
-const MAX_HOSTS = 8;
+/* Hosts per check. RAISED 8 → 25, and the reasoning matters: the two queries are the whole spend,
+   and matching hostnames against the results they already returned is free. Checking 25 hosts costs
+   exactly what checking 2 costs. There are no slots to conserve, so the only reason to cap at all
+   is to keep the stored row and the panel readable. */
+const MAX_HOSTS = 25;
 /** Refuse at or above this. Apify runs the audits AND the lead scraping; a full cap stops BOTH, so
  *  a directory check must never be the thing that tips it over. Matches USAGE_CRITICAL_PCT. */
 const REFUSE_AT_PCT = 0.90;
@@ -50,14 +52,23 @@ const RUN_POLL_MS = 3_000;
 const RUN_TIMEOUT_MS = 90_000;
 
 /** Organic-only input for apify~google-search-scraper. No chatGptSearch / geminiSearch blocks —
- *  that is the whole cost saving. Organic IS the actor's base output; there is no toggle to add. */
+ *  that is the whole cost saving. Organic IS the actor's base output; there is no toggle to add.
+ *
+ *  ⚠️ `resultsPerPage` WAS HERE AND IT DOES NOT EXIST. Checked against the actor's published input
+ *  schema (api.apify.com/v2/actor-builds/<latest>): the valid fields are queries, maxPagesPerQuery,
+ *  countryCode, searchLanguage, languageCode, locationUule, forceExactMatch, site, … — no
+ *  resultsPerPage. It was being silently ignored, so the run returned ONE page, "approximately 10
+ *  results" in the actor's own words. Removed rather than left as decoration.
+ *
+ *  maxPagesPerQuery stays at 1 DELIBERATELY: each extra page is another SERP fetch and roughly
+ *  another unit of spend, so raising it is a cost decision for the operator, not a silent change.
+ *  See the note in the report — with 25 hosts to match against, 2 pages may be worth it. */
 function buildOrganicSearchInput(query: string, countryCode: string): Record<string, unknown> {
   return {
     queries: query,
     countryCode: (countryCode || "gb").toLowerCase(),
     maxPagesPerQuery: 1,
     languageCode: "en",
-    resultsPerPage: 20,
   };
 }
 
@@ -194,12 +205,15 @@ Deno.serve(async (req) => {
       // had 32 citations from a SINGLE audit and read as the strongest source in the data.
       .sort((a, b) => b.audits - a.audits || b.citations - a.citations)
       .map((e) => e.host)
-      // Only hosts that are a listing someone could actually be ON. A competitor's own site or an
-      // editorial mention is not something to check for a listing.
-      .filter((h) => {
-        const g = gatingFor(h);
-        return g.gating !== "unclassified";
-      })
+      /* NO CLASSIFICATION FILTER — this was here and it was WRONG, dangerously so.
+         Excluding unclassified hosts would have made the check test only the hosts already known,
+         and reported a clean sweep while the most important host in the trade went unmentioned.
+         The live example: Elite Clean (valeting) has yell.com as its ONLY classified host, so the
+         check would have tested one host, found it, and read as all-done — while cleanme.co.uk
+         (15 citations across 5 of 5 audits, joinable, named directly by AI Overview) was never
+         looked at. That false all-done signal is the exact thing this feature exists to prevent.
+         An unclassified host is rendered UNCLASSIFIED and, when NOT FOUND, is routed to a group that
+         says it needs classifying before it can be actioned — never counted as work. */
       .slice(0, MAX_HOSTS);
 
     if (hosts.length === 0) {

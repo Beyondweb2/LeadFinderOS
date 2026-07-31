@@ -1,4 +1,5 @@
 import { DIRECTORY_FACTS, factFor, type DirectoryFact } from '@/lib/directoryFacts';
+import type { DirectoryCheckFold } from '@/lib/directoryHosts';
 
 /* ============================================================
    PLAYBOOK FOLD — deterministic, no language model.
@@ -37,7 +38,17 @@ export interface PlaybookLead {
 /** One row already recorded in client_listings, so a done task shows as done. */
 export interface ListingRecord { host: string; done_at: string | null; verified_at: string | null; listing_url: string | null }
 
-export type Section = 'do_now' | 'blocked' | 'no_website' | 'deprioritised';
+export type Section =
+  | 'do_now'
+  | 'blocked'
+  | 'no_website'
+  | 'deprioritised'
+  /* A cited host with NO entry in directoryFacts that a directory check looked for and did not
+     find. It is NOT a task: we do not yet know whether it can be joined at all, or by whom. It gets
+     its own group asking for a classification, and is excluded from BOTH header counters.
+     Competitor domains will land here. That is accepted deliberately — a labelling problem the
+     operator fixes by hand beats silently dropping the one host that mattered. */
+  | 'needs_classification';
 
 export interface PlaybookStep {
   key: string;
@@ -113,10 +124,10 @@ export function buildPlaybook(
   tradeAuditTotals: Record<string, number>,
   listings: ListingRecord[] = [],
   /* A stored directory check for this lead, if one has ever been run. Only an 'ok' check can
-     suppress a task — foundHostMap enforces that, so a refused/errored/empty search can never hide
-     real work. Absent → the fold behaves exactly as it always has and the document says the check
-     has not been run, rather than implying a clean sweep. */
-  directoryFound: Map<string, { url: string; title: string | null }> = new Map(),
+     suppress a task — directoryCheckFold enforces that, so a refused/errored/empty search can never
+     hide real work. Absent → the fold behaves exactly as it always has and the document says the
+     check has not been run, rather than implying a clean sweep. */
+  directory: DirectoryCheckFold = { found: new Map(), checked: new Set() },
 ): Playbook {
   const trade = norm(lead.trade);
   const tradeAudits = tradeAuditTotals[trade] ?? 0;
@@ -142,7 +153,33 @@ export function buildPlaybook(
        guessing. But it is almost always a competitor's own site, and those are the answer key to
        "who keeps getting named". Surfaced as intelligence rather than discarded. Treating unknown
        as intelligence also means a NEW competitor appears automatically, with no entry to write. */
-    if (!f) { whoIsWinning.push({ host: e.host, citations: e.citations, audits: e.audits, kind: 'unclassified' }); continue; }
+    if (!f) {
+      whoIsWinning.push({ host: e.host, citations: e.citations, audits: e.audits, kind: 'unclassified' });
+      /* PROMOTED BY A DIRECTORY CHECK. Before a check, an unclassified host is only intelligence.
+         Once we have actually searched for it we know something, and it earns a row:
+           FOUND     → ALREADY LISTED with its URL, whatever its classification.
+           NOT FOUND → 'needs_classification'. NOT a task — we do not know if it can be joined, or
+                       by whom — and excluded from both header counters.
+         It stays in whoIsWinning as well: that list is the competitor answer key and losing a
+         competitor from it to gain a classification prompt would trade one signal for another. */
+      const key = e.host.toLowerCase();
+      if (directory.checked.has(key)) {
+        const hit = directory.found.get(key);
+        steps.push({
+          key: `unclassified:${e.host}`, section: 'needs_classification',
+          label: e.host, host: e.host,
+          signupUrl: null, urlVerified: true, fields: [], minutes: 0,
+          citations: e.citations, audits: e.audits,
+          strength: e.audits >= EVIDENCE_MIN_AUDITS ? 'evidenced' : 'thin',
+          notes: hit
+            ? undefined
+            : 'No entry in directoryFacts, so we do not yet know whether this can be joined, by whom, or what it costs. Classify it before treating it as work.',
+          done: false, verified: false, listingUrl: null,
+          ...(hit ? { alreadyListed: { url: hit.url, title: hit.title } } : {}),
+        });
+      }
+      continue;
+    }
     /* Classified as something that cannot be joined. Same destination, better label. */
     if (f.kind && f.kind !== 'directory' && f.kind !== 'trade-body') {
       whoIsWinning.push({ host: e.host, citations: e.citations, audits: e.audits, kind: f.kind });
@@ -193,7 +230,7 @@ export function buildPlaybook(
     /* A stored check that FOUND this host turns the task into a verification instruction. Minutes
        and paste-values are dropped with it: this is no longer an hour's work, and printing a NAP
        table beside "already listed" invites the operator to create a duplicate. */
-    const listed = directoryFound.get(e.host.toLowerCase());
+    const listed = directory.found.get(e.host.toLowerCase());
 
     steps.push({
       key: `dir:${e.host}`, section, label: f.label, host: e.host,

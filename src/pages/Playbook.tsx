@@ -48,6 +48,11 @@ const SECTION_META: Record<Section, { title: string; blurb: string; icon: typeof
     blurb: 'Gemini reads businesses’ own sites. Without one there is nothing of theirs to read.',
     icon: Globe, tone: 'text-red-400',
   },
+  needs_classification: {
+    title: 'NEEDS CLASSIFYING',
+    blurb: 'Cited for this trade, searched for, not found — and with no entry in our host facts, so it is unknown whether they can be joined, by whom, or at what cost. Not counted as work in either direction. Some will be competitors’ own sites; classify them by hand rather than dropping them.',
+    icon: AlertTriangle, tone: 'text-amber-400',
+  },
   deprioritised: {
     title: 'DEPRIORITISED',
     blurb: 'Measured and found not to move the needle. Deliberately last — do not spend the hour here.',
@@ -55,7 +60,7 @@ const SECTION_META: Record<Section, { title: string; blurb: string; icon: typeof
   },
 };
 
-const ORDER: Section[] = ['do_now', 'blocked', 'no_website', 'deprioritised'];
+const ORDER: Section[] = ['do_now', 'blocked', 'no_website', 'needs_classification', 'deprioritised'];
 
 /** Citations/audits chip. Always shown together — breadth is what stops volume lying. */
 function Evidence({ step }: { step: PlaybookStep }) {

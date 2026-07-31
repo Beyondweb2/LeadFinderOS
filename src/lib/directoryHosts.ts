@@ -118,14 +118,28 @@ export interface DirectoryCheck {
   created_at: string;
 }
 
-/** Fast lookup of "is this host already listed", for the playbook's task suppression. */
-export function foundHostMap(check: DirectoryCheck | null | undefined): Map<string, DirectoryFoundRow> {
-  const m = new Map<string, DirectoryFoundRow>();
-  // Only an 'ok' check may suppress a task. A refused, errored or empty search proves nothing, and
-  // suppressing work on the strength of a failed search would hide real jobs.
-  if (!check || check.status !== 'ok') return m;
-  for (const f of check.found ?? []) {
-    if (f?.host) m.set(f.host.toLowerCase(), f);
+/** What the fold needs from a stored check: what was found, and what was looked at. */
+export interface DirectoryCheckFold {
+  /** host (lowercased) → the listing we found. Drives ALREADY LISTED suppression. */
+  found: Map<string, DirectoryFoundRow>;
+  /** Every host the check actually tested, lowercased. Lets the fold PROMOTE an unclassified host
+   *  into a visible row: before a check it is only "who keeps getting named" intelligence; once we
+   *  have searched for it, we know something about it and it deserves a line. */
+  checked: Set<string>;
+}
+
+/** Build the fold input from a stored check. Only an 'ok' check counts: a refused, errored or empty
+ *  search proves nothing, and suppressing work on the strength of a failed search would hide real
+ *  jobs — so everything else yields an empty fold and the playbook behaves exactly as before. */
+export function directoryCheckFold(check: DirectoryCheck | null | undefined): DirectoryCheckFold {
+  const found = new Map<string, DirectoryFoundRow>();
+  const checked = new Set<string>();
+  if (!check || check.status !== 'ok') return { found, checked };
+  for (const h of check.hosts_checked ?? []) {
+    if (h?.host) checked.add(h.host.toLowerCase());
   }
-  return m;
+  for (const f of check.found ?? []) {
+    if (f?.host) found.set(f.host.toLowerCase(), f);
+  }
+  return { found, checked };
 }
