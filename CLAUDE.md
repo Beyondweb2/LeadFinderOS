@@ -131,6 +131,17 @@ below, and it bit twice tonight:
 - Use word boundaries (`/\bACCA\b/`) or match a distinctive full token. When a check comes back positive,
   print the surrounding characters before you believe it.
 
+**`deno check --sloppy-imports` PASSING DOES NOT MEAN AN EDGE FUNCTION DEPLOYS.** It returned **exit 0**
+on a file importing the Vite `@/` alias, which the Supabase bundler rejected outright:
+`Relative import path "@/lib/directoryFacts" not prefixed with / or ./ or ../`. There is no
+`deno.json` and no import map in this repo, so `@/` resolves to nothing for Deno — and the local
+check said nothing. **The deploy itself is the only real gate for an edge function.** Same shape as:
+typecheck at baseline does not mean the build passes.
+⚠️ Practical rule: any `src/lib` file reachable from an edge function must use **relative imports with
+an explicit `.ts` extension** (`'./directoryFacts.ts'`), never `@/`. Vite resolves that form too, so
+it costs the SPA nothing — `auditReport.ts` has always done it this way, which is why it deploys.
+Before deploying, walk the transitive import closure from the entrypoint and grep it for `@/`.
+
 **CLOUDFLARE PAGES CAN SIT ON A PUSH FOR 15+ MINUTES — that is not the ~90-second lag §4 describes.**
 Commit `56134630` was verified on `origin/main`, built clean locally, and the live site still served the
 PREVIOUS `AiAudit-C55Dvb4S.js` after 15 minutes of polling. Before concluding a deploy failed, prove
