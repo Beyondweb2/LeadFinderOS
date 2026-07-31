@@ -139,6 +139,26 @@ deploy. If the old markers are present and the new ones absent, it is the pipeli
 so rather than claiming success or hunting a phantom bug. Also confirm which chunk your marker lands in
 locally (`grep -l <marker> dist/assets/*.js`) before trusting a False.
 
+**THE MEASUREMENT CAN BE RIGHT WHILE THE DOCUMENT LIES.** A bulk audit of five tattoo studios found
+from one "Wisbech" search stored the correct derived town on every audit (`location_source =
+derived`) and the questions genuinely asked about Cambridge — but the playbook and client form both
+printed **Wisbech**, because `usePlaybook` resolved the town as `search_location || location_text`,
+the searched town FIRST. Wrong on **102 of the 121** leads that have a derived town. Fixed
+2026-07-30 to `audit.location_text || derived_town || search_location`: the audit row already IS the
+resolved answer, so preferring it keeps the documents agreeing with the measurement by construction.
+Before concluding an audit is invalid, check whether it is the DATA or only the RENDERING.
+
+**QUESTIONS CAN MEASURE THE WRONG INTENT AND STILL LOOK FINE.** "tattoo design for beginners
+cambridge uk" was answered accurately by the engines — with ucas.com, barnsley.ac.uk and camre.ac.uk.
+A third of that niche's citations measured people wanting to LEARN the trade, not hire one. The
+prompt banned "near me", head-terms and two-intents-per-question; it never required BUYING intent.
+Guarded 2026-07-30 in `seedGuard.ts` (`researchIntentReason`, `dropResearchIntent`).
+⚠️ **Two tiers, and the second is the whole difficulty:** for a driving school "learn to drive" is
+the BEST buying question, "dog training" is what a dog trainer sells. Tier A (salary, career,
+apprenticeship, qualification, "how to", "become a") rejects for everyone; Tier B (course, training,
+learn, lessons, "for beginners", class) is skipped when `isTeachingTrade()` says teaching IS the
+product. A flat keyword list would have broken every driving school in the lead book.
+
 **A CATCH-ALL ERROR MESSAGE IS WORSE THAN NO MESSAGE.** The AI Audit page printed one hardcoded line
 for every failed question — *"Couldn't check — term too broad to complete. Retry or narrow it."* — while
 the real error sat unread in `ai_audit_queue.result.error` AND `ai_audit_runs.results.error`. On

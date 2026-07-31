@@ -161,6 +161,16 @@ export function renderClientRequestDoc(input: ClientRequestInput): string {
   const town = (input.town ?? '').trim();
   const vert = [input.trade, input.town].filter(Boolean).join(' · ');
   const missing = input.fields.filter((f) => !f.held);
+  /* ASKS BACKED BY OUR OWN MEASUREMENT. An ask carrying an evidenceNote is justified from somewhere
+     else (Google's guidance, for the Business Profile) and has no audit count, so it must NOT be
+     described as one of "the strongest signals in everything we have measured".
+
+     THE CONTRADICTION THIS FIXES. For a tattoo studio there are no gated directories, so the only ask
+     is Google Business Profile — and the document said its asks were among our strongest measured
+     signals three paragraphs after saying that exact ask was "Google's guidance rather than something
+     we have measured ourselves". Same page, flatly contradicting itself. The line now appears only
+     when at least one ask actually carries measured breadth. */
+  const measuredAsks = input.asks.filter((a) => !a.evidenceNote && !!a.audits && a.audits > 0);
 
   /* ONE LINE OF CONTEXT. Omitted entirely when nothing has completed — asked for explicitly, because
      the address request is valid whether or not a run finished, and refusing to produce the document
@@ -239,10 +249,10 @@ ${docBand('What we need from you')}
       ${missing.length ? `<p class="note"><b>Why the details matter.</b> Every directory asks for the
       same handful of facts, and they have to match everywhere or the listings work against each other.
       We cannot complete a single signup while ${missing.length === 1 ? 'that detail is' : 'those details are'} missing.</p>` : ''}
-      <p class="note"><b>What to expect.</b> The items above that only you can complete are among the
-      strongest signals in everything we have measured. If they are not done, the measurement we take at
-      eight weeks is unlikely to move. That is not us stepping back from the work — it is so you can see
-      what your part actually decides.</p>
+      ${measuredAsks.length ? `<p class="note"><b>What to expect.</b> The items above that only you can
+      complete are among the strongest signals in everything we have measured. If they are not done, the
+      measurement we take at eight weeks is unlikely to move. That is not us stepping back from the work
+      — it is so you can see what your part actually decides.</p>` : ''}
       <p class="note"><b>Being straight with you.</b> We are not going to tell you this guarantees you
       will be named. No client has completed a full eight-week cycle with us yet, so we have no results
       to point at, and we would rather say that than imply otherwise. What we can tell you is what we
