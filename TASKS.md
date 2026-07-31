@@ -18,7 +18,12 @@ mid-run leaves broken data, which is the exact failure Item 4 exists to prevent.
 | 1 | Fetch the real address (`getPlaceDetails`) | ✅ **done, deployed** | `ef86c9bf` |
 | 2 | Use it — town precedence + override | ✅ **done, deployed** | `ef86c9bf` |
 | — | Migration-tolerance fix (regression caught in test) | ✅ **done, deployed** | `3b93284d` |
-| 3 | Active directory check (Apify search) | ☐ **NOT STARTED** | |
+| 3 | Active directory check (Apify search) | ☐ **NOT STARTED — THIS IS THE NEXT JOB** | |
+
+> **Item 3 is next, and Paul is briefing it himself — do not start it from the spec below.**
+> The checklist further down this file predates several things that have since changed (the Apify
+> account cap, the client request form, the single playbook route). Wait for his brief, then
+> reconcile it against that checklist rather than treating the old spec as current.
 
 ## Second brief, 2026-07-30 — lead enrichment incomplete, location data missing
 
@@ -158,18 +163,22 @@ externally-sourced justification, and its type comment requires the source to be
 ask cannot borrow the phrasing of a measurement it does not have. It does not count against
 `CLIENT_ASK_LIMIT`, which caps the citation-derived directory asks.
 
-⏳ **DEPLOY PENDING AGAIN** — live was still on `Playbook-D5RFG2k8.js` after ~8 minutes. Same
-behaviour as `56134630`, which landed on its own. See CLAUDE.md §4 on the 15-minute Pages lag.
+✅ **DEPLOYED AND LIVE-VERIFIED** — `Playbook-DGQTBTyP.js`, GBP ask + new MyBuilder wording +
+the Google attribution all present. (It stalled ~8 minutes first, like `56134630`. See CLAUDE.md §4.)
+**Paul confirmed the GBP wording stays as written** — he wants it explicit in the document that this
+is Google's claim and not our measurement.
 
-☐ **REPORTED, NOT BUILT: client request as a tracked LINK rather than a PDF.** The recommended route
-is the SNAPSHOT approach — the SPA already renders the HTML, so store that string with an opaque
-token and have a public edge function serve it and bump a counter. That avoids re-implementing the
-Playbook fold in Deno, which is the expensive half. Needs: a table + an atomic bump function (SQL for
-Paul, mirroring `bump_audit_open()`), one edge function, and a "Copy client link" button. ⚠️ The
-token must be OPAQUE — `render-audit-report` had a real hole where the bare slugified business name
-resolved, fixed by requiring an 8-hex code suffix. Known limits inherited from the existing report:
-no viewer/IP/user-agent, no per-open log, cannot tell Paul's own views from the client's, and email
-scanners can register a false open.
+⏸️ **PARKED BY PAUL: client request as a tracked LINK rather than a PDF.** The decision is already
+made, so do not re-open the comparison — **Option A, the SNAPSHOT approach**: the SPA already renders
+the HTML, so store that string against an **opaque token** and have a public edge function serve it
+and bump a counter. Deliberately NOT the rebuild-in-Deno option: porting `usePlaybook`'s data path is
+the expensive half and buys nothing, because a request form already sent should not change under the
+client. Needs: a table + an atomic bump function (SQL for Paul, mirroring `bump_audit_open()`), one
+edge function, and a "Copy client link" button.
+⚠️ **The token must be OPAQUE, never the business name** — `render-audit-report` had a real hole
+where the bare slugified name resolved, fixed by requiring an 8-hex code suffix. Paul has noted it.
+Limits inherited from the existing report, all stated to him: no viewer/IP/user-agent, no per-open
+log, cannot distinguish Paul's own views from the client's, and email scanners register false opens.
 
 ### Still to do after the test passes
 - [ ] `npx supabase gen types typescript --project-ref ruusxpkkmwtljxxulhbq > src/integrations/supabase/types.ts`
