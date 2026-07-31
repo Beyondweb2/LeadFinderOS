@@ -6,6 +6,7 @@ import {
   type EvidenceRow, type ListingRecord, type Playbook, type PlaybookLead,
 } from '@/lib/buildPlaybook';
 import { buildOwnCitations, type OwnCitations } from '@/lib/ownCitations';
+import { foundHostMap, type DirectoryCheck } from '@/lib/directoryHosts';
 import { aggregateSeoFindings, isRenderableSeo, SCORED_ENGINES, type QueueRow } from '@/lib/auditReport';
 import type { AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { fetchAllRows } from '@/lib/fetchAllRows';
@@ -79,6 +80,11 @@ export interface UsePlaybookResult {
      datapoint per SCORED engine per DONE question, preferring the run's stored summary counts when
      present so the sheet and the report cannot disagree. */
   naming: { named: number; total: number } | null;
+  /* The newest stored directory check for this lead, or null when none has been run. Fetched HERE
+     because the fold needs it — an already-listed host must stop being a task before any counter is
+     computed. Null is meaningful: the document then says the check has not been run rather than
+     letting the absence of markers imply a clean sweep. */
+  directoryCheck: DirectoryCheck | null;
   /** Which row the id resolved to — printed on the page so the audit-first path is never a mystery. */
   resolvedAs: 'audit' | 'lead' | null;
   auditId: string | null;
@@ -99,6 +105,7 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
   const [ownCitations, setOwnCitations] = useState<OwnCitations | null>(null);
   const [seo, setSeo] = useState<AiAuditSeo | null>(null);
   const [naming, setNaming] = useState<{ named: number; total: number } | null>(null);
+  const [directoryCheck, setDirectoryCheck] = useState<DirectoryCheck | null>(null);
   const [resolvedAs, setResolvedAs] = useState<'audit' | 'lead' | null>(null);
   const [auditId, setAuditId] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
@@ -193,7 +200,26 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
         listings = (lsRaw ?? []) as ListingRecord[];
       }
 
-      setPlaybook(buildPlaybook(pbLead, evidence, tradeAuditTotals, listings));
+      /* 4b. THE DIRECTORY CHECK — a stored, on-demand search for listings this business already has.
+         Keyed on the LEAD, so an audit-only business (ABLM has no outreach_leads row) simply has
+         none and the document says "not run". Newest row wins; a re-check inserts rather than
+         updates so the history stays readable. A failed read must not break the playbook, so it is
+         swallowed and treated as "no check". */
+      let dirCheck: DirectoryCheck | null = null;
+      if (listingKey) {
+        try {
+          const { data: dcRaw } = await client
+            .from('lead_directory_checks').select('*')
+            .eq('lead_id', listingKey)
+            .order('created_at', { ascending: false }).limit(1).maybeSingle();
+          dirCheck = (dcRaw ?? null) as DirectoryCheck | null;
+        } catch { dirCheck = null; }
+      }
+      setDirectoryCheck(dirCheck);
+
+      /* foundHostMap returns an EMPTY map for anything other than an 'ok' check, so a refused,
+         errored or empty search can never suppress a task the operator still needs to do. */
+      setPlaybook(buildPlaybook(pbLead, evidence, tradeAuditTotals, listings, foundHostMap(dirCheck)));
 
       /* 5. THIS AUDIT'S OWN CITATIONS — a second, sharper signal alongside the trade fold, never a
          replacement for it. Only possible when the id resolved to an audit: without one there are no
@@ -253,6 +279,7 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
       setOwnCitations(null);
       setSeo(null);
       setNaming(null);
+      setDirectoryCheck(null);
     } finally {
       setIsLoading(false);
     }
@@ -260,5 +287,5 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
 
   useEffect(() => { load(); }, [load]);
 
-  return { playbook, ownCitations, seo, naming, resolvedAs, auditId, leadId, isLoading, error, reload: load };
+  return { playbook, ownCitations, seo, naming, directoryCheck, resolvedAs, auditId, leadId, isLoading, error, reload: load };
 }

@@ -58,6 +58,12 @@ export interface PlaybookStep {
   done: boolean;
   verified: boolean;
   listingUrl: string | null;
+  /* ALREADY LISTED — set ONLY from a stored, successful directory check that FOUND this host.
+     Never inferred. The step stops being work to do and becomes a verification instruction: open
+     the URL and confirm the category and town match the questions being measured, because a
+     listing filed under the wrong category is a real and different problem from no listing.
+     Excluded from every counter — see operatorMinutes below and the header in playbookDoc.ts. */
+  alreadyListed?: { url: string; title: string | null };
 }
 
 export interface Playbook {
@@ -81,7 +87,11 @@ export interface Playbook {
   whoIsWinning: Array<{ host: string; citations: number; audits: number; kind: string }>;
 }
 
-const norm = (t: string | null | undefined) => {
+/* EXPORTED 2026-07-30 so check-directory-listings can reuse it instead of making a THIRD copy.
+   Logic unchanged — not one character inside the function. It is already duplicated in
+   playbook-evidence/index.ts, which carries the warning that the two must stay identical or every
+   trade silently folds to zero evidence; a third copy was not acceptable. */
+export const norm = (t: string | null | undefined) => {
   const s = (t ?? '').toLowerCase();
   if (/plumb/.test(s)) return 'plumber';
   if (/accountant|accountancy|bookkeep/.test(s)) return 'accountant';
@@ -102,6 +112,11 @@ export function buildPlaybook(
   evidence: EvidenceRow[],
   tradeAuditTotals: Record<string, number>,
   listings: ListingRecord[] = [],
+  /* A stored directory check for this lead, if one has ever been run. Only an 'ok' check can
+     suppress a task — foundHostMap enforces that, so a refused/errored/empty search can never hide
+     real work. Absent → the fold behaves exactly as it always has and the document says the check
+     has not been run, rather than implying a clean sweep. */
+  directoryFound: Map<string, { url: string; title: string | null }> = new Map(),
 ): Playbook {
   const trade = norm(lead.trade);
   const tradeAudits = tradeAuditTotals[trade] ?? 0;
@@ -175,14 +190,20 @@ export function buildPlaybook(
       { name: 'Website', value: lead.website ?? 'none', missing: false },
     ];
 
+    /* A stored check that FOUND this host turns the task into a verification instruction. Minutes
+       and paste-values are dropped with it: this is no longer an hour's work, and printing a NAP
+       table beside "already listed" invites the operator to create a duplicate. */
+    const listed = directoryFound.get(e.host.toLowerCase());
+
     steps.push({
       key: `dir:${e.host}`, section, label: f.label, host: e.host,
       signupUrl: f.signupUrl || null, urlVerified: f.urlVerified,
-      fields: section === 'do_now' ? fields : [],
-      minutes: section === 'do_now' ? (MINUTES[e.host] ?? 10) : 0,
+      fields: !listed && section === 'do_now' ? fields : [],
+      minutes: !listed && section === 'do_now' ? (MINUTES[e.host] ?? 10) : 0,
       citations: e.citations, audits: e.audits, strength,
       blockedReason: f.blockedReason, notes: f.notes,
       done: !!r?.done_at, verified: !!r?.verified_at, listingUrl: r?.listing_url ?? null,
+      ...(listed ? { alreadyListed: { url: listed.url, title: listed.title } } : {}),
     });
   }
 
@@ -222,7 +243,12 @@ export function buildPlaybook(
     done: false, verified: false, listingUrl: null,
   });
 
-  const operatorMinutes = steps.filter((s) => s.section === 'do_now').reduce((n, s) => n + s.minutes, 0);
+  /* COUNTED AFTER SUPPRESSION. An already-listed host is not work, so it must not add minutes —
+     a header that says "3 tasks I can complete now" for a business whose only free listing already
+     exists is inverted, and it goes in front of paying customers. */
+  const operatorMinutes = steps
+    .filter((s) => s.section === 'do_now' && !s.alreadyListed)
+    .reduce((n, s) => n + s.minutes, 0);
 
   return {
     businessName: lead.business_name ?? 'this business',

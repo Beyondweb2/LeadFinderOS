@@ -279,10 +279,21 @@ function seoSection(seo: AiAuditSeo | null): string {
       </div>`;
 }
 
-export function renderPlaybookDoc(pb: Playbook, seo: AiAuditSeo | null = null, naming: { named: number; total: number } | null = null): string {
-  const now = pb.steps.filter((s) => s.section === 'do_now');
-  const blocked = pb.steps.filter((s) => s.section === 'blocked');
-  const noWebsite = pb.steps.filter((s) => s.section === 'no_website');
+export function renderPlaybookDoc(
+  pb: Playbook,
+  seo: AiAuditSeo | null = null,
+  naming: { named: number; total: number } | null = null,
+  /* Whether a directory check has ever been run for this business. FALSE prints an explicit note
+     rather than letting the absence of "already listed" markers imply a clean sweep. */
+  directoryCheckRun = false,
+): string {
+  /* ALREADY-LISTED STEPS ARE PULLED OUT OF EVERY WORK BUCKET FIRST, so the counters below cannot
+     count them. This is the fix for the inverted header: a business whose only free listing already
+     exists was being described as "3 tasks I can complete now, 0 need the client". */
+  const alreadyListed = pb.steps.filter((s) => !!s.alreadyListed);
+  const now = pb.steps.filter((s) => s.section === 'do_now' && !s.alreadyListed);
+  const blocked = pb.steps.filter((s) => s.section === 'blocked' && !s.alreadyListed);
+  const noWebsite = pb.steps.filter((s) => s.section === 'no_website' && !s.alreadyListed);
   const deprioritised = pb.steps.filter((s) => s.section === 'deprioritised');
   const nowMinutes = now.reduce((n, s) => n + s.minutes, 0);
   const vert = [pb.trade, pb.town].filter(Boolean).join(' · ');
@@ -314,6 +325,10 @@ export function renderPlaybookDoc(pb: Playbook, seo: AiAuditSeo | null = null, n
   }
   summaryBits.push(`${now.length} task${now.length === 1 ? '' : 's'} I can complete now, about ${nowMinutes} minutes of work; `
     + `${blocked.length} need${blocked.length === 1 ? 's' : ''} the client before week 8.`);
+  // Counted separately and named, so the drop in the numbers above is explained rather than mysterious.
+  if (alreadyListed.length) {
+    summaryBits.push(`${alreadyListed.length} already listed and excluded from those counts.`);
+  }
   const summary = summaryBits.join(' ');
 
   /* PROVENANCE, SAID OUT LOUD. Asked for explicitly so the sheet cannot read as more bespoke than it
@@ -355,6 +370,26 @@ ${pb.missingAddress ? `    <div class="warn">No address on file — every signup
         || '<p class="wk-client">Nothing is currently actionable without the client.</p>'}
       ${group('AI Visibility — the client must do these', 'Goes in the client pack. None of it moves until they act, and week 8 measures whether it did.', blocked, pb)}
       ${group('AI Visibility — no website', 'Gemini builds answers from businesses’ own sites. With no site there is nothing of theirs to read.', noWebsite, pb)}
+      ${alreadyListed.length ? `
+      <div class="act-group">
+        <div class="act-group-h">Already listed — verify, do not re-create</div>
+        <div class="act-group-sub">A directory check found a live listing on these. Open each one and confirm the CATEGORY and the TOWN match what is being measured — a listing filed under the wrong category is a different problem from no listing, not a smaller one.</div>
+        <ul class="acts">${alreadyListed.map((s) => `
+          <li class="act">
+            <div class="act-top">
+              <span class="act-do">${esc(s.label)}${s.host ? ` <span class="host">${esc(s.host)}</span>` : ''}</span>
+              <span class="act-tags"><span class="flag flag-done">already listed</span></span>
+            </div>
+            ${why(s, pb)}
+            <div class="url">${esc(s.alreadyListed!.url)}</div>
+            ${s.alreadyListed!.title ? `<div class="act-dep">${esc(s.alreadyListed!.title)}</div>` : ''}
+          </li>`).join('')}
+        </ul>
+      </div>` : ''}
+      ${!directoryCheckRun ? `
+      <p class="wk-client" style="margin-top:12px"><b>Directory check not run.</b> Nothing below has been
+      checked against a live search, so some of it may already be done. Run the directory check on this
+      business to find out before spending the hour.</p>` : ''}
       ${seoSection(seo)}
     </section>
 
@@ -436,6 +471,11 @@ ${pb.missingAddress ? `    <div class="warn">No address on file — every signup
 }
 
 /** Print the operator playbook via the browser's own dialog. No PDF library. */
-export function printPlaybookDoc(pb: Playbook, seo: AiAuditSeo | null = null, naming: { named: number; total: number } | null = null): void {
-  printHtmlAsPdf(renderPlaybookDoc(pb, seo, naming), pdfTitle(pb.businessName, 'Playbook-Operator'));
+export function printPlaybookDoc(
+  pb: Playbook,
+  seo: AiAuditSeo | null = null,
+  naming: { named: number; total: number } | null = null,
+  directoryCheckRun = false,
+): void {
+  printHtmlAsPdf(renderPlaybookDoc(pb, seo, naming, directoryCheckRun), pdfTitle(pb.businessName, 'Playbook-Operator'));
 }
