@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ExternalLink, AlertTriangle, Clock, Trophy, Ban, Globe, ArrowDownToLine, CheckCircle2, Printer, Quote, Send } from 'lucide-react';
+import { Loader2, ExternalLink, AlertTriangle, Clock, Trophy, Ban, Globe, ArrowDownToLine, CheckCircle2, Printer, Quote, Send, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BackLink } from '@/components/BackLink';
 import { SEOHead } from '@/components/SEOHead';
@@ -10,6 +10,8 @@ import { ABSENCE_CAVEAT } from '@/lib/ownCitations';
 import { printPlaybookDoc } from '@/lib/playbookDoc';
 import { printClientRequestDoc } from '@/lib/clientRequestDoc';
 import { buildClientRequest } from '@/lib/clientRequestSelect';
+import { useDirectoryCheck } from '@/hooks/useDirectoryCheck';
+import { gatingFor } from '@/lib/directoryHosts';
 
 /**
  * OPERATOR DELIVERY CHECKLIST — /playbook/:id.
@@ -46,6 +48,11 @@ const SECTION_META: Record<Section, { title: string; blurb: string; icon: typeof
     blurb: 'Gemini reads businesses’ own sites. Without one there is nothing of theirs to read.',
     icon: Globe, tone: 'text-red-400',
   },
+  needs_classification: {
+    title: 'NEEDS CLASSIFYING',
+    blurb: 'Cited for this trade, searched for, not found — and with no entry in our host facts, so it is unknown whether they can be joined, by whom, or at what cost. Not counted as work in either direction. Some will be competitors’ own sites; classify them by hand rather than dropping them.',
+    icon: AlertTriangle, tone: 'text-amber-400',
+  },
   deprioritised: {
     title: 'DEPRIORITISED',
     blurb: 'Measured and found not to move the needle. Deliberately last — do not spend the hour here.',
@@ -53,7 +60,7 @@ const SECTION_META: Record<Section, { title: string; blurb: string; icon: typeof
   },
 };
 
-const ORDER: Section[] = ['do_now', 'blocked', 'no_website', 'deprioritised'];
+const ORDER: Section[] = ['do_now', 'blocked', 'no_website', 'needs_classification', 'deprioritised'];
 
 /** Citations/audits chip. Always shown together — breadth is what stops volume lying. */
 function Evidence({ step }: { step: PlaybookStep }) {
@@ -87,9 +94,31 @@ function StepRow({ step }: { step: PlaybookStep }) {
               {step.minutes} min
             </span>
           )}
+          {/* Mirrors the printed document. Without this the screen would show a plain task while the
+              print said ALREADY LISTED for the same host — the two must not disagree. */}
+          {step.alreadyListed && (
+            <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-500">
+              already listed
+            </span>
+          )}
         </div>
         <Evidence step={step} />
       </div>
+
+      {step.alreadyListed && (
+        <div className="mt-2 rounded border border-emerald-500/30 bg-emerald-500/5 p-2">
+          <p className="text-[11px] leading-relaxed text-emerald-600 dark:text-emerald-400">
+            A directory check found a live listing. Open it and confirm the <b>category</b> and the
+            <b> town</b> match what is being measured — a listing under the wrong category is a
+            different problem from no listing, not a smaller one.
+          </p>
+          <a href={step.alreadyListed.url} target="_blank" rel="noreferrer noopener"
+            className="mt-1 inline-flex items-center gap-1 break-all text-[11px] text-primary hover:underline">
+            <ExternalLink className="h-3 w-3 shrink-0" />
+            {step.alreadyListed.url}
+          </a>
+        </div>
+      )}
 
       {step.signupUrl && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -145,7 +174,13 @@ function StepRow({ step }: { step: PlaybookStep }) {
 
 export default function Playbook() {
   const { id } = useParams<{ id: string }>();
-  const { playbook: pb, ownCitations: oc, seo, naming, resolvedAs, auditId, isLoading, error } = usePlaybook(id);
+  const {
+    playbook: pb, ownCitations: oc, seo, naming, directoryCheck, resolvedAs, auditId, leadId,
+    isLoading, error, reload,
+  } = usePlaybook(id);
+  /* Running is separate from reading: usePlaybook owns the stored result because the fold needs it.
+     onDone reloads the whole playbook, because a completed check changes which steps are tasks. */
+  const dirCheck = useDirectoryCheck(leadId, reload);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -176,7 +211,12 @@ export default function Playbook() {
       }, ...pb.steps]
     : pb.steps;
 
-  const doNowMinutes = steps.filter((s) => s.section === 'do_now').reduce((n, s) => n + s.minutes, 0);
+  /* AFTER SUPPRESSION, matching the printed header. An already-listed host contributes no minutes:
+     it is not work. buildPlaybook already zeroes their minutes, so this filter is belt-and-braces
+     against a future step that sets both. */
+  const doNowMinutes = steps
+    .filter((s) => s.section === 'do_now' && !s.alreadyListed)
+    .reduce((n, s) => n + s.minutes, 0);
 
   /* Capped at the same 20 the printed sheet uses. Uncapped this was 181 rows for a plumber, which
      drowned the four or five incumbents actually worth studying. */
@@ -219,11 +259,35 @@ export default function Playbook() {
                 <div className="flex flex-col items-end gap-1.5">
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:text-destructive"
-                      onClick={() => printPlaybookDoc({ ...pb, steps }, seo, naming)}>
+                      onClick={() => printPlaybookDoc({ ...pb, steps }, seo, naming, !!directoryCheck)}>
                       <Printer className="mr-1.5 h-3.5 w-3.5" /> Print operator copy
                     </Button>
                     <Button size="sm" onClick={() => printClientRequestDoc(buildClientRequest({ ...pb, steps }, naming))}>
                       <Send className="mr-1.5 h-3.5 w-3.5" /> Print client request
+                    </Button>
+                    {/* ON DEMAND, BEHIND A CONFIRM THAT STATES THE COST. Disabled without a lead:
+                        the check is keyed on outreach_leads, so an audit-only business has nothing
+                        to key on and says so rather than offering a button that cannot work. */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!leadId || dirCheck.running}
+                      title={leadId
+                        ? 'Search for listings this business already has on the directories cited for its trade'
+                        : 'This business has no CRM lead record, so there is nothing to key a check on'}
+                      onClick={() => {
+                        if (!window.confirm(
+                          'Run a live search for existing directory listings?\n\n'
+                          + 'Two Google searches via Apify. Estimated cost ~8p.\n'
+                          + 'Nothing is spent until you press OK.',
+                        )) return;
+                        void dirCheck.run();
+                      }}
+                    >
+                      {dirCheck.running
+                        ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        : <Search className="mr-1.5 h-3.5 w-3.5" />}
+                      {dirCheck.running ? 'Checking…' : directoryCheck ? 'Re-check listings (~8p)' : 'Check existing directory listings (~8p)'}
                     </Button>
                   </div>
                   <p className="text-[10px] leading-tight text-destructive/80">
@@ -234,6 +298,84 @@ export default function Playbook() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2 p-3 pt-0 sm:p-4 sm:pt-0">
+            {/* ── DIRECTORY CHECK RESULT ──────────────────────────────────────────────────────────
+                FOUND / NOT FOUND only. Never "not listed" or "missing": one search failing to
+                surface a listing is not proof there is no listing, and the UI will not claim it.
+                The gating badge comes from directoryFacts via gatingFor — the same hand-maintained
+                classification the rest of the system uses, never a second source and never
+                defaulted to self-serve. */}
+            {dirCheck.error && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
+                <span className="font-semibold">Directory check failed.</span> {dirCheck.error}
+              </div>
+            )}
+            {directoryCheck && (
+              <div className="rounded-lg border border-border/60 bg-card/60 p-3 text-[12px]">
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-[13px] font-semibold">Directory check</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {directoryCheck.checked_at
+                      ? new Date(directoryCheck.checked_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                      : '—'}
+                    {typeof directoryCheck.cost_estimate_usd === 'number'
+                      ? ` · $${Number(directoryCheck.cost_estimate_usd).toFixed(3)}`
+                      : ''}
+                  </span>
+                </div>
+
+                {directoryCheck.status !== 'ok' ? (
+                  /* Every non-ok state says what it actually was. A refused or empty search is NOT
+                     reported as NOT FOUND for every host — that would be a lie about eight hosts. */
+                  <p className="text-[12px] text-amber-600 dark:text-amber-500">
+                    <span className="font-semibold uppercase">{directoryCheck.status.replace('_', ' ')}</span>
+                    {directoryCheck.error ? ` — ${directoryCheck.error}` : ''}
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {(directoryCheck.hosts_checked ?? []).map((h) => {
+                      const hit = (directoryCheck.found ?? []).find((f) => f.host === h.host);
+                      const g = gatingFor(h.host);
+                      return (
+                        <li key={h.host} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border/40 py-1 last:border-b-0">
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                            hit ? 'bg-emerald-500/15 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+                            {hit ? 'FOUND' : 'NOT FOUND'}
+                          </span>
+                          <span className="font-medium">{h.host}</span>
+                          <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
+                            g.gating === 'client-gated' ? 'border-blue-500/40 text-blue-500'
+                              : g.gating === 'unclassified' ? 'border-amber-500/40 text-amber-600 dark:text-amber-500'
+                              : 'border-border text-muted-foreground'}`}>
+                            {g.label}
+                          </span>
+                          {hit && (
+                            <a href={hit.url} target="_blank" rel="noreferrer"
+                              className="w-full break-all text-[11px] text-primary underline decoration-dotted underline-offset-2 hover:no-underline">
+                              {hit.url}
+                            </a>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {(directoryCheck.queries_run ?? []).length > 0 && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Searched: {(directoryCheck.queries_run ?? []).map((q) => `“${q}”`).join(' · ')}
+                  </p>
+                )}
+                <p className="mt-1 text-[11px] text-muted-foreground/80">
+                  NOT FOUND means this search did not surface a listing — it is not proof one does not exist.
+                </p>
+              </div>
+            )}
+            {!directoryCheck && leadId && (
+              <p className="text-[11px] text-muted-foreground">
+                Directory check not run — some of the tasks below may already be done.
+              </p>
+            )}
+
             <div className="flex flex-wrap gap-1.5">
               {pb.missingAddress && (
                 /* THE BLOCKING GAP. Every directory signup asks for it, so without it none of DO NOW

@@ -1,4 +1,13 @@
-import { DIRECTORY_FACTS, factFor, type DirectoryFact } from '@/lib/directoryFacts';
+/* RELATIVE paths with explicit .ts extensions, NOT the Vite "@/" alias — and this is load-bearing,
+   not style. Exporting norm() pulled this file into the check-directory-listings edge bundle for the
+   first time, and the Supabase bundler rejected the whole deploy on the alias:
+     Relative import path "@/lib/directoryFacts" not prefixed with / or ./ or ../
+   Deno has no deno.json or import map here, so "@/" resolves to nothing. Vite resolves the relative
+   form perfectly well, so this costs the SPA nothing. Same convention as auditReport.ts, which is
+   imported by process-ai-audit-queue and deploys cleanly.
+   ⚠️ ANY src/lib file reachable from an edge function must obey this. See CLAUDE.md §4. */
+import { DIRECTORY_FACTS, factFor, type DirectoryFact } from './directoryFacts.ts';
+import type { DirectoryCheckFold } from './directoryHosts.ts';
 
 /* ============================================================
    PLAYBOOK FOLD — deterministic, no language model.
@@ -37,7 +46,17 @@ export interface PlaybookLead {
 /** One row already recorded in client_listings, so a done task shows as done. */
 export interface ListingRecord { host: string; done_at: string | null; verified_at: string | null; listing_url: string | null }
 
-export type Section = 'do_now' | 'blocked' | 'no_website' | 'deprioritised';
+export type Section =
+  | 'do_now'
+  | 'blocked'
+  | 'no_website'
+  | 'deprioritised'
+  /* A cited host with NO entry in directoryFacts that a directory check looked for and did not
+     find. It is NOT a task: we do not yet know whether it can be joined at all, or by whom. It gets
+     its own group asking for a classification, and is excluded from BOTH header counters.
+     Competitor domains will land here. That is accepted deliberately — a labelling problem the
+     operator fixes by hand beats silently dropping the one host that mattered. */
+  | 'needs_classification';
 
 export interface PlaybookStep {
   key: string;
@@ -58,6 +77,12 @@ export interface PlaybookStep {
   done: boolean;
   verified: boolean;
   listingUrl: string | null;
+  /* ALREADY LISTED — set ONLY from a stored, successful directory check that FOUND this host.
+     Never inferred. The step stops being work to do and becomes a verification instruction: open
+     the URL and confirm the category and town match the questions being measured, because a
+     listing filed under the wrong category is a real and different problem from no listing.
+     Excluded from every counter — see operatorMinutes below and the header in playbookDoc.ts. */
+  alreadyListed?: { url: string; title: string | null };
 }
 
 export interface Playbook {
@@ -81,7 +106,11 @@ export interface Playbook {
   whoIsWinning: Array<{ host: string; citations: number; audits: number; kind: string }>;
 }
 
-const norm = (t: string | null | undefined) => {
+/* EXPORTED 2026-07-30 so check-directory-listings can reuse it instead of making a THIRD copy.
+   Logic unchanged — not one character inside the function. It is already duplicated in
+   playbook-evidence/index.ts, which carries the warning that the two must stay identical or every
+   trade silently folds to zero evidence; a third copy was not acceptable. */
+export const norm = (t: string | null | undefined) => {
   const s = (t ?? '').toLowerCase();
   if (/plumb/.test(s)) return 'plumber';
   if (/accountant|accountancy|bookkeep/.test(s)) return 'accountant';
@@ -102,6 +131,11 @@ export function buildPlaybook(
   evidence: EvidenceRow[],
   tradeAuditTotals: Record<string, number>,
   listings: ListingRecord[] = [],
+  /* A stored directory check for this lead, if one has ever been run. Only an 'ok' check can
+     suppress a task — directoryCheckFold enforces that, so a refused/errored/empty search can never
+     hide real work. Absent → the fold behaves exactly as it always has and the document says the
+     check has not been run, rather than implying a clean sweep. */
+  directory: DirectoryCheckFold = { found: new Map(), checked: new Set() },
 ): Playbook {
   const trade = norm(lead.trade);
   const tradeAudits = tradeAuditTotals[trade] ?? 0;
@@ -127,7 +161,33 @@ export function buildPlaybook(
        guessing. But it is almost always a competitor's own site, and those are the answer key to
        "who keeps getting named". Surfaced as intelligence rather than discarded. Treating unknown
        as intelligence also means a NEW competitor appears automatically, with no entry to write. */
-    if (!f) { whoIsWinning.push({ host: e.host, citations: e.citations, audits: e.audits, kind: 'unclassified' }); continue; }
+    if (!f) {
+      whoIsWinning.push({ host: e.host, citations: e.citations, audits: e.audits, kind: 'unclassified' });
+      /* PROMOTED BY A DIRECTORY CHECK. Before a check, an unclassified host is only intelligence.
+         Once we have actually searched for it we know something, and it earns a row:
+           FOUND     → ALREADY LISTED with its URL, whatever its classification.
+           NOT FOUND → 'needs_classification'. NOT a task — we do not know if it can be joined, or
+                       by whom — and excluded from both header counters.
+         It stays in whoIsWinning as well: that list is the competitor answer key and losing a
+         competitor from it to gain a classification prompt would trade one signal for another. */
+      const key = e.host.toLowerCase();
+      if (directory.checked.has(key)) {
+        const hit = directory.found.get(key);
+        steps.push({
+          key: `unclassified:${e.host}`, section: 'needs_classification',
+          label: e.host, host: e.host,
+          signupUrl: null, urlVerified: true, fields: [], minutes: 0,
+          citations: e.citations, audits: e.audits,
+          strength: e.audits >= EVIDENCE_MIN_AUDITS ? 'evidenced' : 'thin',
+          notes: hit
+            ? undefined
+            : 'No entry in directoryFacts, so we do not yet know whether this can be joined, by whom, or what it costs. Classify it before treating it as work.',
+          done: false, verified: false, listingUrl: null,
+          ...(hit ? { alreadyListed: { url: hit.url, title: hit.title } } : {}),
+        });
+      }
+      continue;
+    }
     /* Classified as something that cannot be joined. Same destination, better label. */
     if (f.kind && f.kind !== 'directory' && f.kind !== 'trade-body') {
       whoIsWinning.push({ host: e.host, citations: e.citations, audits: e.audits, kind: f.kind });
@@ -175,14 +235,20 @@ export function buildPlaybook(
       { name: 'Website', value: lead.website ?? 'none', missing: false },
     ];
 
+    /* A stored check that FOUND this host turns the task into a verification instruction. Minutes
+       and paste-values are dropped with it: this is no longer an hour's work, and printing a NAP
+       table beside "already listed" invites the operator to create a duplicate. */
+    const listed = directory.found.get(e.host.toLowerCase());
+
     steps.push({
       key: `dir:${e.host}`, section, label: f.label, host: e.host,
       signupUrl: f.signupUrl || null, urlVerified: f.urlVerified,
-      fields: section === 'do_now' ? fields : [],
-      minutes: section === 'do_now' ? (MINUTES[e.host] ?? 10) : 0,
+      fields: !listed && section === 'do_now' ? fields : [],
+      minutes: !listed && section === 'do_now' ? (MINUTES[e.host] ?? 10) : 0,
       citations: e.citations, audits: e.audits, strength,
       blockedReason: f.blockedReason, notes: f.notes,
       done: !!r?.done_at, verified: !!r?.verified_at, listingUrl: r?.listing_url ?? null,
+      ...(listed ? { alreadyListed: { url: listed.url, title: listed.title } } : {}),
     });
   }
 
@@ -222,7 +288,12 @@ export function buildPlaybook(
     done: false, verified: false, listingUrl: null,
   });
 
-  const operatorMinutes = steps.filter((s) => s.section === 'do_now').reduce((n, s) => n + s.minutes, 0);
+  /* COUNTED AFTER SUPPRESSION. An already-listed host is not work, so it must not add minutes —
+     a header that says "3 tasks I can complete now" for a business whose only free listing already
+     exists is inverted, and it goes in front of paying customers. */
+  const operatorMinutes = steps
+    .filter((s) => s.section === 'do_now' && !s.alreadyListed)
+    .reduce((n, s) => n + s.minutes, 0);
 
   return {
     businessName: lead.business_name ?? 'this business',
