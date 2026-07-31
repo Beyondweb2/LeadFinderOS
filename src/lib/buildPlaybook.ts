@@ -1,5 +1,13 @@
-import { DIRECTORY_FACTS, factFor, type DirectoryFact } from '@/lib/directoryFacts';
-import type { DirectoryCheckFold } from '@/lib/directoryHosts';
+/* RELATIVE paths with explicit .ts extensions, NOT the Vite "@/" alias — and this is load-bearing,
+   not style. Exporting norm() pulled this file into the check-directory-listings edge bundle for the
+   first time, and the Supabase bundler rejected the whole deploy on the alias:
+     Relative import path "@/lib/directoryFacts" not prefixed with / or ./ or ../
+   Deno has no deno.json or import map here, so "@/" resolves to nothing. Vite resolves the relative
+   form perfectly well, so this costs the SPA nothing. Same convention as auditReport.ts, which is
+   imported by process-ai-audit-queue and deploys cleanly.
+   ⚠️ ANY src/lib file reachable from an edge function must obey this. See CLAUDE.md §4. */
+import { DIRECTORY_FACTS, factFor, type DirectoryFact } from './directoryFacts.ts';
+import type { DirectoryCheckFold } from './directoryHosts.ts';
 
 /* ============================================================
    PLAYBOOK FOLD — deterministic, no language model.
