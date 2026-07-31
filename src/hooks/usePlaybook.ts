@@ -45,6 +45,9 @@ interface LeadRow {
   place_id: string | null;
   search_keyword: string | null;
   search_location: string | null;
+  /** The town Google says the business is IN. Behind the audit's resolved location_text, ahead of
+   *  search_location — see the town precedence where pbLead is built. */
+  derived_town: string | null;
   category: string | null;
 }
 
@@ -86,7 +89,7 @@ export interface UsePlaybookResult {
 }
 
 const AUDIT_COLS = 'id, lead_id, business_name, business_type, location_text, website, business_address, business_phone';
-const LEAD_COLS = 'id, business_name, phone, website, address, google_maps_url, place_id, search_keyword, search_location, category';
+const LEAD_COLS = 'id, business_name, phone, website, address, google_maps_url, place_id, search_keyword, search_location, derived_town, category';
 
 /** A lead row's trade lives in search_keyword for ~20% of rows; category is the fallback. */
 const leadTrade = (l: LeadRow) => (l.search_keyword ?? '').trim() || (l.category ?? '').trim() || null;
@@ -150,7 +153,28 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
         google_maps_url: lead?.google_maps_url ?? null,
         place_id: lead?.place_id ?? null,
         trade: (lead ? leadTrade(lead) : null) ?? audit?.business_type ?? null,
-        town: (lead?.search_location ?? '').trim() || audit?.location_text || null,
+        /* ── THE TOWN THE BUSINESS IS IN, NOT THE TOWN THAT WAS SEARCHED ──────────────────────────
+           This read `search_location || audit.location_text` — the SEARCHED town first — which is
+           backwards, and it was wrong on 102 of the 121 leads that have a derived town.
+
+           WHAT IT LOOKED LIKE. A bulk audit of five tattoo studios found from one "Wisbech" search:
+           create-ai-audit resolved each one correctly (Blood of Angels stored `Cambridge` with
+           location_source `derived`) and the questions genuinely asked about Cambridge — but the
+           playbook and the client request form both printed Wisbech, so the paste-values table told
+           the operator to put "Wisbech" beside a Cambridge address. The measurement was right the
+           whole time; only the documents lied.
+
+           THE AUDIT ROW WINS because it already IS the resolved answer: create-ai-audit applies
+           confirmed_location || derived_town || search_location and records which it used in
+           location_source. Preferring it keeps the documents agreeing with the measurement by
+           construction rather than by re-deriving and hoping the two match.
+
+           derived_town then search_location behind it, for the lead-only case where there is no
+           audit to resolve anything (usePlaybook is audit-FIRST, but an id can resolve to a lead). */
+        town: (audit?.location_text ?? '').trim()
+          || (lead?.derived_town ?? '').trim()
+          || (lead?.search_location ?? '').trim()
+          || null,
       };
 
       // 3. Evidence — the edge function, because the fold needs SQL PostgREST cannot express.

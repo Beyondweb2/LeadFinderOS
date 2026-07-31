@@ -3,7 +3,7 @@ import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
-import { applySeed } from "../../../src/lib/seedGuard.ts";
+import { applySeed, dropResearchIntent } from "../../../src/lib/seedGuard.ts";
 import {
   OUTREACH_HOOK_QUESTIONS,
   WIZARD_MIN_QUESTIONS,
@@ -789,7 +789,21 @@ Return via the return_questions tool.`;
     const arr = Array.isArray(parsed?.questions) ? parsed.questions : null;
     if (!arr) return fallback;
     const cleaned = stripNearMe(arr.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim()));
-    return cleaned.length >= n ? cleaned.slice(0, n) : fallback;
+    const usable = cleaned.length >= n ? cleaned.slice(0, n) : fallback;
+    /* BUYING INTENT, NOT RESEARCH INTENT. The model produced "tattoo design for beginners cambridge
+       uk" for a tattoo studio, and the engines answered it accurately with ucas.com and two colleges
+       — a third of that niche's citations measuring people who want to LEARN the trade rather than
+       hire one. Rejected here and topped back up from the deterministic templates, so the operator
+       still gets the count they paid for. Skipped for businesses that actually teach: see
+       isTeachingTrade — "learn to drive in Peterborough" is a driving school's best question. */
+    const guarded = dropResearchIntent(usable, fallback, n, businessType);
+    if (guarded.rejected.length) {
+      console.warn(
+        `[create-ai-audit] research-intent questions dropped (${guarded.rejected.length}): `
+        + guarded.rejected.map((r) => `"${r.question}" (${r.reason})`).join(" | "),
+      );
+    }
+    return guarded.questions;
   } catch (_e) {
     return fallback;
   }

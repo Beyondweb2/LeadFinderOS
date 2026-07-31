@@ -180,6 +180,26 @@ where the bare slugified name resolved, fixed by requiring an 8-hex code suffix.
 Limits inherited from the existing report, all stated to him: no viewer/IP/user-agent, no per-open
 log, cannot distinguish Paul's own views from the client's, and email scanners register false opens.
 
+### 🔴 PENDING SIGN-OFF: the guarantee wording (do NOT change unilaterally)
+Paul is moving from guaranteeing the OUTCOME to guaranteeing the WORK, but **not until it is signed
+off and updated in Stripe** — the document and Stripe must not disagree.
+
+**The wording is hardcoded in THREE places and nothing reads Stripe at runtime:**
+| Where | Text |
+|---|---|
+| `clientRequestDoc.ts:250` | "Our promise is to get **you** named in more AI answers within 8 weeks, or a full refund." |
+| `playbookDoc.ts:421` | Same, phrased "get **this business** named…" |
+| `findable-checkout/index.ts:204` | The Stripe line-item description, sent at checkout creation |
+
+They agree today only because the two documents were copied from the Stripe string BY HAND.
+
+☐ **DO THIS AS PART OF THE REWORD, not before it:** extract one shared constant that all three
+import, so they cannot drift. `findable-checkout` is an edge function and the documents are SPA
+modules, but edge functions already import from `src/lib` (`create-ai-audit` imports `seedGuard.ts`,
+`process-ai-audit-queue` imports `auditReport.ts`), so a `src/lib/guarantee.ts` works for all three.
+⚠️ Changing the Stripe string only affects NEW checkouts — anyone who has already paid bought the
+old wording, so the old text may still need to be honoured for existing customers.
+
 ### Still to do after the test passes
 - [ ] `npx supabase gen types typescript --project-ref ruusxpkkmwtljxxulhbq > src/integrations/supabase/types.ts`
       — Paul approved. Lets the `as unknown as` casts in `AiAudit.tsx` and the `as never` in
