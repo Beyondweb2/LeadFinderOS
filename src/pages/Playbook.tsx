@@ -258,8 +258,12 @@ export default function Playbook() {
                     already on the page — neither is a blank template. */}
                 <div className="flex flex-col items-end gap-1.5">
                   <div className="flex items-center gap-2">
+                    {/* status === 'ok', not merely "a row exists". The doc suppresses its
+                        "Directory check not run" caveat on this flag, and a pending, refused or
+                        errored row learned nothing — printing as though it had would have the doc
+                        claiming a check that never produced an answer. */}
                     <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:text-destructive"
-                      onClick={() => printPlaybookDoc({ ...pb, steps }, seo, naming, !!directoryCheck)}>
+                      onClick={() => printPlaybookDoc({ ...pb, steps }, seo, naming, directoryCheck?.status === 'ok')}>
                       <Printer className="mr-1.5 h-3.5 w-3.5" /> Print operator copy
                     </Button>
                     <Button size="sm" onClick={() => printClientRequestDoc(buildClientRequest({ ...pb, steps }, naming))}>
@@ -323,7 +327,15 @@ export default function Playbook() {
                   </span>
                 </div>
 
-                {directoryCheck.status !== 'ok' ? (
+                {directoryCheck.status === 'pending' ? (
+                  /* A row still reading PENDING means the searches were started and the function
+                     did not live to write the answer. Say that plainly rather than showing an empty
+                     host list: the money is already spent, and the run ids are on the row. */
+                  <p className="text-[12px] text-amber-600 dark:text-amber-500">
+                    <span className="font-semibold uppercase">PENDING</span>
+                    {' — the searches were started but no result was written back. The Apify run ids are stored on this check. Re-check to try again.'}
+                  </p>
+                ) : directoryCheck.status !== 'ok' ? (
                   /* Every non-ok state says what it actually was. A refused or empty search is NOT
                      reported as NOT FOUND for every host — that would be a lie about eight hosts. */
                   <p className="text-[12px] text-amber-600 dark:text-amber-500">
@@ -331,6 +343,15 @@ export default function Playbook() {
                     {directoryCheck.error ? ` — ${directoryCheck.error}` : ''}
                   </p>
                 ) : (
+                  <>
+                  {/* An 'ok' check carries a note ONLY when one of the two searches failed. FOUND
+                      still stands; NOT FOUND is weaker than usual, and it says so rather than
+                      letting a half-run read exactly like a whole one. */}
+                  {directoryCheck.error && (
+                    <p className="mb-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-600 dark:text-amber-500">
+                      {directoryCheck.error}
+                    </p>
+                  )}
                   <ul className="space-y-1">
                     {(directoryCheck.hosts_checked ?? []).map((h) => {
                       const hit = (directoryCheck.found ?? []).find((f) => f.host === h.host);
@@ -358,6 +379,7 @@ export default function Playbook() {
                       );
                     })}
                   </ul>
+                  </>
                 )}
 
                 {(directoryCheck.queries_run ?? []).length > 0 && (
