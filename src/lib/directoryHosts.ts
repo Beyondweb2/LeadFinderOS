@@ -99,8 +99,11 @@ export interface DirectoryNotFoundRow { host: string }
 /** What goes in hosts_checked: the host plus its gating, so the status is STORED and not only drawn. */
 export interface DirectoryHostRow { host: string; gating: Gating; actor: Actor | null }
 
-/** status values this feature writes. Distinct states, never collapsed into one failure. */
-export type DirectoryCheckStatus = 'ok' | 'no_results' | 'refused_cap' | 'error';
+/** status values this feature writes. Distinct states, never collapsed into one failure.
+ *  'pending' is written BEFORE the searches start and updated in place when they end, so a row left
+ *  reading 'pending' means the run was interrupted after money was committed — the Apify run ids on
+ *  it are then the only route back to the data. It is never a healthy resting state. */
+export type DirectoryCheckStatus = 'pending' | 'ok' | 'no_results' | 'refused_cap' | 'error';
 
 export interface DirectoryCheck {
   id: string;

@@ -49,7 +49,24 @@ const REFUSE_AT_PCT = 0.90;
  *  the operator before anything is spent. NOT a billed figure: it is an estimate and stored as one. */
 const COST_PER_QUERY_USD = 0.05;
 const RUN_POLL_MS = 3_000;
-const RUN_TIMEOUT_MS = 90_000;
+/** 60s, DOWN FROM 90s. The two runs now go out CONCURRENTLY, so the worst case is ONE timeout plus
+ *  overhead instead of two stacked. Two sequential 90s runs gave a 180s ceiling against the ~150s
+ *  edge wall clock (see seo-scan-core.ts:12, bulk-jobs:36) — on a slow day the isolate would have
+ *  been killed with both searches paid for and nothing written at all. */
+const RUN_TIMEOUT_MS = 60_000;
+
+/** One search, as stored in raw_results.apify_runs. The run_id is the whole point: it is written to
+ *  the row the moment Apify hands it over, so a dataset stays openable in the Apify console even if
+ *  this function never gets to finish. */
+interface QueryAttempt {
+  query: string;
+  run_id: string | null;
+  state: "started" | "succeeded" | "failed" | "start_failed";
+  billed_usd: number | null;
+  error: string | null;
+}
+
+const reasonOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Organic-only input for apify~google-search-scraper. No chatGptSearch / geminiSearch blocks —
  *  that is the whole cost saving. Organic IS the actor's base output; there is no toggle to add.
@@ -92,14 +109,20 @@ function organicHits(items: unknown[]): OrganicHit[] {
   return out;
 }
 
-/** One actor run, start → poll → items. Returns the raw items AND what Apify says it cost.
+/** START one actor run and return its id AT ONCE, before any polling. Split out of the old
+ *  start-and-poll helper for one reason: the id has to be persisted before we spend time waiting
+ *  on it, or an interrupted poll loses the only handle on a run that has already been paid for. */
+async function startQuery(query: string, countryCode: string, token: string): Promise<string> {
+  const { runId } = await startApifyRun(AI_SEARCH_ACTOR, buildOrganicSearchInput(query, countryCode), token);
+  return runId;
+}
+
+/** Poll an already-started run to completion and pull its items. Returns what Apify says it cost.
  *  Throws with the REAL message on any failure. */
-async function runQuery(
-  query: string,
-  countryCode: string,
+async function awaitRun(
+  runId: string,
   token: string,
 ): Promise<{ items: unknown[]; billedUsd: number | null }> {
-  const { runId } = await startApifyRun(AI_SEARCH_ACTOR, buildOrganicSearchInput(query, countryCode), token);
   const deadline = Date.now() + RUN_TIMEOUT_MS;
   for (;;) {
     if (Date.now() > deadline) throw new Error(`Apify run ${runId} timed out after ${RUN_TIMEOUT_MS / 1000}s`);
@@ -129,6 +152,15 @@ Deno.serve(async (req) => {
   // Declared out here so the catch-all can still write a row against the right lead.
   let leadId = "";
   let userId = "";
+  /** The pending row's id, once money is committed. Its presence is what tells the catch-all to
+   *  UPDATE rather than INSERT — one click must never leave two rows. */
+  let checkId = "";
+
+  /** Close the pending row out, whichever way the check ended. */
+  const finish = (id: string, patch: Record<string, unknown>) =>
+    service.from("lead_directory_checks")
+      .update({ ...patch, checked_at: new Date().toISOString() })
+      .eq("id", id);
 
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -164,28 +196,39 @@ Deno.serve(async (req) => {
 
     /* ── SPEND GATE, BEFORE ANY CALL ────────────────────────────────────────────────────────────
        Same snapshot the AI Audit page shows. Apify runs the audits and the lead scraping too, so a
-       directory check must never be what tips the account over. Refuse WITH the live figure. */
-    const { data: usage } = await service
+       directory check must never be what tips the account over. Refuse WITH the live figure.
+
+       ⚠️ IT NOW REFUSES ON A MISSING OR UNREADABLE SNAPSHOT TOO. This was `if (usage)` guarding a
+       `cap > 0` test, so no row — or a null cap — skipped the gate entirely and the search went
+       ahead blind. With single-digit dollars of headroom that is the wrong default: not knowing the
+       balance is a reason to STOP, not a reason to spend. No cap is ever guessed or defaulted. */
+    const { data: usage, error: usageErr } = await service
       .from("apify_account_usage")
       .select("monthly_usage_usd, max_monthly_usage_usd, cycle_end")
       .order("captured_at", { ascending: false }).limit(1).maybeSingle();
-    if (usage) {
-      const used = Number(usage.monthly_usage_usd ?? 0);
-      const cap = Number(usage.max_monthly_usage_usd ?? 0);
-      // Recomputed from used/cap, never the stored pct — the cap can be RAISED mid-cycle and the
-      // stored figure is only true for the cap in force when the row was written.
-      const pct = cap > 0 ? used / cap : 0;
-      if (cap > 0 && pct >= REFUSE_AT_PCT) {
-        const line = `Apify is at ${(pct * 100).toFixed(1)}% of its monthly cap ($${used.toFixed(2)} of $${cap.toFixed(2)})`
-          + (usage.cycle_end ? `, resetting ${new Date(String(usage.cycle_end)).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}` : "")
+
+    const used = Number(usage?.monthly_usage_usd ?? NaN);
+    const cap = Number(usage?.max_monthly_usage_usd ?? NaN);
+    const blind = !!usageErr || !usage || !Number.isFinite(used) || !Number.isFinite(cap) || cap <= 0;
+    // Recomputed from used/cap, never the stored pct — the cap can be RAISED mid-cycle and the
+    // stored figure is only true for the cap in force when the row was written.
+    const pct = blind ? 1 : used / cap;
+
+    if (blind || pct >= REFUSE_AT_PCT) {
+      const why = usageErr ? `read failed: ${usageErr.message}`
+        : !usage ? "there is no apify_account_usage row at all"
+        : "the newest row has no usable spend or cap figure";
+      const line = blind
+        ? `Refused: the Apify spend snapshot is unreadable, so there is no way to tell how much headroom is left (${why}). Nothing was spent.`
+        : `Apify is at ${(pct * 100).toFixed(1)}% of its monthly cap ($${used.toFixed(2)} of $${cap.toFixed(2)})`
+          + (usage?.cycle_end ? `, resetting ${new Date(String(usage.cycle_end)).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}` : "")
           + ". Refused: audits and lead scraping share this account and both stop at 100%.";
-        await service.from("lead_directory_checks").insert({
-          lead_id: leadId, user_id: userId, trade, town, status: "refused_cap",
-          queries_run: [], hosts_checked: [], found: [], not_found: [],
-          error: line, checked_at: new Date().toISOString(),
-        });
-        return json({ ok: false, status: "refused_cap", error: line, usage_pct: pct }, 200);
-      }
+      await service.from("lead_directory_checks").insert({
+        lead_id: leadId, user_id: userId, trade, town, status: "refused_cap",
+        queries_run: [], hosts_checked: [], found: [], not_found: [],
+        error: line, checked_at: new Date().toISOString(),
+      });
+      return json({ ok: false, status: "refused_cap", error: line, usage_pct: blind ? null : pct }, 200);
     }
 
     /* ── THE HOSTS: trade-level citation evidence, BREADTH first ────────────────────────────────
@@ -240,35 +283,98 @@ Deno.serve(async (req) => {
       `"${businessName}"${tradeRaw ? ` ${tradeRaw}` : ""}${town ? ` ${town}` : ""}`.trim(),
     ].filter((q, i, a) => q && a.indexOf(q) === i);   // if trade+town add nothing, do not pay twice
 
+    /* ── THE PENDING ROW, WRITTEN BEFORE A PENNY IS SPENT ───────────────────────────────────────
+       Everything above this line is free, which is why the refusals and the empty-host case still
+       short-circuit without a row. From here on money is committed, so the row exists FIRST and is
+       UPDATED in place afterwards — never followed by a second insert. One click, one row.
+       A row still reading 'pending' is the signal that the searches were started and this function
+       did not live to write the answer; the run ids on it are then the only way back to the data. */
+    const { data: pendingRow, error: pendErr } = await service
+      .from("lead_directory_checks").insert({
+        lead_id: leadId, user_id: userId, trade, town, status: "pending",
+        queries_run: queries, hosts_checked: hostRows, found: [], not_found: [],
+        checked_at: new Date().toISOString(),
+      }).select("id").single();
+    if (pendErr || !pendingRow) {
+      // Fail BEFORE spending. If the row cannot be opened there is nowhere to put the answer.
+      throw new Error(`could not open the check row, so nothing was searched: ${pendErr?.message ?? "no row returned"}`);
+    }
+    checkId = String(pendingRow.id);
+
+    /* ── BOTH SEARCHES START CONCURRENTLY ───────────────────────────────────────────────────────
+       allSettled, not all: one query failing must not throw away what the other one found. */
+    const started = await Promise.allSettled(queries.map((q) => startQuery(q, countryCode, apifyToken)));
+    const attempts: QueryAttempt[] = queries.map((q, i) => {
+      const s = started[i];
+      return s.status === "fulfilled"
+        ? { query: q, run_id: s.value, state: "started", billed_usd: null, error: null }
+        : { query: q, run_id: null, state: "start_failed", billed_usd: null, error: reasonOf(s.reason) };
+    });
+
+    /* RUN IDS GO DOWN NOW, NOT AT THE END — the whole reason the pending row exists. If the isolate
+       is killed while polling, the runs are still sitting in the Apify console and the row says
+       which ones they are. Stored under raw_results.apify_runs: no new column, no SQL. */
+    await service.from("lead_directory_checks")
+      .update({ raw_results: { apify_runs: attempts, partial: false, items: [] } })
+      .eq("id", checkId);
+
+    const polled = await Promise.allSettled(attempts.map((a) =>
+      a.run_id ? awaitRun(a.run_id, apifyToken) : Promise.reject(new Error(a.error ?? "run was never started"))));
+
     const rawItems: unknown[] = [];
     const seenUrl = new Set<string>();
     const hits: OrganicHit[] = [];
     let billedTotal = 0;
     let anyBilledFigure = false;
-    for (const q of queries) {
-      const { items, billedUsd } = await runQuery(q, countryCode, apifyToken);
-      if (typeof billedUsd === "number") { billedTotal += billedUsd; anyBilledFigure = true; }
-      rawItems.push(...items);
-      for (const h of organicHits(items)) {
+    let okRuns = 0;
+    polled.forEach((p, i) => {
+      const a = attempts[i];
+      if (p.status !== "fulfilled") {
+        if (a.state === "started") a.state = "failed";
+        a.error = reasonOf(p.reason);
+        return;
+      }
+      okRuns++;
+      a.state = "succeeded";
+      a.billed_usd = p.value.billedUsd;
+      if (typeof p.value.billedUsd === "number") { billedTotal += p.value.billedUsd; anyBilledFigure = true; }
+      rawItems.push(...p.value.items);
+      for (const h of organicHits(p.value.items)) {
         const key = h.url.toLowerCase();
         if (seenUrl.has(key)) continue;
         seenUrl.add(key);
         hits.push(h);
       }
+    });
+    /* Apify's own number when it gave us one, our estimate only as a fallback — and the estimate is
+       per SUCCEEDED run, so a half-failed check is not priced as a whole one. */
+    const costUsd = anyBilledFigure ? billedTotal : okRuns * COST_PER_QUERY_USD;
+
+    const failedRuns = attempts.filter((a) => a.state !== "succeeded");
+    const partial = okRuns > 0 && failedRuns.length > 0;
+    const partialNote = partial
+      ? `PARTIAL — ${okRuns} of ${attempts.length} searches completed. Failed: `
+        + failedRuns.map((f) => `"${f.query}" (${f.error ?? "unknown"})`).join("; ")
+        + ". FOUND is still true; NOT FOUND is less certain than usual."
+      : null;
+    // Bounded: the full dataset is large and this column is a diagnostic, not a store.
+    const rawBlob = { apify_runs: attempts, partial, items: rawItems.slice(0, 5) };
+
+    /* EVERY SEARCH FAILED. Distinct from "no results": there we searched and found nothing, here we
+       never got an answer at all. The run ids stay on the row either way. */
+    if (okRuns === 0) {
+      const line = "Every search failed, so nothing was learned about any host. "
+        + failedRuns.map((f) => `"${f.query}": ${f.error ?? "unknown"}`).join(" | ");
+      await finish(checkId, { status: "error", error: line, raw_results: rawBlob, cost_estimate_usd: costUsd });
+      return json({ ok: false, status: "error", error: line, queries_run: queries }, 200);
     }
-    /* Apify's own number when it gave us one, our estimate only as a fallback. */
-    const costUsd = anyBilledFigure ? billedTotal : queries.length * COST_PER_QUERY_USD;
 
     /* ZERO RESULTS IS ITS OWN STATE. A search that surfaced nothing at all tells us nothing about
-       any host, and reporting NOT FOUND for all eight off the back of it would be a lie. */
+       any host, and reporting NOT FOUND for all of them off the back of it would be a lie. */
     if (hits.length === 0) {
-      const line = "The search returned no results at all, so nothing can be said about any host. This is not the same as the business being absent from them.";
-      await service.from("lead_directory_checks").insert({
-        lead_id: leadId, user_id: userId, trade, town, status: "no_results",
-        queries_run: queries, hosts_checked: hostRows, found: [], not_found: [],
-        raw_results: rawItems.slice(0, 5), cost_estimate_usd: costUsd,
-        error: line, checked_at: new Date().toISOString(),
-      });
+      const line = "The search returned no results at all, so nothing can be said about any host. This is not the same as the business being absent from them."
+        + (partialNote ? ` ${partialNote}` : "");
+      await finish(checkId, { status: "no_results", raw_results: rawBlob, cost_estimate_usd: costUsd, error: line });
       return json({ ok: false, status: "no_results", error: line, queries_run: queries }, 200);
     }
 
@@ -285,17 +391,23 @@ Deno.serve(async (req) => {
       else notFound.push({ host });
     }
 
-    const { data: row, error: insErr } = await service.from("lead_directory_checks").insert({
-      lead_id: leadId, user_id: userId, trade, town, status: "ok",
-      queries_run: queries, hosts_checked: hostRows, found, not_found: notFound,
-      // Bounded: the full dataset is large and this column is a diagnostic, not a store.
-      raw_results: rawItems.slice(0, 5),
-      cost_estimate_usd: costUsd,
-      checked_at: new Date().toISOString(),
-    }).select("*").single();
-    if (insErr) throw new Error(`could not store the result: ${insErr.message}`);
+    /* A PARTIAL RUN STILL STORES AS 'ok', DELIBERATELY. The fold only suppresses a task when a host
+       was FOUND, and a listing surfaced by one search is a real listing whether or not the other
+       search ran; a host that was not surfaced keeps its task regardless. Giving partial its own
+       status would empty the fold and silently re-raise work already done — worse than the caveat.
+       The caveat rides in `error` and is shown on screen above the host list. */
+    const { data: row, error: updErr } = await service.from("lead_directory_checks")
+      .update({
+        status: "ok", found, not_found: notFound,
+        raw_results: rawBlob,
+        cost_estimate_usd: costUsd,
+        error: partialNote,
+        checked_at: new Date().toISOString(),
+      })
+      .eq("id", checkId).select("*").single();
+    if (updErr) throw new Error(`could not store the result: ${updErr.message}`);
 
-    return json({ ok: true, status: "ok", check: row });
+    return json({ ok: true, status: "ok", partial, check: row });
   } catch (e) {
     /* THE REAL ERROR, NEVER A CATCH-ALL. An Apify 402 must read as the cap being reached, not as a
        generic failure — that mistake cost a day when "term too broad" masked exactly this. */
@@ -307,7 +419,13 @@ Deno.serve(async (req) => {
     else if (/\b5\d\d\b/.test(raw)) human = `Apify returned a server error — their end, not ours. (${raw})`;
 
     console.error("[check-directory-listings]", raw);
-    if (leadId && userId) {
+    /* ONE ROW PER CHECK. Once the pending row exists this UPDATES it — inserting here as well would
+       leave two rows for one click, and the newest would read as an error with no queries, no hosts
+       and no run ids on it, hiding the very thing the pending row was written to preserve.
+       The insert branch only fires for failures BEFORE any money was committed. */
+    if (checkId) {
+      await finish(checkId, { status: "error", error: human });
+    } else if (leadId && userId) {
       await service.from("lead_directory_checks").insert({
         lead_id: leadId, user_id: userId, status: "error",
         queries_run: [], hosts_checked: [], found: [], not_found: [],
