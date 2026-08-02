@@ -26,6 +26,7 @@ import NotFound from "./pages/NotFound";
 
 // Lazy loaded routes — reduces initial bundle size
 const Index = lazy(() => import("./pages/Index"));
+const MarketViewPage = lazy(() => import("./pages/MarketView"));
 const Outreach = lazy(() => import("./pages/Outreach"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Templates = lazy(() => import("./pages/Templates"));
@@ -466,6 +467,18 @@ const App = () => {
                   <RequireAdmin>
                     <AdminSiteManage />
                   </RequireAdmin>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/market"
+              element={
+                <ProtectedRoute>
+                  <SubscriptionGate>
+                    <AppLayout>
+                      <MarketViewPage />
+                    </AppLayout>
+                  </SubscriptionGate>
                 </ProtectedRoute>
               }
             />

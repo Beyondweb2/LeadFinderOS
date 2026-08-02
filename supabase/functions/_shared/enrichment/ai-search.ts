@@ -203,7 +203,7 @@ const GENERIC_NAME_TOKENS = new Set([
 /** Canonical token stream for name matching: lowercase, fold accents (café→cafe), ampersand→"and",
  *  strip punctuation/apostrophes, collapse whitespace, and canonicalise connector tokens
  *  (&/and/n all become "and"). No phonetic folding — matching stays exact per token. */
-function normalizeForMatch(s: string): string {
+export function normalizeForMatch(s: string): string {
   return norm(s)
     .normalize("NFD").replace(/\p{Diacritic}/gu, "") // fold accents so café == cafe
     .replace(/&/g, " and ")
@@ -215,7 +215,7 @@ function normalizeForMatch(s: string): string {
 
 /** Distinctive leading brand segment (normalised) — everything before the first generic
  *  descriptor. "Sinners N Saints Pool Bar and Kava Cafe" → "sinners and saints". */
-function businessCore(businessName: string): string {
+export function businessCore(businessName: string): string {
   const tokens = normalizeForMatch(businessName).split(/\s+/).filter(Boolean);
   const core: string[] = [];
   for (const t of tokens) {
@@ -241,7 +241,7 @@ function tokensContain(hay: string[], needle: string[]): boolean {
 /** Does `haystack` NAME the business? Matches the distinctive core when it's strong enough
  *  (≥2 meaningful words, OR one word ≥6 chars); else falls back to the FULL normalised name so a
  *  weak/generic core (e.g. "the") can't over-match on a fragment. */
-function nameMatches(haystack: string, businessName: string): boolean {
+export function nameMatches(haystack: string, businessName: string): boolean {
   const hay = normalizeForMatch(haystack).split(/\s+/).filter(Boolean);
   if (!hay.length) return false;
   const coreTokens = businessCore(businessName).split(/\s+/).filter(Boolean);
