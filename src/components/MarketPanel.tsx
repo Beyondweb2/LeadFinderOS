@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Loader2, MapPin, Plus, RefreshCw, Search, Sparkles, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,14 +37,26 @@ const MARKET_SEARCH_RADIUS_M = 50_000;
 /** Google Places text search, per page of ~20 results, from search-leads' own logging constant. */
 const GOOGLE_PAGE_USD = 0.032;
 
-export default function MarketViewPage() {
-  const { options, optionsLoading, view, loading, error, load, reload } = useMarketView();
+export interface MarketPanelProps {
+  /** Trade as typed on Find Leads. Normalised server-side by the same norm() the playbook uses. */
+  trade: string;
+  /** Town as typed on Find Leads. */
+  town: string;
+}
+
+/**
+ * The market view, rendered inside Find Leads as a search MODE rather than its own page.
+ * Inputs come from the page's existing niche and location boxes — there is deliberately no picker
+ * here and no restriction to trades that already have audits, because "what do I have for
+ * locksmiths in Peterborough, and what would it cost to get the rest" is the question.
+ */
+export default function MarketPanel({ trade, town }: MarketPanelProps) {
+  const { view, loading, error, load, reload } = useMarketView();
   const { usage: apifyUsage } = useApifyUsage();
   const { search, isLoading: searching, townFilterFallback } = useLeadSearchContext();
   const { addLead } = useOutreach();
   const { toast } = useToast();
 
-  const [selected, setSelected] = useState<string>('');
   const [auditCount, setAuditCount] = useState(5);
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditBusy, setAuditBusy] = useState(false);
@@ -54,14 +66,17 @@ export default function MarketViewPage() {
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
 
-  const chosen = useMemo(() => options.find((o) => `${o.trade}|||${o.town}` === selected) ?? null, [options, selected]);
-
-  const onPick = useCallback((value: string) => {
-    setSelected(value);
+  /* The market is whatever is in the two boxes. Reload whenever either changes, and clear the
+     per-row "Added" ticks with it so they can never carry across from a different town. */
+  const chosen = useMemo(
+    () => (trade.trim() && town.trim() ? { trade: trade.trim(), town: town.trim() } : null),
+    [trade, town],
+  );
+  useEffect(() => {
+    if (!chosen) return;
     setAddedKeys(new Set());
-    const [trade, town] = value.split('|||');
-    void load(trade, town);
-  }, [load]);
+    void load(chosen.trade, chosen.town);
+  }, [chosen, load]);
 
   /* ── THE LEAD SEARCH. Reuses the Find Leads context call verbatim, so it goes through the same
      search-leads function, writes the same search_history row and fills the same search_cache the
@@ -176,44 +191,30 @@ export default function MarketViewPage() {
   const tone = apifyTone(pct);
 
   return (
-    <div className="space-y-4 p-3 sm:p-6">
-      <header className="space-y-1">
-        <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <Store className="h-5 w-5" /> Market view
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          One trade in one town: how concentrated it is, who AI already names, and who it never has.
-        </p>
-      </header>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <Store className="h-4 w-4" />
+          {chosen ? <>Market: {chosen.trade} · {chosen.town}</> : <>Market view</>}
+        </h2>
+        {chosen && (
+          <Button variant="outline" size="sm" onClick={() => void reload()} disabled={loading}>
+            {loading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+            Reload
+          </Button>
+        )}
+      </div>
 
-      {/* ── PICKER. Populated from audits that exist, with the count beside each so a thin market is
-          obvious before it is opened rather than after. */}
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-3 p-3 sm:p-4">
-          <div className="min-w-[16rem] flex-1 space-y-1.5">
-            <Label className="text-xs font-medium text-foreground/80">Trade and town</Label>
-            <Select value={selected} onValueChange={onPick} disabled={optionsLoading}>
-              <SelectTrigger>
-                <SelectValue placeholder={optionsLoading ? 'Loading markets…' : options.length ? 'Pick a market' : 'No audited markets yet'} />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((o) => (
-                  <SelectItem key={`${o.trade}|||${o.town}`} value={`${o.trade}|||${o.town}`}>
-                    {o.trade} · {o.town} — {o.audits} audit{o.audits === 1 ? '' : 's'}
-                    {o.audits < EVIDENCE_MIN_AUDITS ? ' (thin)' : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {selected && (
-            <Button variant="outline" size="sm" onClick={() => void reload()} disabled={loading}>
-              {loading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
-              Reload
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+      {!chosen && (
+        <p className="text-sm text-muted-foreground">
+          Enter a trade and a town above, then press Search.
+        </p>
+      )}
+      {loading && (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading what we already have for this market…
+        </p>
+      )}
 
       {error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -221,7 +222,38 @@ export default function MarketViewPage() {
         </div>
       )}
 
-      {view && conc && (
+      {/* NO AUDITS AT ALL. A market with no data and a market with no competition must never look
+          the same, so this REPLACES the concentration card rather than rendering it full of zeros:
+          "0 businesses named, top share 0%" reads as "nobody is winning here", which is the
+          opposite of the truth. */}
+      {view && conc && conc.audits === 0 && (
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-2">
+            <CardTitle className="text-base">No audits yet for {view.trade} in {view.town}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 p-3 pt-0 sm:p-4 sm:pt-0">
+            <p className="text-sm text-muted-foreground">
+              Nothing has been measured in this market, so there is nothing to say about who AI names
+              or how concentrated it is. That is not the same as a market where AI names nobody.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {view.poolState.state === 'ready'
+                ? `${view.pool.length} local business${view.pool.length === 1 ? '' : 'es'} found and ready to audit.`
+                : 'Run the lead search first to find the local businesses, then audit them.'}
+            </p>
+            <div className="flex flex-wrap gap-2 pt-0.5">
+              <Button size="sm" onClick={() => setAuditOpen(true)} disabled={auditable.length === 0}>
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Run audits for this town
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setSearchOpen(true)} disabled={searching}>
+                <Search className="mr-1.5 h-3.5 w-3.5" /> {view.poolState.state === 'ready' ? 'Re-run the lead search' : 'Run the lead search'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {view && conc && conc.audits > 0 && (
         <>
           {/* ── 1. CONCENTRATION ─────────────────────────────────────────────────────────── */}
           <Card>
