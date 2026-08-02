@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { QuickLocationsList } from '@/components/QuickLocationsList';
 import { QuickBusinessTypes } from '@/components/QuickBusinessTypes';
@@ -47,6 +48,9 @@ export function SearchForm({
   const [location, setLocation] = usePersistedState('find-leads-location', '', persist);
   const [radius, setRadius] = usePersistedState('find-leads-radius', initialRadius ?? 50, persist);
   const [selectedCountry, setSelectedCountry] = usePersistedState<Country>('find-leads-country', 'UK' as Country, persist);
+  // Persisted exactly like radius — same tier, same per-user scope — so the mode survives a
+  // reload instead of quietly reverting to a radius search between sessions.
+  const [townOnly, setTownOnly] = usePersistedState('find-leads-town-only', false, persist);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,8 +59,11 @@ export function SearchForm({
     onSearch({
       keyword: keyword.trim(),
       location: location.trim(),
+      // Still sent when townOnly is on: the server ignores it for the search itself but uses it
+      // for the cache key and for the fallback message if the town has no boundary.
       radius: radius * 1000,
       country: selectedCountry,
+      townOnly,
     });
   };
 
@@ -106,20 +113,44 @@ export function SearchForm({
             </div>
 
             <div className="space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-1">
-              <Label className="text-xs font-medium text-foreground/80">
+              <Label className={`text-xs font-medium ${townOnly ? 'text-muted-foreground/50' : 'text-foreground/80'}`}>
                 Radius: {radius} km
               </Label>
               <div className="relative flex items-center gap-2 sm:gap-3 pt-0.5">
-                <Radius className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+                <Radius className={`h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 ${townOnly ? 'text-muted-foreground/40' : 'text-muted-foreground'}`} />
                 <Slider
                   value={[radius]}
                   onValueChange={(value) => setRadius(value[0])}
                   min={1}
                   max={50}
                   step={1}
+                  disabled={townOnly}
                   className="flex-1"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* THIS TOWN ONLY. A separate mode, not a smaller radius: the radius is a soft hint to
+              Google and it returns neighbouring towns whatever it is set to. This sends the town's
+              own boundary as a hard restriction instead, which is why the slider is disabled and
+              says so rather than sitting there looking like it still applies. */}
+          <div className="flex items-start gap-2.5 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+            <Switch
+              id="town-only"
+              checked={townOnly}
+              onCheckedChange={setTownOnly}
+              className="mt-0.5"
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor="town-only" className="text-xs font-medium text-foreground/90 cursor-pointer">
+                This town only
+              </Label>
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                {townOnly
+                  ? 'Searching inside the town boundary only — the radius slider is ignored, and the extra sweep for no-website leads is skipped.'
+                  : 'Off: the radius is a hint, so Google can return nearby towns too.'}
+              </p>
             </div>
           </div>
 

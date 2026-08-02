@@ -42,6 +42,10 @@ interface LeadSearchContextType {
   gated: boolean;
   regionMeta: RegionMeta | null;
   regionDowngraded: { reason: string; spentUsd: number } | null;
+  /** Set ONLY when "this town only" was asked for and the server could not apply it (no geocoded
+   *  boundary). Carries the server's reason. Null the rest of the time — including when the
+   *  filter worked, because there is nothing to warn about then. */
+  townFilterFallback: { reason: string } | null;
 }
 
 const LeadSearchContext = createContext<LeadSearchContextType | null>(null);
@@ -66,6 +70,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   // Region tiling: the grid the last region search used + a downgrade notice.
   const [regionMeta, setRegionMeta] = useState<RegionMeta | null>(null);
   const [regionDowngraded, setRegionDowngraded] = useState<{ reason: string; spentUsd: number } | null>(null);
+  const [townFilterFallback, setTownFilterFallback] = useState<{ reason: string } | null>(null);
   // Manual website-status overrides, keyed by normalized googleMapsUrl. Applied
   // over auto-detected results so a hand-correction always wins, even after a
   // re-search of the same query.
@@ -280,6 +285,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     setFreeSearchExhausted(false);
     setSearchError(null);
     setSearchNotice(null);
+    setTownFilterFallback(null);
     setExpanded(false);
     setRegionMeta(null);
     setRegionDowngraded(null);
@@ -437,6 +443,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
             setExpanded(false);
             setRegionMeta(null);
             setRegionDowngraded(null);
+            setTownFilterFallback(null);
             setIsLoading(false);
             return;
           }
@@ -458,6 +465,13 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           setExpanded(!!data.expanded);
           setRegionMeta(data.region ?? null);
           setRegionDowngraded(data.downgraded ?? null);
+          /* applied === false is the ONLY case that warns. Absent (normal search) and applied
+             true (it worked) both clear it, so a stale warning cannot survive the next search. */
+          setTownFilterFallback(
+            data.townFilter && data.townFilter.applied === false
+              ? { reason: data.townFilter.reason ?? 'The town boundary could not be resolved, so the radius was used instead.' }
+              : null,
+          );
           setGated(!!data.gated);
 
           // Persist gated flag so it survives refresh
@@ -605,7 +619,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     gated,
     regionMeta,
     regionDowngraded,
-  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded]);
+    townFilterFallback,
+  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>

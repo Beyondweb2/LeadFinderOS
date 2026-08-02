@@ -52,6 +52,14 @@ const SearchRequestSchema = z.object({
   // centres, merge + dedupe, no-website-first. Separate from broad/curated.
   region: z.boolean().default(false),
   density: z.enum(['fine', 'medium', 'coarse']).default('medium'),
+  // "This town only": swap the SOFT locationBias circle for a HARD
+  // locationRestriction rectangle built from the geocoded town's own bounds.
+  // WHY IT IS A SEPARATE MODE AND NOT A SMALLER RADIUS: locationBias is a hint —
+  // Google returns results outside the circle whatever the radius, which is how a
+  // Huntingdon locksmith came back from a Wisbech search. Dragging the slider to
+  // 1km narrows the hint; it does not exclude a neighbouring town.
+  // Default false, so every existing call is byte-identical to before.
+  townOnly: z.boolean().default(false),
   // Legacy fields — accepted but ignored
   minRating: z.number().optional(),
   minReviews: z.number().optional(),
@@ -161,9 +169,14 @@ function normalizeKeyword(kw: string): string {
   return w;
 }
 
-async function generateCacheKey(keyword: string, location: string, radius: number): Promise<string> {
+/* townOnly is PART OF THE CACHE IDENTITY. Without it a "this town only" search and a radius
+   search with the same keyword + location + radius hash to the same key and serve each other's
+   results out of search_cache — the town-filtered run would silently hand back out-of-town leads,
+   which is the exact failure the mode exists to prevent. Appended ONLY when true, so every
+   existing radius search keeps its current key and its warm cache. */
+async function generateCacheKey(keyword: string, location: string, radius: number, townOnly = false): Promise<string> {
   const normKeyword = normalizeKeyword(keyword);
-  const input = `v4-norm|${normKeyword}|${location.toLowerCase().trim()}|${radius}`;
+  const input = `v4-norm|${normKeyword}|${location.toLowerCase().trim()}|${radius}${townOnly ? '|townonly' : ''}`;
   const data = new TextEncoder().encode(input);
   const hash = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -235,6 +248,11 @@ function extractViewport(geometry: any): Viewport | null {
 }
 
 type GeoHit = { lat: number; lng: number; viewport: Viewport | null };
+
+/** Echoed to the client whenever townOnly was REQUESTED, so the SPA can tell the difference
+ *  between "the hard boundary was used" and "we fell back to the radius". Absent entirely on a
+ *  normal search. `applied: false` must always carry a human-readable `reason`. */
+interface TownFilterResult { requested: true; applied: boolean; reason?: string }
 
 async function geocodeLocation(
   location: string,
@@ -399,6 +417,10 @@ async function textSearchPlaces(
   apiKey: string,
   debug: DebugMeta,
   broad = false,
+  /** "This town only": the geocoded town's own bounds. When present the request sends a HARD
+   *  locationRestriction rectangle instead of the soft locationBias circle, and `radius` is
+   *  ignored. Null (the default, and every existing caller) leaves the bias path untouched. */
+  townViewport: Viewport | null = null,
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug }> {
   const pool: SearchLead[] = [];
   const seenIds = new Set<string>();
@@ -416,6 +438,10 @@ async function textSearchPlaces(
   console.log(`[DIAG-SEARCH] Field mask: ${FIELD_MASK}`);
   console.log(`[DIAG-SEARCH] API key present: ${!!apiKey}`);
   console.log(`[DIAG-SEARCH] Radius requested: ${radius}, clamped: ${clampedRadius}`);
+  if (townViewport) {
+    console.log(`[DIAG-SEARCH] TOWN-ONLY: hard locationRestriction rectangle `
+      + `[${townViewport.latMin},${townViewport.lngMin}]..[${townViewport.latMax},${townViewport.lngMax}] — radius IGNORED`);
+  }
 
   for (let page = 0; page < MAX_PAGES; page++) {
     // Hard cap on total text search calls across initial + expansion
@@ -429,14 +455,30 @@ async function textSearchPlaces(
       break;
     }
 
+    /* ONE BRANCH. locationRestriction is a HARD boundary Google enforces; locationBias is a hint
+       it may ignore. Text Search takes a restriction as a RECTANGLE only (no circle form), which
+       is exactly the shape extractViewport already produces and geocode_cache already stores —
+       low = southwest, high = northeast. The radius is not sent in this mode: the town's own
+       bounds ARE the extent, and passing both would be two answers to one question. */
     const requestBody: Record<string, unknown> = {
       textQuery: keyword,
-      locationBias: {
-        circle: {
-          center: { latitude: lat, longitude: lng },
-          radius: clampedRadius,
-        },
-      },
+      ...(townViewport
+        ? {
+          locationRestriction: {
+            rectangle: {
+              low: { latitude: townViewport.latMin, longitude: townViewport.lngMin },
+              high: { latitude: townViewport.latMax, longitude: townViewport.lngMax },
+            },
+          },
+        }
+        : {
+          locationBias: {
+            circle: {
+              center: { latitude: lat, longitude: lng },
+              radius: clampedRadius,
+            },
+          },
+        }),
       pageSize: 20,
     };
     if (pageToken) requestBody.pageToken = pageToken;
@@ -720,19 +762,45 @@ async function performSearchGoogle(
   serviceClient?: ReturnType<typeof createClient>,
   broad = false,
   country?: string,
-): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
-  const { lat, lng } = await geocodeLocation(location, apiKey, debug, serviceClient, false, country);
-  const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, apiKey, debug, broad);
+  townOnly = false,
+): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean; townFilter?: TownFilterResult }> {
+  /* needViewport = townOnly. Same flag, same extraction, same geocode_cache.viewport column that
+     region mode already uses — no second geocode path. */
+  const geo = await geocodeLocation(location, apiKey, debug, serviceClient, townOnly, country);
+  const { lat, lng } = geo;
+
+  /* THE FALLBACK IS REPORTED, NEVER SILENT. Some locations geocode to a point with no bounds and
+     no viewport (extractViewport returns null). We could refuse, but an empty result for a real
+     town is worse than a wider one — so we run today's bias search and SAY the filter did not
+     apply. A filter that quietly did nothing is worse than no filter at all. */
+  const townViewport = townOnly ? geo.viewport : null;
+  const townFilter: TownFilterResult | undefined = townOnly
+    ? (townViewport
+      ? { requested: true, applied: true }
+      : { requested: true, applied: false, reason: `Google returned no boundary for "${location}", so this search used the ${Math.round(radius / 1000)}km radius instead.` })
+    : undefined;
+  if (townOnly && !townViewport) {
+    console.warn(`[TOWN-ONLY] no viewport/bounds for "${location}" — FALLING BACK to locationBias radius ${radius}m`);
+  }
+
+  const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, apiKey, debug, broad, townViewport);
+
+  /* Town-only never expands. expandSearch generates centres AROUND the original point and
+     searches them for more no-website leads — it would reach straight back out of the town and
+     undo the restriction. Same treatment, and the same shape, as broad below. */
+  if (townViewport) {
+    return { leads, selectionDebug, expanded: false, townFilter };
+  }
 
   // List-builder mode casts wide — never expand (expansion chases no-website leads).
   if (broad) {
-    return { leads, selectionDebug, expanded: false };
+    return { leads, selectionDebug, expanded: false, townFilter };
   }
 
   const noWebCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
 
   if (noWebCount >= MIN_NO_WEBSITE_TARGET) {
-    return { leads, selectionDebug, expanded: false };
+    return { leads, selectionDebug, expanded: false, townFilter };
   }
 
   // Expansion needed
@@ -755,12 +823,12 @@ async function performSearchGoogle(
       expanded: true,
     };
 
-    return { leads: merged, selectionDebug: updatedDebug, expanded: true };
+    return { leads: merged, selectionDebug: updatedDebug, expanded: true, townFilter };
   }
 
   selectionDebug.expansionAttempts = attempts;
   selectionDebug.expanded = true;
-  return { leads, selectionDebug, expanded: true };
+  return { leads, selectionDebug, expanded: true, townFilter };
 }
 
 // ═══════════════════════════════════════════════
@@ -1043,14 +1111,20 @@ async function performSearchWithExpansion(
   serviceClient?: ReturnType<typeof createClient>,
   broad = false,
   country?: string,
-): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
+  townOnly = false,
+): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean; townFilter?: TownFilterResult }> {
   const apifyToken = Deno.env.get('APIFY_TOKEN');
   // DISCOVERY default = Google (fast: ~3s cold, instant cached). Apify discovery
   // is OPT-IN only (DISCOVERY_SOURCE=apify) because the actor has a ~20s run floor
   // — too slow for interactive search. Apify's value is the deep-enrich
   // (reviews/images/contacts) in generate-barber-site, where latency is tolerable.
   const useApifyDiscovery = (Deno.env.get('DISCOVERY_SOURCE') ?? '').toLowerCase() === 'apify';
-  if (apifyToken && useApifyDiscovery) {
+  /* !townOnly: the Apify discovery actor takes a free-text query, not a bounding box, so it
+     CANNOT honour a hard boundary. If DISCOVERY_SOURCE=apify were ever switched on, routing a
+     town-only search through it would return out-of-town results while the UI said the filter was
+     on — silently. Town-only therefore always takes the Google path. Discovery defaults to Google
+     anyway, so this changes nothing today; it stops the mode lying if that env is ever flipped. */
+  if (apifyToken && useApifyDiscovery && !townOnly) {
     try {
       return await performSearchApify(keyword, location, apifyToken, broad);
     } catch (e) {
@@ -1058,7 +1132,7 @@ async function performSearchWithExpansion(
       // fall through to Google below
     }
   }
-  return await performSearchGoogle(keyword, location, radius, apiKey, debug, serviceClient, broad, country);
+  return await performSearchGoogle(keyword, location, radius, apiKey, debug, serviceClient, broad, country, townOnly);
 }
 
 // ═══════════════════════════════════════════════
@@ -1182,7 +1256,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Invalid search parameters. Please check your input.', _debug: debug }, 400);
     }
 
-    const { keyword, location, radius, broad, region, density, country } = validationResult.data;
+    const { keyword, location, radius, broad, region, density, country, townOnly } = validationResult.data;
 
     if (!GOOGLE_MAPS_API_KEY) {
       console.error('GOOGLE_MAPS_API_KEY not configured');
@@ -1194,7 +1268,7 @@ Deno.serve(async (req) => {
     // so they never collide with normal/curated results for the same area.
     const cacheKey = region
       ? await generateCacheKey(keyword, `##region:${density}##${location}`, radius)
-      : await generateCacheKey(keyword, location, radius);
+      : await generateCacheKey(keyword, location, radius, townOnly);
     const cutoff = new Date(Date.now() - CACHE_TTL_MS).toISOString();
 
     const { data: cached } = await serviceClient
@@ -1231,6 +1305,10 @@ Deno.serve(async (req) => {
         cached: true,
         expanded: hasExpanded,
         region: cachedRegion,
+        /* Safe to assert applied:true here. Fallback runs are never cached (see CACHE STORE), and
+           the '|townonly' key suffix means these results can only have come from a restricted
+           run — so a hit on this key is by construction a filtered result. */
+        townFilter: townOnly ? { requested: true, applied: true } as TownFilterResult : undefined,
         gated: isGated,
         _debug: debug,
       });
@@ -1242,6 +1320,7 @@ Deno.serve(async (req) => {
     let expanded = false;
     let regionMeta: RegionMeta | undefined;
     let downgraded: { reason: string; spentUsd: number } | undefined;
+    let townFilter: TownFilterResult | undefined;
 
     // Region daily budget guard: if today's Google spend is over the cap, downgrade
     // region → a normal single-centre search so a big region can't blow the budget.
@@ -1272,18 +1351,28 @@ Deno.serve(async (req) => {
       console.log(`[DIAG-HANDLER] Region: ${leads.length} leads from ${regionMeta.tilesSucceeded}/${regionMeta.tilesTotal} tiles`);
     } else {
       console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
-      const res = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient, broad, country);
-      leads = res.leads; selectionDebug = res.selectionDebug; expanded = res.expanded;
+      const res = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient, broad, country, townOnly);
+      leads = res.leads; selectionDebug = res.selectionDebug; expanded = res.expanded; townFilter = res.townFilter;
       console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb, expanded: ${expanded})`);
     }
 
     // ─── CACHE STORE ─────────────────────────────
     // Region: store { leads, region } so a cached re-run keeps the grid banner.
+    /* A town-only run that FELL BACK to the radius is not cached. The cache blob carries no
+       townFilter, so a later hit on the '|townonly' key would replay those wider results with no
+       warning attached — the fallback would be announced once and then quietly forgotten. Cheaper
+       to re-run the search than to serve an unlabelled one. */
+    const skipCacheStore = townFilter?.applied === false;
+    if (skipCacheStore) {
+      console.warn('[TOWN-ONLY] fallback result NOT cached — a cached copy would lose the "filter did not apply" warning');
+    }
     try {
-      await serviceClient.from('search_cache').upsert(
-        { cache_key: cacheKey, results: regionMeta ? { leads, region: regionMeta } : leads, created_at: new Date().toISOString() },
-        { onConflict: 'cache_key' }
-      );
+      if (!skipCacheStore) {
+        await serviceClient.from('search_cache').upsert(
+          { cache_key: cacheKey, results: regionMeta ? { leads, region: regionMeta } : leads, created_at: new Date().toISOString() },
+          { onConflict: 'cache_key' }
+        );
+      }
     } catch (cacheErr) {
       console.error('Cache store failed (non-blocking):', cacheErr);
     }
@@ -1343,6 +1432,7 @@ Deno.serve(async (req) => {
       expanded,
       region: regionMeta,
       downgraded,
+      townFilter,
       gated: isGated,
       _debug: { ...debug, ...selectionDebug },
     });

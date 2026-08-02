@@ -22,7 +22,7 @@ import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTeamClaims } from '@/hooks/useTeamClaims';
-import { Flame, Zap, Search, MapPin, Info, Globe2 } from 'lucide-react';
+import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Country, Lead } from '@/types/lead';
@@ -31,7 +31,7 @@ const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 const ASK_CAMPAIGN_KEY = 'lf_ask_campaign_each_time';
 
 const Index = () => {
-  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded } = useLeadSearchContext();
+  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded, townFilterFallback } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach, leads: crmLeads, removeFreshLead, refetch: refetchCrm } = useOutreach();
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
@@ -380,6 +380,19 @@ const Index = () => {
           isPaidSubscriber={true}
         />
       </section>
+
+      {/* "THIS TOWN ONLY" ASKED FOR, NOT APPLIED. A persistent banner, deliberately NOT a toast:
+          the results below it are wider than the toggle claims, and that has to stay readable for
+          as long as they are on screen rather than fading after four seconds. */}
+      {townFilterFallback && !isLoading && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-500" />
+          <p className="text-xs leading-snug text-amber-700 dark:text-amber-400">
+            <span className="font-semibold">&ldquo;This town only&rdquo; did not apply.</span>{' '}
+            {townFilterFallback.reason} Results below may include nearby towns.
+          </p>
+        </div>
+      )}
 
       {/* Handled notice (location not found / map lookup unavailable) — a calm
           empty-state with a retry, NOT the destructive "Search failed" card. */}

@@ -34,6 +34,11 @@ export interface SearchFilters {
   /** Region tiling mode (radius slider past 50km) → tile a bbox of centre ± radius,
    *  merge + dedupe. Density defaults server-side (medium 8km, auto-coarsened). */
   region?: boolean;
+  /** "This town only" → the server swaps the soft locationBias circle for a HARD
+   *  locationRestriction rectangle built from the town's geocoded bounds. The radius
+   *  is IGNORED in this mode, and the no-website expansion sweep is skipped (it would
+   *  search outside the town). Absent/false = today's radius behaviour, unchanged. */
+  townOnly?: boolean;
 }
 
 /** Grid the region search actually used (echoed back for the results banner). */
@@ -62,6 +67,10 @@ export interface SearchResponse {
   region?: RegionMeta;
   /** Present when region mode was downgraded to a single search (daily budget). */
   downgraded?: { reason: string; spentUsd: number };
+  /** Present ONLY when townOnly was requested. `applied: false` means the town had no
+   *  geocoded boundary and the search silently widened to the radius — it always carries
+   *  a `reason`, and it must be shown, not swallowed. */
+  townFilter?: { requested: true; applied: boolean; reason?: string };
   /** Handled "couldn't resolve that location" — empty leads + a friendly notice
    *  (a clean 2xx, not an error). */
   notFound?: boolean;
