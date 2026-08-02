@@ -112,12 +112,28 @@ export function SearchForm({
               }} />
             </div>
 
+            {/* HOW WIDE TO SEARCH — one control group. The radius and the town boundary answer the
+                same question, so they share a cell. As its own bordered block below the grid the
+                toggle read as an unrelated setting. */}
             <div className="space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-1">
-              <Label className={`text-xs font-medium ${townOnly ? 'text-muted-foreground/50' : 'text-foreground/80'}`}>
-                Radius: {radius} km
-              </Label>
-              <div className="relative flex items-center gap-2 sm:gap-3 pt-0.5">
-                <Radius className={`h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 ${townOnly ? 'text-muted-foreground/40' : 'text-muted-foreground'}`} />
+              <div className="flex items-center justify-between gap-3">
+                <Label className={`whitespace-nowrap text-xs font-medium transition-colors ${townOnly ? 'text-muted-foreground/50' : 'text-foreground/80'}`}>
+                  Radius: {radius} km
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="town-only" className="cursor-pointer whitespace-nowrap text-xs font-medium text-foreground/80">
+                    This town only
+                  </Label>
+                  <Switch id="town-only" checked={townOnly} onCheckedChange={setTownOnly} />
+                </div>
+              </div>
+              {/* Dimmed as ONE unit — icon, track and thumb together — so "off" reads as deliberate
+                  rather than broken. The shared Slider's own `disabled:opacity-50` sits on the thumb
+                  and never fires: Radix sets data-disabled, not the HTML disabled attribute, so
+                  without this the control looks live while ignoring every drag. `disabled` stays for
+                  the real a11y/interaction state; the opacity is only what makes it legible. */}
+              <div className={`relative flex items-center gap-2 sm:gap-3 pt-0.5 transition-opacity ${townOnly ? 'opacity-40' : ''}`}>
+                <Radius className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 text-muted-foreground" />
                 <Slider
                   value={[radius]}
                   onValueChange={(value) => setRadius(value[0])}
@@ -128,29 +144,6 @@ export function SearchForm({
                   className="flex-1"
                 />
               </div>
-            </div>
-          </div>
-
-          {/* THIS TOWN ONLY. A separate mode, not a smaller radius: the radius is a soft hint to
-              Google and it returns neighbouring towns whatever it is set to. This sends the town's
-              own boundary as a hard restriction instead, which is why the slider is disabled and
-              says so rather than sitting there looking like it still applies. */}
-          <div className="flex items-start gap-2.5 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
-            <Switch
-              id="town-only"
-              checked={townOnly}
-              onCheckedChange={setTownOnly}
-              className="mt-0.5"
-            />
-            <div className="space-y-0.5">
-              <Label htmlFor="town-only" className="text-xs font-medium text-foreground/90 cursor-pointer">
-                This town only
-              </Label>
-              <p className="text-[11px] leading-snug text-muted-foreground">
-                {townOnly
-                  ? 'Searching inside the town boundary only — the radius slider is ignored, and the extra sweep for no-website leads is skipped.'
-                  : 'Off: the radius is a hint, so Google can return nearby towns too.'}
-              </p>
             </div>
           </div>
 
