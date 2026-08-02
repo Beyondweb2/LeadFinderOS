@@ -1,10 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { norm } from "../../../src/lib/buildPlaybook.ts";
-import { businessCore, normalizeForMatch } from "../_shared/enrichment/ai-search.ts";
+import { buildMatchContext, groupNames, keyIndex } from "../_shared/market-match.ts";
 import { generateCacheKey } from "../_shared/search-cache-key.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
-  type MarketConcentration, type MarketNamedRow, type MarketPoolRow, type MarketPoolState,
+  type MarketConcentration, type MarketNamedRow, type MarketPoolExcluded,
+  type MarketPoolRow, type MarketPoolState,
 } from "../../../src/lib/marketView.ts";
 
 /* ============================================================
@@ -43,23 +44,24 @@ const POOL_TTL_MS = 72 * 60 * 60 * 1000;
 const townKey = (t: string | null | undefined) =>
   (t ?? "").toLowerCase().replace(/\b(uk|england|scotland|wales|united kingdom)\b/g, "").replace(/[^a-z]/g, "");
 
-/** Display name for a merged group: the SHORTEST original spelling, which is almost always the
- *  cleanest ("advance plumbing" beats "emergency plumber only advance plumbing"). Ties break
- *  alphabetically so the answer is stable between runs. */
-function pickDisplayName(variants: string[]): string {
-  return [...variants].sort((a, b) => a.length - b.length || a.localeCompare(b))[0] ?? "";
+/** Label for a merged group.
+ *  Prefer a spelling WITHOUT brackets, then the most-mentioned, then the shortest.
+ *  Not simply "the shortest": that picked "Rapid Secure UK" as the label for a 38-mention Rapid
+ *  Locksmiths group, and "Wisbech Locksmiths (Rapid Locksmiths)" once brackets were in play. The
+ *  label should be what this firm usually gets CALLED, which is the modal spelling. */
+function pickDisplayName(counts: Map<string, number>): string {
+  const all = [...counts.entries()];
+  if (all.length === 0) return "";
+  const plain = all.filter(([n]) => !n.includes("("));
+  const pool = plain.length ? plain : all;
+  return pool.sort((a, b) => b[1] - a[1] || a[0].length - b[0].length || a[0].localeCompare(b[0]))[0][0];
 }
 
-/** The merge key for "is this the same firm?".
- *  businessCore strips the generic tail ("Ltd", "Plumbing", "Services") and leaves the distinctive
- *  brand segment, with punctuation, accents, "&"/"and" and runs of whitespace all canonicalised —
- *  so "r foster plumbing and heating" and "r  foster plumbing   heating" collapse, and so does
- *  "Swell Clean Ltd" with "Swell Clean". Falls back to the fully normalised name when the core is
- *  empty (a name that is ALL generic words, e.g. "Plumbing Services"), because an empty key would
- *  merge every such firm into one. */
-function mergeKey(name: string): string {
-  const core = businessCore(name).trim();
-  return core || normalizeForMatch(name).trim();
+/** Same rule for a list with no mention counts (the lead pool, where each row appears once). */
+function pickDisplayNameFromList(names: string[]): string {
+  const counts = new Map<string, number>();
+  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);
+  return pickDisplayName(counts);
 }
 
 // deno-lint-ignore no-explicit-any
@@ -162,15 +164,12 @@ Deno.serve(async (req) => {
     const auditOfRun = new Map(completeRuns.map((r) => [r.id, r.audit_id]));
     const runIds = completeRuns.map((r) => r.id);
 
-    /* ── 2. THE COMPETITOR FOLD ────────────────────────────────────────────────────────────── */
+    /* -- 2. RAW COMPETITOR MENTIONS ------------------------------------------------------- */
     const queue = runIds.length
       ? await all<QueueRow>(service, "ai_audit_queue", "id, run_id, result", (q) => q.in("run_id", runIds))
       : [];
 
-    // key -> { variants, mentions, audits:Set }. AUDITS is the honest signal: 32 mentions from one
-    // audit is one opinion, not a market position (the same trap playbook-evidence guards).
-    const fold = new Map<string, { variants: Set<string>; mentions: number; audits: Set<string> }>();
-    let rawNameCount = 0;
+    const mentions: { auditId: string; name: string }[] = [];
     let engineBlocks = 0;
     let truncatedBlocks = 0;
 
@@ -187,41 +186,100 @@ Deno.serve(async (req) => {
         if (!Array.isArray(list)) continue;
         engineBlocks += 1;
         // MAX_PER_ENGINE caps extract-competitors at 8 per engine, so a block sitting exactly on
-        // the cap was probably cut short — the fragmented markets are the ones that hit it.
+        // the cap was probably cut short - the fragmented markets are the ones that hit it.
         if (list.length >= MAX_PER_ENGINE_CAP) truncatedBlocks += 1;
         for (const raw of list) {
           const name = typeof raw === "string" ? raw.trim() : "";
-          if (!name) continue;
-          rawNameCount += 1;
-          const k = mergeKey(name);
-          if (!k) continue;
-          const hit = fold.get(k) ?? { variants: new Set<string>(), mentions: 0, audits: new Set<string>() };
-          hit.variants.add(name);
-          hit.mentions += 1;
-          hit.audits.add(auditId);
-          fold.set(k, hit);
+          if (name) mentions.push({ auditId, name });
         }
       }
+    }
+
+    /* -- 3. THE LEAD POOL, FROM CACHE ONLY -------------------------------------------------- */
+    /* Fetched BEFORE the grouping, because the grouping has to see both sides at once. Three
+       states, and they must read differently on screen: an empty prospect list and a search that
+       was never run are completely different facts about a market. */
+    let poolState: MarketPoolState = { state: "never_searched" };
+    let pool: CachedLead[] = [];
+
+    /* Which keyword was actually SEARCHED for this trade? It cannot be assumed to equal the trade:
+       norm() maps "plumbers" to "plumber" but leaves "locksmiths" alone, while the cache key
+       singularises everything. So the real keyword is resolved from history rather than guessed. */
+    const history = await all<HistoryRow>(service, "search_history", "id, keyword, location, radius, searched_at",
+      (q) => q.eq("user_id", userId));
+    const matching = history
+      .filter((h) => norm(h.keyword) === trade && townKey(h.location) === tk)
+      .sort((a, b) => (b.searched_at ?? "").localeCompare(a.searched_at ?? ""));
+
+    if (matching.length > 0) {
+      const last = matching[0];
+      const cutoff = new Date(Date.now() - POOL_TTL_MS).toISOString();
+      /* townOnly FIRST. The market view's own search button runs townOnly, and that is the pool
+         this view wants - a radius pool includes neighbouring towns the audits never covered,
+         which would put businesses in the prospect list that were never in the market being
+         measured. The plain key is only a fallback, and it is reported as such. */
+      for (const [tOnly, kind] of [[true, "town"], [false, "radius"]] as const) {
+        const key = await generateCacheKey(last.keyword, last.location, last.radius, tOnly);
+        const { data: hit } = await service.from("search_cache")
+          .select("results, created_at").eq("cache_key", key).gte("created_at", cutoff).maybeSingle();
+        if (!hit?.results) continue;
+        const rawRes = hit.results as unknown;
+        const isRegionBlob = !!rawRes && !Array.isArray(rawRes) && Array.isArray((rawRes as { leads?: unknown }).leads);
+        pool = (isRegionBlob ? (rawRes as { leads: CachedLead[] }).leads : rawRes) as CachedLead[];
+        poolState = {
+          state: "ready", scope: kind, keyword: last.keyword, radiusM: last.radius,
+          searchedAt: String(hit.created_at), total: pool.length,
+        };
+        break;
+      }
+      if (poolState.state === "never_searched") {
+        poolState = { state: "expired", keyword: last.keyword, searchedAt: last.searched_at, ttlHours: POOL_TTL_MS / 3_600_000 };
+      }
+    }
+
+    /* -- 4. ONE GROUPING PASS OVER BOTH SIDES ----------------------------------------------- */
+    /* THE FIX. Previously the named list merged on businessCore and the pool subtracted using the
+       same key computed separately - so "Anglia Locksmiths" led the named list on 86 mentions
+       while "Anglia Locksmiths (MLA Approved Company)" sat in the prospect list, telling the
+       operator to cold-contact the market leader. Grouping both sides in ONE pass makes that
+       disagreement structurally impossible: the pool asks the same index the named list was
+       built from. */
+    const ctx = buildMatchContext(trade, town);
+    const poolNames = pool.map((p) => (p?.name ?? "").trim()).filter(Boolean);
+    const groups = groupNames([...mentions.map((m) => m.name), ...poolNames], ctx);
+    const idx = keyIndex(groups);
+
+    // key -> the fold. AUDITS is the honest signal: 32 mentions from one audit is one opinion, not
+    // a market position (the same trap playbook-evidence guards).
+    const fold = new Map<string, { counts: Map<string, number>; mentions: number; audits: Set<string> }>();
+    for (const m of mentions) {
+      const k = idx.get(m.name);
+      if (!k) continue;
+      const hit = fold.get(k) ?? { counts: new Map<string, number>(), mentions: 0, audits: new Set<string>() };
+      hit.counts.set(m.name, (hit.counts.get(m.name) ?? 0) + 1);
+      hit.mentions += 1;
+      hit.audits.add(m.auditId);
+      fold.set(k, hit);
     }
 
     const named: MarketNamedRow[] = [...fold.entries()]
       .map(([key, v]) => ({
         key,
-        name: pickDisplayName([...v.variants]),
-        variants: [...v.variants].sort(),
+        name: pickDisplayName(v.counts),
+        variants: [...v.counts.keys()].sort(),
         mentions: v.mentions,
         audits: v.audits.size,
       }))
       .sort((a, b) => b.audits - a.audits || b.mentions - a.mentions || a.name.localeCompare(b.name));
 
-    /* ── 3. CONCENTRATION ──────────────────────────────────────────────────────────────────── */
+    /* -- 5. CONCENTRATION -------------------------------------------------------------------- */
     const totalMentions = named.reduce((s, n) => s + n.mentions, 0);
     const byMentions = [...named].sort((a, b) => b.mentions - a.mentions);
     const share = (n: number) => (totalMentions > 0 ? Math.round((n / totalMentions) * 1000) / 10 : 0);
     /* JUNK DETECTION, not a quality score. extract-competitors cleans these with an LLM but never
-       ran on the older audits, so those carry raw regex output — Wisbech accountants folds to
-       thousands of "names" topped by "hmrc". Measured: clean markets sit at 4–9 distinct names per
-       audit, junk ones at 30–970. Reported as a suspicion with the ratio attached, never as a
+       ran on the older audits, so those carry raw regex output - Wisbech accountants folds to
+       thousands of "names" topped by "hmrc". Measured: clean markets sit at 4-9 distinct names per
+       audit, junk ones at 30-970. Reported as a suspicion with the ratio attached, never as a
        verdict, and never auto-corrected: re-extraction costs an LLM call per run. */
     const distinctPerAudit = auditIds.length > 0
       ? Math.round((named.length / auditIds.length) * 10) / 10
@@ -242,57 +300,15 @@ Deno.serve(async (req) => {
       runIds,
     };
 
-    /* ── 4. THE LEAD POOL, FROM CACHE ONLY ─────────────────────────────────────────────────── */
-    /* Three states, and they must read differently on screen. An empty never-named list and a
-       search that was never run are completely different facts about a market. */
-    let poolState: MarketPoolState = { state: "never_searched" };
-    let pool: CachedLead[] = [];
-
-    /* Which keyword was actually SEARCHED for this trade? It cannot be assumed to equal the trade:
-       norm() maps "plumbers" to "plumber" but leaves "locksmiths" alone, while the cache key
-       singularises everything. So the real keyword is resolved from history rather than guessed. */
-    const history = await all<HistoryRow>(service, "search_history", "id, keyword, location, radius, searched_at",
-      (q) => q.eq("user_id", userId));
-    const matching = history
-      .filter((h) => norm(h.keyword) === trade && townKey(h.location) === tk)
-      .sort((a, b) => (b.searched_at ?? "").localeCompare(a.searched_at ?? ""));
-
-    if (matching.length > 0) {
-      const last = matching[0];
-      const cutoff = new Date(Date.now() - POOL_TTL_MS).toISOString();
-      /* townOnly FIRST. The market view's own search button runs townOnly, and that is the pool
-         this view wants — a radius pool includes neighbouring towns and would make the never-named
-         list wrong by including businesses the audits never covered. The plain key is only a
-         fallback for a pool searched from the Find Leads page with the toggle off, and it is
-         reported as such rather than silently treated as a town pool. */
-      for (const [tOnly, kind] of [[true, "town"], [false, "radius"]] as const) {
-        const key = await generateCacheKey(last.keyword, last.location, last.radius, tOnly);
-        const { data: hit } = await service.from("search_cache")
-          .select("results, created_at").eq("cache_key", key).gte("created_at", cutoff).maybeSingle();
-        if (!hit?.results) continue;
-        const rawRes = hit.results as unknown;
-        const isRegionBlob = !!rawRes && !Array.isArray(rawRes) && Array.isArray((rawRes as { leads?: unknown }).leads);
-        pool = (isRegionBlob ? (rawRes as { leads: CachedLead[] }).leads : rawRes) as CachedLead[];
-        poolState = {
-          state: "ready", scope: kind, keyword: last.keyword, radiusM: last.radius,
-          searchedAt: String(hit.created_at), total: pool.length,
-        };
-        break;
-      }
-      if (poolState.state === "never_searched") {
-        poolState = { state: "expired", keyword: last.keyword, searchedAt: last.searched_at, ttlHours: POOL_TTL_MS / 3_600_000 };
-      }
-    }
-
-    /* ── 5. WHO AI HAS NEVER NAMED = pool − named, with chains collapsed ────────────────────── */
-    const namedKeys = new Set(named.map((n) => n.key));
-    // Chains: group the POOL by the same merge key. Ten Timpson branches share one core, so they
-    // become one row with a branch count. Derived from repetition in the data — no chain list.
+    /* -- 6. PROSPECTS = pool minus named, chains collapsed, exclusions ITEMISED --------------- */
+    const namedByKey = new Map(named.map((n) => [n.key, n]));
+    // Chains: pool rows sharing a group key are one company. Ten Timpson branches are one entry
+    // with a branch count, not ten prospects. Derived from repetition - no chain list anywhere.
     const poolGroups = new Map<string, { variants: string[]; ids: string[]; websiteless: number; sample: CachedLead }>();
     for (const p of pool) {
       const nm = (p?.name ?? "").trim();
       if (!nm) continue;
-      const k = mergeKey(nm);
+      const k = idx.get(nm);
       if (!k) continue;
       const g = poolGroups.get(k) ?? { variants: [], ids: [], websiteless: 0, sample: p };
       g.variants.push(nm);
@@ -301,23 +317,36 @@ Deno.serve(async (req) => {
       poolGroups.set(k, g);
     }
 
-    const notNamed: MarketPoolRow[] = [...poolGroups.entries()]
-      .filter(([k]) => !namedKeys.has(k))
-      .map(([key, g]) => ({
+    const notNamed: MarketPoolRow[] = [];
+    /* EVERY EXCLUSION IS ITEMISED. A silent exclusion is as dangerous as a silent inclusion - it is
+       how a real prospect disappears. Each one names the entry it matched and that entry's weight,
+       so a wrong merge is visible on screen instead of quietly removing a business. */
+    const poolExcluded: MarketPoolExcluded[] = [];
+    for (const [key, g] of poolGroups) {
+      const hit = namedByKey.get(key);
+      if (hit) {
+        poolExcluded.push({
+          name: pickDisplayNameFromList(g.variants),
+          matchedNamed: hit.name,
+          matchedMentions: hit.mentions,
+          matchedAudits: hit.audits,
+        });
+        continue;
+      }
+      notNamed.push({
         key,
-        name: pickDisplayName(g.variants),
+        name: pickDisplayNameFromList(g.variants),
         branches: g.variants.length,
         isChain: g.variants.length > 1,
         placeIds: g.ids,
         noWebsite: g.websiteless > 0,
         googleMapsUrl: g.sample.googleMapsUrl,
         websiteUrl: g.sample.websiteUrl,
-      }))
-      .sort((a, b) => Number(b.noWebsite) - Number(a.noWebsite) || a.name.localeCompare(b.name));
-
-    /* Which pool businesses ARE named — shown so the subtraction is auditable rather than a claim.
-       A wrong merge is visible here as a business that should be in the prospect list and isn't. */
-    const alreadyNamed = [...poolGroups.keys()].filter((k) => namedKeys.has(k)).length;
+      });
+    }
+    notNamed.sort((a, b) => Number(b.noWebsite) - Number(a.noWebsite) || a.name.localeCompare(b.name));
+    poolExcluded.sort((a, b) => b.matchedMentions - a.matchedMentions);
+    const alreadyNamed = poolExcluded.length;
 
     return json({
       ok: true, trade, town,
@@ -326,6 +355,7 @@ Deno.serve(async (req) => {
       pool: notNamed,
       poolState,
       poolMatchedNamed: alreadyNamed,
+      poolExcluded,
       auditedBusinesses: audits.map((a) => a.business_name).filter(Boolean),
     });
   } catch (e) {

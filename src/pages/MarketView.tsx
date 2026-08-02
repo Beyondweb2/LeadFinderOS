@@ -381,6 +381,28 @@ export default function MarketViewPage() {
                       ))}
                     </ul>
                   )}
+                  {/* THE SUBTRACTION, SHOWN. Every business removed from the prospect list names
+                      the entry it matched and how heavily that entry is named. A silent exclusion
+                      is how a real prospect disappears — this is where a wrong merge is caught,
+                      and it is the check that would have caught the Anglia Locksmiths bug. */}
+                  {view.poolExcluded.length > 0 && (
+                    <details className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                      <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground">
+                        {view.poolExcluded.length} excluded — AI already names {view.poolExcluded.length === 1 ? 'it' : 'them'} (check the matches)
+                      </summary>
+                      <ul className="mt-1.5 space-y-1">
+                        {view.poolExcluded.map((x) => (
+                          <li key={x.name} className="text-[11px] leading-snug text-muted-foreground">
+                            <span className="font-medium text-foreground/80">{x.name}</span>
+                            {' → matched '}
+                            <span className="font-medium text-foreground/80">{x.matchedNamed}</span>
+                            {` (${x.matchedMentions} mention${x.matchedMentions === 1 ? '' : 's'} across ${x.matchedAudits} audit${x.matchedAudits === 1 ? '' : 's'})`}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+
                   <div className="flex flex-wrap gap-2 pt-1">
                     <Button size="sm" onClick={() => setAuditOpen(true)} disabled={auditable.length === 0}>
                       <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Run audits for this town
