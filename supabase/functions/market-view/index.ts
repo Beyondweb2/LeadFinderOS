@@ -147,19 +147,24 @@ Deno.serve(async (req) => {
     const audits = allAudits.filter((a) => norm(a.business_type) === trade && townKey(a.location_text) === tk);
     const auditIds = audits.map((a) => a.id);
 
-    if (auditIds.length === 0) {
-      return json({
-        ok: true, trade, town,
-        concentration: emptyConcentration(),
-        named: [], pool: [], poolState: { state: "never_searched" } as MarketPoolState,
-        audited: [],
-      });
-    }
+    /* NO EARLY RETURN ON ZERO AUDITS — deliberately removed when the market view moved onto Find
+       Leads as a free-text mode.
+       It used to short-circuit here with pool: [] and poolState: "never_searched". Under the old
+       dropdown that branch was unreachable, because the picker only offered markets that already
+       had audits. Typing a trade and town freely makes it reachable, and it then LIES twice: it
+       reports "never searched" for a town whose pool is sitting in the cache, and it leaves the
+       run-audits button with no businesses to source. Both are the failure the three pool states
+       exist to prevent. Everything below already copes with an empty audit list — the reads are
+       guarded, the fold yields an empty `named`, and concentration reports audits: 0, which is what
+       the page keys "no audits yet" off. */
 
     /* COMPLETE runs only. A failed or capped run has no answer text, so its absence of competitors
        is not evidence of a concentrated market — it is evidence of nothing. */
-    const runs = await all<RunRow>(service, "ai_audit_runs", "id, audit_id, status",
-      (q) => q.in("audit_id", auditIds));
+    const runs = auditIds.length
+      // Guarded: PostgREST renders .in('audit_id', []) as `in.()`, which is a syntax error, not an
+      // empty result — so a market with no audits would 400 rather than come back empty.
+      ? await all<RunRow>(service, "ai_audit_runs", "id, audit_id, status", (q) => q.in("audit_id", auditIds))
+      : [];
     const completeRuns = runs.filter((r) => (r.status ?? "") === "complete");
     const auditOfRun = new Map(completeRuns.map((r) => [r.id, r.audit_id]));
     const runIds = completeRuns.map((r) => r.id);
@@ -364,12 +369,3 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: raw }, 200);
   }
 });
-
-function emptyConcentration(): MarketConcentration {
-  return {
-    audits: 0, completeRuns: 0, distinctBusinesses: 0, totalMentions: 0,
-    topName: null, topSharePct: 0, topThreeSharePct: 0,
-    thin: true, distinctPerAudit: 0, likelyJunk: false,
-    truncatedBlocks: 0, engineBlocks: 0, runIds: [],
-  };
-}

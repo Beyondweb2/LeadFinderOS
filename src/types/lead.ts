@@ -23,6 +23,10 @@ export interface Lead {
 
 export type Country = 'UK' | 'Australia' | 'USA' | 'Canada' | 'Germany' | 'France' | 'Spain' | 'Italy' | 'Netherlands' | 'Belgium' | 'Ireland' | 'NewZealand' | 'SouthAfrica' | 'India' | 'Singapore' | 'UAE' | 'Brazil' | 'Mexico' | 'Japan' | 'Sweden';
 
+/** What the Search button does. 'leads' is the existing lead search; 'market' reads what is
+ *  already known about a trade in a town and spends nothing on its own. */
+export type SearchMode = 'leads' | 'market';
+
 export interface SearchFilters {
   keyword: string;
   location: string;
@@ -39,6 +43,8 @@ export interface SearchFilters {
    *  is IGNORED in this mode, and the no-website expansion sweep is skipped (it would
    *  search outside the town). Absent/false = today's radius behaviour, unchanged. */
   townOnly?: boolean;
+  /** Absent or 'leads' = today's behaviour, unchanged. Never sent to search-leads. */
+  mode?: SearchMode;
 }
 
 /** Grid the region search actually used (echoed back for the results banner). */

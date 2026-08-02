@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { MarketOption, MarketViewResult } from '@/lib/marketView';
 
@@ -84,7 +84,10 @@ export function useMarketView(): UseMarketView {
     if (last) await load(last.trade, last.town);
   }, [last, load]);
 
-  useEffect(() => { void refreshOptions(); }, [refreshOptions]);
+  /* No auto-fetch of the trade/town OPTIONS list any more. The picker it fed is gone: the market
+     is now whatever is typed into Find Leads' own niche and location boxes, deliberately including
+     trades and towns with no audits yet. refreshOptions stays callable, but firing it on every
+     mount would be an edge-function round trip for a dropdown that no longer exists. */
 
   return { options, optionsLoading, view, loading, error, load, reload, refreshOptions };
 }

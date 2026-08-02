@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { SearchForm } from '@/components/SearchForm';
+import MarketPanel from '@/components/MarketPanel';
 import { LeadsTable } from '@/components/LeadsTable';
 // EmailListBuilder kept in the repo for the future bulk-add flow; no longer rendered
 // here (email finding is now an in-place scan on the results).
@@ -25,7 +26,7 @@ import { useTeamClaims } from '@/hooks/useTeamClaims';
 import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import type { Country, Lead } from '@/types/lead';
+import type { Country, Lead, SearchMode } from '@/types/lead';
 
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 const ASK_CAMPAIGN_KEY = 'lf_ask_campaign_each_time';
@@ -37,6 +38,12 @@ const Index = () => {
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { toast } = useToast();
 
+  /* WHICH MODE THE LAST SEARCH RAN IN. Held here, not read live from the form, so flipping the
+     toggle does not silently swap the results already on screen out from under the operator — the
+     view only changes when Search is pressed. */
+  const [activeMode, setActiveMode] = useState<SearchMode>('leads');
+  const [marketTrade, setMarketTrade] = useState('');
+  const [marketTown, setMarketTown] = useState('');
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [lastSearchKeyword, setLastSearchKeyword] = useState<string | null>(null);
   const [lastSearchLocation, setLastSearchLocation] = useState<string | null>(null);
@@ -107,10 +114,25 @@ const Index = () => {
     }
   }, [isLoading, leads.length]);
 
+  /* Lead results and market output are mutually exclusive. Gating each block on the mode the last
+     search RAN in (rather than hiding them by clearing `leads`) keeps the lead results intact
+     underneath, so switching back to Find leads shows them again without re-running the search. */
+  const showLeadResults = activeMode === 'leads';
+
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
     setLastSearchKeyword(filters.keyword?.trim() || null);
     setLastSearchLocation(filters.location?.trim() || null);
+
+    /* MARKET MODE SPENDS NOTHING AND CALLS NO SEARCH. It reads audits and the cached pool for the
+       trade and town in the boxes. The lead search is left completely untouched below. */
+    if (filters.mode === 'market') {
+      setActiveMode('market');
+      setMarketTrade(filters.keyword?.trim() || '');
+      setMarketTown(filters.location?.trim() || '');
+      return;
+    }
+    setActiveMode('leads');
     // Region tiling is capped out of the UI (slider max = 50km) — always a normal
     // single-centre search. The backend tiledRegionSearch stays in place but
     // dormant: the frontend never sends region:true.
@@ -381,10 +403,18 @@ const Index = () => {
         />
       </section>
 
+      {/* MARKET MODE. Same two boxes, different question: what do we already know about this trade
+          in this town. Spends nothing on mount — it reads audits and the cached lead pool. */}
+      {activeMode === 'market' && (
+        <section>
+          <MarketPanel trade={marketTrade} town={marketTown} />
+        </section>
+      )}
+
       {/* "THIS TOWN ONLY" ASKED FOR, NOT APPLIED. A persistent banner, deliberately NOT a toast:
           the results below it are wider than the toggle claims, and that has to stay readable for
           as long as they are on screen rather than fading after four seconds. */}
-      {townFilterFallback && !isLoading && (
+      {showLeadResults && townFilterFallback && !isLoading && (
         <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-500" />
           <p className="text-xs leading-snug text-amber-700 dark:text-amber-400">
@@ -396,7 +426,7 @@ const Index = () => {
 
       {/* Handled notice (location not found / map lookup unavailable) — a calm
           empty-state with a retry, NOT the destructive "Search failed" card. */}
-      {searchNotice && !searchError && !isLoading && (
+      {showLeadResults && searchNotice && !searchError && !isLoading && (
         <div className="flex flex-col items-center gap-3 p-5 bg-muted/40 border border-border rounded-lg text-center">
           <MapPin className="h-5 w-5 text-muted-foreground" />
           <p className="text-sm text-muted-foreground max-w-md">{searchNotice}</p>
@@ -407,7 +437,7 @@ const Index = () => {
       )}
 
       {/* Search Error + Retry */}
-      {searchError && !isLoading && (
+      {showLeadResults && searchError && !isLoading && (
         <div className="flex flex-col items-center gap-3 p-5 bg-destructive/10 border border-destructive/20 rounded-lg text-center">
           <p className="text-base font-semibold text-destructive">Search failed</p>
           <p className="text-sm text-muted-foreground">{searchError.message}</p>
@@ -422,7 +452,7 @@ const Index = () => {
 
 
       {/* Expanded search indicator */}
-      {leads.length > 0 && expanded && noWebsiteCount >= 5 && (
+      {showLeadResults && leads.length > 0 && expanded && noWebsiteCount >= 5 && (
         <div className="flex items-center gap-2 py-2 px-3 sm:px-4 bg-muted/30 border border-border/50 rounded-lg">
           <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <span className="text-xs sm:text-sm text-muted-foreground">
@@ -432,7 +462,7 @@ const Index = () => {
       )}
 
       {/* Fallback: expansion couldn't find 3 No Website leads */}
-      {leads.length > 0 && expanded && noWebsiteCount < 5 && !isLoading && (
+      {showLeadResults && leads.length > 0 && expanded && noWebsiteCount < 5 && !isLoading && (
         <div className="flex flex-col gap-3 py-3 px-4 bg-muted/20 border border-border/40 rounded-lg">
           <div className="flex items-start gap-2">
             <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -457,7 +487,7 @@ const Index = () => {
       )}
 
       {/* Results Section */}
-      {leads.length > 0 && (
+      {showLeadResults && leads.length > 0 && (
         <section data-walkthrough="results-header">
           {(
             <div className="space-y-3">
@@ -514,7 +544,7 @@ const Index = () => {
       )}
 
       {/* Empty State */}
-      {leads.length === 0 && !isLoading && (
+      {showLeadResults && leads.length === 0 && !isLoading && (
         <section className="text-center py-16">
           <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
             <Search className="h-12 w-12 text-muted-foreground" />

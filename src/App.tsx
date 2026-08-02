@@ -26,7 +26,6 @@ import NotFound from "./pages/NotFound";
 
 // Lazy loaded routes — reduces initial bundle size
 const Index = lazy(() => import("./pages/Index"));
-const MarketViewPage = lazy(() => import("./pages/MarketView"));
 const Outreach = lazy(() => import("./pages/Outreach"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Templates = lazy(() => import("./pages/Templates"));
@@ -470,18 +469,9 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/market"
-              element={
-                <ProtectedRoute>
-                  <SubscriptionGate>
-                    <AppLayout>
-                      <MarketViewPage />
-                    </AppLayout>
-                  </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
+            {/* The market view is a MODE on Find Leads now, not a page of its own. Kept as a
+                redirect so an old bookmark or link lands somewhere sensible instead of a 404. */}
+            <Route path="/market" element={<Navigate to="/find-leads" replace />} />
             <Route
               path="/ai-audit"
               element={

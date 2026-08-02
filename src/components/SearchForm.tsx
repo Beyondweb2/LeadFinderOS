@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { QuickLocationsList } from '@/components/QuickLocationsList';
 import { QuickBusinessTypes } from '@/components/QuickBusinessTypes';
 import type { Country } from '@/types/lead';
-import type { SearchFilters } from '@/types/lead';
+import type { SearchFilters, SearchMode } from '@/types/lead';
 
 interface SearchFormProps {
   onSearch: (filters: SearchFilters) => void;
@@ -51,6 +51,17 @@ export function SearchForm({
   // Persisted exactly like radius — same tier, same per-user scope — so the mode survives a
   // reload instead of quietly reverting to a radius search between sessions.
   const [townOnly, setTownOnly] = usePersistedState('find-leads-town-only', false, persist);
+  /* SEARCH MODE. 'leads' = the existing lead search, unchanged. 'market' = read what we already
+     know about this trade in this town. Persisted like the other inputs so the page comes back the
+     way it was left. */
+  const [mode, setMode] = usePersistedState<SearchMode>('find-leads-mode', 'leads' as SearchMode, persist);
+
+  /* TOWN-ONLY IS FORCED ON IN MARKET MODE. The market view compares a MEASURED town against the
+     businesses in that same town; a radius pool drags in neighbouring towns the audits never
+     covered, which is the exact bug that put businesses in the prospect list that were never in the
+     market. The toggle stays visible so it is clear what is happening, but it is not the operator's
+     to turn off here. */
+  const effectiveTownOnly = mode === 'market' ? true : townOnly;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +74,8 @@ export function SearchForm({
       // for the cache key and for the fallback message if the town has no boundary.
       radius: radius * 1000,
       country: selectedCountry,
-      townOnly,
+      townOnly: effectiveTownOnly,
+      mode,
     });
   };
 
@@ -71,6 +83,32 @@ export function SearchForm({
     <Card className="border-border/50 bg-card shadow-sm">
       <CardContent className="p-3 sm:p-6">
         <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
+          {/* MODE. Deliberately louder than the town-only switch: this changes what the Search
+              button DOES, not merely how wide it looks. A segmented control rather than a toggle so
+              both options are named on screen and neither is a hidden default. */}
+          <div className="inline-flex w-full rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
+            {(['leads', 'market'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                aria-pressed={mode === m}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors sm:flex-none sm:px-4 ${
+                  mode === m
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {m === 'leads' ? 'Find leads' : 'Market view'}
+              </button>
+            ))}
+          </div>
+          <p className="-mt-1 text-[11px] text-muted-foreground sm:-mt-4">
+            {mode === 'leads'
+              ? 'Search returns local businesses you can add to the CRM.'
+              : 'Search reads what AI already says about this trade in this town \u2014 no spend.'}
+          </p>
+
           {/* Main Search Fields */}
           <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1.5 sm:space-y-2" data-walkthrough-step="business-type-area">
@@ -117,14 +155,23 @@ export function SearchForm({
                 toggle read as an unrelated setting. */}
             <div className="space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-1">
               <div className="flex items-center justify-between gap-3">
-                <Label className={`whitespace-nowrap text-xs font-medium transition-colors ${townOnly ? 'text-muted-foreground/50' : 'text-foreground/80'}`}>
+                <Label className={`whitespace-nowrap text-xs font-medium transition-colors ${effectiveTownOnly ? 'text-muted-foreground/50' : 'text-foreground/80'}`}>
                   Radius: {radius} km
                 </Label>
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="town-only" className="cursor-pointer whitespace-nowrap text-xs font-medium text-foreground/80">
-                    This town only
+                  <Label
+                    htmlFor="town-only"
+                    className={`whitespace-nowrap text-xs font-medium ${mode === 'market' ? 'text-muted-foreground' : 'cursor-pointer text-foreground/80'}`}
+                    title={mode === 'market' ? 'Always on in market view: the pool has to be the same town that was measured.' : undefined}
+                  >
+                    This town only{mode === 'market' ? ' (always)' : ''}
                   </Label>
-                  <Switch id="town-only" checked={townOnly} onCheckedChange={setTownOnly} />
+                  <Switch
+                    id="town-only"
+                    checked={effectiveTownOnly}
+                    onCheckedChange={setTownOnly}
+                    disabled={mode === 'market'}
+                  />
                 </div>
               </div>
               {/* Dimmed as ONE unit — icon, track and thumb together — so "off" reads as deliberate
@@ -132,7 +179,7 @@ export function SearchForm({
                   and never fires: Radix sets data-disabled, not the HTML disabled attribute, so
                   without this the control looks live while ignoring every drag. `disabled` stays for
                   the real a11y/interaction state; the opacity is only what makes it legible. */}
-              <div className={`relative flex items-center gap-2 sm:gap-3 pt-0.5 transition-opacity ${townOnly ? 'opacity-40' : ''}`}>
+              <div className={`relative flex items-center gap-2 sm:gap-3 pt-0.5 transition-opacity ${effectiveTownOnly ? 'opacity-40' : ''}`}>
                 <Radius className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 text-muted-foreground" />
                 <Slider
                   value={[radius]}
@@ -140,7 +187,7 @@ export function SearchForm({
                   min={1}
                   max={50}
                   step={1}
-                  disabled={townOnly}
+                  disabled={effectiveTownOnly}
                   className="flex-1"
                 />
               </div>
