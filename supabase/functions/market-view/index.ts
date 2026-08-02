@@ -332,6 +332,10 @@ Deno.serve(async (req) => {
       if (hit) {
         poolExcluded.push({
           name: pickDisplayNameFromList(g.variants),
+          // How many Places rows folded into this one entry. Display only: without it the panel
+          // says "5 found, 4 already named, 0 left" and the operator has to guess where the 5th
+          // went. No effect on grouping, matching or the pool states.
+          branches: g.variants.length,
           matchedNamed: hit.name,
           matchedMentions: hit.mentions,
           matchedAudits: hit.audits,

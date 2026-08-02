@@ -184,6 +184,12 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
   }, [view, chosen, auditCount, addLead, asLead, toast, reload]);
 
   const conc = view?.concentration;
+  /* POOL ARITHMETIC, derived here so the panel can show its working.
+     poolFound counts Places ROWS; poolEntries counts them after chain collapsing. The difference is
+     the branches that folded away, which is what made "5 found, 4 named, 0 left" look wrong. */
+  const poolFound = view?.poolState.state === 'ready' ? view.poolState.total : 0;
+  const poolEntries = (view?.pool.length ?? 0) + (view?.poolExcluded.length ?? 0);
+  const collapsedRows = Math.max(0, poolFound - poolEntries);
   const auditable = view ? view.pool.filter((p) => !p.isChain) : [];
   const plannedAudits = Math.min(auditCount, auditable.length);
   const auditCost = plannedAudits * MARKET_AUDIT_QUESTIONS * AUDIT_EST_USD_PER_QUESTION;
@@ -281,7 +287,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                 <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
                   <p className="text-xs leading-snug text-amber-700 dark:text-amber-400">
                     <span className="font-semibold">These names are probably not clean.</span>{' '}
-                    {conc.distinctPerAudit} distinct names per audit — clean markets sit at 4–9, raw regex output at 30+.
+                    {conc.distinctPerAudit} distinct names per audit, against a threshold of {JUNK_RATIO_PER_AUDIT}.
                     The AI cleaner never ran on older audits, so this fold may be full of headings and stray words
                     rather than firms. Treat the figures above as unreliable until it is re-read.
                   </p>
@@ -298,9 +304,16 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                   the per-engine cap — so this market is at least as fragmented as it looks here, and possibly more.
                 </p>
               )}
+              {/* ONLY THE HIGH END IS MEANINGFUL. The old copy quoted a "clean market sits at
+                  4–9" band measured BEFORE spelling variants were merged. Merging lowers the
+                  number by design — Wisbech went 48 distinct to 34 — so that band now reads a
+                  healthy market as abnormal. The junk threshold is unchanged; only the claim
+                  about what normal looks like is gone, because there is no post-merge
+                  measurement to support one yet. */}
               {!conc.likelyJunk && conc.distinctPerAudit > 0 && (
                 <p className="text-[11px] text-muted-foreground">
-                  {conc.distinctPerAudit} distinct names per audit (a clean market sits at 4–9; {JUNK_RATIO_PER_AUDIT}+ suggests uncleaned data).
+                  {conc.distinctPerAudit} distinct names per audit. Only the high end means anything:
+                  {' '}{JUNK_RATIO_PER_AUDIT}+ suggests the names were never cleaned.
                 </p>
               )}
             </CardContent>
@@ -413,26 +426,40 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                       ))}
                     </ul>
                   )}
-                  {/* THE SUBTRACTION, SHOWN. Every business removed from the prospect list names
-                      the entry it matched and how heavily that entry is named. A silent exclusion
-                      is how a real prospect disappears — this is where a wrong merge is caught,
-                      and it is the check that would have caught the Anglia Locksmiths bug. */}
-                  {view.poolExcluded.length > 0 && (
-                    <details className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-                      <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground">
-                        {view.poolExcluded.length} excluded — AI already names {view.poolExcluded.length === 1 ? 'it' : 'them'} (check the matches)
-                      </summary>
-                      <ul className="mt-1.5 space-y-1">
-                        {view.poolExcluded.map((x) => (
-                          <li key={x.name} className="text-[11px] leading-snug text-muted-foreground">
-                            <span className="font-medium text-foreground/80">{x.name}</span>
-                            {' → matched '}
-                            <span className="font-medium text-foreground/80">{x.matchedNamed}</span>
-                            {` (${x.matchedMentions} mention${x.matchedMentions === 1 ? '' : 's'} across ${x.matchedAudits} audit${x.matchedAudits === 1 ? '' : 's'})`}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
+                  {/* THE SUBTRACTION, SHOWN AND RECONCILED.
+                      Was a <details>, collapsed by default, and it rendered as empty rows. This is
+                      the audit trail for silent exclusions — burying it behind a click was wrong on
+                      its own terms, so it is now always open, and every field has an explicit
+                      fallback so a missing value reads as "(name missing)" rather than as blank.
+                      A blank row is indistinguishable from no row, which is the whole failure mode
+                      this panel exists to catch. */}
+                  {(view.poolExcluded.length > 0 || collapsedRows > 0) && (
+                    <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                      {/* THE MATHS, FOLLOWABLE. "5 found, 4 already named, 0 left" does not add up
+                          on its own — the gap is chain collapsing, and it now says so. */}
+                      <p className="text-[11px] font-medium text-foreground/80">
+                        {poolFound} found
+                        {collapsedRows > 0 && <> → {collapsedRows} folded into a chain entry</>}
+                        {' → '}{poolEntries} {poolEntries === 1 ? 'entry' : 'entries'}
+                        {' − '}{view.poolExcluded.length} already named
+                        {' = '}<span className="font-semibold">{view.pool.length} to contact</span>
+                      </p>
+                      {view.poolExcluded.length > 0 && (
+                        <ul className="space-y-1 border-t border-border/40 pt-1.5">
+                          {view.poolExcluded.map((x, i) => (
+                            <li key={`${x.name || 'unnamed'}-${i}`} className="text-[11px] leading-snug text-muted-foreground">
+                              <span className="font-medium text-foreground/80">{x.name || '(name missing)'}</span>
+                              {x.branches > 1 && <span className="text-muted-foreground"> +{x.branches - 1} branch{x.branches - 1 === 1 ? '' : 'es'}</span>}
+                              {' → already named as '}
+                              <span className="font-medium text-foreground/80">{x.matchedNamed || '(match missing)'}</span>
+                              {typeof x.matchedMentions === 'number' && typeof x.matchedAudits === 'number'
+                                ? ` (${x.matchedMentions} mention${x.matchedMentions === 1 ? '' : 's'} across ${x.matchedAudits} audit${x.matchedAudits === 1 ? '' : 's'})`
+                                : ' (counts unavailable)'}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   )}
 
                   <div className="flex flex-wrap gap-2 pt-1">

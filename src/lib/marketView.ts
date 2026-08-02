@@ -21,8 +21,14 @@ export { EVIDENCE_MIN_AUDITS };
  *  AI-judged firms, but it only started running automatically at the end of a run — the older
  *  audits never had it. Those folds contain section headings and stray capitalised words: Wisbech
  *  accountants yields thousands of "names" topped by "hmrc", Stamford plumbers is topped by
- *  "stamford". Measured on real data: clean markets sit at 4–9 distinct names per audit, junk ones
- *  at 30–970. 15 sits in the empty gap between them.
+ *  "stamford". Measured on real data BEFORE spelling variants were merged: clean markets sat at
+ *  4–9 distinct names per audit, junk ones at 30–970, and 15 sits in the empty gap between them.
+ *
+ *  ⚠️ MERGING LOWERED THE CLEAN END and no post-merge band has been measured. Wisbech locksmiths
+ *  went 48 distinct to 34 — 3.4 per audit to 2.4 — so a healthy market now scores BELOW the old
+ *  "normal". The THRESHOLD is unaffected, because junk folds sit an order of magnitude above it
+ *  either way. But do not quote a "normal is 4–9" range on screen: it describes a correctly merged
+ *  market as abnormal, which is exactly what it did until this was corrected.
  *
  *  It is a SUSPICION, shown with the ratio beside it, never a verdict and never auto-corrected —
  *  re-extraction costs an LLM call per run and nothing meters that. */
@@ -71,6 +77,8 @@ export interface MarketNamedRow {
  *  disappears, and this is the row that makes a wrong merge visible instead of invisible. */
 export interface MarketPoolExcluded {
   name: string;
+  /** Places rows that folded into this entry (chain branches). 1 when nothing collapsed. */
+  branches: number;
   matchedNamed: string;
   matchedMentions: number;
   matchedAudits: number;
