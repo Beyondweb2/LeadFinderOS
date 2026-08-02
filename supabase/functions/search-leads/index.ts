@@ -3,6 +3,7 @@ import { z } from 'https://esm.sh/zod@3.22.4';
 import { mapsDiscover } from '../_shared/enrichment/sources.ts';
 import { BOOKING_PLATFORM_DOMAINS, DIRECTORY_AND_RECORD_DOMAINS } from '../_shared/aggregators.ts';
 import { qualifierInfo, resolveGeoBias } from '../_shared/geobias.ts';
+import { generateCacheKey } from '../_shared/search-cache-key.ts';
 
 // ═══════════════════════════════════════════════
 // CORS
@@ -160,27 +161,10 @@ function stripGatedFields(leads: SearchLead[]): SearchLead[] {
   }));
 }
 
-function normalizeKeyword(kw: string): string {
-  let w = kw.toLowerCase().trim();
-  // Strip common English plural/gerund suffixes for cache grouping
-  if (w.endsWith('ies')) w = w.slice(0, -3) + 'y';       // e.g. bakeries → bakery
-  else if (w.endsWith('ses') || w.endsWith('xes') || w.endsWith('zes') || w.endsWith('ches') || w.endsWith('shes')) w = w.slice(0, -2); // e.g. churches → church
-  else if (w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0, -1); // e.g. plumbers → plumber
-  return w;
-}
-
-/* townOnly is PART OF THE CACHE IDENTITY. Without it a "this town only" search and a radius
-   search with the same keyword + location + radius hash to the same key and serve each other's
-   results out of search_cache — the town-filtered run would silently hand back out-of-town leads,
-   which is the exact failure the mode exists to prevent. Appended ONLY when true, so every
-   existing radius search keeps its current key and its warm cache. */
-async function generateCacheKey(keyword: string, location: string, radius: number, townOnly = false): Promise<string> {
-  const normKeyword = normalizeKeyword(keyword);
-  const input = `v4-norm|${normKeyword}|${location.toLowerCase().trim()}|${radius}${townOnly ? '|townonly' : ''}`;
-  const data = new TextEncoder().encode(input);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+/* normalizeKeyword + generateCacheKey MOVED to ../_shared/search-cache-key.ts, unchanged, so
+   market-view can read this cache with the identical hash. A second copy would drift and the
+   market view would silently report "no lead pool" for a town searched minutes ago. This
+   function remains the only WRITER of search_cache. */
 
 // ═══════════════════════════════════════════════
 // DIAGNOSTIC: track Google API calls
