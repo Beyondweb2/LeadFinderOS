@@ -66,6 +66,16 @@ export interface MarketNamedRow {
   audits: number;
 }
 
+/** A pool business REMOVED from the prospect list because AI already names it, and the entry it
+ *  matched. Itemised rather than merely counted: a silent exclusion is how a real prospect
+ *  disappears, and this is the row that makes a wrong merge visible instead of invisible. */
+export interface MarketPoolExcluded {
+  name: string;
+  matchedNamed: string;
+  matchedMentions: number;
+  matchedAudits: number;
+}
+
 export interface MarketPoolRow {
   key: string;
   name: string;
@@ -106,6 +116,8 @@ export interface MarketViewResult {
   poolState: MarketPoolState;
   /** Pool businesses that ARE already named — shown so the subtraction is auditable. */
   poolMatchedNamed: number;
+  /** Which ones, and what each matched. Rendered, not just counted. */
+  poolExcluded: MarketPoolExcluded[];
   auditedBusinesses: string[];
 }
 
