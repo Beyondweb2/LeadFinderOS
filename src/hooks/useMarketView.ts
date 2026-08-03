@@ -16,7 +16,9 @@ export interface UseMarketView {
   view: MarketViewResult | null;
   loading: boolean;
   error: string | null;
-  load: (trade: string, town: string) => Promise<void>;
+  /** force = skip the session cache and refetch. Used by reload() and after anything that changes
+   *  the underlying data (an audit batch, a lead search, a re-extraction). */
+  load: (trade: string, town: string, force?: boolean) => Promise<void>;
   reload: () => Promise<void>;
   refreshOptions: () => Promise<void>;
 }
@@ -36,6 +38,43 @@ async function realError(fnErr: { message: string }): Promise<string> {
     }
   } catch { /* keep the wrapper message if the body cannot be read */ }
   return real;
+}
+
+/* ── SESSION CACHE ────────────────────────────────────────────────────────────────────────────
+   Coming back to Find Leads should re-render what was on screen, not sit on a spinner while an
+   edge function re-folds a market that has not changed. Mirrors how the lead search already keeps
+   its results in sessionStorage: same storage, same "survives navigation, dies with the tab".
+
+   Keyed on trade + town, so two markets never serve each other's numbers. TTL is short because the
+   view is a claim about live data — an audit batch or a lead search changes it, and both call
+   reload(force) anyway, so the TTL only covers plain navigation. */
+const CACHE_KEY = 'leadfinder_market_view';
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
+const cacheKeyFor = (trade: string, town: string) =>
+  `${trade.trim().toLowerCase()}|||${town.trim().toLowerCase()}`;
+
+function readCache(trade: string, town: string): MarketViewResult | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { key?: string; at?: number; result?: MarketViewResult };
+    if (!parsed?.key || parsed.key !== cacheKeyFor(trade, town)) return null;
+    if (!parsed.at || Date.now() - parsed.at > CACHE_TTL_MS) return null;
+    // A cached shape from an older deploy would render half a panel; require the fields the page
+    // actually reads rather than trusting whatever was stored.
+    const r = parsed.result;
+    if (!r || !r.concentration || !Array.isArray(r.named) || !Array.isArray(r.pool) || !r.poolState) return null;
+    return r;
+  } catch {
+    return null;   // quota, private mode, malformed JSON — a cache miss, never an error
+  }
+}
+
+function writeCache(trade: string, town: string, result: MarketViewResult): void {
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ key: cacheKeyFor(trade, town), at: Date.now(), result }));
+  } catch { /* best effort */ }
 }
 
 export function useMarketView(): UseMarketView {
@@ -61,17 +100,27 @@ export function useMarketView(): UseMarketView {
     }
   }, []);
 
-  const load = useCallback(async (trade: string, town: string) => {
+  const load = useCallback(async (trade: string, town: string, force = false) => {
     if (!trade || !town) return;
-    setLoading(true);
-    setError(null);
     setLast({ trade, town });
+    setError(null);
+
+    /* CACHE FIRST, and return without touching the network. The loading state is deliberately not
+       raised here: flashing a spinner before painting a result we already hold is the thing this
+       is meant to remove. */
+    if (!force) {
+      const hit = readCache(trade, town);
+      if (hit) { setView(hit); setLoading(false); return; }
+    }
+
+    setLoading(true);
     try {
       const { data, error: fnErr } = await supabase.functions
         .invoke<MarketViewResult>('market-view', { body: { action: 'view', trade, town } });
       if (fnErr) { setError(await realError(fnErr)); setView(null); return; }
       if (data && data.ok === false) { setError(data.error ?? 'Could not load this market.'); setView(null); return; }
       setView(data ?? null);
+      if (data) writeCache(trade, town, data);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setView(null);
@@ -80,8 +129,11 @@ export function useMarketView(): UseMarketView {
     }
   }, []);
 
+  /* reload() ALWAYS forces. Every caller is something that just changed the underlying data — an
+     audit batch, a lead search, a re-extraction — so serving the pre-change cache would show the
+     operator the state they were trying to move on from. */
   const reload = useCallback(async () => {
-    if (last) await load(last.trade, last.town);
+    if (last) await load(last.trade, last.town, true);
   }, [last, load]);
 
   /* No auto-fetch of the trade/town OPTIONS list any more. The picker it fed is gone: the market

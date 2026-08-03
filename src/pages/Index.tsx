@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import MarketPanel from '@/components/MarketPanel';
 import { LeadsTable } from '@/components/LeadsTable';
@@ -38,12 +39,27 @@ const Index = () => {
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { toast } = useToast();
 
-  /* WHICH MODE THE LAST SEARCH RAN IN. Held here, not read live from the form, so flipping the
-     toggle does not silently swap the results already on screen out from under the operator — the
-     view only changes when Search is pressed. */
-  const [activeMode, setActiveMode] = useState<SearchMode>('leads');
-  const [marketTrade, setMarketTrade] = useState('');
-  const [marketTown, setMarketTown] = useState('');
+  /* THE URL IS THE MARKET VIEW'S MEMORY.
+     A market view used to vanish on navigating away: the lead search survives via sessionStorage,
+     this did not. Putting mode + trade + town in the query string makes one mechanism cover
+     everything at once — the back button, a refresh, a pasted link, and returning to the page.
+
+     WHY townOnly IS NOT CARRIED: market-view never receives it. The server resolves the pool from
+     search_history on its own, trying the town-scoped cache key first and the radius key second,
+     and reports which it used via poolState.scope. The flag is not an input, so a rebuilt view
+     cannot look up a different pool than the one first shown. In market mode the form forces it on
+     regardless, so there is no variation to carry either. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlMode = searchParams.get('mode') === 'market' ? 'market' : 'leads';
+  const urlTrade = (searchParams.get('trade') ?? '').trim();
+  const urlTown = (searchParams.get('town') ?? '').trim();
+  /* Seeded from the URL on FIRST RENDER, not in an effect, so the panel never paints an empty
+     market for a frame before correcting itself. */
+  const [activeMode, setActiveMode] = useState<SearchMode>(
+    urlMode === 'market' && urlTrade && urlTown ? 'market' : 'leads',
+  );
+  const [marketTrade, setMarketTrade] = useState(urlMode === 'market' ? urlTrade : '');
+  const [marketTown, setMarketTown] = useState(urlMode === 'market' ? urlTown : '');
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [lastSearchKeyword, setLastSearchKeyword] = useState<string | null>(null);
   const [lastSearchLocation, setLastSearchLocation] = useState<string | null>(null);
@@ -114,6 +130,18 @@ const Index = () => {
     }
   }, [isLoading, leads.length]);
 
+  /* BACK AND FORWARD change the URL without remounting this page, so the initial state above is
+     not enough on its own — this re-syncs when the query string moves under us. Guarded on real
+     change so it cannot loop against setSearchParams. */
+  useEffect(() => {
+    const wantMode: SearchMode = urlMode === 'market' && urlTrade && urlTown ? 'market' : 'leads';
+    setActiveMode((m) => (m === wantMode ? m : wantMode));
+    if (wantMode === 'market') {
+      setMarketTrade((t) => (t === urlTrade ? t : urlTrade));
+      setMarketTown((w) => (w === urlTown ? w : urlTown));
+    }
+  }, [urlMode, urlTrade, urlTown]);
+
   /* Lead results and market output are mutually exclusive. Gating each block on the mode the last
      search RAN in (rather than hiding them by clearing `leads`) keeps the lead results intact
      underneath, so switching back to Find leads shows them again without re-running the search. */
@@ -127,17 +155,24 @@ const Index = () => {
     /* MARKET MODE SPENDS NOTHING AND CALLS NO SEARCH. It reads audits and the cached pool for the
        trade and town in the boxes. The lead search is left completely untouched below. */
     if (filters.mode === 'market') {
+      const t = filters.keyword?.trim() || '';
+      const w = filters.location?.trim() || '';
       setActiveMode('market');
-      setMarketTrade(filters.keyword?.trim() || '');
-      setMarketTown(filters.location?.trim() || '');
+      setMarketTrade(t);
+      setMarketTown(w);
+      // replace, not push: re-searching the same page should not stack history entries the back
+      // button then has to walk through one at a time.
+      setSearchParams({ mode: 'market', trade: t, town: w }, { replace: true });
       return;
     }
     setActiveMode('leads');
+    // Drop the market params so a later refresh does not resurrect a market view over lead results.
+    setSearchParams({}, { replace: true });
     // Region tiling is capped out of the UI (slider max = 50km) — always a normal
     // single-centre search. The backend tiledRegionSearch stays in place but
     // dormant: the frontend never sends region:true.
     search(filters, false, false);
-  }, [search]);
+  }, [search, setSearchParams]);
 
   // Notify when a region search was downgraded to a single area (daily budget).
   useEffect(() => {
@@ -400,6 +435,9 @@ const Index = () => {
           onSearch={handleSearch}
           isLoading={isLoading}
           isPaidSubscriber={true}
+          initialMode={urlMode === 'market' && urlTrade && urlTown ? 'market' : undefined}
+          initialKeyword={urlMode === 'market' ? urlTrade || undefined : undefined}
+          initialLocation={urlMode === 'market' ? urlTown || undefined : undefined}
         />
       </section>
 

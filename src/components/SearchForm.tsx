@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Search, MapPin, Radius, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
@@ -22,6 +23,13 @@ interface SearchFormProps {
   isPaidSubscriber?: boolean;
   disabled?: boolean;
   initialRadius?: number;
+  /* URL-SEEDED VALUES. Present only when the page was opened on a market-view URL (a pasted link,
+     a refresh, the back button). They win over the persisted boxes ONCE, on mount, so the inputs
+     describe the market actually on screen — boxes reading "plumber / Bourne" above a Wisbech
+     locksmiths view is the quiet kind of wrong this codebase keeps getting caught by. */
+  initialMode?: SearchMode;
+  initialKeyword?: string;
+  initialLocation?: string;
   onUpgrade?: () => void;
   isUpgradeLoading?: boolean;
   freeSearchesExhausted?: boolean;
@@ -36,6 +44,9 @@ export function SearchForm({
   isPaidSubscriber = false,
   disabled = false,
   initialRadius,
+  initialMode,
+  initialKeyword,
+  initialLocation,
   onUpgrade,
   isUpgradeLoading = false,
   freeSearchesExhausted = false,
@@ -62,6 +73,17 @@ export function SearchForm({
      market. The toggle stays visible so it is clear what is happening, but it is not the operator's
      to turn off here. */
   const effectiveTownOnly = mode === 'market' ? true : townOnly;
+
+  /* Apply the URL seeds once. Ref-guarded rather than an empty dep array so the linter stays happy
+     and a later re-render can never re-stomp what the operator has since typed. */
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
+    if (initialMode) setMode(initialMode);
+    if (initialKeyword) setKeyword(initialKeyword);
+    if (initialLocation) setLocation(initialLocation);
+  }, [initialMode, initialKeyword, initialLocation, setMode, setKeyword, setLocation]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
