@@ -19,6 +19,7 @@ import {
   MARKET_SKIP_SEO, SEO_SCAN_USD, marketBatchCost,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
+  MARKET_AUDIT_MIN_AUDITS,
   type MarketPoolRow,
 } from '@/lib/marketView';
 import type { Lead } from '@/types/lead';
@@ -426,6 +427,8 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
       citationHosts: view.citationHosts ?? [],
       citationTotal: view.citationTotal ?? 0,
       distinctBusinesses: view.concentration.distinctBusinesses,
+      marketAudits: view.concentration.marketAudits ?? 0,
+      businessAudits: Math.max(0, view.concentration.audits - (view.concentration.marketAudits ?? 0)),
     })
     : null;
   /* THE PLAIN READ. Same decision as the verdict, rendered as two sentences. Presentation only:
@@ -436,6 +439,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
       view.citationHosts ?? [], auditable.length, view.poolState.state === 'ready',
       view.poolState.state === 'ready' ? view.poolState.total : 0,
       view.pool.length + view.poolExcluded.length,
+      chainEntries, completedRuns, pendingAudits,
     )
     : null;
   const pct = apifyUsage?.usagePct ?? null;
@@ -553,7 +557,9 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
           {/* CHAINS ARE NOT PROSPECTS AND ARE NOT LISTED HERE. A Timpson branch will never be
               pitched, and rendering one in the list while excluding it from the count is how the
               sentence and the rows came to disagree (2 vs 3). They stay visible under the numbers. */}
-          {view.poolState.state === 'ready' && auditable.length > 0 && (
+          {/* AND THE LIST ITSELF WAITS FOR A MEASUREMENT. Rendering rows with Add buttons under a
+              sentence that says nothing has been measured would invite contacting them anyway. */}
+          {measured && view.poolState.state === 'ready' && auditable.length > 0 && (
             <ul className="space-y-1 border-t border-border/50 pt-2">
               {auditable.map((pr) => (
                 <li key={pr.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/40 py-2 last:border-b-0">
@@ -876,7 +882,11 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                         {collapsedRows > 0 && <> → {collapsedRows} folded into a chain entry</>}
                         {' → '}{poolEntries} {poolEntries === 1 ? 'entry' : 'entries'}
                         {' − '}{view.poolExcluded.length} already named
-                        {' = '}<span className="font-semibold">{view.pool.length} to contact</span>
+                        {chainEntries > 0 && <> − {chainEntries} chain {chainEntries === 1 ? 'entry' : 'entries'}</>}
+                        {/* ONE SOURCE. This said view.pool.length, which counts chain entries the
+                            summary excludes — 14 here against 13 there, from the same data. Both
+                            now read `auditable`, the list the Add buttons are drawn from. */}
+                        {' = '}<span className="font-semibold">{auditable.length} to contact</span>
                       </p>
                       {view.poolExcluded.length > 0 && (
                         <ul className="space-y-1 border-t border-border/40 pt-1.5">
@@ -981,6 +991,26 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               It has no business attached, so nobody is measured as named or not named. What it
               produces is who AI names in this town.
             </p>
+            {/* THE DIALOG AND THE VIEW MUST NOT CONTRADICT EACH OTHER. This read as a complete
+                measurement and then the view said it was not enough to judge. It now says what one
+                buys and why a second is worth it - repeat market audits ask NEW intents because of
+                the coverage directive, so the second widens the picture rather than confirming the
+                first. */}
+            <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground/90">
+                  One audit gives you the names; {MARKET_AUDIT_MIN_AUDITS} gives you the shape.
+                </span>{' '}
+                With a single audit every firm appears in 100% of audits, so the view cannot tell a
+                market leader from a one-off mention and will not call the market worth working or not.
+              </p>
+              <p className="mt-1">
+                A second audit of the same town asks {MARKET_AUDIT_QUESTION_COUNT} <em>different</em>{' '}
+                questions, not the same ones again - generation is told what has already been asked
+                here - so it widens the picture as well as confirming it. Two audits is
+                ~${(2 * MARKET_AUDIT_QUESTION_COUNT * AUDIT_EST_USD_PER_QUESTION).toFixed(2)}.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setMarketAuditOpen(false)}>Cancel</Button>
