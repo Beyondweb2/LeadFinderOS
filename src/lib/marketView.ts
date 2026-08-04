@@ -302,7 +302,7 @@ export function marketBatchCost(
    resolving it: "a local firm leads the naming, but a marketplace leads the sources" is the read
    that stops someone walking into Loughborough on fragmentation alone. */
 
-export type MarketShapeKind = "unmeasured" | "marketplace_led" | "local_leader" | "too_small";
+export type MarketShapeKind = "unmeasured" | "marketplace_led" | "local_leader" | "thin_market";
 
 export interface MarketShape {
   kind: MarketShapeKind;
@@ -313,14 +313,31 @@ export interface MarketShape {
   reasoning: string[];
 }
 
-/** Fewer than this many contactable businesses and the town cannot carry a market pass.
- *  ABSOLUTE COUNT, NOT A RATIO, and deliberately not derived from a measured gap - there isn't one.
- *  Hastings (workable) sits at 63% of its pool already named while Wisbech (too small) sits at 50%,
- *  so the ratio ORDERING IS INVERTED against the operator's own read of those two markets. Any
- *  percentage threshold here would be a number fitted to two pools that differ by three rows.
- *  This is the WEAKEST of the three reads and is labelled as such on screen. Re-derive it once the
- *  nearby pass has produced fresh town-scoped pools for five or six markets. */
-export const TOO_SMALL_MAX_PROSPECTS = 3;
+/* THE POOL NO LONGER DECIDES THE MARKET SHAPE, AND MUST NOT BE REINTRODUCED HERE.
+   It did, and it was wrong: Hastings has 26 businesses named, a local leader on 13.8% of mentions,
+   no marketplace in its citations and no national brand on top - the strongest "worth working" read
+   there is - and it reported "probably not worth a pass" purely because Places returned 3
+   contactable firms and a chain exclusion took that to 2.
+
+   THE POOL IS KNOWN-INCOMPLETE: Surelock Homes takes 23 mentions across 6 of 6 Hastings audits and
+   is not in the pool at all, having no Places listing in the town. A read resting on that was
+   overruling two stronger reads resting on citations and naming.
+
+   So they are separate statements now: the SHAPE comes from citations and naming, and the
+   CONTACTABLE COUNT is its own line in marketPlainRead which never changes the verdict. */
+
+/** A market with almost nothing named in it - no competitive picture to show a client.
+ *
+ *  NOT DERIVED FROM DATA, BECAUSE THERE IS NONE TO DERIVE IT FROM. Every market measured to the
+ *  5-audit minimum names at least 23 distinct businesses (Spalding 23, Hastings 26, Wisbech 34,
+ *  Kettering 53, Loughborough 87, Wrexham 334). No genuinely thin market has ever been observed, so
+ *  there is no gap to fit a threshold to and one has not been invented.
+ *
+ *  What this number is: the point below which there is no "who is winning" picture at all - fewer
+ *  named firms than the audit minimum itself. Deliberately far below every observed market, so it
+ *  cannot misfire on real data. It exists so the vocabulary is complete, not to classify anything
+ *  today. If it ever fires, look at that market by hand before trusting it. */
+export const THIN_MARKET_MAX_NAMED = EVIDENCE_MIN_AUDITS;
 
 export interface MarketShapeInput {
   audits: number;
@@ -330,19 +347,14 @@ export interface MarketShapeInput {
   leaderRow: MarketNamedRow | null;
   citationHosts: MarketCitationHost[];
   citationTotal: number;
-  /** Contactable businesses: never-named plus thinly-named, chains excluded. */
-  prospects: number;
-  poolEntries: number;
-  /** True only for a FRESH, town-scoped pool. A stale or radius pool cannot support the too-small
-   *  read, so it is not attempted. */
-  poolFreshTownScoped: boolean;
+  /** Distinct businesses AI names here - the only size signal the shape uses. */
+  distinctBusinesses: number;
+  /* NO POOL FIELDS, DELIBERATELY. The shape is decided by citations and naming alone, so an
+     incomplete Places pool cannot overrule them. The contactable count lives in marketPlainRead. */
 }
 
 export function marketShape(input: MarketShapeInput): MarketShape {
-  const {
-    audits, completeRuns, leader, leaderRow, citationHosts, citationTotal,
-    prospects, poolEntries, poolFreshTownScoped,
-  } = input;
+  const { audits, completeRuns, leader, leaderRow, citationHosts, citationTotal, distinctBusinesses } = input;
 
   /* NEVER MORE CONFIDENT THAN THE EVIDENCE. Below the same bar the playbook uses, this names no
      shape at all - a market read off two audits is a guess wearing a verdict's clothes. */
@@ -388,15 +400,16 @@ export function marketShape(input: MarketShapeInput): MarketShape {
     return { kind: "marketplace_led", headline: "Marketplace-led \u00b7 probably skip this market", reasoning };
   }
 
-  // -- SHAPE 3: fragmented, but nothing left to sell to. Absolute prospects, fresh pool only.
-  if (poolFreshTownScoped && prospects < TOO_SMALL_MAX_PROSPECTS) {
+  /* -- SHAPE 3: the MARKET is thin, not the pool. See THIN_MARKET_MAX_NAMED - this has never fired
+     on real data and is not expected to. */
+  if (distinctBusinesses < THIN_MARKET_MAX_NAMED) {
     return {
-      kind: "too_small",
-      headline: "Too small \u00b7 little headroom",
+      kind: "thin_market",
+      headline: "Barely a market \u00b7 almost nothing is named here",
       reasoning: [
-        `${prospects} business${prospects === 1 ? "" : "es"} left to contact after the ones AI already names, from a pool of ${poolEntries}.`,
-        "Fragmented, but not enough of it is winnable to be worth a pass.",
-        "Weakest of the three reads: the pool is what Places returned inside the town boundary, so it may be missing firms.",
+        `AI names only ${distinctBusinesses} business${distinctBusinesses === 1 ? "" : "es"} across ${audits} audits of this trade and town.`,
+        "There is no competitive picture to show a client, and nobody established to displace.",
+        "This read has never fired on a measured market - check the audits by hand before acting on it.",
       ],
     };
   }
@@ -408,9 +421,6 @@ export function marketShape(input: MarketShapeInput): MarketShape {
   ];
   if (topHost) {
     reasoning.push(`The most-cited source is ${topHost.host} (${topHost.citations} of ${citationTotal}), a business's own site rather than a directory.`);
-  }
-  if (!poolFreshTownScoped) {
-    reasoning.push("The prospect count is not judged here: this pool is stale or came from a radius search.");
   }
   return { kind: "local_leader", headline: "Local leader \u00b7 the best shape to work", reasoning };
 }
@@ -440,8 +450,14 @@ export function marketPlainRead(
   town: string,
   leader: MarketLeader | null,
   citationHosts: MarketCitationHost[],
+  /** Contactable businesses: never-named plus thinly-named, CHAINS EXCLUDED. The same list the
+   *  panel renders, so the count and the rows can never disagree. */
   prospects: number,
   poolSearched: boolean,
+  /** Places rows found, before chain folding. */
+  poolFound: number,
+  /** Entries after chain folding. */
+  poolEntries: number,
 ): MarketPlainRead {
   const topHost = citationHosts[0] ?? null;
   const plural = trade.trim().toLowerCase();
@@ -456,8 +472,8 @@ export function marketPlainRead(
         ? `Skip this one. ${topHost.host} is the source AI trusts most for ${plural} in ${town}, so a local business is competing with a platform rather than with other ${plural}.`
         : `Skip this one. The business AI names most here, ${leader?.name ?? "the leader"}, is a national brand rather than a local firm, so a local business is competing with a chain.`;
       break;
-    case "too_small":
-      market = `Probably not worth a pass. AI already names most of the ${plural} in ${town} - only ${prospects} ${prospects === 1 ? "is" : "are"} left to contact.`;
+    case "thin_market":
+      market = `Barely a market. AI names only ${conc.distinctBusinesses} ${plural} in ${town} across ${conc.audits} audits, so there is no competitive picture to show anybody.`;
       break;
     default:
       market = leader
@@ -467,11 +483,17 @@ export function marketPlainRead(
 
   /* THE CONTACT SENTENCE. Counted from the prospect list as rendered, so it can never disagree with
      the rows underneath it. With no pool it says what to do rather than leaving the top blank. */
+  /* EVERY NUMBER SAYS WHAT IT IS. "from a pool of 3" conflated the prospect count with the pool:
+     Hastings is 13 rows found in Places, 8 entries after chain branches fold together, and 3 worth
+     contacting. Three different figures, and the sentence now names each one. */
+  const poolLine = poolFound > poolEntries
+    ? `${poolFound} found in Places, ${poolEntries} after chain branches fold together`
+    : `${poolEntries} found in Places`;
   const contact = !poolSearched
     ? "No lead search has been run for this town yet - run it to see who to contact."
     : prospects === 0
-      ? `Nobody left to contact here: every business found in ${town} is already named by AI.`
-      : `${prospects} business${prospects === 1 ? "" : "es"} here ${prospects === 1 ? "either never shows up" : "either never show up"} in AI answers or barely ${prospects === 1 ? "does" : "do"}. Those are the ones worth contacting.`;
+      ? `Nobody left to contact: of ${poolLine}, every one is already named by AI. The list can't be complete though - it is only what Places returned inside the town boundary.`
+      : `${prospects} worth contacting: of ${poolLine}, ${prospects} ${prospects === 1 ? "either never shows up" : "either never show up"} in AI answers or barely ${prospects === 1 ? "does" : "do"}. Places may be missing firms, so treat it as a floor.`;
 
   return { market, contact };
 }

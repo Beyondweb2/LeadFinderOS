@@ -425,11 +425,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
         : null,
       citationHosts: view.citationHosts ?? [],
       citationTotal: view.citationTotal ?? 0,
-      prospects: auditable.length,
-      poolEntries: view.pool.length,
-      /* FRESH AND TOWN-SCOPED ONLY. The too-small read cannot be made on a stale or radius pool,
-         and saying so is better than judging a market on the wrong pool. */
-      poolFreshTownScoped: view.poolState.state === 'ready' && view.poolState.scope === 'town',
+      distinctBusinesses: view.concentration.distinctBusinesses,
     })
     : null;
   /* THE PLAIN READ. Same decision as the verdict, rendered as two sentences. Presentation only:
@@ -438,6 +434,8 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
     ? marketPlainRead(
       shape, view.concentration, view.trade, view.town, view.leader ?? null,
       view.citationHosts ?? [], auditable.length, view.poolState.state === 'ready',
+      view.poolState.state === 'ready' ? view.poolState.total : 0,
+      view.pool.length + view.poolExcluded.length,
     )
     : null;
   const pct = apifyUsage?.usagePct ?? null;
@@ -536,7 +534,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
             ? 'border-flag-green/50 bg-green-500/5'
             : shape.kind === 'marketplace_led'
               ? 'border-destructive/40 bg-destructive/5'
-              : shape.kind === 'too_small'
+              : shape.kind === 'thin_market'
                 ? 'border-amber-500/50 bg-amber-500/10'
                 : 'border-border bg-muted/30'
         }`}>
@@ -552,17 +550,15 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
 
           {/* THE LIST. Plain words for how invisible each one is, and the Add buttons that already
               existed, so the operator picks who and how many. */}
-          {view.poolState.state === 'ready' && view.pool.length > 0 && (
+          {/* CHAINS ARE NOT PROSPECTS AND ARE NOT LISTED HERE. A Timpson branch will never be
+              pitched, and rendering one in the list while excluding it from the count is how the
+              sentence and the rows came to disagree (2 vs 3). They stay visible under the numbers. */}
+          {view.poolState.state === 'ready' && auditable.length > 0 && (
             <ul className="space-y-1 border-t border-border/50 pt-2">
-              {view.pool.map((pr) => (
+              {auditable.map((pr) => (
                 <li key={pr.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/40 py-2 last:border-b-0">
                   <span className="text-[15px] font-medium">{pr.name}</span>
                   <span className="text-[13px] text-muted-foreground">{invisibilityPhrase(pr, conc?.audits ?? 0)}</span>
-                  {pr.isChain && (
-                    <Badge variant="outline" className="border-blue-500/40 text-[10px] text-blue-500">
-                      chain · {pr.branches} branches
-                    </Badge>
-                  )}
                   {pr.noWebsite && <Badge variant="outline" className="text-[10px]">no website</Badge>}
                   <Button
                     size="sm" variant="outline" className="ml-auto h-8"
@@ -650,35 +646,9 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                   reading the figures beside it. Deliberately NOT a black box: nothing here tells
                   anyone to skip a market without showing its working. Below the evidence minimum it
                   refuses to name a shape at all. */}
-              {shape && (
-                <div className={`rounded-lg border px-3 py-2.5 ${
-                  shape.kind === 'local_leader'
-                    ? 'border-flag-green/50 bg-green-500/5'
-                    : shape.kind === 'marketplace_led'
-                      ? 'border-destructive/40 bg-destructive/5'
-                      : shape.kind === 'too_small'
-                        ? 'border-amber-500/50 bg-amber-500/10'
-                        : 'border-border/60 bg-muted/30'
-                }`}>
-                  <p className={`text-sm font-semibold ${
-                    shape.kind === 'local_leader'
-                      ? 'text-green-700 dark:text-green-500'
-                      : shape.kind === 'marketplace_led'
-                        ? 'text-destructive'
-                        : shape.kind === 'too_small'
-                          ? 'text-amber-700 dark:text-amber-400'
-                          : 'text-muted-foreground'
-                  }`}>
-                    {shape.headline}
-                  </p>
-                  <ul className="mt-1 space-y-0.5">
-                    {shape.reasoning.map((r) => (
-                      <li key={r} className="text-[11px] leading-snug text-muted-foreground">{r}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
+              {/* The verdict and its justification are rendered ONCE, in the summary block at the
+                  top of this panel. They used to appear here as well, which meant reading the same
+                  three bullets twice. */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Stat label="Audits behind it" value={String(conc.audits)} sub={`${conc.completeRuns} completed run${conc.completeRuns === 1 ? '' : 's'}`} />
                 <Stat label="Businesses named" value={String(conc.distinctBusinesses)} sub={`${conc.totalMentions} mentions`} />
