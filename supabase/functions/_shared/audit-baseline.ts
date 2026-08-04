@@ -461,15 +461,24 @@ export async function startPaidBaseline(
        Best-effort throughout. A failure here must never stop a paid client's baseline starting; the
        worst case is the old behaviour, which is a working baseline on freshly generated questions. */
     let seedQuestions: string[] = [];
+    /* WHICH audit the seed came from, and which town it measured. Load-bearing for a LEGACY
+       outcome-guarantee client: his refund test is "named in more AI answers after 8 weeks than
+       today", and "today" is that audit — which may be a DIFFERENT TOWN from the areas he has since
+       asked for. RG Locksmiths was sold on a Wisbech audit and has since picked Huntingdon,
+       St Neots and Peterborough, so the scored set and the new main town genuinely differ. */
+    let seedAuditId: string | null = null;
+    let seedTown: string | null = null;
     try {
       const { data: priorAudits } = await service
-        .from("ai_audits").select("id, baseline_target_runs, created_at")
+        .from("ai_audits").select("id, baseline_target_runs, created_at, location_text")
         .eq("lead_id", leadId).order("created_at", { ascending: false });
       // <= 1 target run is an ORDINARY audit. Never seed from another baseline: those questions are
       // already a measurement, and copying them would chain one guarantee onto another.
-      const outreach = ((priorAudits ?? []) as Array<{ id: string; baseline_target_runs: number | null }>)
+      const outreach = ((priorAudits ?? []) as Array<{ id: string; baseline_target_runs: number | null; location_text: string | null }>)
         .find((a) => Number(a.baseline_target_runs ?? 0) <= 1);
       if (outreach) {
+        seedAuditId = outreach.id;
+        seedTown = (outreach.location_text ?? "").trim() || null;
         const { data: latestRun } = await service
           .from("ai_audit_runs").select("id").eq("audit_id", outreach.id)
           .order("run_number", { ascending: false }).limit(1).maybeSingle();
@@ -510,8 +519,6 @@ export async function startPaidBaseline(
     const rawAreas = Array.isArray((row as { areas_list?: unknown }).areas_list)
       ? ((row as { areas_list: unknown[] }).areas_list.filter((a): a is string => typeof a === "string"))
       : [];
-    const { allocation, dropped } = allocateAreas(locationText, rawAreas, MULTI_AREA_CEILING);
-    const multiArea = allocation.length > 1;
     const { guarantee, reason: guaranteeReason } = decideGuarantee(
       typeof lead.amount_paid === "number" ? lead.amount_paid : null,
       FINDABLE_SETUP_PRICE_GBP,
@@ -519,6 +526,13 @@ export async function startPaidBaseline(
         ? (row as { guarantee_kind: "work" | "outcome" }).guarantee_kind
         : null,
     );
+    /* THE SCORED SET IS NOT NEGOTIABLE. For a legacy OUTCOME client the seeded questions ARE the
+       refund test, so the main town's share must be large enough to carry every one of them —
+       otherwise the allocation would silently drop part of the set the promise is settled on.
+       Work-guarantee clients need no such floor: nothing rides on which questions moved. */
+    const seedFloor = guarantee === "outcome" ? Math.min(seedQuestions.length, MULTI_AREA_CEILING) : 0;
+    const { allocation, dropped } = allocateAreas(locationText, rawAreas, MULTI_AREA_CEILING, seedFloor);
+    const multiArea = allocation.length > 1;
     const questionTotal = multiArea ? allocation.reduce((sum, a) => sum + a.questions, 0) : BASELINE_QUESTIONS;
     if (multiArea) {
       console.log(`[baseline] multi-area: ${allocation.map((a) => `${a.town}:${a.questions}`).join(" ")}`
@@ -585,7 +599,14 @@ export async function startPaidBaseline(
         .eq("audit_id", out.audit_id).order("created_at", { ascending: true });
       const askedAll = ((queued.data ?? []) as Array<{ question: string }>)
         .map((q) => (q.question ?? "").trim()).filter(Boolean);
-      const mainShare = allocation.find((a) => a.isMain)?.questions ?? askedAll.length;
+      /* The seeds AS QUEUED, matched case-insensitively so a re-cased seed still counts. This is
+         the refund test for an outcome client: the questions from the audit that sold them, and
+         nothing else. If a seed was rejected by the guards it is legitimately absent, and the
+         count stored here says so rather than implying a set that was never asked. */
+      const askedKeys = new Map(askedAll.map((q) => [q.trim().toLowerCase(), q]));
+      const scored = seedQuestions
+        .map((q) => askedKeys.get(q.trim().toLowerCase()))
+        .filter((q): q is string => !!q);
       const contract: BaselineContract = {
         version: 1,
         guarantee,
@@ -597,13 +618,24 @@ export async function startPaidBaseline(
         ceiling: MULTI_AREA_CEILING,
         seededQuestions: seedQuestions,
         // OUTCOME clients only. The main town's share is what was sold and what the refund reads.
-        ...(guarantee === "outcome" ? { scoredQuestions: askedAll.slice(0, mainShare) } : {}),
+        ...(guarantee === "outcome"
+          ? { scoredQuestions: scored, scoredFromAuditId: seedAuditId, scoredTown: seedTown }
+          : {}),
         createdAt: new Date().toISOString(),
       };
       const { error: cErr } = await service.from("ai_audits")
         .update({ baseline_contract: contract }).eq("id", out.audit_id);
       if (cErr) console.warn(`[baseline] baseline_contract not stored (${cErr.message}) — baseline unaffected`);
-      else console.log(`[baseline] contract frozen for audit ${out.audit_id}: guarantee=${guarantee}, ${allocation.length} town(s), ${contract.scoredQuestions?.length ?? 0} scored`);
+      else {
+        console.log(`[baseline] contract frozen for audit ${out.audit_id}: guarantee=${guarantee}, ${allocation.length} town(s), ${contract.scoredQuestions?.length ?? 0} scored`);
+        if (guarantee === "outcome") {
+          console.log(`[baseline] LEGACY OUTCOME CLIENT: refund test is ${scored.length} of ${seedQuestions.length} seeded question(s)`
+            + ` from audit ${seedAuditId ?? "(none)"} in "${seedTown ?? "(unknown town)"}"; delivery areas are ${allocation.map((a) => a.town).join(", ")}`);
+          if (scored.length < seedQuestions.length) {
+            console.error(`[baseline] SCORED SET SHORT: ${seedQuestions.length - scored.length} seeded question(s) were not queued — the refund test is narrower than what was sold. Audit ${out.audit_id}.`);
+          }
+        }
+      }
     } catch (e) {
       console.warn(`[baseline] contract write threw (non-blocking):`, e instanceof Error ? e.message : e);
     }

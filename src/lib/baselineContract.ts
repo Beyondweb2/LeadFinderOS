@@ -50,9 +50,20 @@ export interface BaselineContract {
    *  Seed-preserving: these are re-run exactly, so the numbers that closed the sale are the
    *  numbers the re-measurement reports. */
   seededQuestions: string[];
-  /** OUTCOME-GUARANTEE CLIENTS ONLY. The frozen set the refund test reads. Written once, never
-   *  recomputed. Absent for 'work' clients, because nothing rides on which questions moved. */
+  /** OUTCOME-GUARANTEE CLIENTS ONLY. The frozen set the refund test reads: the questions from the
+   *  audit that SOLD them, verbatim, as actually queued. Written once, never recomputed. Absent for
+   *  'work' clients, because nothing rides on which questions moved.
+   *  NOT "the main town's share": the promise was "named in more AI answers after 8 weeks than
+   *  today", and "today" is the audit they were shown — so the scored set is the seed, not whatever
+   *  the new allocation happens to put first. */
   scoredQuestions?: string[];
+  /** The audit the scored set came from, so week eight can compare against the exact measurement
+   *  that was sold rather than re-deriving a "before". Outcome clients only. */
+  scoredFromAuditId?: string | null;
+  /** The town that audit measured. May differ from mainTown: RG Locksmiths was sold on a Wisbech
+   *  audit and has since asked for Huntingdon, St Neots and Peterborough. Recorded so nobody has to
+   *  remember that the refund test lives in a different town from the delivery areas. */
+  scoredTown?: string | null;
   createdAt: string;
 }
 
@@ -70,7 +81,15 @@ export const MAIN_TOWN_SHARE = 0.5;
  * exactly what a client picking three costs, and gets thinner coverage per town rather than a
  * bigger bill. Cost scaling with a client's ambition against a fixed price is the wrong risk.
  */
-export function allocateAreas(mainTown: string, areas: string[], ceiling: number): {
+export function allocateAreas(
+  mainTown: string,
+  areas: string[],
+  ceiling: number,
+  /** Minimum the MAIN town must get, whatever the share works out to. Used for a legacy
+   *  outcome-guarantee client, whose seeded questions ARE the refund test and must all survive the
+   *  allocation — the extra areas take what is left. 0 (the default) restores the plain share. */
+  mainFloor = 0,
+): {
   allocation: AreaAllocation[];
   dropped: string[];
 } {
@@ -89,8 +108,16 @@ export function allocateAreas(mainTown: string, areas: string[], ceiling: number
   if (extras.length === 0) {
     return { allocation: [{ town: main, questions: ceiling, isMain: true }], dropped: [] };
   }
+  /* A floor at or above the ceiling means the scored set fills the budget on its own: measure the
+     main town only and report every extra area as dropped, rather than shaving the refund test. */
+  if (mainFloor >= ceiling) {
+    return { allocation: [{ town: main, questions: ceiling, isMain: true }], dropped: extras };
+  }
 
-  const mainQuestions = Math.max(AREA_MIN_QUESTIONS, Math.floor(ceiling * MAIN_TOWN_SHARE));
+  const mainQuestions = Math.min(
+    ceiling,
+    Math.max(AREA_MIN_QUESTIONS, Math.floor(ceiling * MAIN_TOWN_SHARE), mainFloor),
+  );
   let remaining = ceiling - mainQuestions;
   /* How many extras can be measured AT ALL. Anything past that is dropped rather than measured on
      one question, and the caller names the dropped ones on screen. */
