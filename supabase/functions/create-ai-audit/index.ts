@@ -4,6 +4,7 @@ import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { applySeed, dropResearchIntent, dropMissingTown, dedupeQuestions } from "../../../src/lib/seedGuard.ts";
+import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
 import {
   OUTREACH_HOOK_QUESTIONS,
   WIZARD_MIN_QUESTIONS,
@@ -287,6 +288,17 @@ Deno.serve(async (req) => {
        existing caller is untouched, and it can only ever REDUCE spend - which is why it needs no
        internal-caller gate. Applied at the run insert below. */
     const skipSeo: boolean = body.skip_seo === true;
+    /* MULTI-AREA BASELINE. audit-baseline sends the allocation it froze into the baseline contract:
+       [{town, questions, isMain}]. The MAIN town keeps location_text and the verbatim seed; each
+       extra area gets its own generated questions for the same services. Absent (every other
+       caller) leaves the single-town path byte-for-byte unchanged.
+       INTERNAL ONLY, like purpose='baseline': it decides what a paying client is measured on. */
+    const areaAllocation: AreaAllocation[] = isInternal && Array.isArray(body.areas)
+      ? (body.areas as unknown[])
+        .map((a) => a as { town?: unknown; questions?: unknown; isMain?: unknown })
+        .filter((a) => typeof a.town === "string" && (a.town as string).trim() && Number(a.questions) > 0)
+        .map((a) => ({ town: (a.town as string).trim(), questions: Math.floor(Number(a.questions)), isMain: a.isMain === true }))
+      : [];
 
     if (!businessName && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
 
@@ -488,7 +500,43 @@ Deno.serve(async (req) => {
          the full stored set, so they take the verbatim branch exactly as before. Only a SHORT
          supplied set on a baseline is treated as a seed, which no existing caller sends. */
       const isSeeding = isBaseline && !!providedQuestions?.length && providedQuestions.length < questionCount;
-      if (isSeeding) {
+      /* ORDER MATTERS. The multi-area branch must be tested BEFORE isSeeding: a multi-area baseline
+         normally arrives WITH a short seed, so the single-town seeded branch would win and the extra
+         areas would be silently dropped — the exact failure this work exists to remove. The
+         multi-area branch does its own seeding for the main town's share. */
+      if (areaAllocation.length > 1) {
+        /* MULTI-AREA, SEED-PRESERVING. The main town's share carries the verbatim seed (topped up
+           if the seed is short); every extra area is generated for the same services in that town.
+           One LLM call per area, gpt-4o-mini — the Apify question runs dominate the bill, not this.
+           A failed area generation is skipped and LOGGED rather than silently substituted, so the
+           stored contract and the queued set cannot disagree about what was measured. */
+        const perArea: string[] = [];
+        for (const area of areaAllocation) {
+          if (area.isMain) continue;
+          try {
+            const qs = await generateQuestions(businessName, businessType, area.town, hasWebsite, specialisms, area.questions, "local", country);
+            perArea.push(...qs.slice(0, area.questions));
+          } catch (e) {
+            console.error(`[create-ai-audit] area "${area.town}" generation failed, area NOT measured:`, e instanceof Error ? e.message : e);
+          }
+        }
+        const mainShare = areaAllocation.find((a) => a.isMain)?.questions ?? questionCount;
+        let mainQs: string[];
+        if (providedQuestions?.length && providedQuestions.length < mainShare) {
+          const generated = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, mainShare, businessScope, country);
+          const outcome = applySeed(providedQuestions, generated, mainShare, businessType, locationText);
+          mainQs = outcome.questions;
+          seededQuestions = outcome.seeded;
+          rejectedSeeds = outcome.rejected;
+        } else if (providedQuestions?.length) {
+          mainQs = providedQuestions.slice(0, mainShare);
+          seededQuestions = mainQs;
+        } else {
+          mainQs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, mainShare, businessScope, country);
+        }
+        questions = [...mainQs, ...perArea];
+        console.log(`[create-ai-audit] multi-area baseline: ${mainQs.length} for "${locationText}" (${seededQuestions.length} seeded) + ${perArea.length} across ${areaAllocation.length - 1} other areas = ${questions.length}`);
+      } else if (isSeeding) {
         const generated = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country);
         const outcome = applySeed(providedQuestions!, generated, questionCount, businessType, locationText);
         questions = outcome.questions;

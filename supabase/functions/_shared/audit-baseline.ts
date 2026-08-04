@@ -22,6 +22,8 @@ const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
 /** Paid baseline shape, from the shared question-count policy. */
 import { BASELINE_QUESTIONS, BASELINE_RUNS } from "../../../src/lib/auditQuestionCounts.ts";
+import { allocateAreas, decideGuarantee, type BaselineContract } from "../../../src/lib/baselineContract.ts";
+import { FINDABLE_SETUP_PRICE_GBP } from "../../../src/lib/findableOffer.ts";
 import { pickAuditTown } from "./place-town.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 
@@ -388,7 +390,7 @@ export async function startPaidBaseline(
   try {
     const { data: row, error: rErr } = await service
       .from("onboarding_responses")
-      .select("id, lead_id, confirmed_location, services")
+      .select("id, lead_id, confirmed_location, services, areas_list")
       .eq("id", onboardingId).maybeSingle();
     if (rErr) return { ok: false, error: `onboarding read failed: ${rErr.message}` };
     if (!row) return { ok: false, error: "onboarding row not found" };
@@ -489,6 +491,40 @@ export async function startPaidBaseline(
       console.error(`[audit-baseline] seed lookup failed for lead ${leadId} (non-blocking):`, (e as Error).message);
     }
 
+    /* ── THE BASELINE CONTRACT ─────────────────────────────────────────────────────────────────
+       The client picked services AND a priority-ordered list of towns (onboarding areas_list).
+       Measuring only the main town gave them work aimed at three towns and a measurement of one.
+
+       CEILING, NOT SCALING: MULTI_AREA_CEILING questions however many towns they picked, so a
+       client naming eight towns costs exactly what one naming three costs, and gets thinner
+       coverage per town rather than a bigger bill against a fixed price.
+
+       SEED-PRESERVING (Paul's decision, 2026-08-04): every seeded question is kept verbatim on the
+       main town's share; the remaining budget buys the extra areas. The guarantee is now WORK-based,
+       so nothing rides on which specific questions moved - EXCEPT for legacy outcome-guarantee
+       clients, whose scored set is frozen in the contract and must never drift.
+
+       Frozen at day 0 and read VERBATIM at week eight (the re-run path above repeats the stored
+       questions), so the yardstick cannot move underneath a client between the two measurements. */
+    const MULTI_AREA_CEILING = 12;
+    const rawAreas = Array.isArray((row as { areas_list?: unknown }).areas_list)
+      ? ((row as { areas_list: unknown[] }).areas_list.filter((a): a is string => typeof a === "string"))
+      : [];
+    const { allocation, dropped } = allocateAreas(locationText, rawAreas, MULTI_AREA_CEILING);
+    const multiArea = allocation.length > 1;
+    const { guarantee, reason: guaranteeReason } = decideGuarantee(
+      typeof lead.amount_paid === "number" ? lead.amount_paid : null,
+      FINDABLE_SETUP_PRICE_GBP,
+      typeof (row as { guarantee_kind?: unknown }).guarantee_kind === "string"
+        ? (row as { guarantee_kind: "work" | "outcome" }).guarantee_kind
+        : null,
+    );
+    const questionTotal = multiArea ? allocation.reduce((sum, a) => sum + a.questions, 0) : BASELINE_QUESTIONS;
+    if (multiArea) {
+      console.log(`[baseline] multi-area: ${allocation.map((a) => `${a.town}:${a.questions}`).join(" ")}`
+        + `${dropped.length ? ` | DROPPED (not measured): ${dropped.join(", ")}` : ""} | guarantee=${guarantee} (${guaranteeReason})`);
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
       method: "POST",
@@ -510,7 +546,10 @@ export async function startPaidBaseline(
         has_website: !!lead.website,
         ...(scopeIsLocal ? { business_scope: "local" } : {}),
         purpose: "baseline",
-        question_count: BASELINE_QUESTIONS,
+        question_count: questionTotal,
+        // Only sent when there is more than one town — a single-area baseline stays byte-for-byte
+        // the shape it has always been.
+        ...(multiArea ? { areas: allocation } : {}),
         baseline_target_runs: BASELINE_RUNS,
         // Omitted entirely when there is nothing to seed, so a lead with no earlier audit takes the
         // untouched generate-all-ten path rather than an empty-array edge case.
@@ -526,6 +565,49 @@ export async function startPaidBaseline(
       return { ok: false, error: `create-ai-audit refused: ${why}` };
     }
     console.log(`[baseline] started paid baseline ${out.audit_id} for onboarding ${onboardingId} (${source})`);
+    /* ── FREEZE THE CONTRACT ───────────────────────────────────────────────────────────────────
+       Written ONCE, immediately after the audit exists, and read verbatim at week eight rather
+       than re-derived. What it protects:
+         - the yardstick cannot move if the allocation rule, the ceiling or the areas change later;
+         - a LEGACY outcome-guarantee client's scored set is explicit. scoredQuestions is present
+           ONLY for guarantee === 'outcome': for that client the measured set IS the refund test
+           ("named in more AI answers after 8 weeks than today"), so it is frozen as the questions
+           actually queued for the main town. Work-guarantee clients get no scored set at all,
+           because the promise is the audit, the work and the re-measurement - not a naming result -
+           so nothing rides on which particular questions moved.
+         - areasDropped is recorded, so "measured but not scored" can be stated on screen instead
+           of an area quietly vanishing.
+       Best-effort and migration-tolerant: if baseline_contract is not there yet the baseline still
+       runs and behaves exactly as it did before, which is the single-town shape. */
+    try {
+      const queued = await service
+        .from("ai_audit_queue").select("question")
+        .eq("audit_id", out.audit_id).order("created_at", { ascending: true });
+      const askedAll = ((queued.data ?? []) as Array<{ question: string }>)
+        .map((q) => (q.question ?? "").trim()).filter(Boolean);
+      const mainShare = allocation.find((a) => a.isMain)?.questions ?? askedAll.length;
+      const contract: BaselineContract = {
+        version: 1,
+        guarantee,
+        guaranteeReason,
+        mainTown: locationText,
+        areasRequested: rawAreas,
+        allocation,
+        areasDropped: dropped,
+        ceiling: MULTI_AREA_CEILING,
+        seededQuestions: seedQuestions,
+        // OUTCOME clients only. The main town's share is what was sold and what the refund reads.
+        ...(guarantee === "outcome" ? { scoredQuestions: askedAll.slice(0, mainShare) } : {}),
+        createdAt: new Date().toISOString(),
+      };
+      const { error: cErr } = await service.from("ai_audits")
+        .update({ baseline_contract: contract }).eq("id", out.audit_id);
+      if (cErr) console.warn(`[baseline] baseline_contract not stored (${cErr.message}) — baseline unaffected`);
+      else console.log(`[baseline] contract frozen for audit ${out.audit_id}: guarantee=${guarantee}, ${allocation.length} town(s), ${contract.scoredQuestions?.length ?? 0} scored`);
+    } catch (e) {
+      console.warn(`[baseline] contract write threw (non-blocking):`, e instanceof Error ? e.message : e);
+    }
+
     await service.from("onboarding_responses")
       .update({ audit_id: out.audit_id, updated_at: new Date().toISOString() })
       .eq("id", onboardingId);
