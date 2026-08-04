@@ -114,9 +114,17 @@ Deno.serve(async (req) => {
     // 2) audit_id → ai_audits (business context for the report copy).
     const { data: audit } = await service
       .from("ai_audits")
-      .select("id, business_name, business_type, location_text, specialism, website")
+      .select("id, business_name, business_type, location_text, specialism, website, is_market")
       .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
+    /* ⛔ THE PUBLIC RENDERER REFUSES MARKET AUDITS. This is the one an outsider could reach with a
+       URL, so it refuses the same way it refuses a missing audit — no error page, no sentinel name
+       echoed back. A market audit has no business, so there is nothing here to show anybody.
+       Reads the column, never the name. */
+    if ((audit as { is_market?: boolean }).is_market === true) {
+      console.log(`[render-audit-report] REFUSED market audit ${audit.id}: no business attached.`);
+      return unavailable("No report for this audit.");
+    }
 
     // 3) latest run for the audit.
     const { data: run } = await service

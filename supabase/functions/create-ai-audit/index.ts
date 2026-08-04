@@ -294,6 +294,24 @@ Deno.serve(async (req) => {
        stable and seed-driven, and two businesses in one market getting different questions is right
        for mapping a market and wrong for measuring a client. */
     const isMarket: boolean = body.purpose === "market";
+    /* ── A STANDALONE MARKET AUDIT: a trade and a town, NO business, NO CRM row ────────────────
+       The market view used to populate a town by adding 5 businesses to the CRM and auditing each
+       — leads the operator never chose to contact, in a town they were only assessing. This is the
+       replacement: ONE audit of the market itself.
+
+       ai_audits.business_name is NOT NULL, so the row carries a readable SENTINEL. Nothing keys off
+       that string: the is_market COLUMN is what every consumer reads, because a report guard resting
+       on a name prefix is not a guard (see isMarketAudit in src/lib/auditReport.ts).
+
+       What follows from having no business, all of it correct rather than worked around:
+         - the named count stays 0 (nothing to match) — flagged as a market audit everywhere it is
+           rendered, so 0 never reads as a failed audit;
+         - the SEO scan skips for free (no website on the sentinel, and maybeRunSeoStep requires one);
+         - extract-competitors improves — no self-name to exclude from the competitor list;
+         - lead_id is null, which makes the audit_reply WhatsApp and the D2 completion send
+           unreachable by their own existing gates.
+       INTERNAL ONLY: it decides what gets measured and spends on Apify. */
+    const marketOnly: boolean = isInternal && body.market_only === true;
     /* MULTI-AREA BASELINE. audit-baseline sends the allocation it froze into the baseline contract:
        [{town, questions, isMain}]. The MAIN town keeps location_text and the verbatim seed; each
        extra area gets its own generated questions for the same services. Absent (every other
@@ -306,7 +324,13 @@ Deno.serve(async (req) => {
         .map((a) => ({ town: (a.town as string).trim(), questions: Math.floor(Number(a.questions)), isMain: a.isMain === true }))
       : [];
 
-    if (!businessName && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
+    /* THE SENTINEL. Written here rather than by the caller so its shape is owned in one place and
+       a market audit can never arrive with a real business's name on it by accident. */
+    const marketSentinel = marketOnly
+      ? `[market] ${(businessType || "trade").trim()} · ${(locationText || "unknown town").trim()}`
+      : "";
+    if (marketOnly && !businessType) return json({ ok: false, error: "business_type required for a market audit" }, 400);
+    if (!businessName && !marketOnly && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
 
     /* ── REUSE THE LEAD'S EXISTING AUDIT INSTEAD OF MINTING A DUPLICATE ─────────
        The Inbox audit button, the outreach bulk runner and the wizard's "Run audit" all posted a
@@ -536,7 +560,16 @@ Deno.serve(async (req) => {
          normally arrives WITH a short seed, so the single-town seeded branch would win and the extra
          areas would be silently dropped — the exact failure this work exists to remove. The
          multi-area branch does its own seeding for the main town's share. */
-      if (areaAllocation.length > 1) {
+      if (marketOnly) {
+        /* NO NAME IN THE PROMPT. generateQuestions uses the name only to infer a specialism when
+           none is given; for a market audit there is no business to infer from and no name that
+           should shape the questions. Scope is forced LOCAL (a trade in a town always is) and the
+           count is the market default, so one audit covers the market's intents rather than three.
+           Coverage is on via `coverage`, so a second market audit of the same town asks new
+           intents instead of repeating these. */
+        questions = await generateQuestions("", businessType, locationText, false, specialisms, questionCount, "local", country, coverage);
+        console.log(`[create-ai-audit] MARKET audit: ${questions.length} question(s) for "${businessType}" in "${locationText}", no business attached`);
+      } else if (areaAllocation.length > 1) {
         /* MULTI-AREA, SEED-PRESERVING. The main town's share carries the verbatim seed (topped up
            if the seed is short); every extra area is generated for the same services in that town.
            One LLM call per area, gpt-4o-mini — the Apify question runs dominate the bill, not this.
@@ -586,7 +619,11 @@ Deno.serve(async (req) => {
       const auditRow: Record<string, unknown> = {
         user_id: userId,
         lead_id: leadId,
-        business_name: businessName,
+        business_name: marketOnly ? marketSentinel : businessName,
+        /* SET EXPLICITLY ON BOTH PATHS. The column is NOT NULL with a default, but PostgREST lists
+           it as required, so relying on the default would leave the ordinary insert path depending
+           on behaviour that is not guaranteed at this layer. Cheap certainty. */
+        is_market: marketOnly,
         business_type: businessType || null,
         location_text: locationText || null,
         country,
@@ -631,7 +668,9 @@ Deno.serve(async (req) => {
        `categories`, so isReusableSeo (queue) and isRenderableSeo (report) both reject it: nothing
        downstream can mistake it for a grade, and no report renders an SEO block from it.
        Only the CALLER decides this - default is unchanged, so every existing path still scans. */
-    const runResults = skipSeo
+    /* A market audit has no website by definition, so the SEO scan is unreachable for it — the
+       skip is structural rather than a flag. skipSeo still applies to the per-business batch. */
+    const runResults = (skipSeo || marketOnly)
       ? { seo: { skipped: "seo_scan_not_requested", checked_at: new Date().toISOString() } }
       : {};
     const { data: run, error: runErr } = await service

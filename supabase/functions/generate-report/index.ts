@@ -184,9 +184,17 @@ Deno.serve(async (req) => {
     // --- Load the audit (business context). ---
     const { data: audit } = await service
       .from("ai_audits")
-      .select("id, lead_id, business_name, business_type, location_text, country, has_website, website, business_scope, specialism, credentials, business_phone, business_address, business_email")
+      .select("id, lead_id, business_name, business_type, location_text, country, has_website, website, business_scope, specialism, credentials, business_phone, business_address, business_email, is_market")
       .eq("id", auditId).maybeSingle();
     if (!audit) return json({ ok: false, error: "audit_not_found" }, 404);
+    /* ⛔ MARKET AUDITS HAVE NO CLIENT REPORT. Belt-and-braces behind the auto-report guard in
+       process-ai-audit-queue: this function is also reachable by hand and from the operator UI, and
+       a report titled "[market] locksmiths · Hastings" must be impossible from every direction.
+       Reads the column, never the name. */
+    if ((audit as { is_market?: boolean }).is_market === true) {
+      console.log(`[generate-report] REFUSED for market audit ${auditId}: no business attached.`);
+      return json({ ok: false, error: "market_audit_has_no_report" }, 400);
+    }
 
     // --- Latest run for this audit → results (AI-visibility questions + SEO). Optional. ---
     const { data: latestRun } = await service
