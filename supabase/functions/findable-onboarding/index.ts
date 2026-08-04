@@ -35,11 +35,27 @@ function json(body: unknown, status = 200): Response {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
 const GBP_CONSENT = new Set(["yes_all", "listings_only", "discuss"]);
+// Who can change their website — the pages route's dependency (2026-08-04 questionnaire).
+const WEBSITE_MANAGER = new Set(["direct_access", "web_company", "owner_only"]);
 const SUBMIT_COOLDOWN_MS = 10 * 60_000;   // one submission per lead per 10 min
 
 const clip = (v: unknown, max: number): string | null => {
   const s = typeof v === "string" ? v.trim() : "";
   return s ? s.slice(0, max) : null;
+};
+
+/** A JSON array of trimmed, de-duplicated, length-capped strings — or null when empty.
+ *  For the jsonb answer columns (services_list, areas_list): never trust shape from the
+ *  public client, and never store an empty array where a NULL reads more honestly. */
+const clipList = (v: unknown, maxItems: number, maxLen: number): string[] | null => {
+  if (!Array.isArray(v)) return null;
+  const out: string[] = [];
+  for (const item of v) {
+    const s = typeof item === "string" ? item.trim().slice(0, maxLen) : "";
+    if (s && !out.some((x) => x.toLowerCase() === s.toLowerCase())) out.push(s);
+    if (out.length >= maxItems) break;
+  }
+  return out.length ? out : null;
 };
 
 /**
@@ -163,12 +179,29 @@ Deno.serve(async (req) => {
       if (!incomplete && gbpConsent === "yes_all" && !gbpEmail) {
         return json({ ok: false, error: "missing_gbp_email" }, 400);
       }
+      // The GBP email's validation pattern, reused for the web company's address: store a
+      // valid email or an honest NULL, never junk.
+      const websiteEmailRaw = clip(a.website_manager_email, 200);
       const answers = {
+        // standout is no longer asked (cut 2026-08-04: nothing read it); the column stays
+        // and old rows keep their values.
         standout: clip(a.standout, 2000),
+        // BOTH shapes on purpose: `services` (joined string) is the audit-facing field the
+        // baseline turns into specialisms — unchanged; `services_list` (jsonb) is the
+        // structured page list the new questionnaire captures.
         services: clip(a.services, 2000),
-        // Storage only. `services` is the audit-facing field (it becomes specialisms),
-        // so the areas answer is kept out of it deliberately.
+        services_list: clipList(a.services_list, 40, 120),
+        // Surrounding towns they want work from, priority-ordered. DELIVERY-facing (a page
+        // per service per town). Deliberately NOT fed to the audit: the multi-area audit is
+        // unscoped, and confirmed_location below stays the measurement town.
+        areas_list: clipList(a.areas_list, 30, 120),
+        // Legacy column, kept accepting for old callers; the new flow sends areas_list.
         areas_wanted: clip(a.areas_wanted, 2000),
+        // Who can change their website + the web company's email when that's the answer.
+        website_manager: typeof a.website_manager === "string" && WEBSITE_MANAGER.has(a.website_manager) ? a.website_manager : null,
+        website_manager_email: websiteEmailRaw && EMAIL_RE.test(websiteEmailRaw) ? websiteEmailRaw : null,
+        // The competitor who keeps winning their work — one name, tells us who to track.
+        competitor_name: clip(a.competitor_name, 200),
         confirmed_location: confirmedLocation,
         /* Full postal address, SEPARATE from confirmed_location on purpose: that value is what
            create-ai-audit builds "[service] in [town]" from, so an address in it would generate
@@ -192,7 +225,9 @@ Deno.serve(async (req) => {
         let res = await attempt({ ...answers, ...extra });
         // Drop whichever optional column the database does not have yet and retry, so a
         // pending migration can never cost us a real submission.
-        for (const col of ["areas_wanted", "incomplete", "contact_email", "business_address"]) {
+        // website_manager_email BEFORE website_manager: the name-substring match would
+        // otherwise drop both columns when only the email one is missing.
+        for (const col of ["services_list", "areas_list", "website_manager_email", "website_manager", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"]) {
           if (res.error && new RegExp(col, "i").test(res.error.message ?? "")) {
             console.warn(`[findable-onboarding] ${col} column missing, saving without it`);
             const reduced = { ...answers } as Record<string, unknown>;
