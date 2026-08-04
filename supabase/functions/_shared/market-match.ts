@@ -111,6 +111,21 @@ export function candidateCores(name: string, ctx: MarketMatchContext): Candidate
     // If the same core arrives both ways, the STRONGER (prefix-eligible) reading wins.
     const prev = out.get(core);
     if (!prev || (prev.exactOnly && !exactOnly)) out.set(core, { core, exactOnly });
+
+    /* THE LEADING SEGMENT BEFORE A CONNECTOR, as an EXACT-ONLY candidate.
+       "Timpson Locksmiths and Safe Engineers" in a locksmiths market strips to
+       "timpson and safe engineers" — nothing equals that, and prefix-matching it against the
+       plain "Timpson" is refused (correctly: see namesMatch). Hastings therefore listed five
+       Timpson rows as a chain entry AND the sixth as a separate prospect.
+       "timpson" is what the firm is actually called, so it is offered as its own candidate and the
+       two names now meet by EQUALITY. exactOnly, because it is a fragment of a reduced name and
+       must never absorb a longer one — which is what keeps the Wrexham junk ("Mobile",
+       "Industrial") from swallowing real entries. */
+    const connectorAt = stripped.indexOf("and");
+    if (connectorAt > 0) {
+      const lead = stripped.slice(0, connectorAt).join(" ");
+      if (lead.length >= MIN_CORE_CHARS && !out.has(lead)) out.set(lead, { core: lead, exactOnly: true });
+    }
   }
   if (out.size === 0) {
     // Nothing distinctive survived. Fall back to the FULL normalised name so the entry still has an
@@ -146,6 +161,13 @@ function tokenPrefix(a: string, b: string): boolean {
  * Every town variant ("LockRite Wisbech", "LockRite Locksmiths Wisbech", "LockRite") still merges,
  * because after stripping they are EQUAL, not merely prefixes. Prefix is only doing work for the
  * genuinely-extended names, which is where it belongs.
+ *
+ * ⚠️ THIS RULE WAS DELIBERATELY NOT LOOSENED to fix the Hastings Timpson duplicate. Allowing a
+ * real name to prefix-match a longer RESIDUE would have merged it, but measured over four real
+ * markets it also merged junk fragments in Wrexham ("Mobile" absorbing "Mobile Auto Electricians",
+ * "Industrial" + "Wrexham Industrial Estate") — and the same mechanism could absorb a genuine pool
+ * business into a named entry, hiding a prospect. The connector split in candidateCores fixes
+ * Timpson by EQUALITY instead, which needs no loosening here.
  */
 export function namesMatch(a: Candidate[], b: Candidate[]): boolean {
   for (const x of a) {

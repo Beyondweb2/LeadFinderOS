@@ -286,6 +286,10 @@ Deno.serve(async (req) => {
     const VALID_SCOPES = new Set(["national", "local", "hybrid"]);
     const businessScope: BusinessScope = typeof body.business_scope === "string" && VALID_SCOPES.has(body.business_scope)
       ? (body.business_scope as BusinessScope) : null;
+    /* Caller asked for NO website SEO scan (market-populating batches). Opt-IN only, so every
+       existing caller is untouched, and it can only ever REDUCE spend - which is why it needs no
+       internal-caller gate. Applied at the run insert below. */
+    const skipSeo: boolean = body.skip_seo === true;
 
     if (!businessName && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
 
@@ -540,9 +544,20 @@ Deno.serve(async (req) => {
       .order("run_number", { ascending: false }).limit(1).maybeSingle();
     const runNumber = (lastRun?.run_number ?? 0) + 1;
 
+    /* SKIP THE SEO SCAN, WITHOUT A SCHEMA CHANGE.
+       A market-populating batch wants to know who AI names in a town; grading five strangers'
+       websites was ~60% of its bill ($0.12 each) and answered a question nobody asked.
+       maybeRunSeoStep in process-ai-audit-queue skips any run whose results.seo is already set,
+       so seeding an explicit SKIP MARKER here is all it takes. The marker deliberately carries no
+       `categories`, so isReusableSeo (queue) and isRenderableSeo (report) both reject it: nothing
+       downstream can mistake it for a grade, and no report renders an SEO block from it.
+       Only the CALLER decides this - default is unchanged, so every existing path still scans. */
+    const runResults = skipSeo
+      ? { seo: { skipped: "seo_scan_not_requested", checked_at: new Date().toISOString() } }
+      : {};
     const { data: run, error: runErr } = await service
       .from("ai_audit_runs")
-      .insert({ audit_id: auditId, user_id: userId, run_number: runNumber, status: "pending", results: {} })
+      .insert({ audit_id: auditId, user_id: userId, run_number: runNumber, status: "pending", results: runResults })
       .select("id")
       .single();
     if (runErr || !run) return json({ ok: false, error: runErr?.message ?? "run_insert_failed" }, 500);

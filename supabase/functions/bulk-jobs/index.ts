@@ -218,6 +218,11 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     // Operator-chosen count from the bulk dialog; falls back to the shared outreach-hook value
     // rather than a bare literal, so the cheap paths move together or not at all.
     const questionCount = Number((job.params as { question_count?: unknown } | null)?.question_count) || OUTREACH_HOOK_QUESTIONS;
+    /* Market batches ask for skip_seo: the point is who AI names in a town, not a website grade
+       for five businesses nobody has sold to, and the scan was ~60% of the batch's bill. Passed
+       straight through; create-ai-audit seeds the run's results.seo skip marker. Absent/false on
+       every other path, so ordinary audits still scan. */
+    const skipSeo = (job.params as { skip_seo?: unknown } | null)?.skip_seo === true;
     const res = await fetch(`${SUPABASE_URL}/functions/v1/create-ai-audit`, {
       method: "POST",
       headers: internalHeaders,
@@ -231,6 +236,7 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
         has_website: !!website,
         website: website || undefined,
         question_count: questionCount,
+        ...(skipSeo ? { skip_seo: true } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));

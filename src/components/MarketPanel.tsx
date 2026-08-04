@@ -16,6 +16,7 @@ import { shortDate } from '@/lib/auditErrors';
 import {
   AUDIT_EST_USD_PER_QUESTION, MARKET_AUDIT_QUESTIONS, MARKET_AUDIT_MAX,
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
+  MARKET_SKIP_SEO, SEO_SCAN_USD, marketBatchCost,
   type MarketPoolRow,
 } from '@/lib/marketView';
 import type { Lead } from '@/types/lead';
@@ -65,6 +66,11 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
   const [reExtractBusy, setReExtractBusy] = useState(false);
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
+  /* An ACTIVE bulk job blocks bulk-jobs' create with a 409, and until now that was discovered
+     AFTER the CRM rows had been written — so the operator got leads and no audits, silently.
+     Checked when the dialog opens, and stated before anything is spent. null = not checked yet. */
+  const [activeJob, setActiveJob] = useState<{ job_type: string; status: string } | null>(null);
+  const [jobCheckDone, setJobCheckDone] = useState(false);
 
   /* The market is whatever is in the two boxes. Reload whenever either changes, and clear the
      per-row "Added" ticks with it so they can never carry across from a different town. */
@@ -161,7 +167,12 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
         return;
       }
       const { data, error: fnErr } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>('bulk-jobs', {
-        body: { action: 'create', job_type: 'audit', lead_ids: leadIds, params: { question_count: MARKET_AUDIT_QUESTIONS } },
+        // skip_seo: a market batch measures who AI names, not five strangers' website grades. The
+        // scan was ~60% of the bill; create-ai-audit honours the flag per run.
+        body: {
+          action: 'create', job_type: 'audit', lead_ids: leadIds,
+          params: { question_count: MARKET_AUDIT_QUESTIONS, skip_seo: MARKET_SKIP_SEO },
+        },
       });
       if (fnErr || data?.ok === false) {
         let real = fnErr?.message ?? data?.error ?? 'Could not start the audit batch.';
@@ -169,7 +180,16 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
           const ctx = (fnErr as unknown as { context?: Response })?.context;
           if (ctx?.text) { const b = await ctx.text(); const p = b ? JSON.parse(b) as { error?: string } : null; if (p?.error) real = p.error; }
         } catch { /* keep the wrapper message */ }
-        toast({ title: 'Audit batch not started', description: `${real} The ${leadIds.length} businesses were still added to your CRM.`, variant: 'destructive' });
+        /* LEADS WRITTEN, NO AUDITS: say it in full. This is the state the 409 used to leave
+           behind silently — CRM rows with nothing measuring them. Names what happened, what it
+           cost, and what to do, because "not started" alone left the operator to work out that
+           they now had orphaned leads. */
+        console.info('[market] audit batch refused after CRM writes', { leadIds, error: real });
+        toast({
+          title: `${leadIds.length} lead${leadIds.length === 1 ? '' : 's'} added, but NO audits started`,
+          description: `${real} The ${leadIds.length} business${leadIds.length === 1 ? '' : 'es'} ${leadIds.length === 1 ? 'is' : 'are'} now in your CRM with nothing measuring them. Run the audits from Outreach when the other job finishes, or delete them.`,
+          variant: 'destructive',
+        });
         return;
       }
       setAuditOpen(false);
@@ -183,6 +203,50 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
     }
   }, [view, chosen, auditCount, addLead, asLead, toast, reload]);
 
+  /* ── OPENING THE AUDIT CONFIRM ────────────────────────────────────────────────────────────────
+     The button is NEVER disabled. A disabled button gives no reason, and "nothing happened" is the
+     worst thing this panel can do — it cost a diagnosis session to establish the click was landing
+     at all. So: log the counts, open the dialog whatever the state, and let the dialog explain any
+     refusal. The toast covers the one case where the dialog itself might not mount. */
+  const openAuditDialog = useCallback(() => {
+    const pool = view?.pool ?? [];
+    const chains = pool.filter((p) => p.isChain);
+    const audit = pool.filter((p) => !p.isChain);
+    // Deliberately console.info, not debug: this is the proof the click landed, and it must
+    // survive a default-filtered console.
+    console.info('[market] audit confirm opened', {
+      trade: chosen?.trade ?? null, town: chosen?.town ?? null,
+      poolEntries: pool.length, auditable: audit.length, chains: chains.length,
+      completedRuns: view?.concentration.completeRuns ?? 0,
+    });
+    if (audit.length === 0) {
+      toast({
+        title: 'Nothing here can be audited',
+        description: pool.length === 0
+          ? 'The prospect pool is empty, so there is nothing to audit. Run the lead search first.'
+          : `All ${pool.length} ${pool.length === 1 ? 'entry' : 'entries'} in this pool are chain branches. Chains are not prospects, so there is nothing to audit here.`,
+        variant: 'destructive',
+      });
+    }
+    setAuditOpen(true);
+    // Re-checked every time the dialog opens: a job may have started or finished since the last look.
+    setJobCheckDone(false);
+    setActiveJob(null);
+    void (async () => {
+      try {
+        // bulk_jobs is not in the generated types; RLS scopes it to the caller's own rows.
+        const client = supabase as unknown as { from: (t: string) => { select: (c: string) => { in: (c: string, v: string[]) => { limit: (n: number) => Promise<{ data: { job_type: string; status: string }[] | null }> } } } };
+        const { data } = await client.from('bulk_jobs').select('job_type, status').in('status', ['queued', 'running']).limit(1);
+        setActiveJob(data?.[0] ?? null);
+      } catch {
+        /* A failed check must not block the run: the dialog says it could not check rather than
+           claiming the path is clear. */
+      } finally {
+        setJobCheckDone(true);
+      }
+    })();
+  }, [view, chosen, toast]);
+
   const conc = view?.concentration;
   /* POOL ARITHMETIC, derived here so the panel can show its working.
      poolFound counts Places ROWS; poolEntries counts them after chain collapsing. The difference is
@@ -191,8 +255,21 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
   const poolEntries = (view?.pool.length ?? 0) + (view?.poolExcluded.length ?? 0);
   const collapsedRows = Math.max(0, poolFound - poolEntries);
   const auditable = view ? view.pool.filter((p) => !p.isChain) : [];
+  const chainEntries = view ? view.pool.filter((p) => p.isChain).length : 0;
   const plannedAudits = Math.min(auditCount, auditable.length);
-  const auditCost = plannedAudits * MARKET_AUDIT_QUESTIONS * AUDIT_EST_USD_PER_QUESTION;
+  /* THE TRUE ESTIMATE, ITEMISED. The old figure counted question runs only and read ~4x low
+     ($0.19 against a real $0.75-0.80). The targets are the ones that would actually be audited, so
+     the website count — and therefore the SEO saving — describes this batch, not an average. */
+  const targets = auditable.slice(0, plannedAudits);
+  const withWebsite = targets.filter((t) => !t.noWebsite).length;
+  const cost = marketBatchCost(plannedAudits, MARKET_AUDIT_QUESTIONS, withWebsite);
+  /* MEASURED, NOT MEASURABLE. completeRuns is what produced competitor names; audits alone can be
+     pending or failed. With zero completed runs nobody CAN have been named, so the never-named list
+     is not a prospect list — it is just the pool. Item 6: the two states must read differently. */
+  const completedRuns = view?.concentration.completeRuns ?? 0;
+  const auditsExist = (view?.concentration.audits ?? 0) > 0;
+  const measured = completedRuns > 0;
+  const pendingAudits = Math.max(0, (view?.concentration.audits ?? 0) - completedRuns);
   const pct = apifyUsage?.usagePct ?? null;
   const tone = apifyTone(pct);
 
@@ -242,13 +319,16 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               Nothing has been measured in this market, so there is nothing to say about who AI names
               or how concentrated it is. That is not the same as a market where AI names nobody.
             </p>
+            {/* THE ARITHMETIC THE BUTTON ACTUALLY USES. This line said "9 found and ready to
+                audit" from pool.length while the button counted auditable (chains excluded), so
+                the sentence and the control could disagree by the number of chains. */}
             <p className="text-xs text-muted-foreground">
               {view.poolState.state === 'ready'
-                ? `${view.pool.length} local business${view.pool.length === 1 ? '' : 'es'} found and ready to audit.`
+                ? `${view.pool.length} found, ${auditable.length} auditable${chainEntries > 0 ? `, ${chainEntries} chain ${chainEntries === 1 ? 'entry' : 'entries'} excluded` : ''}.`
                 : 'Run the lead search first to find the local businesses, then audit them.'}
             </p>
             <div className="flex flex-wrap gap-2 pt-0.5">
-              <Button size="sm" onClick={() => setAuditOpen(true)} disabled={auditable.length === 0}>
+              <Button size="sm" onClick={openAuditDialog}>
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Run audits for this town
               </Button>
               <Button size="sm" variant="outline" onClick={() => setSearchOpen(true)} disabled={searching}>
@@ -357,7 +437,8 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
           <Card>
             <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-2">
               <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                <MapPin className="h-4 w-4" /> Who AI has never named
+                <MapPin className="h-4 w-4" />
+                {measured ? 'Who AI has never named' : 'Local businesses in this pool'}
                 {view.poolState.state === 'ready' && <Badge variant="secondary">{view.pool.length}</Badge>}
               </CardTitle>
             </CardHeader>
@@ -382,10 +463,33 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               )}
               {view.poolState.state === 'ready' && (
                 <>
+                  {/* NOTHING MEASURED = NOTHING TO SUBTRACT. With no completed run, every business
+                      is "never named" by default, which would dress an unmeasured pool up as a
+                      prospect list. This notice comes FIRST and the list below is a pool, not a
+                      prospect list, until a run completes. The louder the list, the louder this
+                      has to be. */}
+                  {!measured && (
+                    <div className="rounded-md border-2 border-amber-500/50 bg-amber-500/10 px-3 py-2.5">
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                        {auditsExist
+                          ? `Not measured yet: ${pendingAudits} audit${pendingAudits === 1 ? '' : 's'} for this market ${pendingAudits === 1 ? 'has' : 'have'} not completed.`
+                          : 'Nothing has been measured in this market yet.'}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-snug text-amber-700/90 dark:text-amber-400/90">
+                        No completed run means no competitor names, so there is nothing to subtract —
+                        every business below would look invisible whatever AI actually says. This is
+                        the local business pool, not a prospect list. Run audits first, then this
+                        becomes "who AI has never named".
+                      </p>
+                    </div>
+                  )}
                   <p className="text-[11px] text-muted-foreground">
                     From {view.poolState.total} businesses found for &ldquo;{view.poolState.keyword}&rdquo;
                     {' '}({view.poolState.scope === 'town' ? 'town boundary' : `${Math.round(view.poolState.radiusM / 1000)}km radius`}),
-                    searched {shortDate(view.poolState.searchedAt) ?? 'recently'}. {view.poolMatchedNamed} of them AI already names.
+                    searched {shortDate(view.poolState.searchedAt) ?? 'recently'}.
+                    {measured
+                      ? ` ${view.poolMatchedNamed} of them AI already names.`
+                      : ' Nothing measured, so none have been subtracted.'}
                   </p>
                   {/* A radius pool is not a town pool. Say so rather than letting a wider list
                       masquerade as the market that was measured. */}
@@ -463,7 +567,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                   )}
 
                   <div className="flex flex-wrap gap-2 pt-1">
-                    <Button size="sm" onClick={() => setAuditOpen(true)} disabled={auditable.length === 0}>
+                    <Button size="sm" onClick={openAuditDialog}>
                       <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Run audits for this town
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setSearchOpen(true)} disabled={searching}>
@@ -541,6 +645,34 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>Run audits for {chosen?.town}?</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            {/* THE REFUSAL, WITH ITS REASON. The button no longer disables itself, so any reason
+                the batch cannot run has to be stated here instead of being mimed by a greyed
+                control. */}
+            {auditable.length === 0 && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-[13px] text-destructive">
+                <p className="font-semibold">Nothing here can be audited.</p>
+                <p className="mt-1 leading-snug">
+                  {(view?.pool.length ?? 0) === 0
+                    ? 'The pool is empty for this trade and town. Run the lead search first, then come back.'
+                    : `All ${view?.pool.length} ${view?.pool.length === 1 ? 'entry' : 'entries'} in this pool are chain branches (${chainEntries} chain ${chainEntries === 1 ? 'entry' : 'entries'}). Chains are not prospects, so there is nothing here worth auditing.`}
+                </p>
+              </div>
+            )}
+
+            {/* AN ACTIVE BULK JOB, CAUGHT BEFORE ANYTHING IS WRITTEN. bulk-jobs allows exactly one
+                job per user and 409s otherwise — and that used to be discovered only AFTER the CRM
+                rows existed, which is how "choosing 5 did nothing, choosing 1 worked" happened. */}
+            {activeJob && (
+              <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 text-[13px] text-amber-700 dark:text-amber-400">
+                <p className="font-semibold">You already have a bulk job running.</p>
+                <p className="mt-1 leading-snug">
+                  A {activeJob.job_type} job is {activeJob.status}. Only one runs at a time, so this batch
+                  would be refused after the businesses had already been added to your CRM. Wait for it to
+                  finish, or cancel it, then run this.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">How many businesses</Label>
               <Select value={String(auditCount)} onValueChange={(v) => setAuditCount(Number(v))}>
@@ -556,13 +688,33 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               </p>
             </div>
 
+            {/* THE BILL, ITEMISED. The old line quoted question runs only and read ~4x low. Every
+                line the batch actually incurs is listed, so the total can be checked rather than
+                trusted. */}
             <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-[13px]">
-              <p className="font-semibold">
-                {plannedAudits} audit{plannedAudits === 1 ? '' : 's'} × {MARKET_AUDIT_QUESTIONS} questions
-                {' '}= ~${auditCost.toFixed(2)}
-              </p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                At ${AUDIT_EST_USD_PER_QUESTION} per question — the same estimate the AI Audit page uses. An estimate, not a bill.
+              <p className="font-semibold">Estimated total ~${cost.total.toFixed(2)}</p>
+              <ul className="mt-1.5 space-y-1">
+                {cost.lines.map((l) => (
+                  <li key={l.label} className="flex items-baseline justify-between gap-3 text-[11px] text-muted-foreground">
+                    <span>
+                      <span className="font-medium text-foreground/90">{l.label}</span>
+                      {' — '}{l.detail}
+                      {l.unverified && <span className="text-amber-600 dark:text-amber-500"> (unverified figure)</span>}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-foreground/80">${l.usd.toFixed(2)}</span>
+                  </li>
+                ))}
+              </ul>
+              {MARKET_SKIP_SEO && (
+                <p className="mt-1.5 text-[11px] leading-snug text-green-700 dark:text-green-500">
+                  Website SEO scans are skipped on a market batch, saving ~${cost.seoSaved.toFixed(2)}
+                  {' '}({withWebsite} of these {withWebsite === 1 ? 'has' : 'have'} a website, at ${SEO_SCAN_USD} each).
+                  This batch is about who AI names, not website grades.
+                </p>
+              )}
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Questions at ${AUDIT_EST_USD_PER_QUESTION} each — the same measured figure the AI Audit page uses.
+                An estimate, not a bill.
               </p>
               {/* THE CRM SIDE EFFECT, STATED. bulk-jobs audits are keyed on lead ids and refuse
                   anything not in the CRM, so these businesses become leads as part of the run. */}
@@ -591,9 +743,11 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAuditOpen(false)}>Cancel</Button>
-            <Button onClick={() => void runAudits()} disabled={auditBusy || plannedAudits === 0}>
-              {auditBusy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Add {plannedAudits} to CRM and run
+            {/* Still disabled when the run genuinely cannot proceed — but now every reason is
+                written above it, and the check that produced it is stated (or admitted). */}
+            <Button onClick={() => void runAudits()} disabled={auditBusy || plannedAudits === 0 || !!activeJob || !jobCheckDone}>
+              {(auditBusy || !jobCheckDone) && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {!jobCheckDone ? 'Checking for running jobs' : `Add ${plannedAudits} to CRM and run`}
             </Button>
           </DialogFooter>
         </DialogContent>

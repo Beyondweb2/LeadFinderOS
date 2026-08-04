@@ -142,3 +142,63 @@ export const MARKET_AUDIT_QUESTIONS = 3;
 
 /** bulk-jobs' JOB_CAPS.audit. A market run cannot exceed it, so the picker stops there. */
 export const MARKET_AUDIT_MAX = 25;
+
+/* ── WHAT A MARKET BATCH ACTUALLY COSTS ────────────────────────────────────────────────────────
+   The confirm used to quote questions ONLY and understated the bill by ~4x: 5 audits x 3
+   questions read as $0.19 while the real spend was $0.75-0.80. The two missing lines were the
+   per-business SEO scan (the single biggest item, ~60% of it) and the Places lookup that fires
+   when a business is added to the CRM. Every figure here is itemised on screen for that reason —
+   an estimate the operator cannot break down is an estimate they cannot check. */
+
+/** Apify on-page SEO scan, per audited business that HAS a website. From
+ *  process-ai-audit-queue's own costing comment ($0.12 per scan, re-costed against billed spend).
+ *  A market batch now SKIPS these (see MARKET_SKIP_SEO), so this is only used to show the
+ *  operator what skipping them saves. */
+export const SEO_SCAN_USD = 0.12;
+
+/** Google Place Details, charged once per business added to the CRM (the phone/address/rating
+ *  lookup in useOutreach.addLead).
+ *  ⚠️ INHERITED CONSTANT, NEVER VERIFIED AGAINST A BILL — it is google-place-details' own
+ *  logUsage figure. Shown on screen labelled as unverified rather than quietly folded in. */
+export const PLACE_DETAILS_USD = 0.017;
+
+/** Market-populating audits skip the SEO scan. The point of a market batch is who AI names in a
+ *  town, not a website grade for five businesses nobody has sold to — and the scan was ~60% of
+ *  the spend. Implemented WITHOUT a schema change: create-ai-audit seeds the run's results.seo
+ *  with a skip marker, which is the same field the queue already treats as "already graded".
+ *  The marker carries no categories, so isRenderableSeo / isReusableSeo both reject it and no
+ *  report ever renders a fabricated grade from it. */
+export const MARKET_SKIP_SEO = true;
+
+export interface MarketCostLine { label: string; detail: string; usd: number; unverified?: boolean }
+
+/** The itemised estimate the confirm renders. `withWebsite` counts only the businesses that would
+ *  have been SEO-scanned, so the saving line is honest about which ones it applies to. */
+export function marketBatchCost(
+  audits: number,
+  questionsEach: number,
+  withWebsite: number,
+): { lines: MarketCostLine[]; total: number; seoSaved: number } {
+  const lines: MarketCostLine[] = [
+    {
+      label: "AI question runs",
+      detail: `${audits} audit${audits === 1 ? "" : "s"} x ${questionsEach} question${questionsEach === 1 ? "" : "s"} at $${AUDIT_EST_USD_PER_QUESTION}`,
+      usd: audits * questionsEach * AUDIT_EST_USD_PER_QUESTION,
+    },
+    {
+      label: "Google Places lookup",
+      detail: `${audits} business${audits === 1 ? "" : "es"} added to the CRM at ~$${PLACE_DETAILS_USD}`,
+      usd: audits * PLACE_DETAILS_USD,
+      unverified: true,
+    },
+  ];
+  const seoSaved = MARKET_SKIP_SEO ? withWebsite * SEO_SCAN_USD : 0;
+  if (!MARKET_SKIP_SEO) {
+    lines.push({
+      label: "Website SEO scans",
+      detail: `${withWebsite} of them have a website, at $${SEO_SCAN_USD}`,
+      usd: withWebsite * SEO_SCAN_USD,
+    });
+  }
+  return { lines, total: lines.reduce((s, l) => s + l.usd, 0), seoSaved };
+}
