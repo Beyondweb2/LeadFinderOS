@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { norm } from "../../../src/lib/buildPlaybook.ts";
 import { buildMatchContext, groupNames, keyIndex } from "../_shared/market-match.ts";
 import { generateCacheKey } from "../_shared/search-cache-key.ts";
+import { questionKey } from "../../../src/lib/seedGuard.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
@@ -86,7 +87,7 @@ async function all<T>(service: Client, table: string, cols: string, apply: (q: C
 
 interface AuditRow { id: string; business_type: string | null; location_text: string | null; business_name: string | null }
 interface RunRow { id: string; audit_id: string; status: string | null }
-interface QueueRow { id: string; run_id: string; result: Record<string, unknown> | null }
+interface QueueRow { id: string; run_id: string; question?: string | null; result: Record<string, unknown> | null }
 interface HistoryRow { id: string; keyword: string; location: string; radius: number; searched_at: string }
 /** Shape search-leads stores in search_cache — a bare array, or { leads, region } for region runs. */
 interface CachedLead {
@@ -176,18 +177,31 @@ Deno.serve(async (req) => {
 
     /* -- 2. RAW COMPETITOR MENTIONS ------------------------------------------------------- */
     const queue = runIds.length
-      ? await all<QueueRow>(service, "ai_audit_queue", "id, run_id, result", (q) => q.in("run_id", runIds))
+      ? await all<QueueRow>(service, "ai_audit_queue", "id, run_id, question, result", (q) => q.in("run_id", runIds))
       : [];
 
     const mentions: { auditId: string; name: string }[] = [];
     let engineBlocks = 0;
     let truncatedBlocks = 0;
 
+    /* ONE QUESTION, COUNTED ONCE PER RUN. Measured 2026-08-04: 18 Hastings questions held only 12
+       distinct ones, because the queue treated "locksmith services in hastings uk" and "... in
+       Hastings UK" as different. Two rows asking the same thing in different capitals answered the
+       same way, which inflated every MENTION total and therefore the top-share percentages and the
+       established/thin mention test. The generator no longer produces them (dedupeQuestions), but
+       historical runs already hold them, so the fold protects itself.
+       Scoped to the RUN, deliberately: the same question in a different AUDIT is a separate
+       measurement of the market and still counts — which is why `audits` is the robust signal. */
+    const seenPerRun = new Set<string>();
+    let dupRows = 0;
     for (const row of queue) {
       const result = row.result;
       if (!result || typeof result !== "object") continue;
       const auditId = auditOfRun.get(row.run_id);
       if (!auditId) continue;
+      const qk = `${row.run_id}|${questionKey(String((row as { question?: unknown }).question ?? ""))}`;
+      if (seenPerRun.has(qk)) { dupRows += 1; continue; }
+      seenPerRun.add(qk);
       for (const payload of Object.values(result)) {
         const block = payload as { competitors?: unknown; named?: unknown } | null;
         // Only real engine blocks carry `named`; this skips _apify and _cost_usd.
@@ -203,6 +217,10 @@ Deno.serve(async (req) => {
           if (name) mentions.push({ auditId, name });
         }
       }
+    }
+
+    if (dupRows > 0) {
+      console.log(`[market-view] ${dupRows} case-duplicate question row(s) ignored in the mention fold`);
     }
 
     /* -- 3. THE LEAD POOL, FROM CACHE ONLY -------------------------------------------------- */
