@@ -48,6 +48,11 @@ export interface MarketMatchContext {
   /** Tokens of the trade being viewed, plus the obvious singular/plural pair. Dropping these is
    *  what lets "LockRite" meet "LockRite Locksmiths". */
   tradeTokens: Set<string>;
+  /** token -> its canonical form, for every town/trade token and its plural. Used ONLY to build the
+   *  fallback key of a name with nothing distinctive left, so "Hastings Locksmiths" and "Hastings
+   *  Locksmith" produce the SAME key instead of two entries for one firm. Safe by construction:
+   *  these are exactly the tokens already known to carry no distinguishing information. */
+  canonical: Map<string, string>;
 }
 
 /** Both singular and plural, because a market is "locksmiths" while a name says "Locksmith". */
@@ -62,9 +67,20 @@ function withPlurals(tokens: string[]): string[] {
 }
 
 export function buildMatchContext(trade: string, town: string): MarketMatchContext {
-  const townTokens = new Set(withPlurals(normalizeForMatch(town).split(/\s+/).filter(Boolean)));
-  const tradeTokens = new Set(withPlurals(normalizeForMatch(trade).split(/\s+/).filter(Boolean)));
-  return { townTokens, tradeTokens };
+  const townBase = normalizeForMatch(town).split(/\s+/).filter(Boolean);
+  const tradeBase = normalizeForMatch(trade).split(/\s+/).filter(Boolean);
+  const townTokens = new Set(withPlurals(townBase));
+  const tradeTokens = new Set(withPlurals(tradeBase));
+  /* Canonical form of every town/trade token: the SINGULAR of the word as given. Both spellings map
+     to it, so a fallback key built from these tokens is spelling-independent. */
+  const canonical = new Map<string, string>();
+  for (const t of [...townBase, ...tradeBase]) {
+    const singular = t.endsWith("s") ? t.slice(0, -1) : t;
+    canonical.set(t, singular);
+    canonical.set(singular, singular);
+    canonical.set(`${singular}s`, singular);
+  }
+  return { townTokens, tradeTokens, canonical };
 }
 
 /** Split a name into its outside-brackets text and each inside-brackets text.
@@ -128,10 +144,20 @@ export function candidateCores(name: string, ctx: MarketMatchContext): Candidate
     }
   }
   if (out.size === 0) {
-    // Nothing distinctive survived. Fall back to the FULL normalised name so the entry still has an
-    // identity of its own — never an empty key, which would merge every such name into one.
+    /* Nothing distinctive survived ("Hastings Locksmiths" inside a Hastings locksmiths market is a
+       description, not a name). Fall back to the full normalised name so the entry keeps an identity
+       of its own — never an empty key, which would merge every such name into one.
+
+       CANONICALISED, and this is the fix for a real split: "Hastings Locksmiths" (12 mentions,
+       established) and "Hastings Locksmith" (1 mention, barely named) were TWO entries for one firm,
+       which inflated the barely-named count and understated the established one. Only town and trade
+       tokens are canonicalised — words already known to carry no distinguishing information — so no
+       two genuinely different firms can be brought together by this. */
     const full = normalizeForMatch(name).trim();
-    if (full) out.set(full, { core: full, exactOnly: false });
+    if (full) {
+      const canonicalFull = full.split(/\s+/).map((t) => ctx.canonical.get(t) ?? t).join(" ");
+      out.set(canonicalFull, { core: canonicalFull, exactOnly: false });
+    }
   }
   return [...out.values()];
 }
@@ -169,12 +195,49 @@ function tokenPrefix(a: string, b: string): boolean {
  * business into a named entry, hiding a prospect. The connector split in candidateCores fixes
  * Timpson by EQUALITY instead, which needs no loosening here.
  */
-export function namesMatch(a: Candidate[], b: Candidate[]): boolean {
+/** Is `t` a variant of the trade being viewed — a stem match rather than an exact one?
+ *  "locks" against a "locksmiths" market shares the 5-char prefix "locks", so a firm called
+ *  "Little's Locks" is describing the same trade as "Little's Locksmiths". Requires 4+ shared
+ *  leading characters, so "secure" never matches "locksmith". */
+const TRADE_STEM_MIN = 4;
+function isTradeAdjacent(t: string, ctx: MarketMatchContext): boolean {
+  if (ctx.tradeTokens.has(t)) return true;
+  for (const trade of ctx.tradeTokens) {
+    const n = Math.min(t.length, trade.length);
+    if (n < TRADE_STEM_MIN) continue;
+    let shared = 0;
+    while (shared < n && t[shared] === trade[shared]) shared++;
+    if (shared >= TRADE_STEM_MIN) return true;
+  }
+  return false;
+}
+
+/** Country/region words, which qualify a name without identifying a different firm. */
+const COUNTRY_TOKENS = new Set(["uk", "gb", "england", "scotland", "wales", "britain", "ltd", "limited"]);
+
+export function namesMatch(a: Candidate[], b: Candidate[], ctx?: MarketMatchContext): boolean {
   for (const x of a) {
     for (const y of b) {
       if (x.core === y.core) return true;
-      if (x.exactOnly || y.exactOnly) continue;        // shorthand matches only exactly
-      if (tokenPrefix(x.core, y.core) || tokenPrefix(y.core, x.core)) return true;
+      if (!x.exactOnly && !y.exactOnly) {
+        if (tokenPrefix(x.core, y.core) || tokenPrefix(y.core, x.core)) return true;
+        continue;
+      }
+      /* ── A RESIDUE MAY PREFIX-MATCH, BUT ONLY WHEN THE EXTRA WORDS SAY NOTHING NEW ────────────
+         The blanket refusal split one firm in two: "Little's Locksmiths" reduces to the residue
+         "little s" while "Little's Locks" keeps "little s locks", so they never met — 8 mentions
+         established and 2 barely-named, for one business.
+         The Rapid trap is still refused, and the difference is the EXTRA tokens:
+           ALLOWED  "little s" + "little s locks"      — "locks" is the trade, said differently.
+           REFUSED  "rapid"    + "rapid secure uk"     — "secure" is a different firm's name.
+         So every extra token must be trade-adjacent (4+ shared leading characters with a trade
+         token) or a country/company suffix. Anything else and the longer name is its own firm. */
+      if (!ctx) continue;
+      const [shorter, longer] = x.core.split(" ").length <= y.core.split(" ").length ? [x, y] : [y, x];
+      if (!tokenPrefix(shorter.core, longer.core)) continue;
+      const extra = longer.core.split(" ").slice(shorter.core.split(" ").length);
+      if (extra.length === 0) continue;
+      if (extra.every((t) => isTradeAdjacent(t, ctx) || COUNTRY_TOKENS.has(t))) return true;
     }
   }
   return false;
@@ -205,7 +268,7 @@ export function groupNames(names: string[], ctx: MarketMatchContext): Map<string
 
   for (let i = 0; i < unique.length; i++) {
     for (let j = i + 1; j < unique.length; j++) {
-      if (namesMatch(cores[i], cores[j])) union(i, j);
+      if (namesMatch(cores[i], cores[j], ctx)) union(i, j);
     }
   }
 
