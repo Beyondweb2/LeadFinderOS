@@ -96,6 +96,14 @@ Checks:
       as the file changes — **match on the message, not the line.**
 
 Deploy:
+- [ ] **SQL FIRST, CONFIRMED, THEN DEPLOY.** When a task involves both SQL and code that depends on
+      it, hand Paul the SQL and **WAIT for his confirmation that it has run** before deploying
+      anything that reads or writes the new schema. Proven 2026-08-04: `findable-onboarding` v18
+      deployed before its five new columns existed and **every submission — including ones carrying
+      no new fields — died `save_failed` for ~20 minutes**, because the insert always carried the new
+      keys and the single-pass column-shedding fallback couldn't recover. The fix (v19) also made the
+      code defensive both ways: null-valued new keys are omitted from inserts, and the fallback is
+      multi-pass. "Assume the columns exist" is not confirmation.
 - [ ] Edge functions **do not auto-deploy**: `npx supabase functions deploy <name>` by hand.
 - [ ] **Redeploy every function that imports a shared module you changed**, and prove each one. They keep
       running old code until you do.
@@ -299,6 +307,11 @@ Facts with numbers. These are measured, and several contradict the older docs.
 
 ## 8. Known open problems — don't rediscover these
 
+- **TWO LIVE CRON JOBS EXIST ONLY IN THE DATABASE, NOT IN MIGRATIONS.** Confirmed from `cron.job`
+  2026-08-04: **`notify-onboarding-submit-run`** (every minute — the "submitted but not paid" email
+  to Paul WORKS) has no migration file, and the `bulk_jobs` `job_type` constraint has the same gap.
+  A rebuild from migrations would silently lose both. Do not "discover" the notifier as unscheduled
+  (a repo-only recon reads it that way), and don't fix the gap without Paul asking.
 - ✅ **GOOGLE PLACE DETAILS COST — SETTLED 2026-07-30 against Google's docs.** A Place Details request is
   billed **ONCE, at the highest SKU tier any requested field touches** ("if you select fields in both the
   Essentials and the Pro SKUs, you are billed based on the Pro SKU").
