@@ -18,6 +18,7 @@ import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
   MARKET_SKIP_SEO, SEO_SCAN_USD, marketBatchCost,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
+  marketShape,
   type MarketPoolRow,
 } from '@/lib/marketView';
 import type { Lead } from '@/types/lead';
@@ -352,6 +353,26 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
   const auditsExist = (view?.concentration.audits ?? 0) > 0;
   const measured = completedRuns > 0;
   const pendingAudits = Math.max(0, (view?.concentration.audits ?? 0) - completedRuns);
+  /* THE VERDICT. A read on top of numbers that already exist - it changes no grading, no pool and
+     no subtraction. Contactable = the prospect list as rendered (never-named plus thinly-named,
+     chains excluded), which is exactly what the operator would work. */
+  const shape = view
+    ? marketShape({
+      audits: view.concentration.audits,
+      completeRuns: view.concentration.completeRuns,
+      leader: view.leader ?? null,
+      leaderRow: view.leader
+        ? (view.named.find((n) => n.name === view.leader!.name) ?? null)
+        : null,
+      citationHosts: view.citationHosts ?? [],
+      citationTotal: view.citationTotal ?? 0,
+      prospects: auditable.length,
+      poolEntries: view.pool.length,
+      /* FRESH AND TOWN-SCOPED ONLY. The too-small read cannot be made on a stale or radius pool,
+         and saying so is better than judging a market on the wrong pool. */
+      poolFreshTownScoped: view.poolState.state === 'ready' && view.poolState.scope === 'town',
+    })
+    : null;
   const pct = apifyUsage?.usagePct ?? null;
   const tone = apifyTone(pct);
 
@@ -479,6 +500,41 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-3 pt-0 sm:p-4 sm:pt-0">
+              {/* ── THE VERDICT ────────────────────────────────────────────────────────────────
+                  Names the shape and says what it means for working the town, with every number it
+                  rests on listed underneath — so the operator can disagree with the sentence by
+                  reading the figures beside it. Deliberately NOT a black box: nothing here tells
+                  anyone to skip a market without showing its working. Below the evidence minimum it
+                  refuses to name a shape at all. */}
+              {shape && (
+                <div className={`rounded-lg border px-3 py-2.5 ${
+                  shape.kind === 'local_leader'
+                    ? 'border-flag-green/50 bg-green-500/5'
+                    : shape.kind === 'marketplace_led'
+                      ? 'border-destructive/40 bg-destructive/5'
+                      : shape.kind === 'too_small'
+                        ? 'border-amber-500/50 bg-amber-500/10'
+                        : 'border-border/60 bg-muted/30'
+                }`}>
+                  <p className={`text-sm font-semibold ${
+                    shape.kind === 'local_leader'
+                      ? 'text-green-700 dark:text-green-500'
+                      : shape.kind === 'marketplace_led'
+                        ? 'text-destructive'
+                        : shape.kind === 'too_small'
+                          ? 'text-amber-700 dark:text-amber-400'
+                          : 'text-muted-foreground'
+                  }`}>
+                    {shape.headline}
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {shape.reasoning.map((r) => (
+                      <li key={r} className="text-[11px] leading-snug text-muted-foreground">{r}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Stat label="Audits behind it" value={String(conc.audits)} sub={`${conc.completeRuns} completed run${conc.completeRuns === 1 ? '' : 's'}`} />
                 <Stat label="Businesses named" value={String(conc.distinctBusinesses)} sub={`${conc.totalMentions} mentions`} />

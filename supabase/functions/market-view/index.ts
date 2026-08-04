@@ -3,11 +3,12 @@ import { norm } from "../../../src/lib/buildPlaybook.ts";
 import { buildMatchContext, groupNames, keyIndex } from "../_shared/market-match.ts";
 import { generateCacheKey } from "../_shared/search-cache-key.ts";
 import { questionKey } from "../../../src/lib/seedGuard.ts";
+import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   type MarketConcentration, type MarketNamedRow, type MarketPoolExcluded,
-  type MarketPoolRow, type MarketPoolState, type MarketTier,
+  type MarketPoolRow, type MarketPoolState, type MarketTier, type MarketCitationHost,
 } from "../../../src/lib/marketView.ts";
 
 /* ============================================================
@@ -181,6 +182,9 @@ Deno.serve(async (req) => {
       : [];
 
     const mentions: { auditId: string; name: string }[] = [];
+    /** host -> citation count, for the shape read's #1-host test. */
+    const hostCounts = new Map<string, number>();
+    let citationTotal = 0;
     let engineBlocks = 0;
     let truncatedBlocks = 0;
 
@@ -215,6 +219,24 @@ Deno.serve(async (req) => {
         for (const raw of list) {
           const name = typeof raw === "string" ? raw.trim() : "";
           if (name) mentions.push({ auditId, name });
+        }
+        /* CITED HOSTS, from the same block. The shape read needs to know whether a marketplace
+           holds the #1 host position - Checkatrade is the single most-cited source in
+           plumber/Loughborough, ahead of every business's own site, which is the only signal that
+           catches a market where a local firm leads the naming but a platform owns the sources.
+           No extra query: these citations are already on the row. */
+        const cites = (payload as { citations?: unknown })?.citations;
+        if (Array.isArray(cites)) {
+          for (const c of cites) {
+            const url = typeof (c as { url?: unknown })?.url === "string" ? (c as { url: string }).url : "";
+            if (!url) continue;
+            const m = url.match(/^https?:\/\/([^/]+)/i);
+            if (!m) continue;
+            const host = m[1].toLowerCase().replace(/^www\./, "");
+            if (!host) continue;
+            hostCounts.set(host, (hostCounts.get(host) ?? 0) + 1);
+            citationTotal += 1;
+          }
         }
       }
     }
@@ -392,6 +414,14 @@ Deno.serve(async (req) => {
       engineBlocks,
       runIds,
     };
+
+    /* CITED HOSTS, biggest first. Only the top few are needed (the shape read uses position 1),
+       but a handful is useful context on screen. isAggregatorUrl is the same classifier the audit
+       report uses, so "directory or marketplace" means one thing across the app. */
+    const citationHosts: MarketCitationHost[] = [...hostCounts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 8)
+      .map(([host, citations]) => ({ host, citations, isAggregator: isAggregatorUrl(`https://${host}/`) }));
 
     /* -- 6. PROSPECTS = pool minus named, chains collapsed, exclusions ITEMISED --------------- */
     const namedByKey = new Map(named.map((n) => [n.key, n]));
