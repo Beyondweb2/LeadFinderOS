@@ -19,7 +19,7 @@ import {
   MARKET_SKIP_SEO, SEO_SCAN_USD, marketBatchCost,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
-  MARKET_AUDIT_MIN_AUDITS,
+  MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase,
   type MarketPoolRow,
 } from '@/lib/marketView';
 import type { Lead } from '@/types/lead';
@@ -92,6 +92,10 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
      not chosen to contact, in a town they were only assessing. */
   const [marketAuditOpen, setMarketAuditOpen] = useState(false);
   const [activeMarketAudit, setActiveMarketAudit] = useState(false);
+  /* THE CLOCK BEHIND "started 4 minutes ago", and behind a still-running audit turning into a
+     stalled one. Without it the operator would have to guess when to reload, which is the whole
+     failure being fixed: a market audit's state must arrive on screen, not be hunted for. */
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [showNumbers, setShowNumbers] = useState<boolean>(() => {
     try { return sessionStorage.getItem('leadfinder_market_numbers') === '1'; } catch { return false; }
   });
@@ -427,8 +431,11 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
       citationHosts: view.citationHosts ?? [],
       citationTotal: view.citationTotal ?? 0,
       distinctBusinesses: view.concentration.distinctBusinesses,
-      marketAudits: view.concentration.marketAudits ?? 0,
-      businessAudits: Math.max(0, view.concentration.audits - (view.concentration.marketAudits ?? 0)),
+      /* ⛔ THE COMPLETED COUNTS, NOT THE AUDIT COUNTS. Ipswich had 2 market audits and 1 completed
+         run, and the old line passed 2 — clearing the two-audit bar on one audit's data, which is
+         the degeneracy the bar exists to prevent. */
+      marketAuditsComplete: view.concentration.marketAuditsComplete ?? 0,
+      businessAuditsComplete: view.concentration.businessAuditsComplete ?? 0,
     })
     : null;
   /* THE PLAIN READ. Same decision as the verdict, rendered as two sentences. Presentation only:
@@ -442,6 +449,17 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
       chainEntries, completedRuns, pendingAudits,
     )
     : null;
+  /* WHILE AN AUDIT IS UNFINISHED, THE PANEL WATCHES IT. Ticks the clock every 15s so the age is
+     honest, and refetches the view every 45s so a finished audit appears and a stalled one is
+     caught. Stops dead the moment marketProgress is empty — nothing polls a settled market. */
+  const unfinishedCount = (view?.marketProgress ?? []).length;
+  useEffect(() => {
+    if (unfinishedCount === 0) return;
+    const tick = setInterval(() => setNowMs(Date.now()), 15_000);
+    const poll = setInterval(() => { void reload(); }, 45_000);
+    return () => { clearInterval(tick); clearInterval(poll); };
+  }, [unfinishedCount, reload]);
+
   const pct = apifyUsage?.usagePct ?? null;
   const tone = apifyTone(pct);
 
@@ -544,6 +562,38 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
         }`}>
           <p className="text-[17px] font-semibold leading-snug sm:text-xl">{plain.market}</p>
           <p className="text-[15px] leading-snug text-foreground/85 sm:text-lg">{plain.contact}</p>
+
+          {/* ══ AUDITS THAT HAVE NOT FINISHED ══════════════════════════════════════════════════
+              A market audit that fails is money spent AND a market the operator believes is
+              measured. Two Ipswich audits showing "1 completed run" said nothing about the second
+              one — in that case it was healthy and 4 minutes old, but nothing on screen could have
+              told you that, and nothing would have told you if it had died either.
+              The RAW error is printed. A wrapper string ("term too broad to complete") is what sent
+              the last diagnosis off rewriting working questions while an Apify 402 sat unread. */}
+          {(view.marketProgress ?? []).length > 0 && (
+            <ul className="space-y-1.5 border-t border-border/50 pt-2">
+              {(view.marketProgress ?? []).map((mp) => {
+                const said = marketAuditProgressPhrase(mp, nowMs);
+                return (
+                  <li
+                    key={mp.auditId}
+                    className={`flex items-start gap-2 rounded-md border px-2.5 py-2 text-[13px] leading-snug ${
+                      said.severity === 'failed'
+                        ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                        : said.severity === 'stalled'
+                          ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                          : 'border-border bg-muted/50 text-muted-foreground'
+                    }`}
+                  >
+                    {said.severity === 'running'
+                      ? <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+                      : <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+                    <span className="break-words">{said.text}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
           {/* the numbers the verdict rests on — small, but never hidden */}
           <ul className="space-y-0.5 border-t border-border/50 pt-2">

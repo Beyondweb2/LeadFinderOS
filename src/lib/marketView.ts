@@ -63,6 +63,10 @@ export interface MarketConcentration {
   /** Of `audits`, how many are MARKET audits (no business attached, 8 questions). They carry more
    *  evidence weight than a business audit — see MARKET_AUDIT_MIN_AUDITS. */
   marketAudits?: number;
+  /** Of those, how many have a COMPLETED run. The evidence gate reads these, never the audit
+   *  counts: two audits with one completed run must not pass a two-audit bar. */
+  marketAuditsComplete?: number;
+  businessAuditsComplete?: number;
 }
 
 /* ── GRADED, NOT BINARY ────────────────────────────────────────────────────────────────────────
@@ -117,6 +121,25 @@ export interface MarketNamedRow {
 
 /** The market leader's mention count, needed to render "against N for the leader". */
 export interface MarketLeader { name: string; mentions: number }
+
+/** An UNFINISHED market audit: what it is doing, and the raw reason if a question failed.
+ *  Only unfinished ones are reported — a finished audit needs no explanation. */
+export interface MarketAuditProgress {
+  auditId: string;
+  /** The run's own status: pending, running, failed, or 'no_run' when none was created. */
+  status: string;
+  questionsDone: number;
+  questionsTotal: number;
+  questionsFailed: number;
+  /** When the run was created, so "still running" can be told apart from "stuck for an hour". */
+  startedAt?: string | null;
+  /** The RAW error off the queue row, never a wrapper. Null when nothing has errored. */
+  error: string | null;
+}
+
+/** How long a market audit can legitimately take before silence is a problem. An Apify question can
+ *  run ~9 minutes and the queue's own timeout is 12, so a run older than this has stopped moving. */
+export const MARKET_AUDIT_STALE_MS = 20 * 60 * 1000;
 
 /** A cited host and whether it is a directory/marketplace rather than a business's own site.
  *  Position 1 in this list is the whole basis of the marketplace-led read — see marketShape. */
@@ -185,6 +208,8 @@ export interface MarketViewResult {
   citationHosts?: MarketCitationHost[];
   /** Total citations behind citationHosts, so a share can be shown next to the leader. */
   citationTotal?: number;
+  /** Market audits that have NOT finished, with progress and the raw error if any. */
+  marketProgress?: MarketAuditProgress[];
   /** Businesses the radius pass found JUST OUTSIDE the town boundary. Visible, tagged, and never
    *  merged into `pool` — see MarketPoolRow.outsideTown. */
   poolNearby?: MarketPoolRow[];
@@ -363,6 +388,10 @@ export const MARKET_AUDIT_MIN_AUDITS = 2;
  *  the number to lower. */
 export const MARKET_AUDIT_EVIDENCE_WEIGHT = 2.5;
 
+/** ⛔ COMPLETED audits only. Counting audits that merely EXIST let two market audits with one
+ *  completed run pass a two-audit bar, so the view called a shape on a single audit's data — the
+ *  degeneracy the bar exists to prevent, reintroduced by the gate itself. An audit in flight or
+ *  failed contributes nothing until it finishes. */
 export interface MarketEvidence { marketAudits: number; businessAudits: number }
 
 /** Is there enough to call a shape? Either bar on its own, or a weighted mix reaching the
@@ -378,7 +407,7 @@ export function evidenceShortfall(e: MarketEvidence): string {
   const parts: string[] = [];
   if (e.marketAudits > 0) parts.push(`${e.marketAudits} market audit${e.marketAudits === 1 ? "" : "s"}`);
   if (e.businessAudits > 0) parts.push(`${e.businessAudits} business audit${e.businessAudits === 1 ? "" : "s"}`);
-  const have = parts.length ? parts.join(" and ") : "nothing measured yet";
+  const have = parts.length ? `${parts.join(" and ")} finished` : "nothing finished yet";
   if (e.marketAudits === 1 && e.businessAudits === 0) {
     return `${have}. One more market audit and this view will call the shape - and because repeat market audits cover NEW intents rather than repeating, the second one widens the picture as well as confirming it.`;
   }
@@ -408,10 +437,12 @@ export interface MarketShapeInput {
   citationTotal: number;
   /** Distinct businesses AI names here - the only size signal the shape uses. */
   distinctBusinesses: number;
-  /** Audits of this market with no business attached (8 questions each). */
-  marketAudits: number;
-  /** Per-business audits of this trade and town (3 questions each, typically). */
-  businessAudits: number;
+  /** Audits of this market with no business attached (8 questions each) that have a COMPLETED run.
+   *  ⛔ COMPLETED, not created. Named that way because the bug was passing the audit count: two
+   *  market audits with one finished run cleared a two-audit bar. */
+  marketAuditsComplete: number;
+  /** Per-business audits of this trade and town with a COMPLETED run. */
+  businessAuditsComplete: number;
   /* NO POOL FIELDS, DELIBERATELY. The shape is decided by citations and naming alone, so an
      incomplete Places pool cannot overrule them. The contactable count lives in marketPlainRead. */
 }
@@ -419,7 +450,7 @@ export interface MarketShapeInput {
 export function marketShape(input: MarketShapeInput): MarketShape {
   const {
     audits, completeRuns, leader, leaderRow, citationHosts, citationTotal, distinctBusinesses,
-    marketAudits, businessAudits,
+    marketAuditsComplete: marketAudits, businessAuditsComplete: businessAudits,
   } = input;
 
   /* NEVER MORE CONFIDENT THAN THE EVIDENCE. Below the same bar the playbook uses, this names no
@@ -544,8 +575,8 @@ export function marketPlainRead(
          quote different minimums - it said "5 is the minimum" to someone who had run one MARKET
          audit, where the bar is two. */
       market = `Not enough measured yet to say. ${evidenceShortfall({
-        marketAudits: conc.marketAudits ?? 0,
-        businessAudits: Math.max(0, conc.audits - (conc.marketAudits ?? 0)),
+        marketAudits: conc.marketAuditsComplete ?? 0,
+        businessAudits: conc.businessAuditsComplete ?? 0,
       })}`;
       break;
     case "marketplace_led":
@@ -603,4 +634,47 @@ export function invisibilityPhrase(row: MarketPoolRow, audits: number): string {
   const { mentions, audits: inAudits } = row.thin;
   if (mentions === 1) return `mentioned once, in 1 of ${audits} audits`;
   return `mentioned ${mentions} times, in ${inAudits} of ${audits} audits`;
+}
+
+/** One unfinished market audit, in words, with the RAW error when there is one.
+ *  Severity drives the colour on the panel; a run inside its normal window is information, not an
+ *  alarm. The last incident was a healthy 3.9-minute-old run that looked like a silent failure
+ *  purely because nothing on screen said it was still going. */
+export function marketAuditProgressPhrase(
+  p: MarketAuditProgress,
+  nowMs: number,
+): { severity: "running" | "stalled" | "failed"; text: string } {
+  const progress = p.questionsTotal > 0
+    ? `${p.questionsDone} of ${p.questionsTotal} questions done`
+    : "no questions queued";
+  const ageMs = p.startedAt ? nowMs - Date.parse(p.startedAt) : 0;
+  const mins = Math.max(0, Math.round(ageMs / 60000));
+  const age = p.startedAt ? `, started ${mins} minute${mins === 1 ? "" : "s"} ago` : "";
+  const stale = ageMs > MARKET_AUDIT_STALE_MS;
+
+  if (p.status === "failed" || (p.error && (stale || p.questionsDone === 0))) {
+    return { severity: "failed", text: `This market audit failed: ${p.error ?? "no error was recorded on the run."} (${progress}${age}.)` };
+  }
+  if (p.status === "no_run") {
+    return { severity: "failed", text: "This market audit was created but no run was ever started for it, so nothing is measuring." };
+  }
+  if (p.error) {
+    return { severity: "stalled", text: `A question in this market audit errored and it is retrying: ${p.error} (${progress}${age}.)` };
+  }
+  if (p.questionsFailed > 0) {
+    return {
+      severity: stale ? "failed" : "stalled",
+      text: `${p.questionsFailed} question${p.questionsFailed === 1 ? "" : "s"} in this market audit failed with no error recorded (${progress}${age}.)`,
+    };
+  }
+  if (stale) {
+    return {
+      severity: "stalled",
+      text: `This market audit has not moved for a while: ${progress}${age}. A question takes about nine minutes at most, so this one is stuck rather than working.`,
+    };
+  }
+  return {
+    severity: "running",
+    text: `This market audit is still running: ${progress}${age}. A question can take up to about nine minutes, so give it a few and reload.`,
+  };
 }
