@@ -115,6 +115,10 @@ export interface MarketNamedRow {
 /** The market leader's mention count, needed to render "against N for the leader". */
 export interface MarketLeader { name: string; mentions: number }
 
+/** A cited host and whether it is a directory/marketplace rather than a business's own site.
+ *  Position 1 in this list is the whole basis of the marketplace-led read — see marketShape. */
+export interface MarketCitationHost { host: string; citations: number; isAggregator: boolean }
+
 /** A pool business REMOVED from the prospect list because AI already names it, and the entry it
  *  matched. Itemised rather than merely counted: a silent exclusion is how a real prospect
  *  disappears, and this is the row that makes a wrong merge visible instead of invisible. */
@@ -173,6 +177,11 @@ export interface MarketViewResult {
   named: MarketNamedRow[];
   pool: MarketPoolRow[];
   poolState: MarketPoolState;
+  /** The most-cited hosts in this market, biggest first, with the aggregator flag the shape read
+   *  needs. Folded from citations already stored on the queue rows - no extra queries. */
+  citationHosts?: MarketCitationHost[];
+  /** Total citations behind citationHosts, so a share can be shown next to the leader. */
+  citationTotal?: number;
   /** Businesses the radius pass found JUST OUTSIDE the town boundary. Visible, tagged, and never
    *  merged into `pool` — see MarketPoolRow.outsideTown. */
   poolNearby?: MarketPoolRow[];
@@ -260,4 +269,143 @@ export function marketBatchCost(
     });
   }
   return { lines, total: lines.reduce((s, l) => s + l.usd, 0), seoSaved };
+}
+
+/* -- THE SHAPE OF A MARKET ---------------------------------------------------------------------
+   The panel gave numbers and left the operator to read three market shapes by eye. This names the
+   shape and says what it means for working the town. It is a READ on top of figures that already
+   exist: it changes no grading, no pool and no subtraction.
+
+   AGGREGATOR SHARE IS USELESS AS A SIGNAL - DO NOT REINTRODUCE IT. Measured 2026-08-04 across the
+   six markets with enough depth: aggregator citations were 10% (locksmiths/Hastings), 10%
+   (locksmiths/Wisbech), 11% (locksmiths/Spalding), 13% (plumber/Kettering), 19%
+   (electrician/Wrexham) and 25% (plumber/Loughborough). The HIGHEST share belongs to Loughborough,
+   the one market a marketplace genuinely dominates, and the LOWEST to markets that are perfectly
+   healthy - the spread is so narrow and so evenly distributed that no threshold separates them.
+   What discriminates is whether an aggregator holds the #1 HOST POSITION: Checkatrade is the single
+   most-cited source in Loughborough (210 of 1,325, ahead of every business's own website), while
+   every healthy market's top host is a local firm's own site. Position, never share.
+
+   THE TWO SHAPE-1 SIGNALS ARE COMPLEMENTARY, NOT REDUNDANT - each catches a case the other misses,
+   also measured:
+     plumber/Loughborough - the named leader is a LOCAL firm, so the cross-town test says healthy,
+                            but Checkatrade leads the citations. Only the citation test sees it.
+     plumber/Kettering    - the top host is able-group.co.uk, not a classified aggregator, but the
+                            named LEADER is Able Group, cited in three other towns. Only the
+                            cross-town test sees it.
+   So either firing means shape 1, and when they DISAGREE the verdict says so out loud rather than
+   resolving it: "a local firm leads the naming, but a marketplace leads the sources" is the read
+   that stops someone walking into Loughborough on fragmentation alone. */
+
+export type MarketShapeKind = "unmeasured" | "marketplace_led" | "local_leader" | "too_small";
+
+export interface MarketShape {
+  kind: MarketShapeKind;
+  /** The verdict line: the shape, then what it means for working the market. */
+  headline: string;
+  /** Every claim the verdict rests on, with its numbers, so the operator can disagree with the
+   *  sentence by reading the figures beside it. Never a black box. */
+  reasoning: string[];
+}
+
+/** Fewer than this many contactable businesses and the town cannot carry a market pass.
+ *  ABSOLUTE COUNT, NOT A RATIO, and deliberately not derived from a measured gap - there isn't one.
+ *  Hastings (workable) sits at 63% of its pool already named while Wisbech (too small) sits at 50%,
+ *  so the ratio ORDERING IS INVERTED against the operator's own read of those two markets. Any
+ *  percentage threshold here would be a number fitted to two pools that differ by three rows.
+ *  This is the WEAKEST of the three reads and is labelled as such on screen. Re-derive it once the
+ *  nearby pass has produced fresh town-scoped pools for five or six markets. */
+export const TOO_SMALL_MAX_PROSPECTS = 3;
+
+export interface MarketShapeInput {
+  audits: number;
+  completeRuns: number;
+  leader: MarketLeader | null;
+  /** The leader's row, for its national flag and audit share. */
+  leaderRow: MarketNamedRow | null;
+  citationHosts: MarketCitationHost[];
+  citationTotal: number;
+  /** Contactable businesses: never-named plus thinly-named, chains excluded. */
+  prospects: number;
+  poolEntries: number;
+  /** True only for a FRESH, town-scoped pool. A stale or radius pool cannot support the too-small
+   *  read, so it is not attempted. */
+  poolFreshTownScoped: boolean;
+}
+
+export function marketShape(input: MarketShapeInput): MarketShape {
+  const {
+    audits, completeRuns, leader, leaderRow, citationHosts, citationTotal,
+    prospects, poolEntries, poolFreshTownScoped,
+  } = input;
+
+  /* NEVER MORE CONFIDENT THAN THE EVIDENCE. Below the same bar the playbook uses, this names no
+     shape at all - a market read off two audits is a guess wearing a verdict's clothes. */
+  if (audits < EVIDENCE_MIN_AUDITS || completeRuns === 0 || !leader) {
+    return {
+      kind: "unmeasured",
+      headline: "Not measured enough to judge",
+      reasoning: [
+        `${audits} audit${audits === 1 ? "" : "s"}, ${completeRuns} completed - ${EVIDENCE_MIN_AUDITS} is the minimum before this view claims anything about a market's shape.`,
+        "Run more audits, then come back.",
+      ],
+    };
+  }
+
+  const topHost = citationHosts[0] ?? null;
+  const aggregatorLeads = !!topHost?.isAggregator;
+  const leaderIsNational = (leaderRow?.otherTowns ?? 0) > 0;
+  const hostShare = topHost && citationTotal > 0 ? Math.round((topHost.citations / citationTotal) * 100) : 0;
+
+  // -- SHAPE 1: a marketplace or a national platform owns the market.
+  if (aggregatorLeads || leaderIsNational) {
+    const reasoning: string[] = [];
+    if (aggregatorLeads && topHost) {
+      reasoning.push(
+        `${topHost.host} is the most-cited source here: ${topHost.citations} of ${citationTotal} citations (${hostShare}%), ahead of every business's own site.`,
+      );
+    }
+    if (leaderIsNational && leaderRow) {
+      reasoning.push(
+        `The most-named business, ${leader.name}, is cited in ${leaderRow.otherTowns} other town${leaderRow.otherTowns === 1 ? "" : "s"} for this trade, so it is a national brand rather than a local firm.`,
+      );
+    }
+    /* THE DISAGREEMENT, SPELLED OUT. Resolving it in favour of one signal would hide the read that
+       matters: Loughborough looks fragmented and healthy on the naming alone. */
+    if (aggregatorLeads && !leaderIsNational) {
+      reasoning.push(
+        `A local firm leads the naming (${leader.name}, ${leader.mentions} mentions) but a marketplace leads the sources - so getting a local business named competes with the platform, not with that firm.`,
+      );
+    }
+    if (!aggregatorLeads && leaderIsNational && topHost) {
+      reasoning.push(`The top cited host is ${topHost.host} (${topHost.citations} of ${citationTotal}).`);
+    }
+    return { kind: "marketplace_led", headline: "Marketplace-led \u00b7 probably skip this market", reasoning };
+  }
+
+  // -- SHAPE 3: fragmented, but nothing left to sell to. Absolute prospects, fresh pool only.
+  if (poolFreshTownScoped && prospects < TOO_SMALL_MAX_PROSPECTS) {
+    return {
+      kind: "too_small",
+      headline: "Too small \u00b7 little headroom",
+      reasoning: [
+        `${prospects} business${prospects === 1 ? "" : "es"} left to contact after the ones AI already names, from a pool of ${poolEntries}.`,
+        "Fragmented, but not enough of it is winnable to be worth a pass.",
+        "Weakest of the three reads: the pool is what Places returned inside the town boundary, so it may be missing firms.",
+      ],
+    };
+  }
+
+  // -- SHAPE 2: a beatable local firm leads. The one worth working.
+  const reasoning = [
+    `${leader.name} takes ${leader.mentions} mentions across ${leaderRow?.audits ?? 0} of ${audits} audits and is a local firm, not a national brand or a platform.`,
+    "A local leader is beatable, and this is the comparison to sell with.",
+  ];
+  if (topHost) {
+    reasoning.push(`The most-cited source is ${topHost.host} (${topHost.citations} of ${citationTotal}), a business's own site rather than a directory.`);
+  }
+  if (!poolFreshTownScoped) {
+    reasoning.push("The prospect count is not judged here: this pool is stale or came from a radius search.");
+  }
+  return { kind: "local_leader", headline: "Local leader \u00b7 the best shape to work", reasoning };
 }
