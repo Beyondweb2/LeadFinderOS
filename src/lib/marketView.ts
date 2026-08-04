@@ -211,6 +211,11 @@ export const MARKET_AUDIT_QUESTIONS = 3;
 /** bulk-jobs' JOB_CAPS.audit. A market run cannot exceed it, so the picker stops there. */
 export const MARKET_AUDIT_MAX = 25;
 
+/** Questions in a STANDALONE market audit (one audit of a trade and town, no business attached).
+ *  Top of the 5-8 range Paul scoped: it is the only audit of that market, so breadth is the point,
+ *  and 8 x $0.0125 = $0.10 against ~$0.28 for the five-business batch it replaces. */
+export const MARKET_AUDIT_QUESTION_COUNT = 8;
+
 /* ── WHAT A MARKET BATCH ACTUALLY COSTS ────────────────────────────────────────────────────────
    The confirm used to quote questions ONLY and understated the bill by ~4x: 5 audits x 3
    questions read as $0.19 while the real spend was $0.75-0.80. The two missing lines were the
@@ -408,4 +413,75 @@ export function marketShape(input: MarketShapeInput): MarketShape {
     reasoning.push("The prospect count is not judged here: this pool is stale or came from a radius search.");
   }
   return { kind: "local_leader", headline: "Local leader \u00b7 the best shape to work", reasoning };
+}
+
+/* -- THE TEN-SECOND READ -----------------------------------------------------------------------
+   The panel was accurate and unreadable: a verdict, concentration figures, 26 names in three
+   groups, prospects, nearby, exclusions. This renders the SAME decision marketShape already made
+   into two plain sentences a non-technical person can take in over a video call.
+
+   IT ADDS NO LOGIC AND NO THRESHOLD. Every number comes from the fold that already produced it -
+   distinctBusinesses, topName, topSharePct, the top cited host, the prospect count. Nothing here is
+   hand-written: an early draft of this said the Hastings leader takes "a quarter" of the mentions
+   when the measured figure is 13%, which is exactly the kind of invented number this comment exists
+   to prevent. If a sentence cannot be built from the fold, it is not said. */
+
+export interface MarketPlainRead {
+  /** One sentence: is this market worth working, and why. */
+  market: string;
+  /** One sentence: who to contact here. */
+  contact: string;
+}
+
+export function marketPlainRead(
+  shape: MarketShape,
+  conc: MarketConcentration,
+  trade: string,
+  town: string,
+  leader: MarketLeader | null,
+  citationHosts: MarketCitationHost[],
+  prospects: number,
+  poolSearched: boolean,
+): MarketPlainRead {
+  const topHost = citationHosts[0] ?? null;
+  const plural = trade.trim().toLowerCase();
+
+  let market: string;
+  switch (shape.kind) {
+    case "unmeasured":
+      market = `Not enough measured yet to say. ${conc.audits} audit${conc.audits === 1 ? "" : "s"} here, and ${EVIDENCE_MIN_AUDITS} is the minimum before this view will call a market.`;
+      break;
+    case "marketplace_led":
+      market = topHost?.isAggregator
+        ? `Skip this one. ${topHost.host} is the source AI trusts most for ${plural} in ${town}, so a local business is competing with a platform rather than with other ${plural}.`
+        : `Skip this one. The business AI names most here, ${leader?.name ?? "the leader"}, is a national brand rather than a local firm, so a local business is competing with a chain.`;
+      break;
+    case "too_small":
+      market = `Probably not worth a pass. AI already names most of the ${plural} in ${town} - only ${prospects} ${prospects === 1 ? "is" : "are"} left to contact.`;
+      break;
+    default:
+      market = leader
+        ? `Worth working. AI names ${conc.distinctBusinesses} different ${plural} in ${town}, and even the most-named one, ${leader.name}, takes only ${conc.topSharePct}% of the mentions - so there is room for another name.`
+        : `Worth working. AI names ${conc.distinctBusinesses} different ${plural} in ${town}, and no single firm dominates the answers.`;
+  }
+
+  /* THE CONTACT SENTENCE. Counted from the prospect list as rendered, so it can never disagree with
+     the rows underneath it. With no pool it says what to do rather than leaving the top blank. */
+  const contact = !poolSearched
+    ? "No lead search has been run for this town yet - run it to see who to contact."
+    : prospects === 0
+      ? `Nobody left to contact here: every business found in ${town} is already named by AI.`
+      : `${prospects} business${prospects === 1 ? "" : "es"} here ${prospects === 1 ? "either never shows up" : "either never show up"} in AI answers or barely ${prospects === 1 ? "does" : "do"}. Those are the ones worth contacting.`;
+
+  return { market, contact };
+}
+
+/** How invisible one prospect is, in words. "never mentioned in 6 audits" reads to anybody;
+ *  "0 mentions / 6 audits" needs decoding. Built from the row's own thin data, so it cannot
+ *  disagree with the grading. */
+export function invisibilityPhrase(row: MarketPoolRow, audits: number): string {
+  if (!row.thin) return `never mentioned in ${audits} audit${audits === 1 ? "" : "s"}`;
+  const { mentions, audits: inAudits } = row.thin;
+  if (mentions === 1) return `mentioned once, in 1 of ${audits} audits`;
+  return `mentioned ${mentions} times, in ${inAudits} of ${audits} audits`;
 }

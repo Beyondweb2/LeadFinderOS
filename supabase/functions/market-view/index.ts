@@ -86,7 +86,12 @@ async function all<T>(service: Client, table: string, cols: string, apply: (q: C
   return out;
 }
 
-interface AuditRow { id: string; business_type: string | null; location_text: string | null; business_name: string | null }
+interface AuditRow {
+  id: string; business_type: string | null; location_text: string | null; business_name: string | null;
+  /** A trade-and-town audit with no business attached. Excluded from the named list and the pool
+   *  subtraction; its mentions and its audit count still count. */
+  is_market?: boolean | null;
+}
 interface RunRow { id: string; audit_id: string; status: string | null }
 interface QueueRow { id: string; run_id: string; question?: string | null; result: Record<string, unknown> | null }
 interface HistoryRow { id: string; keyword: string; location: string; radius: number; searched_at: string }
@@ -125,7 +130,7 @@ Deno.serve(async (req) => {
        Populated from real audits so the picker can never offer a market with nothing behind it,
        and the count is shown so a thin one is obvious BEFORE it is opened. */
     if (action === "options") {
-      const audits = await all<AuditRow>(service, "ai_audits", "id, business_type, location_text, business_name",
+      const audits = await all<AuditRow>(service, "ai_audits", "id, business_type, location_text, business_name, is_market",
         (q) => q.eq("user_id", userId));
       const byPair = new Map<string, { trade: string; town: string; audits: number }>();
       for (const a of audits) {
@@ -149,7 +154,7 @@ Deno.serve(async (req) => {
     const tk = townKey(town);
 
     /* ── 1. THE AUDITS BEHIND THIS MARKET ─────────────────────────────────────────────────── */
-    const allAudits = await all<AuditRow>(service, "ai_audits", "id, business_type, location_text, business_name",
+    const allAudits = await all<AuditRow>(service, "ai_audits", "id, business_type, location_text, business_name, is_market",
       (q) => q.eq("user_id", userId));
     const audits = allAudits.filter((a) => norm(a.business_type) === trade && townKey(a.location_text) === tk);
     const auditIds = audits.map((a) => a.id);
@@ -538,7 +543,11 @@ Deno.serve(async (req) => {
       poolState,
       poolMatchedNamed: alreadyNamed,
       poolExcluded,
-      auditedBusinesses: audits.map((a) => a.business_name).filter(Boolean),
+      /* MARKET AUDITS ARE NOT BUSINESSES. Their sentinel name ("[market] locksmiths · Hastings")
+         must never appear in a list of audited businesses. Their competitor mentions DO count —
+         that is the entire point of them — and so does their contribution to `audits`, because a
+         market audit is a legitimate measurement of the market. */
+      auditedBusinesses: audits.filter((a) => a.is_market !== true).map((a) => a.business_name).filter(Boolean),
     });
   } catch (e) {
     const raw = e instanceof Error ? e.message : String(e);

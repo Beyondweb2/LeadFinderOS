@@ -839,6 +839,20 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   // same audit in one tick can't both slip past the guard.
   for (const job of reportJobs) {
     try {
+      /* ⛔ MARKET AUDITS NEVER GET A REPORT. THE MOST IMPORTANT GUARD IN THIS FILE.
+         A market audit has NO business attached — its business_name is a sentinel like
+         "[market] locksmiths · Hastings" and its lead_id is null. This auto-report path has no
+         lead-id gate (see its comment above), so without this check a market audit finishing
+         cleanly would PUBLISH A PUBLIC /r/ REPORT, titled with the sentinel, with no human
+         involved. Read from the column, never from the name: a string prefix is not a safety
+         guard. The two other completion side effects (audit_reply, D2 completion send) are
+         already safe because both require a lead_id. */
+      const { data: auditRow } = await service
+        .from("ai_audits").select("is_market, business_name").eq("id", job.auditId).maybeSingle();
+      if (auditRow?.is_market === true) {
+        console.log(`[process-ai-audit-queue] auto-report REFUSED for market audit ${job.auditId} ("${auditRow.business_name}"): market audits have no business and must never produce a public report.`);
+        continue;
+      }
       const { data: existing } = await service
         .from("business_reports")
         .select("id")

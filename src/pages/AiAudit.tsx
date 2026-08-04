@@ -25,6 +25,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
+import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
 import {
   DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, classifyWinnability,
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
@@ -77,7 +78,10 @@ const COUNTRIES: { value: string; label: string }[] = [
 ];
 
 
-interface AuditRow { id: string; business_name: string; business_type: string | null; location_text: string | null; country: string | null; has_website: boolean; created_at: string }
+interface AuditRow { id: string; business_name: string; business_type: string | null; location_text: string | null; country: string | null; has_website: boolean; created_at: string;
+  /** MARKET audit: a trade and a town with no business attached. Its named count is 0 by
+   *  construction, so nothing here may render it as a business's result — see isMarketAudit. */
+  is_market?: boolean | null }
 
 /* ── The audit book, grouped ────────────────────────────────────────────────────
    The list used to be one flat row per AUDIT, which reads as duplicates because the
@@ -441,7 +445,7 @@ const AiAudit = () => {
     if (!user) return;
     const { data: audits } = await (supabase as unknown as SupabaseClient)
       .from('ai_audits')
-      .select('id, business_name, business_type, location_text, country, has_website, created_at, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted')
+      .select('id, business_name, business_type, location_text, country, has_website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted')
       .order('created_at', { ascending: false })
       .limit(AUDIT_FETCH_LIMIT);
     const auditRows = (audits ?? []) as Array<AuditRow & {
@@ -1295,6 +1299,14 @@ const AiAudit = () => {
   // as-is, never silently regenerated); only builds one if this run has never had a report
   // generated. Loads the run into results state too, so Regenerate has live data to work from.
   const viewReport = async (audit: AuditRow) => {
+    /* MARKET AUDITS HAVE NO CLIENT REPORT. This view is the only route to the download button
+       as well, so refusing here closes both SPA paths at once. The server refuses independently
+       (generate-report and render-audit-report), so this is the operator-facing explanation
+       rather than the security boundary. */
+    if (isMarketAudit(audit)) {
+      toast({ title: 'No report for a market audit', description: MARKET_AUDIT_NO_REPORT, variant: 'destructive' });
+      return;
+    }
     const latest = await reopenAudit(audit);
     if (!latest) return;
     const rid = latest.id;

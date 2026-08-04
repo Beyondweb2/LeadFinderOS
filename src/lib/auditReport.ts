@@ -404,6 +404,28 @@ function pickGutPunch(
   return best;
 }
 
+/* ── MARKET AUDITS ARE NOT CLIENT REPORTS ─────────────────────────────────────────────────────
+   A MARKET audit measures a trade in a town with NO business attached: business_name is a
+   sentinel ("[market] locksmiths · Hastings") and lead_id is null. It exists to learn who AI names
+   in a market, so its named count is 0 by construction — which is correct, and must never be
+   rendered as a business's result. A report titled with that sentinel, or a hero verdict reading
+   "AI doesn't know you exist" about it, would be indefensible if it ever reached a customer.
+
+   ONE PREDICATE, USED BY EVERY REPORT PATH — the auto-report in process-ai-audit-queue, the public
+   render-audit-report renderer, generate-report, the operator's download and the in-app preview.
+   It reads the is_market COLUMN, never the name: a string prefix is not a safety guard, and this is
+   the guard that stops a public report publishing itself with no human involved. */
+export interface MarketAuditFlag { is_market?: boolean | null }
+
+export function isMarketAudit(audit: MarketAuditFlag | null | undefined): boolean {
+  return audit?.is_market === true;
+}
+
+/** The refusal every report path gives for a market audit. One sentence, so the five call sites
+ *  cannot drift into explaining it differently. */
+export const MARKET_AUDIT_NO_REPORT =
+  'This is a market audit — a trade and a town with no business attached — so it has no client report.';
+
 /** results.seo is only renderable by the report when it's a GRADED object (overall grade +
  *  the three category grades). The queue writes a failure/cap marker ({error, checked_at})
  *  when the SEO step doesn't produce a grade — passing that to the report crashes its

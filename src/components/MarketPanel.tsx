@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, Loader2, MapPin, Plus, RefreshCw, Search, Sparkles, Store } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Loader2, MapPin, Plus, RefreshCw, Search, Sparkles, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +18,7 @@ import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
   MARKET_SKIP_SEO, SEO_SCAN_USD, marketBatchCost,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
-  marketShape,
+  marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
   type MarketPoolRow,
 } from '@/lib/marketView';
 import type { Lead } from '@/types/lead';
@@ -82,6 +82,25 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
   const [reExtractBusy, setReExtractBusy] = useState(false);
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
+  /* THE NUMBERS ARE COLLAPSED BY DEFAULT. The screen has to be readable on a video call in about
+     ten seconds; the concentration percentages, the named lists, the exclusions and the nearby
+     group are all kept, one click away. Remembered for the session so it does not re-collapse on
+     every navigation. The verdict's JUSTIFICATION is never inside this - see the summary block. */
+  /* THE MARKET AUDIT: one audit of the trade and town, no business, NO CRM ROWS. This replaces
+     add-to-CRM-then-audit as the way to populate a market — that generated leads the operator had
+     not chosen to contact, in a town they were only assessing. */
+  const [marketAuditOpen, setMarketAuditOpen] = useState(false);
+  const [activeMarketAudit, setActiveMarketAudit] = useState(false);
+  const [showNumbers, setShowNumbers] = useState<boolean>(() => {
+    try { return sessionStorage.getItem('leadfinder_market_numbers') === '1'; } catch { return false; }
+  });
+  const toggleNumbers = useCallback(() => {
+    setShowNumbers((prev) => {
+      const next = !prev;
+      try { sessionStorage.setItem('leadfinder_market_numbers', next ? '1' : '0'); } catch { /* private mode */ }
+      return next;
+    });
+  }, []);
   /* An ACTIVE bulk job blocks bulk-jobs' create with a 409, and until now that was discovered
      AFTER the CRM rows had been written — so the operator got leads and no audits, silently.
      Checked when the dialog opens, and stated before anything is spent. null = not checked yet. */
@@ -217,7 +236,47 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
     return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
   }, [readJob, reload]);
 
-  /* ── THE AUDIT BATCH. Adds the businesses to the CRM and then hands them to the EXISTING
+  /* ── THE MARKET AUDIT ─────────────────────────────────────────────────────────────────────
+     ONE audit of a trade in a town: no business attached, no lead created, no CRM row. Questions
+     are generated for the market itself, the SEO scan is unreachable (no website), and the named
+     count stays 0 by construction — which is correct here and flagged everywhere it renders.
+     ~8p against ~22p for the five-business batch, and nothing added to the CRM. */
+  const runMarketAudit = useCallback(async () => {
+    if (!chosen) return;
+    setActiveMarketAudit(true);
+    try {
+      const { data, error: fnErr } = await supabase.functions.invoke<{ ok?: boolean; audit_id?: string; error?: string }>('create-ai-audit', {
+        body: {
+          market_only: true,
+          purpose: 'market',
+          business_type: chosen.trade,
+          location_text: chosen.town,
+          question_count: MARKET_AUDIT_QUESTION_COUNT,
+          business_scope: 'local',
+          has_website: false,
+        },
+      });
+      if (fnErr || data?.ok === false || !data?.audit_id) {
+        let real = fnErr?.message ?? data?.error ?? 'Could not start the market audit.';
+        try {
+          const ctx = (fnErr as unknown as { context?: Response })?.context;
+          if (ctx?.text) { const b = await ctx.text(); const parsed = b ? JSON.parse(b) as { error?: string } : null; if (parsed?.error) real = parsed.error; }
+        } catch { /* keep the wrapper message */ }
+        toast({ title: 'Market audit not started', description: real, variant: 'destructive' });
+        return;
+      }
+      setMarketAuditOpen(false);
+      toast({
+        title: 'Market audit queued',
+        description: `${MARKET_AUDIT_QUESTION_COUNT} questions about ${chosen.trade} in ${chosen.town}. No businesses were added to your CRM.`,
+      });
+      await reload();
+    } finally {
+      setActiveMarketAudit(false);
+    }
+  }, [chosen, toast, reload]);
+
+  /* ── THE PER-BUSINESS BATCH. Adds the businesses to the CRM and then hands them to the EXISTING
      bulk-jobs audit runner, which is keyed on lead ids and refuses anything it does not own. Both
      halves are stated on the confirm before a penny moves. */
   const runAudits = useCallback(async () => {
@@ -373,6 +432,14 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
       poolFreshTownScoped: view.poolState.state === 'ready' && view.poolState.scope === 'town',
     })
     : null;
+  /* THE PLAIN READ. Same decision as the verdict, rendered as two sentences. Presentation only:
+     no new logic, no new thresholds, every figure from the fold. */
+  const plain = view && shape
+    ? marketPlainRead(
+      shape, view.concentration, view.trade, view.town, view.leader ?? null,
+      view.citationHosts ?? [], auditable.length, view.poolState.state === 'ready',
+    )
+    : null;
   const pct = apifyUsage?.usagePct ?? null;
   const tone = apifyTone(pct);
 
@@ -455,6 +522,83 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
           the same, so this REPLACES the concentration card rather than rendering it full of zeros:
           "0 businesses named, top share 0%" reads as "nobody is winning here", which is the
           opposite of the truth. */}
+      {/* ══ THE TEN-SECOND READ ══════════════════════════════════════════════════════════════
+          Two sentences, the justification under them, then the list with its Add buttons. Sized to
+          be read over a video call by someone non-technical. Everything else - concentration
+          percentages, the established list, the thin tail, exclusions, nearby, the per-business
+          batch - is behind "Show the numbers" below, kept in full.
+          THE JUSTIFICATION IS NOT COLLAPSIBLE. A verdict that cannot be audited is exactly what
+          this panel exists not to be, so the bullets with the figures in them sit here, always
+          visible, next to the sentence they support. */}
+      {view && plain && shape && (
+        <div className={`space-y-3 rounded-xl border-2 p-4 sm:p-5 ${
+          shape.kind === 'local_leader'
+            ? 'border-flag-green/50 bg-green-500/5'
+            : shape.kind === 'marketplace_led'
+              ? 'border-destructive/40 bg-destructive/5'
+              : shape.kind === 'too_small'
+                ? 'border-amber-500/50 bg-amber-500/10'
+                : 'border-border bg-muted/30'
+        }`}>
+          <p className="text-[17px] font-semibold leading-snug sm:text-xl">{plain.market}</p>
+          <p className="text-[15px] leading-snug text-foreground/85 sm:text-lg">{plain.contact}</p>
+
+          {/* the numbers the verdict rests on — small, but never hidden */}
+          <ul className="space-y-0.5 border-t border-border/50 pt-2">
+            {shape.reasoning.map((r) => (
+              <li key={r} className="text-[11px] leading-snug text-muted-foreground">{r}</li>
+            ))}
+          </ul>
+
+          {/* THE LIST. Plain words for how invisible each one is, and the Add buttons that already
+              existed, so the operator picks who and how many. */}
+          {view.poolState.state === 'ready' && view.pool.length > 0 && (
+            <ul className="space-y-1 border-t border-border/50 pt-2">
+              {view.pool.map((pr) => (
+                <li key={pr.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/40 py-2 last:border-b-0">
+                  <span className="text-[15px] font-medium">{pr.name}</span>
+                  <span className="text-[13px] text-muted-foreground">{invisibilityPhrase(pr, conc?.audits ?? 0)}</span>
+                  {pr.isChain && (
+                    <Badge variant="outline" className="border-blue-500/40 text-[10px] text-blue-500">
+                      chain · {pr.branches} branches
+                    </Badge>
+                  )}
+                  {pr.noWebsite && <Badge variant="outline" className="text-[10px]">no website</Badge>}
+                  <Button
+                    size="sm" variant="outline" className="ml-auto h-8"
+                    disabled={addingKey === pr.key || addedKeys.has(pr.key)}
+                    onClick={() => void addOne(pr)}
+                  >
+                    {addingKey === pr.key
+                      ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                      : addedKeys.has(pr.key) ? <Check className="mr-1 h-3 w-3" /> : <Plus className="mr-1 h-3 w-3" />}
+                    {addedKeys.has(pr.key) ? 'Added' : 'Add to CRM'}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* THE PRIMARY ACTION IS THE MARKET AUDIT: one audit of the trade and town, no CRM rows.
+              The per-business batch is not offered here - it lives under the numbers, labelled for
+              what it is actually for. */}
+          <div className="flex flex-wrap gap-2 border-t border-border/50 pt-3">
+            <Button size="sm" onClick={() => setMarketAuditOpen(true)} disabled={!chosen || !!activeMarketAudit}>
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              Audit this market
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setSearchOpen(true)} disabled={searching}>
+              <Search className="mr-1.5 h-3.5 w-3.5" />
+              {view.poolState.state === 'ready' ? 'Re-run the lead search' : 'Run the lead search'}
+            </Button>
+            <Button size="sm" variant="ghost" className="ml-auto" onClick={toggleNumbers}>
+              {showNumbers ? <ChevronDown className="mr-1.5 h-3.5 w-3.5" /> : <ChevronRight className="mr-1.5 h-3.5 w-3.5" />}
+              {showNumbers ? 'Hide the numbers' : 'Show the numbers'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {view && conc && conc.audits === 0 && (
         <Card className="border-amber-500/40 bg-amber-500/5">
           <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-2">
@@ -485,7 +629,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
         </Card>
       )}
 
-      {view && conc && conc.audits > 0 && (
+      {showNumbers && view && conc && conc.audits > 0 && (
         <>
           {/* ── 1. CONCENTRATION ─────────────────────────────────────────────────────────── */}
           <Card>
@@ -737,46 +881,15 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                       It may include businesses in neighbouring towns that the audits never covered. Re-run the search here to get a town-only pool.
                     </div>
                   )}
-                  {view.pool.length === 0 ? (
+                  {view.pool.length === 0 && (
                     <p className="text-sm text-muted-foreground">
                       Every business in the pool is already named by AI. Nothing to contact here.
                     </p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {view.pool.map((p) => (
-                        <li key={p.key} className="flex flex-wrap items-center gap-2 border-b border-border/40 py-1.5 text-[13px] last:border-b-0">
-                          <span className="font-medium">{p.name}</span>
-                          {/* NAMED, BUT BARELY. Kept as a prospect deliberately (graded, not
-                              binary) and it must carry its thinness: "1 mention in 1 of 6 audits"
-                              is the pitch, and hiding it would make this row look never-named. */}
-                          {p.thin && (
-                            <Badge variant="outline" className="border-amber-500/50 text-[10px] text-amber-600 dark:text-amber-500">
-                              barely named · {p.thin.mentions} mention{p.thin.mentions === 1 ? '' : 's'} in {p.thin.audits} of {conc.audits}
-                              {view.leader ? `, vs ${view.leader.mentions} for the leader` : ''}
-                            </Badge>
-                          )}
-                          {/* Chains, by repetition alone — no hardcoded list. Ten Timpson branches
-                              are one company, not ten prospects. */}
-                          {p.isChain && (
-                            <Badge variant="outline" className="border-blue-500/40 text-[10px] text-blue-500">
-                              CHAIN · {p.branches} branches
-                            </Badge>
-                          )}
-                          {p.noWebsite && <Badge variant="outline" className="text-[10px]">no website</Badge>}
-                          <Button
-                            size="sm" variant="outline" className="ml-auto h-7"
-                            disabled={addingKey === p.key || addedKeys.has(p.key)}
-                            onClick={() => void addOne(p)}
-                          >
-                            {addingKey === p.key
-                              ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                              : addedKeys.has(p.key) ? <Check className="mr-1 h-3 w-3" /> : <Plus className="mr-1 h-3 w-3" />}
-                            {addedKeys.has(p.key) ? 'Added' : 'Add to CRM'}
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
                   )}
+                  {/* The prospect rows themselves live in the summary block at the top of this
+                      panel, with their Add buttons - listing them twice would invite adding the
+                      same business from two places. What stays here is the AUDIT TRAIL: the
+                      arithmetic, the itemised exclusions and the nearby group. */}
                   {/* THE SUBTRACTION, SHOWN AND RECONCILED.
                       Was a <details>, collapsed by default, and it rendered as empty rows. This is
                       the audit trail for silent exclusions — burying it behind a click was wrong on
@@ -873,6 +986,41 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
           </Card>
         </>
       )}
+
+      {/* ── MARKET AUDIT CONFIRM. Cost first, and the thing that makes it the default: no CRM rows. */}
+      <Dialog open={marketAuditOpen} onOpenChange={setMarketAuditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Audit {chosen?.trade} in {chosen?.town}?</DialogTitle></DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p>
+              One audit of the market itself: {MARKET_AUDIT_QUESTION_COUNT} questions about
+              {' '}<span className="font-medium">{chosen?.trade}</span> in{' '}
+              <span className="font-medium">{chosen?.town}</span>, asked across the engines.
+            </p>
+            <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-[13px]">
+              <p className="font-semibold">
+                ~${(MARKET_AUDIT_QUESTION_COUNT * AUDIT_EST_USD_PER_QUESTION).toFixed(2)}
+                {' '}· {MARKET_AUDIT_QUESTION_COUNT} questions at ${AUDIT_EST_USD_PER_QUESTION}
+              </p>
+              <p className="mt-1 text-[11px] font-medium text-foreground/90">
+                No businesses are added to your CRM, and no website is graded — this measures the
+                market, not a business.
+              </p>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              It has no business attached, so nobody is measured as named or not named. What it
+              produces is who AI names in this town.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setMarketAuditOpen(false)}>Cancel</Button>
+            <Button onClick={() => void runMarketAudit()} disabled={activeMarketAudit}>
+              {activeMarketAudit && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Run the market audit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── LEAD SEARCH CONFIRM ───────────────────────────────────────────────────────────── */}
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
