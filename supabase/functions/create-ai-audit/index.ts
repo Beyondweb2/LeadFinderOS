@@ -3,7 +3,7 @@ import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
-import { applySeed, dropResearchIntent } from "../../../src/lib/seedGuard.ts";
+import { applySeed, dropResearchIntent, dropMissingTown, dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
 import {
   OUTREACH_HOOK_QUESTIONS,
@@ -161,13 +161,10 @@ function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, speci
     ];
   }
 
-  // De-dupe (a niche can echo a template), ban near-me, slice to the requested count.
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const q of base) {
-    const k = q.trim();
-    if (k && !seen.has(k)) { seen.add(k); out.push(k); }
-  }
+  /* De-dupe (a niche can echo a template), ban near-me, slice to the requested count.
+     CASE-INSENSITIVE: keyed on q.trim() this let "... in hastings uk" and "... in Hastings UK"
+     both through as separate questions. */
+  const out = dedupeQuestions(base).questions;
   return stripNearMe(out).slice(0, Math.min(out.length, Math.max(1, count)));
 }
 
@@ -476,10 +473,12 @@ Deno.serve(async (req) => {
         if (latestRun) {
           const { data: prevQ } = await service
             .from("ai_audit_queue").select("question").eq("run_id", latestRun.id).order("created_at", { ascending: true });
-          const seen = new Set<string>();
-          for (const r of prevQ ?? []) {
-            const q = String(r.question ?? "").trim();
-            if (q && !seen.has(q)) { seen.add(q); questions.push(q); }
+          /* Case-insensitive: a run that already holds two casings of one question must not
+             propagate both into the next run. First spelling wins. */
+          const prev = dedupeQuestions(((prevQ ?? []) as Array<{ question: string }>).map((r) => String(r.question ?? "")));
+          questions.push(...prev.questions);
+          if (prev.duplicates.length) {
+            console.warn(`[create-ai-audit] previous run had ${prev.duplicates.length} case-duplicate question(s), not repeated: ${prev.duplicates.join(" | ")}`);
           }
         }
         if (questions.length < MIN_QUESTION_COUNT) {
@@ -612,6 +611,15 @@ Deno.serve(async (req) => {
     const runId = run.id;
 
     // ── Enqueue one row per question ──────────────────────────────────────────
+    /* THE FINAL GATE. Whatever path produced `questions` — LLM, templates, a verbatim repeat, a
+       seed top-up, or the multi-area concatenation — no two rows may be the same question in
+       different capitals. There was no dedupe here at all, which is how one audit could queue both
+       casings. Original spelling is preserved; only the identity is normalised. */
+    const finalQ = dedupeQuestions(questions);
+    if (finalQ.duplicates.length) {
+      console.warn(`[create-ai-audit] ${finalQ.duplicates.length} case-duplicate question(s) dropped before queueing: ${finalQ.duplicates.join(" | ")}`);
+    }
+    questions = finalQ.questions;
     const queueRows = questions.map((q) => ({
       audit_id: auditId,
       run_id: runId,
@@ -865,6 +873,25 @@ Return via the return_questions tool.`;
         `[create-ai-audit] research-intent questions dropped (${guarded.rejected.length}): `
         + guarded.rejected.map((r) => `"${r.question}" (${r.reason})`).join(" | "),
       );
+    }
+    /* THE TOWN IS CHECKED, NOT TRUSTED. The prompt says to always write the place exactly, but
+       with business_scope null the model classifies the business itself and may pick NATIONAL —
+       which is how "emergency locksmith for homes uk" reached a Hastings locksmith audit. Enforced
+       only when this audit HAS a usable town and is not explicitly national: a genuinely national
+       business's questions are supposed to omit the town. */
+    if (scope !== "national" && hasUsableTown(locationText)) {
+      /* The town as the questions should carry it. locationText is already the bare town by the
+         time it reaches here (create-ai-audit resolves it via pickAuditTown), so the check is on
+         that value — not on locQ, which appends " UK" for engine disambiguation. */
+      const town = locationText.trim();
+      const localised = dropMissingTown(guarded.questions, fallback, n, town);
+      if (localised.rejected.length) {
+        console.warn(
+          `[create-ai-audit] town-less questions dropped (${localised.rejected.length}) for "${town}": `
+          + localised.rejected.map((r) => `"${r.question}"`).join(" | "),
+        );
+      }
+      return localised.questions;
     }
     return guarded.questions;
   } catch (_e) {
