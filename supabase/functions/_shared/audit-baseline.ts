@@ -23,6 +23,7 @@ const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 /** Paid baseline shape, from the shared question-count policy. */
 import { BASELINE_QUESTIONS, BASELINE_RUNS } from "../../../src/lib/auditQuestionCounts.ts";
 import { pickAuditTown } from "./place-town.ts";
+import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 
 /** Towns this is not. Mirrors findable-onboarding: forcing scope='local' needs a real town. */
 const NON_TOWN = new Set([
@@ -268,11 +269,12 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     const latest = usable[usable.length - 1];
     const { data: qrows } = await service
       .from("ai_audit_queue").select("question").eq("run_id", latest.id).order("created_at", { ascending: true });
-    const seen = new Set<string>();
-    const questions: string[] = [];
-    for (const r of (qrows ?? []) as Array<{ question: string }>) {
-      const q = (r.question ?? "").trim();
-      if (q && !seen.has(q)) { seen.add(q); questions.push(q); }
+    /* Case-insensitive: repeating a run must not repeat two casings of one question. This is the
+       week-eight / run-2-3 path, so a duplicate here would be paid for on every subsequent run. */
+    const repeat = dedupeQuestions(((qrows ?? []) as Array<{ question: string }>).map((r) => r.question ?? ""));
+    const questions: string[] = repeat.questions;
+    if (repeat.duplicates.length) {
+      console.warn(`[baseline] audit ${auditId}: ${repeat.duplicates.length} case-duplicate question(s) not repeated: ${repeat.duplicates.join(" | ")}`);
     }
     if (!questions.length) {
       console.warn(`[baseline] audit ${auditId}: no questions to repeat`);

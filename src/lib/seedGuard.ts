@@ -213,3 +213,90 @@ export function applySeed(seeds: string[], generated: string[], target: number, 
   }
   return { questions: out, seeded: kept.slice(0, target), rejected };
 }
+
+/* ── CASE-INSENSITIVE QUESTION IDENTITY ───────────────────────────────────────────────────────
+   MEASURED 2026-08-04, locksmiths/Hastings: of 18 questions paid for, "locksmith services in
+   hastings uk" and "locksmith services in Hastings UK" were treated as different questions, as
+   were "lock repair services Hastings UK" / "lock repair services in hastings uk" and
+   "emergency locksmith in hastings uk" / "emergency locksmiths in Hastings UK". Roughly a third of
+   the spend bought the same question twice in different capitals.
+
+   Every dedupe site was keyed on `q.trim()`, which is case- and punctuation-SENSITIVE. These two
+   helpers are the single definition of "the same question", and the ORIGINAL casing is what gets
+   stored and run — only the identity is normalised. */
+
+/** Identity of a question for dedupe: lowercase, punctuation folded, whitespace collapsed.
+ *  Deliberately the same normalise() the seed guard already matches on, so "the same question"
+ *  means one thing across seeding, generation and the queue. */
+export const questionKey = (q: string): string => normalise(q);
+
+/** De-duplicate case-insensitively, KEEPING the first spelling seen (the model's own casing).
+ *  Returns the kept list and the dropped duplicates, so a caller can log what it saved. */
+export function dedupeQuestions(questions: string[]): { questions: string[]; duplicates: string[] } {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const duplicates: string[] = [];
+  for (const raw of questions ?? []) {
+    const q = (raw ?? "").trim();
+    if (!q) continue;
+    const k = questionKey(q);
+    if (!k) continue;
+    if (seen.has(k)) { duplicates.push(q); continue; }
+    seen.add(k);
+    out.push(q);
+  }
+  return { questions: out, duplicates };
+}
+
+/* ── A LOCAL AUDIT'S QUESTIONS MUST NAME THE TOWN ─────────────────────────────────────────────
+   MEASURED 2026-08-04: a Hastings locksmith audit ran "emergency locksmith for homes uk" — no
+   town anywhere. That is the prompt's NATIONAL pattern ("[service] for [audience] [country]"),
+   which the model is free to choose whenever business_scope is null and it classifies the business
+   as national. It costs the same as a real question, measures a different market, and pulls
+   national brands (Able Group, Lockforce UK, Rapid Secure UK) into a local competitor fold.
+
+   So the town is checked rather than trusted. Rejected questions are topped up from the
+   deterministic fallback templates, which always embed the town, so the operator still gets the
+   count they paid for. */
+
+/** Does this question name the town? Token-level on the normalised forms, so "Hastings UK",
+ *  "hastings uk" and "in hastings" all pass while "for homes uk" does not. Multi-word towns
+ *  ("St Neots") must appear as a contiguous run. */
+export function mentionsTown(question: string, town: string): boolean {
+  const t = normalise(town);
+  if (!t) return true;                      // no town to check against — nothing to enforce
+  const q = normalise(question);
+  return (` ${q} `).includes(` ${t} `) || q.startsWith(`${t} `) || q.endsWith(` ${t}`) || q === t;
+}
+
+/** Drop questions that do not name the town, topping up from the fallback templates. Mirrors
+ *  dropResearchIntent exactly, including its case-insensitive dedupe. */
+export function dropMissingTown(
+  generated: string[],
+  fallback: string[],
+  target: number,
+  town: string,
+): { questions: string[]; rejected: Array<{ question: string; reason: string }> } {
+  const rejected: Array<{ question: string; reason: string }> = [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const take = (list: string[], enforce: boolean) => {
+    for (const q of list) {
+      if (out.length >= target) return;
+      const t = (q ?? "").trim();
+      if (!t) continue;
+      const key = questionKey(t);
+      if (seen.has(key)) continue;
+      if (enforce && !mentionsTown(t, town)) {
+        rejected.push({ question: t, reason: `does not name the town "${town}" — a local audit cannot measure a national question` });
+        seen.add(key);
+        continue;
+      }
+      seen.add(key);
+      out.push(t);
+    }
+  };
+  take(generated, true);
+  take(fallback, true);   // templates always embed the town, so this only tops up
+  return { questions: out, rejected };
+}
