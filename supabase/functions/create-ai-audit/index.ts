@@ -3,7 +3,7 @@ import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
-import { applySeed, dropResearchIntent, dropMissingTown, dedupeQuestions } from "../../../src/lib/seedGuard.ts";
+import { applySeed, dropResearchIntent, dropMissingTown, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
 import {
   OUTREACH_HOOK_QUESTIONS,
@@ -288,6 +288,12 @@ Deno.serve(async (req) => {
        existing caller is untouched, and it can only ever REDUCE spend - which is why it needs no
        internal-caller gate. Applied at the run insert below. */
     const skipSeo: boolean = body.skip_seo === true;
+    /* MARKET-POPULATING AUDIT. Set by the market panel's batch (via bulk-jobs params). It turns on
+       cross-audit intent coverage: generation is told what this trade+town has already been asked
+       so it covers new ground. Deliberately NOT applied to baselines — a paid client's set must be
+       stable and seed-driven, and two businesses in one market getting different questions is right
+       for mapping a market and wrong for measuring a client. */
+    const isMarket: boolean = body.purpose === "market";
     /* MULTI-AREA BASELINE. audit-baseline sends the allocation it froze into the baseline contract:
        [{town, questions, isMain}]. The MAIN town keeps location_text and the verbatim seed; each
        extra area gets its own generated questions for the same services. Absent (every other
@@ -499,6 +505,32 @@ Deno.serve(async (req) => {
          The `>= questionCount` test is what keeps runs 2 and 3 byte-for-byte unchanged — they send
          the full stored set, so they take the verbatim branch exactly as before. Only a SHORT
          supplied set on a baseline is treated as a seed, which no existing caller sends. */
+      /* WHAT THIS MARKET HAS ALREADY BEEN ASKED. Market audits only, and best-effort: a failure
+         here just means the generator gets no coverage hint and behaves exactly as before.
+         Measured need: six Hastings locksmith audits produced 18 questions covering five intents,
+         with the generic head question asked six times, while car keys / safes / uPVC / key cutting
+         / commercial work were never asked at all. */
+      let coverage = "";
+      if (isMarket && businessType && locationText) {
+        try {
+          const { data: sameMarket } = await service
+            .from("ai_audits").select("id")
+            .eq("user_id", userId).eq("business_type", businessType).ilike("location_text", locationText);
+          const otherIds = ((sameMarket ?? []) as Array<{ id: string }>).map((a) => a.id);
+          if (otherIds.length) {
+            const { data: askedRows } = await service
+              .from("ai_audit_queue").select("question").in("audit_id", otherIds).limit(400);
+            const asked = ((askedRows ?? []) as Array<{ question: string }>)
+              .map((r) => (r.question ?? "").trim()).filter(Boolean);
+            coverage = coverageDirective(asked, businessType);
+            if (coverage) {
+              console.log(`[create-ai-audit] market coverage: steering away from ${dedupeQuestions(asked).questions.length} question(s) already asked for "${businessType}" in "${locationText}"`);
+            }
+          }
+        } catch (e) {
+          console.warn("[create-ai-audit] coverage lookup failed (generation unaffected):", e instanceof Error ? e.message : e);
+        }
+      }
       const isSeeding = isBaseline && !!providedQuestions?.length && providedQuestions.length < questionCount;
       /* ORDER MATTERS. The multi-area branch must be tested BEFORE isSeeding: a multi-area baseline
          normally arrives WITH a short seed, so the single-town seeded branch would win and the extra
@@ -549,7 +581,7 @@ Deno.serve(async (req) => {
       } else {
         questions = providedQuestions && providedQuestions.length
           ? providedQuestions
-          : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country);
+          : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, coverage);
       }
       const auditRow: Record<string, unknown> = {
         user_id: userId,
@@ -722,6 +754,9 @@ async function generateQuestions(
   count: number,
   scope: BusinessScope,
   country: string | null,
+  /** MARKET AUDITS ONLY: what this trade+town has already been asked, so the generator covers new
+   *  ground instead of repeating the same five intents. Empty for every other caller. */
+  coverage = "",
 ): Promise<string[]> {
   // The CALLER has already applied the right POLICY ceiling: MAX_QUESTION_COUNT for the outreach
   // hook, BASELINE_MAX_QUESTION_COUNT for a paid baseline. Re-clamping here with clampCount's
@@ -810,7 +845,9 @@ ${specialismLine}
 
 ${scopeGuidance}
 
-Return EXACTLY ${n} questions (lowercase), spread across the business's services/niches under the matching rule set. ${framing}
+${coverage ? `${coverage}
+
+` : ""}Return EXACTLY ${n} questions (lowercase), spread across the business's services/niches under the matching rule set. ${framing}
 
 Return via the return_questions tool.`;
 

@@ -237,6 +237,10 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
         website: website || undefined,
         question_count: questionCount,
         ...(skipSeo ? { skip_seo: true } : {}),
+        /* purpose='market' turns on cross-audit intent coverage in create-ai-audit. Sent for the
+           market panel's batches only (it asks for skip_seo, which nothing else does), so ordinary
+           outreach bulk audits keep generating exactly as before. */
+        ...(skipSeo ? { purpose: "market" } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));

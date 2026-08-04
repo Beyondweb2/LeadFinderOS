@@ -300,3 +300,105 @@ export function dropMissingTown(
   take(fallback, true);   // templates always embed the town, so this only tops up
   return { questions: out, rejected };
 }
+
+/* ── INTENT COVERAGE FOR MARKET AUDITS ────────────────────────────────────────────────────────
+   MEASURED 2026-08-04, locksmiths/Hastings: six independent audits produced 18 questions covering
+   only FIVE intents — generic locksmith services, emergency lockout, lock repair, lock replacement,
+   online booking — all house-related, and the generic head intent appeared six times. Car keys,
+   safes, uPVC/multipoint doors, burglary repair, key cutting and commercial/landlord work were
+   never asked, while Bexhill Car Keys, PK Keys and Phoenix Car Keys all showed up in the folds:
+   a whole segment of the market was invisible because nobody asked about it.
+
+   WHY NOT JUST ASK MORE QUESTIONS PER AUDIT. The model has no memory between audits, so a bigger
+   count buys more of the SAME questions — proven by the six-fold repeat above. Coverage comes from
+   telling the generator what this trade and town has already been asked.
+
+   MARKET AUDITS ONLY. A paid baseline's set must be stable and seed-driven, so this never applies
+   there: two businesses in one market getting different questions is right for mapping a market and
+   wrong for measuring a client. */
+
+/** Intents worth covering for a trade, roughly in commercial order. Hand-maintained and COARSE on
+ *  purpose: it steers the generator's coverage, it is never rendered to a customer and never
+ *  decides anything on its own. A trade with no entry falls back to the generic list, which reads
+ *  sensibly for any local service business. */
+const TRADE_INTENTS: Record<string, string[]> = {
+  locksmith: [
+    "emergency lockout", "car keys and auto locksmith", "lock repair", "lock replacement",
+    "uPVC and multipoint door locks", "safes", "burglary repair and boarding up", "key cutting",
+    "commercial and landlord work", "window locks",
+  ],
+  plumber: [
+    "emergency plumbing", "boiler repair", "boiler installation", "leak detection",
+    "blocked drains", "bathroom installation", "radiators and heating", "power flushing",
+    "landlord gas safety", "commercial plumbing",
+  ],
+  electrician: [
+    "emergency electrician", "fuse board replacement", "rewiring", "EV charger installation",
+    "EICR and landlord certificates", "lighting installation", "fault finding",
+    "outdoor and garden power", "commercial electrical", "PAT testing",
+  ],
+  accountant: [
+    "annual accounts", "self assessment", "VAT returns", "payroll", "bookkeeping",
+    "corporation tax", "company formation", "CIS and subcontractors",
+    "landlord and property tax", "tax investigation",
+  ],
+  generic: [
+    "emergency or urgent work", "repairs", "installation", "servicing and maintenance",
+    "inspection and reports", "commercial work", "landlord work", "replacement",
+  ],
+};
+
+/** The intent vocabulary for a trade. Matching is loose (substring both ways) so "locksmiths",
+ *  "auto locksmith" and "emergency locksmith" all reach the locksmith list. */
+export function intentsForTrade(businessType: string): string[] {
+  const t = normalise(businessType);
+  if (!t) return TRADE_INTENTS.generic;
+  for (const [key, list] of Object.entries(TRADE_INTENTS)) {
+    if (key === "generic") continue;
+    if (t.includes(key) || key.includes(t)) return list;
+  }
+  return TRADE_INTENTS.generic;
+}
+
+/** The generic head intent for a trade ("locksmith services in X"), which is the single most
+ *  valuable question in a market — and therefore worth asking ONCE and then deliberately not
+ *  repeating. True when the question carries no intent beyond the trade itself. */
+export function isHeadIntent(question: string, businessType: string): boolean {
+  const q = normalise(question);
+  const trade = normalise(businessType).replace(/s$/, "");
+  if (!trade || !q.includes(trade)) return false;
+  /* Anything that adds a real qualifier is NOT the head term. Deliberately a small list of the
+     words that make a question specific — matched on the normalised text, so no punctuation or
+     casing games. */
+  const qualifiers = [
+    "emergency", "car", "auto", "key", "safe", "upvc", "multipoint", "burglary", "boarding",
+    "commercial", "landlord", "repair", "replace", "replacement", "install", "installation",
+    "booking", "boiler", "leak", "drain", "bathroom", "radiator", "heating", "flush", "rewir",
+    "fuse", "ev charger", "eicr", "light", "fault", "pat", "vat", "payroll", "bookkeep", "tax",
+    "accounts", "assessment", "window", "cut", "service call", "24 hour", "out of hours",
+  ];
+  return !qualifiers.some((w) => q.includes(w));
+}
+
+/** Build the prompt block that steers a market audit onto NEW ground.
+ *  `asked` is every question already put to this trade+town; `intents` is the trade vocabulary.
+ *  Returns "" when there is nothing to avoid, so the first audit in a market is untouched. */
+export function coverageDirective(asked: string[], businessType: string): string {
+  const seen = dedupeQuestions(asked).questions;
+  if (seen.length === 0) return "";
+  const intents = intentsForTrade(businessType);
+  const headAsked = seen.some((q) => isHeadIntent(q, businessType));
+  const lines = [
+    "ALREADY MEASURED IN THIS MARKET — do NOT repeat these or near-variants of them:",
+    ...seen.slice(0, 40).map((q) => `- ${q}`),
+    "",
+    `COVER NEW GROUND. Intents worth reaching for this trade: ${intents.join("; ")}.`,
+    "Choose intents from that list (or equally specific ones) that are NOT already covered above.",
+  ];
+  if (headAsked) {
+    lines.push(
+      `The generic head question ("${businessType} services in the town") is ALREADY measured — do not ask it again in any phrasing.`,
+    );
+  }
+  return lines.join("\n");
+}
