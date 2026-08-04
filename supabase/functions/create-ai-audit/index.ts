@@ -43,6 +43,10 @@ const DEFAULT_QUESTION_COUNT = OUTREACH_HOOK_QUESTIONS;
 // audit reach 50+ percentage points, where one flipped cell moves the rate 10 points. These
 // higher bounds apply ONLY to trusted internal callers that ask for purpose='baseline'
 // (see BASELINE_PURPOSE below), so no public caller can raise its own cost ceiling.
+/** Ceiling for a STANDALONE MARKET AUDIT (no business attached). Mirrors
+ *  MARKET_AUDIT_QUESTION_COUNT in src/lib/marketView.ts — one audit of a market wants breadth, and
+ *  8 x $0.0125 = $0.10 is the figure the market dialog quotes. */
+const MARKET_MAX_QUESTION_COUNT = 8;
 const BASELINE_MIN_QUESTION_COUNT = 6;
 /* 20, raised from 12. A re-measurement supplies its OWN question set so the before and after
    compare like with like, and ABLM's set was 16 — at 12 the last four were dropped SILENTLY,
@@ -239,15 +243,36 @@ Deno.serve(async (req) => {
     // purpose='baseline' (paid client) unlocks the wider question bounds. INTERNAL ONLY:
     // findable-onboarding calls this server-side with the service key, so a public caller
     // cannot opt itself into 10-12 questions and triple our Apify spend.
+    /* ⚠️ NOT GATED ON isInternal, AND THAT WAS THE BUG. It was, and the only caller is the market
+       panel in the operator's own browser: supabase.functions.invoke sends the USER's JWT, never the
+       service key, so isInternal was always false, marketOnly was always false, and every market
+       audit fell through to the business_name check and 400'd — the exact guard this branch exists
+       to bypass.
+
+       Safe to allow any AUTHENTICATED caller: the !isInternal path above already rejects anyone
+       without a valid session with a 401, and a market audit is 8 questions (~10p) against a wizard
+       audit's 5 that the same session can already trigger. It cannot touch a lead (no lead_id), and
+       the question ceiling below is explicit rather than inherited. */
+    const marketOnly: boolean = body.market_only === true;
     const isBaseline = isInternal && body.purpose === "baseline";
+    /* A MARKET AUDIT HAS ITS OWN CEILING. The wizard bounds are 3..5, so the 8 questions the market
+       dialog quotes (and charges for) would have been silently clamped to 5 — the panel promising one
+       thing and the queue doing another. MARKET_MAX_QUESTION_COUNT mirrors MARKET_AUDIT_QUESTION_COUNT
+       in src/lib/marketView.ts; it is stated here rather than imported to keep this function's
+       dependency closure unchanged. Still a hard ceiling: a caller cannot ask for 20. */
     const questionCount = isBaseline
       ? clampCount(body.question_count ?? body.questionCount,
           BASELINE_MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT, BASELINE_DEFAULT_QUESTION_COUNT)
-      : clampCount(body.question_count ?? body.questionCount);
+      : marketOnly
+        ? clampCount(body.question_count ?? body.questionCount,
+            MIN_QUESTION_COUNT, MARKET_MAX_QUESTION_COUNT, MARKET_MAX_QUESTION_COUNT)
+        : clampCount(body.question_count ?? body.questionCount);
     // The provided-questions cap must match, or a baseline REPEAT run (which passes the first
     // run's questions verbatim so the three runs are like-for-like) would silently truncate
     // 10 questions to 5 and average two different question sets.
-    const MAX_QUESTIONS = isBaseline ? BASELINE_MAX_QUESTION_COUNT : MAX_QUESTION_COUNT;
+    const MAX_QUESTIONS = isBaseline
+      ? BASELINE_MAX_QUESTION_COUNT
+      : marketOnly ? MARKET_MAX_QUESTION_COUNT : MAX_QUESTION_COUNT;
     // How many runs make up this audit's baseline. Stored on the audit; the queue's completion
     // hook fires the remaining runs and averages them. Absent/0 → an ordinary single-run audit.
     const baselineTargetRuns = isBaseline
@@ -311,7 +336,7 @@ Deno.serve(async (req) => {
          - lead_id is null, which makes the audit_reply WhatsApp and the D2 completion send
            unreachable by their own existing gates.
        INTERNAL ONLY: it decides what gets measured and spends on Apify. */
-    const marketOnly: boolean = isInternal && body.market_only === true;
+
     /* MULTI-AREA BASELINE. audit-baseline sends the allocation it froze into the baseline contract:
        [{town, questions, isMain}]. The MAIN town keeps location_text and the verbatim seed; each
        extra area gets its own generated questions for the same services. Absent (every other
