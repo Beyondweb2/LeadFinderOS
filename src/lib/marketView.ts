@@ -137,6 +137,10 @@ export interface MarketPoolRow {
   noWebsite: boolean;
   googleMapsUrl: string;
   websiteUrl: string | null;
+  /** Nearby, but OUTSIDE the town boundary the pool was searched with. Shown separately and never
+   *  counted as a business in the town: the rectangle is 6x11km for Hastings and Battle Locksmiths
+   *  sits 10km north of it, so "in the pool" and "in the town" are not the same claim. */
+  outsideTown?: boolean;
   /** Present when this business IS named, but only thinly — so it stays a PROSPECT instead of
    *  being subtracted. Carries its own thinness so the row can show how thin: "1 mention in 1 of
    *  6 audits, against 25 for the leader". Absent = never named at all. */
@@ -169,6 +173,9 @@ export interface MarketViewResult {
   named: MarketNamedRow[];
   pool: MarketPoolRow[];
   poolState: MarketPoolState;
+  /** Businesses the radius pass found JUST OUTSIDE the town boundary. Visible, tagged, and never
+   *  merged into `pool` — see MarketPoolRow.outsideTown. */
+  poolNearby?: MarketPoolRow[];
   /** The market leader, for the "against N for the leader" comparison on thin rows. */
   leader?: MarketLeader | null;
   /** True when the cross-town scan for national brands hit its read cap, so `otherTowns` is a

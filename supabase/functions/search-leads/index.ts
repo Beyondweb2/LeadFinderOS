@@ -366,6 +366,12 @@ interface SearchLead {
   confidence: number;
   reason: string;
   isExpanded?: boolean;
+  /* NEARBY, BUT OUTSIDE THE TOWN BOUNDARY. Set only by the townOnly nearby pass below. The town
+     pool keeps its hard-rectangle identity; these are tagged so they can be SHOWN without ever
+     being counted as businesses in the town. Proven necessary 2026-08-04: Battle Locksmiths is
+     cited in 10 Hastings audit citations and sits at Battle TN33, ~10km north of the rectangle,
+     so no phrasing of the query could ever return it inside the boundary. */
+  outsideTown?: boolean;
 }
 
 function classifyWebsite(websiteUri: string | null | undefined): { status: SearchLead['websiteStatus']; confidence: number; reason: string } {
@@ -405,11 +411,14 @@ async function textSearchPlaces(
    *  locationRestriction rectangle instead of the soft locationBias circle, and `radius` is
    *  ignored. Null (the default, and every existing caller) leaves the bias path untouched. */
   townViewport: Viewport | null = null,
+  /** Page ceiling for THIS call. The town-only nearby pass asks for 1: it wants the "who is just
+   *  outside" signal, not a second pool, and one page keeps it to a single Places call. */
+  maxPages = 3,
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug }> {
   const pool: SearchLead[] = [];
   const seenIds = new Set<string>();
   let pageToken: string | undefined;
-  const MAX_PAGES = 3;
+  const MAX_PAGES = Math.max(1, maxPages);
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
   const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
   // Google Places API (New) max radius is 50,000m
@@ -769,11 +778,33 @@ async function performSearchGoogle(
 
   const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, apiKey, debug, broad, townViewport);
 
-  /* Town-only never expands. expandSearch generates centres AROUND the original point and
-     searches them for more no-website leads — it would reach straight back out of the town and
-     undo the restriction. Same treatment, and the same shape, as broad below. */
+  /* Town-only never EXPANDS (expandSearch chases no-website leads across a ring of centres and
+     would undo the restriction). But it does now take ONE nearby pass, because the rectangle
+     alone was quietly deciding who exists:
+
+       MEASURED 2026-08-04, Hastings locksmiths. The rectangle is 6.0km x 11.1km. "locksmiths"
+       inside it returns 13 places. Battle Locksmiths — 10 citations across 6 Hastings audits —
+       is at Battle TN33, north of latMax, and a radius-biased call finds it immediately. So do
+       six more genuine locksmiths in Bexhill, Rye, Eastbourne and Heathfield.
+
+     ONE page, not three: this is a "who else is just outside" signal, not a second pool, and it
+     costs one Places call on top of the town search. Everything it finds that the rectangle did
+     NOT is tagged outsideTown and stays tagged all the way to the screen. The town pool itself is
+     unchanged — same rectangle, same identity, same count. */
   if (townViewport) {
-    return { leads, selectionDebug, expanded: false, townFilter };
+    const inside = new Set(leads.map((l) => l.id));
+    let nearby: SearchLead[] = [];
+    try {
+      const { leads: wide } = await textSearchPlaces(
+        keyword, lat, lng, radius, apiKey, debug, broad, null, 1 /* ONE page only */,
+      );
+      nearby = wide.filter((l) => !inside.has(l.id)).map((l) => ({ ...l, outsideTown: true }));
+      console.log(`[TOWN-ONLY] nearby pass: ${wide.length} radius results, ${nearby.length} outside the boundary`);
+    } catch (e) {
+      // Never fatal: the town pool is the product here, the nearby list is a bonus signal.
+      console.warn('[TOWN-ONLY] nearby pass failed (town pool unaffected):', e instanceof Error ? e.message : e);
+    }
+    return { leads: [...leads, ...nearby], selectionDebug, expanded: false, townFilter };
   }
 
   // List-builder mode casts wide — never expand (expansion chases no-website leads).

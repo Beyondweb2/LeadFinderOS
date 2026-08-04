@@ -92,6 +92,10 @@ interface HistoryRow { id: string; keyword: string; location: string; radius: nu
 interface CachedLead {
   id: string; name: string; googleMapsUrl: string; websiteUrl: string | null;
   websiteStatus: string; confidence: number; reason: string;
+  /** search-leads' town-only nearby pass sets this on anything outside the boundary rectangle.
+   *  Absent on every row cached before that shipped, which reads as false — correct, because
+   *  those pools only ever contained inside-the-rectangle results. */
+  outsideTown?: boolean;
 }
 
 Deno.serve(async (req) => {
@@ -243,6 +247,13 @@ Deno.serve(async (req) => {
       }
     }
 
+    /* THE TOWN POOL KEEPS ITS IDENTITY. Rows tagged outsideTown came from the nearby radius pass
+       and are NOT businesses in this town: they are shown separately so the boundary stops
+       silently deciding who exists, without ever inflating the town's own count. */
+    const poolOutside = pool.filter((p) => p?.outsideTown === true);
+    pool = pool.filter((p) => p?.outsideTown !== true);
+    if (poolState.state === "ready") poolState = { ...poolState, total: pool.length };
+
     /* -- 4. ONE GROUPING PASS OVER BOTH SIDES ----------------------------------------------- */
     /* THE FIX. Previously the named list merged on businessCore and the pool subtracted using the
        same key computed separately - so "Anglia Locksmiths" led the named list on 86 mentions
@@ -251,7 +262,7 @@ Deno.serve(async (req) => {
        disagreement structurally impossible: the pool asks the same index the named list was
        built from. */
     const ctx = buildMatchContext(trade, town);
-    const poolNames = pool.map((p) => (p?.name ?? "").trim()).filter(Boolean);
+    const poolNames = [...pool, ...poolOutside].map((p) => (p?.name ?? "").trim()).filter(Boolean);
     const groups = groupNames([...mentions.map((m) => m.name), ...poolNames], ctx);
     const idx = keyIndex(groups);
 
@@ -431,6 +442,37 @@ Deno.serve(async (req) => {
     }
     /* Never-named first, then the thinly-named: the completely invisible are the strongest pitch,
        and a thin row needs its context read rather than being skimmed past. */
+    /* NEARBY, OUTSIDE THE BOUNDARY. Same grouping (so a chain reads as a chain and a firm AI
+       already names is marked), but its own list. Established-named ones are flagged via `thin`
+       being absent + the named lookup, so a nearby market leader is never pitched as a prospect. */
+    const nearbyGroups = new Map<string, { variants: string[]; ids: string[]; websiteless: number; sample: CachedLead }>();
+    for (const p of poolOutside) {
+      const nm = (p?.name ?? "").trim();
+      if (!nm) continue;
+      const k = idx.get(nm);
+      if (!k) continue;
+      const g = nearbyGroups.get(k) ?? { variants: [], ids: [], websiteless: 0, sample: p };
+      g.variants.push(nm);
+      g.ids.push(p.id);
+      if (p.websiteStatus === "NO_WEBSITE") g.websiteless += 1;
+      nearbyGroups.set(k, g);
+    }
+    const poolNearby: MarketPoolRow[] = [...nearbyGroups.entries()].map(([key, g]) => {
+      const hit = namedByKey.get(key);
+      return {
+        key,
+        name: pickDisplayNameFromList(g.variants),
+        branches: g.variants.length,
+        isChain: g.variants.length > 1,
+        placeIds: g.ids,
+        noWebsite: g.websiteless > 0,
+        googleMapsUrl: g.sample.googleMapsUrl,
+        websiteUrl: g.sample.websiteUrl,
+        outsideTown: true,
+        ...(hit ? { thin: { mentions: hit.mentions, audits: hit.audits, matchedNamed: hit.name } } : {}),
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+
     notNamed.sort((a, b) =>
       Number(!!a.thin) - Number(!!b.thin) ||
       Number(b.noWebsite) - Number(a.noWebsite) ||

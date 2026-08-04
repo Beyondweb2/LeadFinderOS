@@ -650,13 +650,28 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                       </p>
                     </div>
                   )}
+                  {/* WHAT THIS LIST ACTUALLY IS. Not "the businesses in this town": what Google
+                      Places returned inside the geocoded boundary. Two proven mechanisms keep real
+                      local firms out of it, so the screen says so rather than implying completeness.
+                      Measured 2026-08-04 on Hastings locksmiths: Battle Locksmiths (10 citations
+                      across 6 audits) sits 10km north of a 6x11km rectangle, and Surelock Homes,
+                      LockFit and LockRite — 40, 31 and 32 citations — have no Places listing in the
+                      town at all, so no phrasing or boundary could ever return them. */}
                   <p className="text-[11px] text-muted-foreground">
-                    From {view.poolState.total} businesses found for &ldquo;{view.poolState.keyword}&rdquo;
-                    {' '}({view.poolState.scope === 'town' ? 'town boundary' : `${Math.round(view.poolState.radiusM / 1000)}km radius`}),
+                    What Google Places returned for &ldquo;{view.poolState.keyword}&rdquo;
+                    {' '}{view.poolState.scope === 'town' ? 'inside the town boundary' : `within a ${Math.round(view.poolState.radiusM / 1000)}km radius`}:
+                    {' '}{view.poolState.total} business{view.poolState.total === 1 ? '' : 'es'},
                     searched {shortDate(view.poolState.searchedAt) ?? 'recently'}.
                     {measured
                       ? ` ${view.poolMatchedNamed} of them AI already names.`
                       : ' Nothing measured, so none have been subtracted.'}
+                  </p>
+                  <p className="text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+                    This is not a complete list of the town's businesses, and cannot be. Firms just
+                    outside the boundary never appear in it (they are listed separately below), and
+                    firms with no Google Places listing in the town — franchises and service-area
+                    businesses — cannot appear at all, however the search is phrased. AI names several
+                    of those in this trade.
                   </p>
                   {/* A radius pool is not a town pool. Say so rather than letting a wider list
                       masquerade as the market that was measured. */}
@@ -739,6 +754,40 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                           ))}
                         </ul>
                       )}
+                    </div>
+                  )}
+
+                  {/* NEARBY, OUTSIDE THE BOUNDARY. Visible and tagged, never merged into the
+                      town pool: they are not businesses in this town and the counts above must not
+                      pretend they are. No Add button — deciding whether a Bexhill locksmith belongs
+                      in a Hastings market is a judgement, not a default. */}
+                  {(view.poolNearby?.length ?? 0) > 0 && (
+                    <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                      <p className="text-[11px] font-medium text-foreground/80">
+                        Nearby, outside the town boundary ({view.poolNearby!.length})
+                      </p>
+                      <p className="text-[11px] leading-snug text-muted-foreground">
+                        Found by a radius pass, so you can see who the boundary excluded. Not counted
+                        as businesses in {view.town} and not part of the numbers above.
+                      </p>
+                      <ul className="space-y-1">
+                        {view.poolNearby!.map((n) => (
+                          <li key={n.key} className="flex flex-wrap items-center gap-2 text-[11px]">
+                            <span className="font-medium text-foreground/80">{n.name}</span>
+                            {n.isChain && (
+                              <Badge variant="outline" className="border-blue-500/40 text-[10px] text-blue-500">
+                                CHAIN · {n.branches}
+                              </Badge>
+                            )}
+                            {n.noWebsite && <Badge variant="outline" className="text-[10px]">no website</Badge>}
+                            {n.thin && (
+                              <span className="text-muted-foreground">
+                                AI names it: {n.thin.mentions} mention{n.thin.mentions === 1 ? '' : 's'} in {n.thin.audits} of {conc.audits} audits
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
 
