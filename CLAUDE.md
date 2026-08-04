@@ -412,6 +412,21 @@ Facts with numbers. These are measured, and several contradict the older docs.
   - ⚠️ **Still outstanding:** the queue spends **`MAX_ATTEMPTS = 3`** attempts per question against a
     402/403 hard stop. Failing fast on those is deliberately **not built** — Paul deferred it as a
     live-queue behaviour change while he was testing.
+- **A MARKET AUDIT SITTING AT "1 completed run" IS PROBABLY STILL WORKING, NOT DEAD.** Investigated
+  2026-08-04: Ipswich showed "2 audits, 1 completed run" and looked like a silent failure. Audit
+  `c39d755f` was **3.9 minutes old** with one question in flight on Apify against
+  `MAX_RUN_AGE_MS = 12 min` — an Apify question legitimately runs up to ~9 minutes — and it finished
+  unaided, 8/8, $0.083. **Before diagnosing a market audit as failed, read
+  `ai_audit_queue.result._apify.startedAtTick` and compare it to 12 minutes.**
+  - The real bug was that **nothing on the panel said which state it was in**. `market-view` now
+    returns `marketProgress` per unfinished market audit (questions done/total, run age, and the
+    **raw** error off the queue row), and `MarketPanel` grades it running / stalled
+    (`MARKET_AUDIT_STALE_MS`, 20 min) / failed, polling every 45s while anything is unfinished.
+  - ⚠️ **The evidence gate counts COMPLETED audits, never audits.** It used to count audits, so 2
+    market audits with 1 completed run cleared `MARKET_AUDIT_MIN_AUDITS = 2` and the view called a
+    shape on ONE audit's data — the degenerate-`auditShare` case the bar exists to prevent. The
+    `MarketShapeInput` fields are named `marketAuditsComplete` / `businessAuditsComplete` so the
+    audit counts cannot be passed in again by accident.
 - **No Baseline Test button.** Baselines are gated to internal callers (cron secret or service role +
   `x-internal-job`) and currently only start from `stripe-webhook` after payment. A button needs an
   authenticated path. Cost ≈ **30p** (measured — see above).
