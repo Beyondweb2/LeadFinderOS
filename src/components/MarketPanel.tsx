@@ -35,6 +35,20 @@ import type { Lead } from '@/types/lead';
 /** Radius sent with the market view's own lead search. Only used for the cache identity and for the
  *  fallback message: the search runs townOnly, so the boundary comes from the town, not this. */
 const MARKET_SEARCH_RADIUS_M = 50_000;
+
+/** An audit batch in flight, as bulk_jobs reports it. */
+interface AuditJobProgress {
+  id: string;
+  status: string;
+  total: number;
+  done_count: number;
+  failed_count: number;
+  skipped_count: number;
+}
+/** How often to re-read a live batch. The audit queue cron ticks every 60s, so anything faster
+ *  than this just burns reads for the same numbers. */
+const JOB_POLL_MS = 8_000;
+const JOB_ACTIVE = new Set(['queued', 'running']);
 /** Google Places text search, per page of ~20 results, from search-leads' own logging constant. */
 const GOOGLE_PAGE_USD = 0.032;
 
@@ -71,6 +85,13 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
      Checked when the dialog opens, and stated before anything is spent. null = not checked yet. */
   const [activeJob, setActiveJob] = useState<{ job_type: string; status: string } | null>(null);
   const [jobCheckDone, setJobCheckDone] = useState(false);
+  /* THE RUNNING BATCH, VISIBLE. Pressing the button used to leave the panel looking inert for
+     minutes: bulk-jobs enqueues, then the 1-minute audit-queue cron drains it, so nothing on
+     screen changed until the numbers silently appeared. This is polled while a job is live. */
+  const [jobProgress, setJobProgress] = useState<AuditJobProgress | null>(null);
+  /** Set when a batch we started has finished, so the panel can offer a refresh rather than
+   *  quietly going stale. Cleared by reloading. */
+  const [finishedJob, setFinishedJob] = useState<AuditJobProgress | null>(null);
 
   /* The market is whatever is in the two boxes. Reload whenever either changes, and clear the
      per-row "Added" ticks with it so they can never carry across from a different town. */
@@ -195,13 +216,70 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
       setAuditOpen(false);
       toast({
         title: `${leadIds.length} audit${leadIds.length === 1 ? '' : 's'} queued`,
-        description: 'They drain through the usual audit queue. Reload this market in a few minutes to see them counted.',
+        description: 'The panel now tracks them. They drain through the audit queue, roughly a minute per tick.',
       });
+      /* Seed the progress strip immediately rather than waiting up to JOB_POLL_MS for the first
+         poll — the whole complaint was that nothing visibly happened after the click. */
+      setFinishedJob(null);
+      setJobProgress({ id: 'pending', status: 'queued', total: leadIds.length, done_count: 0, failed_count: 0, skipped_count: 0 });
+      void readJob().then((j) => { if (j && JOB_ACTIVE.has(j.status)) setJobProgress(j); });
       await reload();
     } finally {
       setAuditBusy(false);
     }
-  }, [view, chosen, auditCount, addLead, asLead, toast, reload]);
+  }, [view, chosen, auditCount, addLead, asLead, toast, reload, readJob]);
+
+  /* ── A LIVE AUDIT BATCH, POLLED ───────────────────────────────────────────────────────────────
+     Reads the caller's own audit jobs (RLS scopes bulk_jobs to them) and keeps polling while one is
+     queued or running. On the active -> terminal transition it reloads the market itself, so the
+     numbers appear without the operator wondering whether to press Reload. */
+  const readJob = useCallback(async (): Promise<AuditJobProgress | null> => {
+    try {
+      const client = supabase as unknown as {
+        from: (t: string) => {
+          select: (c: string) => {
+            eq: (c: string, v: string) => {
+              order: (c: string, o: { ascending: boolean }) => {
+                limit: (n: number) => Promise<{ data: AuditJobProgress[] | null }>;
+              };
+            };
+          };
+        };
+      };
+      const { data } = await client
+        .from('bulk_jobs')
+        .select('id, status, total, done_count, failed_count, skipped_count')
+        .eq('job_type', 'audit')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      return data?.[0] ?? null;
+    } catch {
+      return null;   // a failed read must never break the panel; the next tick tries again
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | undefined;
+    const tick = async () => {
+      const job = await readJob();
+      if (cancelled) return;
+      setJobProgress((prev) => {
+        const wasActive = !!prev && JOB_ACTIVE.has(prev.status);
+        const nowActive = !!job && JOB_ACTIVE.has(job.status);
+        /* FINISHED WHILE WATCHING: reload the fold and say so, rather than leaving the panel
+           showing pre-batch numbers with no hint that they moved. */
+        if (wasActive && !nowActive && job) {
+          setFinishedJob(job);
+          void reload();
+        }
+        return nowActive ? job : null;
+      });
+      if (!cancelled) timer = window.setTimeout(tick, JOB_POLL_MS);
+    };
+    void tick();
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
+  }, [readJob, reload]);
 
   /* ── OPENING THE AUDIT CONFIRM ────────────────────────────────────────────────────────────────
      The button is NEVER disabled. A disabled button gives no reason, and "nothing happened" is the
@@ -302,6 +380,49 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
       {error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <span className="font-semibold">Market view failed.</span> {error}
+        </div>
+      )}
+
+      {/* ── A BATCH IN FLIGHT ────────────────────────────────────────────────────────────────
+          Pressing the button used to produce no visible change for minutes. This states what is
+          queued, how far it has got, and that the queue moves on a ~1-minute tick. */}
+      {jobProgress && (
+        <div className="space-y-1.5 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2.5">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Audits {jobProgress.status === 'queued' ? 'queued' : 'running'}:
+            {' '}{jobProgress.done_count} of {jobProgress.total} done
+            {jobProgress.failed_count > 0 && <span className="text-destructive">· {jobProgress.failed_count} failed</span>}
+            {jobProgress.skipped_count > 0 && <span className="text-muted-foreground">· {jobProgress.skipped_count} skipped</span>}
+          </p>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-500"
+              style={{ width: `${jobProgress.total > 0 ? Math.round((jobProgress.done_count / jobProgress.total) * 100) : 0}%` }}
+            />
+          </div>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Each audit is enqueued, then the audit queue drains it on a roughly one-minute tick, so
+            the whole batch takes a few minutes. This panel refreshes itself when the batch finishes —
+            you can leave the page.
+          </p>
+        </div>
+      )}
+
+      {/* Finished while they were looking at it: the fold has already been reloaded, so this is a
+          statement of what changed rather than a prompt to go and check. */}
+      {!jobProgress && finishedJob && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-flag-green/40 bg-green-500/5 px-3 py-2.5">
+          <Check className="h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-500" />
+          <p className="text-sm">
+            <span className="font-semibold">Audit batch {finishedJob.status}</span>
+            {' — '}{finishedJob.done_count} of {finishedJob.total} completed
+            {finishedJob.failed_count > 0 && <span className="text-destructive"> ({finishedJob.failed_count} failed)</span>}.
+            {' '}The market below has been reloaded.
+          </p>
+          <Button variant="outline" size="sm" className="ml-auto h-7" onClick={() => { setFinishedJob(null); void reload(); }}>
+            <RefreshCw className="mr-1.5 h-3 w-3" /> Reload again
+          </Button>
         </div>
       )}
 
