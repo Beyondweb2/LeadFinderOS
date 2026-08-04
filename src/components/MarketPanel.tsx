@@ -17,6 +17,7 @@ import {
   AUDIT_EST_USD_PER_QUESTION, MARKET_AUDIT_QUESTIONS, MARKET_AUDIT_MAX,
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
   MARKET_SKIP_SEO, SEO_SCAN_USD, marketBatchCost,
+  ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   type MarketPoolRow,
 } from '@/lib/marketView';
 import type { Lead } from '@/types/lead';
@@ -163,6 +164,58 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
     }
   }, [chosen, addLead, asLead]);
 
+  /* ── A LIVE AUDIT BATCH, POLLED ───────────────────────────────────────────────────────────────
+     Reads the caller's own audit jobs (RLS scopes bulk_jobs to them) and keeps polling while one is
+     queued or running. On the active -> terminal transition it reloads the market itself, so the
+     numbers appear without the operator wondering whether to press Reload. */
+  const readJob = useCallback(async (): Promise<AuditJobProgress | null> => {
+    try {
+      const client = supabase as unknown as {
+        from: (t: string) => {
+          select: (c: string) => {
+            eq: (c: string, v: string) => {
+              order: (c: string, o: { ascending: boolean }) => {
+                limit: (n: number) => Promise<{ data: AuditJobProgress[] | null }>;
+              };
+            };
+          };
+        };
+      };
+      const { data } = await client
+        .from('bulk_jobs')
+        .select('id, status, total, done_count, failed_count, skipped_count')
+        .eq('job_type', 'audit')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      return data?.[0] ?? null;
+    } catch {
+      return null;   // a failed read must never break the panel; the next tick tries again
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | undefined;
+    const tick = async () => {
+      const job = await readJob();
+      if (cancelled) return;
+      setJobProgress((prev) => {
+        const wasActive = !!prev && JOB_ACTIVE.has(prev.status);
+        const nowActive = !!job && JOB_ACTIVE.has(job.status);
+        /* FINISHED WHILE WATCHING: reload the fold and say so, rather than leaving the panel
+           showing pre-batch numbers with no hint that they moved. */
+        if (wasActive && !nowActive && job) {
+          setFinishedJob(job);
+          void reload();
+        }
+        return nowActive ? job : null;
+      });
+      if (!cancelled) timer = window.setTimeout(tick, JOB_POLL_MS);
+    };
+    void tick();
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
+  }, [readJob, reload]);
+
   /* ── THE AUDIT BATCH. Adds the businesses to the CRM and then hands them to the EXISTING
      bulk-jobs audit runner, which is keyed on lead ids and refuses anything it does not own. Both
      halves are stated on the confirm before a penny moves. */
@@ -229,58 +282,6 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
     }
   }, [view, chosen, auditCount, addLead, asLead, toast, reload, readJob]);
 
-  /* ── A LIVE AUDIT BATCH, POLLED ───────────────────────────────────────────────────────────────
-     Reads the caller's own audit jobs (RLS scopes bulk_jobs to them) and keeps polling while one is
-     queued or running. On the active -> terminal transition it reloads the market itself, so the
-     numbers appear without the operator wondering whether to press Reload. */
-  const readJob = useCallback(async (): Promise<AuditJobProgress | null> => {
-    try {
-      const client = supabase as unknown as {
-        from: (t: string) => {
-          select: (c: string) => {
-            eq: (c: string, v: string) => {
-              order: (c: string, o: { ascending: boolean }) => {
-                limit: (n: number) => Promise<{ data: AuditJobProgress[] | null }>;
-              };
-            };
-          };
-        };
-      };
-      const { data } = await client
-        .from('bulk_jobs')
-        .select('id, status, total, done_count, failed_count, skipped_count')
-        .eq('job_type', 'audit')
-        .order('created_at', { ascending: false })
-        .limit(1);
-      return data?.[0] ?? null;
-    } catch {
-      return null;   // a failed read must never break the panel; the next tick tries again
-    }
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    let timer: number | undefined;
-    const tick = async () => {
-      const job = await readJob();
-      if (cancelled) return;
-      setJobProgress((prev) => {
-        const wasActive = !!prev && JOB_ACTIVE.has(prev.status);
-        const nowActive = !!job && JOB_ACTIVE.has(job.status);
-        /* FINISHED WHILE WATCHING: reload the fold and say so, rather than leaving the panel
-           showing pre-batch numbers with no hint that they moved. */
-        if (wasActive && !nowActive && job) {
-          setFinishedJob(job);
-          void reload();
-        }
-        return nowActive ? job : null;
-      });
-      if (!cancelled) timer = window.setTimeout(tick, JOB_POLL_MS);
-    };
-    void tick();
-    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
-  }, [readJob, reload]);
-
   /* ── OPENING THE AUDIT CONFIRM ────────────────────────────────────────────────────────────────
      The button is NEVER disabled. A disabled button gives no reason, and "nothing happened" is the
      worst thing this panel can do — it cost a diagnosis session to establish the click was landing
@@ -344,6 +345,9 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
   /* MEASURED, NOT MEASURABLE. completeRuns is what produced competitor names; audits alone can be
      pending or failed. With zero completed runs nobody CAN have been named, so the never-named list
      is not a prospect list — it is just the pool. Item 6: the two states must read differently. */
+  /** Named but thin — shown as their own group in "Who AI names", and (when they are in the pool)
+   *  kept as prospects rather than subtracted. */
+  const thinTail = (view?.named ?? []).filter((n) => n.tier === 'thin');
   const completedRuns = view?.concentration.completeRuns ?? 0;
   const auditsExist = (view?.concentration.audits ?? 0) > 0;
   const measured = completedRuns > 0;
@@ -533,7 +537,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                 </p>
               ) : (
                 <ul className="space-y-1">
-                  {view.named.map((n) => (
+                  {view.named.filter((n) => n.tier !== 'thin').map((n) => (
                     <li key={n.key} className="flex flex-wrap items-baseline gap-x-2 border-b border-border/40 py-1 text-[13px] last:border-b-0">
                       <span className="min-w-[3.5rem] shrink-0 tabular-nums text-xs text-muted-foreground">
                         {n.audits} audit{n.audits === 1 ? '' : 's'}
@@ -550,6 +554,48 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                     </li>
                   ))}
                 </ul>
+              )}
+
+              {/* ── THE THIN TAIL ────────────────────────────────────────────────────────────
+                  Named, but barely: a share of audits or of the leader's mentions below the
+                  thresholds in marketView.ts. Kept OUT of the list above (they are not who AI
+                  recommends here) and shown separately with their thinness, because "AI mentioned
+                  it once" is a completely different fact from "AI recommends it".
+                  Entries also cited in OTHER towns of this trade are flagged as likely national
+                  brands — that is evidence from citations, not a brand list, and it stops Able
+                  Group and Rapid Secure UK reading as Hastings prospects. */}
+              {thinTail.length > 0 && (
+                <div className="mt-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                  <p className="text-[11px] font-medium text-foreground/80">
+                    Barely named ({thinTail.length}) — mentioned, but not who AI recommends here
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    Under {Math.round(ESTABLISHED_MIN_AUDIT_SHARE * 100)}% of this market's audits, or under{' '}
+                    {Math.round(ESTABLISHED_MIN_MENTION_SHARE * 100)}% of the leader's mentions
+                    {view.leader ? ` (${view.leader.mentions} for ${view.leader.name})` : ''}.
+                  </p>
+                  <ul className="mt-1.5 space-y-1">
+                    {thinTail.map((n) => (
+                      <li key={n.key} className="flex flex-wrap items-baseline gap-x-2 text-[11px] leading-snug">
+                        <span className="font-medium text-foreground/80">{n.name}</span>
+                        <span className="text-muted-foreground">
+                          {n.mentions} mention{n.mentions === 1 ? '' : 's'} in {n.audits} of {conc.audits} audits
+                          {view.leader ? `, against ${view.leader.mentions} for the leader` : ''}
+                        </span>
+                        {n.otherTowns > 0 && (
+                          <Badge variant="outline" className="border-blue-500/40 text-[10px] text-blue-500">
+                            also in {n.otherTowns} other {n.otherTowns === 1 ? 'town' : 'towns'} · likely national
+                          </Badge>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  {view.otherTownsCapped && (
+                    <p className="mt-1.5 text-[10px] leading-snug text-amber-600 dark:text-amber-500">
+                      The other-town check stopped at its read cap, so "also in N other towns" is a floor, not a total.
+                    </p>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>
@@ -629,6 +675,15 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                       {view.pool.map((p) => (
                         <li key={p.key} className="flex flex-wrap items-center gap-2 border-b border-border/40 py-1.5 text-[13px] last:border-b-0">
                           <span className="font-medium">{p.name}</span>
+                          {/* NAMED, BUT BARELY. Kept as a prospect deliberately (graded, not
+                              binary) and it must carry its thinness: "1 mention in 1 of 6 audits"
+                              is the pitch, and hiding it would make this row look never-named. */}
+                          {p.thin && (
+                            <Badge variant="outline" className="border-amber-500/50 text-[10px] text-amber-600 dark:text-amber-500">
+                              barely named · {p.thin.mentions} mention{p.thin.mentions === 1 ? '' : 's'} in {p.thin.audits} of {conc.audits}
+                              {view.leader ? `, vs ${view.leader.mentions} for the leader` : ''}
+                            </Badge>
+                          )}
                           {/* Chains, by repetition alone — no hardcoded list. Ten Timpson branches
                               are one company, not ten prospects. */}
                           {p.isChain && (

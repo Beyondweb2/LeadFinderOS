@@ -62,6 +62,35 @@ export interface MarketConcentration {
   runIds: string[];
 }
 
+/* ── GRADED, NOT BINARY ────────────────────────────────────────────────────────────────────────
+   "Named" and "not named" hid the best prospects: in Hastings, Titanium Locksmiths (25 mentions
+   across 6 of 6 audits) and Mr Locks (1 mention in 1 audit) both counted as named, so both were
+   subtracted from the prospect list. One is the market leader; the other is a firm AI barely
+   knows exists, which is exactly who to sell to.
+
+   WHERE THE LINE SITS, AND WHY IT IS NOT A ROUND NUMBER PICKED IN ADVANCE. Measured on the two
+   markets with real depth:
+     Hastings (6 audits)   weakest established: Battle Locksmiths, 8 mentions = 32% of the leader
+                           strongest thin:      A1 Locksmiths,     3 mentions = 12% of the leader
+     Wisbech  (14 audits)  weakest established: THE LOCK TEAM,    26 mentions = 30% of the leader
+                           strongest thin:      Timpson Security, 10 mentions = 12% of the leader
+   The SAME empty band appears in both: 12% -> ~30%. 20% sits inside it in both markets, which is
+   why it is the threshold rather than a number chosen first and justified later.
+
+   The audit-share half of the test is the guard the mention count cannot provide: 32 mentions all
+   from ONE audit is one opinion, not a market position (the trap playbook-evidence also guards).
+   Both conditions must hold. */
+
+/** Minimum share of the market's audits an entry must appear in to count as established. */
+export const ESTABLISHED_MIN_AUDIT_SHARE = 0.5;
+/** Minimum share of the LEADER's mentions an entry must hold to count as established. */
+export const ESTABLISHED_MIN_MENTION_SHARE = 0.2;
+
+/** 'established' = AI names it consistently. 'thin' = named, but barely — a prospect.
+ *  'unknown' = the market has fewer than EVIDENCE_MIN_AUDITS audits, so nothing is established
+ *  yet and claiming otherwise would dress 2 audits up as a market position. */
+export type MarketTier = "established" | "thin" | "unknown";
+
 export interface MarketNamedRow {
   /** businessCore merge key. Stable across spellings; the join key against the pool. */
   key: string;
@@ -70,7 +99,21 @@ export interface MarketNamedRow {
   variants: string[];
   mentions: number;
   audits: number;
+  /** Graded standing in THIS market. See the thresholds above. */
+  tier: MarketTier;
+  /** audits / total audits in the market, 0-1. Rendered so the grade shows its working. */
+  auditShare: number;
+  /** mentions / leader's mentions, 0-1. */
+  mentionShare: number;
+  /** Other TOWNS of the same trade where this same name is cited. >0 is the only evidence-based
+   *  signal available that a name is a national brand rather than a local firm: Able Group,
+   *  Rapid Secure UK and E-Locksmiths all show up in both Hastings and Wisbech. Derived from
+   *  citations, never from a hardcoded brand list. */
+  otherTowns: number;
 }
+
+/** The market leader's mention count, needed to render "against N for the leader". */
+export interface MarketLeader { name: string; mentions: number }
 
 /** A pool business REMOVED from the prospect list because AI already names it, and the entry it
  *  matched. Itemised rather than merely counted: a silent exclusion is how a real prospect
@@ -94,6 +137,10 @@ export interface MarketPoolRow {
   noWebsite: boolean;
   googleMapsUrl: string;
   websiteUrl: string | null;
+  /** Present when this business IS named, but only thinly — so it stays a PROSPECT instead of
+   *  being subtracted. Carries its own thinness so the row can show how thin: "1 mention in 1 of
+   *  6 audits, against 25 for the leader". Absent = never named at all. */
+  thin?: { mentions: number; audits: number; matchedNamed: string };
 }
 
 /** The three states, which MUST read differently on screen. An empty prospect list and a search
@@ -122,6 +169,11 @@ export interface MarketViewResult {
   named: MarketNamedRow[];
   pool: MarketPoolRow[];
   poolState: MarketPoolState;
+  /** The market leader, for the "against N for the leader" comparison on thin rows. */
+  leader?: MarketLeader | null;
+  /** True when the cross-town scan for national brands hit its read cap, so `otherTowns` is a
+   *  floor rather than a count. Surfaced on screen — a silent cap reads as "covered everything". */
+  otherTownsCapped?: boolean;
   /** Pool businesses that ARE already named — shown so the subtraction is auditable. */
   poolMatchedNamed: number;
   /** Which ones, and what each matched. Rendered, not just counted. */
