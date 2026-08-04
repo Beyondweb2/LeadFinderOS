@@ -1,6 +1,7 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
+import { FINDABLE_SETUP_PRICE_GBP } from "../../../src/lib/findableOffer.ts";
 
 // stripe-webhook — flips generated_sites.is_paid from Stripe subscription events.
 //
@@ -350,8 +351,9 @@ Deno.serve(async (req) => {
     switch (event.type) {
       case "checkout.session.completed": {
         const s = event.data.object as Stripe.Checkout.Session;
-        // FINDABLE onboarding payment (mode=payment, £49.99 one-off from findable-checkout):
-        // identified by metadata.onboarding_id — a different product from the barber
+        // FINDABLE onboarding payment (mode=payment, one-off sprint price from
+        // findable-checkout / findableOffer.ts): identified by metadata.onboarding_id — a
+        // different product from the barber
         // subscription, handled first so it never falls into the site-paid path's
         // "no generated_site_id" warning. Idempotent: payment is terminal, so re-deliveries
         // just re-write the same values.
@@ -359,7 +361,7 @@ Deno.serve(async (req) => {
         if (onboardingId) {
           if (s.status === "complete") {
             const findableLeadId = (s.metadata?.lead_id as string) || "";
-            const amountGbp = typeof s.amount_total === "number" ? s.amount_total / 100 : 49.99;
+            const amountGbp = typeof s.amount_total === "number" ? s.amount_total / 100 : FINDABLE_SETUP_PRICE_GBP;
             // Every write checked. A failure records to client_error_reports and throws, so the
             // handler returns 500 and Stripe retries. The one thing that must never happen is
             // taking the money and leaving no trace that we did.

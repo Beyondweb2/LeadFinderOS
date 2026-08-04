@@ -1,4 +1,5 @@
 import { DOC_CSS, docBand, esc, pdfTitle, printHtmlAsPdf } from './playbookDocStyle';
+import { FINDABLE_GUARANTEE } from './findableOffer';
 
 /* ============================================================
    THE CLIENT REQUEST FORM — the only client-facing document in the system.
@@ -257,8 +258,7 @@ ${docBand('What we need from you')}
       will be named. No client has completed a full eight-week cycle with us yet, so we have no results
       to point at, and we would rather say that than imply otherwise. What we can tell you is what we
       measured, what we did, and what changed when we measured again.</p>
-      <p class="note"><b>Our promise.</b> Our promise is to get you named in more AI answers within
-      8 weeks, or a full refund.</p>
+      <p class="note"><b>Our promise.</b> ${FINDABLE_GUARANTEE}</p>
     </section>
 
     <footer class="site-foot">

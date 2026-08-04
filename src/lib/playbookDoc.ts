@@ -1,4 +1,5 @@
 import { DOC_CSS, docBand, esc, pdfTitle, printHtmlAsPdf } from './playbookDocStyle';
+import { FINDABLE_GUARANTEE } from './findableOffer';
 import type { Playbook, PlaybookStep } from './buildPlaybook';
 import { EVIDENCE_MIN_AUDITS, thinTradeMessage } from './buildPlaybook';
 import { factFor } from './directoryFacts';
@@ -476,10 +477,9 @@ ${pb.missingAddress ? `    <div class="warn">No address on file — every signup
       starts naming this business: a directory listing is read when it is read. Repeated runs of the
       same question also disagree with each other, which is why the re-audit repeats the whole set
       rather than spot-checking.</p>
-      <p class="note"><b>Our promise.</b> Our promise is to get this business named in more AI answers
-      within 8 weeks, or a full refund — the wording this was sold on. No client has completed a full
-      eight-week cycle yet, so there are no results to point at, and we would rather say that than
-      imply otherwise.</p>
+      <p class="note"><b>Our promise.</b> ${FINDABLE_GUARANTEE} The same sentence the payer sees
+      at checkout. No client has completed a full eight-week cycle yet, so there are no results to
+      point at, and we would rather say that than imply otherwise.</p>
     </section>
 
     <footer class="site-foot">
