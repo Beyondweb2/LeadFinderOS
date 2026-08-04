@@ -418,6 +418,10 @@ Deno.serve(async (req) => {
       truncatedBlocks,
       engineBlocks,
       runIds,
+      /* How many of these are MARKET audits. They carry more evidence weight than a business audit
+         (8 questions aimed at the market vs 3 aimed at a firm), so the shape's evidence gate needs
+         the split — see hasShapeEvidence in src/lib/marketView.ts. */
+      marketAudits: audits.filter((a) => a.is_market === true).length,
     };
 
     /* CITED HOSTS, biggest first. Only the top few are needed (the shape read uses position 1),

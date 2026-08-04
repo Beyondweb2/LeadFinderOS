@@ -60,6 +60,9 @@ export interface MarketConcentration {
   engineBlocks: number;
   /** Completed run ids for this market — what the re-extract button iterates. */
   runIds: string[];
+  /** Of `audits`, how many are MARKET audits (no business attached, 8 questions). They carry more
+   *  evidence weight than a business audit — see MARKET_AUDIT_MIN_AUDITS. */
+  marketAudits?: number;
 }
 
 /* ── GRADED, NOT BINARY ────────────────────────────────────────────────────────────────────────
@@ -326,6 +329,62 @@ export interface MarketShape {
    So they are separate statements now: the SHAPE comes from citations and naming, and the
    CONTACTABLE COUNT is its own line in marketPlainRead which never changes the verdict. */
 
+/* -- HOW MUCH EVIDENCE BEFORE A SHAPE IS CALLED ------------------------------------------------
+   EVIDENCE_MIN_AUDITS (5) was built for PER-BUSINESS audits: five businesses sampling one market
+   with 3 questions each. A market audit is a single 8-question direct measurement of the market
+   itself, so one of them is stronger evidence than one business audit ever was. Measured
+   2026-08-04:
+
+     one MARKET audit (Colchester, 8 questions)  -> 31 distinct businesses named, 153 citations
+     one BUSINESS audit (mean of 6, Hastings)    -> 16.5 distinct businesses, ~61 citations
+     SIX business audits together (18 questions) -> 26 distinct businesses
+
+   One market audit surfaced MORE distinct businesses than six business audits of the same trade
+   did, because its questions are chosen for the market rather than for one firm's specialisms, and
+   the coverage directive makes a second one ask NEW intents rather than repeating.
+
+   SO WHY TWO AND NOT ONE. Not breadth - breadth is already there. The reason is structural: with a
+   single audit, `auditShare` is degenerate. Every named firm appears in 1 of 1 audits = 100%, so the
+   established/thin test collapses onto its mention-share half and the audit-share guard - the one
+   that stops "32 mentions from one answer" reading as a market position - does nothing at all. Two
+   audits is the minimum at which that guard carries information (1 of 2 = 50% vs 2 of 2 = 100%).
+   Two market audits is 16 non-overlapping questions and ~300 citations, for ~16p. */
+
+/** Market audits needed before a shape is called. See above: two is where audit-share starts to
+ *  mean anything, not a round number. */
+export const MARKET_AUDIT_MIN_AUDITS = 2;
+
+/** What one market audit is worth in business-audit terms, for a market measured by both.
+ *  ⚠️ THIS FOLLOWS FROM THE TWO THRESHOLDS (2 market audits and 5 business audits both being
+ *  "enough"), not from an independent measurement. It credits a market audit slightly above the
+ *  measured breadth ratio of 1.9x, which is deliberate: a market audit's questions are chosen for
+ *  the market and are non-overlapping by design, so its 8 questions reach more distinct intent than
+ *  8 questions spread across three business audits would. If that turns out to be generous, this is
+ *  the number to lower. */
+export const MARKET_AUDIT_EVIDENCE_WEIGHT = 2.5;
+
+export interface MarketEvidence { marketAudits: number; businessAudits: number }
+
+/** Is there enough to call a shape? Either bar on its own, or a weighted mix reaching the
+ *  business-audit bar. */
+export function hasShapeEvidence(e: MarketEvidence): boolean {
+  if (e.marketAudits >= MARKET_AUDIT_MIN_AUDITS) return true;
+  if (e.businessAudits >= EVIDENCE_MIN_AUDITS) return true;
+  return (e.businessAudits + e.marketAudits * MARKET_AUDIT_EVIDENCE_WEIGHT) >= EVIDENCE_MIN_AUDITS;
+}
+
+/** The shortfall, in words, for the "not measured enough" verdict. */
+export function evidenceShortfall(e: MarketEvidence): string {
+  const parts: string[] = [];
+  if (e.marketAudits > 0) parts.push(`${e.marketAudits} market audit${e.marketAudits === 1 ? "" : "s"}`);
+  if (e.businessAudits > 0) parts.push(`${e.businessAudits} business audit${e.businessAudits === 1 ? "" : "s"}`);
+  const have = parts.length ? parts.join(" and ") : "nothing measured yet";
+  if (e.marketAudits === 1 && e.businessAudits === 0) {
+    return `${have}. One more market audit and this view will call the shape - and because repeat market audits cover NEW intents rather than repeating, the second one widens the picture as well as confirming it.`;
+  }
+  return `${have}. This view needs ${MARKET_AUDIT_MIN_AUDITS} market audits, or ${EVIDENCE_MIN_AUDITS} business audits, before it will call a market's shape.`;
+}
+
 /** A market with almost nothing named in it - no competitive picture to show a client.
  *
  *  NOT DERIVED FROM DATA, BECAUSE THERE IS NONE TO DERIVE IT FROM. Every market measured to the
@@ -349,22 +408,31 @@ export interface MarketShapeInput {
   citationTotal: number;
   /** Distinct businesses AI names here - the only size signal the shape uses. */
   distinctBusinesses: number;
+  /** Audits of this market with no business attached (8 questions each). */
+  marketAudits: number;
+  /** Per-business audits of this trade and town (3 questions each, typically). */
+  businessAudits: number;
   /* NO POOL FIELDS, DELIBERATELY. The shape is decided by citations and naming alone, so an
      incomplete Places pool cannot overrule them. The contactable count lives in marketPlainRead. */
 }
 
 export function marketShape(input: MarketShapeInput): MarketShape {
-  const { audits, completeRuns, leader, leaderRow, citationHosts, citationTotal, distinctBusinesses } = input;
+  const {
+    audits, completeRuns, leader, leaderRow, citationHosts, citationTotal, distinctBusinesses,
+    marketAudits, businessAudits,
+  } = input;
 
   /* NEVER MORE CONFIDENT THAN THE EVIDENCE. Below the same bar the playbook uses, this names no
      shape at all - a market read off two audits is a guess wearing a verdict's clothes. */
-  if (audits < EVIDENCE_MIN_AUDITS || completeRuns === 0 || !leader) {
+  if (!hasShapeEvidence({ marketAudits, businessAudits }) || completeRuns === 0 || !leader) {
     return {
       kind: "unmeasured",
       headline: "Not measured enough to judge",
       reasoning: [
-        `${audits} audit${audits === 1 ? "" : "s"}, ${completeRuns} completed - ${EVIDENCE_MIN_AUDITS} is the minimum before this view claims anything about a market's shape.`,
-        "Run more audits, then come back.",
+        evidenceShortfall({ marketAudits, businessAudits }),
+        completeRuns === 0
+          ? `${audits} audit${audits === 1 ? "" : "s"} exist${audits === 1 ? "s" : ""} but none has finished, so nothing has been measured yet.`
+          : `${completeRuns} completed run${completeRuns === 1 ? "" : "s"} behind it so far.`,
       ],
     };
   }
@@ -458,6 +526,13 @@ export function marketPlainRead(
   poolFound: number,
   /** Entries after chain folding. */
   poolEntries: number,
+  /** Chain entries inside poolEntries — folded branches, never prospects. */
+  chainEntries: number,
+  /** Runs that actually COMPLETED. With none, nothing has been measured, so nobody can have been
+   *  named and no business can be called a prospect. */
+  completeRuns: number,
+  /** Audits that exist but have not finished, so the wait can be stated. */
+  pendingAudits: number,
 ): MarketPlainRead {
   const topHost = citationHosts[0] ?? null;
   const plural = trade.trim().toLowerCase();
@@ -465,7 +540,13 @@ export function marketPlainRead(
   let market: string;
   switch (shape.kind) {
     case "unmeasured":
-      market = `Not enough measured yet to say. ${conc.audits} audit${conc.audits === 1 ? "" : "s"} here, and ${EVIDENCE_MIN_AUDITS} is the minimum before this view will call a market.`;
+      /* Uses the SAME shortfall wording the verdict does, so the sentence and the bullets cannot
+         quote different minimums - it said "5 is the minimum" to someone who had run one MARKET
+         audit, where the bar is two. */
+      market = `Not enough measured yet to say. ${evidenceShortfall({
+        marketAudits: conc.marketAudits ?? 0,
+        businessAudits: Math.max(0, conc.audits - (conc.marketAudits ?? 0)),
+      })}`;
       break;
     case "marketplace_led":
       market = topHost?.isAggregator
@@ -489,11 +570,27 @@ export function marketPlainRead(
   const poolLine = poolFound > poolEntries
     ? `${poolFound} found in Places, ${poolEntries} after chain branches fold together`
     : `${poolEntries} found in Places`;
+  const chainLine = chainEntries > 0
+    ? (chainEntries === 1
+      ? ", one of them a chain entry that is not a prospect"
+      : `, ${chainEntries} of them chain entries that are not prospects`)
+    : "";
+
+  /* ⛔ NOTHING MEASURED MEANS NO PROSPECTS. WITH ZERO COMPLETED RUNS NOBODY CAN HAVE BEEN NAMED, so
+     every business in the pool looks invisible whatever AI actually says — and calling 13 of them
+     "worth contacting" is a prospect list built on no data. The collapsed detail already refused to
+     do this; the summary now defers to the SAME rule (completeRuns > 0) instead of ignoring it. */
   const contact = !poolSearched
     ? "No lead search has been run for this town yet - run it to see who to contact."
-    : prospects === 0
-      ? `Nobody left to contact: of ${poolLine}, every one is already named by AI. The list can't be complete though - it is only what Places returned inside the town boundary.`
-      : `${prospects} worth contacting: of ${poolLine}, ${prospects} ${prospects === 1 ? "either never shows up" : "either never show up"} in AI answers or barely ${prospects === 1 ? "does" : "do"}. Places may be missing firms, so treat it as a floor.`;
+    : completeRuns === 0
+      ? `Nobody can be called a prospect yet: ${poolLine}${chainLine}, but no audit has finished, so nothing has been measured and there is nothing to subtract. ${
+        pendingAudits > 0
+          ? `${pendingAudits} audit${pendingAudits === 1 ? "" : "s"} still running - this becomes a prospect list when ${pendingAudits === 1 ? "it finishes" : "they finish"}.`
+          : "Run an audit of this market first."
+      }`
+      : prospects === 0
+        ? `Nobody left to contact: of ${poolLine}, every one is already named by AI. The list can't be complete though - it is only what Places returned inside the town boundary.`
+        : `${prospects} worth contacting: of ${poolLine}${chainLine}, ${prospects} ${prospects === 1 ? "either never shows up" : "either never show up"} in AI answers or barely ${prospects === 1 ? "does" : "do"}. Places may be missing firms, so treat it as a floor.`;
 
   return { market, contact };
 }
