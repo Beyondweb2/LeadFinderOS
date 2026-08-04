@@ -4,8 +4,9 @@ import { buildMatchContext, groupNames, keyIndex } from "../_shared/market-match
 import { generateCacheKey } from "../_shared/search-cache-key.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
+  ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   type MarketConcentration, type MarketNamedRow, type MarketPoolExcluded,
-  type MarketPoolRow, type MarketPoolState,
+  type MarketPoolRow, type MarketPoolState, type MarketTier,
 } from "../../../src/lib/marketView.ts";
 
 /* ============================================================
@@ -267,15 +268,73 @@ Deno.serve(async (req) => {
       fold.set(k, hit);
     }
 
+    /* ── NATIONAL BRAND OR LOCAL FIRM, FROM CITATIONS ONLY ─────────────────────────────────────
+       A name cited in OTHER towns for the same trade is a national brand, not a local prospect:
+       Able Group, Rapid Secure UK and E-Locksmiths all appear in Hastings AND Wisbech. Evidence,
+       not a hardcoded brand list (§6: facts are per-host, evidence is per-trade).
+       Bounded: OTHER_TOWN_RUN_CAP runs, and the cap is REPORTED rather than swallowed, so
+       otherTowns reads as a floor when it trips. */
+    const OTHER_TOWN_RUN_CAP = 60;
+    const townsByName = new Map<string, Set<string>>();
+    let otherTownsCapped = false;
+    {
+      const sameTrade = await all<AuditRow>(service, "ai_audits", "id, business_type, location_text",
+        (q) => q.eq("user_id", userId));
+      const otherAudits = sameTrade.filter((a) =>
+        norm(a.business_type) === trade && townKey(a.location_text) !== tk && !!(a.location_text ?? "").trim());
+      const byAuditTown = new Map<string, string>(otherAudits.map((a) => [a.id, townKey(a.location_text)]));
+      if (byAuditTown.size > 0) {
+        const otherRuns = await all<RunRow>(service, "ai_audit_runs", "id, audit_id, status",
+          (q) => q.in("audit_id", [...byAuditTown.keys()]).in("status", ["complete", "capped"]));
+        const use = otherRuns.slice(0, OTHER_TOWN_RUN_CAP);
+        otherTownsCapped = otherRuns.length > use.length;
+        for (const r of use) {
+          const town2 = byAuditTown.get(r.audit_id) ?? "";
+          const rows = await all<QueueRow>(service, "ai_audit_queue", "id, result", (q) => q.eq("run_id", r.id));
+          for (const row of rows) {
+            for (const eng of Object.values(row.result ?? {})) {
+              const list = (eng as { competitors?: unknown })?.competitors;
+              if (!Array.isArray(list)) continue;
+              for (const raw of list) {
+                const nm = typeof raw === "string" ? raw.trim() : "";
+                if (!nm) continue;
+                const k = idx.get(nm);
+                if (!k) continue;   // only names this market already knows about
+                const set = townsByName.get(k) ?? new Set<string>();
+                set.add(town2);
+                townsByName.set(k, set);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    /* GRADED: established / thin / unknown. Below EVIDENCE_MIN_AUDITS nothing is established —
+       two audits cannot establish a market position, and saying otherwise is the same
+       thin-evidence trap the playbook guards. Thresholds and their justification live in
+       src/lib/marketView.ts. */
+    const leaderMentions = Math.max(0, ...[...fold.values()].map((v) => v.mentions));
+    const thinMarket = auditIds.length < EVIDENCE_MIN_AUDITS;
     const named: MarketNamedRow[] = [...fold.entries()]
-      .map(([key, v]) => ({
-        key,
-        name: pickDisplayName(v.counts),
-        variants: [...v.counts.keys()].sort(),
-        mentions: v.mentions,
-        audits: v.audits.size,
-      }))
+      .map(([key, v]) => {
+        const auditShare = auditIds.length > 0 ? v.audits.size / auditIds.length : 0;
+        const mentionShare = leaderMentions > 0 ? v.mentions / leaderMentions : 0;
+        const established = auditShare >= ESTABLISHED_MIN_AUDIT_SHARE && mentionShare >= ESTABLISHED_MIN_MENTION_SHARE;
+        return {
+          key,
+          name: pickDisplayName(v.counts),
+          variants: [...v.counts.keys()].sort(),
+          mentions: v.mentions,
+          audits: v.audits.size,
+          tier: (thinMarket ? "unknown" : established ? "established" : "thin") as MarketTier,
+          auditShare: Math.round(auditShare * 1000) / 1000,
+          mentionShare: Math.round(mentionShare * 1000) / 1000,
+          otherTowns: townsByName.get(key)?.size ?? 0,
+        };
+      })
       .sort((a, b) => b.audits - a.audits || b.mentions - a.mentions || a.name.localeCompare(b.name));
+    const leaderRow = [...named].sort((a, b) => b.mentions - a.mentions)[0] ?? null;
 
     /* -- 5. CONCENTRATION -------------------------------------------------------------------- */
     const totalMentions = named.reduce((s, n) => s + n.mentions, 0);
@@ -329,6 +388,23 @@ Deno.serve(async (req) => {
     const poolExcluded: MarketPoolExcluded[] = [];
     for (const [key, g] of poolGroups) {
       const hit = namedByKey.get(key);
+      /* GRADED SUBTRACTION. Only an ESTABLISHED entry is subtracted. A thinly-named business stays
+         a prospect and carries its thinness with it — being named once in one audit is not being
+         known, and excluding it hid exactly the businesses worth contacting. */
+      if (hit && hit.tier === "thin") {
+        notNamed.push({
+          key,
+          name: pickDisplayNameFromList(g.variants),
+          branches: g.variants.length,
+          isChain: g.variants.length > 1,
+          placeIds: g.ids,
+          noWebsite: g.websiteless > 0,
+          googleMapsUrl: g.sample.googleMapsUrl,
+          websiteUrl: g.sample.websiteUrl,
+          thin: { mentions: hit.mentions, audits: hit.audits, matchedNamed: hit.name },
+        });
+        continue;
+      }
       if (hit) {
         poolExcluded.push({
           name: pickDisplayNameFromList(g.variants),
@@ -353,7 +429,12 @@ Deno.serve(async (req) => {
         websiteUrl: g.sample.websiteUrl,
       });
     }
-    notNamed.sort((a, b) => Number(b.noWebsite) - Number(a.noWebsite) || a.name.localeCompare(b.name));
+    /* Never-named first, then the thinly-named: the completely invisible are the strongest pitch,
+       and a thin row needs its context read rather than being skimmed past. */
+    notNamed.sort((a, b) =>
+      Number(!!a.thin) - Number(!!b.thin) ||
+      Number(b.noWebsite) - Number(a.noWebsite) ||
+      a.name.localeCompare(b.name));
     poolExcluded.sort((a, b) => b.matchedMentions - a.matchedMentions);
     const alreadyNamed = poolExcluded.length;
 
@@ -361,6 +442,8 @@ Deno.serve(async (req) => {
       ok: true, trade, town,
       concentration,
       named,
+      leader: leaderRow ? { name: leaderRow.name, mentions: leaderRow.mentions } : null,
+      otherTownsCapped,
       pool: notNamed,
       poolState,
       poolMatchedNamed: alreadyNamed,
