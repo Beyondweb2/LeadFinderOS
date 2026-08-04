@@ -1,20 +1,23 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
+import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
 
 // findable-checkout — Stripe Checkout for the Findable onboarding plan (verify_jwt = false;
 // called by the public findable-site with the anon apikey — the visitor has no app account).
 //
-// ONE plan: £49.99 ONE-OFF (setup + first 2 months, money-back guarantee). mode=payment —
-// deliberately NOT the barber subscription function (that one needs an operator JWT, bills
-// £29.99/month and redirects to /barber).
+// ONE plan: the eight-week sprint, ONE-OFF at FINDABLE_SETUP_PRICE_GBP (findableOffer.ts —
+// £99 since 2026-08-04), work-based guarantee. mode=payment — deliberately NOT the barber
+// subscription function (that one needs an operator JWT, bills £29.99/month and redirects
+// to /barber).
 //
 // KEY SAFETY: STRIPE_SECRET_KEY lives ONLY in this function's server-side secrets. The
 // session is created HERE via the Stripe REST API; the browser only ever receives the
 // session's redirect URL. Nothing secret ships in findable-site's bundle.
 //
-// Price: FINDABLE_SETUP_PRICE_ID (a Stripe dashboard Price) wins when set; otherwise the
-// inline price_data below charges exactly £49.99. Keep the constant in sync with the
-// onboarding page's plan card.
+// Price: FINDABLE_SETUP_PRICE_ID (a Stripe dashboard Price) wins when set (NOT set as of
+// 2026-08-04 — checked the secret list); otherwise the inline price_data below charges
+// exactly FINDABLE_SETUP_PRICE_GBP. The price findable-site DISPLAYS is that repo's own
+// copy — a matching pass there is required when this changes.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +25,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const FINDABLE_SETUP_PRICE_GBP = 49.99;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
 // Origins a payer may be bounced back to. Never an attacker-supplied origin.
@@ -124,8 +126,8 @@ Deno.serve(async (req) => {
          bare visit. Guarding the senders closes some of those; guarding this closes all of them.
 
          Without a trade on the LEAD, startPaidBaseline returns skipped:"no_business_type" and no
-         baseline is ever created — so the 8-week money-back guarantee this £49.99 buys has nothing
-         to measure against, and that only surfaces at week eight in front of the customer. Refusing
+         baseline is ever created — so the week-eight re-measurement this payment guarantees has
+         nothing to measure against, and that only surfaces at week eight in front of the customer. Refusing
          a payment is recoverable in a minute; selling an unmeasurable guarantee is not.
 
          MIRRORS audit-baseline.ts's own bizType line character for character, deliberately:
@@ -147,8 +149,8 @@ Deno.serve(async (req) => {
     } else {
       /* NO ATTRIBUTION — refuse rather than take the money.
          Without a lead there is no baseline (startPaidBaseline returns skipped:no_lead_id) and
-         therefore no way to measure the 8-week guarantee this payment buys. Taking £49.99 for a
-         promise that cannot be assessed is the wrong side of the trade, so the session is not
+         therefore no way to measure the week-eight re-measurement this payment guarantees. Taking
+         the money for a promise that cannot be assessed is the wrong side of the trade, so the session is not
          created. The site turns this into an instruction to use their own link, never an error.
          Safe to enforce now that the client falls back to the URL's ?lead=, so a failed prefill no
          longer strips attribution from a real link - a missing lead here means there genuinely
@@ -200,8 +202,10 @@ Deno.serve(async (req) => {
     } else {
       form.set("line_items[0][price_data][currency]", "gbp");
       form.set("line_items[0][price_data][unit_amount]", String(Math.round(FINDABLE_SETUP_PRICE_GBP * 100)));
-      form.set("line_items[0][price_data][product_data][name]", "Findable — Setup + first 2 months");
-      form.set("line_items[0][price_data][product_data][description]", "AI-visibility setup. Money-back guarantee: named in more AI answers within 8 weeks or a full refund.");
+      // The name is what the payer sees on their Stripe receipt; the description carries
+      // the guarantee VERBATIM from findableOffer.ts — the wording the sale is made on.
+      form.set("line_items[0][price_data][product_data][name]", "Findable — 8-week AI visibility sprint");
+      form.set("line_items[0][price_data][product_data][description]", FINDABLE_GUARANTEE);
       form.set("line_items[0][quantity]", "1");
     }
 

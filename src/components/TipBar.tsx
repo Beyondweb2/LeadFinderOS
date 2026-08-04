@@ -7,7 +7,6 @@ const TIPS = [
   "Send a quick 1-minute Loom video reviewing their current online presence.",
   "Cold calling between 10am–12pm often gets the best answer rates.",
   "Trades, local services, and home improvement businesses convert well.",
-  "Offer a paid draft for £49 instead of building for free.",
   "Never build a full site for free before payment.",
   "Follow up after 48 hours if no reply.",
   "Ask \"Are you open to getting more enquiries online?\" instead of pitching immediately.",

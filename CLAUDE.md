@@ -10,10 +10,16 @@ Facts and warnings, not prose. Keep it that way. If it grows too long to read, i
 
 ## 1. What the business is
 
-- Paul sells **AI visibility** to local UK businesses. **£49.99, one-off.**
+- Paul sells **AI visibility** to local UK businesses. **£99, one-off** (was £49.99 until
+  2026-08-04). Price + guarantee wording live in **`src/lib/findableOffer.ts`** — one constant,
+  shared by the SPA docs and the checkout/webhook edge functions. findable-site (separate repo)
+  carries its own copy; changing either means a matching pass in the other.
 - Audit whether **ChatGPT and Gemini name them** when a customer asks for their trade in their town.
-- Get them onto **the directories AI actually reads for that trade**.
-- **Re-measure at 8 weeks**, with a **money-back guarantee**.
+- Fix what AI reads: pages on **their own site**, a page per service per town, plus consistency in
+  the sources the evidence says matter for that trade.
+- **Re-measure at 8 weeks.** The guarantee is **WORK-based** (audit + work + re-measurement with
+  evidence, or a full refund) — it does NOT promise being named. Never write copy that promises
+  the outcome.
 - **Zero paying customers so far.** Nothing here has been proven on a paying client yet. Do not write copy or
   code that implies it has.
 
@@ -537,8 +543,10 @@ Facts with numbers. These are measured, and several contradict the older docs.
     honour that and may push the whole section to a fresh sheet, leaving page 1 half empty. Overridden
     in `playbookDoc.ts`'s own `EXTRA_CSS` (containers flow, atoms protected) — **not** in the shared
     file, so the LLM document is untouched. ~7 pages for 17 tasks, against the LLM doc's 4.
-  - **The promise wording is the Stripe line-item, verbatim in scope** — `findable-checkout:204`:
-    "named in more AI answers within 8 weeks or a full refund". Phrased "Our promise is to". The LLM's
+  - **The promise wording is `FINDABLE_GUARANTEE` in `src/lib/findableOffer.ts`** (since
+    2026-08-04, WORK-based: audit + work + re-measurement or refund, never the outcome).
+    `findable-checkout`'s Stripe line-item description, `playbookDoc` and `clientRequestDoc` all
+    render that constant — no local copies. The LLM's
     "We guarantee that…" and "Expect initial visibility improvements within a few weeks" are both
     model output (`guaranteeNote`/`timelineNote`), so they vary per generation and cannot be fixed in
     that pipeline — only replaced by template text in this one.

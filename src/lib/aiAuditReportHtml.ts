@@ -241,7 +241,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
 
   // Purpose-drawn inline icons for the "What we do" steps — one per step, 2px stroke,
   // consistent weight, brand blue (currentColor inherits var(--blue) from the tile).
-  // 1 · Get you listed → stacked directory cards (listings across many sources).
+  // 1 · Give AI a page to quote → stacked page cards (a page per service, per town).
   const icListed = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h9"/><rect x="8" y="8" width="12" height="12" rx="2"/><line x1="11" y1="12" x2="17" y2="12"/><line x1="11" y1="16" x2="15" y2="16"/></svg>`;
   // 2 · Structure your info → a schema/node graph (structured data engines can read).
   const icStruct = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.4"/><circle cx="5.5" cy="18.5" r="2.4"/><circle cx="18.5" cy="18.5" r="2.4"/><line x1="11" y1="7.1" x2="6.6" y2="16.4"/><line x1="13" y1="7.1" x2="17.4" y2="16.4"/></svg>`;
@@ -525,13 +525,13 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
       <div class="sec-eyebrow">The fix</div>
       <div class="sec-title">Here&rsquo;s how we get you found</div>
       <div class="dowe-panel">
-        <p class="dowe-lead">We get you into the sources AI reads &mdash; and make sure it can understand and <span class="hl">name you</span>.</p>
+        <p class="dowe-lead">We give AI something specific about you to read &mdash; and make sure it can understand and <span class="hl">name you</span>.</p>
         <div class="steps">
           <div class="step">
             <div class="step-ic"><span class="ic">${icListed}</span><span class="badge">1</span></div>
             <div class="step-n">Step 1</div>
-            <div class="st">Get you listed</div>
-            <p>We put you in the directories, maps and review sites AI pulls its answers from.</p>
+            <div class="st">Give AI a page to quote</div>
+            <p>A page for each service you do, in your town, on your own site &mdash; written the way people actually ask.</p>
           </div>
           <div class="step">
             <div class="step-ic"><span class="ic">${icStruct}</span><span class="badge">2</span></div>
