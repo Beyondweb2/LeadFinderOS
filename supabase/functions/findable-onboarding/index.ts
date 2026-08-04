@@ -216,24 +216,35 @@ Deno.serve(async (req) => {
         incomplete,
       };
 
-      // Save helper. If the areas_wanted migration has not been applied yet, PostgREST
-      // rejects the unknown column: retry without it rather than lose a real submission.
-      // Removes any ordering hazard between deploying this function and running the SQL.
+      /* NEVER SEND A NULL-VALUED NEW COLUMN. Proven live 2026-08-04: v18 added the five
+         new keys to EVERY insert, and with the columns not yet in the schema the old
+         single-pass fallback could not shed them all - so every submission, including
+         ones carrying no new answers at all, died save_failed. The base path must never
+         depend on columns newer than itself. */
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name"];
+      for (const col of NEWER_COLS) {
+        if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
+      }
+
+      // Save helper. If a column's migration has not been applied yet, PostgREST rejects
+      // the unknown column: retry without it rather than lose a real submission. MULTI-PASS
+      // (the v18 lesson): each retry can surface the NEXT missing column, so keep shedding
+      // until the insert lands or nothing in the error matches. website_manager_email is
+      // tested before website_manager so the substring cannot drop both for one miss.
       const saveAnswers = async (extra: Record<string, unknown>) => {
         const attempt = (payload: Record<string, unknown>) =>
           service.from("onboarding_responses").insert(payload).select("id").maybeSingle();
-        let res = await attempt({ ...answers, ...extra });
-        // Drop whichever optional column the database does not have yet and retry, so a
-        // pending migration can never cost us a real submission.
-        // website_manager_email BEFORE website_manager: the name-substring match would
-        // otherwise drop both columns when only the email one is missing.
-        for (const col of ["services_list", "areas_list", "website_manager_email", "website_manager", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"]) {
-          if (res.error && new RegExp(col, "i").test(res.error.message ?? "")) {
-            console.warn(`[findable-onboarding] ${col} column missing, saving without it`);
-            const reduced = { ...answers } as Record<string, unknown>;
-            delete reduced[col];
-            res = await attempt({ ...reduced, ...extra });
-          }
+        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"];
+        const reduced = { ...answers } as Record<string, unknown>;
+        let res = await attempt({ ...reduced, ...extra });
+        let guard = 0;
+        while (res.error && guard++ < optional.length) {
+          const msg = res.error.message ?? "";
+          const hit = optional.find((col) => col in reduced && new RegExp(col, "i").test(msg));
+          if (!hit) break;
+          console.warn(`[findable-onboarding] ${hit} column missing, saving without it`);
+          delete reduced[hit];
+          res = await attempt({ ...reduced, ...extra });
         }
         return res;
       };
