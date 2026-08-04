@@ -37,6 +37,11 @@ const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"])
 const GBP_CONSENT = new Set(["yes_all", "listings_only", "discuss"]);
 // Who can change their website — the pages route's dependency (2026-08-04 questionnaire).
 const WEBSITE_MANAGER = new Set(["direct_access", "web_company", "owner_only"]);
+/* What their site is built on. Stored because it decides how the delivery work is done — WordPress
+   has an API and pages can be published to it, Wix and Squarespace mean the editor by hand — so it
+   has to be known before a job is quoted. Validated against the set so a hand-crafted POST cannot
+   put arbitrary text in the column. */
+const WEBSITE_PLATFORM = new Set(["wordpress", "wix", "squarespace", "godaddy", "shopify", "other", "not_sure"]);
 const SUBMIT_COOLDOWN_MS = 10 * 60_000;   // one submission per lead per 10 min
 
 const clip = (v: unknown, max: number): string | null => {
@@ -200,6 +205,10 @@ Deno.serve(async (req) => {
         // Who can change their website + the web company's email when that's the answer.
         website_manager: typeof a.website_manager === "string" && WEBSITE_MANAGER.has(a.website_manager) ? a.website_manager : null,
         website_manager_email: websiteEmailRaw && EMAIL_RE.test(websiteEmailRaw) ? websiteEmailRaw : null,
+        // OPTIONAL and unvalidated-beyond-the-set: an owner who does not know what their site runs
+        // on is normal, so null is a real answer here, never a missing field.
+        website_platform: typeof a.website_platform === "string" && WEBSITE_PLATFORM.has(a.website_platform) ? a.website_platform : null,
+        website_platform_other: clip(a.website_platform_other, 120),
         // The competitor who keeps winning their work — one name, tells us who to track.
         competitor_name: clip(a.competitor_name, 200),
         confirmed_location: confirmedLocation,
@@ -221,7 +230,7 @@ Deno.serve(async (req) => {
          single-pass fallback could not shed them all - so every submission, including
          ones carrying no new answers at all, died save_failed. The base path must never
          depend on columns newer than itself. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -234,7 +243,10 @@ Deno.serve(async (req) => {
       const saveAnswers = async (extra: Record<string, unknown>) => {
         const attempt = (payload: Record<string, unknown>) =>
           service.from("onboarding_responses").insert(payload).select("id").maybeSingle();
-        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"];
+        // website_platform_other before website_platform, for the same reason website_manager_email
+        // comes before website_manager: the shorter name is a substring of the longer one, so
+        // testing it first would shed both columns on a single miss.
+        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
