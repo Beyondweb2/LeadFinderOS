@@ -9,6 +9,7 @@ import {
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   type MarketConcentration, type MarketNamedRow, type MarketPoolExcluded,
   type MarketPoolRow, type MarketPoolState, type MarketTier, type MarketCitationHost,
+  type MarketAuditProgress,
 } from "../../../src/lib/marketView.ts";
 
 /* ============================================================
@@ -92,8 +93,8 @@ interface AuditRow {
    *  subtraction; its mentions and its audit count still count. */
   is_market?: boolean | null;
 }
-interface RunRow { id: string; audit_id: string; status: string | null }
-interface QueueRow { id: string; run_id: string; question?: string | null; result: Record<string, unknown> | null }
+interface RunRow { id: string; audit_id: string; status: string | null; created_at?: string | null }
+interface QueueRow { id: string; run_id: string; question?: string | null; status?: string | null; result: Record<string, unknown> | null }
 interface HistoryRow { id: string; keyword: string; location: string; radius: number; searched_at: string }
 /** Shape search-leads stores in search_cache — a bare array, or { leads, region } for region runs. */
 interface CachedLead {
@@ -175,9 +176,16 @@ Deno.serve(async (req) => {
     const runs = auditIds.length
       // Guarded: PostgREST renders .in('audit_id', []) as `in.()`, which is a syntax error, not an
       // empty result — so a market with no audits would 400 rather than come back empty.
-      ? await all<RunRow>(service, "ai_audit_runs", "id, audit_id, status", (q) => q.in("audit_id", auditIds))
+      ? await all<RunRow>(service, "ai_audit_runs", "id, audit_id, status, created_at", (q) => q.in("audit_id", auditIds))
       : [];
     const completeRuns = runs.filter((r) => (r.status ?? "") === "complete");
+    /* WHICH AUDITS HAVE FINISHED, and which are still going. "2 audits, 1 completed run" told the
+       operator nothing about the second one: whether it was mid-flight (an Apify question legitimately
+       takes up to ~9 minutes) or dead. Both the evidence gate and the panel need this. */
+    const marketAuditIds = new Set(audits.filter((a) => a.is_market === true).map((a) => a.id));
+    const completedByAudit = new Set(
+      runs.filter((r) => ["complete", "capped"].includes(r.status ?? "")).map((r) => r.audit_id),
+    );
     const auditOfRun = new Map(completeRuns.map((r) => [r.id, r.audit_id]));
     const runIds = completeRuns.map((r) => r.id);
 
@@ -422,7 +430,59 @@ Deno.serve(async (req) => {
          (8 questions aimed at the market vs 3 aimed at a firm), so the shape's evidence gate needs
          the split — see hasShapeEvidence in src/lib/marketView.ts. */
       marketAudits: audits.filter((a) => a.is_market === true).length,
+      /* ⛔ AND HOW MANY HAVE ACTUALLY FINISHED. The evidence gate counted AUDITS, so two market
+         audits with only one completed run passed the bar and the view called a shape on a single
+         audit's data — the exact degeneracy the bar exists to prevent. These are the numbers the
+         gate now reads. */
+      marketAuditsComplete: [...completedByAudit].filter((id) => marketAuditIds.has(id)).length,
+      businessAuditsComplete: [...completedByAudit].filter((id) => !marketAuditIds.has(id)).length,
     };
+
+    /* ── WHAT EACH UNFINISHED MARKET AUDIT IS DOING ────────────────────────────────────────────
+       A market audit that stalls or fails is money spent on a market the operator then believes is
+       measured. Reported per audit with question progress and the RAW error string off the queue
+       row — never a wrapper like "audit failed", which is what made the last one undiagnosable. */
+    const unfinished = audits.filter((a) => a.is_market === true && !completedByAudit.has(a.id));
+    const unfinishedRuns = runs.filter((r) => unfinished.some((a) => a.id === r.audit_id));
+    /* One query for every unfinished market run's questions, not one per run. */
+    const progressRows = unfinishedRuns.length
+      ? await all<QueueRow>(service, "ai_audit_queue", "id, run_id, question, status, result",
+        (q) => q.in("run_id", unfinishedRuns.map((r) => r.id)))
+      : [];
+    const marketProgress: MarketAuditProgress[] = unfinished.map((a) => {
+      const myRuns = unfinishedRuns.filter((r) => r.audit_id === a.id);
+      const myRunIds = new Set(myRuns.map((r) => r.id));
+      const rows = progressRows.filter((row) => myRunIds.has(row.run_id));
+      let done = 0, failed = 0;
+      let firstError: string | null = null;
+      for (const row of rows) {
+        const st = row.status ?? "";
+        if (st === "done") done += 1;
+        if (st === "failed") failed += 1;
+        /* THE RAW STRING, wherever it sits. The queue writes the error either at result.error or
+           inside a per-engine block, and a catch-all wrapper is what sent the last diagnosis off
+           after phantom question wording while `Apify start ... HTTP 402` sat unread. */
+        if (!firstError && row.result && typeof row.result === "object") {
+          const direct = (row.result as { error?: unknown }).error;
+          if (typeof direct === "string" && direct) firstError = direct;
+          else {
+            for (const v of Object.values(row.result)) {
+              const e = (v as { error?: unknown } | null)?.error;
+              if (typeof e === "string" && e) { firstError = e; break; }
+            }
+          }
+        }
+      }
+      return {
+        auditId: a.id,
+        status: myRuns.length === 0 ? "no_run" : (myRuns[0].status ?? "pending"),
+        questionsDone: done,
+        questionsTotal: rows.length,
+        questionsFailed: failed,
+        startedAt: myRuns[0]?.created_at ?? null,
+        error: firstError,
+      };
+    });
 
     /* CITED HOSTS, biggest first. Only the top few are needed (the shape read uses position 1),
        but a handful is useful context on screen. isAggregatorUrl is the same classifier the audit
