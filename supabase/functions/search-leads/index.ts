@@ -105,9 +105,19 @@ for (const d of BOOKING_PLATFORM_DOMAINS) DIRECTORY_BLACKLIST.add(d);
 // a business's own website. Shared with enrich-business via the same module.
 for (const d of DIRECTORY_AND_RECORD_DOMAINS) DIRECTORY_BLACKLIST.add(d);
 
+/* ⚠️ A FREE SUBDOMAIN IS STILL THEIR OWN WEBSITE. This list was written for the OLD product, where
+   the thing being sold was a website and a business on a free Wix subdomain was a prospect for one.
+   For AI visibility it is the wrong call: a `something.wixsite.com` business HAS a site AI can read,
+   it is simply on Wix — which the onboarding's platform question and the migrate question now handle
+   properly (see src/lib/serveGate.ts). Classifying them NO_WEBSITE pitched them the wrong way round
+   and, downstream, told the audit not to scan a site that exists.
+   Removed 2026-08-05: myshopify.com, wixsite.com, squarespace.com, wordpress.com.
+   ⚠️ STILL HERE AND ARGUABLY THE SAME MISTAKE: webflow.io, godaddysites.com, weebly.com and carrd.co
+   are also real sites on free subdomains. Left in deliberately — Paul named the four above and
+   widening the list further changes what lead search returns, which is his call, not a tidy-up.
+   blogspot.com and notion.site are genuinely marginal and belong here either way. */
 const PLATFORM_PATTERNS = [
-  /\.myshopify\.com$/i, /\.wixsite\.com$/i, /\.webflow\.io$/i,
-  /\.squarespace\.com$/i, /\.wordpress\.com$/i, /\.blogspot\.com$/i,
+  /\.webflow\.io$/i, /\.blogspot\.com$/i,
   /\.godaddysites\.com$/i, /\.weebly\.com$/i, /\.carrd\.co$/i, /\.notion\.site$/i,
 ];
 

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
+import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
 // bulk-jobs — server-side bulk runner for enrich + site-gen, so an operator can
 // fire a batch, close the browser, and come back to progress / finished results.
@@ -214,7 +215,16 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
 
     // Inputs sourced the SAME way as the wizard's pickLead: type = search_keyword||category,
     // location = search_location||address. Eligibility (client-side) already ensures these exist.
-    const website = (lead.website ?? "").trim();
+/* A DIRECTORY OR SOCIAL URL IS NOT A WEBSITE. `!!lead.website` was a bare truthiness test, so a
+   listing whose only "website" is a Facebook page reported has_website: true — and
+   process-ai-audit-queue then ran a ~$0.12 Apify SEO scan against facebook.com, grading Facebook's
+   markup. isAggregatorUrl is the same classifier search-leads and the audit report use, so
+   "not their own website" means one thing everywhere.
+   The URL is dropped as well as the flag: the scan needs both, and leaving a facebook.com value on a
+   row that says has_website: false is the stale-field trap that started this. The raw URL is still on
+   outreach_leads.website, so nothing is lost. */
+    const rawWebsite = (lead.website ?? "").trim();
+    const website = rawWebsite && !isAggregatorUrl(rawWebsite) ? rawWebsite : "";
     // Operator-chosen count from the bulk dialog; falls back to the shared outreach-hook value
     // rather than a bare literal, so the cheap paths move together or not at all.
     const questionCount = Number((job.params as { question_count?: unknown } | null)?.question_count) || OUTREACH_HOOK_QUESTIONS;

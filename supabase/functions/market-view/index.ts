@@ -526,7 +526,11 @@ Deno.serve(async (req) => {
           branches: g.variants.length,
           isChain: g.variants.length > 1,
           placeIds: g.ids,
-          noWebsite: g.websiteless > 0,
+          /* EVERY branch, not any branch. `> 0` flagged a whole chain entry as websiteless
+             because ONE of its branches had no site on its Places listing, which is a wrong badge on
+             an entry that plainly has a website. An entry has no website only if none of its
+             branches does. Single-business entries are unaffected: 1 of 1 either way. */
+          noWebsite: g.websiteless === g.variants.length,
           googleMapsUrl: g.sample.googleMapsUrl,
           websiteUrl: g.sample.websiteUrl,
           thin: { mentions: hit.mentions, audits: hit.audits, matchedNamed: hit.name },
@@ -552,7 +556,7 @@ Deno.serve(async (req) => {
         branches: g.variants.length,
         isChain: g.variants.length > 1,
         placeIds: g.ids,
-        noWebsite: g.websiteless > 0,
+        noWebsite: g.websiteless === g.variants.length,   // see the note above: every branch, not any
         googleMapsUrl: g.sample.googleMapsUrl,
         websiteUrl: g.sample.websiteUrl,
       });
@@ -582,7 +586,7 @@ Deno.serve(async (req) => {
         branches: g.variants.length,
         isChain: g.variants.length > 1,
         placeIds: g.ids,
-        noWebsite: g.websiteless > 0,
+        noWebsite: g.websiteless === g.variants.length,   // see the note above: every branch, not any
         googleMapsUrl: g.sample.googleMapsUrl,
         websiteUrl: g.sample.websiteUrl,
         outsideTown: true,

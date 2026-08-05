@@ -400,6 +400,11 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
   const collapsedRows = Math.max(0, poolFound - poolEntries);
   const auditable = view ? view.pool.filter((p) => !p.isChain) : [];
   const chainEntries = view ? view.pool.filter((p) => p.isChain).length : 0;
+  /* THE SPLIT. Both halves come out of `auditable`, so the two lists together are exactly the
+     prospect count the summary sentence quotes - the sentence and the rows cannot disagree, which is
+     the failure this panel has already had twice. */
+  const noWebsiteProspects = auditable.filter((p) => p.noWebsite);
+  const withWebsiteProspects = auditable.filter((p) => !p.noWebsite);
   const plannedAudits = Math.min(auditCount, auditable.length);
   /* THE TRUE ESTIMATE, ITEMISED. The old figure counted question runs only and read ~4x low
      ($0.19 against a real $0.75-0.80). The targets are the ones that would actually be audited, so
@@ -446,7 +451,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
       view.citationHosts ?? [], auditable.length, view.poolState.state === 'ready',
       view.poolState.state === 'ready' ? view.poolState.total : 0,
       view.pool.length + view.poolExcluded.length,
-      chainEntries, completedRuns, pendingAudits,
+      chainEntries, completedRuns, pendingAudits, noWebsiteProspects.length,
     )
     : null;
   /* WHILE AN AUDIT IS UNFINISHED, THE PANEL WATCHES IT. Ticks the clock every 15s so the age is
@@ -609,26 +614,50 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               sentence and the rows came to disagree (2 vs 3). They stay visible under the numbers. */}
           {/* AND THE LIST ITSELF WAITS FOR A MEASUREMENT. Rendering rows with Add buttons under a
               sentence that says nothing has been measured would invite contacting them anyway. */}
+          {/* ── TWO LISTS, NOT ONE ───────────────────────────────────────────────────────────────
+              A business with no website is not a weaker prospect, it is a DIFFERENT one. AI has
+              nothing of theirs to read, so Gemini cannot name them at all (measured: MK Plumbing,
+              0/10 on Gemini, 3/3 on ChatGPT through directories) — which makes the AI-visibility
+              pitch the wrong opening. For delivery they are our BEST case: we build the site on our
+              hosting, nothing to migrate (serveGate.ts serves `no_website` outright).
+              So they stay visible and stay addable. They are simply not in the same list, and the
+              heading says which pitch each list wants. */}
           {measured && view.poolState.state === 'ready' && auditable.length > 0 && (
-            <ul className="space-y-1 border-t border-border/50 pt-2">
-              {auditable.map((pr) => (
-                <li key={pr.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/40 py-2 last:border-b-0">
-                  <span className="text-[15px] font-medium">{pr.name}</span>
-                  <span className="text-[13px] text-muted-foreground">{invisibilityPhrase(pr, conc?.audits ?? 0)}</span>
-                  {pr.noWebsite && <Badge variant="outline" className="text-[10px]">no website</Badge>}
-                  <Button
-                    size="sm" variant="outline" className="ml-auto h-8"
-                    disabled={addingKey === pr.key || addedKeys.has(pr.key)}
-                    onClick={() => void addOne(pr)}
-                  >
-                    {addingKey === pr.key
-                      ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                      : addedKeys.has(pr.key) ? <Check className="mr-1 h-3 w-3" /> : <Plus className="mr-1 h-3 w-3" />}
-                    {addedKeys.has(pr.key) ? 'Added' : 'Add to CRM'}
-                  </Button>
-                </li>
+            <div className="space-y-3 border-t border-border/50 pt-2">
+              {([
+                { rows: withWebsiteProspects, title: 'Worth contacting', note: 'The AI-visibility pitch' },
+                { rows: noWebsiteProspects, title: 'No website - different pitch', note: 'Site first, visibility second. Our best delivery case, the wrong opening line.' },
+              ] as const).filter((g) => g.rows.length > 0).map((g) => (
+                <div key={g.title}>
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-[13px] font-semibold">{g.title}</span>
+                    <span className="text-[13px] text-muted-foreground">{g.rows.length}</span>
+                    <span className="text-[11px] text-muted-foreground">{g.note}</span>
+                  </div>
+                  <ul className="space-y-1">
+                    {g.rows.map((pr) => (
+                      <li key={pr.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/40 py-2 last:border-b-0">
+                        <span className="text-[15px] font-medium">{pr.name}</span>
+                        <span className="text-[13px] text-muted-foreground">{invisibilityPhrase(pr, conc?.audits ?? 0)}</span>
+                        {/* The badge stays on the row as well as in the heading: the lists can be
+                            scrolled apart on a phone, and a row must say what it is on its own. */}
+                        {pr.noWebsite && <Badge variant="outline" className="text-[10px]">no website</Badge>}
+                        <Button
+                          size="sm" variant="outline" className="ml-auto h-8"
+                          disabled={addingKey === pr.key || addedKeys.has(pr.key)}
+                          onClick={() => void addOne(pr)}
+                        >
+                          {addingKey === pr.key
+                            ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                            : addedKeys.has(pr.key) ? <Check className="mr-1 h-3 w-3" /> : <Plus className="mr-1 h-3 w-3" />}
+                          {addedKeys.has(pr.key) ? 'Added' : 'Add to CRM'}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
 
           {/* THE PRIMARY ACTION IS THE MARKET AUDIT: one audit of the trade and town, no CRM rows.
