@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
+import { showFounderOffer } from "../../../src/lib/founderOffer.ts";
 
 // The public origin the clean URL will live at (Stage 3 can front this fn at /a/<slug>); used for
 // the report's canonical "View online" footer link.
@@ -114,7 +115,9 @@ Deno.serve(async (req) => {
     // 2) audit_id → ai_audits (business context for the report copy).
     const { data: audit } = await service
       .from("ai_audits")
-      .select("id, business_name, business_type, location_text, specialism, website, is_market")
+      // lead_id joins the payment check below: a client must never open their own report to a
+      // cheaper founder offer.
+      .select("id, business_name, business_type, location_text, specialism, website, is_market, lead_id")
       .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
     /* ⛔ THE PUBLIC RENDERER REFUSES MARKET AUDITS. This is the one an outsider could reach with a
@@ -150,6 +153,22 @@ Deno.serve(async (req) => {
       ownWebsite: audit.website ?? "",
     });
     if (!data) return unavailable("This audit hasn’t completed yet — check back shortly.");
+
+    /* ── DOES THIS READER GET THE FOUNDER OFFER? ────────────────────────────────────────────────
+       Not a client, and the offer still running. `amount_paid > 0` is the app-wide definition of
+       paid (CLAUDE.md §6); the audit-id list in founderOffer.ts covers the two audits with NO lead
+       row, where there is structurally no payment to read — ABLM being the one that matters.
+       One extra query, and only when a lead is attached. Fully guarded: if it fails we treat the
+       reader as UNPAID, which shows the offer. That is the right way round — a prospect seeing no
+       offer is a lost sale, and the two client audits are caught by id rather than by this query. */
+    let amountPaid = 0;
+    const leadId = (audit as { lead_id?: string | null }).lead_id ?? null;
+    if (leadId) {
+      const { data: lead } = await service
+        .from("outreach_leads").select("amount_paid").eq("id", leadId).maybeSingle();
+      amountPaid = Number((lead as { amount_paid?: unknown } | null)?.amount_paid ?? 0) || 0;
+    }
+    data.showFounderOffer = showFounderOffer({ auditId: audit.id, amountPaid });
 
     data.shareUrl = `${SITE_ORIGIN}/a/${slug}`; // canonical public URL → "View online" footer
     // Genuine render succeeded → record the open (non-bot only). Awaited but fully guarded, so a
