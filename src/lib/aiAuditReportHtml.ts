@@ -161,6 +161,12 @@ function gradeCircle(grade: string, score: number | null, size: number, label: s
    TODO(paul): set REPORT_CONTACT_EMAIL to the Findable inbox once findable.uk has mail. */
 const REPORT_CONTACT_EMAIL = "paul@move37.fun";
 const REPORT_CONTACT_WHATSAPP = "447347041545";
+/** Somewhere to go and check we are real. A prospect who reads the whole report and wants to know
+ *  who wrote it had nowhere to click: two contact buttons, both of which mean starting a
+ *  conversation. This is the third option, and the only one that costs them nothing.
+ *  Labelled, never a bare URL — "https://findable.live" in a document reads as a footnote, "Who we
+ *  are" reads as an invitation. */
+const REPORT_SITE_URL = "https://findable.live";
 
 const SEV_COLOUR: Record<SeoFinding["severity"], string> = { high: "var(--red)", med: "var(--amber)", low: "var(--muted)" };
 
@@ -472,6 +478,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     text-decoration:none; border:1px solid transparent; }
   .cta-btn.email{ background:var(--yellow); color:var(--blue); }
   .cta-btn.wa{ background:#fff; color:var(--blue); }
+  .cta-btn.site{ background:transparent; color:#fff; box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.45); }
 
   /* FOOTER &mdash; a distinct darker navy bar so the text is clearly readable (no blue-on-blue) */
   /* THE FOUNDER OFFER reuses .cta wholesale — same navy ground, same yellow accent, same button
@@ -639,6 +646,9 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
       <div class="cta-actions">
         <a class="cta-btn email" href="${emailHref}" target="_blank" rel="noopener noreferrer">Email us</a>
         <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp us</a>
+        <!-- Deliberately the QUIETEST of the three: it is not the action we want, it is the
+             reassurance that makes the other two thinkable. Outline rather than filled. -->
+        <a class="cta-btn site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">Who we are</a>
       </div>
     </section>
 
