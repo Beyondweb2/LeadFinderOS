@@ -624,7 +624,11 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
     <!-- CTA -->
     <section class="cta">
       <h3>Ready to get <span class="y">started</span>?</h3>
-      <p><b>This is your starting point.</b></p>
+      <!-- "READS", NOT "SAYS", and it matters twice over. It is more accurate — AI reads sources
+           and produces answers, and what we change is the sources — and it is the exact wording
+           findable-site's onboarding flow uses ("We fix what AI reads about you"), so the two
+           surfaces a prospect sees describe the product identically. -->
+      <p><b>This is your starting point.</b> We fix what AI reads about you.</p>
       <div class="close">Let&rsquo;s give AI something to find about ${esc(d.businessName)}.</div>
       <div class="cta-actions">
         <a class="cta-btn email" href="${emailHref}" target="_blank" rel="noopener noreferrer">Email us</a>
