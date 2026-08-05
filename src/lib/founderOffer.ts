@@ -40,7 +40,7 @@ export const FOUNDER_OFFER_COUNT = 10;
  *  ⚠️ EMPTY MEANS NO BUTTON, BY DESIGN. The renderer omits the button entirely when this is blank,
  *  so an unset link can never ship as a dead or placeholder button — the offer still reads, and
  *  Email us / WhatsApp us above it are still a route. Never put a guessed URL here. */
-export const FOUNDER_OFFER_STRIPE_URL = "";
+export const FOUNDER_OFFER_STRIPE_URL = "https://buy.stripe.com/5kQcN492k1Uqdal01G0kE06";
 
 /** What they are told will happen after they pay, BEFORE they pay.
  *  ⚠️ THIS ALSO HAS TO BE SET IN STRIPE. The payment link's own confirmation page is configured in
