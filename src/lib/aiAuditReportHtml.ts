@@ -216,13 +216,15 @@ function founderOfferSection(): string {
     <section class="cta offer">
       <div class="sec-eyebrow offer-eyebrow">The offer</div>
       <h3>The first ${FOUNDER_OFFER_COUNT} at <span class="y">${esc(FOUNDER_OFFER_PRICE_LABEL)}</span></h3>
-      <p>Normally ${esc(FOUNDER_OFFER_NORMAL_LABEL)}. I&rsquo;m running the first ${FOUNDER_OFFER_COUNT} at ${esc(FOUNDER_OFFER_PRICE_LABEL)} because I want honest feedback out of them &mdash; what worked and what didn&rsquo;t.</p>
+      <p>Normally ${esc(FOUNDER_OFFER_NORMAL_LABEL)}. We&rsquo;re running the first ${FOUNDER_OFFER_COUNT} at ${esc(FOUNDER_OFFER_PRICE_LABEL)} because we want honest feedback from them &mdash; what worked and what didn&rsquo;t.</p>
       <div class="offer-gets">
-        <div class="offer-h">What you get</div>
+        <div class="offer-h">What&rsquo;s included</div>
         <ul>
-          <li>The audit you&rsquo;ve just read.</li>
-          <li>The work: pages on your own site for what you do and where, and your Google Business Profile sorted.</li>
-          <li>The same searches re-run at eight weeks, so you see the before and after side by side.</li>
+          <li>The audit you&rsquo;ve just read, and the baseline it sets.</li>
+          <li>A page for each service you offer, in each town you work, written the way customers actually ask so AI has something specific to quote.</li>
+          <li>Your Google Business Profile completed properly, and your name, address, phone and services made consistent everywhere AI reads them.</li>
+          <li>Structured data on your site, the technical fixes listed above, and a review link you can drop into your email signature.</li>
+          <li>The same questions re-run at week eight, both reports side by side.</li>
         </ul>
       </div>
       <div class="offer-gtee">${esc(FINDABLE_GUARANTEE)}</div>
