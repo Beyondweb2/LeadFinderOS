@@ -41,7 +41,13 @@ const WEBSITE_MANAGER = new Set(["direct_access", "web_company", "owner_only"]);
    has an API and pages can be published to it, Wix and Squarespace mean the editor by hand — so it
    has to be known before a job is quoted. Validated against the set so a hand-crafted POST cannot
    put arbitrary text in the column. */
-const WEBSITE_PLATFORM = new Set(["wordpress", "wix", "squarespace", "godaddy", "shopify", "other", "not_sure"]);
+const WEBSITE_PLATFORM = new Set(["wordpress", "wix", "squarespace", "godaddy", "shopify", "other", "not_sure", "no_website"]);
+/* WHETHER WE MAY MOVE THEIR SITE TO OUR HOSTING. ⛔ THE GATE ANSWER — findable-checkout refuses
+   payment on it (see src/lib/serveGate.ts), so a row that fails to store this is a customer the
+   block can never fire for. Proven by a live end-to-end test 2026-08-05: the column existed and the
+   flow sent the value, and it was still silently dropped here, because this function builds its
+   insert from an explicit key list and an unlisted key simply vanishes. */
+const WILLING_TO_MIGRATE = new Set(["yes", "not_sure", "no"]);
 const SUBMIT_COOLDOWN_MS = 10 * 60_000;   // one submission per lead per 10 min
 
 const clip = (v: unknown, max: number): string | null => {
@@ -209,6 +215,7 @@ Deno.serve(async (req) => {
         // on is normal, so null is a real answer here, never a missing field.
         website_platform: typeof a.website_platform === "string" && WEBSITE_PLATFORM.has(a.website_platform) ? a.website_platform : null,
         website_platform_other: clip(a.website_platform_other, 120),
+        willing_to_migrate: typeof a.willing_to_migrate === "string" && WILLING_TO_MIGRATE.has(a.willing_to_migrate) ? a.willing_to_migrate : null,
         // The competitor who keeps winning their work — one name, tells us who to track.
         competitor_name: clip(a.competitor_name, 200),
         confirmed_location: confirmedLocation,
@@ -230,7 +237,7 @@ Deno.serve(async (req) => {
          single-pass fallback could not shed them all - so every submission, including
          ones carrying no new answers at all, died save_failed. The base path must never
          depend on columns newer than itself. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -246,7 +253,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"];
+        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;

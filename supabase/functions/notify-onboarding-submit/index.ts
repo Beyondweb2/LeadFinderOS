@@ -17,6 +17,10 @@
 // touches nothing on the payment path.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+/* The SAME decision function findable-checkout refuses payment with, so this email and that block
+   can never disagree about who could be served. Relative path with the .ts extension — Deno cannot
+   resolve the Vite "@/" alias. */
+import { serveDecision, serveInputFromRow, platformLabel, type ServeGateRow } from "../../../src/lib/serveGate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,6 +53,15 @@ interface Row {
   contact_email: string | null;
   confirmed_location: string | null;
   created_at: string;
+  /* THE THREE WEBSITE ANSWERS. A prospect who was BLOCKED from paying looks, to the query above,
+     exactly like one who changed their mind — and those two need completely different responses
+     from Paul. The verdict is derived from these, never stored. */
+  website_platform: string | null;
+  website_platform_other: string | null;
+  website_manager: string | null;
+  willing_to_migrate: string | null;
+  /** An escape-hatch bail-out. Its answers are partial, so it is never given a verdict. */
+  incomplete: boolean | null;
 }
 
 Deno.serve(async (req) => {
@@ -75,7 +88,9 @@ Deno.serve(async (req) => {
        column is missing this select errors and the sweep reports it rather than emailing twice. */
     const { data, error } = await service
       .from("onboarding_responses")
-      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at")
+      // ONE STRING LITERAL, not a concatenation. supabase-js types the select on the literal, so
+      // splitting it across two lines makes `data` GenericStringError[] and the cast below a TS2352.
+      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, incomplete")
       .is("notified_at", null)
       .lte("created_at", cutoff)
       .order("created_at", { ascending: true })
@@ -126,19 +141,48 @@ Deno.serve(async (req) => {
       const mins = Math.max(DELAY_MINUTES, Math.round((Date.now() - new Date(row.created_at).getTime()) / 60_000));
       const line = (k: string, v: string | null) => (v ? `  ${k.padEnd(7)} ${v}\n` : "");
 
+      /* ══ WHY THEY DID NOT PAY ═══════════════════════════════════════════════════════════════
+         KEYED OFF THE SUBMITTED ROW, NOT THE CHECKOUT. Someone the gate blocks sees the "this
+         wouldn't work for you" screen and never clicks pay, so a notification triggered by the
+         checkout refusal would miss nearly all of them — exactly the silent failure this exists to
+         prevent. Derived from the same serveGate the checkout refuses with.
+         NEVER on an escape-hatch bail-out: its answers are partial, and reporting a half-filled
+         questionnaire as a rejection would be wrong about the one thing that matters here. */
+      const gate = row.incomplete === true ? null : serveDecision(serveInputFromRow(row as ServeGateRow));
+      const verdictLabel = gate?.verdict === "block"
+        ? "COULD NOT PAY — we cannot serve them as things stand"
+        : gate?.verdict === "flag"
+          ? "WORTH A CONVERSATION"
+          : null;
+      const siteLine = gate ? platformLabel(
+        serveInputFromRow(row as ServeGateRow).platform, row.website_platform_other,
+      ) : null;
+      const tail = gate?.verdict === "block"
+        ? "They were blocked before Stripe, so no payment was possible. They saw the honest refusal screen with your email address on it. Some of these are worth a call anyway."
+        : "They reached the payment screen and stopped. Nothing has been sent to them automatically.";
+
       const text =
         `${name} filled in the questionnaire ${mins} minutes ago and has not paid.\n\n` +
+        (verdictLabel ? `  ${verdictLabel}\n  ${gate!.reason}\n\n` : "") +
         line("Trade:", trade) + line("Town:", town) + line("Phone:", phone) + line("Email:", row.contact_email) +
-        `\nThey reached the payment screen and stopped. Nothing has been sent to them automatically.\n`;
+        (gate ? line("Site:", siteLine) : "") +
+        `\n${tail}\n`;
       const html =
         `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1e293b">` +
-        `<h2 style="margin:0 0 12px">Questionnaire submitted, not paid</h2>` +
+        `<h2 style="margin:0 0 12px">${gate?.verdict === "block" ? "Could not be served" : "Questionnaire submitted, not paid"}</h2>` +
         `<p style="margin:0 0 10px"><strong>${escapeHtml(name)}</strong> filled in the questionnaire ${mins} minutes ago and has not paid.</p>` +
+        (verdictLabel
+          ? `<p style="margin:0 0 12px;padding:10px 12px;border-radius:8px;background:${
+            gate!.verdict === "block" ? "#fef2f2" : "#fffbeb"
+          };color:${gate!.verdict === "block" ? "#991b1b" : "#92400e"}">` +
+            `<strong>${escapeHtml(verdictLabel)}</strong><br>${escapeHtml(gate!.reason)}</p>`
+          : "") +
         (trade ? `<p style="margin:0 0 2px"><strong>Trade:</strong> ${escapeHtml(trade)}</p>` : "") +
         (town ? `<p style="margin:0 0 2px"><strong>Town:</strong> ${escapeHtml(town)}</p>` : "") +
         (phone ? `<p style="margin:0 0 2px"><strong>Phone:</strong> ${escapeHtml(phone)}</p>` : "") +
         (row.contact_email ? `<p style="margin:0 0 2px"><strong>Email:</strong> ${escapeHtml(row.contact_email)}</p>` : "") +
-        `<p style="margin:10px 0 0;color:#475569">They reached the payment screen and stopped. Nothing has been sent to them automatically.</p>` +
+        (siteLine ? `<p style="margin:0 0 2px"><strong>Site:</strong> ${escapeHtml(siteLine)}</p>` : "") +
+        `<p style="margin:10px 0 0;color:#475569">${escapeHtml(tail)}</p>` +
         `</div>`;
 
       /* NON-BLOCKING. A Resend outage must never affect anything else, and the row is already
@@ -153,7 +197,9 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             from: "LeadFinder Pro <noreply@lead-finder-app.com>",
             to: [ADMIN_EMAIL],
-            subject: `Questionnaire submitted, not paid — ${name}`,
+            subject: gate?.verdict === "block"
+            ? `Could not be served — ${name}`
+            : `Questionnaire submitted, not paid — ${name}`,
             text, html,
           }),
         });
