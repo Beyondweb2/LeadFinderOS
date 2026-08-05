@@ -16,11 +16,26 @@ import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 import { showFounderOffer } from "../../../src/lib/founderOffer.ts";
 
-// The public origin the clean URL will live at (Stage 3 can front this fn at /a/<slug>); used for
-// the report's canonical "View online" footer link.
 import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
 
-const SITE_ORIGIN = "https://yoursites.uk";
+/* ⛔ THE "VIEW ONLINE" FOOTER LINK WAS DEAD IN EVERY REPORT EVER SENT.
+   It was built from a hardcoded SITE_ORIGIN of https://yoursites.uk plus /a/<slug> — a route that
+   was never fronted, on an origin that 404s. Nobody noticed because the PITCH links Paul sends are
+   the UUID form straight at this function, which has always worked; the broken one was the link
+   printed INSIDE the document.
+
+   Now built from SUPABASE_URL, which is this function's own origin, so it follows the deployment
+   instead of asserting where the site might live one day. Verified 2026-08-05: both the path form
+   and ?slug= return HTTP 200 with a real rendered report.
+
+   WHY THE AUDIT ID AND NOT THE SLUG: a UUID resolves DIRECTLY here (see the resolution note below) —
+   no business_reports lookup at all, so it cannot fail. The slug form needs the stored slug to end
+   in the 8-hex code, and only 69 of 123 report rows do; the other 54 include published ones, so a
+   slug-based share link would be dead for those. The id form works for every audit.
+   ⚠️ When a clean public route does exist, change this line and the pretty URL comes back — it is
+   one template string, deliberately not spread through the file. */
+const shareUrlFor = (supabaseUrl: string, auditId: string) =>
+  `${supabaseUrl}/functions/v1/render-audit-report/${auditId}`;
 
 function htmlResponse(html: string, status = 200): Response {
   // Return the HTML as a STRING body (Deno encodes string bodies as UTF-8) with an explicit
@@ -170,7 +185,7 @@ Deno.serve(async (req) => {
     }
     data.showFounderOffer = showFounderOffer({ auditId: audit.id, amountPaid });
 
-    data.shareUrl = `${SITE_ORIGIN}/a/${slug}`; // canonical public URL → "View online" footer
+    data.shareUrl = shareUrlFor(supabaseUrl, audit.id); // "View online" footer link — see shareUrlFor
     // Genuine render succeeded → record the open (non-bot only). Awaited but fully guarded, so a
     // tracking failure can never break the report the visitor came for.
     await recordAuditOpen(service, audit.id, req.headers.get("user-agent") ?? "");
