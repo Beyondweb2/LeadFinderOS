@@ -36,12 +36,15 @@ import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
    in the 8-hex code, and only 69 of 123 report rows do; the other 54 include published ones, so a
    slug link would be dead for those. That is the whole original bug.
 
-   The origin is a PROXY that forces text/html — yoursites.uk/a/<id> today (LeadFinderOS
-   functions/a/[slug].ts, verified HTTP 200 text/html), moving to findable.live/report/<id> once that
-   route is proven. One template string, deliberately not spread through the file. */
-const REPORT_PUBLIC_ORIGIN = "https://yoursites.uk";
+   THE ORIGIN IS A PROXY THAT FORCES text/html — findable.live/report/<id>, a Pages Function in the
+   findable-site repo (functions/report/[id].ts). Verified on production 2026-08-05: HTTP 200,
+   text/html; charset=utf-8, x-robots-tag noindex, the real report.
+   yoursites.uk/a/<id> is the OLDER proxy and still live — every pitch link already sent uses it and
+   must keep working, so it is deliberately not retired. This constant only decides what NEW documents
+   print. One template string, not spread through the file. */
+const REPORT_PUBLIC_ORIGIN = "https://findable.live";
 const shareUrlFor = (_supabaseUrl: string, auditId: string) =>
-  `${REPORT_PUBLIC_ORIGIN}/a/${auditId}`;
+  `${REPORT_PUBLIC_ORIGIN}/report/${auditId}`;
 
 function htmlResponse(html: string, status = 200): Response {
   // Return the HTML as a STRING body (Deno encodes string bodies as UTF-8) with an explicit

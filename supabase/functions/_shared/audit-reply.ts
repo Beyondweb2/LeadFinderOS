@@ -9,7 +9,14 @@ import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/au
 import { isAggregatorUrl } from "./aggregators.ts";
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
-const REPORT_SITE_ORIGIN = "https://yoursites.uk";
+/* ⛔ THE PROSPECT-FACING ORIGIN. findable.live/report/<auditId> — a Pages Function proxy that forces
+   text/html (findable-site functions/report/[id].ts). NEVER the Supabase function URL: the gateway
+   serves it text/plain with nosniff, so a browser shows raw HTML source.
+   {{4}} of the audit_reply template is a BODY TEXT variable (templateBodyParams sends type:"body"),
+   not a button URL, so changing this value needs NO Meta template resubmission — the template body
+   is unchanged and the value is filled at send time.
+   The 64 links already sent point at yoursites.uk/a/<uuid>; that proxy stays live and untouched. */
+const REPORT_SITE_ORIGIN = "https://findable.live";
 
 /** Top competitor names → a readable list ("Whitings, TC Group and Charlotte Watson"). Caps at 3
  *  so the WhatsApp line stays tight. Empty string when there are none. (Mirrors the auto-flow.) */
@@ -111,7 +118,7 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
      while the id it was overriding resolves directly with no lookup and cannot fail.
      A marginally nicer URL is not worth a link that 404s on a live prospect. The name is in the
      document; it does not need to be in the address bar. */
-  const link = `${REPORT_SITE_ORIGIN}/a/${audit.id}`;
+  const link = `${REPORT_SITE_ORIGIN}/report/${audit.id}`;
 
   return { ok: true, trade, competitors, business, link, auditId: audit.id };
 }

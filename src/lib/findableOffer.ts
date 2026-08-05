@@ -20,3 +20,16 @@ export const FINDABLE_SETUP_PRICE_GBP = 99;
 export const FINDABLE_GUARANTEE =
   "We guarantee the audit, the work, and the re-measurement at week eight with " +
   "before-and-after evidence, or a full refund. We do not promise you will be named.";
+
+/* ⛔ WHERE A PROSPECT'S REPORT LIVES. findable.live/report/<auditId> — a Cloudflare Pages Function in
+   the findable-site repo (functions/report/[id].ts) that proxies the render-audit-report edge
+   function and FORCES text/html, because the Supabase gateway serves that function as text/plain
+   with nosniff and a sandbox CSP. The upstream function URL must never be given to a human.
+   Deliberately NOT PUBLIC_SITE_ORIGIN: that is the barber product's yoursites.uk, and coupling the
+   AI-visibility report to it is what left the share link pointing at a dead route.
+   ⚠️ The edge functions cannot import this file's SPA-side siblings, so render-audit-report and
+   _shared/audit-reply hold their own copy of this origin. Three places, one value — change together. */
+export const REPORT_PUBLIC_ORIGIN = "https://findable.live";
+
+/** The URL a prospect is given for their report. */
+export const reportPublicUrl = (auditId: string) => `${REPORT_PUBLIC_ORIGIN}/report/${auditId}`;
