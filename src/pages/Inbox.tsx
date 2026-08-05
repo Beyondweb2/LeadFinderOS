@@ -330,8 +330,9 @@ const Inbox = () => {
      Deliberately the raw audit id and NOT the pretty name-plus-code slug: a pretty link only
      resolves when a PUBLISHED business_reports row exists, and 14 of 74 audits have none, so
      building one here would 404 for about a fifth of leads. The id always resolves directly. The
-     prospect-facing pitch link does use the pretty slug — audit-reply.ts reads the stored row and
-     falls back to the id, so it can never send a dead link either. */
+     prospect-facing pitch link now does the SAME: audit-reply.ts's slug preference was deleted
+     2026-08-05 because it resolved only for slugs carrying the 8-hex code — 69 of 123 rows — so it
+     was a coin flip on whether a prospect got a dead link. Both surfaces use the id. */
   const reportUrl = activeReport?.auditId ? `${PUBLIC_SITE_ORIGIN}/a/${activeReport.auditId}` : null;
   const [reportCopied, setReportCopied] = useState(false);
   const copyReportUrl = () => {

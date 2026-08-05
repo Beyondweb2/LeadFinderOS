@@ -331,6 +331,14 @@ export function renderReportHtml(d: AiAuditReportData): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- ⛔ NEVER INDEXABLE. This document names the prospect's COMPETITORS and their own measured
+     invisibility. It appearing in a Google result would be a genuine problem for them and for us,
+     and it was fully indexable until 2026-08-05: no robots meta, no X-Robots-Tag on any route.
+     In the DOCUMENT rather than only on a response header, so the downloaded file and every route
+     that ever serves this HTML carry it — a header only protects the route that sets it.
+     noarchive/nosnippet as well as noindex: a cached copy or a snippet naming their competitors is
+     the same disclosure by another name. The proxy adds the header too; belt and braces. -->
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />
 <link rel="icon" type="image/svg+xml" href="${favicon}" />
 <title>AI Visibility Report &mdash; ${esc(d.businessName)}</title>
 <style>
