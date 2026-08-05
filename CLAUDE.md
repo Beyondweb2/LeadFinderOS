@@ -22,6 +22,23 @@ Facts and warnings, not prose. Keep it that way. If it grows too long to read, i
   the outcome.
 - **Zero paying customers so far.** Nothing here has been proven on a paying client yet. Do not write copy or
   code that implies it has.
+- 🔴 **DELIVERY WORKS EXACTLY TWO WAYS, AND SOME CUSTOMERS CANNOT BE SERVED.** Either their site is
+  **WordPress and we can have access** (pages publish automatically), or **they let us move the site
+  to our hosting**, copied as-is. Hand-editing Wix/Squarespace is ~15 min a page forever and does not
+  work at £99. Since 2026-08-05 the questionnaire asks both (`website_platform`,
+  `willing_to_migrate`) and **`src/lib/serveGate.ts` decides**: serve / flag / block.
+  - **`findable-checkout` refuses a blocked row before creating a Stripe session** — that is the real
+    block; the site's `CannotServePanel` is only presentation. `notify-onboarding-submit` derives the
+    same verdict and labels the email, keyed off the **submitted row** (a blocked visitor never
+    clicks pay, so keying off the checkout would miss them).
+  - **A BLOCK ONLY FIRES WHEN WE ARE CERTAIN.** A skipped or `not_sure` platform, WordPress with
+    unconfirmed access, and unrecognised column values all **flag, never block**. `no_website`
+    **serves outright** — it is the best case (we build it on our hosting). 20 of 144 states block,
+    all requiring an explicit `migrate = 'no'` **and** a known hand-edit platform.
+  - ⚠️ **The verdict is DERIVED, never stored.** No `serve_decision` column — a stored verdict
+    freezes old rows at a stale rule and lets the three callers drift.
+  - ⚠️ **findable-site carries a hand-kept MIRROR at its own `src/lib/serveGate.ts`.** Change both.
+    Diff the two `serveDecision` bodies; they were byte-identical (3635 chars) on 2026-08-05.
 
 ---
 
@@ -224,6 +241,14 @@ justified by a comment saying the address "is already returned by Text Search at
 null on **every** search-added lead, and with no address there were no `addressComponents`, so no
 `derived_town`. Nobody re-checked the layer the comment was asserting about. When a comment explains
 why something is safe to skip, **verify the claim, don't inherit it.**
+
+**`findable-onboarding` SILENTLY DROPS ANY ANSWER KEY IT DOES NOT LIST.** It builds its insert from an
+explicit key list, so a field the flow sends and the column accepts still vanishes if nobody added it
+there. Proven 2026-08-05: `willing_to_migrate` — the column existed, the site sent it, the row saved
+with **HTTP 200**, and the value was null. The checkout then read "not answered", which never blocks,
+so a Squarespace customer who had said no to moving **reached Stripe**. Three places to add a field:
+the `answers` object, `NEWER_COLS`, and the `optional` shedding list. Caught only by a live end-to-end
+test; no local check can see it.
 
 **The mistake you keep making: reasoning from one layer without checking the next.** Real examples:
 - "No address is stored" — the insert writes one.
