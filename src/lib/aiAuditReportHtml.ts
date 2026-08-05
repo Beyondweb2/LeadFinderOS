@@ -620,25 +620,36 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
       <div class="sec-eyebrow">The fix</div>
       <div class="sec-title">Here&rsquo;s what we do</div>
       <div class="dowe-panel">
-        <p class="dowe-lead">We give AI something specific about you to read &mdash; and make sure it can understand <span class="hl">who you are and what you do</span>.</p>
+        <p class="dowe-lead">Being absent is not bad luck. It comes down to <span class="hl">three things</span>, and all three are fixable.</p>
+        <!-- ⛔ THREE IDEAS, NO QUANTITIES. THIS SECTION IS THE ARGUMENT, NOT THE INVENTORY.
+             It used to carry the deliverables too - "a page for each service you do, in your town",
+             "we mark up your details" - which is word for word what "What's included" says in the
+             offer block a screen below. The reader met the same list twice and both readings got
+             weaker: the argument read like a quote, and the quote read like a repeat.
+             So the split is by JOB. Here: why being absent happens and what has to change, as three
+             causal claims - it has to exist, it has to be readable, it has to agree with itself.
+             There: the countable list someone weighs against the price, which is where "each service,
+             each town" and "structured data" belong.
+             ⚠️ Keep quantities, deliverables and anything with a number OUT of these three. The moment
+             one appears here it is duplicated below, because the offer list is exhaustive by design. -->
         <div class="steps">
           <div class="step">
             <div class="step-ic"><span class="ic">${icListed}</span><span class="badge">1</span></div>
             <div class="step-n">Step 1</div>
-            <div class="st">Give AI a page to quote</div>
-            <p>A page for each service you do, in your town, on your own site &mdash; written the way people actually ask.</p>
+            <div class="st">It quotes pages, not businesses</div>
+            <p>AI answers from sources it can read. If nothing of yours says plainly what you do, there is nothing for it to quote.</p>
           </div>
           <div class="step">
             <div class="step-ic"><span class="ic">${icStruct}</span><span class="badge">2</span></div>
             <div class="step-n">Step 2</div>
-            <div class="st">Structure your info</div>
-            <p>We mark up your details so AI understands who you are, what you do and where.</p>
+            <div class="st">It has to be able to read you</div>
+            <p>Plain wording, and your details written so an engine can tell who you are, what you do and where &mdash; without guessing.</p>
           </div>
           <div class="step">
             <div class="step-ic"><span class="ic">${icNamed}</span><span class="badge">3</span></div>
             <div class="step-n">Step 3</div>
-            <div class="st">Give AI a reason to pick you</div>
-            <p>So when your customers ask, there&rsquo;s something of yours for AI to quote.</p>
+            <div class="st">And it has to agree with itself</div>
+            <p>Where your details differ between the sources AI reads, it has no reason to be confident about you. Where they match, it has.</p>
           </div>
         </div>
       </div>
