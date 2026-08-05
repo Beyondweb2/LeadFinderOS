@@ -24,18 +24,24 @@ import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
    the UUID form straight at this function, which has always worked; the broken one was the link
    printed INSIDE the document.
 
-   Now built from SUPABASE_URL, which is this function's own origin, so it follows the deployment
-   instead of asserting where the site might live one day. Verified 2026-08-05: both the path form
-   and ?slug= return HTTP 200 with a real rendered report.
+   ⚠️ IT IS THE IDENTIFIER THAT WAS WRONG, NOT THE ORIGIN — and an earlier fix today got that
+   backwards, pointing this at THIS function's own URL. Do not do that again: the Supabase gateway
+   serves render-audit-report as `text/plain` with `X-Content-Type-Options: nosniff` and
+   `Content-Security-Policy: default-src 'none'; sandbox`, whatever content-type the function sets.
+   A browser opening that URL gets raw HTML source as text. The function is upstream plumbing; it
+   must never be the URL a human is given.
 
    WHY THE AUDIT ID AND NOT THE SLUG: a UUID resolves DIRECTLY here (see the resolution note below) —
    no business_reports lookup at all, so it cannot fail. The slug form needs the stored slug to end
    in the 8-hex code, and only 69 of 123 report rows do; the other 54 include published ones, so a
-   slug-based share link would be dead for those. The id form works for every audit.
-   ⚠️ When a clean public route does exist, change this line and the pretty URL comes back — it is
-   one template string, deliberately not spread through the file. */
-const shareUrlFor = (supabaseUrl: string, auditId: string) =>
-  `${supabaseUrl}/functions/v1/render-audit-report/${auditId}`;
+   slug link would be dead for those. That is the whole original bug.
+
+   The origin is a PROXY that forces text/html — yoursites.uk/a/<id> today (LeadFinderOS
+   functions/a/[slug].ts, verified HTTP 200 text/html), moving to findable.live/report/<id> once that
+   route is proven. One template string, deliberately not spread through the file. */
+const REPORT_PUBLIC_ORIGIN = "https://yoursites.uk";
+const shareUrlFor = (_supabaseUrl: string, auditId: string) =>
+  `${REPORT_PUBLIC_ORIGIN}/a/${auditId}`;
 
 function htmlResponse(html: string, status = 200): Response {
   // Return the HTML as a STRING body (Deno encodes string bodies as UTF-8) with an explicit
@@ -47,6 +53,9 @@ function htmlResponse(html: string, status = 200): Response {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
+      // Belt and braces with the document's own robots meta: a header protects only this route,
+      // a meta travels with the file. A prospect's competitors must never reach a search index.
+      "x-robots-tag": "noindex, nofollow, noarchive, nosnippet",
       // Short cache: the page renders live, but a few minutes of CDN/edge caching is fine.
       "cache-control": status === 200 ? "public, max-age=120" : "public, max-age=0, must-revalidate",
     },

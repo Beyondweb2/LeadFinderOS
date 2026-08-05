@@ -6,7 +6,6 @@
 // report's HEADLINE rivals (gutPunch) first, so the pitch names exactly what the report leads
 // with; frequency-aggregate fallback (US-marker-filtered for UK audits) when there's no gutPunch.
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
-import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
@@ -104,21 +103,15 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     };
   }
 
-  /* Prefer the published slug so the prospect gets a link with their own name in it. Read from
-     business_reports rather than rebuilt from the name, because only a stored, published row is
-     guaranteed to resolve. Falls back to the raw audit id — always valid, resolved directly — so a
-     missing row degrades to a working ugly link rather than a dead pretty one. */
-  let link = `${REPORT_SITE_ORIGIN}/a/${audit.id}`;
-  try {
-    const { data: rep } = await service
-      .from("business_reports").select("slug")
-      .eq("audit_id", audit.id).eq("status", "published").limit(1).maybeSingle();
-    const slug = (rep?.slug as string | undefined)?.trim();
-    /* Only a slug that CARRIES THE CODE can resolve. The 68 rows written before the code existed hold
-       the bare slugified name, and a bare name is exactly what the resolver now refuses — using one
-       would send a prospect a dead link. Those audits keep the raw-id link, which always works. */
-    if (slug && auditCodeFromSlug(slug)) link = `${REPORT_SITE_ORIGIN}/a/${slug}`;
-  } catch { /* keep the uuid link — never fail a send over a prettier URL */ }
+  /* ⛔ THE AUDIT ID, ALWAYS. NO SLUG PREFERENCE. REMOVED 2026-08-05, DO NOT REINSTATE.
+     This used to read business_reports and swap in a name-carrying slug when one existed, keeping the
+     id only as a fallback. That preference is the bug that started all of this: a slug resolves ONLY
+     if it ends in the 8-hex code, and just 69 of 123 report rows do — published ones among the 54
+     that do not. So the "prettier" branch was a coin flip on whether a prospect got a dead link,
+     while the id it was overriding resolves directly with no lookup and cannot fail.
+     A marginally nicer URL is not worth a link that 404s on a live prospect. The name is in the
+     document; it does not need to be in the address bar. */
+  const link = `${REPORT_SITE_ORIGIN}/a/${audit.id}`;
 
   return { ok: true, trade, competitors, business, link, auditId: audit.id };
 }
