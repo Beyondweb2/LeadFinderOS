@@ -12,6 +12,15 @@
 // the worst answer (NOT the raw AI paragraph), why it matters, then WHAT WE DO to fix
 // it, then the per-engine proof + CTA.
 
+/* RELATIVE paths with explicit .ts extensions, NOT the "@/" alias: this file is bundled into
+   render-audit-report and apply-seo-paste, and Deno cannot resolve the Vite alias. Both are
+   dependency-free constant files, so nothing heavy joins those bundles. */
+import { FINDABLE_GUARANTEE } from './findableOffer.ts';
+import {
+  FOUNDER_OFFER_AFTER_PAYMENT, FOUNDER_OFFER_COUNT, FOUNDER_OFFER_NORMAL_LABEL,
+  FOUNDER_OFFER_PRICE_LABEL, FOUNDER_OFFER_STRIPE_URL,
+} from './founderOffer.ts';
+
 export interface ReportEngineRow {
   label: string;   // "ChatGPT", "Gemini", "AI Overview", "Google"
   named: number;   // how many tested questions named the business on this engine
@@ -60,6 +69,12 @@ export interface AiAuditReportData {
   /** False when the business has no website at all. The SEO slot then shows what we will BUILD
    *  them instead of rendering nothing: a site is part of the setup, and silence sells nothing. */
   hasWebsite?: boolean;
+  /** Render the founder offer at the bottom. DEFAULTS TO FALSE — a renderer that shows a price
+   *  unless told not to is the wrong default, because the callers that forget are the in-app preview
+   *  and the download, and a client must never open their own report to a cheaper offer.
+   *  Decided by showFounderOffer() in founderOffer.ts; render-audit-report (the route a prospect
+   *  actually opens) is what passes it. */
+  showFounderOffer?: boolean;
   /* NO PER-TERM WINNABILITY HERE, DELIBERATELY.
      This is the CUSTOMER report's data contract, and a "winnable" verdict is not something we can
      evidence. Measured over all 402 stored answered questions: 77.6% came back "open" (winnable)
@@ -163,6 +178,49 @@ function noWebsiteSection(): string {
         your area, your credentials, all written the way AI quotes them. It&rsquo;s included in your setup,
         nothing extra to pay.
       </p>
+    </section>`;
+}
+
+/* ══ THE FOUNDER OFFER ═════════════════════════════════════════════════════════════════════════
+   The ask, not another pitch. The report has already made the argument; this is four sentences, what
+   they get, the guarantee and one button.
+
+   THREE RULES THIS SECTION MUST KEEP:
+   · NO OUTCOME PROMISE. "so you see the before and after side by side" promises they will SEE the
+     comparison, never that it will be favourable — the same work-based framing as the guarantee.
+   · THE GUARANTEE IS FINDABLE_GUARANTEE, VERBATIM. Not paraphrased, not shortened. The price above it
+     is temporary and the guarantee must not drift when the price changes.
+   · NO BUTTON WITHOUT A REAL LINK. An empty FOUNDER_OFFER_STRIPE_URL renders no button at all rather
+     than a dead or placeholder one; the Email us / WhatsApp us buttons in the CTA above are still a
+     route, which is why omitting it leaves the report perfectly usable.
+   Visual language is the existing .cta band — navy ground, yellow accent, the .cta-btn shape. No new
+   colours and no new components. */
+function founderOfferSection(): string {
+  const url = FOUNDER_OFFER_STRIPE_URL.trim();
+  /* Only http(s). A relative or javascript: value in that constant would be a link nobody intended;
+     with no button the offer still reads and the CTA above still works. */
+  const button = /^https:\/\//i.test(url)
+    ? `<div class="cta-actions">
+        <a class="cta-btn email" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Get started &mdash; ${esc(FOUNDER_OFFER_PRICE_LABEL)}</a>
+      </div>
+      <p class="offer-after">${esc(FOUNDER_OFFER_AFTER_PAYMENT)}</p>`
+    : "";
+  return `
+    <!-- FOUNDER OFFER &mdash; temporary; see src/lib/founderOffer.ts -->
+    <section class="cta offer">
+      <div class="sec-eyebrow offer-eyebrow">The offer</div>
+      <h3>The first ${FOUNDER_OFFER_COUNT} at <span class="y">${esc(FOUNDER_OFFER_PRICE_LABEL)}</span></h3>
+      <p>Normally ${esc(FOUNDER_OFFER_NORMAL_LABEL)}. I&rsquo;m running the first ${FOUNDER_OFFER_COUNT} at ${esc(FOUNDER_OFFER_PRICE_LABEL)} because I want honest feedback out of them &mdash; what worked and what didn&rsquo;t.</p>
+      <div class="offer-gets">
+        <div class="offer-h">What you get</div>
+        <ul>
+          <li>The audit you&rsquo;ve just read.</li>
+          <li>The work: pages on your own site for what you do and where, and your Google Business Profile sorted.</li>
+          <li>The same searches re-run at eight weeks, so you see the before and after side by side.</li>
+        </ul>
+      </div>
+      <div class="offer-gtee">${esc(FINDABLE_GUARANTEE)}</div>
+      ${button}
     </section>`;
 }
 
@@ -416,6 +474,20 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .cta-btn.wa{ background:#fff; color:var(--blue); }
 
   /* FOOTER &mdash; a distinct darker navy bar so the text is clearly readable (no blue-on-blue) */
+  /* THE FOUNDER OFFER reuses .cta wholesale — same navy ground, same yellow accent, same button
+     shape. These rules only add the eyebrow, the list and the guarantee panel. A hairline above it
+     separates the transaction from the close without introducing a second band colour. */
+  .cta.offer{ border-top:1px solid rgba(255,255,255,.16); padding-top:18px; }
+  .offer-eyebrow{ color:var(--yellow); margin-bottom:6px; }
+  .offer-gets{ margin-top:14px; }
+  .offer-gets .offer-h{ font-size:12px; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; color:#c7d3ea; margin-bottom:6px; }
+  .offer-gets ul{ margin:0; padding-left:18px; max-width:66ch; }
+  .offer-gets li{ font-size:14px; line-height:1.55; color:#fff; margin-bottom:4px; }
+  .offer-gtee{ margin-top:16px; border-left:3px solid var(--yellow); padding:10px 14px;
+    background:rgba(255,255,255,.06); font-size:13px; line-height:1.55; color:#e6ecf7;
+    max-width:70ch; border-radius:0 6px 6px 0; }
+  .offer-after{ margin:10px 0 0; font-size:12.5px; color:#c7d3ea; max-width:66ch; }
   .site-foot{ background:var(--foot); padding:12px 28px 14px; }
   .site-foot .row{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
     font-size:11px; color:#c7d5ee; font-weight:400; }
@@ -525,7 +597,7 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
       <div class="sec-eyebrow">The fix</div>
       <div class="sec-title">Here&rsquo;s how we get you found</div>
       <div class="dowe-panel">
-        <p class="dowe-lead">We give AI something specific about you to read &mdash; and make sure it can understand and <span class="hl">name you</span>.</p>
+        <p class="dowe-lead">We give AI something specific about you to read &mdash; and make sure it can understand <span class="hl">who you are and what you do</span>.</p>
         <div class="steps">
           <div class="step">
             <div class="step-ic"><span class="ic">${icListed}</span><span class="badge">1</span></div>
@@ -542,8 +614,8 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
           <div class="step">
             <div class="step-ic"><span class="ic">${icNamed}</span><span class="badge">3</span></div>
             <div class="step-n">Step 3</div>
-            <div class="st">Get you named</div>
-            <p>So when your customers ask AI, your name is the one that comes up.</p>
+            <div class="st">Give AI a reason to pick you</div>
+            <p>So when your customers ask, there&rsquo;s something of yours for AI to quote.</p>
           </div>
         </div>
       </div>
@@ -553,13 +625,14 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
     <section class="cta">
       <h3>Ready to get <span class="y">found</span>?</h3>
       <p><b>This is your starting point.</b> We fix what AI says about you &mdash; then re-ask the questions from this report, plus more, three times each, so you see the before &amp; after in black and white.</p>
-      <div class="close">Let&rsquo;s get ${esc(d.businessName)} named when your customers ask.</div>
+      <div class="close">Let&rsquo;s give AI something to find about ${esc(d.businessName)}.</div>
       <div class="cta-actions">
         <a class="cta-btn email" href="${emailHref}" target="_blank" rel="noopener noreferrer">Email us</a>
         <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp us</a>
       </div>
     </section>
 
+${d.showFounderOffer === true ? founderOfferSection() : ""}
     <footer class="site-foot">
       <div class="row">
         <span>Prepared for <b>${esc(d.businessName)}</b></span>
