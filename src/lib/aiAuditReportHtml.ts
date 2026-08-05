@@ -618,7 +618,11 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
     <!-- WHAT WE DO (solution) &mdash; the confident turn from problem to fix -->
     <section class="dowe">
       <div class="sec-eyebrow">The fix</div>
-      <div class="sec-title">Here&rsquo;s what we do</div>
+      <!-- The title names the ARGUMENT this section makes, not an inventory. It read "Here's what we
+           do" while the three steps below carried the deliverables; once those became three causal
+           claims (it has to exist, be readable, agree with itself) that title described the offer
+           block instead. "What's included" is the inventory, a screen below. -->
+      <div class="sec-title">Why you&rsquo;re not in the answer</div>
       <div class="dowe-panel">
         <p class="dowe-lead">Being absent is not bad luck. It comes down to <span class="hl">three things</span>, and all three are fixable.</p>
         <!-- ⛔ THREE IDEAS, NO QUANTITIES. THIS SECTION IS THE ARGUMENT, NOT THE INVENTORY.
