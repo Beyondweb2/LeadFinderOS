@@ -589,7 +589,13 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
         </div>
       </div>
       <p class="why-frame">This is where your customers are <span class="hl">already going</span> &mdash; and it&rsquo;s growing fast.</p>
-      <div class="src">Source: BrightLocal, 2026</div>
+      <!-- THE SAME SOURCE LINE AS findable.live, and for the same reason: this is a US survey and
+           we sell to UK businesses. "US data, UK behaviour follows the same pattern" is more credible
+           than implying the figure was British, and a prospect who works that out for themselves
+           trusts us less than one we told. The report is what a prospect actually READS, so the
+           caveat matters more here than on the marketing page.
+           ⚠️ CROSS-SURFACE: the site's WhyThisMatters section carries this wording too. Change both. -->
+      <div class="src">Source: BrightLocal Local Consumer Review Survey 2026 &mdash; 1,002 US adults; UK behaviour follows the same pattern, and the year-on-year comparison is self-reported within the same survey series.</div>
     </section>
 
     <!-- WHAT WE DO (solution) &mdash; the confident turn from problem to fix -->
