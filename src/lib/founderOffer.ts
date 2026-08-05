@@ -43,14 +43,19 @@ export const FOUNDER_OFFER_COUNT = 10;
 export const FOUNDER_OFFER_STRIPE_URL = "https://buy.stripe.com/5kQcN492k1Uqdal01G0kE06";
 
 /** What they are told will happen after they pay, BEFORE they pay.
+ *  It still does the original job — a payment from the report bypasses the questionnaire's serve
+ *  gate, so somebody we may not be able to serve must be expecting a conversation rather than
+ *  silence, and a refund then reads as a check we always do rather than as a failure.
+ *  ⚠️ BUT IT NOW READS AS PROCESS, NOT A PERSONAL PROMISE. "I'll be in touch" was a note scribbled
+ *  at the bottom of a report; "before we start we'll confirm" is how a business describes a step.
+ *  It also hints at the platform question without making it sound like a problem — "some setups we
+ *  can publish to directly, others we host for you" is the serveGate distinction in plain words,
+ *  with no hint that one of the answers is a refusal.
  *  ⚠️ THIS ALSO HAS TO BE SET IN STRIPE. The payment link's own confirmation page is configured in
- *  the Stripe dashboard, not in this repo, so this constant covers the report side only — see the
- *  note in the build report. Someone the serve gate would have refused (a Wix site they will not let
- *  us move) can reach this link, because a payment link does not go through findable-checkout. They
- *  must be expecting a conversation rather than silence, so a refund reads as a check we always do
- *  rather than as a failure. */
+ *  the Stripe dashboard, not in this repo, so this constant covers the report side only. */
 export const FOUNDER_OFFER_AFTER_PAYMENT =
-  "I'll be in touch to check a couple of things about your site before any work starts.";
+  "Before we start we'll confirm a couple of things about your website. Some setups we can publish "
+  + "to directly; others we host for you.";
 
 /* ── WHO MUST NEVER SEE IT ───────────────────────────────────────────────────────────────────────
    A client reopening their own report to a cheaper founder offer is a bad moment.
