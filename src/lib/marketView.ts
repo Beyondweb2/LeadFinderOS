@@ -564,6 +564,11 @@ export function marketPlainRead(
   completeRuns: number,
   /** Audits that exist but have not finished, so the wait can be stated. */
   pendingAudits: number,
+  /** Of `prospects`, how many have NO WEBSITE. They are not a smaller prospect list — they are a
+   *  DIFFERENT one: the AI-visibility pitch is the wrong opening for a business AI has nothing of to
+   *  read, and Gemini cannot name them at all (measured: MK Plumbing, 0/10). Stated here so the
+   *  sentence and the two lists under it cannot disagree about the total. */
+  noWebsiteProspects: number,
 ): MarketPlainRead {
   const topHost = citationHosts[0] ?? null;
   const plural = trade.trim().toLowerCase();
@@ -621,7 +626,11 @@ export function marketPlainRead(
       }`
       : prospects === 0
         ? `Nobody left to contact: of ${poolLine}, every one is already named by AI. The list can't be complete though - it is only what Places returned inside the town boundary.`
-        : `${prospects} worth contacting: of ${poolLine}${chainLine}, ${prospects} ${prospects === 1 ? "either never shows up" : "either never show up"} in AI answers or barely ${prospects === 1 ? "does" : "do"}. Places may be missing firms, so treat it as a floor.`;
+        : `${prospects} worth contacting: of ${poolLine}${chainLine}, ${prospects} ${prospects === 1 ? "either never shows up" : "either never show up"} in AI answers or barely ${prospects === 1 ? "does" : "do"}.${
+        noWebsiteProspects > 0
+          ? ` ${noWebsiteProspects} of them ${noWebsiteProspects === 1 ? "has" : "have"} no website, so ${noWebsiteProspects === 1 ? "it needs" : "they need"} a different opening - listed separately below.`
+          : ""
+      } Places may be missing firms, so treat it as a floor.`;
 
   return { market, contact };
 }

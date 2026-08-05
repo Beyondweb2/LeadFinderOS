@@ -1,4 +1,18 @@
 import { toWhatsAppNumber } from "./whatsapp-send.ts";
+import { isAggregatorUrl } from "./aggregators.ts";
+
+/* A DIRECTORY OR SOCIAL URL IS NOT A WEBSITE. `!!lead.website` was a bare truthiness test, so a
+   listing whose only "website" is a Facebook page reported has_website: true — and
+   process-ai-audit-queue then ran a ~$0.12 Apify SEO scan against facebook.com, grading Facebook's
+   markup. isAggregatorUrl is the same classifier search-leads and the audit report use, so
+   "not their own website" means one thing everywhere.
+   The URL is dropped as well as the flag: the scan needs both, and leaving a facebook.com value on a
+   row that says has_website: false is the stale-field trap that started this. The raw URL is still on
+   outreach_leads.website, so nothing is lost. */
+function ownWebsite(raw: string | null | undefined): string | null {
+  const w = (raw ?? "").trim();
+  return w && !isAggregatorUrl(w) ? w : null;
+}
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, phoneSuppressed, pitchEverSent } from "./auto-reply-rules.ts";
 
@@ -225,8 +239,9 @@ export async function handleInboundMessages(
                   business_type: lead.category ?? lead.search_keyword ?? "",
                   location_text: lead.search_location ?? lead.address ?? "",
                   country: lead.country ?? null,
-                  website: lead.website ?? null,
-                  has_website: !!lead.website,
+                  // See ownWebsite: a Facebook page is not a website, and was being SEO-scanned.
+                  website: ownWebsite(lead.website),
+                  has_website: !!ownWebsite(lead.website),
                 }),
               });
               if (!res.ok) {
@@ -375,8 +390,8 @@ export async function handleInboundMessages(
                             business_type: bizType,
                             location_text: locText,
                             country: leadRow.country ?? null,
-                            website: leadRow.website ?? null,
-                            has_website: !!leadRow.website,
+                            website: ownWebsite(leadRow.website),
+                            has_website: !!ownWebsite(leadRow.website),
                             question_count: OUTREACH_HOOK_QUESTIONS,
                           }),
                         });

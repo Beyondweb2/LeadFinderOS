@@ -541,6 +541,32 @@ Facts with numbers. These are measured, and several contradict the older docs.
   `phoneFetchStatus[lead.id] === 'failed'`**, which is in-memory session state. And bulk "recover
   phones" **skips any lead that already has a phone** (`useOutreach.ts:1250`). So a lead like
   Macca-Gas — phone present, address null, `place_id` present — is reachable by neither.
+- 🔴 **A BUSINESS WITH NO WEBSITE IS A DIFFERENT PRODUCT, NOT A WEAKER PROSPECT.** Gemini cannot
+  name a business it has nothing of to read (§5, MK Plumbing 0/10), so the AI-visibility pitch is the
+  wrong opening — but for DELIVERY they are the best case (`serveGate` serves `no_website` outright:
+  we build the site on our hosting, nothing to migrate). Measured 2026-08-05: **228 of 969 leads
+  (23%)** have no website, 49 of them directory-only; total waste to date **36p** of Facebook SEO
+  scans + **93p** auditing them.
+  - **`isAggregatorUrl`** (`_shared/aggregators.ts` + its SPA mirror `src/lib/aggregators.ts`) is the
+    one classifier. `has_website` was a bare `!!lead.website`, so a Facebook-only listing triggered a
+    **$0.12 Apify SEO scan against facebook.com**. Fixed in `bulk-jobs` and **both**
+    `_shared/whatsapp-inbound` call sites 2026-08-05.
+  - The audit batch holds them back **by default, stated with the saving**, overridable. The market
+    view lists them **separately**, never hidden.
+  - ⚠️ **`outreach_leads.list_type` IS NOT A WEBSITE SIGNAL.** It defaults to `'no_website'` for every
+    lead ever added — both `addLead` call sites pass that literal. It is a leftover from the
+    website-generation product. The real signal is `website` (raw URL) + `isAggregatorUrl`.
+  - ⚠️ **`search_cache.websiteStatus` has TWO confidence tiers and they are different claims:** a
+    directory/social URL is **0.95**, a blank Places website field is **0.60** ("may have one"). The
+    0.60 tier has never been validated against reality.
+  - A **free subdomain is still their own website.** `PLATFORM_PATTERNS` in `search-leads` treated
+    `wixsite.com` / `myshopify.com` / `squarespace.com` / `wordpress.com` as NO_WEBSITE — right for
+    the old product, wrong for this one. Removed 2026-08-05. `webflow.io`, `godaddysites.com`,
+    `weebly.com`, `carrd.co` are arguably the same mistake and are **still there** — Paul's call,
+    because removing them changes what lead search returns.
+- ⚠️ **`search-leads` has ONE pre-existing `TS2345`** (~line 1379, the supabase-js client generic on
+  `performSearchWithExpansion`). Proven pre-existing by `git stash` 2026-08-05 — `deno check` exits 1
+  on that file either way. Don't fix it, and don't read the exit code as your own breakage.
 - ✅ **AUDIT-ONLY BUSINESSES WORK.** ABLM (`d2008327`) has `lead_id = NULL` and its address lives on
   `ai_audits.business_address`. Paul viewed and printed its playbook. `usePlaybook`'s audit-first
   resolution is what makes this work — do not reorder it.

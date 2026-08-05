@@ -1,5 +1,9 @@
 import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
 import type { PhoneFetchStatus } from '@/hooks/useOutreach';
+import { isAggregatorUrl } from '@/lib/aggregators';
+/* MEASURED audit costs, shared with the market panel and the audit page so no screen quotes a
+   different figure. See CLAUDE.md section 8 — these came from actor_cost_usd, not a constant. */
+import { AUDIT_EST_USD_PER_QUESTION, SEO_SCAN_USD } from '@/lib/marketView';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
@@ -296,6 +300,11 @@ export function OutreachTable({
   // HARD 3..5 clamp (default 3) — unified across wizard/bulk/auto-chain.
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
   const [auditQuestionCount, setAuditQuestionCount] = useState<number>(3);
+  /* OFF by default: a business with no website is a different product with a different opening, and
+     auditing one buys an answer we already know — Gemini cannot name a business it has nothing of to
+     read (measured: MK Plumbing, 0/10 on Gemini). Overridable, because the ChatGPT-via-directories
+     number is occasionally worth having. NEVER silent: the count and the saving are both stated. */
+  const [auditIncludeNoWebsite, setAuditIncludeNoWebsite] = useState(false);
   const [sitesByLead, setSitesByLead] = useState<Record<string, { id: string; slug: string; opened: boolean; claimed: boolean; addon: boolean }>>({});
   // Per-lead LATEST audit state (mirrors sitesByLead) — drives the upcoming "Run audit" /
   // "Manage" row control. Keyed by lead_id, newest audit first; each entry carries that
@@ -925,7 +934,7 @@ export function OutreachTable({
   // (auditsByLead — avoids double-spend), and carrying a usable business type + location
   // (search_keyword||category / search_location||address — the audit's inputs, sourced the
   // same way the wizard's pickLead does). Mirrors siteGenEligibleIds.
-  const auditEligibleLeads = useMemo(
+  const auditSelectedLeads = useMemo(
     () => leads.filter((l) =>
       selectedIds.has(l.id) &&
       !isDemoLead(l.id) &&
@@ -934,13 +943,42 @@ export function OutreachTable({
       !!(l.search_location || l.address)),
     [leads, selectedIds, auditsByLead],
   );
+  /* NO WEBSITE = no own site AI can read. isAggregatorUrl is the same classifier search-leads and
+     the audit report use, so a Facebook-only listing counts as no website here too — which it is. */
+  const auditNoWebsiteLeads = useMemo(
+    () => auditSelectedLeads.filter((l) => {
+      const w = (l.website ?? '').trim();
+      return !w || isAggregatorUrl(w);
+    }),
+    [auditSelectedLeads],
+  );
+  const auditEligibleLeads = useMemo(
+    () => (auditIncludeNoWebsite
+      ? auditSelectedLeads
+      : auditSelectedLeads.filter((l) => !auditNoWebsiteLeads.includes(l))),
+    [auditSelectedLeads, auditNoWebsiteLeads, auditIncludeNoWebsite],
+  );
   const auditEligibleIds = useMemo(() => auditEligibleLeads.map((l) => l.id), [auditEligibleLeads]);
-  // Cost estimate for the confirm guard: N × Q AI-search runs @ $0.05 + one $0.02 SEO per website lead.
+  /* MEASURED CONSTANTS, not invented ones. This read $0.05 a question and $0.02 an SEO scan; the
+     measured figures are $0.0125 (ai_audit_runs.actor_cost_usd over 81 runs) and $0.12 (the Apify
+     on-page scan). Wrong in BOTH directions — 4x high on questions, 6x low on the scan — which for a
+     no-website batch overstated the bill 4x and for a website-heavy one understated the biggest line.
+     Imported rather than re-typed so they move with the rest of the app.
+     The SEO count uses the SAME own-website test as the eligibility above, because a Facebook page no
+     longer triggers a scan (see the has_website fix in bulk-jobs). */
   const auditCostUsd = useMemo(() => {
     const q = Math.max(3, Math.min(5, auditQuestionCount));
-    const websites = auditEligibleLeads.filter((l) => (l.website ?? '').trim()).length;
-    return auditEligibleIds.length * q * 0.05 + websites * 0.02;
+    const websites = auditEligibleLeads.filter((l) => {
+      const w = (l.website ?? '').trim();
+      return !!w && !isAggregatorUrl(w);
+    }).length;
+    return auditEligibleIds.length * q * AUDIT_EST_USD_PER_QUESTION + websites * SEO_SCAN_USD;
   }, [auditEligibleLeads, auditEligibleIds, auditQuestionCount]);
+  /** What holding the no-website leads back is saving, at the same measured rates. */
+  const auditNoWebsiteSavingUsd = useMemo(
+    () => auditNoWebsiteLeads.length * Math.max(3, Math.min(5, auditQuestionCount)) * AUDIT_EST_USD_PER_QUESTION,
+    [auditNoWebsiteLeads, auditQuestionCount],
+  );
 
   // Open the question-count + cost-confirm dialog (validates there's something eligible first).
   const handleBulkRunAudit = () => {
@@ -2380,7 +2418,7 @@ export function OutreachTable({
             <DialogDescription className="text-xs">
               One AI-visibility audit per selected lead — enqueued server-side and drained through the
               audit queue (no direct Apify). Uses each lead’s stored business type + location.
-              {selectedIds.size - auditEligibleIds.length > 0 && ` · ${selectedIds.size - auditEligibleIds.length} skipped (already audited or missing type/location)`}.
+              {selectedIds.size - auditSelectedLeads.length > 0 && ` · ${selectedIds.size - auditSelectedLeads.length} skipped (already audited or missing type/location)`}.
               Capped at $3/audit + $15/day. Safe to leave this page.
             </DialogDescription>
           </DialogHeader>
@@ -2395,6 +2433,30 @@ export function OutreachTable({
               </SelectContent>
             </Select>
           </div>
+
+          {/* ── THE NO-WEBSITE HOLD-BACK, STATED ─────────────────────────────────────────────────
+              A silent exclusion reads as "everything selected was audited" when it wasn't, which is
+              the failure mode CLAUDE.md keeps warning about. So the count and the saving are both on
+              screen, and the checkbox is right next to them. */}
+          {auditNoWebsiteLeads.length > 0 && (
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+              <Checkbox
+                checked={auditIncludeNoWebsite}
+                onCheckedChange={(v) => setAuditIncludeNoWebsite(v === true)}
+                className="mt-0.5"
+              />
+              <span className="text-xs leading-snug">
+                <span className="font-semibold">
+                  {auditNoWebsiteLeads.length} of these {auditNoWebsiteLeads.length === 1 ? 'has' : 'have'} no website
+                </span>
+                {auditIncludeNoWebsite
+                  ? <> — included, adding ~${auditNoWebsiteSavingUsd.toFixed(2)}.</>
+                  : <> — held back, saving ~${auditNoWebsiteSavingUsd.toFixed(2)}.</>}
+                {' '}AI has nothing of theirs to read, so Gemini can't name them at all. Tick to audit
+                them anyway.
+              </span>
+            </label>
+          )}
           <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
             Audit <span className="font-semibold">{auditEligibleIds.length}</span> business{auditEligibleIds.length === 1 ? '' : 'es'}
             {' '}× <span className="font-semibold">{auditQuestionCount}</span> question{auditQuestionCount === 1 ? '' : 's'}
