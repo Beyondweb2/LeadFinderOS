@@ -149,6 +149,22 @@ And the traps around it:
   the string, then check the consumer chunk for `import…from"./Shared-<hash>.js"`. Absence in the consumer is
   the *expected* result and is itself evidence the component is shared rather than duplicated.
 
+🔴 **A 200 WITH ALL THE RIGHT STRINGS IN IT CAN STILL BE THE WRONG DOCUMENT.** The worst version of
+the trap, because every signal reads green. Verifying the report's new BrightLocal caveat 2026-08-05
+I fetched `https://findable.live/a/<slug>`, got **HTTP 200**, and **all three** caveat strings
+matched — so I nearly reported it verified. It was the **home page**: `/a/*` is not a route on
+findable.live, it fell back to `index.html`, and the home page contained those exact strings
+*because I had just added them there in the same session.*
+- **The tell was the byte count**: 82,046 bytes, identical to the home page I had fetched minutes
+  earlier. The second tell was that a marker unique to the document type (`class="src"`) was absent.
+- **The rule: assert on something ONLY the target document has**, not on the strings you were
+  looking for. A content-type check is not enough either — Cloudflare served this as `text/html`
+  with a 200.
+- Reports are served by the **`render-audit-report` edge function**, and the reliable URL is the
+  **audit UUID** (`…/functions/v1/render-audit-report/<auditId>`), which resolves directly with no
+  `business_reports` lookup. The slug form needs the stored slug to end in the 8-hex code and only
+  **69 of 123** report rows do.
+
 **A negative result can also be your own check's fault, not the code's.** The mirror of the false positives
 below, and it bit twice tonight:
 - `SECTION 1 OF 2` was False because the source says `Section 1 of 2` — **CSS `text-transform` uppercased it**,
