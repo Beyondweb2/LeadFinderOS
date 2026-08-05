@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
+import { serveDecision, serveInputFromRow, type ServeGateRow } from "../../../src/lib/serveGate.ts";
 
 // findable-checkout — Stripe Checkout for the Findable onboarding plan (verify_jwt = false;
 // called by the public findable-site with the anon apikey — the visitor has no app account).
@@ -72,7 +73,11 @@ Deno.serve(async (req) => {
     // The onboarding row must exist (it's the receipt of a completed questionnaire) and,
     // when a lead is attached, the lead must not already be a paying client.
     const { data: ob } = await service
-      .from("onboarding_responses").select("id, lead_id, status").eq("id", onboardingId).maybeSingle();
+      .from("onboarding_responses")
+      // The three website answers come back too: they decide whether we can serve this customer at
+      // all, and that has to be settled BEFORE a Stripe session exists. See the gate below.
+      .select("id, lead_id, status, website_platform, website_platform_other, website_manager, willing_to_migrate")
+      .eq("id", onboardingId).maybeSingle();
     if (!ob) return json({ ok: false, error: "unknown_onboarding" }, 404);
 
     /* One place to record a refusal, mirroring stripe-webhook's recordPaymentFailure so both ends of
@@ -104,6 +109,34 @@ Deno.serve(async (req) => {
       });
       return json({ ok: false, error: "already_client" }, 403);
     }
+    /* ══ CAN WE ACTUALLY SERVE THEM? ═══════════════════════════════════════════════════════════
+       THIS IS THE REAL BLOCK. The questionnaire also hides the checkout button for a blocked
+       answer, but that is presentation: anyone with devtools, a saved URL or a replayed request
+       walks straight past it. Nothing but this refusal stops a Stripe session being created.
+
+       Delivery works two ways and there is no third — WordPress we can publish to, or a site we
+       are allowed to move to our hosting. Hand-editing a Wix page is ~15 minutes a page forever
+       and does not work at a £99 one-off, so taking the money would mean doing half a job.
+
+       DELIBERATELY AFTER THE ALREADY-PAID CHECKS. An existing client can never be re-gated by a
+       rule that did not exist when they bought, and the gate itself never blocks on uncertainty —
+       a skipped platform question or an unrecognised value degrades to "we don't know", which
+       serves. See src/lib/serveGate.ts; every route to yes is decided before anything can block. */
+    const gate = serveDecision(serveInputFromRow(ob as ServeGateRow));
+    if (gate.verdict === "block") {
+      await recordRefusal("checkout_refused_cannot_serve", {
+        lead_id: effectiveLeadId,
+        gate_code: gate.code,
+        gate_reason: gate.reason,
+        website_platform: ob.website_platform,
+        website_platform_other: ob.website_platform_other,
+        website_manager: ob.website_manager,
+        willing_to_migrate: ob.willing_to_migrate,
+      });
+      console.log(`[findable-checkout] refused ${onboardingId}: ${gate.reason}`);
+      return json({ ok: false, error: "cannot_serve", reason: gate.code }, 403);
+    }
+
     /* Hoisted so the back-URL below can read it. `lead` itself is block-scoped to the check that
        follows and MUST stay that way — it carries status and amount_paid, which have no business
        being live further down. Only the display name escapes, and only as a string. */
