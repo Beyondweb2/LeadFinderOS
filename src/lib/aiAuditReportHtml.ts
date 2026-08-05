@@ -595,7 +595,7 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
     <!-- WHAT WE DO (solution) &mdash; the confident turn from problem to fix -->
     <section class="dowe">
       <div class="sec-eyebrow">The fix</div>
-      <div class="sec-title">Here&rsquo;s how we get you found</div>
+      <div class="sec-title">Here&rsquo;s what we do</div>
       <div class="dowe-panel">
         <p class="dowe-lead">We give AI something specific about you to read &mdash; and make sure it can understand <span class="hl">who you are and what you do</span>.</p>
         <div class="steps">
@@ -623,8 +623,8 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
 
     <!-- CTA -->
     <section class="cta">
-      <h3>Ready to get <span class="y">found</span>?</h3>
-      <p><b>This is your starting point.</b> We fix what AI says about you &mdash; then re-ask the questions from this report, plus more, three times each, so you see the before &amp; after in black and white.</p>
+      <h3>Ready to get <span class="y">started</span>?</h3>
+      <p><b>This is your starting point.</b></p>
       <div class="close">Let&rsquo;s give AI something to find about ${esc(d.businessName)}.</div>
       <div class="cta-actions">
         <a class="cta-btn email" href="${emailHref}" target="_blank" rel="noopener noreferrer">Email us</a>
