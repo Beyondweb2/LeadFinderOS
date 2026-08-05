@@ -31,6 +31,7 @@ import {
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
 } from '@/lib/auditReport';
 import { tradeWord } from '@/lib/trade';
+import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
 import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS } from '@/lib/auditQuestionCounts';
@@ -133,6 +134,10 @@ interface BusinessGroup {
   business_type: string | null;
   location: string | null;
   has_website: boolean;
+  /** A trade-and-town audit with no business attached. Read off the newest audit — already
+   *  selected, so no extra query. Searchable like anything else, but badged, because a sentinel
+   *  called "[market] locksmiths · Hastings" is not a client and must not read as one. */
+  isMarket: boolean;
   /** Newest audit first. */
   audits: AuditLite[];
   /** The newest audit and its latest run — what the collapsed row shows. */
@@ -151,6 +156,10 @@ const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
  *  the "Audits" count, so the count stopped telling the truth at 51 audits with no indication.
  *  Raised, and when the query comes back full the label says so rather than pretending. */
 const AUDIT_FETCH_LIMIT = 300;
+
+/** Above this many businesses the list is long enough to need searching. Below it the box would be
+ *  furniture over a list you can already read in one glance. */
+const SEARCH_MIN_BUSINESSES = 8;
 /** Landing-list refresh cadence while ANY run is in flight. The effect is not armed at all when
  *  nothing is draining, so an idle page makes zero requests. */
 const LIST_POLL_MS = 5000;
@@ -271,6 +280,10 @@ const AiAudit = () => {
   /** True when the audits query came back full, i.e. older audits exist beyond it. Drives an
    *  honest label instead of a count that silently stops growing. */
   const [auditsCapped, setAuditsCapped] = useState(false);
+  /* THE AUDIT SEARCH. Purely client-side over what is already loaded — no query, no round trip, so
+     it filters as you type. Deliberately NOT persisted: a remembered filter is how you come back to
+     this page, see four audits and think you have lost 130. */
+  const [auditQuery, setAuditQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null); // audit being deleted (disables its row buttons)
   const [cancellingId, setCancellingId] = useState<string | null>(null); // audit whose run is being cancelled
   /** Which trade groups / businesses are expanded. Trades default OPEN (the list should read
@@ -1429,6 +1442,7 @@ const AiAudit = () => {
         business_type: latestAudit.business_type,
         location: latestAudit.location_text,
         has_website: latestAudit.has_website,
+        isMarket: latestAudit.is_market === true,
         audits,
         latestAudit,
         latestRun: latestAudit.runs[0] ?? null,
@@ -1442,10 +1456,24 @@ const AiAudit = () => {
     return out.sort((a, b) => b.latestAudit.created_at.localeCompare(a.latestAudit.created_at));
   }, [savedAudits]);
 
-  /** Trades, largest group first. */
+  /* ── THE FILTER ───────────────────────────────────────────────────────────────────────────────
+     Matches NAME, TRADE and TOWN, because the way you remember an audit is often "that Wisbech
+     locksmith" rather than the company name. All three are already on the group, so this costs
+     nothing.
+     Case-insensitive SUBSTRING, not word-prefix: "wisb" has to find Wisbech, and "lock" has to find
+     both "Locksmith" and "Wellsecure Locksmiths".
+     Every term must match SOMEWHERE in the row, so "wisbech locksmith" narrows rather than widening
+     — the two words are in different fields, which an all-in-one-field match would miss. */
+  const auditQueryTerms = useMemo(() => auditSearchTerms(auditQuery), [auditQuery]);
+  const filteredBusinesses = useMemo(
+    () => (auditQueryTerms.length === 0 ? businesses : businesses.filter((b) => auditMatches(b, auditQueryTerms))),
+    [businesses, auditQueryTerms],
+  );
+
+  /** Trades, largest group first — of whatever survived the filter. */
   const tradeGroups = useMemo(() => {
     const byTrade = new Map<string, BusinessGroup[]>();
-    for (const b of businesses) {
+    for (const b of filteredBusinesses) {
       const list = byTrade.get(b.trade) ?? [];
       list.push(b);
       byTrade.set(b.trade, list);
@@ -1453,7 +1481,7 @@ const AiAudit = () => {
     return [...byTrade.entries()]
       .map(([trade, items]) => ({ trade, items }))
       .sort((a, b) => b.items.length - a.items.length || a.trade.localeCompare(b.trade));
-  }, [businesses]);
+  }, [filteredBusinesses]);
 
   /** Anything draining? Gates the landing list's poller so an idle page makes no requests. */
   const inFlightCount = useMemo(
@@ -1791,9 +1819,13 @@ const AiAudit = () => {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-baseline gap-2">
                   <Label className="text-sm font-semibold text-foreground">Past audits</Label>
-                  {/* Honest about the window: the count is what was LOADED, and says so when full. */}
+                  {/* Honest about the window: the count is what was LOADED, and says so when full.
+                      AND WITH A SEARCH ACTIVE IT DESCRIBES THE SEARCH, not the page — leaving
+                      "129 businesses" above a list of three would make the filter look broken. */}
                   <span className="text-[11px] text-muted-foreground">
-                    {metrics.businesses} business{metrics.businesses === 1 ? '' : 'es'} · {metrics.audits} audit{metrics.audits === 1 ? '' : 's'}
+                    {auditQueryTerms.length > 0
+                      ? `${filteredBusinesses.length} of ${metrics.businesses} match`
+                      : `${metrics.businesses} business${metrics.businesses === 1 ? '' : 'es'} · ${metrics.audits} audit${metrics.audits === 1 ? '' : 's'}`}
                     {auditsCapped ? ` (latest ${AUDIT_FETCH_LIMIT})` : ''}
                   </span>
                 </div>
@@ -1805,7 +1837,54 @@ const AiAudit = () => {
                   <Plus className="mr-1.5 h-4 w-4" /> New audit
                 </Button>
               </div>
-              {businesses.length === 0 ? (
+
+              {/* ── SEARCH ────────────────────────────────────────────────────────────────────────
+                  Only once there is enough to lose something in. Below that the list IS the search,
+                  and a box over four rows is furniture. */}
+              {businesses.length > SEARCH_MIN_BUSINESSES && (
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={auditQuery}
+                    onChange={(e) => setAuditQuery(e.target.value)}
+                    /* Escape clears rather than blurring. preventDefault stops it closing anything
+                       this input happens to sit inside. */
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { e.preventDefault(); setAuditQuery(''); }
+                    }}
+                    placeholder="Search by name, trade or town"
+                    aria-label="Search past audits"
+                    className="h-8 pl-8 pr-8 text-[13px]"
+                  />
+                  {auditQuery !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => setAuditQuery('')}
+                      aria-label="Clear search"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* NOTHING MATCHED — said out loud, with the term quoted back and a way out. An empty
+                  list reads as "you have no audits", which is the opposite of the truth, and is
+                  exactly how a filter left on by accident becomes a panic. */}
+              {businesses.length > 0 && filteredBusinesses.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
+                  <Search className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
+                  <div className="text-sm font-medium">No audits match &ldquo;{auditQuery}&rdquo;</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Searched {businesses.length} business{businesses.length === 1 ? '' : 'es'} by name, trade and town
+                    {auditsCapped ? `, from the latest ${AUDIT_FETCH_LIMIT} audits loaded` : ''}.
+                  </div>
+                  <Button size="sm" variant="outline" className="mt-3" onClick={() => setAuditQuery('')}>
+                    <X className="mr-1.5 h-3.5 w-3.5" /> Clear search
+                  </Button>
+                </div>
+              ) : businesses.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
                   <Sparkles className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
                   <div className="text-sm font-medium">No audits yet</div>
@@ -1870,6 +1949,13 @@ const AiAudit = () => {
                                   <div className="flex items-center gap-1.5 truncate text-[0.95rem] font-semibold text-foreground">
                                     {b.has_website ? <Globe className="h-3 w-3 shrink-0 text-muted-foreground/70" /> : <MapPin className="h-3 w-3 shrink-0 text-muted-foreground/70" />}
                                     <span className="truncate">{b.name}</span>
+                                    {/* A MARKET AUDIT IS NOT A CLIENT. It sits in this list because it
+                                        is an audit, and it stays searchable — but "[market] locksmiths
+                                        · Hastings" reading like a business name is how one gets pitched
+                                        by mistake. Badged, not hidden. */}
+                                    {b.isMarket && (
+                                      <span className="shrink-0 rounded border border-border bg-muted/60 px-1 py-0.5 text-[10px] font-medium text-muted-foreground">market</span>
+                                    )}
                                     {nested && <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground">{b.runCount} runs</span>}
                                   </div>
                                   {/* SECONDARY: trade and place, deliberately recessive. */}
