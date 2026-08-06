@@ -1,5 +1,6 @@
 import { DOC_CSS, docBand, esc, pdfTitle, printHtmlAsPdf } from './playbookDocStyle';
 import { FINDABLE_GUARANTEE } from './findableOffer';
+import { DELIVERY_ASKS } from './clientRequestAsks';
 
 /* ============================================================
    THE CLIENT REQUEST FORM — the only client-facing document in the system.
@@ -73,9 +74,17 @@ export interface ClientRequestInput {
   trade: string | null;
   town: string | null;
   fields: ClientHeldField[];
-  asks: ClientAsk[];
-  /** Named in `named` of `total` AI answers. NULL when no run has completed — the line is then
-   *  omitted rather than filled with a borrowed or invented figure. */
+  /* ⛔ NO `asks` FIELD ANY MORE. Step two used to be derived from the per-trade citation fold and
+     listed directory signups. The asks are now FIXED (DELIVERY_ASKS in clientRequestAsks.ts) because
+     what we need from a client does not vary by trade — which means this document no longer touches
+     the evidence at all, and the old "never pass the Playbook through" boundary is now structural
+     rather than a rule someone has to remember. */
+  /** Their services and towns, from the questionnaire. The page list IS the product, so the document
+   *  prints it back and asks for the facts that make each page specific. Empty when they paid
+   *  without completing the questionnaire (the founder-offer Stripe link bypasses it), and the
+   *  document then asks for the list itself rather than pretending to know it. */
+  services: string[];
+  areas: string[];
   naming: { named: number; total: number } | null;
 }
 
@@ -107,7 +116,14 @@ const EXTRA_CSS = `
 
   /* Held vs missing details. Missing is the actionable state, so it is the one that shouts. */
   .details{ list-style:none; margin:0; padding:0; }
-  .det{ display:flex; align-items:baseline; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); }
+  /* ⛔ flex-wrap IS LOAD-BEARING. .det-why asks for flex:0 0 100% — a full-width row of its own —
+     and without wrapping it became a FOURTH item on the same line. Everything then compressed: .det-v
+     (flex-shrink 1) collapsed to a few pixels and word-break:break-word rendered it one character per
+     line, and .det-why overflowed the page and was cut mid-word at the paper edge.
+     That is the "M IS SI N G - pl e a s e p r o vi d e" and the "so witho" truncation, both from this
+     one missing declaration. Its own margin-left:162px only makes sense on a wrapped line, which is
+     what the rule always assumed. */
+  .det{ display:flex; flex-wrap:wrap; align-items:baseline; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); }
   .det:last-child{ border-bottom:0; }
   .det-k{ flex:0 0 150px; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
     color:var(--faint); font-weight:800; }
@@ -116,7 +132,8 @@ const EXTRA_CSS = `
     border-radius:999px; padding:2px 9px; background:#eef1f6; color:var(--muted); white-space:nowrap; }
   .det.miss .det-v{ color:var(--red); font-weight:900; }
   .det.miss .det-have{ background:var(--red); color:#fff; }
-  .det-why{ flex:0 0 100%; margin:4px 0 0 162px; font-size:12.5px; line-height:1.5; color:var(--muted); }
+  .det-why{ flex:0 0 100%; margin:4px 0 0 162px; font-size:12.5px; line-height:1.5; color:var(--muted);
+    overflow-wrap:anywhere; }
 
   /* One ask per block: what it is, why we are asking, what it costs. */
   .asks{ list-style:none; margin:0; padding:0; }
@@ -127,6 +144,16 @@ const EXTRA_CSS = `
   .ask-cost{ flex:0 0 auto; font-size:9.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
     border-radius:999px; padding:2px 9px; white-space:nowrap; background:var(--blue); color:#fff; }
   .ask-cost.free{ background:var(--green); }
+  /* The two that stop the work, and the one that never does. A client skimming the pills alone must
+     be able to tell which is which — that is the whole point of marking them. */
+  .ask-cost.blocking{ background:var(--red); }
+  .ask-cost.optional{ background:var(--page); color:var(--muted); border:1px solid var(--line); }
+  /* THE PAGE LIST — the product, printed back. One row per service, the towns beside it, so the
+     client can see exactly what they are getting before they send the details for it. */
+  .pages{ list-style:none; margin:0; padding:0; border-top:1px solid var(--line); }
+  .pg{ display:flex; align-items:baseline; gap:12px; padding:7px 0; border-bottom:1px solid var(--line); }
+  .pg-s{ flex:1 1 auto; font-size:14px; font-weight:750; color:var(--ink); }
+  .pg-t{ flex:0 0 auto; font-size:11px; color:var(--muted); text-align:right; }
   .ask-ev{ margin:6px 0 0; padding:8px 12px; background:var(--page); border-radius:8px;
     font-size:13px; line-height:1.5; color:#334155; font-weight:600; }
   .ask-body{ margin:8px 0 0; font-size:13.5px; line-height:1.55; color:var(--muted); }
@@ -162,16 +189,6 @@ export function renderClientRequestDoc(input: ClientRequestInput): string {
   const town = (input.town ?? '').trim();
   const vert = [input.trade, input.town].filter(Boolean).join(' · ');
   const missing = input.fields.filter((f) => !f.held);
-  /* ASKS BACKED BY OUR OWN MEASUREMENT. An ask carrying an evidenceNote is justified from somewhere
-     else (Google's guidance, for the Business Profile) and has no audit count, so it must NOT be
-     described as one of "the strongest signals in everything we have measured".
-
-     THE CONTRADICTION THIS FIXES. For a tattoo studio there are no gated directories, so the only ask
-     is Google Business Profile — and the document said its asks were among our strongest measured
-     signals three paragraphs after saying that exact ask was "Google's guidance rather than something
-     we have measured ourselves". Same page, flatly contradicting itself. The line now appears only
-     when at least one ask actually carries measured breadth. */
-  const measuredAsks = input.asks.filter((a) => !a.evidenceNote && !!a.audits && a.audits > 0);
 
   /* ONE LINE OF CONTEXT. Omitted entirely when nothing has completed — asked for explicitly, because
      the address request is valid whether or not a run finished, and refusing to produce the document
@@ -218,42 +235,59 @@ ${docBand('What we need from you')}
       </ul>
     </section>
 
-    ${input.asks.length ? `<section class="block tint">
+    <section class="block tint">
       <div class="sec-eyebrow">Step two</div>
       <div class="sec-title">What only you can do</div>
-      <p class="wk-client" style="margin-bottom:12px">These are the ones we cannot complete on your
-      behalf, because each needs you personally — your access, your identity, your money, or your
-      decision. For each one we have said why we are asking and what it costs.</p>
-      <ul class="asks">${input.asks.map((a) => {
-        const costLine = COST_SENTENCE[a.cost] ?? '';
-        const costLabel = a.cost === 'membership' ? 'Paid membership'
-          : a.cost === 'pay-per-lead' ? 'Pay per enquiry'
-          : a.cost === 'paid' ? 'Paid'
-          : a.cost === 'free' ? 'Free' : '';
-        const paras = (a.clientParagraph ?? '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-        return `
+      <p class="wk-client" style="margin-bottom:12px">Everything else on your setup we do ourselves.
+      These are the ones we cannot: each needs your access, your property, or your decision. Two of
+      them stop the work until they are done, and they are marked.</p>
+      <ul class="asks">${DELIVERY_ASKS.map((a) => `
         <li class="ask">
           <div class="ask-h">
             <span class="ask-name">${esc(a.label)}</span>
-            ${costLabel ? `<span class="ask-cost${a.cost === 'free' ? ' free' : ''}">${esc(costLabel)}</span>` : ''}
+            ${a.blocking ? '<span class="ask-cost blocking">Holds everything up</span>' : ''}
+            ${a.optional ? '<span class="ask-cost optional">Optional</span>' : ''}
+            ${a.cost === 'free' ? '<span class="ask-cost free">Free</span>' : ''}
           </div>
-          <div class="ask-ev">${esc(askEvidence(a, trade))}</div>
-          ${paras.length ? `<div class="ask-body">${paras.map((p) => `<p>${esc(p)}</p>`).join('')}</div>` : ''}
-          ${!paras.length && a.blockedReason ? `<div class="ask-body"><p>${esc(a.blockedReason)}</p></div>` : ''}
-          ${costLine ? `<div class="ask-cost-line">${esc(costLine)}</div>` : ''}
-        </li>`;
-      }).join('')}
+          <div class="ask-ev">${esc(a.why)}</div>
+          <div class="ask-body"><p>${esc(a.how)}</p></div>
+        </li>`).join('')}
       </ul>
-    </section>` : ''}
+    </section>
+
+    ${input.services.length ? `<section class="block">
+      <div class="sec-eyebrow">Step three</div>
+      <div class="sec-title">Your pages</div>
+      <p class="wk-client" style="margin-bottom:12px">This is the page list from your questionnaire:
+      one page for each service, in each town. Send us the details for each service and we will
+      write them.</p>
+      <ul class="pages">${input.services.map((sv) => `
+        <li class="pg"><span class="pg-s">${esc(sv)}</span><span class="pg-t">${
+          // A LITERAL SEPARATOR, not an entity: esc() escapes the & in &middot; into &amp;middot;, which
+          // renders as visible markup. Anything passed through esc() must already be the character.
+          input.areas.length ? esc(input.areas.join(' · ')) : esc(input.town ?? 'your area')
+        }</span></li>`).join('')}
+      </ul>
+      <p class="wk-client" style="margin-top:10px">${
+        esc(`${input.services.length} service${input.services.length === 1 ? '' : 's'} across ${
+          input.areas.length || 1} town${(input.areas.length || 1) === 1 ? '' : 's'}.`)
+      }</p>
+    </section>` : `<section class="block">
+      <div class="sec-eyebrow">Step three</div>
+      <div class="sec-title">Your pages</div>
+      <p class="wk-client">We do not have your service list yet. Send us the services you want pages
+      for and the towns you want work from, and that becomes the page plan.</p>
+    </section>`}
 
     <section class="notes">
-      ${missing.length ? `<p class="note"><b>Why the details matter.</b> Every directory asks for the
-      same handful of facts, and they have to match everywhere or the listings work against each other.
-      We cannot complete a single signup while ${missing.length === 1 ? 'that detail is' : 'those details are'} missing.</p>` : ''}
-      ${measuredAsks.length ? `<p class="note"><b>What to expect.</b> The items above that only you can
-      complete are among the strongest signals in everything we have measured. If they are not done, the
-      measurement we take at eight weeks is unlikely to move. That is not us stepping back from the work
-      — it is so you can see what your part actually decides.</p>` : ''}
+      ${missing.length ? `<p class="note"><b>Why the details matter.</b> The same handful of facts goes
+      on every page we write and on your Google Business Profile, and they have to match each other
+      exactly — an engine that finds two versions of your phone number trusts neither. We cannot
+      finish a page while ${missing.length === 1 ? 'that detail is' : 'those details are'} missing.</p>` : ''}
+      <p class="note"><b>What to expect.</b> The two marked items above hold everything up: without
+      the Google invite we cannot touch your profile, and without knowing who controls your domain we
+      cannot move your site if it turns out we need to. Everything else can start while you gather
+      them.</p>
       <p class="note"><b>Being straight with you.</b> We are not going to tell you this guarantees you
       will be named. No client has completed a full eight-week cycle with us yet, so we have no results
       to point at, and we would rather say that than imply otherwise. What we can tell you is what we

@@ -64,13 +64,19 @@ Either way, the details need to match everything else: same business name, same 
 
 /** Why each missing detail is needed, in plain terms. A client reads a bare "address: missing" as
  *  admin; it is actually the thing blocking every signup, and it has to say so. */
+/* ⛔ THESE JUSTIFY THE FIELD BY THE WORK WE ACTUALLY DO. They used to justify it by directory
+   signups — "every directory signup asks for a full business address", "it has to match on every
+   listing" — which was Step one still describing the delivery model we dropped, three sections above
+   a Step two that no longer mentions it. An earlier sweep caught the asks and missed these.
+   The reason is the same fact stated honestly: these details go on the pages we write and on the
+   Google Business Profile, and an engine that finds two versions of one of them trusts neither. */
 const WHY_MISSING: Record<string, string> = {
-  Address: 'This is the one that blocks everything else. Every directory signup asks for a full business address before it will let us finish, so while this is missing we cannot complete a single one of them — including the ones we would otherwise do for you today.',
-  Phone: 'Every listing asks for a phone number, and it has to be the same one everywhere or the listings start contradicting each other.',
-  Town: 'This decides which town we are measured in. Without it we would be asking about the wrong area.',
-  Trade: 'This is the wording customers actually search for, and it has to match on every listing.',
-  'Business name': 'The exact trading name, so every listing reads identically.',
-  Website: 'If you have one, we need the address. If you do not, that is worth a conversation: Gemini builds its answers largely from businesses’ own websites, so without one it has nothing of yours to read.',
+  Address: 'This is the one that holds everything up. It goes on every page we write and on your Google Business Profile, and it is how an engine works out which towns you actually serve. Until we have it there is nothing to publish.',
+  Phone: 'It goes on every page and on your profile, and it has to be the same number in both. An engine that finds two versions of it trusts neither.',
+  Town: 'This decides which town we measure you in, and which town pages get written. Without it we would be asking about the wrong area.',
+  Trade: 'This is the wording customers actually search for, and it is what every page we write is built around.',
+  'Business name': 'The exact trading name, so it reads identically on your pages and your profile.',
+  Website: 'If you have one, we need the address. If you do not, that is worth a conversation: AI builds its answers largely from businesses’ own websites, so without one it has nothing of yours to read — and building you a simple one is included in the setup.',
 };
 
 /** The six details the operator sheet already resolves, mapped to held/missing for the client.
@@ -111,9 +117,19 @@ function heldFields(pb: Playbook): ClientHeldField[] {
  * not of the fold, and null is a legitimate value (no completed measurement) that the renderer
  * handles by omitting the line.
  */
+export interface ClientAnswers {
+  services: string[];
+  areas: string[];
+}
+
+/* ⚠️ THE QUESTIONNAIRE ANSWERS ARE A SEPARATE ARGUMENT, not fields on the Playbook. The Playbook is
+   the evidence fold — what the citations say about a trade — and the services and towns are what the
+   CLIENT told us. Hanging them off the fold would mean every consumer of Playbook carries data it
+   has no use for, and would blur the one boundary that has kept this document honest. */
 export function buildClientRequest(
   pb: Playbook,
   naming: { named: number; total: number } | null,
+  answers: ClientAnswers | null,
 ): ClientRequestInput {
   const trade = (pb.trade ?? '').trim().toLowerCase();
   const town = (pb.town ?? '').trim();
@@ -141,8 +157,12 @@ export function buildClientRequest(
     trade: pb.trade,
     town: pb.town,
     fields: heldFields(pb),
-    // Free-and-already-theirs first, then the evidenced directory asks in breadth order.
-    asks: [GOOGLE_BUSINESS_PROFILE_ASK, ...directoryAsks],
+    /* ⛔ NO ASKS PASSED. They are fixed now (DELIVERY_ASKS) and the document imports them itself, so
+       nothing evidence-derived reaches the client sheet at all. `directoryAsks` above is dead and is
+       left in place deliberately until the new document has been printed and checked — nothing is
+       deleted before its replacement is proven. */
+    services: answers?.services ?? [],
+    areas: answers?.areas ?? [],
     naming,
   };
 }

@@ -85,6 +85,14 @@ export interface UsePlaybookResult {
      computed. Null is meaningful: the document then says the check has not been run rather than
      letting the absence of markers imply a clean sweep. */
   directoryCheck: DirectoryCheck | null;
+  /* THE CLIENT'S OWN ANSWERS — services and towns from the questionnaire. NOT part of the Playbook:
+     that is the evidence fold (what citations say about a trade), and these are what the client told
+     us. The page list is the product, so the client request sheet prints it back and asks for the
+     facts that make each page specific.
+     NULL when there is no onboarding row — a founder-offer payer reaches Stripe straight from the
+     report, bypassing the questionnaire, so this is a real state rather than an error. The document
+     then asks for the list instead of pretending to know it. */
+  answers: { services: string[]; areas: string[] } | null;
   /** Which row the id resolved to — printed on the page so the audit-first path is never a mystery. */
   resolvedAs: 'audit' | 'lead' | null;
   auditId: string | null;
@@ -106,6 +114,7 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
   const [seo, setSeo] = useState<AiAuditSeo | null>(null);
   const [naming, setNaming] = useState<{ named: number; total: number } | null>(null);
   const [directoryCheck, setDirectoryCheck] = useState<DirectoryCheck | null>(null);
+  const [answers, setAnswers] = useState<{ services: string[]; areas: string[] } | null>(null);
   const [resolvedAs, setResolvedAs] = useState<'audit' | 'lead' | null>(null);
   const [auditId, setAuditId] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
@@ -217,6 +226,25 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
       }
       setDirectoryCheck(dirCheck);
 
+      /* THE QUESTIONNAIRE ANSWERS, for the client request sheet's page list. Keyed on the lead, the
+         same key the directory check uses. Newest row wins: a client who re-submitted should get the
+         list they last sent, not their first attempt.
+         Swallowed on failure and left null — a missing service list must degrade to "tell us your
+         services" rather than break the document that is asking for everything else. */
+      let ans: { services: string[]; areas: string[] } | null = null;
+      if (listingKey) {
+        try {
+          const { data: obRaw } = await client
+            .from('onboarding_responses').select('services_list, areas_list')
+            .eq('lead_id', listingKey)
+            .order('created_at', { ascending: false }).limit(1).maybeSingle();
+          const row = obRaw as { services_list?: unknown; areas_list?: unknown } | null;
+          const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : []);
+          if (row) ans = { services: list(row.services_list), areas: list(row.areas_list) };
+        } catch { ans = null; }
+      }
+      setAnswers(ans);
+
       /* directoryCheckFold returns EMPTY sets for anything other than an 'ok' check, so a refused,
          errored or empty search can never suppress a task the operator still needs to do. */
       setPlaybook(buildPlaybook(pbLead, evidence, tradeAuditTotals, listings, directoryCheckFold(dirCheck)));
@@ -280,6 +308,7 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
       setSeo(null);
       setNaming(null);
       setDirectoryCheck(null);
+      setAnswers(null);
     } finally {
       setIsLoading(false);
     }
@@ -287,5 +316,5 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
 
   useEffect(() => { load(); }, [load]);
 
-  return { playbook, ownCitations, seo, naming, directoryCheck, resolvedAs, auditId, leadId, isLoading, error, reload: load };
+  return { playbook, ownCitations, seo, naming, directoryCheck, answers, resolvedAs, auditId, leadId, isLoading, error, reload: load };
 }
