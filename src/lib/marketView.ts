@@ -520,15 +520,26 @@ export function elapsedPhrase(startedMs: number, nowMs: number): string {
  *  ⛔ REFRESH, NOT "ALREADY MEASURED", once the bar is cleared. A stale read is the commonest reason
  *  to press again; telling the operator it is measured answers a question they did not ask. The
  *  expensive action stops being the default the moment the question has been answered. */
-export type MeasureAction = 'measure' | 'finish' | 'refresh';
+export type MeasureAction = 'measure' | 'finish' | 'refresh' | 'running';
 
-export function measureAction(completedMarketAudits: number): MeasureAction {
-  if (completedMarketAudits >= MARKET_AUDIT_MIN_AUDITS) return 'refresh';
-  if (completedMarketAudits === 1) return 'finish';
+/* ⛔ IN-FLIGHT AUDITS COUNT. The first version took only the COMPLETED count, so a market with one
+   audit running read as zero measured and the button offered "Measure this market", which would have
+   created two MORE on top of it. The label was telling the operator to trigger the runaway the
+   cooldown exists to stop. Observed on Norwich, 2026-08-06.
+   An audit in flight is neither nothing nor finished, and the button has to know the difference:
+   what matters is how many audits this market will HAVE once the dust settles, not how many it has
+   already banked. */
+export function measureAction(completedMarketAudits: number, inFlightMarketAudits = 0): MeasureAction {
+  const eventual = completedMarketAudits + inFlightMarketAudits;
+  /* Something running AND enough on the way: there is nothing to press. Say so rather than offering
+     an action that would over-spend, and rather than a disabled button with no reason on it. */
+  if (inFlightMarketAudits > 0 && eventual >= MARKET_AUDIT_MIN_AUDITS) return 'running';
+  if (eventual >= MARKET_AUDIT_MIN_AUDITS) return 'refresh';
+  if (eventual === 1) return 'finish';
   return 'measure';
 }
 
-/** How many audits a press starts. Refresh starts none - it re-reads, free. */
+/** How many audits a press starts. Refresh and running start none. */
 export function auditsToRun(action: MeasureAction): number {
   if (action === 'measure') return MARKET_AUDIT_MIN_AUDITS;
   if (action === 'finish') return 1;

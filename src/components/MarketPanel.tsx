@@ -687,6 +687,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               trade={chosen?.trade ?? view.trade}
               town={chosen?.town ?? view.town}
               completedMarketAudits={view.concentration.marketAuditsComplete ?? 0}
+              inFlightMarketAudits={view.marketProgress?.length ?? 0}
               poolSearchedAt={view.poolState.state === 'ready' ? view.poolState.searchedAt : null}
               onSearch={measureSearch}
               onReload={reload}
@@ -726,6 +727,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                 trade={chosen?.trade ?? view.trade}
                 town={chosen?.town ?? view.town}
                 completedMarketAudits={view.concentration.marketAuditsComplete ?? 0}
+              inFlightMarketAudits={view.marketProgress?.length ?? 0}
                 poolSearchedAt={view.poolState.state === 'ready' ? view.poolState.searchedAt : null}
                 onSearch={measureSearch}
                 onReload={reload}

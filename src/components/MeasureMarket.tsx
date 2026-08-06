@@ -40,8 +40,11 @@ import {
 export interface MeasureMarketProps {
   trade: string;
   town: string;
-  /** Completed market audits this market already has, from the view. Decides what the button is. */
+  /** Completed market audits this market already has, from the view. */
   completedMarketAudits: number;
+  /** ⛔ AUDITS STILL RUNNING, from the view's marketProgress. Without this the button reads a market
+   *  with one audit in flight as unmeasured and offers to start two more. */
+  inFlightMarketAudits: number;
   /** When the cached lead pool was searched, or null. Inside 72h the search is free. */
   poolSearchedAt: string | null;
   /** Runs the same lead search the manual button runs. Resolves to the number of businesses found. */
@@ -57,7 +60,7 @@ interface QRow { status: string | null }
 const POLL_MS = 5_000;
 
 export default function MeasureMarket({
-  trade, town, completedMarketAudits, poolSearchedAt, onSearch, onReload,
+  trade, town, completedMarketAudits, inFlightMarketAudits, poolSearchedAt, onSearch, onReload,
 }: MeasureMarketProps) {
   const { toast } = useToast();
   const [phase, setPhase] = useState<MeasurePhase>('idle');
@@ -77,7 +80,7 @@ export default function MeasureMarket({
   useEffect(() => () => { cancelled.current = true; }, []);
 
   const poolFresh = !!poolSearchedAt && (Date.now() - new Date(poolSearchedAt).getTime()) < MARKET_POOL_FRESH_MS;
-  const action: MeasureAction = measureAction(completedMarketAudits);
+  const action: MeasureAction = measureAction(completedMarketAudits, inFlightMarketAudits);
   const audits = auditsToRun(action);
   const cost = measureRunCost(poolFresh, audits);
   const running = phase === 'searching' || phase === 'starting' || phase === 'answering';
@@ -234,6 +237,7 @@ export default function MeasureMarket({
     measure: 'Measure this market',
     finish: 'Finish measuring',
     refresh: 'Refresh this market',
+    running: 'Measuring...',
   };
 
   return (
@@ -241,21 +245,23 @@ export default function MeasureMarket({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
-          onClick={() => (action === 'refresh' ? void refresh() : void run(false))}
-          disabled={running || !trade || !town}
+          onClick={() => (action === 'refresh' || action === 'running' ? void refresh() : void run(false))}
+          disabled={running || action === 'running' || !trade || !town}
           className="min-w-[13.5rem]"
         >
           {running
             ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            : action === 'refresh'
-              ? <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-              : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+            : action === 'running'
+              ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              : action === 'refresh'
+                ? <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
           {running ? 'Measuring...' : LABEL[action]}
           {/* ⛔ THE PRICE IS ON THE BUTTON, not in a dialog. It is the thing the removed confirm was
               actually for, and here it is read on every press rather than once. Refresh says free
               because it is free — re-reading spends nothing. */}
           {!running && (
-            <span className="ml-1.5 opacity-80">· {action === 'refresh' ? 'free' : `~${asPence(cost)}`}</span>
+            <span className="ml-1.5 opacity-80">· {action === 'refresh' || action === 'running' ? 'free' : `~${asPence(cost)}`}</span>
           )}
         </Button>
 
