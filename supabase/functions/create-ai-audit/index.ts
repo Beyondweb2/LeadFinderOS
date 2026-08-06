@@ -47,6 +47,10 @@ const DEFAULT_QUESTION_COUNT = OUTREACH_HOOK_QUESTIONS;
  *  MARKET_AUDIT_QUESTION_COUNT in src/lib/marketView.ts — one audit of a market wants breadth, and
  *  8 x $0.0125 = $0.10 is the figure the market dialog quotes. */
 const MARKET_MAX_QUESTION_COUNT = 8;
+/** ⚠️ MIRRORS MARKET_COOLDOWN_MS in src/lib/marketView.ts. Stated here rather than imported to keep
+ *  this function's dependency closure unchanged, exactly as MARKET_MAX_QUESTION_COUNT above is.
+ *  Change one, change the other — the panel's copy is only what it SAYS, this is what it DOES. */
+const MARKET_COOLDOWN_MS = 10 * 60 * 1000;
 const BASELINE_MIN_QUESTION_COUNT = 6;
 /* 20, raised from 12. A re-measurement supplies its OWN question set so the before and after
    compare like with like, and ABLM's set was 16 — at 12 the last four were dropped SILENTLY,
@@ -355,6 +359,38 @@ Deno.serve(async (req) => {
       ? `[market] ${(businessType || "trade").trim()} · ${(locationText || "unknown town").trim()}`
       : "";
     if (marketOnly && !businessType) return json({ ok: false, error: "business_type required for a market audit" }, 400);
+
+    /* ⛔ THE REPEAT-PRESS GUARD, AND IT HAS TO LIVE HERE. The market panel spends ~21p on one press
+       with no confirm dialog, which is the right trade at this price — but only if pressing it twice
+       cannot spend it twice. A client-side lock does NOT hold: component state resets on reload, and
+       "pressed it repeatedly" in practice means reload-and-press. So the refusal is the server's.
+       ⚠️ TEN MINUTES, longer than the ~5 minute typical run, so it can never fire against an audit
+       that has already finished and been read. Same window as findable-onboarding's cooldown.
+       ⚠️ IT RETURNS 429 WITH A NAMED CODE, not a generic failure: the panel turns `market_cooldown`
+       into "already measuring X in Y, started N minutes ago", which is the difference between a
+       button that looks broken and one that has already done what was asked. */
+    if (marketOnly && businessType && locationText) {
+      const since = new Date(Date.now() - MARKET_COOLDOWN_MS).toISOString();
+      const { data: recent } = await service
+        .from("ai_audits").select("id, created_at")
+        .eq("user_id", userId).eq("is_market", true)
+        .eq("business_type", businessType).ilike("location_text", locationText)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false }).limit(1);
+      const hit = (recent ?? [])[0] as { id: string; created_at: string } | undefined;
+      if (hit) {
+        const ageMs = Date.now() - new Date(hit.created_at).getTime();
+        console.log(`[create-ai-audit] market cooldown: "${businessType}" in "${locationText}" started ${Math.round(ageMs / 1000)}s ago`);
+        return json({
+          ok: false,
+          error: "market_cooldown",
+          audit_id: hit.id,
+          started_at: hit.created_at,
+          age_seconds: Math.round(ageMs / 1000),
+          cooldown_seconds: Math.round(MARKET_COOLDOWN_MS / 1000),
+        }, 429);
+      }
+    }
     if (!businessName && !marketOnly && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
 
     /* ── REUSE THE LEAD'S EXISTING AUDIT INSTEAD OF MINTING A DUPLICATE ─────────

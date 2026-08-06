@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Loader2, MapPin, Plus, RefreshCw, Search, Sparkles, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useMarketView } from '@/hooks/useMarketView';
+import MeasureMarket from '@/components/MeasureMarket';
 import { useApifyUsage, apifyTone } from '@/hooks/useApifyUsage';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 import { useOutreach } from '@/hooks/useOutreach';
@@ -71,7 +72,11 @@ export interface MarketPanelProps {
 export default function MarketPanel({ trade, town }: MarketPanelProps) {
   const { view, loading, error, load, reload } = useMarketView();
   const { usage: apifyUsage } = useApifyUsage();
-  const { search, isLoading: searching, townFilterFallback } = useLeadSearchContext();
+  const { search, isLoading: searching, townFilterFallback, leads } = useLeadSearchContext();
+  /* A ref, not the value: measureSearch awaits the search and then reads the result, and a captured
+     `leads` would be the array from before the call. */
+  const leadsRef = useRef(leads);
+  useEffect(() => { leadsRef.current = leads; }, [leads]);
   const { addLead } = useOutreach();
   const { toast } = useToast();
 
@@ -134,6 +139,17 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
   /* ── THE LEAD SEARCH. Reuses the Find Leads context call verbatim, so it goes through the same
      search-leads function, writes the same search_history row and fills the same search_cache the
      market view then reads. A second search path would drift from that cache and find nothing. */
+  /* ⛔ THE COUNT IS THE GATE'S ONLY INPUT, and LeadSearchContext.search() resolves to void — so the
+     number has to come from the context's own `leads` after it settles, not from the call. Returning
+     0 on a failure is deliberate: a search that errored has not proved a town exists either, and the
+     gate stopping is the safe direction. */
+  const measureSearch = useCallback(async (): Promise<number> => {
+    if (!chosen) return 0;
+    await search({ keyword: chosen.trade, location: chosen.town, radius: MARKET_SEARCH_RADIUS_M, townOnly: true });
+    await reload();
+    return leadsRef.current.length;
+  }, [chosen, search, reload]);
+
   const runSearch = useCallback(async () => {
     if (!chosen) return;
     setSearchOpen(false);
@@ -660,22 +676,27 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
             </div>
           )}
 
-          {/* THE PRIMARY ACTION IS THE MARKET AUDIT: one audit of the trade and town, no CRM rows.
-              The per-business batch is not offered here - it lives under the numbers, labelled for
-              what it is actually for. */}
-          <div className="flex flex-wrap gap-2 border-t border-border/50 pt-3">
-            <Button size="sm" onClick={() => setMarketAuditOpen(true)} disabled={!chosen || !!activeMarketAudit}>
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              Audit this market
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setSearchOpen(true)} disabled={searching}>
-              <Search className="mr-1.5 h-3.5 w-3.5" />
-              {view.poolState.state === 'ready' ? 'Re-run the lead search' : 'Run the lead search'}
-            </Button>
-            <Button size="sm" variant="ghost" className="ml-auto" onClick={toggleNumbers}>
-              {showNumbers ? <ChevronDown className="mr-1.5 h-3.5 w-3.5" /> : <ChevronRight className="mr-1.5 h-3.5 w-3.5" />}
-              {showNumbers ? 'Hide the numbers' : 'Show the numbers'}
-            </Button>
+          {/* ⛔ ONE BUTTON. Trade, town, go — search, then two market audits, then results, with a
+              real bar throughout. The manual controls still exist, under Advanced at the foot of the
+              panel; they are no longer the path.
+              TWO audits, not one, because the view refuses to call a shape below two completed and
+              landing on "not enough measured yet" after pressing the only button there is was the
+              single worst thing the old flow did. */}
+          <div className="border-t border-border/50 pt-3">
+            <MeasureMarket
+              trade={chosen?.trade ?? view.trade}
+              town={chosen?.town ?? view.town}
+              completedMarketAudits={view.concentration.marketAuditsComplete ?? 0}
+              poolSearchedAt={view.poolState.state === 'ready' ? view.poolState.searchedAt : null}
+              onSearch={measureSearch}
+              onReload={reload}
+            />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" variant="ghost" className="ml-auto" onClick={toggleNumbers}>
+                {showNumbers ? <ChevronDown className="mr-1.5 h-3.5 w-3.5" /> : <ChevronRight className="mr-1.5 h-3.5 w-3.5" />}
+                {showNumbers ? 'Hide the numbers' : 'Show the numbers'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -698,13 +719,17 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                 ? `${view.pool.length} found, ${auditable.length} auditable${chainEntries > 0 ? `, ${chainEntries} chain ${chainEntries === 1 ? 'entry' : 'entries'} excluded` : ''}.`
                 : 'Run the lead search first to find the local businesses, then audit them.'}
             </p>
-            <div className="flex flex-wrap gap-2 pt-0.5">
-              <Button size="sm" onClick={openAuditDialog}>
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Run audits for this town
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setSearchOpen(true)} disabled={searching}>
-                <Search className="mr-1.5 h-3.5 w-3.5" /> {view.poolState.state === 'ready' ? 'Re-run the lead search' : 'Run the lead search'}
-              </Button>
+            {/* The same one button. A market with nothing measured is exactly where it matters
+                most that pressing once does everything. */}
+            <div className="pt-0.5">
+              <MeasureMarket
+                trade={chosen?.trade ?? view.trade}
+                town={chosen?.town ?? view.town}
+                completedMarketAudits={view.concentration.marketAuditsComplete ?? 0}
+                poolSearchedAt={view.poolState.state === 'ready' ? view.poolState.searchedAt : null}
+                onSearch={measureSearch}
+                onReload={reload}
+              />
             </div>
           </CardContent>
         </Card>
