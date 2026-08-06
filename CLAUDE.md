@@ -172,6 +172,41 @@ below, and it bit twice tonight:
 - `thin &middot;` was False because the markup uses a literal `·`, not the HTML entity.
 - Before reporting a missing marker, grep the **source** for your own search string.
 
+🔴 **A RATE COPIED FROM A PRICE LIST IS A GUESS UNTIL A BILLED ROW AGREES WITH IT. FOUR CONSTANTS
+HAVE NOW BEEN WRONG THIS WAY, ALL FOUND WHILE LOOKING AT SOMETHING ELSE.** Swept 2026-08-06.
+| Constant | Was | Real | The mistake |
+|---|---|---|---|
+| Text search, per page | $0.032 | **$0.035** | Priced at Text Search **Pro**; the mask asks for `websiteUri`, so it bills **Enterprise** |
+| Place Details — **three copies** | $0.017 | **$0.020** | Matched **no published Google rate at all**. Each copy cited the others |
+| Per-question audit | $0.0125 | **$0.0104** | Re-measured; `sources.ts` was left behind when `marketView` was corrected |
+| SEO scan | $0.12 | **~$0.04** | Derived from "$40/1,000 pages × 3 pages" and never checked against spend. **3× high** |
+
+- ⚠️ **THE RULE: a cost constant must name the PRODUCT and the TIER it was priced at, and cite a real
+  billed row.** "$0.017" with no tier is unfalsifiable and propagated to three files. Google bills a
+  request **once, at the highest tier any requested field touches**, so a rate is meaningless without
+  the field mask it belongs to. Before trusting one, read the mask and find the dearest field in it.
+- ⚠️ **A CONSTANT MUST NEVER BE VALIDATED AGAINST DATA IT WROTE.** The SEO figure looked confirmed
+  because 57 usage rows read exactly $0.12 — that is the fallback in `process-ai-audit-queue` echoing
+  the constant back when Apify reports no usage. Excluding those, the real values are $0.02 (×65),
+  $0.04 (×41), $0.08 (×4), $0.20 (×1). **$0.04 is the top of a measured BAND, not a precise figure**;
+  do not round it up "to be safe" — inventing a margin on top of a measurement is the same error in
+  the other direction.
+- ⚠️ **A CONSTANT THE SYNC CHECK CANNOT READ IS UNGUARDABLE.** It parses `const NAME =`, so the two
+  values living as object properties inside `SOURCES` had silently drifted from their `marketView`
+  twins. They are now `AI_SEARCH_USD_PER_QUESTION` and `SEO_SCAN_USD_PER_SCAN`, named exports for
+  that reason alone. **If you add a value that must match another, make it a named const.**
+- ✅ **Correct and verified, leave them:** Geocoding **$0.005**; OpenAI `gpt-4o-mini` at **$0.15 /
+  $0.60** per 1M tokens; `SOURCES.place_details` at **$0.005** (that one really is the address-only
+  **Essentials** call in `place-town.ts`).
+- ⚠️ **STILL UNVERIFIED, AND MARKED AS SUCH — do not quote them as fact:** `maps` $0.003,
+  `social_images` $0.01, `contact_scraper` $0.0011 (disabled), `whatsapp` $0.005. None are on the
+  Findable path; Paul's call 2026-08-06 was that spending on Apify to check a disabled scraper is not
+  worth it.
+- **The resulting real costs:** a market measure **22p**, a 25-lead outreach batch **$2.28** (was
+  quoted $4.36 — the SEO constant was nearly all of the gap), **full delivery ≈ 30p a customer.**
+  Paul's read, and it settles the pricing question: *the offer works at £19.99 and the constraint has
+  never been cost.*
+
 **Substring false positives. You have been fooled by both of these twice each:**
 - `"bing"` matches **plum*bing***.
 - `"acca"` matches **M*acca*-Gas**.
@@ -358,8 +393,8 @@ Facts with numbers. These are measured, and several contradict the older docs.
   Observed 2026-08-06 from a Thai IP: the Checkout Session presented **THB 4,582.95** with a stated
   4% conversion fee; the founder Payment Link showed **£19.99 only**, minutes apart in the same
   browser. One observation does not disprove the docs — treat the link as capable of converting.
-- 🔴 **AN ABSENT VALUE FALLING THROUGH AS THOUGH IT WERE A REAL ONE. THIS HAS NOW HAPPENED THREE
-  TIMES, in three unrelated files, and it will happen again.** The shape is always the same: code
+- 🔴 **AN ABSENT VALUE FALLING THROUGH AS THOUGH IT WERE A REAL ONE. THIS HAS NOW HAPPENED FOUR
+  TIMES, in four unrelated files, and it will happen again.** The shape is always the same: code
   branches on the *known* values and lets everything else drop into the `else`, where the default
   means something the data never said.
   | Where | The absent value | What it was silently treated as |
@@ -367,6 +402,7 @@ Facts with numbers. These are measured, and several contradict the older docs.
   | `findable-onboarding` | a null questionnaire column | "they said no" |
   | `clientHeld.ts` (pre-fix) | `''` / whitespace / placeholder | "we hold this" |
   | `market-view` (pre-fix) | tier `unknown` (below the evidence bar) | "AI names them" → subtracted |
+  | `offTradeMark` (**caught before shipping**, 2026-08-06) | a pool row with no `primaryType` | "Google does not call this a locksmith" |
   The market one is the clearest: the branch kept `tier === "thin"` and dropped the rest, so
   `unknown` — which is what *every* entry is below the bar — was subtracted as established. **The
   guard inverted in exactly the case it was written for.**
@@ -374,6 +410,14 @@ Facts with numbers. These are measured, and several contradict the older docs.
   the absent case explicitly, and when a value is graded, assert on the grade you *want*
   (`=== 'established'`), never on the one you want to exclude (`=== 'thin'`). A new grade added
   later joins the wrong side of a negative test and nothing throws.
+  ✅ **THE FOURTH ONE WAS CAUGHT BY APPLYING THIS RULE RATHER THAN BY AN INCIDENT** — the first time
+  that has happened. `primaryType` arrived in `search-leads`' field mask on 2026-08-06, so **every
+  pool row cached before that has none**. Marking a row "not the trade" on a missing type would have
+  flagged an entire market as non-locksmiths — the Norwich subtraction again, in a new file.
+  `offTradeMark` asserts on the grade it WANTS (a known type differing from a known modal type) and
+  returns nothing for an untyped row whatever the consensus. `scripts/off-trade.test.ts` asserts a
+  20-row pre-field-mask pool produces **zero** marks. Write the absent case into the test, not the
+  comment.
 - ⛔ **ABSENCE IS NEVER AN ANSWER — the second place this rule lives.** `serveGate` was the first (a
   skipped question flags, never blocks). `src/lib/clientHeld.ts` is the second: `heldValue()` is the
   ONLY way the client sheet decides it holds a value, and null / undefined / `''` / whitespace / an
