@@ -333,6 +333,20 @@ Facts with numbers. These are measured, and several contradict the older docs.
   everywhere.**
 - **Paginate PostgREST reads** — it truncates at `db-max-rows` silently. Use `src/lib/fetchAllRows.ts` with
   `.order('id')` as a unique tiebreaker.
+- ⛔ **THE GUARANTEE IS BYTE-IDENTICAL ACROSS BOTH REPOS, AND A SCRIPT NOW ENFORCES IT.**
+  `FINDABLE_GUARANTEE` (`src/lib/findableOffer.ts`) and findable-site's `GUARANTEE`
+  (`src/lib/site.ts`) **had drifted** — this repo's ended at "…you will be named." while the site's
+  carried "The engines decide that, and anyone who promises it is guessing." So the sentence a
+  customer **agreed to at Stripe checkout** was not the sentence on the page that sold it to them.
+  Both files already carried a comment asking for them to be kept in sync; a comment cannot fail a
+  build. Run `node scripts/check-guarantee-sync.mjs` — it exists in **both** repos, each reading
+  across to the other, and exits non-zero on any byte difference. Proven to fail on an injected
+  one-word drift, from either side.
+  ⚠️ The **price** is still guarded by nothing but a comment.
+  ✅ **Stripe renders the full 222-character string untruncated** — verified 2026-08-06 by creating a
+  real Checkout Session and reading `document.body.innerText`. Stripe documents no length limit for
+  `line_items[].price_data.product_data.description`, so this could only be answered empirically; the
+  page HTML is a JS-rendered shell and contains nothing, so fetching it proves nothing.
 - ⛔ **ABSENCE IS NEVER AN ANSWER — the second place this rule lives.** `serveGate` was the first (a
   skipped question flags, never blocks). `src/lib/clientHeld.ts` is the second: `heldValue()` is the
   ONLY way the client sheet decides it holds a value, and null / undefined / `''` / whitespace / an

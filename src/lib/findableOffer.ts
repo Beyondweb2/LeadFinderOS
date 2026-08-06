@@ -8,18 +8,32 @@
 // ⚠️ CROSS-REPO SEAM: findable-site is a separate repo and cannot import this.
 // Its copy lives in findable-site/src/lib/site.ts (GUARANTEE) and the price is
 // displayed in its OnboardingFlow.tsx. Changing either value here means a matching
-// pass there — the two repos CAN drift, and this comment is the only guard.
+// pass there.
+// ⛔ THE COMMENT USED TO SAY IT WAS "the only guard", AND IT FAILED. The guarantee
+// drifted and nobody noticed for weeks. There is now a real check in each repo:
+//   node scripts/check-guarantee-sync.mjs
+// It reads the other repo off disk and exits non-zero on any byte difference. The
+// PRICE is still guarded by nothing but this comment.
 
 /** The one-off price of the eight-week sprint, in GBP. £49.99 until 2026-08-04. */
 export const FINDABLE_SETUP_PRICE_GBP = 99;
 
-/** The guarantee, WORK-based: we promise the audit, the work and the re-measurement,
- *  never the outcome. Same wording the website carries. Anywhere this sentence is
- *  shown to a client must render it from this constant, not a local copy — three
- *  hardcoded copies drifted apart once already. */
+/* The guarantee, WORK-based: we promise the audit, the work and the re-measurement, never the
+   outcome. Anywhere this sentence is shown to a client must render it from this constant, not a
+   local copy — three hardcoded copies drifted apart once already.
+
+   ⛔ BYTE-IDENTICAL TO findable-site's GUARANTEE, and asserted by scripts/check-guarantee-sync.mjs
+   in BOTH repos. It is the sentence the Stripe line item charges against, the sentence the audit
+   report prints, the sentence the client request sheet prints, and the sentence on the marketing
+   site. A customer must not agree to one wording at checkout and read a different one on the page
+   that sold it to them.
+   ⚠️ THEY HAD DRIFTED. This copy ended at "We do not promise you will be named."; the site's carried
+   a further sentence — "The engines decide that, and anyone who promises it is guessing" — which is
+   the strongest line in it. Restored here 2026-08-06, longer version wins. */
 export const FINDABLE_GUARANTEE =
   "We guarantee the audit, the work, and the re-measurement at week eight with " +
-  "before-and-after evidence, or a full refund. We do not promise you will be named.";
+  "before-and-after evidence, or a full refund. We do not promise you will be " +
+  "named. The engines decide that, and anyone who promises it is guessing.";
 
 /* ⛔ WHERE A PROSPECT'S REPORT LIVES. findable.live/report/<auditId> — a Cloudflare Pages Function in
    the findable-site repo (functions/report/[id].ts) that proxies the render-audit-report edge
