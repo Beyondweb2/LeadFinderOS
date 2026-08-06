@@ -111,9 +111,19 @@ function heldFields(pb: Playbook): ClientHeldField[] {
  * not of the fold, and null is a legitimate value (no completed measurement) that the renderer
  * handles by omitting the line.
  */
+export interface ClientAnswers {
+  services: string[];
+  areas: string[];
+}
+
+/* ⚠️ THE QUESTIONNAIRE ANSWERS ARE A SEPARATE ARGUMENT, not fields on the Playbook. The Playbook is
+   the evidence fold — what the citations say about a trade — and the services and towns are what the
+   CLIENT told us. Hanging them off the fold would mean every consumer of Playbook carries data it
+   has no use for, and would blur the one boundary that has kept this document honest. */
 export function buildClientRequest(
   pb: Playbook,
   naming: { named: number; total: number } | null,
+  answers: ClientAnswers | null,
 ): ClientRequestInput {
   const trade = (pb.trade ?? '').trim().toLowerCase();
   const town = (pb.town ?? '').trim();
@@ -141,8 +151,12 @@ export function buildClientRequest(
     trade: pb.trade,
     town: pb.town,
     fields: heldFields(pb),
-    // Free-and-already-theirs first, then the evidenced directory asks in breadth order.
-    asks: [GOOGLE_BUSINESS_PROFILE_ASK, ...directoryAsks],
+    /* ⛔ NO ASKS PASSED. They are fixed now (DELIVERY_ASKS) and the document imports them itself, so
+       nothing evidence-derived reaches the client sheet at all. `directoryAsks` above is dead and is
+       left in place deliberately until the new document has been printed and checked — nothing is
+       deleted before its replacement is proven. */
+    services: answers?.services ?? [],
+    areas: answers?.areas ?? [],
     naming,
   };
 }

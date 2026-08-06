@@ -175,7 +175,7 @@ function StepRow({ step }: { step: PlaybookStep }) {
 export default function Playbook() {
   const { id } = useParams<{ id: string }>();
   const {
-    playbook: pb, ownCitations: oc, seo, naming, directoryCheck, resolvedAs, auditId, leadId,
+    playbook: pb, ownCitations: oc, seo, naming, directoryCheck, answers, resolvedAs, auditId, leadId,
     isLoading, error, reload,
   } = usePlaybook(id);
   /* Running is separate from reading: usePlaybook owns the stored result because the fold needs it.
@@ -266,7 +266,7 @@ export default function Playbook() {
                       onClick={() => printPlaybookDoc({ ...pb, steps }, seo, naming, directoryCheck?.status === 'ok')}>
                       <Printer className="mr-1.5 h-3.5 w-3.5" /> Print operator copy
                     </Button>
-                    <Button size="sm" onClick={() => printClientRequestDoc(buildClientRequest({ ...pb, steps }, naming))}>
+                    <Button size="sm" onClick={() => printClientRequestDoc(buildClientRequest({ ...pb, steps }, naming, answers))}>
                       <Send className="mr-1.5 h-3.5 w-3.5" /> Print client request
                     </Button>
                     {/* ON DEMAND, BEHIND A CONFIRM THAT STATES THE COST. Disabled without a lead:
