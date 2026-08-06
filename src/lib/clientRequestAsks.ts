@@ -92,20 +92,34 @@ export function deliveryAsks(ctx: AskContext): DeliveryAsk[] {
        step with everything else already done.
        OFFERED THE RIGHT WAY ROUND, deliberately: we do it if they hand over access, because most
        owners do not know what a registrar is and "you change your DNS records" is where they stop
-       reading. Doing it for them removes the single biggest reason a move stalls. */
-    label: 'Tell us who controls your domain name',
+       reading. Doing it for them removes the single biggest reason a move stalls.
+
+       ⛔ NOT UNCONDITIONALLY BLOCKING — that was a real fault on a printed sheet. It was marked
+       "HOLDS EVERYTHING UP" on every document while its own text said "if we host your site for
+       you". Little's Locksmiths has a working site nobody has proposed moving, so the sheet told a
+       client that something blocked the work when it may never apply to them. A blocking marker that
+       is sometimes wrong teaches a client to ignore the marker, which costs us the two that are real.
+
+       ⚠️ WHAT WE ACTUALLY KNOW AT PRINT TIME: nothing. The questionnaire asks `willing_to_migrate`
+       and `website_platform`, and serveGate turns them into serve/flag/block — but NONE of that is
+       plumbed into this document, and a founder-offer client who paid from the report never answered
+       it at all. So the honest state today is "undecided", and the ask is worded for undecided rather
+       than asserting a migration that has not been agreed. Wiring the real signal in is the
+       questionnaire-adaptive pass; when it lands, `blocking` becomes true only for a client who said
+       yes to moving. */
+    label: 'Tell us who controls your domain name — if it turns out we need it',
     why:
-      'If we host your site for you, one setting has to change at whoever your domain is registered '
-      + 'with. It is the step that most often holds a move up, and it is nearly always somewhere '
-      + 'nobody has logged in to for years.',
+      'This only matters if we end up moving your site to our hosting, which we will not do without '
+      + 'agreeing it with you first. If we do, one setting has to change at whoever your domain is '
+      + 'registered with — the step that most often holds a move up, and nearly always somewhere '
+      + 'nobody has logged in to for years. Worth knowing the answer before we need it.',
     how:
-      'Easiest for you: send us the login for wherever the domain was bought (GoDaddy, 123-Reg, '
-      + 'Namecheap, or whoever) and we will make the change ourselves. If you would rather not hand '
-      + 'that over, no problem — tell us who does have it and we will send them the exact record to '
-      + 'change, with screenshots. If you have no idea, say so and we will work it out from the '
-      + 'domain itself.',
+      'For now, just tell us who it is: wherever the domain was bought (GoDaddy, 123-Reg, Namecheap, '
+      + 'or whoever). If you have no idea, say so and we will work it out from the domain itself. '
+      + 'If a move does turn out to be the right call, send us the login and we will make the change '
+      + 'ourselves — or tell us who has it and we will send them the exact record to change, with '
+      + 'screenshots.',
     cost: 'free',
-    blocking: true,
   },
   {
     label: 'Send us photos of real jobs',
