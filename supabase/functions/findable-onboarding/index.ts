@@ -173,6 +173,56 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* ── revise ─────────────────────────────────────────────────────────────────
+       ONE FIELD, ONE ROW, NOTHING ELSE. A visitor who was blocked can change their mind about moving
+       the site, and the refusal screen now offers that in place rather than sending them to email.
+
+       ⛔ DELIBERATELY NOT "make submit idempotent". Submit carries a 10-minute cooldown, the audit
+       trigger and the required-field checks; routing a one-field change through it would put all
+       three at risk, and a re-submit would create a SECOND row - which the notifier would then email
+       Paul about twice for one person.
+
+       ⛔ IT CAN ONLY EVER WRITE "not_sure", NOT "yes". serveDecision blocks only on an explicit
+       "no", so not_sure is enough to unblock and is the honest record of what they actually said.
+       Accepting "yes" here would let a client-side call record an agreement the customer never gave,
+       on the exact column findable-checkout reads to decide whether they may pay. This endpoint
+       resolves a block; it must never be able to bypass one.
+
+       ⚠️ THE SERVER IS STILL THE GATE. findable-checkout re-derives the verdict from the STORED
+       row, so this endpoint changing a value is what unblocks payment - not the client saying so.
+       A forged call with a made-up onboarding_id updates nothing (the id must exist), and a forged
+       willing_to_migrate value is rejected before it reaches the database.
+
+       ⚠️ PAID ROWS ARE REFUSED. Once money has changed hands the migrate answer is part of what
+       was agreed, and letting an anonymous caller edit it after the fact is not a hole worth
+       leaving open. */
+    if (action === "revise") {
+      const onboardingId = typeof body.onboarding_id === "string" ? body.onboarding_id : "";
+      if (!UUID_RE.test(onboardingId)) return json({ ok: false, error: "bad_onboarding_id" }, 400);
+
+      const migrate = typeof body.willing_to_migrate === "string" ? body.willing_to_migrate : "";
+      if (migrate !== "not_sure") return json({ ok: false, error: "unsupported_revision" }, 400);
+
+      const { data: existing } = await service
+        .from("onboarding_responses")
+        .select("id, status")
+        .eq("id", onboardingId).maybeSingle();
+      if (!existing) return json({ ok: false, error: "unknown_onboarding" }, 404);
+      if (PAID_OR_BEYOND.has((existing.status as string) ?? "")) {
+        return json({ ok: false, error: "already_client" }, 403);
+      }
+
+      const { error: updErr } = await service
+        .from("onboarding_responses")
+        .update({ willing_to_migrate: migrate, updated_at: new Date().toISOString() })
+        .eq("id", onboardingId);
+      if (updErr) {
+        console.error("[findable-onboarding] revise failed:", updErr.message);
+        return json({ ok: false, error: "revise_failed" }, 500);
+      }
+      return json({ ok: true, onboarding_id: onboardingId, willing_to_migrate: migrate });
+    }
+
     // ── submit ──────────────────────────────────────────────────────────────────
     if (action === "submit") {
       const a = (body.answers ?? {}) as Record<string, unknown>;
