@@ -722,6 +722,9 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               completedMarketAudits={view.concentration.marketAuditsComplete ?? 0}
               marketProgress={view.marketProgress}
               poolSearchedAt={view.poolState.state === 'ready' ? view.poolState.searchedAt : null}
+              /* The gate's input. Only a READY pool has a trustworthy count; expired or
+                 never-searched sends null, which never blocks. */
+              poolCount={view.poolState.state === 'ready' ? view.poolState.total : null}
               onSearch={measureSearch}
               onReload={reload}
               onMeasureComplete={autoCleanIfDirty}
@@ -994,9 +997,17 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                       It may include businesses in neighbouring towns that the audits never covered. Re-run the search here to get a town-only pool.
                     </div>
                   )}
+                  {/* ⛔ TWO DIFFERENT ZEROES, AND THEY MEAN OPPOSITE THINGS. An empty prospect list
+                      because every business is named is a closed market; an empty prospect list
+                      because Places returned nothing is an empty SEARCH — and "every business is
+                      already named" is a claim about a set that does not exist. Keyed on
+                      poolState.total, what Places actually returned, never on pool.length, which is
+                      the list AFTER subtraction and reads the same in both cases. */}
                   {view.pool.length === 0 && (
                     <p className="text-sm text-muted-foreground">
-                      Every business in the pool is already named by AI. Nothing to contact here.
+                      {view.poolState.state === 'ready' && view.poolState.total === 0
+                        ? `Places found no ${view.trade} inside the ${view.town} boundary, so there is no pool here — nothing to contact, and nothing the audits were measured against. The firms named above are from other towns.`
+                        : 'Every business in the pool is already named by AI. Nothing to contact here.'}
                     </p>
                   )}
                   {/* The prospect rows themselves live in the summary block at the top of this
