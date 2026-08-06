@@ -51,6 +51,11 @@ const MARKET_MAX_QUESTION_COUNT = 8;
  *  this function's dependency closure unchanged, exactly as MARKET_MAX_QUESTION_COUNT above is.
  *  Change one, change the other — the panel's copy is only what it SAYS, this is what it DOES. */
 const MARKET_COOLDOWN_MS = 10 * 60 * 1000;
+/** ⛔ HOW MANY MARKET AUDITS ONE MEASUREMENT IS. The cooldown allows this many per trade+town per
+ *  window and refuses the next. It MUST equal MARKET_AUDIT_MIN_AUDITS in src/lib/marketView.ts — the
+ *  measure button creates exactly that many, sequentially, and an allowance below it blocks the
+ *  button's own second audit. That is not hypothetical: it happened on 2026-08-06. */
+const MARKET_COOLDOWN_ALLOWANCE = 2;
 const BASELINE_MIN_QUESTION_COUNT = 6;
 /* 20, raised from 12. A re-measurement supplies its OWN question set so the before and after
    compare like with like, and ABLM's set was 16 — at 12 the last four were dropped SILENTLY,
@@ -376,8 +381,18 @@ Deno.serve(async (req) => {
         .eq("user_id", userId).eq("is_market", true)
         .eq("business_type", businessType).ilike("location_text", locationText)
         .gte("created_at", since)
-        .order("created_at", { ascending: false }).limit(1);
-      const hit = (recent ?? [])[0] as { id: string; created_at: string } | undefined;
+        .order("created_at", { ascending: false }).limit(MARKET_COOLDOWN_ALLOWANCE + 1);
+      const within = (recent ?? []) as Array<{ id: string; created_at: string }>;
+      /* ⛔ AN ALLOWANCE, NOT A LOCK, AND THE FIRST VERSION GOT THIS WRONG IN PRODUCTION. It refused
+         on the FIRST match, so it blocked the measure button's own SECOND audit — the two are created
+         one after the other, a second apart, with the same trade and town, and by then audit one is
+         already in the table. Norwich got exactly one audit on 2026-08-06 for this reason, leaving
+         the market on a count the view refuses to call a shape from: the failure the whole rebuild
+         existed to prevent, caused by its own guard.
+         The guard's purpose was never "one audit per window" — it is "no more than a measurement's
+         worth per window". A measurement is MARKET_COOLDOWN_ALLOWANCE audits, so that many pass and
+         the next one does not. A repeated press still cannot run away. */
+      const hit = within.length >= MARKET_COOLDOWN_ALLOWANCE ? within[0] : undefined;
       if (hit) {
         const ageMs = Date.now() - new Date(hit.created_at).getTime();
         console.log(`[create-ai-audit] market cooldown: "${businessType}" in "${locationText}" started ${Math.round(ageMs / 1000)}s ago`);
@@ -385,6 +400,8 @@ Deno.serve(async (req) => {
           ok: false,
           error: "market_cooldown",
           audit_id: hit.id,
+          audits_in_window: within.length,
+          allowance: MARKET_COOLDOWN_ALLOWANCE,
           started_at: hit.created_at,
           age_seconds: Math.round(ageMs / 1000),
           cooldown_seconds: Math.round(MARKET_COOLDOWN_MS / 1000),
