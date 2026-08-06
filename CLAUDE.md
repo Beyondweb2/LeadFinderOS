@@ -339,14 +339,25 @@ Facts with numbers. These are measured, and several contradict the older docs.
   carried "The engines decide that, and anyone who promises it is guessing." So the sentence a
   customer **agreed to at Stripe checkout** was not the sentence on the page that sold it to them.
   Both files already carried a comment asking for them to be kept in sync; a comment cannot fail a
-  build. Run `node scripts/check-guarantee-sync.mjs` — it exists in **both** repos, each reading
-  across to the other, and exits non-zero on any byte difference. Proven to fail on an injected
-  one-word drift, from either side.
-  ⚠️ The **price** is still guarded by nothing but a comment.
+  build. Run **`node scripts/check-cross-repo-sync.mjs`** — it exists in **both** repos, each reading
+  across to the other, and exits non-zero on any difference. It covers the **guarantee AND the price**
+  (`FINDABLE_SETUP_PRICE_GBP` vs `SETUP_PRICE_GBP`), and exits **2** if the sibling repo is absent.
+  Proven by injecting a drift in each value on each side — four cases, all caught by both scripts.
+  🔴 **A THIRD COPY EXISTS THAT NO SCRIPT CAN REACH: the Stripe PAYMENT LINK's own description**,
+  typed into Stripe's dashboard. The founder link's copy is **out of date** — it drops "at week eight
+  with before-and-after evidence" and the entire "The engines decide that…" clause. Edit it in Stripe
+  by hand whenever the constant changes.
   ✅ **Stripe renders the full 222-character string untruncated** — verified 2026-08-06 by creating a
   real Checkout Session and reading `document.body.innerText`. Stripe documents no length limit for
   `line_items[].price_data.product_data.description`, so this could only be answered empirically; the
   page HTML is a JS-rendered shell and contains nothing, so fetching it proves nothing.
+  ⚠️ **STRIPE ADAPTIVE PRICING CANNOT BE TURNED OFF FOR PAYMENT LINKS.** Stripe's docs:
+  *"Adaptive Pricing is always enabled for Payment Links. Manage Adaptive Pricing for Checkout in your
+  payment settings in the Dashboard."* So the Dashboard toggle governs **Checkout Sessions only** —
+  the `findable-checkout` path. The founder link is a Payment Link and is not covered by it.
+  Observed 2026-08-06 from a Thai IP: the Checkout Session presented **THB 4,582.95** with a stated
+  4% conversion fee; the founder Payment Link showed **£19.99 only**, minutes apart in the same
+  browser. One observation does not disprove the docs — treat the link as capable of converting.
 - ⛔ **ABSENCE IS NEVER AN ANSWER — the second place this rule lives.** `serveGate` was the first (a
   skipped question flags, never blocks). `src/lib/clientHeld.ts` is the second: `heldValue()` is the
   ONLY way the client sheet decides it holds a value, and null / undefined / `''` / whitespace / an
