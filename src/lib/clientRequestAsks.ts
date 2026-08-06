@@ -45,6 +45,14 @@ export interface DeliveryAsk {
    only reads the top of the list must still hit the two that stop the work. */
 export const DELIVERY_ASKS: DeliveryAsk[] = [
   {
+    /* ⛔ NOTHING IN THIS SYSTEM SENDS THAT INVITE. It is a manual step Paul does in the Google
+       Business Profile dashboard, and this sheet tells the client to accept something that does not
+       exist until he has. That is fine while the sheet is printed and sent by hand — he sends the
+       invite and the sheet in the same breath.
+       ⚠️ IT STOPS BEING FINE THE MOMENT THIS SHEET IS SENT AUTOMATICALLY. A client whose first
+       instruction is to accept an invite that never arrives will assume we have not started. If this
+       document is ever wired to a trigger, the invite has to be sent first — either automate it or
+       gate the send on the invite already existing. Do not ship the automation without solving it. */
     label: 'Accept the Google Business Profile invite',
     why:
       'Your Google Business Profile is one of the few things AI reads that you own outright, and it '
