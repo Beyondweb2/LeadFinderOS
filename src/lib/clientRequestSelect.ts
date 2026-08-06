@@ -2,6 +2,7 @@ import type { AiAuditSeo } from './aiAuditReportHtml';
 import type { Playbook, PlaybookStep } from './buildPlaybook';
 import { factFor } from './directoryFacts';
 import { plainFinding } from './seoFindingText';
+import { NO_ANSWERS, applyHeld, extraHeldFields, heldValue, type QuestionnaireHeld } from './clientHeld';
 import {
   CLIENT_ASK_LIMIT, type AskCost, type ClientAsk, type ClientHeldField, type ClientRequestInput,
   type ClientSeo,
@@ -90,9 +91,11 @@ function heldFields(pb: Playbook): ClientHeldField[] {
   if (src && src.length) {
     return src.map((f) => {
       /* buildPlaybook writes placeholder text into a missing address ("NOT HELD — ask the client")
-         and 'none' into an absent website. Neither belongs in front of a client, so `missing` decides
-         and the value is blanked. 'none' is treated as a gap because a missing website IS one. */
-      const absent = !!f.missing || f.value.trim() === '' || f.value.trim().toLowerCase() === 'none';
+         and 'none' into an absent website. Neither belongs in front of a client, so the value is
+         blanked. 'none' is treated as a gap because a missing website IS one.
+         ⛔ THROUGH heldValue, not a local test. The placeholder list used to be duplicated here, and
+         two copies of an absence rule is how the sweep would have disagreed with itself. */
+      const absent = !!f.missing || heldValue(f.value) === null;
       return {
         name: f.name,
         value: absent ? '' : f.value,
@@ -123,6 +126,9 @@ function heldFields(pb: Playbook): ClientHeldField[] {
 export interface ClientAnswers {
   services: string[];
   areas: string[];
+  /* What else the questionnaire already answers. Separate from services/areas because those DRIVE a
+     section (the page list) while these only SUPPRESS asks — see clientHeld.ts. */
+  held: QuestionnaireHeld;
 }
 
 /* ⚠️ THE QUESTIONNAIRE ANSWERS ARE A SEPARATE ARGUMENT, not fields on the Playbook. The Playbook is
@@ -179,7 +185,15 @@ export function buildClientRequest(
     businessName: pb.businessName,
     trade: pb.trade,
     town: pb.town,
-    fields: heldFields(pb),
+    /* ⛔ THE SWEEP. Anything the questionnaire already answers is marked held here, with the client's
+       own value, and its "why we need this" line drops with it — a field we have needs no
+       justification. `held` defaults to NO_ANSWERS, so a client who never saw the questionnaire (a
+       founder-offer sale from the report, or an audit with no lead row at all) is asked for
+       everything exactly as before. Absence is never an answer: see clientHeld.ts. */
+    fields: [
+      ...applyHeld(heldFields(pb), answers?.held ?? NO_ANSWERS),
+      ...extraHeldFields(answers?.held ?? NO_ANSWERS),
+    ],
     /* ⛔ NO ASKS PASSED. They are fixed now (DELIVERY_ASKS) and the document imports them itself, so
        nothing evidence-derived reaches the client sheet at all. `directoryAsks` above is dead and is
        left in place deliberately until the new document has been printed and checked — nothing is

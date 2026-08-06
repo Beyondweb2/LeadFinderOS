@@ -10,6 +10,8 @@ import { directoryCheckFold, type DirectoryCheck } from '@/lib/directoryHosts';
 import { aggregateSeoFindings, isRenderableSeo, SCORED_ENGINES, type QueueRow } from '@/lib/auditReport';
 import type { AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { fetchAllRows } from '@/lib/fetchAllRows';
+import type { ClientAnswers } from '@/lib/clientRequestSelect';
+import { questionnaireHeld } from '@/lib/clientHeld';
 
 /**
  * usePlaybook(id) — loads everything buildPlaybook needs and folds it.
@@ -92,7 +94,7 @@ export interface UsePlaybookResult {
      NULL when there is no onboarding row — a founder-offer payer reaches Stripe straight from the
      report, bypassing the questionnaire, so this is a real state rather than an error. The document
      then asks for the list instead of pretending to know it. */
-  answers: { services: string[]; areas: string[] } | null;
+  answers: ClientAnswers | null;
   /** Which row the id resolved to — printed on the page so the audit-first path is never a mystery. */
   resolvedAs: 'audit' | 'lead' | null;
   auditId: string | null;
@@ -114,7 +116,7 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
   const [seo, setSeo] = useState<AiAuditSeo | null>(null);
   const [naming, setNaming] = useState<{ named: number; total: number } | null>(null);
   const [directoryCheck, setDirectoryCheck] = useState<DirectoryCheck | null>(null);
-  const [answers, setAnswers] = useState<{ services: string[]; areas: string[] } | null>(null);
+  const [answers, setAnswers] = useState<ClientAnswers | null>(null);
   const [resolvedAs, setResolvedAs] = useState<'audit' | 'lead' | null>(null);
   const [auditId, setAuditId] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
@@ -231,16 +233,27 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
          list they last sent, not their first attempt.
          Swallowed on failure and left null — a missing service list must degrade to "tell us your
          services" rather than break the document that is asking for everything else. */
-      let ans: { services: string[]; areas: string[] } | null = null;
+      let ans: ClientAnswers | null = null;
       if (listingKey) {
         try {
           const { data: obRaw } = await client
-            .from('onboarding_responses').select('services_list, areas_list')
+            .from('onboarding_responses')
+            /* All six columns predate the questionnaire rewrite and are on every row, so none of them
+               can 400 this select. A new column added later MUST be verified live before it goes in
+               here: PostgREST rejects the whole select for one unknown name, and the catch below
+               would then swallow the SERVICE LIST too — losing a section to gain a field. */
+            .select('services_list, areas_list, business_name, confirmed_location, business_address, accreditations')
             .eq('lead_id', listingKey)
             .order('created_at', { ascending: false }).limit(1).maybeSingle();
-          const row = obRaw as { services_list?: unknown; areas_list?: unknown } | null;
+          const row = obRaw as Record<string, unknown> | null;
           const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : []);
-          if (row) ans = { services: list(row.services_list), areas: list(row.areas_list) };
+          if (row) {
+            ans = {
+              services: list(row.services_list),
+              areas: list(row.areas_list),
+              held: questionnaireHeld(row),
+            };
+          }
         } catch { ans = null; }
       }
       setAnswers(ans);
