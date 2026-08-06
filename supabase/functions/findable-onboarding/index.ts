@@ -32,6 +32,8 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
+import { offerPriceForLead } from "../_shared/offer-price.ts";
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
 /* ⛔ "listings_only" IS GONE FROM THE ACCEPTED SET (2026-08-06). It meant directory listings, which
@@ -164,9 +166,20 @@ Deno.serve(async (req) => {
       if (PAID_OR_BEYOND.has(lead.status as string) || ((lead.amount_paid as number) ?? 0) > 0) {
         return json({ ok: false, error: "already_client" }, 403);
       }
+      /* ⛔ THE PRICE COMES BACK WITH THE PREFILL, FROM THE SAME FUNCTION THAT CHARGES IT. The plan
+         card used to render findable-site's own SETUP_PRICE_GBP — a second constant in a second repo,
+         a mirror that has already drifted once. Now the display and the charge have one source, so
+         they cannot disagree: whatever this says, findable-checkout puts in the Stripe session.
+         ⚠️ SAFE TO EXPOSE. It reveals only what the customer is about to be shown anyway, and it is
+         advisory: the flow renders it, but the charge is re-derived server-side at checkout, so a
+         tampered response buys nothing. */
+      const offer = await offerPriceForLead(service as never, leadId);
       // SAFE subset only — never expose phone/email/notes/owner to the public page.
       return json({
         ok: true,
+        price_gbp: offer.gbp,
+        price_label: offer.label,
+        is_founder: offer.isFounder,
         business_name: lead.business_name ?? "",
         business_type: ((lead.category as string) || (lead.search_keyword as string) || "").trim(),
         location_guess: ((lead.search_location as string) || (lead.address as string) || "").trim(),

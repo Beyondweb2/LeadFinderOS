@@ -30,7 +30,23 @@ export const FINDABLE_SETUP_PRICE_GBP = 99;
    ⚠️ THEY HAD DRIFTED. This copy ended at "We do not promise you will be named."; the site's carried
    a further sentence — "The engines decide that, and anyone who promises it is guessing" — which is
    the strongest line in it. Restored here 2026-08-06, longer version wins. */
+/* ⛔ TWO CONSTANTS, AND THE SHORTER ONE IS A STRICT PREFIX OF THE LONGER. That property is the whole
+   reason this is safe, and scripts/check-cross-repo-sync.mjs asserts it rather than trusting it.
+   FINDABLE_GUARANTEE is CONTRACTUAL: the Stripe line item, the audit report, the client request
+   sheet. FINDABLE_GUARANTEE_FULL adds one sentence and is what the marketing site carries.
+   ⚠️ THE EXTRA SENTENCE ADDS NO OBLIGATION — it disclaims a promise that was never made — so the
+   contractual version is shorter without owing the customer less. That is the only test that
+   matters for a string somebody agrees to at checkout. A prefix can only ever be a shorter promise,
+   never a different one; a "subset" could be neither.
+   ⛔ NEVER MAKE THEM DIVERGE IN CONTENT. If the marketing line needs different words, the
+   contractual one changes first and the marketing one extends it. The sync check fails otherwise. */
 export const FINDABLE_GUARANTEE =
+  "We guarantee the audit, the work, and the re-measurement at week eight with " +
+  "before-and-after evidence, or a full refund. We do not promise you will be named.";
+
+/** The site's version: the contractual sentence plus the line that makes the point rather than the
+ *  promise. Byte-identical to findable-site's GUARANTEE, asserted by the sync check. */
+export const FINDABLE_GUARANTEE_FULL =
   "We guarantee the audit, the work, and the re-measurement at week eight with " +
   "before-and-after evidence, or a full refund. We do not promise you will be " +
   "named. The engines decide that, and anyone who promises it is guessing.";

@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
+import { offerPriceForLead } from "../_shared/offer-price.ts";
 import { serveDecision, serveInputFromRow, type ServeGateRow } from "../../../src/lib/serveGate.ts";
 
 // findable-checkout — Stripe Checkout for the Findable onboarding plan (verify_jwt = false;
@@ -192,6 +193,10 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "no_lead_attribution" }, 403);
     }
 
+    /* Derived after the lead checks above, so `effectiveLeadId` is the one that passed them. */
+    const offer = await offerPriceForLead(service as never, effectiveLeadId ?? null);
+    console.log(`[findable-checkout] price for lead ${effectiveLeadId}: £${offer.gbp} (${offer.reason})`);
+
     const reqOrigin = req.headers.get("origin") ?? "";
     const origin = ALLOWED_ORIGINS.has(reqOrigin) ? reqOrigin : CANONICAL_ORIGIN;
     // Trailing slash on purpose: the built site serves /onboarding/ and 308-redirects
@@ -234,7 +239,15 @@ Deno.serve(async (req) => {
       form.set("line_items[0][quantity]", "1");
     } else {
       form.set("line_items[0][price_data][currency]", "gbp");
-      form.set("line_items[0][price_data][unit_amount]", String(Math.round(FINDABLE_SETUP_PRICE_GBP * 100)));
+      /* ⛔ THE PRICE IS DERIVED HERE, FROM THE LEAD, AND NEVER FROM THE REQUEST. offerPriceForLead
+         reads whether this lead has a completed audit and has not paid — neither of which a browser
+         can fabricate — and the plan card that displayed the price called the same function. There
+         is no parameter on this endpoint through which a discount can be asked for.
+         ⚠️ IT FAILS CLOSED: every error path inside returns the standard price. A transient database
+         error must never hand out an 80% discount.
+         ⚠️ FINDABLE_SETUP_PRICE_GBP IS STILL THE FLOOR for anyone not eligible, which is the path
+         that carries almost all the revenue and the one most worth regression-testing. */
+      form.set("line_items[0][price_data][unit_amount]", String(Math.round(offer.gbp * 100)));
       // The name is what the payer sees on their Stripe receipt; the description carries
       // the guarantee VERBATIM from findableOffer.ts — the wording the sale is made on.
       form.set("line_items[0][price_data][product_data][name]", "Findable — 8-week AI visibility sprint");
