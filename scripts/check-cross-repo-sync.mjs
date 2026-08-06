@@ -72,6 +72,15 @@ function read(file, name, kind) {
     if (!n) throw new Error(`${name} in ${file} is not a bare number: ${body.trim()}`);
     return Number(n[0]);
   }
+  /* A duration written as arithmetic — `10 * 60 * 1000`. Compared by VALUE, because the same window
+     can honestly be written `10 * 60 * 1000` in one file and `600_000` in another and a string
+     comparison would call those a drift. Only digits, * and whitespace are evaluated; anything else
+     throws rather than being run. */
+  if (kind === 'expression') {
+    const expr = body.trim();
+    if (!/^[\d_\s*]+$/.test(expr)) throw new Error(`${name} in ${file} is not a simple arithmetic expression: ${expr}`);
+    return expr.split('*').reduce((acc, part) => acc * Number(part.replace(/[_\s]/g, '')), 1);
+  }
   /* A price written as a display label — "£19.99". Compared as a NUMBER, because "£19.99" and
      "£19.99 " and "19.99" are the same price and only one of them is a string match. */
   if (kind === 'money-label') {
@@ -117,6 +126,35 @@ const SAME_REPO_GROUPS = [
       { file: path.join(LFOS_ROOT, 'supabase', 'functions', '_shared', 'offer-price.ts'), name: 'FOUNDER_PRICE_GBP', kind: 'number', role: 'CHARGED' },
       { file: path.join(LFOS_ROOT, 'src', 'lib', 'founderOffer.ts'), name: 'FOUNDER_OFFER_PRICE_LABEL', kind: 'money-label', role: 'displayed on the report' },
       { file: path.join(LFOS_ROOT, 'src', 'hooks', 'useDashboardMetrics.ts'), name: 'FOUNDER_PRICE_GBP', kind: 'number', role: 'counted on the dashboard' },
+    ],
+  },
+  {
+    /* ⛔ THIS PAIR BROKE PRODUCTION ON 2026-08-06, WITH A COMMENT ON BOTH SIDES ASKING FOR IT.
+       The measure button creates MARKET_AUDIT_MIN_AUDITS audits back to back, a second apart, for the
+       same trade and town — sequentially on purpose, because the coverage directive needs the first
+       audit's queue rows to exist before the second is generated. create-ai-audit's cooldown allows
+       MARKET_COOLDOWN_ALLOWANCE per trade+town per window.
+       If the allowance is BELOW the minimum, the button is structurally unable to finish: the guard
+       refuses the flow's own second audit and the market is stranded on one — which is the exact
+       "not enough measured yet" state the rebuild existed to prevent, caused by its own guard.
+       Norwich got one audit that way. A comment on each naming the other did not stop it, and a
+       comment is what is being replaced here. */
+    what: 'the market audit count and the cooldown allowance',
+    why: 'The measure button creates MARKET_AUDIT_MIN_AUDITS audits in a row; create-ai-audit refuses more than MARKET_COOLDOWN_ALLOWANCE per window. An allowance below the minimum makes the button unable to complete, silently, and strands the market on one audit.',
+    places: [
+      { file: path.join(LFOS_ROOT, 'src', 'lib', 'marketView.ts'), name: 'MARKET_AUDIT_MIN_AUDITS', kind: 'number', role: 'how many the button CREATES' },
+      { file: path.join(LFOS_ROOT, 'supabase', 'functions', 'create-ai-audit', 'index.ts'), name: 'MARKET_COOLDOWN_ALLOWANCE', kind: 'number', role: 'how many the server ALLOWS' },
+    ],
+  },
+  {
+    /* The window itself. Less dangerous than the allowance — a mismatch only makes the panel's
+       message wrong about how long to wait — but it is the same two-copies-one-value shape, and it
+       costs one entry to cover. */
+    what: 'the market cooldown window',
+    why: 'The panel states this to the operator and create-ai-audit enforces it. A mismatch means the refusal message names a wait that is not the real one.',
+    places: [
+      { file: path.join(LFOS_ROOT, 'src', 'lib', 'marketView.ts'), name: 'MARKET_COOLDOWN_MS', kind: 'expression', role: 'stated by the panel' },
+      { file: path.join(LFOS_ROOT, 'supabase', 'functions', 'create-ai-audit', 'index.ts'), name: 'MARKET_COOLDOWN_MS', kind: 'expression', role: 'enforced by the server' },
     ],
   },
 ];
