@@ -9,6 +9,7 @@ import {
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE, expectedPrimaryType, offTradeMark,
   type MarketConcentration, type MarketNamedRow, type MarketPoolExcluded,
   type MarketPoolRow, type MarketPoolState, type MarketTier, type MarketCitationHost,
+  type MarketViewResult,
   type MarketAuditProgress,
 } from "../../../src/lib/marketView.ts";
 
@@ -623,9 +624,19 @@ Deno.serve(async (req) => {
     poolExcluded.sort((a, b) => b.matchedMentions - a.matchedMentions);
     const alreadyNamed = poolExcluded.length;
 
-    return json({
+    /* ⛔ TYPED, AND THAT IS THE WHOLE POINT. This object used to be an untyped literal, and three
+       values computed above it — marketProgress, poolNearby, citationHosts — were simply never
+       added to it. All three were optional on the interface, so nothing anywhere complained: the
+       SPA read undefined, defaulted to [], and displayed "nothing running" / "none nearby" /
+       "no hosts" for months. The measure bar surviving a reload, which deriveRun exists for, has
+       never once worked in production.
+       Annotating the payload makes a missing field a compile error. Keep the annotation. */
+    const payload: MarketViewResult = {
       ok: true, trade, town,
       concentration,
+      marketProgress,
+      poolNearby,
+      citationHosts,
       named,
       leader: leaderRow ? { name: leaderRow.name, mentions: leaderRow.mentions } : null,
       otherTownsCapped,
@@ -637,8 +648,16 @@ Deno.serve(async (req) => {
          must never appear in a list of audited businesses. Their competitor mentions DO count —
          that is the entire point of them — and so does their contribution to `audits`, because a
          market audit is a legitimate measurement of the market. */
-      auditedBusinesses: audits.filter((a) => a.is_market !== true).map((a) => a.business_name).filter(Boolean),
-    });
+      /* A type PREDICATE, not `.filter(Boolean)`. The behaviour is identical at runtime — the first
+         thing the annotation above caught was that business_name is nullable and `.filter(Boolean)`
+         does not narrow it, so the declared string[] was a lie the untyped literal had been telling
+         all along. A cast would have silenced it; this states the guarantee instead. */
+      auditedBusinesses: audits
+        .filter((a) => a.is_market !== true)
+        .map((a) => a.business_name)
+        .filter((n): n is string => typeof n === "string" && n.length > 0),
+    };
+    return json(payload);
   } catch (e) {
     const raw = e instanceof Error ? e.message : String(e);
     console.error("[market-view]", raw);

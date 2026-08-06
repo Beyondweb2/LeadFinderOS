@@ -215,16 +215,28 @@ export interface MarketViewResult {
   named: MarketNamedRow[];
   pool: MarketPoolRow[];
   poolState: MarketPoolState;
+  /* ⛔ THESE THREE WERE OPTIONAL, AND ALL THREE WERE COMPUTED BY market-view AND THEN LEFT OUT OF
+     ITS RESPONSE — from the commit that introduced them until 2026-08-06. Optional meant tsc had
+     nothing to say, and every consumer defends with `?? []`, so three features read as "nothing to
+     show" rather than as broken:
+       marketProgress — the measure bar could not survive a reload, which was the entire point of
+                        deriveRun, and the running/stalled/failed grading never rendered once
+       poolNearby     — businesses just outside the town boundary (Battle Locksmiths) never listed
+       citationHosts  — the most-cited hosts in the market never rendered
+     REQUIRED NOW, ON PURPOSE. market-view builds its success payload as a typed
+     MarketViewResult, so leaving any of them out is a compile error rather than a silent
+     absence. Do not make them optional again to "simplify" a caller — an empty array is how you
+     say there is nothing, and it is not the same statement as omitting the key. */
   /** The most-cited hosts in this market, biggest first, with the aggregator flag the shape read
    *  needs. Folded from citations already stored on the queue rows - no extra queries. */
-  citationHosts?: MarketCitationHost[];
+  citationHosts: MarketCitationHost[];
   /** Total citations behind citationHosts, so a share can be shown next to the leader. */
   citationTotal?: number;
   /** Market audits that have NOT finished, with progress and the raw error if any. */
-  marketProgress?: MarketAuditProgress[];
+  marketProgress: MarketAuditProgress[];
   /** Businesses the radius pass found JUST OUTSIDE the town boundary. Visible, tagged, and never
    *  merged into `pool` — see MarketPoolRow.outsideTown. */
-  poolNearby?: MarketPoolRow[];
+  poolNearby: MarketPoolRow[];
   /** The market leader, for the "against N for the leader" comparison on thin rows. */
   leader?: MarketLeader | null;
   /** True when the cross-town scan for national brands hit its read cap, so `otherTowns` is a
