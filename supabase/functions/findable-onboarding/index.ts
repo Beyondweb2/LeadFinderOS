@@ -34,7 +34,25 @@ function json(body: unknown, status = 200): Response {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
-const GBP_CONSENT = new Set(["yes_all", "listings_only", "discuss"]);
+/* ⛔ "listings_only" IS GONE FROM THE ACCEPTED SET (2026-08-06). It meant directory listings, which
+   is work we no longer sell, and the whole consent step was built around it. The replacement asks
+   permission for the two things we actually touch: their profile and their pages.
+   ⚠️ OLD ROWS KEEP "listings_only". This set validates INBOUND values only, so nothing stored is
+   rewritten and the historical answer stays readable as the answer it was. No DDL needed either —
+   the column is plain text with no CHECK constraint. */
+const GBP_CONSENT = new Set(["yes_all", "pages_only", "discuss"]);
+/* ⛔ THE PRECONDITION FOR THE ADD-US STEPS. "Open your profile and add us" is impossible advice for
+   someone who has no profile, or whose profile is claimed by an ex-web-company. Asked BEFORE the
+   three clicks so the flow can route instead of instructing. */
+const GBP_EXISTS = new Set(["yes", "not_claimed", "no", "not_sure"]);
+/* ⛔ THREE STATES, AND THE THIRD IS THE POINT. "no_access" is common and it is the only one that
+   needs Paul. Two options (done / will do) force someone locked out to lie or stall, and it surfaces
+   in week three instead of week one. */
+const GBP_STATUS = new Set(["done", "will_do", "no_access"]);
+/* Photo READINESS, never files. Nothing in this flow uploads anything, and the Places photo route is
+   closed: Maps ToS 3.2.3(a) names "rehost" as a prohibited use of Maps Content, so a profile photo
+   cannot legally be put on a client's own website. Asking is the route, not the fallback. */
+const PHOTOS_STATUS = new Set(["phone", "online", "none"]);
 // Who can change their website — the pages route's dependency (2026-08-04 questionnaire).
 const WEBSITE_MANAGER = new Set(["direct_access", "web_company", "owner_only"]);
 /* What their site is built on. Stored because it decides how the delivery work is done — WordPress
@@ -169,8 +187,16 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "missing_required" }, 400);
       }
       const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const gbpEmailRaw = clip(a.gbp_manager_email, 200);
-      const gbpEmail = gbpEmailRaw && EMAIL_RE.test(gbpEmailRaw) ? gbpEmailRaw : null;
+      /* ⛔ gbp_manager_email IS NO LONGER ACCEPTED. It asked the client for THEIR address under the
+         label "Email to add as your Google Business Profile manager", which corresponds to no Google
+         flow: in add-a-manager the OWNER types the manager's address, and in request-access Google
+         supplies the owner's from its own records. Nothing ever read it — all eight readers of this
+         table were checked. The COLUMN stays (dropping it would destroy answers already given); the
+         flow simply stops sending it and this function stops listing it, which is what makes it
+         stop being written. */
+      const gbpExists = typeof a.gbp_exists === "string" && GBP_EXISTS.has(a.gbp_exists) ? a.gbp_exists : null;
+      const gbpStatus = typeof a.gbp_status === "string" && GBP_STATUS.has(a.gbp_status) ? a.gbp_status : null;
+      const photosStatus = typeof a.photos_status === "string" && PHOTOS_STATUS.has(a.photos_status) ? a.photos_status : null;
       /* CONTACT EMAIL — where the report and documents go. Validated with the same shape the client
          gates on, so a submission that got past the button is not silently downgraded here. Stored
          as null when it fails, never as junk: a bad address is worse than a known-missing one,
@@ -183,13 +209,12 @@ Deno.serve(async (req) => {
       if (!incomplete && !contactEmail) {
         return json({ ok: false, error: "missing_contact_email" }, 400);
       }
-      // "Yes to both" exists to collect the address we add as GBP manager. Accepting that
-      // answer without it silently loses the single field the option is for — so require it
-      // for that answer only. The other two consent options don't need an email, and the
-      // escape hatch stays exempt like every other required field.
-      if (!incomplete && gbpConsent === "yes_all" && !gbpEmail) {
-        return json({ ok: false, error: "missing_gbp_email" }, 400);
-      }
+      /* ⛔ THE "yes_all NEEDS AN EMAIL" GATE IS DELETED WITH THE FIELD IT GATED. It rejected a
+         complete submission with error "missing_gbp_email" unless the client supplied their own
+         Google address — a value no flow consumes. Leaving the check while removing the field would
+         have made "Yes to both" impossible to submit at all.
+         NOTHING REPLACES IT. gbp_exists and gbp_status are genuinely optional: someone who does not
+         know whether their profile is claimed must still be able to finish and pay. */
       // The GBP email's validation pattern, reused for the web company's address: store a
       // valid email or an honest NULL, never junk.
       const websiteEmailRaw = clip(a.website_manager_email, 200);
@@ -226,7 +251,12 @@ Deno.serve(async (req) => {
         business_address: clip(a.business_address, 300),
         accreditations: clip(a.accreditations, 2000),
         gbp_consent: gbpConsent,
-        gbp_manager_email: gbpEmail,
+        gbp_exists: gbpExists,
+        gbp_status: gbpStatus,
+        // The only question here that can embarrass us publicly. Far cheaper to know before we write
+        // the pages than to correct after they are published.
+        must_not_say: clip(a.must_not_say, 2000),
+        photos_status: photosStatus,
         contact_email: contactEmail,
         business_name: clip(a.business_name, 200),
         incomplete,
@@ -237,7 +267,12 @@ Deno.serve(async (req) => {
          single-pass fallback could not shed them all - so every submission, including
          ones carrying no new answers at all, died save_failed. The base path must never
          depend on columns newer than itself. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate"];
+      /* ⛔ THREE PLACES OR THE FIELD VANISHES: the `answers` object above, this list, and the
+         `optional` list below. Proven live 2026-08-05 — willing_to_migrate had its column, the flow
+         sent it, the row saved with HTTP 200, and the value was null, because this function builds
+         its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
+         customer who had said no to moving reached Stripe as a result. */
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "must_not_say", "photos_status"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -253,7 +288,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"];
+        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
