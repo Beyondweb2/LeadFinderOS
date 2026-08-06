@@ -69,6 +69,12 @@ export interface ClientHeldField {
   why?: string;
 }
 
+/* THE SCAN, NARROWED FOR A CLIENT. Deliberately NOT the full AiAuditSeo: the per-category grades and
+   the numeric scores behind the radar are operator furniture and say nothing a client can act on.
+   What comes across is the overall grade and the findings — the two things that are concrete. */
+export interface ClientSeoFinding { title: string; detail: string; severity: 'high' | 'med' | 'low' }
+export interface ClientSeo { grade: string; findings: ClientSeoFinding[] }
+
 export interface ClientRequestInput {
   businessName: string;
   trade: string | null;
@@ -85,6 +91,9 @@ export interface ClientRequestInput {
    *  document then asks for the list itself rather than pretending to know it. */
   services: string[];
   areas: string[];
+  /** The real Apify scan of THEIR OWN SITE, when one completed. Null when there is no website or the
+   *  scan failed — the section then does not render at all rather than showing an empty grade. */
+  seo: ClientSeo | null;
   naming: { named: number; total: number } | null;
 }
 
@@ -154,6 +163,25 @@ const EXTRA_CSS = `
   .pg{ display:flex; align-items:baseline; gap:12px; padding:7px 0; border-bottom:1px solid var(--line); }
   .pg-s{ flex:1 1 auto; font-size:14px; font-weight:750; color:var(--ink); }
   .pg-t{ flex:0 0 auto; font-size:11px; color:var(--muted); text-align:right; }
+  /* THE SCAN. One grade, one framing paragraph beside it, then the findings as a plain list. No
+     radar and no per-category grades: operator furniture a client cannot act on. */
+  .seo-head{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:16px; }
+  .seo-grade{ flex:0 0 auto; min-width:118px; padding:10px 14px; background:var(--page);
+    border-radius:10px; text-align:center; }
+  .seo-grade .k{ font-size:9.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--faint); font-weight:800; }
+  .seo-grade .v{ font-size:34px; font-weight:900; color:var(--ink); letter-spacing:-.02em; line-height:1.1; }
+  .seo-frame{ flex:1 1 260px; margin:0; font-size:12.5px; line-height:1.55; color:var(--muted); }
+  .seo-find{ list-style:none; margin:0; padding:0; }
+  .seo-find li{ display:flex; flex-wrap:wrap; align-items:baseline; gap:10px; padding:7px 0;
+    border-bottom:1px solid var(--line); }
+  .seo-find li:last-child{ border-bottom:0; }
+  .sev{ flex:0 0 auto; font-size:9px; font-weight:900; letter-spacing:.05em; text-transform:uppercase;
+    border-radius:999px; padding:2px 8px; color:#fff; background:var(--muted); }
+  .sev.high{ background:var(--red); }
+  .sev.med{ background:var(--amber); }
+  .sev.low{ background:var(--muted); }
+  .sf-t{ flex:1 1 200px; font-size:13px; font-weight:750; color:var(--ink); }
+  .sf-d{ flex:0 0 100%; font-size:12px; line-height:1.5; color:var(--muted); }
   .ask-ev{ margin:6px 0 0; padding:8px 12px; background:var(--page); border-radius:8px;
     font-size:13px; line-height:1.5; color:#334155; font-weight:600; }
   .ask-body{ margin:8px 0 0; font-size:13.5px; line-height:1.55; color:var(--muted); }
@@ -184,6 +212,20 @@ function askEvidence(a: ClientAsk, trade: string): string {
   return `${a.label} comes up in the answers we measured.`;
 }
 
+/* ⛔ THE WEBSITE GRADE IS THE WEBSITE SCORE. IT IS NEVER AI VISIBILITY, AND NOTHING IN THE DOCUMENT
+   MAY IMPLY IT IS. Our own measurement says site quality does not decide whether AI names anyone —
+   firms the engines name have WORSE sites than our clients do. So "B to A" is honest as "we fixed
+   your site" and dishonest as "we made AI name you". The copy states the separation outright rather
+   than leaving it to be inferred, and a test asserts the phrase "get you named" only ever appears
+   negated.
+   THE GRADE IS IN BECAUSE BEING JUDGED ON IT IS THE POINT: it is the one number in the engagement
+   that is mechanically ours. Fixing H1s, alt text and meta descriptions raises it. That is work, not
+   a prediction — which is exactly why it can carry a promise when the naming cannot.
+
+   ⚠️ AND THIS IS A TEMPLATE LITERAL, NOT JSX. A brace-slash-star comment inside the returned string
+   PRINTS — the first version of this note rendered in full on the client's document, internal
+   warnings and all. Comments about the markup belong out here, and never write the closing
+   star-slash sequence inside one or it terminates itself. */
 export function renderClientRequestDoc(input: ClientRequestInput): string {
   const trade = (input.trade ?? '').trim().toLowerCase();
   const town = (input.town ?? '').trim();
@@ -278,6 +320,32 @@ ${docBand('What we need from you')}
       <p class="wk-client">We do not have your service list yet. Send us the services you want pages
       for and the towns you want work from, and that becomes the page plan.</p>
     </section>`}
+
+    ${input.seo ? `<section class="block">
+      <div class="sec-eyebrow">Step four</div>
+      <div class="sec-title">What we found on your website</div>
+      <div class="seo-head">
+        <div class="seo-grade">
+          <div class="k">Website score today</div>
+          <div class="v">${esc(input.seo.grade)}</div>
+        </div>
+        <p class="seo-frame">This is a score for <b>your website</b>, not for whether AI names you.
+        The two are separate, and we are careful about which one we promise: the site score is work
+        we do and you can hold us to it, and we re-score it at week eight alongside the AI
+        measurement. Our own research is that a better site does not by itself get you named &mdash;
+        it is what gives AI something of yours worth quoting.</p>
+      </div>
+      ${input.seo.findings.length ? `<p class="wk-client" style="margin:14px 0 8px">Here is what the
+      scan actually found. We fix these &mdash; you do not need to do anything with this list.</p>
+      <ul class="seo-find">${input.seo.findings.map((fd) => `
+        <li>
+          <span class="sev ${fd.severity}">${fd.severity === 'high' ? 'Fix first' : fd.severity === 'med' ? 'Worth fixing' : 'Minor'}</span>
+          <span class="sf-t">${esc(fd.title)}</span>
+          <span class="sf-d">${esc(fd.detail)}</span>
+        </li>`).join('')}
+      </ul>` : `<p class="wk-client" style="margin-top:12px">The scan did not raise anything
+      significant, which is a good result and unusual.</p>`}
+    </section>` : ''}
 
     <section class="notes">
       ${missing.length ? `<p class="note"><b>Why the details matter.</b> The same handful of facts goes

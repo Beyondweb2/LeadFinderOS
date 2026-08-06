@@ -1,7 +1,9 @@
+import type { AiAuditSeo } from './aiAuditReportHtml';
 import type { Playbook, PlaybookStep } from './buildPlaybook';
 import { factFor } from './directoryFacts';
 import {
   CLIENT_ASK_LIMIT, type AskCost, type ClientAsk, type ClientHeldField, type ClientRequestInput,
+  type ClientSeo,
 } from './clientRequestDoc';
 
 /* ============================================================
@@ -126,10 +128,26 @@ export interface ClientAnswers {
    the evidence fold — what the citations say about a trade — and the services and towns are what the
    CLIENT told us. Hanging them off the fold would mean every consumer of Playbook carries data it
    has no use for, and would blur the one boundary that has kept this document honest. */
+/* NARROWED HERE, not in the renderer. The document should never be handed the full AiAuditSeo: it
+   carries per-category scores and a stored `baseline` blob that must never reach a client, and the
+   safest way to guarantee that is for the client type not to have the fields at all. */
+export function toClientSeo(seo: AiAuditSeo | null): ClientSeo | null {
+  if (!seo) return null;
+  const grade = (seo.overallGrade ?? '').trim();
+  if (!grade) return null;
+  return {
+    grade,
+    findings: (seo.leadFindings ?? [])
+      .filter((f) => !!f?.title)
+      .map((f) => ({ title: f.title, detail: f.detail ?? '', severity: f.severity })),
+  };
+}
+
 export function buildClientRequest(
   pb: Playbook,
   naming: { named: number; total: number } | null,
   answers: ClientAnswers | null,
+  seo: AiAuditSeo | null,
 ): ClientRequestInput {
   const trade = (pb.trade ?? '').trim().toLowerCase();
   const town = (pb.town ?? '').trim();
@@ -163,6 +181,7 @@ export function buildClientRequest(
        deleted before its replacement is proven. */
     services: answers?.services ?? [],
     areas: answers?.areas ?? [],
+    seo: toClientSeo(seo),
     naming,
   };
 }
