@@ -28,8 +28,10 @@ alter table public.onboarding_responses
   -- the pages than to correct after they are published. Free text.
   add column if not exists must_not_say text,
 
-  -- ⚠️ CONTINGENT — drop this line if the photo approach is rejected. It captures READINESS, never
-  -- files: 'phone' | 'online' | 'none'. There is no upload anywhere in this flow (see the report).
+  -- PHOTO READINESS, never files: 'phone' | 'online' | 'none'. There is no upload anywhere in this
+  -- flow, and after the Places recon there is no automatic route either — Google's ToS 3.2.3(a)
+  -- names "rehost" as a prohibited use of Maps Content, so a profile photo cannot legally be put on
+  -- a client's own website. Asking is the main route, not the fallback.
   add column if not exists photos_status text;
 
 comment on column public.onboarding_responses.gbp_exists is
@@ -39,7 +41,7 @@ comment on column public.onboarding_responses.gbp_status is
 comment on column public.onboarding_responses.must_not_say is
   'Anything we must not claim on their behalf - registrations they do not hold, wording a trade body forbids. Free text. NULL = not answered, which is NOT the same as "there is nothing".';
 comment on column public.onboarding_responses.photos_status is
-  'Whether they have photos of their own work and where: phone | online | none. READINESS ONLY - no files are uploaded anywhere in this flow.';
+  'Whether they have photos of their own work and where: phone | online | none. READINESS ONLY - no files are uploaded anywhere in this flow, and photos cannot be taken from their Google Business Profile (Maps ToS 3.2.3 forbids rehosting Maps Content). Asked before payment because having no photos stalls delivery.';
 
 -- ⛔ DEAD, DELIBERATELY KEPT. It asked the client for THEIR email under the label "Email to add as
 -- your Google Business Profile manager", which corresponds to no Google flow: in add-a-manager the
