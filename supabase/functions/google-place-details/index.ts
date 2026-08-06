@@ -203,10 +203,14 @@ serve(async (req) => {
         + `, rating=${rating ?? 'none'}, reviews=${reviewCount ?? 'none'}`
       );
 
-      // Log API miss (best-effort). NOTE: 0.017 is an inherited constant, NOT a measured or verified
-      // price, and this change does not alter it — the call was already Enterprise-tier before the
-      // extra fields were added, so whatever it truly costs, it costs the same as it did.
-      logUsage(supabase, userId, false, 0.017, triggerSource);
+      /* Log API miss (best-effort). ⛔ WAS 0.017, AN INHERITED CONSTANT MATCHING NO PUBLISHED GOOGLE
+         RATE. Corrected 2026-08-06 to the real one: this request asks for a phone number, phone is an
+         ENTERPRISE field, and Google bills a request ONCE at the highest tier any requested field
+         touches. Place Details (Enterprise) is $20 per 1,000 = $0.020. 18% under.
+         The reasoning in the old note still holds and is worth keeping: the extra address/rating/
+         review fields cost nothing, because the call was already Enterprise before they were added.
+         Mirrors src/lib/marketView.ts PLACE_DETAILS_USD. */
+      logUsage(supabase, userId, false, 0.020, triggerSource);
 
       // ─── CACHE STORE ─────────────────────────
       // Write what we fetched; preserve category/google_maps_uri, which come from Text Search and are

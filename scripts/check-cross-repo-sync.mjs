@@ -147,6 +147,30 @@ const SAME_REPO_GROUPS = [
     ],
   },
   {
+    /* ⛔ THIS PAIR HAD ALREADY DRIFTED WHEN THE CHECK WAS WRITTEN. marketView was re-measured to
+       $0.0104 per question and sources.ts was left at $0.0125, so the app quoted the operator one
+       price while the server reserved another against the spend cap — a 20% gap between the number
+       on screen and the number being enforced, with nothing anywhere to notice it.
+       Both are now named exports for the sole reason that this checker can only read a named const;
+       the value in sources.ts used to be an object property and was therefore unguardable. */
+    what: 'the per-question audit cost',
+    why: 'marketView quotes this to the operator and sources.ts reserves against it in the cap pre-check. A mismatch means the estimate on screen is not the spend being enforced.',
+    places: [
+      { file: path.join(LFOS_ROOT, 'src', 'lib', 'marketView.ts'), name: 'AUDIT_EST_USD_PER_QUESTION', kind: 'number', role: 'QUOTED to the operator' },
+      { file: path.join(LFOS_ROOT, 'supabase', 'functions', '_shared', 'enrichment', 'sources.ts'), name: 'AI_SEARCH_USD_PER_QUESTION', kind: 'number', role: 'RESERVED against the cap' },
+    ],
+  },
+  {
+    /* Same shape, same two files. The SEO figure matters more than it looks: it is the biggest single
+       line in a batch estimate, so a drift here moves the total the operator approves. */
+    what: 'the SEO scan cost',
+    why: 'marketView shows this in the batch estimate and as the saving from skipping scans; sources.ts reserves against it and is the fallback written to enrichment_usage when Apify reports no figure. A mismatch mis-states both the estimate and the record.',
+    places: [
+      { file: path.join(LFOS_ROOT, 'src', 'lib', 'marketView.ts'), name: 'SEO_SCAN_USD', kind: 'number', role: 'SHOWN in the batch estimate' },
+      { file: path.join(LFOS_ROOT, 'supabase', 'functions', '_shared', 'enrichment', 'sources.ts'), name: 'SEO_SCAN_USD_PER_SCAN', kind: 'number', role: 'RESERVED, and the usage fallback' },
+    ],
+  },
+  {
     /* The window itself. Less dangerous than the allowance — a mismatch only makes the panel's
        message wrong about how long to wait — but it is the same two-copies-one-value shape, and it
        costs one entry to cover. */

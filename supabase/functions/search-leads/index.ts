@@ -382,6 +382,15 @@ interface SearchLead {
      cited in 10 Hastings audit citations and sits at Battle TN33, ~10km north of the rectangle,
      so no phrasing of the query could ever return it inside the boundary. */
   outsideTown?: boolean;
+  /* WHAT GOOGLE CALLS THIS BUSINESS. places.primaryType ("locksmith", "plumber", "hair_salon") and
+     its display label. FREE: primaryType is a Pro field and this request already bills at Text
+     Search (Enterprise) because the mask asks for websiteUri.
+     ⚠️ ADVISORY ONLY. It exists so a business Google does not file under the searched trade can be
+     MARKED, never filtered — a radius search legitimately returns a hardware shop that cuts keys,
+     and Google mis-files plenty of real traders. Absent on every row cached before this shipped,
+     and absence must stay unmarkable: see market-view. */
+  primaryType?: string;
+  primaryTypeLabel?: string;
 }
 
 function classifyWebsite(websiteUri: string | null | undefined): { status: SearchLead['websiteStatus']; confidence: number; reason: string } {
@@ -430,7 +439,7 @@ async function textSearchPlaces(
   let pageToken: string | undefined;
   const MAX_PAGES = Math.max(1, maxPages);
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,nextPageToken';
   // Google Places API (New) max radius is 50,000m
   const clampedRadius = Math.min(radius, 50000);
 
@@ -543,6 +552,8 @@ async function textSearchPlaces(
         websiteStatus: status,
         confidence,
         reason,
+        primaryType: place.primaryType || undefined,
+        primaryTypeLabel: place.primaryTypeDisplayName?.text || undefined,
       });
 
       if (status === 'NO_WEBSITE') {
@@ -655,7 +666,7 @@ async function expandSearch(
 
     try {
       const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
+      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,nextPageToken';
       const clampedRadius = Math.min(radius, 50000);
 
       // Fetch 1 page per expansion centre to limit API spend
@@ -711,6 +722,8 @@ async function expandSearch(
             websiteStatus: status,
             confidence,
             reason,
+            primaryType: place.primaryType || undefined,
+            primaryTypeLabel: place.primaryTypeDisplayName?.text || undefined,
             isExpanded: true,
           });
           totalNoWebsite++;
@@ -986,7 +999,7 @@ async function fetchTile(
   keyword: string, lat: number, lng: number, radiusM: number, apiKey: string, debug: DebugMeta,
 ): Promise<SearchLead[]> {
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,nextPageToken';
   const out: SearchLead[] = [];
   let pageToken: string | undefined;
 
@@ -1021,6 +1034,8 @@ async function fetchTile(
         websiteStatus: status,
         confidence,
         reason,
+        primaryType: place.primaryType || undefined,
+        primaryTypeLabel: place.primaryTypeDisplayName?.text || undefined,
       });
     }
     pageToken = data.nextPageToken;
@@ -1414,7 +1429,14 @@ Deno.serve(async (req) => {
 
     // ─── LOG API USAGE TO api_usage_log (best-effort) ───
     const searchSessionId = crypto.randomUUID();
-    const totalCostUsd = (debug.googleCallsMade.geocode * 0.005) + (debug.googleCallsMade.textSearchPages * 0.032);
+    /* ⛔ THE PAGE RATE WAS 0.032 — TEXT SEARCH (PRO). This search bills at Text Search (ENTERPRISE),
+       $35 per 1,000 = $0.035, because the field mask requests places.websiteUri and Google charges a
+       request ONCE at the highest tier any requested field touches. 9% under on every search ever
+       logged. Corrected 2026-08-06. Geocoding is $5 per 1,000 and 0.005 is right.
+       ⚠️ Adding places.primaryType the same day cost NOTHING for exactly this reason: primaryType is
+       a Pro field arriving on a request already priced at Enterprise. Before adding any field here,
+       check its tier — if it is Enterprise and nothing else already is, it re-prices the whole call. */
+    const totalCostUsd = (debug.googleCallsMade.geocode * 0.005) + (debug.googleCallsMade.textSearchPages * 0.035);
     console.log(`[COST] userId=${userId} searchSession=${searchSessionId} geocode=${debug.googleCallsMade.geocode} textSearch=${debug.googleCallsMade.textSearchPages} totalCost=$${totalCostUsd.toFixed(3)} expanded=${expanded}`);
 
     try {
@@ -1437,7 +1459,7 @@ Deno.serve(async (req) => {
           api_type: 'text_search',
           calls_made: debug.googleCallsMade.textSearchPages,
           cache_hit: false,
-          estimated_cost_usd: debug.googleCallsMade.textSearchPages * 0.032,
+          estimated_cost_usd: debug.googleCallsMade.textSearchPages * 0.035,  // Enterprise, see above
           search_session_id: searchSessionId,
         });
       }

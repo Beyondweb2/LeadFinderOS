@@ -171,6 +171,12 @@ export interface MarketPoolRow {
    *  counted as a business in the town: the rectangle is 6x11km for Hastings and Battle Locksmiths
    *  sits 10km north of it, so "in the pool" and "in the town" are not the same claim. */
   outsideTown?: boolean;
+  /** GOOGLE DOES NOT FILE THIS BUSINESS UNDER THE SEARCHED TRADE. Carries the label Google does use
+   *  ("Hardware Store"), so the row can say what it is rather than only what it is not.
+   *  ⚠️ A MARK, NOT A FILTER, and deliberately: a radius search legitimately returns a hardware shop
+   *  that cuts keys, and Google mis-files real traders often enough that filtering on this would
+   *  silently drop prospects. The operator skips it or does not. */
+  offTrade?: { label: string };
   /** Present when this business IS named but NOT established — so it stays a PROSPECT instead of
    *  being subtracted. Carries the counts so the row can show how thin: "1 mention in 1 of 6
    *  audits". Absent = never named at all.
@@ -264,17 +270,29 @@ export const MARKET_AUDIT_QUESTION_COUNT = 8;
    when a business is added to the CRM. Every figure here is itemised on screen for that reason —
    an estimate the operator cannot break down is an estimate they cannot check. */
 
-/** Apify on-page SEO scan, per audited business that HAS a website. From
- *  process-ai-audit-queue's own costing comment ($0.12 per scan, re-costed against billed spend).
- *  A market batch now SKIPS these (see MARKET_SKIP_SEO), so this is only used to show the
- *  operator what skipping them saves. */
-export const SEO_SCAN_USD = 0.12;
+/** Apify on-page SEO scan, per audited business that HAS a website.
+ *  ⛔ WAS 0.12, AND THAT WAS THE ONLY CONSTANT IN THE APP DERIVED FROM A PRICE LIST RATHER THAN
+ *  FROM SPEND: "$40 per 1,000 pages x MAX_PAGES=3". Measured 2026-08-06 against 218 real
+ *  enrichment_usage rows, the actual figures Apify reported are $0.02 (x65), $0.04 (x41),
+ *  $0.08 (x4) and $0.20 (x1) — plus 57 rows at exactly $0.12, which is this constant echoed back
+ *  by the fallback in process-ai-audit-queue when Apify returns no usage figure.
+ *  ⚠️ THE TWO CANNOT BE SEPARATED IN THE DATA, so the honest reading is a RANGE, not a number: a
+ *  typical scan costs $0.02-$0.04. Set to the top of that band rather than the $0.031 mean, because
+ *  this figure also reserves headroom in the cap pre-check and under-reserving is the worse error.
+ *  The tell that $0.12 is the constant and not a measurement: $0.06, $0.10 and $0.14 never occur
+ *  once in 218 rows, so the values are not landing on a per-page ladder that passes through $0.12.
+ *  A market batch SKIPS these (see MARKET_SKIP_SEO), so this mostly shows what skipping them saves. */
+export const SEO_SCAN_USD = 0.04;
 
 /** Google Place Details, charged once per business added to the CRM (the phone/address/rating
  *  lookup in useOutreach.addLead).
- *  ⚠️ INHERITED CONSTANT, NEVER VERIFIED AGAINST A BILL — it is google-place-details' own
- *  logUsage figure. Shown on screen labelled as unverified rather than quietly folded in. */
-export const PLACE_DETAILS_USD = 0.017;
+ *  ⛔ WAS 0.017, AN INHERITED CONSTANT MATCHING NO PUBLISHED RATE. Corrected 2026-08-06 against
+ *  Google's own pricing table: that call requests a phone number, phone is an ENTERPRISE field, and
+ *  a request bills ONCE at the highest tier it touches. Place Details (Enterprise) is $20 per 1,000
+ *  = $0.020. 18% under, and the same class of error as MARKET_SEARCH_USD: a rate copied from the
+ *  wrong tier of the right product. Verified against the price list, not against a bill — Google
+ *  itemises by SKU, not by call, so a bill cannot confirm a single request. */
+export const PLACE_DETAILS_USD = 0.020;
 
 /** Market-populating audits skip the SEO scan. The point of a market batch is who AI names in a
  *  town, not a website grade for five businesses nobody has sold to — and the scan was ~60% of
@@ -911,6 +929,66 @@ export function marketPlainRead(
 /** How invisible one prospect is, in words. "never mentioned in 6 audits" reads to anybody;
  *  "0 mentions / 6 audits" needs decoding. Built from the row's own thin data, so it cannot
  *  disagree with the grading. */
+/* ── WHICH POOL ROWS ARE NOT THE TRADE YOU SEARCHED FOR ────────────────────────────────────────
+   Norwich returned a hardware shop and a shoe-repair counter in a locksmith pool. Both are real
+   businesses that do touch keys, so neither is a bug in the search — but neither is a locksmith,
+   and they sat in the prospect list with nothing saying so.
+
+   ⛔ THE EXPECTED TYPE IS DERIVED FROM THE POOL, NEVER HARDCODED. There is no trade -> Google-type
+   table anywhere in this file and there must not be one, for the same reason DirectoryFact may not
+   carry a `trade` (see CLAUDE.md §6): the moment the code asserts "locksmiths are type locksmith"
+   it is a hand-maintained list that is wrong for every trade nobody thought about. What Google
+   calls MOST of the businesses a search for that trade returned is the answer, and it costs no
+   maintenance because it is recomputed from each pool.
+
+   ⚠️ ABSENCE IS NEVER AN ANSWER (CLAUDE.md, three instances and counting). A row with no
+   primaryType — every row cached before the field mask changed — is NEVER marked. The assertion is
+   on the grade we WANT (a known type that differs from a known modal type), never on the one we
+   want to exclude. Getting this backwards is what made the tier subtraction drop 15 Norwich
+   prospects, and it would here mark every historic row as not-a-locksmith. */
+
+/** Below this share of typed rows the modal type is not a consensus, so nothing is marked. A pool
+ *  genuinely split between two types has no "expected" type and guessing one would mark half the
+ *  market as off-trade. */
+export const OFF_TRADE_MIN_SHARE = 0.5;
+/** Fewer typed rows than this and the mode is noise — 2 of 3 is not a consensus. */
+export const OFF_TRADE_MIN_TYPED = 4;
+
+export interface TypedPoolEntry { primaryType?: string; primaryTypeLabel?: string }
+
+/** The type Google gives most of this pool, or null when there is no clear consensus. Exported so
+ *  the behaviour is testable without a market-view round trip. */
+export function expectedPrimaryType(rows: TypedPoolEntry[]): string | null {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.primaryType) continue;               // untyped rows do not vote, and are never marked
+    counts.set(r.primaryType, (counts.get(r.primaryType) ?? 0) + 1);
+  }
+  const typed = [...counts.values()].reduce((a, b) => a + b, 0);
+  if (typed < OFF_TRADE_MIN_TYPED) return null;
+  let best: string | null = null, bestN = 0;
+  for (const [t, n] of counts) {
+    // Ties resolve alphabetically so the same pool always gives the same answer. A tie at or above
+    // the share bar is possible only with exactly two types at 50% each, which the >= below admits;
+    // determinism matters more than which of the two wins, because neither is marked as off-trade.
+    if (n > bestN || (n === bestN && best !== null && t < best)) { best = t; bestN = n; }
+  }
+  return bestN / typed >= OFF_TRADE_MIN_SHARE ? best : null;
+}
+
+/** The mark for one row, or undefined. Undefined for: no consensus, no type on the row, or a match.
+ *  ⚠️ Never returns a mark for an untyped row, whatever the consensus is. */
+export function offTradeMark(
+  row: TypedPoolEntry,
+  expected: string | null,
+): { label: string } | undefined {
+  if (!expected || !row.primaryType || row.primaryType === expected) return undefined;
+  /* The label Google itself shows, falling back to the raw type made readable. Saying "Google lists
+     this as a Hardware Store" is actionable; "not a locksmith" alone is not, because it does not
+     tell the operator whether it is a near-miss worth keeping. */
+  return { label: row.primaryTypeLabel || row.primaryType.replace(/_/g, " ") };
+}
+
 export function invisibilityPhrase(row: MarketPoolRow, audits: number): string {
   if (!row.thin) return `never mentioned in ${audits} audit${audits === 1 ? "" : "s"}`;
   const { mentions, audits: inAudits } = row.thin;
