@@ -393,8 +393,8 @@ Facts with numbers. These are measured, and several contradict the older docs.
   Observed 2026-08-06 from a Thai IP: the Checkout Session presented **THB 4,582.95** with a stated
   4% conversion fee; the founder Payment Link showed **£19.99 only**, minutes apart in the same
   browser. One observation does not disprove the docs — treat the link as capable of converting.
-- 🔴 **AN ABSENT VALUE FALLING THROUGH AS THOUGH IT WERE A REAL ONE. THIS HAS NOW HAPPENED FOUR
-  TIMES, in four unrelated files, and it will happen again.** The shape is always the same: code
+- 🔴 **AN ABSENT VALUE FALLING THROUGH AS THOUGH IT WERE A REAL ONE. THIS HAS NOW HAPPENED SIX
+  TIMES, in six unrelated files, and it will happen again.** The shape is always the same: code
   branches on the *known* values and lets everything else drop into the `else`, where the default
   means something the data never said.
   | Where | The absent value | What it was silently treated as |
@@ -403,6 +403,8 @@ Facts with numbers. These are measured, and several contradict the older docs.
   | `clientHeld.ts` (pre-fix) | `''` / whitespace / placeholder | "we hold this" |
   | `market-view` (pre-fix) | tier `unknown` (below the evidence bar) | "AI names them" → subtracted |
   | `offTradeMark` (**caught before shipping**, 2026-08-06) | a pool row with no `primaryType` | "Google does not call this a locksmith" |
+  | `marketPlainRead` (Soham, 2026-08-07) | a pool Places returned **0** businesses for | "every one is already named by AI" |
+  | `MeasureMarket` gate (Soham, 2026-08-07) | the gate skipped when no search ran | a fresh EMPTY pool = "fine, proceed" → 2 paid audits |
   The market one is the clearest: the branch kept `tier === "thin"` and dropped the rest, so
   `unknown` — which is what *every* entry is below the bar — was subtracted as established. **The
   guard inverted in exactly the case it was written for.**
@@ -418,6 +420,15 @@ Facts with numbers. These are measured, and several contradict the older docs.
   returns nothing for an untyped row whatever the consensus. `scripts/off-trade.test.ts` asserts a
   20-row pre-field-mask pool produces **zero** marks. Write the absent case into the test, not the
   comment.
+  🔴 **SOHAM ADDED TWO MORE, AND ONE OF THEM IS A NEW SHAPE: A GUARD THAT IS SKIPPED RATHER THAN
+  WRONG.** The search gate was correct — it just sat inside `if (!poolFresh)`, so it only ran on the
+  path where a search ran, and a pool that was FRESH AND EMPTY (exactly what the gate is for) could
+  never reach it. **Ask not only "is the guard right?" but "can the case it guards reach it?"**
+  Reported twice before it was found, because both the review and the test exercised only the search
+  path. A separate lesson from the same market: **every ratio in `marketView.ts` was correctly
+  guarded against a zero denominator and it still printed "lockrite.org (47 of 0)"** — the total was
+  only ever *interpolated into a sentence*, never divided by. A guard on the arithmetic is not a
+  guard on the copy; grep for printed denominators separately.
 - ⛔ **ABSENCE IS NEVER AN ANSWER — the second place this rule lives.** `serveGate` was the first (a
   skipped question flags, never blocks). `src/lib/clientHeld.ts` is the second: `heldValue()` is the
   ONLY way the client sheet decides it holds a value, and null / undefined / `''` / whitespace / an
