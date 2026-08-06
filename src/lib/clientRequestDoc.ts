@@ -239,13 +239,23 @@ function askEvidence(a: ClientAsk, trade: string): string {
    PRINTS — the first version of this note rendered in full on the client's document, internal
    warnings and all. Comments about the markup belong out here, and never write the closing
    star-slash sequence inside one or it terminates itself. */
-/* ⛔ THE "BEING STRAIGHT WITH YOU" NOTE IS REFRAMED, NOT REMOVED, and the fact in it is unchanged:
-   nobody has completed a cycle. This document reaches someone who has ALREADY PAID, so the old
-   wording's only remaining effect was to lower their expectations after the sale — an apology for a
-   position we chose on purpose. It now says the same thing forwards: they are early, that is why the
-   price is what it is, and we would rather say so than imply a track record we do not have.
-   ⛔ TWO THINGS IN THAT PARAGRAPH ARE VERBATIM AND STAY THAT WAY: the sentence "We are not going to
-   tell you this guarantees you will be named", and FINDABLE_GUARANTEE in the note below it.
+/* ⛔ THE "BEING STRAIGHT WITH YOU" NOTE CARRIES NO TRACK-RECORD APOLOGY (2026-08-06). It went through
+   two versions that both did. The first said "no client has completed a full eight-week cycle with us
+   yet, so we have no results to point at"; the second reframed that forwards as "you are one of the
+   first businesses we have taken on, and that is why the price is what it is" — better, but still a
+   paragraph about what we lack, in a document that only ever reaches somebody who has ALREADY PAID.
+   Lowering their expectations after the sale buys nothing.
+   It now says what we DO and what they GET. Honesty is not the same as volunteering every
+   disadvantage: what is honest here is refusing to promise an outcome, and that survives.
+
+   ⛔ IT MUST NOT RESTATE THE GUARANTEE, WHICH RENDERS IN THE VERY NEXT NOTE. FINDABLE_GUARANTEE
+   already contains "We do not promise you will be named. The engines decide that, and anyone who
+   promises it is guessing" — so the earlier opener, "We are not going to tell you this guarantees you
+   will be named", was saying the constant's own sentence one paragraph above the constant. This note
+   points at it instead. The no-promise and the refund are both still on the page; they are said once,
+   by the sentence that is contractual.
+   ⛔ FINDABLE_GUARANTEE ITSELF IS VERBATIM AND STAYS THAT WAY. It is byte-identical here, in the
+   Stripe line item and on the audit report, and no copy pass touches it.
    ⚠️ THIS NOTE LIVES OUT HERE, NOT IN THE TEMPLATE. An HTML comment inside the returned string ships
    in the document — invisible in print, but it is still internal commentary travelling to a client.
    The JSX-style version of this mistake actually PRINTED, on the scan section, last week. */
@@ -263,8 +273,15 @@ export function renderClientRequestDoc(input: ClientRequestInput): string {
     ? `We asked AI assistants ${input.naming.total} question${input.naming.total === 1 ? '' : 's'} a customer might`
       + ` ask when looking for ${trade ? aOrAn(trade) : 'a business like yours'}${town ? ` in ${town}` : ''},`
       + ` and you were named in ${input.naming.named} of them.`
-    : `We have not completed a measurement for you yet. The requests below do not depend on it —`
-      + ` they are the things we cannot do without you, whatever the measurement shows.`;
+    /* ⛔ FOUND BY THE SAME SWEEP AS THE "Being straight with you" NOTE, and it is the same fault in
+       the document's HEADER: it opened "We have not completed a measurement for you yet", so the
+       no-run path started on what we had not done. Nothing about that helped the reader, who has
+       already paid and is looking for what to send.
+       Same information, forwards: what the requests are, that they stand on their own, and that the
+       measurement is coming. Nothing is hidden — the absence of a figure is visible either way,
+       because the naming line simply is not there. */
+    : `The requests below are what we need from you to start. They do not depend on the measurement`
+      + ` — they are the things we cannot do without you — and your baseline runs during setup.`;
 
   return `<!doctype html>
 <html lang="en">
@@ -383,12 +400,11 @@ ${docBand('What we need from you')}
       <p class="note"><b>What to expect.</b> The marked item above holds everything up: without the
       Google invite we cannot touch your profile at all. Everything else can start straight away, and
       you can send the rest as you get to it.</p>
-      <p class="note"><b>Being straight with you.</b> We are not going to tell you this guarantees you
-      will be named. You are one of the first businesses we have taken on, and that is why the price is
-      what it is — nobody has completed a full eight-week cycle with us yet, so we have no results to
-      point at, and we would rather tell you that than imply a track record we do not have. It also
-      means you get more of our attention than a client we take on in a year's time will. What we can
-      tell you is what we measured, what we did, and what changed when we measured again.</p>
+      <p class="note"><b>Being straight with you.</b> We do everything there is to do to make you
+      easier for these engines to find, and we measure it before and after so you can see exactly what
+      changed. What nobody can do is promise what an engine will say next, which is why our promise
+      below is on the work rather than on the outcome. You get the measurement, the work, and the same
+      measurement again at week eight, whatever it says.</p>
       <p class="note"><b>Our promise.</b> ${FINDABLE_GUARANTEE}</p>
     </section>
 
