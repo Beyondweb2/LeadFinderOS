@@ -33,3 +33,23 @@ export const REPORT_PUBLIC_ORIGIN = "https://findable.live";
 
 /** The URL a prospect is given for their report. */
 export const reportPublicUrl = (auditId: string) => `${REPORT_PUBLIC_ORIGIN}/report/${auditId}`;
+
+/* ⛔ THE GOOGLE ACCOUNT A CLIENT ADDS AS A MANAGER. One value, and it is the OWNER-ADDS-US flow:
+   they open their profile, Users, Add, type this address, choose Manager. Google then emails US the
+   invite and we accept it.
+   ⛔ NOT THE REQUEST-ACCESS FLOW, and the reason is the deciding one: Google's request-access path
+   emails whoever claimed the profile — very often an old address at a web company nobody has spoken
+   to in years — and runs a 3-7 day timer that can end in an ownership transfer nobody asked for.
+   That is not something to build a week-one step on. Owner-adds-us lands in our inbox in seconds and
+   we know it worked because we are the one accepting.
+   ⚠️ IT MUST BE A GOOGLE ACCOUNT. Google will not accept a manager address that is not one.
+   ⚠️ THE QUESTIONNAIRE (findable-site, separate repo) MUST SHOW THE SAME ADDRESS. Two documents
+   describing one mechanism was the whole point of standardising; two documents naming different
+   addresses would be worse than the inconsistency it replaced. */
+export const GBP_MANAGER_EMAIL = "paul@move37.fun";
+
+/** The three clicks, written once. Both documents render this rather than describing it twice. */
+export const GBP_ADD_STEPS =
+  `Open your Google Business Profile, go to Users, click Add, enter ${GBP_MANAGER_EMAIL}, and choose `
+  + 'Manager. That is the whole job — you stay the owner, you never share a password, and you can '
+  + 'remove us in two clicks at any time.';
