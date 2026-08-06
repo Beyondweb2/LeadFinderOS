@@ -25,6 +25,8 @@
    than maintained: there is nothing here that could print a competitor list even by accident.
    ============================================================ */
 
+import { GBP_ADD_STEPS } from './findableOffer';
+
 export type AskCost = 'free' | 'paid' | 'n/a';
 
 export interface DeliveryAsk {
@@ -66,22 +68,23 @@ export function deliveryAsks(ctx: AskContext): DeliveryAsk[] {
   const first = ctx.services.find((s) => s.trim())?.trim();
   return [
   {
-    /* ⛔ NOTHING IN THIS SYSTEM SENDS THAT INVITE. It is a manual step Paul does in the Google
-       Business Profile dashboard, and this sheet tells the client to accept something that does not
-       exist until he has. That is fine while the sheet is printed and sent by hand — he sends the
-       invite and the sheet in the same breath.
-       ⚠️ IT STOPS BEING FINE THE MOMENT THIS SHEET IS SENT AUTOMATICALLY. A client whose first
-       instruction is to accept an invite that never arrives will assume we have not started. If this
-       document is ever wired to a trigger, the invite has to be sent first — either automate it or
-       gate the send on the invite already existing. Do not ship the automation without solving it. */
-    label: 'Accept the Google Business Profile invite',
+    /* ⛔ THE DIRECTION OF THIS ASK IS REVERSED (2026-08-06), and it fixes a real defect. It used to
+       read "You will get an email from Google saying Findable wants to manage your profile. Accept
+       it" — the REQUEST-ACCESS flow, which nothing in this system sent. So the sheet's first
+       instruction was to accept an invite that did not exist until Paul had manually opened the
+       Google dashboard, and a client who read it and waited would assume we had not started.
+       ✅ THE WHOLE CLASS OF PROBLEM IS GONE, not merely papered over. In the owner-adds-us flow there
+       is nothing for us to send, so there is nothing to be out of order and nothing to automate
+       before this document can be triggered automatically. That was previously flagged here as a
+       blocker on ever wiring the sheet to a trigger; it is no longer one.
+       ⚠️ THE QUESTIONNAIRE MUST DESCRIBE THE SAME MECHANISM. It said "You add us as a manager" in its
+       prose while asking for the CLIENT's email — an address no Google flow consumes — and this sheet
+       said the opposite. Three descriptions of one step, at least two of them wrong. */
+    label: 'Add us to your Google Business Profile',
     why:
       'Your Google Business Profile is one of the few things AI reads that you own outright, and it '
       + 'is usually the thickest source of facts about you. We cannot complete it from outside.',
-    how:
-      'You will get an email from Google saying Findable wants to manage your profile. Accept it. '
-      + 'You stay the owner, you never share a password, and you can remove us in two clicks at any '
-      + 'time.',
+    how: GBP_ADD_STEPS,
     cost: 'free',
     blocking: true,
   },
