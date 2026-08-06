@@ -1,6 +1,6 @@
 import { DOC_CSS, docBand, esc, pdfTitle, printHtmlAsPdf } from './playbookDocStyle';
 import { FINDABLE_GUARANTEE } from './findableOffer';
-import { DELIVERY_ASKS } from './clientRequestAsks';
+import { deliveryAsks } from './clientRequestAsks';
 
 /* ============================================================
    THE CLIENT REQUEST FORM — the only client-facing document in the system.
@@ -125,13 +125,10 @@ const EXTRA_CSS = `
 
   /* Held vs missing details. Missing is the actionable state, so it is the one that shouts. */
   .details{ list-style:none; margin:0; padding:0; }
-  /* ⛔ flex-wrap IS LOAD-BEARING. .det-why asks for flex:0 0 100% — a full-width row of its own —
-     and without wrapping it became a FOURTH item on the same line. Everything then compressed: .det-v
-     (flex-shrink 1) collapsed to a few pixels and word-break:break-word rendered it one character per
-     line, and .det-why overflowed the page and was cut mid-word at the paper edge.
-     That is the "M IS SI N G - pl e a s e p r o vi d e" and the "so witho" truncation, both from this
-     one missing declaration. Its own margin-left:162px only makes sense on a wrapped line, which is
-     what the rule always assumed. */
+  /* ⛔ flex-wrap IS LOAD-BEARING. .det-why asks for a full-width row of its own, and without wrapping
+     it became a FOURTH item on the same line. Everything then compressed: .det-v (flex-shrink 1)
+     collapsed to a few pixels and word-break:break-word rendered it one character per line. That is
+     the "M IS SI N G - pl e a s e p r o vi d e". */
   .det{ display:flex; flex-wrap:wrap; align-items:baseline; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); }
   .det:last-child{ border-bottom:0; }
   .det-k{ flex:0 0 150px; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
@@ -141,8 +138,19 @@ const EXTRA_CSS = `
     border-radius:999px; padding:2px 9px; background:#eef1f6; color:var(--muted); white-space:nowrap; }
   .det.miss .det-v{ color:var(--red); font-weight:900; }
   .det.miss .det-have{ background:var(--red); color:#fff; }
-  .det-why{ flex:0 0 100%; margin:4px 0 0 162px; font-size:12.5px; line-height:1.5; color:var(--muted);
-    overflow-wrap:anywhere; }
+  /* ⛔ THE BASIS MUST SUBTRACT ITS OWN MARGIN. This rule was flex:0 0 100% with margin-left:162px,
+     and a flex-basis resolves against the CONTAINER's content box while the margin sits OUTSIDE it —
+     so the line box was 100% wide starting 162px in, i.e. 162px wider than the page. Every wrapped
+     line ran off the right edge and print silently clipped the tail of it, deleting a run of words
+     MID-SENTENCE with no visible cut: "AI builds its [answers largely from] businesses' own
+     websites" and "building you [a simple one is] included in the setup".
+     It reads as truncated data and is not — the string is whole in the markup, and a test asserts so.
+     162px is .det-k's 150px plus the 12px gap, i.e. the left edge of the value column, which is what
+     the alignment wants. calc() keeps the alignment and gives the text somewhere to live.
+     ⚠️ Any full-width flex row with a margin needs the same subtraction. .sf-d has no margin, which
+     is why the findings list was never affected. */
+  .det-why{ flex:0 0 calc(100% - 162px); max-width:calc(100% - 162px); margin:4px 0 0 162px;
+    font-size:12.5px; line-height:1.5; color:var(--muted); overflow-wrap:anywhere; }
 
   /* One ask per block: what it is, why we are asking, what it costs. */
   .asks{ list-style:none; margin:0; padding:0; }
@@ -283,7 +291,7 @@ ${docBand('What we need from you')}
       <p class="wk-client" style="margin-bottom:12px">Everything else on your setup we do ourselves.
       These are the ones we cannot: each needs your access, your property, or your decision. Two of
       them stop the work until they are done, and they are marked.</p>
-      <ul class="asks">${DELIVERY_ASKS.map((a) => `
+      <ul class="asks">${deliveryAsks({ services: input.services }).map((a) => `
         <li class="ask">
           <div class="ask-h">
             <span class="ask-name">${esc(a.label)}</span>
@@ -318,7 +326,8 @@ ${docBand('What we need from you')}
       <div class="sec-eyebrow">Step three</div>
       <div class="sec-title">Your pages</div>
       <p class="wk-client">We do not have your service list yet. Send us the services you want pages
-      for and the towns you want work from, and that becomes the page plan.</p>
+      for and the towns you want work from, and that becomes the page plan. The details we need for
+      each one are in step two &mdash; send them together and we can start writing.</p>
     </section>`}
 
     ${input.seo ? `<section class="block">

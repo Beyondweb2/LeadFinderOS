@@ -41,9 +41,30 @@ export interface DeliveryAsk {
   optional?: boolean;
 }
 
+/* WHAT THE ASKS ARE ALLOWED TO KNOW. Deliberately tiny: the client's own service list, and nothing
+   else. It exists for two faults found on a printed locksmith's sheet.
+
+   ⛔ 1. A HARDCODED TRADE EXAMPLE. The from-price ask illustrated itself with "boiler service from
+   £90" on every sheet, so a locksmith was shown a plumbing price. Nothing marks a document as a
+   template faster than an example from somebody else's trade.
+   ⛔ 2. THE DOCUMENT CONTRADICTED ITSELF. This ask said "for each service on the list overleaf"
+   while step three said "we do not have your service list yet" — pointing at a list it then admitted
+   did not exist. The two states are now written separately and both name the same step.
+
+   ⚠️ NO INVENTED FIGURE, EVER. The obvious fix — a price map per trade — replaces a wrong example
+   with a made-up one, and a number beside a client's own service reads as us telling them what to
+   charge. So the example uses THEIR service name and no figure at all. With no service list it goes
+   fully generic and names no trade. */
+export interface AskContext {
+  /** Their services, from the questionnaire. Empty when we have not had it back yet. */
+  services: string[];
+}
+
 /* ⚠️ ORDER IS THE ORDER THEY SHOULD DO THEM IN, and the two blocking ones come first. A client who
    only reads the top of the list must still hit the two that stop the work. */
-export const DELIVERY_ASKS: DeliveryAsk[] = [
+export function deliveryAsks(ctx: AskContext): DeliveryAsk[] {
+  const first = ctx.services.find((s) => s.trim())?.trim();
+  return [
   {
     /* ⛔ NOTHING IN THIS SYSTEM SENDS THAT INVITE. It is a manual step Paul does in the Google
        Business Profile dashboard, and this sheet tells the client to accept something that does not
@@ -103,9 +124,12 @@ export const DELIVERY_ASKS: DeliveryAsk[] = [
     why:
       'A page that says what you actually do, where, and roughly what it costs is the kind of thing '
       + 'AI quotes. A page that could describe any firm in the country is not.',
-    how:
-      'For each service on the list overleaf: what it involves in your own words, how far you will '
-      + 'travel for it, whether you do it out of hours, and any guarantee or warranty you give.',
+    how: (first
+      ? 'For each service in step three: '
+      : 'Send us the services you want pages for — that list is step three, and we do not have it '
+        + 'yet. Then for each one: ')
+      + 'what it involves in your own words, how far you will travel for it, whether you do it out '
+      + 'of hours, and any guarantee or warranty you give.',
     cost: 'free',
   },
   {
@@ -115,9 +139,12 @@ export const DELIVERY_ASKS: DeliveryAsk[] = [
     why:
       'A from-price makes a page much more likely to be quoted, because it answers the question the '
       + 'customer actually asked.',
-    how:
-      'Give one if you can — “boiler service from £90” is enough. Leave it if you would rather not; '
-      + 'plenty of trades do not publish prices and it does not hold anything up.',
+    how: (first
+      ? `Give one if you can — a single line per service, like “${first} from” and your own figure.`
+      : 'Give one if you can — a single line for each thing you do: what it is, then “from” and '
+        + 'your own figure.')
+      + ' Leave it if you would rather not; plenty of trades do not publish prices and it does not '
+      + 'hold anything up.',
     cost: 'n/a',
     optional: true,
   },
@@ -133,8 +160,10 @@ export const DELIVERY_ASKS: DeliveryAsk[] = [
       + 'you have been told before not to use. If there is nothing, say so and we will get on with it.',
     cost: 'free',
   },
-];
+  ];
+}
 
 /** The blocking ones, for the summary line — a client should know before they read the list how many
- *  of these actually stop the work. */
-export const BLOCKING_ASK_COUNT = DELIVERY_ASKS.filter((a) => a.blocking).length;
+ *  of these actually stop the work. Context-free: which asks block does not vary by trade or by
+ *  whether we hold the service list, so any context gives the same answer. */
+export const BLOCKING_ASK_COUNT = deliveryAsks({ services: [] }).filter((a) => a.blocking).length;
