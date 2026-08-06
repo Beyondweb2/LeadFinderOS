@@ -687,7 +687,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               trade={chosen?.trade ?? view.trade}
               town={chosen?.town ?? view.town}
               completedMarketAudits={view.concentration.marketAuditsComplete ?? 0}
-              inFlightMarketAudits={view.marketProgress?.length ?? 0}
+              marketProgress={view.marketProgress}
               poolSearchedAt={view.poolState.state === 'ready' ? view.poolState.searchedAt : null}
               onSearch={measureSearch}
               onReload={reload}
@@ -702,6 +702,11 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
         </div>
       )}
 
+      {/* ⛔ THE BUTTON IS NOT REPEATED HERE. This card renders when a market has no audits at all —
+          but the primary block above renders in EVERY state, because marketShape returns
+          kind:"unmeasured" rather than null. Both carried a MeasureMarket, so a zero-audit market
+          showed two identical buttons stacked. The card keeps its explanation and points at the one
+          above rather than growing a second. */}
       {view && conc && conc.audits === 0 && (
         <Card className="border-amber-500/40 bg-amber-500/5">
           <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-2">
@@ -720,19 +725,10 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                 ? `${view.pool.length} found, ${auditable.length} auditable${chainEntries > 0 ? `, ${chainEntries} chain ${chainEntries === 1 ? 'entry' : 'entries'} excluded` : ''}.`
                 : 'Run the lead search first to find the local businesses, then audit them.'}
             </p>
-            {/* The same one button. A market with nothing measured is exactly where it matters
-                most that pressing once does everything. */}
-            <div className="pt-0.5">
-              <MeasureMarket
-                trade={chosen?.trade ?? view.trade}
-                town={chosen?.town ?? view.town}
-                completedMarketAudits={view.concentration.marketAuditsComplete ?? 0}
-              inFlightMarketAudits={view.marketProgress?.length ?? 0}
-                poolSearchedAt={view.poolState.state === 'ready' ? view.poolState.searchedAt : null}
-                onSearch={measureSearch}
-                onReload={reload}
-              />
-            </div>
+            <p className="pt-0.5 text-xs text-muted-foreground">
+              Press <span className="font-medium text-foreground">Measure this market</span> above and
+              it will do the lead search and both audits.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -1046,14 +1042,25 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                     </div>
                   )}
 
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <Button size="sm" onClick={openAuditDialog}>
-                      <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Run audits for this town
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setSearchOpen(true)} disabled={searching}>
-                      <Search className="mr-1.5 h-3.5 w-3.5" /> Re-run the lead search
-                    </Button>
-                  </div>
+                  {/* ⛔ BEHIND A DISCLOSURE, NOT ON THE PAGE. These two were supposed to move when the
+                      one button shipped and did not — I replaced two of the four button clusters and
+                      missed this one, so the old per-business dialog stayed one click away and got
+                      pressed. They still work and are still here; they are simply no longer the
+                      path. "Run audits for this town" is the per-business batch, which is a different
+                      job from measuring the market and is labelled as such. */}
+                  <details className="pt-1">
+                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                      Advanced
+                    </summary>
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <Button size="sm" variant="outline" onClick={openAuditDialog}>
+                        <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Audit the businesses, one by one
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setSearchOpen(true)} disabled={searching}>
+                        <Search className="mr-1.5 h-3.5 w-3.5" /> Re-run the lead search only
+                      </Button>
+                    </div>
+                  </details>
                 </>
               )}
 

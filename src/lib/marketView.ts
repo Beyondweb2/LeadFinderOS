@@ -438,7 +438,70 @@ export function measureRunCost(poolIsFresh: boolean, audits: number): number {
 export const USD_TO_GBP_DISPLAY = 0.79;
 export const asPence = (usd: number): string => `${Math.round(usd * USD_TO_GBP_DISPLAY * 100)}p`;
 
-export type MeasurePhase = 'idle' | 'searching' | 'starting' | 'answering' | 'done' | 'blocked' | 'failed';
+export type MeasurePhase = 'idle' | 'searching' | 'starting' | 'answering' | 'stalled' | 'done' | 'blocked' | 'failed';
+
+/* ⛔ THE RUN IS DERIVED FROM THE DATABASE, NOT OWNED BY THE COMPONENT. The first version kept the
+   phase in React state, so any reload or navigation lost the bar and the operator was back to
+   reading a sentence in a paragraph — the exact problem the rebuild existed to fix, and one that
+   fires constantly, because five minutes is long enough to go and do something else.
+   What is actually running lives in ai_audits and ai_audit_queue, and market-view already reports it
+   as marketProgress. So: marketProgress supplies IDENTITY and ORIGIN (which audits, how many
+   questions, when they started) and the 5-second queue poll supplies MOVEMENT. Each for the thing it
+   is good at.
+   ⚠️ ONE CONSEQUENCE, ACCEPTED: the bar now appears without anyone pressing the button — including
+   for an audit started from the AI Audit page, which previously had no visibility here at all.
+   ⚠️ ONE LIMIT, STATED RATHER THAN FAKED: the SEARCH phase cannot survive a reload. Nothing records
+   "a search is in progress", so a refresh during those 10-30 seconds shows the idle button until it
+   finishes. Inventing a marker for it would be a row written to make a bar look better. */
+export interface DerivedRun {
+  phase: MeasurePhase;
+  auditIds: string[];
+  /** Earliest start across the unfinished audits, so elapsed resumes from the real beginning. */
+  startedMs: number | null;
+  /** Questions across all of them, as the VIEW last saw them. The queue poll refines this. */
+  questionsDone: number;
+  questionsTotal: number;
+  /** The raw error off the queue row, when one of them has stalled. Never a wrapper. */
+  error: string | null;
+}
+
+/**
+ * What the panel should be showing on mount, from the view alone.
+ *
+ * ⛔ STALE MEANS STALLED, NOT SLOW. An Apify question can legitimately run ~9 minutes and the queue
+ * times a run out at 12, so past MARKET_AUDIT_STALE_MS the audit has stopped moving. A bar that
+ * keeps implying progress on a dead audit is worse than no bar, because the operator sits and waits
+ * for it. Past the threshold the phase becomes `stalled` and the raw error is surfaced.
+ */
+export function deriveRun(progress: MarketAuditProgress[] | undefined, nowMs: number): DerivedRun {
+  const live = progress ?? [];
+  if (live.length === 0) {
+    return { phase: 'idle', auditIds: [], startedMs: null, questionsDone: 0, questionsTotal: 0, error: null };
+  }
+  const starts = live
+    .map((p) => (p.startedAt ? new Date(p.startedAt).getTime() : NaN))
+    .filter((t) => Number.isFinite(t));
+  const startedMs = starts.length ? Math.min(...starts) : null;
+  const questionsDone = live.reduce((n, p) => n + (p.questionsDone ?? 0), 0);
+  const questionsTotal = live.reduce((n, p) => n + (p.questionsTotal ?? 0), 0);
+  const error = live.find((p) => p.error)?.error ?? null;
+
+  const age = startedMs === null ? 0 : nowMs - startedMs;
+  if (startedMs !== null && age > MARKET_AUDIT_STALE_MS) {
+    return { phase: 'stalled', auditIds: live.map((p) => p.auditId), startedMs, questionsDone, questionsTotal, error };
+  }
+  /* No queue rows yet means create-ai-audit has written the audit but the questions are still being
+     inserted — `starting`, not `answering`, so the bar does not divide by zero and does not claim a
+     count it has not got. */
+  const phase: MeasurePhase = questionsTotal === 0 ? 'starting' : 'answering';
+  return { phase, auditIds: live.map((p) => p.auditId), startedMs, questionsDone, questionsTotal, error };
+}
+
+/** How long a stalled run has been silent, for the message. */
+export function stalledPhrase(startedMs: number, nowMs: number): string {
+  const mins = Math.max(1, Math.round((nowMs - startedMs) / 60000));
+  return `No progress for ${mins} minutes. An audit that has stopped moving will not restart on its own.`;
+}
 
 export interface MeasureProgress {
   phase: MeasurePhase;
@@ -505,6 +568,20 @@ export function measureProgress(
   }
   if (phase === 'done') {
     return { phase, percent: 100, label: 'Measured', questionsDone: done, questionsTotal: total, businessesFound };
+  }
+  /* ⛔ A STALLED BAR MUST NOT LOOK LIKE A MOVING ONE. It keeps the progress it genuinely reached —
+     hiding that would throw away the only information about how far it got — but the caller renders
+     it in a warning colour with the raw error beside it, and the label says stopped rather than
+     answering. */
+  if (phase === 'stalled') {
+    const score = questions.reduce((n, q) => n + (QUESTION_STATE_SCORE[q.status ?? 'pending'] ?? 0), 0);
+    const pct = total ? PHASE_FLOOR.answering + Math.min(0.98, score / (total * 2)) * (PHASE_FLOOR.done - PHASE_FLOOR.answering) : PHASE_FLOOR.starting;
+    return {
+      phase,
+      percent: Math.round(pct),
+      label: `Stopped at ${done} of ${total} questions${failed ? ` - ${failed} failed` : ''}`,
+      questionsDone: done, questionsTotal: total, businessesFound,
+    };
   }
   return { phase, percent: 0, label: '', questionsDone: done, questionsTotal: total, businessesFound };
 }
