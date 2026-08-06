@@ -17,6 +17,17 @@
    ⚠️ FAILING CLOSED MEANS FULL PRICE. Every error path here returns the standard price. A lookup
    that throws must never hand out a discount, and a customer charged the price the site showed them
    is never the emergency — the reverse is.
+
+   🔴 ONE PROSPECT WAS QUOTED SOMETHING ELSE, AND IT IS A DIFFERENT PROMISE AS WELL AS A DIFFERENT
+   PRICE. RG Locksmiths cambs (lead 800425fe-00cc-46bf-a281-df57de6f8d4e, status `interested`, audit
+   9f78ce36) was quoted £49.99 on a SEPARATE Stripe payment link carrying the OLD OUTCOME-based
+   guarantee. That lead has a completed audit and has not paid, so it is eligible here: going through
+   the flow today he would be charged £19.99 against the WORK-based guarantee.
+   Cheaper for him, so there is no harm in the price. The promise is the part worth knowing: the old
+   wording guaranteed an outcome and the current one guarantees the audit, the work and the
+   re-measurement. If he ever refers back to what he was sold, those are not the same document.
+   Recorded here rather than left to be discovered, because this is the file that decides what he
+   pays and nothing else in the system knows the old quote existed.
    ============================================================ */
 import { FINDABLE_SETUP_PRICE_GBP } from "../../../src/lib/findableOffer.ts";
 

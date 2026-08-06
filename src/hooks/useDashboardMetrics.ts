@@ -82,6 +82,12 @@ interface DashboardMetrics {
   channelPerf: ChannelPerformance;
 }
 
+/* ⚠️ MIRRORS FOUNDER_PRICE_GBP in supabase/functions/_shared/offer-price.ts (what is CHARGED) and
+   FOUNDER_OFFER_PRICE_LABEL / FOUNDER_OFFER_COUNT in src/lib/founderOffer.ts (what the report SAYS).
+   Three places, one offer. This one only counts; it decides nothing. */
+const FOUNDER_PRICE_GBP = 19.99;
+const FOUNDER_PLACES = 10;
+
 const getDateRanges = () => {
   const now = new Date();
   const today = new Date(now);
@@ -327,7 +333,7 @@ export function useDashboardMetrics(isAdmin = false) {
                      any report previewed before sending, the recorded "first open" is ours.
        Archived leads are excluded here now, matching the rest of the dashboard. */
     const funnelLeads = allLeads.filter(l => !l.is_archived);
-    let contacted = 0, replied = 0, pitched = 0, pitchReplied = 0, funnelPaid = 0;
+    let contacted = 0, replied = 0, pitched = 0, pitchReplied = 0, funnelPaid = 0, founderSales = 0;
     for (const l of funnelLeads) {
       const ms = msgsByLeadId.get(l.id);
       if (!ms) {
@@ -347,9 +353,15 @@ export function useDashboardMetrics(isAdmin = false) {
       }
       // Money in the bank, and nothing else. A status someone moved by hand is not a payment.
       if ((l.amount_paid ?? 0) > 0) funnelPaid += 1;
+      /* THE FOUNDER PRICE EXACTLY, within a penny. amount_paid is the real charged amount
+         (stripe-webhook writes amount_total / 100), so this counts places actually taken at the
+         founder price — not every paid lead, and not everything below full price, which would sweep
+         in the £49.99 quote that predates this offer. */
+      if (Math.abs((l.amount_paid ?? 0) - FOUNDER_PRICE_GBP) < 0.01) founderSales += 1;
     }
     const auditFunnel: AuditFunnel = {
       contacted, replied, pitched, pitchReplied, paid: funnelPaid,
+      founderSales, founderPlaces: FOUNDER_PLACES,
       replyRate: contacted > 0 ? Math.round((replied / contacted) * 100) : null,
       pitchReplyRate: pitched > 0 ? Math.round((pitchReplied / pitched) * 100) : null,
     };
