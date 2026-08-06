@@ -17,6 +17,16 @@ import {
 } from "./apify.ts";
 import { AI_SEARCH_ACTOR } from "./ai-search.ts";
 
+/** ⛔ MUST EQUAL src/lib/marketView.ts AUDIT_EST_USD_PER_QUESTION. Asserted by
+ *  scripts/check-cross-repo-sync.mjs — these two DID drift (marketView was re-measured to 0.0104 and
+ *  this was left at 0.0125), so the app quoted one price while the server reserved another.
+ *  A named export rather than a bare property because the sync check can only read a named const —
+ *  and a checker that cannot see a value cannot guard it. */
+export const AI_SEARCH_USD_PER_QUESTION = 0.0104;
+
+/** ⛔ MUST EQUAL src/lib/marketView.ts SEO_SCAN_USD. Same reasoning. */
+export const SEO_SCAN_USD_PER_SCAN = 0.04;
+
 export type SourceKey = "maps" | "contact_scraper" | "social_images" | "whatsapp" | "ai_search" | "seo_audit" | "place_details";
 export type SourceStage = "discovery" | "enrich";
 
@@ -100,9 +110,10 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
        MEASURED 2026-07-30 from ai_audit_runs.actor_cost_usd, which records what Apify actually
        billed: 81 runs, $3.4075 total, 295 questions across those runs = **$0.01155 per question**
        (mean $0.04207 per run, at a mean 3.64 questions per run; the runs are 70x3q, 5x5q, 6x10q).
-       Window 26-30 July. Stored as 0.0125 — rounded UP, deliberately: this figure is a spend CEILING,
-       so erring high fails safe, and it matches RE_AUDIT_EST_USD_PER_QUESTION in AiAudit.tsx so the
-       operator's estimate and the cap agree.
+       Window 26-30 July. Was stored as 0.0125, rounded UP on the reasoning that a spend ceiling
+       should err high — SUPERSEDED 2026-08-06 by the re-measurement below, because the same figure
+       is now the estimate the operator is SHOWN, and rounding a quoted price up is not failing safe,
+       it is quoting wrong.
 
        WHY THIS MATTERED, AND WHY IT WAS NOT AN EMERGENCY. It was 0.0025, read off a price list ($2.50
        per 1,000 result pages) rather than a bill — but a question returns SEVERAL result pages, so the
@@ -114,7 +125,12 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
        start — under-reserving by ~$0.01 per question. Worth fixing, not a fire.
 
        DO NOT re-derive this from a price list again. actor_cost_usd is the bill; use it. */
-    estCostUsd: 0.0125,
+    /* ⛔ RE-MEASURED 2026-08-06: 60 completed runs / 206 questions of real actor_cost_usd give a
+       mean of $0.01095 and a median of $0.01038. Was 0.0125, ~20% high.
+       ⚠️ THIS MUST EQUAL src/lib/marketView.ts's AUDIT_EST_USD_PER_QUESTION. It briefly did not —
+       marketView was corrected to 0.0104 and this was left, so the app quoted one price and the
+       server reserved another. The sync check now asserts the pair. */
+    estCostUsd: AI_SEARCH_USD_PER_QUESTION,
     description: "AI Visibility Audit multi-engine SERP via apify/google-search-scraper",
     enabled: true,
   },
@@ -127,9 +143,17 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
     // truth for which actor is CALLED (this field is descriptive — nothing invokes it).
     // The legacy misceres~seo-audit-tool in seo-audit.ts is no longer the scan in use.
     actorId: "smart-digital~complete-seo-audit-tool",
-    // REAL price (Apify dashboard, 2026-07-26): $40 per 1,000 pages at MAX_PAGES=3, so ~$0.12
-    // per scan — the previous $0.02 was 6x too LOW, and it is now the dominant cost in an audit.
-    estCostUsd: 0.12,
+    /* ⛔ WAS 0.12, DERIVED FROM THE PRICE LIST ($40 per 1,000 pages x MAX_PAGES=3) AND NEVER
+       CHECKED AGAINST SPEND. Measured 2026-08-06 across 218 enrichment_usage rows: the figures
+       Apify actually reported are $0.02 (x65), $0.04 (x41), $0.08 (x4), $0.20 (x1). The 57 rows at
+       exactly $0.12 are this constant echoed back by the fallback below when Apify returns no usage
+       figure, so including them would let the constant validate itself.
+       ⚠️ The two are indistinguishable in the data, so $0.04 is the top of the measured band rather
+       than a precise figure. Chosen over the $0.031 mean because this value also reserves headroom
+       in the cap pre-check, where under-reserving is the worse failure.
+       Note the 2026-07-26 note claiming $0.02 was "6x too LOW" had it backwards: $0.02 is the
+       single most common real value. See src/lib/marketView.ts SEO_SCAN_USD, which must match. */
+    estCostUsd: SEO_SCAN_USD_PER_SCAN,
     description: "On-page SEO audit (misceres/seo-audit-tool), graded for the AI-audit report's SEO section",
     enabled: true,
   },

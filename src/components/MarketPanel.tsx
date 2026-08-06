@@ -53,8 +53,10 @@ interface AuditJobProgress {
  *  than this just burns reads for the same numbers. */
 const JOB_POLL_MS = 8_000;
 const JOB_ACTIVE = new Set(['queued', 'running']);
-/** Google Places text search, per page of ~20 results, from search-leads' own logging constant. */
-const GOOGLE_PAGE_USD = 0.032;
+/** Google Places text search, per page of ~20 results, from search-leads' own logging constant.
+ *  ⛔ Was 0.032, the Text Search (Pro) rate, on a call that bills at Text Search (Enterprise) because
+ *  its field mask requests websiteUri. $35 per 1,000. Corrected with search-leads 2026-08-06. */
+const GOOGLE_PAGE_USD = 0.035;
 
 export interface MarketPanelProps {
   /** Trade as typed on Find Leads. Normalised server-side by the same norm() the playbook uses. */
@@ -678,6 +680,17 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                         {/* The badge stays on the row as well as in the heading: the lists can be
                             scrolled apart on a phone, and a row must say what it is on its own. */}
                         {pr.noWebsite && <Badge variant="outline" className="text-[10px]">no website</Badge>}
+                        {/* QUIET, AND NOT A WARNING. Google files this business as something else,
+                            which is worth knowing before spending 8p auditing it — but a hardware
+                            shop that cuts keys is a real prospect, so this must not read as an
+                            error. Same weight as "no website": a fact on the row, operator's call.
+                            Naming the type Google DID give is the actionable half; "not a
+                            locksmith" alone would not tell anyone whether it is a near miss. */}
+                        {pr.offTrade && (
+                          <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+                            Google lists this as {pr.offTrade.label.toLowerCase()}
+                          </Badge>
+                        )}
                         <Button
                           size="sm" variant="outline" className="ml-auto h-8"
                           disabled={addingKey === pr.key || addedKeys.has(pr.key)}

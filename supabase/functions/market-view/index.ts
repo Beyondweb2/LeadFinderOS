@@ -6,7 +6,7 @@ import { questionKey } from "../../../src/lib/seedGuard.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
-  ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
+  ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE, expectedPrimaryType, offTradeMark,
   type MarketConcentration, type MarketNamedRow, type MarketPoolExcluded,
   type MarketPoolRow, type MarketPoolState, type MarketTier, type MarketCitationHost,
   type MarketAuditProgress,
@@ -104,6 +104,10 @@ interface CachedLead {
    *  Absent on every row cached before that shipped, which reads as false — correct, because
    *  those pools only ever contained inside-the-rectangle results. */
   outsideTown?: boolean;
+  /** What Google files this business as. Written by search-leads since 2026-08-06; absent on every
+   *  row cached before that, which must never be read as "not the trade" — see offTradeMark. */
+  primaryType?: string;
+  primaryTypeLabel?: string;
 }
 
 Deno.serve(async (req) => {
@@ -509,6 +513,13 @@ Deno.serve(async (req) => {
       poolGroups.set(k, g);
     }
 
+    /* WHAT GOOGLE CALLS MOST OF THIS MARKET. Computed across the WHOLE in-town pool, named and
+       unnamed alike, because the firms AI already names are the ones most certainly the trade and
+       they should get a vote. Null whenever the pool has no consensus, in which case NOTHING is
+       marked. Not stored: it is a property of the pool in front of the operator, and storing it
+       would freeze one search's consensus onto the next. */
+    const expectedType = expectedPrimaryType(pool);
+
     const notNamed: MarketPoolRow[] = [];
     /* EVERY EXCLUSION IS ITEMISED. A silent exclusion is as dangerous as a silent inclusion - it is
        how a real prospect disappears. Each one names the entry it matched and that entry's weight,
@@ -541,6 +552,7 @@ Deno.serve(async (req) => {
           noWebsite: g.websiteless === g.variants.length,
           googleMapsUrl: g.sample.googleMapsUrl,
           websiteUrl: g.sample.websiteUrl,
+          offTrade: offTradeMark(g.sample, expectedType),
           thin: { mentions: hit.mentions, audits: hit.audits, matchedNamed: hit.name },
         });
         continue;
@@ -567,6 +579,7 @@ Deno.serve(async (req) => {
         noWebsite: g.websiteless === g.variants.length,   // see the note above: every branch, not any
         googleMapsUrl: g.sample.googleMapsUrl,
         websiteUrl: g.sample.websiteUrl,
+        offTrade: offTradeMark(g.sample, expectedType),
       });
     }
     /* Never-named first, then the thinly-named: the completely invisible are the strongest pitch,
@@ -597,6 +610,7 @@ Deno.serve(async (req) => {
         noWebsite: g.websiteless === g.variants.length,   // see the note above: every branch, not any
         googleMapsUrl: g.sample.googleMapsUrl,
         websiteUrl: g.sample.websiteUrl,
+        offTrade: offTradeMark(g.sample, expectedType),
         outsideTown: true,
         ...(hit ? { thin: { mentions: hit.mentions, audits: hit.audits, matchedNamed: hit.name } } : {}),
       };

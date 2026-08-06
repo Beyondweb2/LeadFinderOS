@@ -43,7 +43,14 @@ function jsonResponse(
 // Mirrors google-place-details: best-effort insert into api_usage_log, never
 // blocks the response. Same table + columns; api_type is parameterised so this
 // one function can log both its Google Places call and its OpenAI call.
-const GOOGLE_PLACE_DETAILS_COST_USD = 0.017; // matches google-place-details' per-miss estimate
+/* ⛔ WAS 0.017, INHERITED FROM google-place-details, WHICH HAD INHERITED IT FROM NOWHERE — it
+   matches no published Google rate. Corrected 2026-08-06 with the rest of the sweep. The field mask
+   below asks for rating, userRatingCount and both phone numbers; all four are ENTERPRISE fields, and
+   Google bills a request ONCE at the highest tier any requested field touches. Place Details
+   (Enterprise) is $20 per 1,000 = $0.020.
+   The comment this replaces said "matches google-place-details' per-miss estimate", which was true
+   and was exactly the problem: it propagated a figure nobody had checked. */
+const GOOGLE_PLACE_DETAILS_COST_USD = 0.020;
 // gpt-4o-mini list price (USD per 1M tokens). Used to estimate per-generation AI cost.
 const OPENAI_INPUT_USD_PER_M = 0.15;
 const OPENAI_OUTPUT_USD_PER_M = 0.6;
