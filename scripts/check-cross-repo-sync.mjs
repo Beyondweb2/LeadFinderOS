@@ -20,19 +20,13 @@
    sibling is not checked out the script EXITS 2 with a loud notice rather than passing — a silent
    skip would be the comment's failure one level deeper.
 
-   🔴 THERE IS A THIRD COPY THIS SCRIPT CANNOT REACH: the Stripe PAYMENT LINK's own description, typed
-   into Stripe's dashboard. The founder link (FOUNDER_OFFER_STRIPE_URL) currently reads "...We
-   guarantee the audit, the work, and the re-measurement, or a full refund. We do not promise you
-   will be named." — which is NOT this constant. It drops "at week eight with before-and-after
-   evidence" and the whole "The engines decide that, and anyone who promises it is guessing" clause.
-   No script can check it, because it lives in Stripe. It has to be edited there by hand whenever the
-   constant changes, and it is currently out of date.
-
-   🔴 A THIRD AND A FOURTH COPY EXIST THAT NO SCRIPT CAN REACH, both inside Stripe's dashboard:
-   the PAYMENT LINK's own description (FOUNDER_OFFER_STRIPE_URL — the one kept for sending by hand on
-   WhatsApp), and the link's fixed £19.99 amount. Neither can be read from here. The description was
-   found out of date on 2026-08-06, and the amount will drift the moment the founder price changes
-   anywhere else. Written down because it cannot be tested.
+   🔴 TWO COPIES EXIST THAT NO SCRIPT CAN REACH, both inside Stripe's dashboard, on the PAYMENT LINK
+   kept for sending by hand on WhatsApp (FOUNDER_OFFER_STRIPE_URL):
+     · its DESCRIPTION, which on 2026-08-06 read "...the audit, the work, and the re-measurement, or
+       a full refund. We do not promise you will be named." — dropping "at week eight with
+       before-and-after evidence". Out of date against the constant even in its shortened form.
+     · its fixed £19.99 AMOUNT, which will drift the moment the founder price changes anywhere else.
+   Neither can be read from here. Written down because they cannot be tested.
 
    Run: node scripts/check-cross-repo-sync.mjs
    ============================================================ */
@@ -68,7 +62,9 @@ const PAIRS = [
 
 function read(file, name, kind) {
   const src = fs.readFileSync(file, 'utf8');
-  const m = src.match(new RegExp('export const ' + name + '\\s*=\\s*([\\s\\S]*?);'));
+  /* `export` is optional: the dashboard's copy of the founder price is a module-local const, and
+     requiring the keyword would have silently found nothing there. */
+  const m = src.match(new RegExp('(?:export )?const ' + name + '\\s*=\\s*([\\s\\S]*?);'));
   if (!m) throw new Error(`${name} not found in ${file}`);
   const body = m[1];
   if (kind === 'number') {
@@ -76,9 +72,81 @@ function read(file, name, kind) {
     if (!n) throw new Error(`${name} in ${file} is not a bare number: ${body.trim()}`);
     return Number(n[0]);
   }
+  /* A price written as a display label — "£19.99". Compared as a NUMBER, because "£19.99" and
+     "£19.99 " and "19.99" are the same price and only one of them is a string match. */
+  if (kind === 'money-label') {
+    const parts = body.match(/"(?:[^"\\]|\\.)*"/g);
+    if (!parts) throw new Error(`${name} in ${file} is not a string literal`);
+    const text = parts.map((p) => JSON.parse(p)).join('');
+    const n = text.match(/(\d+(?:\.\d+)?)/);
+    if (!n) throw new Error(`${name} in ${file} has no number in it: ${JSON.stringify(text)}`);
+    return Number(n[1]);
+  }
   const parts = body.match(/"(?:[^"\\]|\\.)*"/g);
   if (!parts) throw new Error(`${name} in ${file} is not a string literal`);
   return parts.map((p) => JSON.parse(p)).join('');
+}
+
+/* ══ SAME-REPO GROUPS ═════════════════════════════════════════════════════════════════════════
+   ⛔ THE ARGUMENT FOR THIS CHECK DOES NOT STOP AT A REPO BOUNDARY. The cross-repo half exists
+   because a comment saying "keep these in sync" does not work — and a comment saying it inside one
+   repository is the same comment. A same-repo drift is more visible, not prevented.
+
+   The founder price lives in THREE places, each doing a different job:
+     · offer-price.ts        what the customer is actually CHARGED   (the only one that decides)
+     · founderOffer.ts       what the report SAYS, as a display label
+     · useDashboardMetrics   what is COUNTED as a founder place
+   Any two of them disagreeing is a real fault with no error: the report advertises one price and
+   Stripe takes another, or the tile counts nothing because it is looking for an amount nobody was
+   charged. None of that throws.
+
+   ⚠️ CHECKED FROM BOTH REPOS, deliberately. Every constant here lives in LeadFinderOS, but the
+   findable-site copy of this script reads it over the same sibling path it already uses for the
+   guarantee — so whichever script someone happens to run, the drift is caught. */
+/** LeadFinderOS's repo root. LFOS points at <repo>/src/lib. */
+const LFOS_ROOT = path.join(LFOS, '..', '..');
+
+const SAME_REPO_GROUPS = [
+  {
+    what: 'the founder price',
+    why: 'The report advertises it, findable-checkout charges it, and the dashboard counts places by matching it exactly. Any two disagreeing means an advertised price nobody is charged, or a tile that counts nothing.',
+    /* LFOS is <repo>/src/lib, so the repo root is two up. The first attempt joined one level and
+       looked for src/supabase/... — it failed loudly with ENOENT rather than quietly finding
+       nothing, which is the behaviour a check like this has to have. */
+    places: [
+      { file: path.join(LFOS_ROOT, 'supabase', 'functions', '_shared', 'offer-price.ts'), name: 'FOUNDER_PRICE_GBP', kind: 'number', role: 'CHARGED' },
+      { file: path.join(LFOS_ROOT, 'src', 'lib', 'founderOffer.ts'), name: 'FOUNDER_OFFER_PRICE_LABEL', kind: 'money-label', role: 'displayed on the report' },
+      { file: path.join(LFOS_ROOT, 'src', 'hooks', 'useDashboardMetrics.ts'), name: 'FOUNDER_PRICE_GBP', kind: 'number', role: 'counted on the dashboard' },
+    ],
+  },
+];
+
+function checkGroups() {
+  let bad = 0;
+  for (const g of SAME_REPO_GROUPS) {
+    let values;
+    try {
+      values = g.places.map((p) => ({ ...p, value: read(p.file, p.name, p.kind) }));
+    } catch (e) {
+      console.error(`ERROR reading ${g.what}: ${e.message}`);
+      bad++;
+      continue;
+    }
+    const distinct = [...new Set(values.map((v) => v.value))];
+    if (distinct.length === 1) {
+      console.log(`PASS  ${g.what}: all ${values.length} places agree (${distinct[0]})`);
+      continue;
+    }
+    bad++;
+    console.error(`\nFAIL  ${g.what} has drifted across ${values.length} places in LeadFinderOS.`);
+    for (const v of values) {
+      console.error(`  ${String(v.value).padStart(8)}  ${v.name}  (${v.role})`);
+      console.error(`            ${path.relative(LFOS_ROOT, v.file)}`);
+    }
+    console.error(`  ${g.why}`);
+    console.error('  Fix ALL of them.');
+  }
+  return bad;
 }
 
 if (!fs.existsSync(SITE)) {
@@ -153,8 +221,12 @@ for (const pair of PAIRS) {
   console.error('  Fix BOTH.');
 }
 
+failed += checkGroups();
+
+// pairs + the guarantee prefix + the same-repo groups
+const TOTAL = PAIRS.length + 1 + SAME_REPO_GROUPS.length;
 if (failed) {
-  console.error(`\n${failed} of ${PAIRS.length} cross-repo values have drifted.`);
+  console.error(`\n${failed} of ${TOTAL} checks failed.`);
   process.exit(1);
 }
-console.log(`\nAll ${PAIRS.length} cross-repo values are in sync.`);
+console.log(`\nAll ${TOTAL} checks pass: ${PAIRS.length} cross-repo, ${SAME_REPO_GROUPS.length} same-repo, plus the guarantee prefix.`);
