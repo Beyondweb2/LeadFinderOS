@@ -116,7 +116,14 @@ const EXTRA_CSS = `
 
   /* Held vs missing details. Missing is the actionable state, so it is the one that shouts. */
   .details{ list-style:none; margin:0; padding:0; }
-  .det{ display:flex; align-items:baseline; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); }
+  /* ⛔ flex-wrap IS LOAD-BEARING. .det-why asks for flex:0 0 100% — a full-width row of its own —
+     and without wrapping it became a FOURTH item on the same line. Everything then compressed: .det-v
+     (flex-shrink 1) collapsed to a few pixels and word-break:break-word rendered it one character per
+     line, and .det-why overflowed the page and was cut mid-word at the paper edge.
+     That is the "M IS SI N G - pl e a s e p r o vi d e" and the "so witho" truncation, both from this
+     one missing declaration. Its own margin-left:162px only makes sense on a wrapped line, which is
+     what the rule always assumed. */
+  .det{ display:flex; flex-wrap:wrap; align-items:baseline; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); }
   .det:last-child{ border-bottom:0; }
   .det-k{ flex:0 0 150px; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
     color:var(--faint); font-weight:800; }
@@ -125,7 +132,8 @@ const EXTRA_CSS = `
     border-radius:999px; padding:2px 9px; background:#eef1f6; color:var(--muted); white-space:nowrap; }
   .det.miss .det-v{ color:var(--red); font-weight:900; }
   .det.miss .det-have{ background:var(--red); color:#fff; }
-  .det-why{ flex:0 0 100%; margin:4px 0 0 162px; font-size:12.5px; line-height:1.5; color:var(--muted); }
+  .det-why{ flex:0 0 100%; margin:4px 0 0 162px; font-size:12.5px; line-height:1.5; color:var(--muted);
+    overflow-wrap:anywhere; }
 
   /* One ask per block: what it is, why we are asking, what it costs. */
   .asks{ list-style:none; margin:0; padding:0; }

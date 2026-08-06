@@ -64,13 +64,19 @@ Either way, the details need to match everything else: same business name, same 
 
 /** Why each missing detail is needed, in plain terms. A client reads a bare "address: missing" as
  *  admin; it is actually the thing blocking every signup, and it has to say so. */
+/* ⛔ THESE JUSTIFY THE FIELD BY THE WORK WE ACTUALLY DO. They used to justify it by directory
+   signups — "every directory signup asks for a full business address", "it has to match on every
+   listing" — which was Step one still describing the delivery model we dropped, three sections above
+   a Step two that no longer mentions it. An earlier sweep caught the asks and missed these.
+   The reason is the same fact stated honestly: these details go on the pages we write and on the
+   Google Business Profile, and an engine that finds two versions of one of them trusts neither. */
 const WHY_MISSING: Record<string, string> = {
-  Address: 'This is the one that blocks everything else. Every directory signup asks for a full business address before it will let us finish, so while this is missing we cannot complete a single one of them — including the ones we would otherwise do for you today.',
-  Phone: 'Every listing asks for a phone number, and it has to be the same one everywhere or the listings start contradicting each other.',
-  Town: 'This decides which town we are measured in. Without it we would be asking about the wrong area.',
-  Trade: 'This is the wording customers actually search for, and it has to match on every listing.',
-  'Business name': 'The exact trading name, so every listing reads identically.',
-  Website: 'If you have one, we need the address. If you do not, that is worth a conversation: Gemini builds its answers largely from businesses’ own websites, so without one it has nothing of yours to read.',
+  Address: 'This is the one that holds everything up. It goes on every page we write and on your Google Business Profile, and it is how an engine works out which towns you actually serve. Until we have it there is nothing to publish.',
+  Phone: 'It goes on every page and on your profile, and it has to be the same number in both. An engine that finds two versions of it trusts neither.',
+  Town: 'This decides which town we measure you in, and which town pages get written. Without it we would be asking about the wrong area.',
+  Trade: 'This is the wording customers actually search for, and it is what every page we write is built around.',
+  'Business name': 'The exact trading name, so it reads identically on your pages and your profile.',
+  Website: 'If you have one, we need the address. If you do not, that is worth a conversation: AI builds its answers largely from businesses’ own websites, so without one it has nothing of yours to read — and building you a simple one is included in the setup.',
 };
 
 /** The six details the operator sheet already resolves, mapped to held/missing for the client.
