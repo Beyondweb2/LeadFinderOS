@@ -1,6 +1,6 @@
 import { DOC_CSS, docBand, esc, pdfTitle, printHtmlAsPdf } from './playbookDocStyle';
 import { FINDABLE_GUARANTEE } from './findableOffer';
-import { deliveryAsks } from './clientRequestAsks';
+import { BLOCKING_ASK_COUNT, deliveryAsks } from './clientRequestAsks';
 
 /* ============================================================
    THE CLIENT REQUEST FORM — the only client-facing document in the system.
@@ -72,7 +72,12 @@ export interface ClientHeldField {
 /* THE SCAN, NARROWED FOR A CLIENT. Deliberately NOT the full AiAuditSeo: the per-category grades and
    the numeric scores behind the radar are operator furniture and say nothing a client can act on.
    What comes across is the overall grade and the findings — the two things that are concrete. */
-export interface ClientSeoFinding { title: string; detail: string; severity: 'high' | 'med' | 'low' }
+/* ⛔ NO `detail` FIELD, DELIBERATELY. The scanner ships a developer recommendation with every finding
+   ("Add descriptive alt attributes...", "Add JSON-LD, Microdata or RDFa..."), and this document tells
+   the client one line earlier that they do not need to do anything with the list. Removing the FIELD
+   rather than declining to render it is what keeps that true: there is nothing here to print. The
+   titles are rewritten into English by plainFinding() in the selector. */
+export interface ClientSeoFinding { title: string; severity: 'high' | 'med' | 'low' }
 export interface ClientSeo { grade: string; findings: ClientSeoFinding[] }
 
 export interface ClientRequestInput {
@@ -188,8 +193,8 @@ const EXTRA_CSS = `
   .sev.high{ background:var(--red); }
   .sev.med{ background:var(--amber); }
   .sev.low{ background:var(--muted); }
+  /* One line per finding. .sf-d — the scanner's recommendation — was deleted with its field. */
   .sf-t{ flex:1 1 200px; font-size:13px; font-weight:750; color:var(--ink); }
-  .sf-d{ flex:0 0 100%; font-size:12px; line-height:1.5; color:var(--muted); }
   .ask-ev{ margin:6px 0 0; padding:8px 12px; background:var(--page); border-radius:8px;
     font-size:13px; line-height:1.5; color:#334155; font-weight:600; }
   .ask-body{ margin:8px 0 0; font-size:13.5px; line-height:1.55; color:var(--muted); }
@@ -234,6 +239,16 @@ function askEvidence(a: ClientAsk, trade: string): string {
    PRINTS — the first version of this note rendered in full on the client's document, internal
    warnings and all. Comments about the markup belong out here, and never write the closing
    star-slash sequence inside one or it terminates itself. */
+/* ⛔ THE "BEING STRAIGHT WITH YOU" NOTE IS REFRAMED, NOT REMOVED, and the fact in it is unchanged:
+   nobody has completed a cycle. This document reaches someone who has ALREADY PAID, so the old
+   wording's only remaining effect was to lower their expectations after the sale — an apology for a
+   position we chose on purpose. It now says the same thing forwards: they are early, that is why the
+   price is what it is, and we would rather say so than imply a track record we do not have.
+   ⛔ TWO THINGS IN THAT PARAGRAPH ARE VERBATIM AND STAY THAT WAY: the sentence "We are not going to
+   tell you this guarantees you will be named", and FINDABLE_GUARANTEE in the note below it.
+   ⚠️ THIS NOTE LIVES OUT HERE, NOT IN THE TEMPLATE. An HTML comment inside the returned string ships
+   in the document — invisible in print, but it is still internal commentary travelling to a client.
+   The JSX-style version of this mistake actually PRINTED, on the scan section, last week. */
 export function renderClientRequestDoc(input: ClientRequestInput): string {
   const trade = (input.trade ?? '').trim().toLowerCase();
   const town = (input.town ?? '').trim();
@@ -289,8 +304,13 @@ ${docBand('What we need from you')}
       <div class="sec-eyebrow">Step two</div>
       <div class="sec-title">What only you can do</div>
       <p class="wk-client" style="margin-bottom:12px">Everything else on your setup we do ourselves.
-      These are the ones we cannot: each needs your access, your property, or your decision. Two of
-      them stop the work until they are done, and they are marked.</p>
+      These are the ones we cannot: each needs your access, your property, or your decision. ${
+        // DERIVED, never typed. This said "Two of them" while the list carried two blocking asks; the
+        // domain ask stopped blocking and the sentence would have gone on saying two.
+        BLOCKING_ASK_COUNT === 1
+          ? 'One of them stops the work until it is done, and it is marked.'
+          : `${BLOCKING_ASK_COUNT} of them stop the work until they are done, and they are marked.`
+      }</p>
       <ul class="asks">${deliveryAsks({ services: input.services }).map((a) => `
         <li class="ask">
           <div class="ask-h">
@@ -350,7 +370,6 @@ ${docBand('What we need from you')}
         <li>
           <span class="sev ${fd.severity}">${fd.severity === 'high' ? 'Fix first' : fd.severity === 'med' ? 'Worth fixing' : 'Minor'}</span>
           <span class="sf-t">${esc(fd.title)}</span>
-          <span class="sf-d">${esc(fd.detail)}</span>
         </li>`).join('')}
       </ul>` : `<p class="wk-client" style="margin-top:12px">The scan did not raise anything
       significant, which is a good result and unusual.</p>`}
@@ -361,14 +380,15 @@ ${docBand('What we need from you')}
       on every page we write and on your Google Business Profile, and they have to match each other
       exactly — an engine that finds two versions of your phone number trusts neither. We cannot
       finish a page while ${missing.length === 1 ? 'that detail is' : 'those details are'} missing.</p>` : ''}
-      <p class="note"><b>What to expect.</b> The two marked items above hold everything up: without
-      the Google invite we cannot touch your profile, and without knowing who controls your domain we
-      cannot move your site if it turns out we need to. Everything else can start while you gather
-      them.</p>
+      <p class="note"><b>What to expect.</b> The marked item above holds everything up: without the
+      Google invite we cannot touch your profile at all. Everything else can start straight away, and
+      you can send the rest as you get to it.</p>
       <p class="note"><b>Being straight with you.</b> We are not going to tell you this guarantees you
-      will be named. No client has completed a full eight-week cycle with us yet, so we have no results
-      to point at, and we would rather say that than imply otherwise. What we can tell you is what we
-      measured, what we did, and what changed when we measured again.</p>
+      will be named. You are one of the first businesses we have taken on, and that is why the price is
+      what it is — nobody has completed a full eight-week cycle with us yet, so we have no results to
+      point at, and we would rather tell you that than imply a track record we do not have. It also
+      means you get more of our attention than a client we take on in a year's time will. What we can
+      tell you is what we measured, what we did, and what changed when we measured again.</p>
       <p class="note"><b>Our promise.</b> ${FINDABLE_GUARANTEE}</p>
     </section>
 

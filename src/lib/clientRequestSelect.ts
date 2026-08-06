@@ -1,6 +1,7 @@
 import type { AiAuditSeo } from './aiAuditReportHtml';
 import type { Playbook, PlaybookStep } from './buildPlaybook';
 import { factFor } from './directoryFacts';
+import { plainFinding } from './seoFindingText';
 import {
   CLIENT_ASK_LIMIT, type AskCost, type ClientAsk, type ClientHeldField, type ClientRequestInput,
   type ClientSeo,
@@ -137,9 +138,13 @@ export function toClientSeo(seo: AiAuditSeo | null): ClientSeo | null {
   if (!grade) return null;
   return {
     grade,
+    /* THE SCANNER'S RECOMMENDATION IS DROPPED HERE, not hidden by the renderer — see the note on
+       ClientSeoFinding. The title is rewritten out of log-line English on the way through; an
+       unrecognised shape passes straight back out, so a new finding type can never render blank. */
     findings: (seo.leadFindings ?? [])
       .filter((f) => !!f?.title)
-      .map((f) => ({ title: f.title, detail: f.detail ?? '', severity: f.severity })),
+      .map((f) => ({ title: plainFinding(f.title), severity: f.severity }))
+      .filter((f) => !!f.title),
   };
 }
 
