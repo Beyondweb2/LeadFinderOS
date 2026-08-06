@@ -171,9 +171,15 @@ export interface MarketPoolRow {
    *  counted as a business in the town: the rectangle is 6x11km for Hastings and Battle Locksmiths
    *  sits 10km north of it, so "in the pool" and "in the town" are not the same claim. */
   outsideTown?: boolean;
-  /** Present when this business IS named, but only thinly — so it stays a PROSPECT instead of
-   *  being subtracted. Carries its own thinness so the row can show how thin: "1 mention in 1 of
-   *  6 audits, against 25 for the leader". Absent = never named at all. */
+  /** Present when this business IS named but NOT established — so it stays a PROSPECT instead of
+   *  being subtracted. Carries the counts so the row can show how thin: "1 mention in 1 of 6
+   *  audits". Absent = never named at all.
+   *  ⚠️ THE NAME IS NARROWER THAN THE MEANING, kept because the field is rendered in three places.
+   *  It covers tier `thin` AND tier `unknown` — everything except `established`. Below the evidence
+   *  bar nothing is established, so on a one-audit market every named business lands here, which is
+   *  the correct answer and was the bug: the subtraction used to keep only `thin` and drop the rest,
+   *  so `unknown` was silently subtracted and Norwich lost 15 of 20 prospects. The counts shown are
+   *  facts either way — how many mentions, in how many audits — never a claim about standing. */
   thin?: { mentions: number; audits: number; matchedNamed: string };
 }
 

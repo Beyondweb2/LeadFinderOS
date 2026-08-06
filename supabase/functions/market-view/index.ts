@@ -516,10 +516,18 @@ Deno.serve(async (req) => {
     const poolExcluded: MarketPoolExcluded[] = [];
     for (const [key, g] of poolGroups) {
       const hit = namedByKey.get(key);
-      /* GRADED SUBTRACTION. Only an ESTABLISHED entry is subtracted. A thinly-named business stays
-         a prospect and carries its thinness with it — being named once in one audit is not being
-         known, and excluding it hid exactly the businesses worth contacting. */
-      if (hit && hit.tier === "thin") {
+      /* ⛔ GRADED SUBTRACTION, AND ONLY `established` IS SUBTRACTED. This read `hit.tier === "thin"`
+         and kept those, dropping everything else — which silently included `unknown`.
+         BELOW THE EVIDENCE BAR EVERY ENTRY IS `unknown`, so the guard inverted in exactly the case
+         it was written for: with one completed audit, Norwich subtracted 15 of 20 businesses as
+         "already named", six of them on a single mention each. One audit makes every firm 100% of
+         audits, so auditShare carries no information and the mention half decides alone — the
+         collapse the graded model exists to prevent, reached through the subtraction instead of
+         through the tier.
+         The test is now what it always should have been: a business is removed from the prospect
+         list ONLY when AI names it consistently. Thin and unknown both stay, and both carry what is
+         known about them. */
+      if (hit && hit.tier !== "established") {
         notNamed.push({
           key,
           name: pickDisplayNameFromList(g.variants),

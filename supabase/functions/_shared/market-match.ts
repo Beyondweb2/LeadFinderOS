@@ -113,20 +113,84 @@ export interface Candidate {
  * Empty only when the name carries no distinguishing content at all (e.g. "Wisbech Locksmiths"
  * inside a Wisbech locksmiths market, which is a description rather than a name).
  */
+
+/* ══ THREE SPELLINGS OF ONE FIRM, ALL SEEN IN NORWICH IN A SINGLE MARKET ══════════════════════
+   Every one of them split a firm in two, and every split does the same damage twice: it inflates
+   the barely-named tail (which is the prospect list) and understates the established firm.
+
+     PT Lock & Safe (6)        vs  P T Lock & Safe Ltd (1)        — spaces inside initials
+     LockSolid Locksmiths (6)  vs  Lock Solid Locksmiths Norwich (5) — a space inside a compound
+     Key & Laser Services (1)  vs  Key Laser Services (1)         — the ampersand
+
+   ⛔ ALL THREE ARE HANDLED BY ADDING CANDIDATES, NEVER BY CHANGING THE EXISTING ONE. An added
+   candidate can only create a merge; it can never remove one. That means no name that matched
+   before can stop matching, and the regression suite only has to prove the new merges are not
+   over-merges — a much smaller claim than re-proving the whole matcher.
+   ⚠️ AND NONE OF IT TOUCHES normalizeForMatch, which is shared with nameMatches in ai-search.ts and
+   decides whether an audited business was NAMED. Changing that would move a number on every report
+   ever generated, to fix a display split in one panel. */
+
+/** "LockSolid" -> "Lock Solid". Splits a lowercase-to-uppercase boundary BEFORE anything lowercases
+ *  the string, which is the only moment the compound is still visible.
+ *  ⚠️ Deliberately not a dictionary split: "lockolid" written all in lower case stays one token,
+ *  because guessing word boundaries without the capital is how "Lockwood" becomes "Lock Wood". */
+function splitCamel(s: string): string {
+  return s.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+}
+
+/** "p t lock" -> "pt lock". Collapses a RUN of single-character tokens, which is what initials look
+ *  like once punctuation is stripped.
+ *  ⚠️ Runs only, and only single characters: "A1" and "A2" are two characters each and never touch
+ *  this, so they stay two firms. */
+function collapseInitials(tokens: string[]): string[] {
+  const out: string[] = [];
+  let run: string[] = [];
+  const flush = () => { if (run.length) { out.push(run.length > 1 ? run.join("") : run[0]); run = []; } };
+  for (const t of tokens) {
+    if (t.length === 1 && /[a-z]/.test(t)) run.push(t);
+    else { flush(); out.push(t); }
+  }
+  flush();
+  return out;
+}
+
+/** "key and laser" -> "key laser". The connector carries no identity: a firm written with an
+ *  ampersand and the same firm written without one are the same firm.
+ *  ⚠️ Only ever offered ALONGSIDE the connector-bearing core, never instead of it. */
+function dropConnectors(tokens: string[]): string[] {
+  return tokens.filter((t) => t !== "and");
+}
+
 export function candidateCores(name: string, ctx: MarketMatchContext): Candidate[] {
   const out = new Map<string, Candidate>();
   for (const seg of segmentsOf(name)) {
-    // businessCore first: it gives the Ltd / Services / Company truncation and the accent,
-    // ampersand and whitespace canonicalisation for free.
-    const base = businessCore(seg.text).trim() || normalizeForMatch(seg.text).trim();
-    const tokens = base.split(/\s+/).filter(Boolean);
-    const stripped = stripContext(tokens, ctx);
-    const core = stripped.join(" ");
-    if (core.length < MIN_CORE_CHARS) continue;
-    const exactOnly = stripped.length !== tokens.length || seg.fromParen;
-    // If the same core arrives both ways, the STRONGER (prefix-eligible) reading wins.
-    const prev = out.get(core);
-    if (!prev || (prev.exactOnly && !exactOnly)) out.set(core, { core, exactOnly });
+    /* TWO READINGS OF THE SAME SEGMENT: as written, and with camel compounds split. Both are run
+       through the whole pipeline, so "LockSolid Locksmiths" yields both "locksolid" and
+       "lock solid" and can meet either spelling. Identical for any name without a camel boundary,
+       which is nearly all of them. */
+    for (const text of new Set([seg.text, splitCamel(seg.text)])) {
+      // businessCore first: it gives the Ltd / Services / Company truncation and the accent,
+      // ampersand and whitespace canonicalisation for free.
+      const base = businessCore(text).trim() || normalizeForMatch(text).trim();
+      const tokens = base.split(/\s+/).filter(Boolean);
+      const stripped = stripContext(tokens, ctx);
+      const core = stripped.join(" ");
+      if (core.length < MIN_CORE_CHARS) continue;
+      const exactOnly = stripped.length !== tokens.length || seg.fromParen;
+      // If the same core arrives both ways, the STRONGER (prefix-eligible) reading wins.
+      const prev = out.get(core);
+      if (!prev || (prev.exactOnly && !exactOnly)) out.set(core, { core, exactOnly });
+
+      /* THE INITIALS-COLLAPSED AND CONNECTOR-FREE READINGS, added beside the core rather than
+         replacing it. exactOnly on both: each is a rewriting of the name rather than the name as
+         anybody typed it, and a rewriting must never absorb a longer name — the same reasoning that
+         keeps the Rapid residue from swallowing "Rapid Secure UK". */
+      for (const variant of [collapseInitials(stripped), dropConnectors(stripped), dropConnectors(collapseInitials(stripped))]) {
+        const alt = variant.join(" ");
+        if (alt === core || alt.length < MIN_CORE_CHARS) continue;
+        if (!out.has(alt)) out.set(alt, { core: alt, exactOnly: true });
+      }
+    }
 
     /* THE LEADING SEGMENT BEFORE A CONNECTOR, as an EXACT-ONLY candidate.
        "Timpson Locksmiths and Safe Engineers" in a locksmiths market strips to
@@ -137,10 +201,14 @@ export function candidateCores(name: string, ctx: MarketMatchContext): Candidate
        two names now meet by EQUALITY. exactOnly, because it is a fragment of a reduced name and
        must never absorb a longer one — which is what keeps the Wrexham junk ("Mobile",
        "Industrial") from swallowing real entries. */
-    const connectorAt = stripped.indexOf("and");
-    if (connectorAt > 0) {
-      const lead = stripped.slice(0, connectorAt).join(" ");
-      if (lead.length >= MIN_CORE_CHARS && !out.has(lead)) out.set(lead, { core: lead, exactOnly: true });
+    {
+      const base = businessCore(seg.text).trim() || normalizeForMatch(seg.text).trim();
+      const stripped = stripContext(base.split(/\s+/).filter(Boolean), ctx);
+      const connectorAt = stripped.indexOf("and");
+      if (connectorAt > 0) {
+        const lead = stripped.slice(0, connectorAt).join(" ");
+        if (lead.length >= MIN_CORE_CHARS && !out.has(lead)) out.set(lead, { core: lead, exactOnly: true });
+      }
     }
   }
   if (out.size === 0) {
