@@ -333,6 +333,19 @@ Facts with numbers. These are measured, and several contradict the older docs.
   everywhere.**
 - **Paginate PostgREST reads** — it truncates at `db-max-rows` silently. Use `src/lib/fetchAllRows.ts` with
   `.order('id')` as a unique tiebreaker.
+- ⛔ **ABSENCE IS NEVER AN ANSWER — the second place this rule lives.** `serveGate` was the first (a
+  skipped question flags, never blocks). `src/lib/clientHeld.ts` is the second: `heldValue()` is the
+  ONLY way the client sheet decides it holds a value, and null / undefined / `''` / whitespace / an
+  empty array / an array of blanks / buildPlaybook's placeholders (`NOT HELD — ask the client`,
+  `none`) all mean "we do not have it". A null column inside a **submitted** row means what no
+  questionnaire means, for that field — `findable-onboarding` writes `incomplete` rows by design and
+  deletes null-valued new keys from the insert, so partial rows are normal.
+  `ASKING_PHRASES` in that file is the enforcement table; the suite asserts the asks vanish when a
+  column is held **and come back when it is not**, which catches a "fix" that deletes an ask instead
+  of suppressing it. Don't re-derive this rule per-caller.
+  ⚠️ **`onboarding_responses` had ZERO rows on 2026-08-06** (`client_listings` too). So the
+  no-questionnaire path is not an edge case — it is the only path that has ever rendered, and any
+  questionnaire-driven branching is untested until Paul submits one for real.
 
 ---
 
