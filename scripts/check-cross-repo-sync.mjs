@@ -28,6 +28,12 @@
    No script can check it, because it lives in Stripe. It has to be edited there by hand whenever the
    constant changes, and it is currently out of date.
 
+   🔴 A THIRD AND A FOURTH COPY EXIST THAT NO SCRIPT CAN REACH, both inside Stripe's dashboard:
+   the PAYMENT LINK's own description (FOUNDER_OFFER_STRIPE_URL — the one kept for sending by hand on
+   WhatsApp), and the link's fixed £19.99 amount. Neither can be read from here. The description was
+   found out of date on 2026-08-06, and the amount will drift the moment the founder price changes
+   anywhere else. Written down because it cannot be tested.
+
    Run: node scripts/check-cross-repo-sync.mjs
    ============================================================ */
 import fs from 'fs';
@@ -42,11 +48,14 @@ const SITE = path.join(HERE, '..', '..', 'findable-site', 'src', 'lib');
    a string built from concatenated literals, or a bare number. */
 const PAIRS = [
   {
-    what: 'the guarantee',
+    /* ⛔ THE SITE CARRIES THE FULL VERSION. Its GUARANTEE must match FINDABLE_GUARANTEE_FULL, not the
+       contractual FINDABLE_GUARANTEE — see the prefix assertion below, which is what keeps the two
+       LeadFinderOS constants from becoming two different promises. */
+    what: 'the guarantee (full / marketing)',
     kind: 'string',
-    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_GUARANTEE' },
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_GUARANTEE_FULL' },
     theirs: { file: path.join(SITE, 'site.ts'), name: 'GUARANTEE' },
-    why: 'This is the sentence the Stripe line item charges against.',
+    why: 'This is the sentence the marketing site shows.',
   },
   {
     what: 'the setup price',
@@ -78,7 +87,40 @@ if (!fs.existsSync(SITE)) {
   process.exit(2);
 }
 
+
+/* ⛔ THE PREFIX ASSERTION. Two guarantee constants are only honest if the contractual one is a strict
+   PREFIX of the marketing one — the site then says everything the contract says plus a line that adds
+   no obligation. A mere "subset" would allow the two to be different promises with words in common;
+   a prefix cannot. This is the assertion that makes the split safe, and it is checked rather than
+   intended, because "keep these in sync" as a comment is exactly what failed last time.
+   It runs in BOTH repos even though both constants live in LeadFinderOS: the site's copy is the thing
+   being anchored, so the check that guards it belongs wherever someone might edit either end. */
+function checkPrefix() {
+  const short = read(path.join(LFOS, 'findableOffer.ts'), 'FINDABLE_GUARANTEE', 'string');
+  const full = read(path.join(LFOS, 'findableOffer.ts'), 'FINDABLE_GUARANTEE_FULL', 'string');
+  if (!short || !full) {
+    console.error('FAIL  one of the guarantee constants is empty.');
+    return false;
+  }
+  if (!full.startsWith(short)) {
+    console.error('\nFAIL  the contractual guarantee is not a prefix of the marketing one.');
+    console.error(`  contractual (${short.length}): ${JSON.stringify(short)}`);
+    console.error(`  marketing   (${full.length}): ${JSON.stringify(full)}`);
+    let i = 0; while (i < short.length && short[i] === full[i]) i++;
+    console.error(`  diverges at character ${i}: ${JSON.stringify(short.slice(i, i + 60))}`);
+    console.error('  The contract must never promise something the site does not, or vice versa.');
+    return false;
+  }
+  if (full.length <= short.length) {
+    console.error('FAIL  the two guarantee constants are identical — one of them is pointless.');
+    return false;
+  }
+  console.log(`PASS  the contractual guarantee is a strict prefix of the marketing one (${short.length} of ${full.length} chars)`);
+  return true;
+}
+
 let failed = 0;
+if (!checkPrefix()) failed++;
 for (const pair of PAIRS) {
   let mine, theirs;
   try {

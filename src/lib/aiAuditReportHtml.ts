@@ -217,14 +217,21 @@ function founderOfferSection(): string {
       <div class="sec-eyebrow offer-eyebrow">The offer</div>
       <h3>The first ${FOUNDER_OFFER_COUNT} at <span class="y">${esc(FOUNDER_OFFER_PRICE_LABEL)}</span></h3>
       <p>Normally ${esc(FOUNDER_OFFER_NORMAL_LABEL)}. We&rsquo;re running the first ${FOUNDER_OFFER_COUNT} at ${esc(FOUNDER_OFFER_PRICE_LABEL)} because we want honest feedback from them &mdash; what worked and what didn&rsquo;t.</p>
+      <!-- FOUR BULLETS, NOT FIVE, AND EACH ONE LEADS WITH ITS NOUN. This is the point of decision:
+           five bullets, a three-sentence guarantee, a button and a closing note was more than anyone
+           reads at the moment they are deciding to pay. The bolded lead phrase means a skimmer takes
+           away four nouns - pages, profile, fixes, re-measurement - without reading the qualifiers.
+           DROPPED: "The audit you've just read, and the baseline it sets." They are holding the
+           audit; listing it as an inclusion at the bottom of it is filler. The baseline is not lost -
+           "the same questions re-run at week eight, both reports side by side" is what a baseline IS.
+           The detail lives on findable.live and in the client request sheet. This is the ask. -->
       <div class="offer-gets">
         <div class="offer-h">What&rsquo;s included</div>
         <ul>
-          <li>The audit you&rsquo;ve just read, and the baseline it sets.</li>
-          <li>A page for each service you offer, in each town you work, written the way customers actually ask so AI has something specific to quote.</li>
-          <li>Your Google Business Profile completed properly, and your name, address, phone and services made consistent everywhere AI reads them.</li>
-          <li>Structured data on your site, the technical fixes listed above, and a review link you can drop into your email signature.</li>
-          <li>The same questions re-run at week eight, both reports side by side.</li>
+          <li><b>A page for every service you offer, in every town you work</b> &mdash; written the way customers actually ask.</li>
+          <li><b>Your Google Business Profile completed properly</b>, and your name, address, phone and services made consistent everywhere AI reads them.</li>
+          <li><b>The technical fixes listed above</b>, plus structured data and a review link for your email signature.</li>
+          <li><b>The same questions re-run at week eight</b> &mdash; both reports, side by side.</li>
         </ul>
       </div>
       <div class="offer-gtee">${esc(FINDABLE_GUARANTEE)}</div>
