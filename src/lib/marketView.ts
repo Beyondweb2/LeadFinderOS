@@ -415,8 +415,14 @@ export const MARKET_AUDIT_MIN_AUDITS = 2;
 export const MARKET_AUDIT_TYPICAL_MS = 5 * 60 * 1000;
 
 /** Google geocode + text search for one town. Measured from api_usage_log: $0.005 geocode plus 3
- *  pages at $0.032. Range across recent searches $0.037 to $0.133. */
-export const MARKET_SEARCH_USD = 0.101;
+ *  pages at the Text Search rate.
+ *  ⛔ RE-PRICED 2026-08-06 AGAINST THE SKU TABLE, and it was under-stated. The code logs $0.032,
+ *  which is Text Search PRO — but the field mask requests `websiteUri`, an ENTERPRISE field, and a
+ *  request bills ONCE at the highest tier any requested field touches (CLAUDE.md §8). Enterprise is
+ *  $35.00/1000, so a page is $0.035 and a typical three-page search is $0.110, not $0.101.
+ *  Nobody had checked the constant against the tier — the same fault as the audit estimate being
+ *  20% out. Range across recent searches $0.040 to $0.145. */
+export const MARKET_SEARCH_USD = 0.110;
 
 /** ⛔ 72 HOURS, and it is why the button quotes two prices. search-leads short-circuits on a cache
  *  hit within this window and charges NOTHING, so a second measure of the same trade and town is
@@ -433,6 +439,23 @@ export const MARKET_ONE_AUDIT_USD = MARKET_AUDIT_QUESTION_COUNT * AUDIT_EST_USD_
  *  that does not hold. Matches findable-onboarding's SUBMIT_COOLDOWN_MS, and is longer than the
  *  ~5 minute typical run so it cannot fire against a run that has already finished. */
 export const MARKET_COOLDOWN_MS = 10 * 60 * 1000;
+
+/* ⛔ THE AI CLEANER, AND WHEN IT IS WORTH 6p. extract-competitors re-reads every answer of a run
+   with one gpt-4o call and rewrites the competitor names, which is what fixes a market whose
+   extraction produced junk.
+   MEASURED on the real Norwich run, not estimated: 8 queue rows, ~79,600 characters of answers,
+   ~19,900 input tokens at $2.50/M plus ~2k output at $10.00/M = $0.070 per run.
+   ⚠️ 6p AGAINST AN 8.3p AUDIT IS A 72% SURCHARGE, so it does NOT run on every measurement. It runs
+   when distinctPerAudit is over JUNK_RATIO_PER_AUDIT — which is exactly when the figures cannot be
+   trusted, and a market whose figures cannot be trusted is worth 6p to fix. Clean markets run 4-9
+   distinct names per audit and junk ones 30-970; the threshold sits in the empty gap between. */
+export const CLEANER_USD_PER_RUN = 0.070;
+
+/** Should a finished measurement be cleaned automatically? True only when the extraction looks
+ *  dirty enough for the figures to be untrustworthy. */
+export function shouldAutoClean(distinctPerAudit: number, runs: number): boolean {
+  return runs > 0 && distinctPerAudit > JUNK_RATIO_PER_AUDIT;
+}
 
 /** What one press costs, stated on the button rather than in a dialog nobody reads twice. */
 export function measureRunCost(poolIsFresh: boolean, audits: number): number {
