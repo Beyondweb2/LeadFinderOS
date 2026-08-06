@@ -20,7 +20,7 @@ import {
   MARKET_SKIP_SEO, SEO_SCAN_USD, marketBatchCost,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
-  MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase,
+  MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase, shouldAutoClean, CLEANER_USD_PER_RUN, asPence,
   type MarketPoolRow,
 } from '@/lib/marketView';
 import type { Lead } from '@/types/lead';
@@ -180,6 +180,26 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
     } finally {
       setReExtractBusy(false);
     }
+  }, [view, reload, toast]);
+
+  /* ⛔ AUTO-CLEAN, AND ONLY WHEN THE FIGURES CANNOT BE TRUSTED. Runs after a MEASUREMENT finishes,
+     never after a refresh. 6p against an 8.3p audit is a 72% surcharge, so it is not paid on every
+     market — but a market whose extraction produced junk is a market whose numbers are wrong, and
+     that is worth 6p to fix rather than leaving behind a button that gets forgotten.
+     ⚠️ IT RE-READS THE VIEW FIRST. The run ids and the junk ratio both come from the freshly
+     reloaded view; deciding from the pre-run state would clean the wrong thing or nothing. */
+  const autoCleanIfDirty = useCallback(async () => {
+    const c = view?.concentration;
+    if (!c || !shouldAutoClean(c.distinctPerAudit ?? 0, c.runIds.length)) return;
+    console.info('[market] auto-cleaning', { distinctPerAudit: c.distinctPerAudit, runs: c.runIds.length });
+    toast({
+      title: 'Cleaning up the names',
+      description: `${c.distinctPerAudit} distinct names per audit is above ${JUNK_RATIO_PER_AUDIT}, so the answers are being re-read. About ${asPence(c.runIds.length * CLEANER_USD_PER_RUN)}.`,
+    });
+    for (const runId of c.runIds) {
+      try { await supabase.functions.invoke('extract-competitors', { body: { runId } }); } catch { /* one bad run must not stop the rest */ }
+    }
+    await reload();
   }, [view, reload, toast]);
 
   /** A pool row as the Lead shape addLead expects. The pool rows came out of search-leads in the
@@ -691,6 +711,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               poolSearchedAt={view.poolState.state === 'ready' ? view.poolState.searchedAt : null}
               onSearch={measureSearch}
               onReload={reload}
+              onMeasureComplete={autoCleanIfDirty}
             />
             <div className="mt-2 flex flex-wrap gap-2">
               <Button size="sm" variant="ghost" className="ml-auto" onClick={toggleNumbers}>
@@ -777,6 +798,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                   <Button size="sm" variant="outline" onClick={() => setReExtractOpen(true)} disabled={reExtractBusy || conc.runIds.length === 0}>
                     {reExtractBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
                     Re-read {conc.runIds.length} run{conc.runIds.length === 1 ? '' : 's'} with the AI cleaner
+                    <span className="ml-1.5 opacity-80">· ~{asPence(conc.runIds.length * CLEANER_USD_PER_RUN)}</span>
                   </Button>
                 </div>
               )}

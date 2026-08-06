@@ -358,6 +358,22 @@ Facts with numbers. These are measured, and several contradict the older docs.
   Observed 2026-08-06 from a Thai IP: the Checkout Session presented **THB 4,582.95** with a stated
   4% conversion fee; the founder Payment Link showed **£19.99 only**, minutes apart in the same
   browser. One observation does not disprove the docs — treat the link as capable of converting.
+- 🔴 **AN ABSENT VALUE FALLING THROUGH AS THOUGH IT WERE A REAL ONE. THIS HAS NOW HAPPENED THREE
+  TIMES, in three unrelated files, and it will happen again.** The shape is always the same: code
+  branches on the *known* values and lets everything else drop into the `else`, where the default
+  means something the data never said.
+  | Where | The absent value | What it was silently treated as |
+  |---|---|---|
+  | `findable-onboarding` | a null questionnaire column | "they said no" |
+  | `clientHeld.ts` (pre-fix) | `''` / whitespace / placeholder | "we hold this" |
+  | `market-view` (pre-fix) | tier `unknown` (below the evidence bar) | "AI names them" → subtracted |
+  The market one is the clearest: the branch kept `tier === "thin"` and dropped the rest, so
+  `unknown` — which is what *every* entry is below the bar — was subtracted as established. **The
+  guard inverted in exactly the case it was written for.**
+  ⚠️ **The test: never branch on the states you expect and let `else` carry the rest.** Enumerate
+  the absent case explicitly, and when a value is graded, assert on the grade you *want*
+  (`=== 'established'`), never on the one you want to exclude (`=== 'thin'`). A new grade added
+  later joins the wrong side of a negative test and nothing throws.
 - ⛔ **ABSENCE IS NEVER AN ANSWER — the second place this rule lives.** `serveGate` was the first (a
   skipped question flags, never blocks). `src/lib/clientHeld.ts` is the second: `heldValue()` is the
   ONLY way the client sheet decides it holds a value, and null / undefined / `''` / whitespace / an

@@ -54,6 +54,10 @@ export interface MeasureMarketProps {
   onSearch: () => Promise<number>;
   /** Re-reads the market view. */
   onReload: () => Promise<void>;
+  /** ⛔ CALLED ONLY WHEN A MEASUREMENT FINISHES, never on a refresh. The panel decides whether the
+   *  extraction was dirty enough to be worth cleaning — it owns the view, so it owns the threshold.
+   *  Separate from onReload because refreshing a settled market must never spend anything. */
+  onMeasureComplete?: () => Promise<void>;
 }
 
 interface QRow { status: string | null }
@@ -71,6 +75,7 @@ function secondsOnly(startedMs: number, nowMs: number): string {
 
 export default function MeasureMarket({
   trade, town, completedMarketAudits, marketProgress, poolSearchedAt, onSearch, onReload,
+  onMeasureComplete,
 }: MeasureMarketProps) {
   const { toast } = useToast();
   /* ⛔ `sessionPhase` IS ONLY WHAT THIS TAB IS DOING RIGHT NOW — searching, starting, blocked, failed.
@@ -163,12 +168,15 @@ export default function MeasureMarket({
         setSessionPhase(null);
         setQuestions([]);
         await onReload();
+        /* The one place a measurement is known to have just finished. The panel checks the junk
+           ratio and cleans only if it is over — see shouldAutoClean. */
+        if (onMeasureComplete) await onMeasureComplete();
       }
     };
     void tick();
     const t = setInterval(() => void tick(), POLL_MS);
     return () => { stop = true; clearInterval(t); };
-  }, [phase, pollKey, readQueue, onReload]);
+  }, [phase, pollKey, readQueue, onReload, onMeasureComplete]);
 
   /** One market audit. Returns its id, or throws with the server's own error code. */
   const startOne = useCallback(async (): Promise<string> => {
