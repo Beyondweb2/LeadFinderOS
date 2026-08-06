@@ -227,10 +227,17 @@ export interface MarketViewResult {
 
 export interface MarketOption { trade: string; town: string; audits: number }
 
-/** Per-question audit cost, mirroring SOURCES.ai_search.estCostUsd and AiAudit.tsx's
- *  RE_AUDIT_EST_USD_PER_QUESTION so the confirm here quotes the same figure the audit page does.
- *  Measured, not guessed — see CLAUDE.md §8. */
-export const AUDIT_EST_USD_PER_QUESTION = 0.0125;
+/* Per-question audit cost. Measured, never guessed — see CLAUDE.md §8.
+   ⛔ RE-MEASURED 2026-08-06 against 60 completed runs / 206 questions of real
+   ai_audit_runs.actor_cost_usd: mean $0.01095, median $0.01038, range $0.0052–$0.0135.
+   It was 0.0125, which over-stated every estimate in the app by about 20%.
+   ⚠️ THE MEDIAN, NOT THE MEAN, and deliberately: 8 × 0.0104 = $0.083, which is exactly the measured
+   cost of a market audit ($0.083 on 3 of the 4 ever run). Market audits are now the dominant use of
+   this constant, so the figure that reproduces them is the one to carry. The mean would put it at
+   0.0110; on a 25-audit outreach batch the difference is 8p, which is not worth the inconsistency.
+   Do not "correct" this upward without re-measuring — both figures are recorded here so the next
+   person does not have to guess which was intended. */
+export const AUDIT_EST_USD_PER_QUESTION = 0.0104;
 
 /** Questions per audit for a market top-up. Matches the outreach-hook default: enough to measure,
  *  cheap enough to run 5 of them without thinking about it. */
@@ -378,6 +385,155 @@ export interface MarketShape {
 /** Market audits needed before a shape is called. See above: two is where audit-share starts to
  *  mean anything, not a round number. */
 export const MARKET_AUDIT_MIN_AUDITS = 2;
+
+/* ══ THE ONE-BUTTON MEASURE RUN ═══════════════════════════════════════════════════════════════
+   Trade, town, one press: lead search, then two market audits, then results. Five clicks and two
+   dialogs became one button because every step of the old flow was friction on a thing used daily.
+
+   ⛔ THE SEARCH RUNS FIRST, AND NOT IN PARALLEL, THOUGH IT COULD. A market audit reads nothing from
+   the pool — create-ai-audit with market_only takes only business_type and location_text — so the
+   two are technically independent. They are still sequential, because the search is the ONLY typo
+   detector that exists: a mistyped town returns zero businesses in ~15 seconds for 8p, and if the
+   audits are already away that mistake has cost 13p and left two audit rows for a town that does
+   not exist. Parallelising saves ~20 seconds of a ~5½ minute run. Not worth the guard.
+
+   ⛔ THE TWO AUDITS ARE CREATED ONE AFTER THE OTHER, and this is the subtle one. create-ai-audit
+   builds its `coverage` directive by reading ai_audit_queue for questions already asked of that
+   trade and town, and it inserts its queue rows BEFORE returning. Fire both at once and the second
+   lookup runs before the first's rows exist, so both get no coverage hint and ask overlapping
+   questions — destroying the only reason to run two: non-overlapping breadth, and an auditShare
+   that is not degenerate. Sequential creation is load-bearing, not tidiness. */
+
+/** Measured wall time for a market audit, from real queue rows: 3.3, 4.3, 5.4 and 17.8 minutes (the
+ *  last a retry). Shown beside the progress bar as context, never used to drive it. */
+export const MARKET_AUDIT_TYPICAL_MS = 5 * 60 * 1000;
+
+/** Google geocode + text search for one town. Measured from api_usage_log: $0.005 geocode plus 3
+ *  pages at $0.032. Range across recent searches $0.037 to $0.133. */
+export const MARKET_SEARCH_USD = 0.101;
+
+/** ⛔ 72 HOURS, and it is why the button quotes two prices. search-leads short-circuits on a cache
+ *  hit within this window and charges NOTHING, so a second measure of the same trade and town is
+ *  audits only. Mirrors CACHE_TTL_MS in search-leads and POOL_TTL_MS in market-view. */
+export const MARKET_POOL_FRESH_MS = 72 * 60 * 60 * 1000;
+
+/** One market audit: 8 questions at the measured per-question rate = $0.083, which is what the four
+ *  real market audits actually cost. */
+export const MARKET_ONE_AUDIT_USD = MARKET_AUDIT_QUESTION_COUNT * AUDIT_EST_USD_PER_QUESTION;
+
+/** ⛔ THE SERVER OWNS THIS TOO. create-ai-audit refuses a second market audit for the same trade and
+ *  town inside this window and returns `market_cooldown`. Client state resets on reload, and
+ *  "pressed it repeatedly" almost always means reload-and-press, so a client-side guard is the one
+ *  that does not hold. Matches findable-onboarding's SUBMIT_COOLDOWN_MS, and is longer than the
+ *  ~5 minute typical run so it cannot fire against a run that has already finished. */
+export const MARKET_COOLDOWN_MS = 10 * 60 * 1000;
+
+/** What one press costs, stated on the button rather than in a dialog nobody reads twice. */
+export function measureRunCost(poolIsFresh: boolean, audits: number): number {
+  return (poolIsFresh ? 0 : MARKET_SEARCH_USD) + audits * MARKET_ONE_AUDIT_USD;
+}
+
+/** Pence, rounded, for the button label. Dollars on a button aimed at a UK operator reads as noise.
+ *  ⚠️ A DISPLAY RATE, not an accounting one — the bill is in dollars and this is a label. */
+export const USD_TO_GBP_DISPLAY = 0.79;
+export const asPence = (usd: number): string => `${Math.round(usd * USD_TO_GBP_DISPLAY * 100)}p`;
+
+export type MeasurePhase = 'idle' | 'searching' | 'starting' | 'answering' | 'done' | 'blocked' | 'failed';
+
+export interface MeasureProgress {
+  phase: MeasurePhase;
+  /** 0-100. Real, derived from state counts, never interpolated from a timer. */
+  percent: number;
+  label: string;
+  questionsDone: number;
+  questionsTotal: number;
+  businessesFound: number | null;
+}
+
+/* ⛔ THE BAR IS SCORED PER QUESTION-STATE, NOT PER QUESTION. Measured on a real market audit: all
+   eight questions finished within ONE SECOND of each other, because the queue claims up to
+   START_BATCH (12) rows on a single tick and Apify runs them in parallel. A done/not-done bar
+   therefore sits at 0% for five minutes and then jumps to 100%, which is a worse spinner than a
+   spinner.
+   Scoring pending=0, running=1, done=2 gives three real movements instead of one: rows claimed, all
+   rows claimed, rows finished. Every point of it is a state that actually exists.
+   ⛔ NOTHING HERE IS DRIVEN BY ELAPSED TIME. A bar advancing smoothly while nothing happens is a lie
+   the operator would then trust, and the first time it sat at 90% for four minutes it would cost the
+   credibility of every progress indicator in the app. Elapsed time is shown BESIDE the bar, as text,
+   next to the measured median. */
+export const QUESTION_STATE_SCORE: Record<string, number> = {
+  pending: 0, queued: 0, running: 1, done: 2, failed: 2,
+};
+
+const PHASE_FLOOR = { searching: 8, starting: 20, answering: 30, done: 100 } as const;
+
+export function measureProgress(
+  phase: MeasurePhase,
+  questions: Array<{ status: string | null }>,
+  businessesFound: number | null,
+): MeasureProgress {
+  const total = questions.length;
+  const done = questions.filter((q) => q.status === 'done').length;
+  const failed = questions.filter((q) => q.status === 'failed').length;
+
+  if (phase === 'searching') {
+    return { phase, percent: PHASE_FLOOR.searching, label: 'Searching for businesses...', questionsDone: 0, questionsTotal: 0, businessesFound };
+  }
+  if (phase === 'starting' || (phase === 'answering' && total === 0)) {
+    return {
+      phase: 'starting',
+      percent: PHASE_FLOOR.starting,
+      label: businessesFound !== null
+        ? `${businessesFound} businesses found - starting the questions`
+        : 'Starting the questions...',
+      questionsDone: 0, questionsTotal: total, businessesFound,
+    };
+  }
+  if (phase === 'answering') {
+    const score = questions.reduce((n, q) => n + (QUESTION_STATE_SCORE[q.status ?? 'pending'] ?? 0), 0);
+    const span = PHASE_FLOOR.done - PHASE_FLOOR.answering;
+    /* Capped below the top until the VIEW says the audits completed. The queue can show every row
+       done a moment before the run is folded, and a bar that reaches 100% while the screen still
+       says "measuring" is the same broken promise as a fake one. */
+    const pct = PHASE_FLOOR.answering + Math.min(0.98, total ? score / (total * 2) : 0) * span;
+    return {
+      phase,
+      percent: Math.round(pct),
+      label: `${done} of ${total} questions answered${failed ? ` - ${failed} failed` : ''}`,
+      questionsDone: done, questionsTotal: total, businessesFound,
+    };
+  }
+  if (phase === 'done') {
+    return { phase, percent: 100, label: 'Measured', questionsDone: done, questionsTotal: total, businessesFound };
+  }
+  return { phase, percent: 0, label: '', questionsDone: done, questionsTotal: total, businessesFound };
+}
+
+/** Elapsed against the measured median, as TEXT beside the bar. Never fills it. */
+export function elapsedPhrase(startedMs: number, nowMs: number): string {
+  const s = Math.max(0, Math.round((nowMs - startedMs) / 1000));
+  const mmss = `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+  return `${mmss} - usually about ${Math.round(MARKET_AUDIT_TYPICAL_MS / 60000)} minutes`;
+}
+
+/** What the one button should say and do, given what the market already has.
+ *  ⛔ REFRESH, NOT "ALREADY MEASURED", once the bar is cleared. A stale read is the commonest reason
+ *  to press again; telling the operator it is measured answers a question they did not ask. The
+ *  expensive action stops being the default the moment the question has been answered. */
+export type MeasureAction = 'measure' | 'finish' | 'refresh';
+
+export function measureAction(completedMarketAudits: number): MeasureAction {
+  if (completedMarketAudits >= MARKET_AUDIT_MIN_AUDITS) return 'refresh';
+  if (completedMarketAudits === 1) return 'finish';
+  return 'measure';
+}
+
+/** How many audits a press starts. Refresh starts none - it re-reads, free. */
+export function auditsToRun(action: MeasureAction): number {
+  if (action === 'measure') return MARKET_AUDIT_MIN_AUDITS;
+  if (action === 'finish') return 1;
+  return 0;
+}
 
 /** What one market audit is worth in business-audit terms, for a market measured by both.
  *  ⚠️ THIS FOLLOWS FROM THE TWO THRESHOLDS (2 market audits and 5 business audits both being
