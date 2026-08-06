@@ -60,6 +60,15 @@ interface Row {
   website_platform_other: string | null;
   website_manager: string | null;
   willing_to_migrate: string | null;
+  /* ⛔ THE FOUR ANSWERS THAT NEED PAUL, IN THE EMAIL RATHER THAN THE DATABASE. "A column I have to
+     run SQL to see is a column I will never look at" — so the two that need action and the two that
+     shape the work are carried here.
+     gbp_status "no_access" and a non-empty must_not_say are the ones that need a reply; gbp_exists
+     and photos_status change what the delivery looks like before it starts. */
+  gbp_exists: string | null;
+  gbp_status: string | null;
+  must_not_say: string | null;
+  photos_status: string | null;
   /** An escape-hatch bail-out. Its answers are partial, so it is never given a verdict. */
   incomplete: boolean | null;
 }
@@ -90,7 +99,7 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // ONE STRING LITERAL, not a concatenation. supabase-js types the select on the literal, so
       // splitting it across two lines makes `data` GenericStringError[] and the cast below a TS2352.
-      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, incomplete")
+      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, must_not_say, photos_status, incomplete")
       .is("notified_at", null)
       .lte("created_at", cutoff)
       .order("created_at", { ascending: true })
@@ -157,6 +166,38 @@ Deno.serve(async (req) => {
       const siteLine = gate ? platformLabel(
         serveInputFromRow(row as ServeGateRow).platform, row.website_platform_other,
       ) : null;
+      /* PLAIN ENGLISH, and NEVER a raw enum in an email Paul reads at a glance. An unrecognised
+         value falls through to the raw string rather than to blank — a new option added to the flow
+         must never render an empty line that looks like "not answered". */
+      const GBP_EXISTS_LABEL: Record<string, string> = {
+        yes: "Has one, and can get into it",
+        not_claimed: "Profile exists but is unclaimed",
+        no: "No profile at all",
+        not_sure: "Not sure",
+      };
+      const GBP_STATUS_LABEL: Record<string, string> = {
+        done: "Already added us as a manager",
+        will_do: "Says they will add us",
+        no_access: "CANNOT GET INTO THEIR PROFILE",
+      };
+      const PHOTOS_LABEL: Record<string, string> = {
+        phone: "Has photos on their phone",
+        online: "Has photos on their site or social",
+        none: "Has no photos of their work",
+      };
+      const label = (m: Record<string, string>, v: string | null) => (v ? (m[v] ?? v) : null);
+      const gbpExistsLine = label(GBP_EXISTS_LABEL, row.gbp_exists);
+      const gbpStatusLine = label(GBP_STATUS_LABEL, row.gbp_status);
+      const photosLine = label(PHOTOS_LABEL, row.photos_status);
+      const mustNotSay = (row.must_not_say ?? "").trim() || null;
+
+      /* ⛔ TWO ANSWERS NEED A REPLY RATHER THAN A READ, and they are pulled out of the list so they
+         cannot be skimmed past: someone locked out of their profile cannot start at all, and a
+         must-not-say note is the only thing here that can embarrass us in public once published. */
+      const needsYou: string[] = [];
+      if (row.gbp_status === "no_access") needsYou.push("They cannot get into their Google Business Profile. They cannot add us, so nothing on the profile can start until this is sorted.");
+      if (mustNotSay) needsYou.push(`They told us something we must not say: "${mustNotSay}"`);
+
       const tail = gate?.verdict === "block"
         ? "They were blocked before Stripe, so no payment was possible. They saw the honest refusal screen with your email address on it. Some of these are worth a call anyway."
         : "They reached the payment screen and stopped. Nothing has been sent to them automatically.";
@@ -166,6 +207,9 @@ Deno.serve(async (req) => {
         (verdictLabel ? `  ${verdictLabel}\n  ${gate!.reason}\n\n` : "") +
         line("Trade:", trade) + line("Town:", town) + line("Phone:", phone) + line("Email:", row.contact_email) +
         (gate ? line("Site:", siteLine) : "") +
+        line("Profile:", gbpExistsLine) + line("Added us:", gbpStatusLine) + line("Photos:", photosLine) +
+        (mustNotSay ? line("Must not say:", mustNotSay) : "") +
+        (needsYou.length ? `\n  NEEDS YOU:\n${needsYou.map((x) => `  - ${x}`).join("\n")}\n` : "") +
         `\n${tail}\n`;
       const html =
         `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1e293b">` +
@@ -182,6 +226,15 @@ Deno.serve(async (req) => {
         (phone ? `<p style="margin:0 0 2px"><strong>Phone:</strong> ${escapeHtml(phone)}</p>` : "") +
         (row.contact_email ? `<p style="margin:0 0 2px"><strong>Email:</strong> ${escapeHtml(row.contact_email)}</p>` : "") +
         (siteLine ? `<p style="margin:0 0 2px"><strong>Site:</strong> ${escapeHtml(siteLine)}</p>` : "") +
+        (gbpExistsLine ? `<p style="margin:0 0 2px"><strong>Profile:</strong> ${escapeHtml(gbpExistsLine)}</p>` : "") +
+        (gbpStatusLine ? `<p style="margin:0 0 2px"><strong>Added us:</strong> ${escapeHtml(gbpStatusLine)}</p>` : "") +
+        (photosLine ? `<p style="margin:0 0 2px"><strong>Photos:</strong> ${escapeHtml(photosLine)}</p>` : "") +
+        (mustNotSay ? `<p style="margin:0 0 2px"><strong>Must not say:</strong> ${escapeHtml(mustNotSay)}</p>` : "") +
+        (needsYou.length
+          ? `<div style="margin:12px 0 0;padding:10px 12px;border-radius:8px;background:#fef2f2;color:#991b1b">` +
+            `<strong>Needs you</strong><ul style="margin:6px 0 0;padding-left:18px">` +
+            needsYou.map((x) => `<li>${escapeHtml(x)}</li>`).join("") + `</ul></div>`
+          : "") +
         `<p style="margin:10px 0 0;color:#475569">${escapeHtml(tail)}</p>` +
         `</div>`;
 
