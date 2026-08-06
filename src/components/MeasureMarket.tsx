@@ -50,6 +50,15 @@ export interface MeasureMarketProps {
   marketProgress: MarketAuditProgress[] | undefined;
   /** When the cached lead pool was searched, or null. Inside 72h the search is free. */
   poolSearchedAt: string | null;
+  /* ⛔ HOW MANY BUSINESSES ARE ALREADY IN THAT POOL, or null when the pool is not ready.
+     THIS IS WHAT THE GATE WAS MISSING. The gate used to live inside the `if (!poolFresh)` branch,
+     so it only ever ran when a search actually ran — and a pool that is FRESH AND EMPTY, which is
+     precisely the state the gate exists to catch, sailed straight past it into two paid audits.
+     Soham: 0 businesses in Places, pool searched minutes earlier, two audits ran anyway. Reported
+     twice before this was found, because both the review and the test only ever exercised the
+     search path. A count of zero must stop the run whether it was learned a second ago or a day
+     ago. null (pool not ready / unknown) NEVER blocks — absence is not a zero. */
+  poolCount: number | null;
   /** Runs the same lead search the manual button runs. Resolves to the number of businesses found. */
   onSearch: () => Promise<number>;
   /** Re-reads the market view. */
@@ -74,7 +83,7 @@ function secondsOnly(startedMs: number, nowMs: number): string {
 }
 
 export default function MeasureMarket({
-  trade, town, completedMarketAudits, marketProgress, poolSearchedAt, onSearch, onReload,
+  trade, town, completedMarketAudits, marketProgress, poolSearchedAt, poolCount, onSearch, onReload,
   onMeasureComplete,
 }: MeasureMarketProps) {
   const { toast } = useToast();
@@ -223,25 +232,41 @@ export default function MeasureMarket({
     setSessionStartedMs(Date.now()); setNowMs(Date.now());
 
     try {
-      /* 1. THE SEARCH, unless the pool is fresh or the operator has overridden the gate. */
+      /* 1. THE SEARCH, unless the pool is already fresh.
+         ⛔ THE SEARCH AND THE GATE ARE NOW TWO SEPARATE STEPS. They used to be one: the gate lived
+         inside this branch, so skipping the search skipped the gate. A fresh pool holding ZERO
+         businesses — the exact state the gate is for — was therefore the one case that could never
+         be caught. Soham ran two audits against an empty pool that way, twice.
+         Whether the count came from a search we just ran or from a pool we already had makes no
+         difference to what it means, so it must make no difference to what we do about it. */
       let businesses: number | null = null;
-      if (!poolFresh && !skipGate) {
+      if (!poolFresh) {
         setSessionPhase('searching');
         businesses = await onSearch();
         if (cancelled.current) return;
-        setFound(businesses);
-        if (businesses === 0) {
-          /* ⛔ THE GATE. Zero businesses almost always means the town is mistyped, and stopping here
-             costs 8p instead of 21p and leaves no audit rows for a town that does not exist. The
-             override appears only now, because the one real reason to continue — assessing a town
-             before deciding to sell into it — is a decision made in response to this, not before. */
-          setSessionPhase('blocked');
-          setBlocked(`No businesses found for ${trade} in ${town}. That usually means the town is misspelled.`);
-          setOfferOverride(true);
-          return;
-        }
-      } else if (poolFresh) {
+      } else {
+        businesses = poolCount;   // already known; costs nothing to consult
         setNote('Pool searched in the last 72 hours, so the search was free.');
+      }
+      setFound(businesses);
+
+      /* 2. THE GATE, on the count from EITHER source.
+         Zero businesses almost always means the town is mistyped, and stopping here costs 8p
+         instead of 21p and leaves no audit rows for a town that does not exist. The override
+         appears only now, because the one real reason to continue — assessing a town before
+         deciding to sell into it — is a decision made in response to this, not before.
+         ⚠️ `=== 0`, never falsy, and never `!businesses`. null means the pool state is unknown,
+         and an unknown count is not a zero: it must pass. That is the same rule as serveGate and
+         offTradeMark, and writing it as `!businesses` would break it silently. */
+      if (!skipGate && businesses === 0) {
+        setSessionPhase('blocked');
+        setBlocked(
+          poolFresh
+            ? `The cached pool for ${trade} in ${town} holds no businesses. Places found none in the town — measuring would ask AI about a market with nothing in it.`
+            : `No businesses found for ${trade} in ${town}. That usually means the town is misspelled.`,
+        );
+        setOfferOverride(true);
+        return;
       }
 
       /* 2. THE AUDITS, one after the other. See the header note: the await is load-bearing. */
@@ -281,7 +306,7 @@ export default function MeasureMarket({
       setSessionPhase('failed');
       setBlocked((e as Error).message);
     }
-  }, [poolFresh, onSearch, trade, town, audits, startOne, onReload]);
+  }, [poolFresh, poolCount, onSearch, trade, town, audits, startOne, onReload]);
 
   const refresh = useCallback(async () => {
     setSessionPhase('idle'); setBlocked(null); setNote(null);

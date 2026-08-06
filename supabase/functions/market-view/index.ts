@@ -637,6 +637,7 @@ Deno.serve(async (req) => {
       marketProgress,
       poolNearby,
       citationHosts,
+      citationTotal,
       named,
       leader: leaderRow ? { name: leaderRow.name, mentions: leaderRow.mentions } : null,
       otherTownsCapped,

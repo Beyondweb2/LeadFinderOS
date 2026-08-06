@@ -230,8 +230,14 @@ export interface MarketViewResult {
   /** The most-cited hosts in this market, biggest first, with the aggregator flag the shape read
    *  needs. Folded from citations already stored on the queue rows - no extra queries. */
   citationHosts: MarketCitationHost[];
-  /** Total citations behind citationHosts, so a share can be shown next to the leader. */
-  citationTotal?: number;
+  /** Total citations behind citationHosts, so a share can be shown next to the leader.
+   *  ⛔ REQUIRED, and it is the fourth field of this group. The other three were made required on
+   *  2026-08-06 and this one was left optional in the same pass — so it kept being computed and
+   *  dropped, and the shape read printed "lockrite.org (47 of 0)": a real numerator over a
+   *  denominator that never arrived. Nothing divides by it (every ratio is guarded), which is why
+   *  no error surfaced — it was only ever PRINTED. A missing denominator is as wrong as a division
+   *  by zero and considerably more convincing. */
+  citationTotal: number;
   /** Market audits that have NOT finished, with progress and the raw error if any. */
   marketProgress: MarketAuditProgress[];
   /** Businesses the radius pass found JUST OUTSIDE the town boundary. Visible, tagged, and never
@@ -773,15 +779,22 @@ export function marketShape(input: MarketShapeInput): MarketShape {
 
   const topHost = citationHosts[0] ?? null;
   const aggregatorLeads = !!topHost?.isAggregator;
-  const leaderIsNational = (leaderRow?.otherTowns ?? 0) > 0;
+  const leaderIsNational = (leaderRow?.otherTowns ?? 0) >= NATIONAL_MIN_OTHER_TOWNS;
   const hostShare = topHost && citationTotal > 0 ? Math.round((topHost.citations / citationTotal) * 100) : 0;
+  /* ⛔ THE DENOMINATOR IS PRINTED, NOT JUST DIVIDED BY, AND THAT IS WHERE IT WENT WRONG.
+     Every ratio in this file is guarded (`citationTotal > 0`), so nothing ever divided by zero and
+     nothing ever threw — but the reasoning lines interpolated the raw total straight into the
+     sentence, and produced "lockrite.org (47 of 0)". One helper for all three, so a total of zero
+     states the count alone rather than a fraction of nothing. A guard on the arithmetic is not a
+     guard on the sentence. */
+  const ofTotal = (n: number) => (citationTotal > 0 ? `${n} of ${citationTotal}` : `${n}`);
 
   // -- SHAPE 1: a marketplace or a national platform owns the market.
   if (aggregatorLeads || leaderIsNational) {
     const reasoning: string[] = [];
     if (aggregatorLeads && topHost) {
       reasoning.push(
-        `${topHost.host} is the most-cited source here: ${topHost.citations} of ${citationTotal} citations (${hostShare}%), ahead of every business's own site.`,
+        `${topHost.host} is the most-cited source here: ${ofTotal(topHost.citations)} citations${citationTotal > 0 ? ` (${hostShare}%)` : ""}, ahead of every business's own site.`,
       );
     }
     if (leaderIsNational && leaderRow) {
@@ -797,7 +810,7 @@ export function marketShape(input: MarketShapeInput): MarketShape {
       );
     }
     if (!aggregatorLeads && leaderIsNational && topHost) {
-      reasoning.push(`The top cited host is ${topHost.host} (${topHost.citations} of ${citationTotal}).`);
+      reasoning.push(`The top cited host is ${topHost.host} (${ofTotal(topHost.citations)}).`);
     }
     return { kind: "marketplace_led", headline: "Marketplace-led \u00b7 probably skip this market", reasoning };
   }
@@ -822,7 +835,7 @@ export function marketShape(input: MarketShapeInput): MarketShape {
     "A local leader is beatable, and this is the comparison to sell with.",
   ];
   if (topHost) {
-    reasoning.push(`The most-cited source is ${topHost.host} (${topHost.citations} of ${citationTotal}), a business's own site rather than a directory.`);
+    reasoning.push(`The most-cited source is ${topHost.host} (${ofTotal(topHost.citations)}), a business's own site rather than a directory.`);
   }
   return { kind: "local_leader", headline: "Local leader \u00b7 the best shape to work", reasoning };
 }
@@ -927,6 +940,16 @@ export function marketPlainRead(
           ? `${pendingAudits} audit${pendingAudits === 1 ? "" : "s"} still running - this becomes a prospect list when ${pendingAudits === 1 ? "it finishes" : "they finish"}.`
           : "Run an audit of this market first."
       }`
+      /* ⛔ AN EMPTY POOL IS ENUMERATED BEFORE THE ZERO-PROSPECTS TEST, NOT AFTER IT.
+         "of 0 found in Places, every one is already named by AI" is what this said, and it is
+         two false claims in one sentence: nothing was found, and therefore nothing was measured
+         against. Zero prospects out of zero businesses and zero prospects out of twelve are
+         opposite findings that happen to share an arithmetic result — the market is EMPTY, not
+         closed. Fifth instance of an absent value read as an answer (CLAUDE.md §6), and the fix is
+         the same one every time: name the absent case explicitly instead of letting it fall into a
+         branch written for a different state. */
+      : poolFound === 0
+        ? `Places found no ${trade} inside the ${town} boundary at all, so there is nothing here to contact and nothing for the audits to have been measured against. That is a fact about the SEARCH, not about the market: a town this size may genuinely have none of this trade, or Places may not list them. The AI answers above name firms from other towns, which is the real finding.`
       : prospects === 0
         ? `Nobody left to contact: of ${poolLine}, every one is already named by AI. The list can't be complete though - it is only what Places returned inside the town boundary.`
         : `${prospects} worth contacting: of ${poolLine}${chainLine}, ${prospects} ${prospects === 1 ? "either never shows up" : "either never show up"} in AI answers or barely ${prospects === 1 ? "does" : "do"}.${
@@ -962,6 +985,29 @@ export function marketPlainRead(
 /** Below this share of typed rows the modal type is not a consensus, so nothing is marked. A pool
  *  genuinely split between two types has no "expected" type and guessing one would mark half the
  *  market as off-trade. */
+/* ⛔ HOW MANY OTHER TOWNS MAKE A NAME A NATIONAL BRAND. Was `> 0` — ONE other town — which called
+   Ely Locksmiths a national chain in Soham and produced a "Skip this one" verdict on a market whose
+   leader is a firm in the next town along. A neighbouring firm appearing in a neighbouring town is
+   expected, not evidence.
+
+   MEASURED 2026-08-07 across every audit in the database — 5,263 distinct trade+name pairs:
+     1 town   5,141  (97.7%)
+     2 towns     93  ( 1.8%)
+     3 towns     15  ( 0.3%)
+     4 towns      4     5 towns  4     6 towns  4     7 towns  1     8 towns  1
+   The break is unmistakable: 97.7% of names are seen in exactly one town, and the whole tail above
+   two is 0.6% of the population. At 3+ the list is Timpson (8), Dyno-Rod (7), SOS Leak Detection
+   (6), ADI Leak Detection (6), Able Group (6), LockRite (6), Keytek (4), TaxAssist (5), Azets (3) —
+   the chains, by name. At 2 you would still flag 93 pairs that are overwhelmingly firms serving a
+   neighbouring town, which is the Ely case exactly.
+
+   ⚠️ 4 would be cleaner still (14 pairs, every one an unambiguous chain) but risks missing a real
+   regional chain, and 3 already matches Paul's own read: "Timpson and Able Group appear in many
+   towns; a neighbouring firm appears in one or two."
+   ⚠️ A FIXED number is right and does not need to scale with how many towns get measured: a local
+   firm does not gain towns as more markets are added, only a chain does. */
+export const NATIONAL_MIN_OTHER_TOWNS = 3;
+
 export const OFF_TRADE_MIN_SHARE = 0.5;
 /** Fewer typed rows than this and the mode is noise — 2 of 3 is not a consensus. */
 export const OFF_TRADE_MIN_TYPED = 4;
