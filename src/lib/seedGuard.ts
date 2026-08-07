@@ -402,3 +402,80 @@ export function coverageDirective(asked: string[], businessType: string): string
   }
   return lines.join("\n");
 }
+
+/* ══ THE COUNTRY MARKER ON A LOCAL QUESTION ══════════════════════════════════════════════════
+   ⛔ 104 OF 104 MARKET-AUDIT QUESTIONS CARRIED NO COUNTRY. Business audits ask "locksmith in
+   Wisbech UK"; market audits asked "locksmith in Wisbech". That is the exposure that put Stamford,
+   CONNECTICUT plumbers — FAIRCONN, JNR Plumbing LLC, United Sewer & Water — into four reports that
+   had already been sent to prospects.
+
+   THE CAUSE WAS A PROMPT CONTRADICTING ITSELF, not a model ignoring it. create-ai-audit told the
+   generator both:
+       ALWAYS write the place EXACTLY as "Wisbech UK"
+       ... no national/uk terms
+   and on the forced-local path (which every market audit takes) the second instruction won, every
+   time. The prompt is now fixed too, but a prompt is a request.
+
+   ⚠️ THIS REPAIRS RATHER THAN REJECTS, and that is a deliberate difference from dropMissingTown.
+   A town-less question is asking about the wrong thing and has to go. A country-less question is
+   the RIGHT question with an under-specified place, so throwing it away would burn a good question
+   and an LLM call to regenerate one that may come back non-compliant again. Appending cannot fail:
+   after this runs the property is true by construction, which is a stronger guarantee than a
+   regenerate-and-recheck loop gives.
+   ⚠️ Idempotent by design — a question that already carries a country marker is returned untouched,
+   so this can never produce "Wisbech UK UK", and re-running it over stored questions is safe. */
+
+/** Country words that already pin a question. Matched whole-word: "uk" must not fire on "ukulele". */
+const COUNTRY_MARKERS = ['uk', 'united kingdom', 'england', 'scotland', 'wales', 'britain', 'gb'];
+
+/** A town name is interpolated into a RegExp below, so it has to be escaped — "St. Ives" would
+ *  otherwise make "." match any character. Its own function because writing the character class
+ *  inline is exactly the sort of line a shell heredoc mangles. */
+function escapeForRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function hasCountryMarker(question: string): boolean {
+  const q = ` ${normalise(question)} `;
+  return COUNTRY_MARKERS.some((c) => q.includes(` ${c} `));
+}
+
+/**
+ * Ensure every LOCAL question names the place with its country: "locksmith in Wisbech" becomes
+ * "locksmith in Wisbech UK". Returns the questions and which ones were changed, so the caller can
+ * log a repair rather than a silent rewrite.
+ *
+ * `suffix` is what follows the town — "UK" today. It is a parameter rather than a constant because
+ * the geocoder now returns a formatted address, and "Wisbech, Cambridgeshire" pins a town far
+ * harder than a country does (Stamford Lincolnshire vs Stamford Connecticut). Changing it is a
+ * decision about comparability with every audit already measured, NOT a code change — see the note
+ * in create-ai-audit.
+ */
+export function qualifyPlace(
+  questions: string[],
+  town: string,
+  suffix = 'UK',
+): { questions: string[]; repaired: Array<{ before: string; after: string }> } {
+  const repaired: Array<{ before: string; after: string }> = [];
+  const t = normalise(town);
+  if (!t || !suffix.trim()) return { questions, repaired };
+
+  const out = questions.map((raw) => {
+    const q = (raw ?? '').trim();
+    if (!q) return q;
+    if (hasCountryMarker(q)) return q;          // already pinned — never double-append
+    if (!mentionsTown(q, town)) return q;       // dropMissingTown owns this case, not us
+
+    /* Replace the LAST occurrence of the town, which is where the place sits in
+       "[service] in [town]". Case-insensitive match, but the ORIGINAL casing is kept: rewriting
+       "Wisbech" to "wisbech" would change the stored question string for no reason, and the stored
+       string is what a week-eight re-measurement re-runs verbatim. */
+    const re = new RegExp(`(.*)(${escapeForRegex(town.trim())})`, 'i');
+    const m = q.match(re);
+    if (!m) return q;
+    const after = `${m[1]}${m[2]} ${suffix.trim()}${q.slice(m[0].length)}`.replace(/\s+/g, ' ').trim();
+    if (after !== q) repaired.push({ before: q, after });
+    return after;
+  });
+  return { questions: out, repaired };
+}
