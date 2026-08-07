@@ -3,7 +3,7 @@ import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
-import { applySeed, dropResearchIntent, dropMissingTown, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
+import { applySeed, dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
 import {
   OUTREACH_HOOK_QUESTIONS,
@@ -969,7 +969,9 @@ ${coverage ? `${coverage}
 Return via the return_questions tool.`;
 
   const userScopeLine = forceLocal
-    ? `This business is LOCAL to ${locQ}. Generate ${n} short, single-intent LOCAL phrases ("[service] in ${locQ}") — no national/uk terms, NEVER "near me" (write the place exactly as "${locQ}").`
+    ? `This business is LOCAL to ${locQ}. Generate ${n} short, single-intent LOCAL phrases ("[service] in ${locQ}"), NEVER "near me".
+The place is ALWAYS written exactly "${locQ}" — that trailing country word is PART OF THE PLACE and is required, not a "national term".
+Do not otherwise widen the question to a country or region: no "for [audience] in England", no "nationwide", no "online".`
     : forceNational
     ? `This business is NATIONAL. Generate ${n} short, single-intent phrases qualified by audience + country — no "near me", no broad head-terms.`
     : `First classify this business as NATIONAL or LOCAL from the location, then generate ${n} short, single-intent search phrases under the matching rules.`;
@@ -1045,7 +1047,24 @@ Return via the return_questions tool.`;
           + localised.rejected.map((r) => `"${r.question}"`).join(" | "),
         );
       }
-      return localised.questions;
+      /* ⛔ AND THE COUNTRY, GUARANTEED RATHER THAN REQUESTED. Every one of the 104 market-audit
+         questions ever generated lacked a country marker while business audits carried "UK" —
+         because the forced-local prompt above simultaneously demanded the place be written
+         "Wisbech UK" and banned "uk" as a national term. The prompt is fixed, but a prompt is a
+         request; this is the check. Repairs rather than rejects: the question is right, only the
+         place was under-specified. See qualifyPlace for why that differs from dropMissingTown.
+         ⚠️ The suffix stays "UK" deliberately. The geocoder can now supply "Cambridgeshire", which
+         pins a town far harder — but changing it changes what the engines return for EVERY town,
+         and a week-eight re-measurement compares against day-0 wording. Paul's decision, not a
+         code change. */
+      const pinned = qualifyPlace(localised.questions, town);
+      if (pinned.repaired.length) {
+        console.warn(
+          `[create-ai-audit] country marker added to ${pinned.repaired.length} question(s) for "${town}": `
+          + pinned.repaired.map((r) => `"${r.before}" -> "${r.after}"`).join(" | "),
+        );
+      }
+      return pinned.questions;
     }
     return guarded.questions;
   } catch (_e) {
