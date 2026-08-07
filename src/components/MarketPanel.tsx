@@ -978,9 +978,22 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
                     {' '}{view.poolState.scope === 'town' ? 'inside the town boundary' : `within a ${Math.round(view.poolState.radiusM / 1000)}km radius`}:
                     {' '}{view.poolState.total} business{view.poolState.total === 1 ? '' : 'es'},
                     searched {shortDate(view.poolState.searchedAt) ?? 'recently'}.
-                    {measured
-                      ? ` ${view.poolMatchedNamed} of them AI already names.`
-                      : ' Nothing measured, so none have been subtracted.'}
+                    {/* ⛔ THIS ALREADY READ FROM THE SUBTRACTION — poolMatchedNamed IS poolExcluded's
+                        length — but it DESCRIBED it wrongly, and that is what made it look like a
+                        contradiction. Only ESTABLISHED firms are subtracted; a firm AI names thinly
+                        stays a prospect on purpose AND appears in the named list. So "N of them AI
+                        already names" was understating by exactly the thin ones, and read as a flat
+                        lie next to a named list full of pool businesses.
+                        Now it reconciles the whole pool out loud: subtracted + kept-but-named +
+                        never-named must equal the total, so any future disagreement is visible on
+                        screen rather than inferable only by counting rows. */}
+                    {measured ? (() => {
+                      const thinKept = view.pool.filter((r) => r.thin).length;
+                      const never = Math.max(0, view.poolState.total - view.poolMatchedNamed - thinKept);
+                      return ` AI names ${view.poolMatchedNamed} of them consistently enough to subtract`
+                        + `, names ${thinKept} only thinly (kept as prospects)`
+                        + `, and has never named the other ${never}.`;
+                    })() : ' Nothing measured, so none have been subtracted.'}
                   </p>
                   <p className="text-[11px] leading-snug text-amber-700 dark:text-amber-400">
                     This is not a complete list of the town's businesses, and cannot be. Firms just
