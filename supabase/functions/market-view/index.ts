@@ -7,6 +7,7 @@ import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE, expectedPrimaryType, offTradeMark,
+  hasShapeEvidence,
   type MarketConcentration, type MarketNamedRow, type MarketPoolExcluded,
   type MarketPoolRow, type MarketPoolState, type MarketTier, type MarketCitationHost,
   type MarketViewResult,
@@ -379,12 +380,34 @@ Deno.serve(async (req) => {
       }
     }
 
-    /* GRADED: established / thin / unknown. Below EVIDENCE_MIN_AUDITS nothing is established —
-       two audits cannot establish a market position, and saying otherwise is the same
-       thin-evidence trap the playbook guards. Thresholds and their justification live in
-       src/lib/marketView.ts. */
+    /* GRADED: established / thin / unknown.
+       ⛔ THE TIER BAR AND THE SHAPE BAR MUST BE THE SAME BAR, AND FOR MONTHS THEY WERE NOT.
+       This read `auditIds.length < EVIDENCE_MIN_AUDITS` — a flat 5 — while the view calls a
+       market's shape on MARKET_AUDIT_MIN_AUDITS (2) market audits. So with 2 market audits the
+       shape was called, every entry was graded `unknown`, and the subtraction (which keeps
+       everything that is not `established`) subtracted NOTHING.
+       Chichester electricians, 2 completed market audits: Chi-Lec Electrical Contractors — 23
+       mentions in 2 of 2 audits, the most-named business in the market — was offered as a
+       PROSPECT, alongside Swift Electrical (19), Arctic Electrical (16) and Henderson (12). The
+       reconciliation line read "24 entries − 0 already named" while the rows displayed their
+       mention counts, which is the tell: the matcher had matched them perfectly.
+
+       ⚠️ THIS IS THE SAME LINE THAT DROPPED 15 NORWICH PROSPECTS, failing in the OPPOSITE
+       direction. There it kept `tier === "thin"` and dropped `unknown`; here it keeps everything
+       because everything IS `unknown`. One expression, two contradictory bugs, because the grade
+       it tests against was computed from a different threshold than the one that decides whether
+       the grades mean anything at all.
+
+       THE FIX IS TO SHARE THE FUNCTION, NOT TO COPY THE NUMBER. hasShapeEvidence already encodes
+       the whole rule — 2 market audits, or 5 business audits, or the weighted mix — and is what
+       the shape gate calls. Two thresholds that must agree will drift; one function cannot.
+       Paul's rule, and it settles it: if two market audits are enough to call a market's shape,
+       they are enough to call a firm established within it — and if they are not, the view should
+       not be calling the shape either. */
     const leaderMentions = Math.max(0, ...[...fold.values()].map((v) => v.mentions));
-    const thinMarket = auditIds.length < EVIDENCE_MIN_AUDITS;
+    const marketAuditsDone = [...completedByAudit].filter((id) => marketAuditIds.has(id)).length;
+    const businessAuditsDone = [...completedByAudit].filter((id) => !marketAuditIds.has(id)).length;
+    const thinMarket = !hasShapeEvidence({ marketAudits: marketAuditsDone, businessAudits: businessAuditsDone });
     const named: MarketNamedRow[] = [...fold.entries()]
       .map(([key, v]) => {
         const auditShare = auditIds.length > 0 ? v.audits.size / auditIds.length : 0;
