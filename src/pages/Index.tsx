@@ -33,7 +33,7 @@ const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 const ASK_CAMPAIGN_KEY = 'lf_ask_campaign_each_time';
 
 const Index = () => {
-  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded, townFilterFallback } = useLeadSearchContext();
+  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach, leads: crmLeads, removeFreshLead, refetch: refetchCrm } = useOutreach();
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
@@ -452,6 +452,37 @@ const Index = () => {
       {/* "THIS TOWN ONLY" ASKED FOR, NOT APPLIED. A persistent banner, deliberately NOT a toast:
           the results below it are wider than the toggle claims, and that has to stay readable for
           as long as they are on screen rather than fading after four seconds. */}
+      {/* ⛔ WHICH PLACE, ON EVERY SEARCH. Paul's rule for normal mode: always DISPLAY the resolution,
+          block only when Google returned more than one candidate. A dialog in front of a search run
+          constantly is friction; a wrong town is 11p and a polluted lead list. Ambiguity is rare
+          (St Ives, Newport, Richmond) so the block almost never fires, and on the searches where it
+          does it is the whole point.
+          ⚠️ The amber form is NOT an error — the search DID run and these are real leads. It says
+          which place they are from, so a wrong one is caught by reading rather than by a Cornish
+          business name three screens later. */}
+      {showLeadResults && resolvedLocation && !isLoading && (
+        <div className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 ${
+          locationCandidates.length > 1
+            ? 'border-amber-500/40 bg-amber-500/10'
+            : 'border-border/50 bg-muted/30'
+        }`}>
+          <MapPin className={`mt-0.5 h-4 w-4 flex-shrink-0 ${
+            locationCandidates.length > 1 ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground'
+          }`} />
+          <p className="text-xs leading-snug text-muted-foreground">
+            Searched <span className="font-semibold text-foreground">{resolvedLocation}</span>
+            {locationCandidates.length > 1 && (
+              <>
+                {' '}&mdash; <span className="font-semibold text-amber-700 dark:text-amber-400">
+                  {locationCandidates.length} places share this name
+                </span>. If that is the wrong one, add the county and search again:{' '}
+                {locationCandidates.slice(0, 4).join('  ·  ')}
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
       {showLeadResults && townFilterFallback && !isLoading && (
         <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-500" />

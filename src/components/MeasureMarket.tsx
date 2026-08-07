@@ -59,6 +59,13 @@ export interface MeasureMarketProps {
      search path. A count of zero must stop the run whether it was learned a second ago or a day
      ago. null (pool not ready / unknown) NEVER blocks — absence is not a zero. */
   poolCount: number | null;
+  /* ⛔ THE PLACE THE GEOCODER CHOSE, in Google's own words. St Ives resolved to CORNWALL and 22p
+     bought a Cornish locksmith market, because nothing on screen ever named the county.
+     Displayed on every measurement, ambiguous or not. */
+  resolvedLocation: string | null;
+  /** Every candidate Google offered, only when it offered more than one. Empty = unambiguous, and
+   *  an unambiguous town must never block — the display alone is enough there. */
+  locationCandidates: string[];
   /** Runs the same lead search the manual button runs. Resolves to the number of businesses found. */
   onSearch: () => Promise<number>;
   /** Re-reads the market view. */
@@ -83,7 +90,8 @@ function secondsOnly(startedMs: number, nowMs: number): string {
 }
 
 export default function MeasureMarket({
-  trade, town, completedMarketAudits, marketProgress, poolSearchedAt, poolCount, onSearch, onReload,
+  trade, town, completedMarketAudits, marketProgress, poolSearchedAt, poolCount,
+  resolvedLocation, locationCandidates, onSearch, onReload,
   onMeasureComplete,
 }: MeasureMarketProps) {
   const { toast } = useToast();
@@ -258,6 +266,24 @@ export default function MeasureMarket({
          ⚠️ `=== 0`, never falsy, and never `!businesses`. null means the pool state is unknown,
          and an unknown count is not a zero: it must pass. That is the same rule as serveGate and
          offTradeMark, and writing it as `!businesses` would break it silently. */
+      /* ⛔ THE AMBIGUITY GATE, BEFORE THE EMPTY-POOL ONE. Google returning more than one candidate
+         IS Google saying the name is ambiguous, and there are at least three St Ives in the UK.
+         Ordered first deliberately: an ambiguous name that resolved to the wrong town can still
+         return a perfectly healthy pool, so the empty-pool gate would wave it straight through —
+         which is exactly what happened. Cornwall has plenty of locksmiths.
+         ⚠️ `> 1`, so an unambiguous town never blocks — Paul's rule, and the display below carries
+         those. An EMPTY candidates array means unambiguous, never unchecked. */
+      if (!skipGate && locationCandidates.length > 1) {
+        setSessionPhase('blocked');
+        setBlocked(
+          `"${town}" is ambiguous — Google returns ${locationCandidates.length} places with that name. ` +
+          `It picked ${resolvedLocation ?? 'the first one'}. Type the town with its county and search again, ` +
+          `or continue if that is the one you meant.`,
+        );
+        setOfferOverride(true);
+        return;
+      }
+
       if (!skipGate && businesses === 0) {
         setSessionPhase('blocked');
         setBlocked(
@@ -306,7 +332,7 @@ export default function MeasureMarket({
       setSessionPhase('failed');
       setBlocked((e as Error).message);
     }
-  }, [poolFresh, poolCount, onSearch, trade, town, audits, startOne, onReload]);
+  }, [poolFresh, poolCount, locationCandidates, resolvedLocation, onSearch, trade, town, audits, startOne, onReload]);
 
   const refresh = useCallback(async () => {
     setSessionPhase('idle'); setBlocked(null); setNote(null);
@@ -397,6 +423,21 @@ export default function MeasureMarket({
             <p className="break-words text-xs text-muted-foreground">{derived.error}</p>
           )}
         </div>
+      )}
+
+      {/* ⛔ WHICH PLACE, ALWAYS, NOT ONLY WHEN AMBIGUOUS. "St Ives, Cornwall, England" on screen
+          would have stopped the 22p before it was spent. Shown for every market, so the operator
+          reads it as a matter of habit rather than noticing it only when it shouts — the same
+          reason the cost sits on the face of the button rather than behind a dialog. */}
+      {resolvedLocation && (
+        <p className="text-xs text-muted-foreground">
+          Measuring <span className="font-medium text-foreground">{resolvedLocation}</span>
+          {locationCandidates.length > 1 && (
+            <span className="text-amber-600 dark:text-amber-500">
+              {' '}— {locationCandidates.length} places share this name
+            </span>
+          )}
+        </p>
       )}
 
       {note && <p className="text-xs text-muted-foreground">{note}</p>}

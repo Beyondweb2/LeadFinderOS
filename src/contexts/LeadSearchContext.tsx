@@ -46,6 +46,12 @@ interface LeadSearchContextType {
    *  boundary). Carries the server's reason. Null the rest of the time — including when the
    *  filter worked, because there is nothing to warn about then. */
   townFilterFallback: { reason: string } | null;
+  /* ⛔ WHICH PLACE THE GEOCODER CHOSE, in Google's own words ("St Ives, Cornwall, UK").
+     ALWAYS set after a search, ambiguous or not — a wrong town costs 11p and a polluted lead list,
+     and the only reason St Ives was measured in Cornwall is that nothing ever said so. */
+  resolvedLocation: string | null;
+  /** Every candidate Google offered, ONLY when it offered more than one. Empty = unambiguous. */
+  locationCandidates: string[];
 }
 
 const LeadSearchContext = createContext<LeadSearchContextType | null>(null);
@@ -71,6 +77,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [regionMeta, setRegionMeta] = useState<RegionMeta | null>(null);
   const [regionDowngraded, setRegionDowngraded] = useState<{ reason: string; spentUsd: number } | null>(null);
   const [townFilterFallback, setTownFilterFallback] = useState<{ reason: string } | null>(null);
+  const [resolvedLocation, setResolvedLocation] = useState<string | null>(null);
+  const [locationCandidates, setLocationCandidates] = useState<string[]>([]);
   // Manual website-status overrides, keyed by normalized googleMapsUrl. Applied
   // over auto-detected results so a hand-correction always wins, even after a
   // re-search of the same query.
@@ -472,6 +480,11 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
               ? { reason: data.townFilter.reason ?? 'The town boundary could not be resolved, so the radius was used instead.' }
               : null,
           );
+          /* SET ON EVERY SEARCH, including the unambiguous ones. Clearing to null/[] when absent
+             matters as much as setting them: a stale "St Ives, Cornwall" left over from the previous
+             search would be worse than showing nothing. */
+          setResolvedLocation(typeof data.resolvedLocation === 'string' ? data.resolvedLocation : null);
+          setLocationCandidates(Array.isArray(data.locationCandidates) ? data.locationCandidates : []);
           setGated(!!data.gated);
 
           // Persist gated flag so it survives refresh
@@ -620,7 +633,9 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     regionMeta,
     regionDowngraded,
     townFilterFallback,
-  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback]);
+    resolvedLocation,
+    locationCandidates,
+  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>
