@@ -74,7 +74,7 @@ export interface MarketPanelProps {
 export default function MarketPanel({ trade, town }: MarketPanelProps) {
   const { view, loading, error, load, reload } = useMarketView();
   const { usage: apifyUsage } = useApifyUsage();
-  const { search, isLoading: searching, townFilterFallback, leads } = useLeadSearchContext();
+  const { search, isLoading: searching, townFilterFallback, leads, resolvedLocation, locationCandidates } = useLeadSearchContext();
   /* A ref, not the value: measureSearch awaits the search and then reads the result, and a captured
      `leads` would be the array from before the call. */
   const leadsRef = useRef(leads);
@@ -725,6 +725,11 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
               /* The gate's input. Only a READY pool has a trustworthy count; expired or
                  never-searched sends null, which never blocks. */
               poolCount={view.poolState.state === 'ready' ? view.poolState.total : null}
+              /* WHICH PLACE THE SEARCH RESOLVED TO, and whether Google had a choice. Straight from
+                 the context, so it is the same resolution the pool was built from — deriving it
+                 separately here is how the panel and the pool would come to disagree. */
+              resolvedLocation={resolvedLocation}
+              locationCandidates={locationCandidates}
               onSearch={measureSearch}
               onReload={reload}
               onMeasureComplete={autoCleanIfDirty}

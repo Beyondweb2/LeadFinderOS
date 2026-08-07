@@ -181,6 +181,10 @@ function stripGatedFields(leads: SearchLead[]): SearchLead[] {
 // ═══════════════════════════════════════════════
 interface DebugMeta {
   googleCallsMade: { geocode: number; textSearchPages: number; placeDetails: number };
+  /** Google's own name for the place it resolved to. ALWAYS set once a geocode has happened. */
+  resolvedLocation?: string | null;
+  /** Every candidate, only when Google returned more than one. Empty = the name was unambiguous. */
+  locationCandidates?: string[];
   apiKeyPresent: boolean;
   authMethod: 'getClaims' | 'getUser' | 'failed' | 'demo';
   cached: boolean;
@@ -241,7 +245,26 @@ function extractViewport(geometry: any): Viewport | null {
   return { latMin: sw.lat, latMax: ne.lat, lngMin: sw.lng, lngMax: ne.lng };
 }
 
-type GeoHit = { lat: number; lng: number; viewport: Viewport | null };
+/* ⛔ WHICH PLACE GOOGLE PICKED, AND WHETHER IT HAD A CHOICE.
+   St Ives, 2026-08-07: the geocoder resolved to 50.208,-5.491 — CORNWALL — and a Cornish locksmith
+   market was measured for 22p with nothing on screen naming the county. There are at least three
+   St Ives in the UK (Cambridgeshire, Cornwall, Dorset).
+   The information was there the whole time and was thrown away: `formatted_address` distinguishes
+   "St Ives, Cambridgeshire, UK" from "St Ives, Cornwall, UK", and `data.results` is an ARRAY whose
+   length is Google telling us the name was ambiguous. The code read `results[0]` and discarded the
+   rest without looking.
+   ⚠️ A country guard already existed — a hit in the wrong COUNTRY retries un-biased — and it works.
+   That is precisely why this was missed: the guard that existed covered ambiguity ACROSS countries,
+   and nobody asked about ambiguity WITHIN one. Same shape as the search gate: the question is not
+   whether a guard is correct but which cases can reach it. */
+type GeoHit = {
+  lat: number; lng: number; viewport: Viewport | null;
+  /** Google's own words for the place it chose, e.g. "St Ives, Cornwall, UK". Always surfaced. */
+  formattedAddress?: string | null;
+  /** Every candidate Google returned, ONLY when it returned more than one. An empty array means the
+   *  name was unambiguous — never that the check was skipped. */
+  candidates?: string[];
+};
 
 /** Echoed to the client whenever townOnly was REQUESTED, so the SPA can tell the difference
  *  between "the hard boundary was used" and "we fell back to the radius". Absent entirely on a
@@ -276,16 +299,26 @@ async function geocodeLocation(
       const cutoff = new Date(Date.now() - GEOCODE_CACHE_TTL_MS).toISOString();
       const { data: cached } = await serviceClient
         .from('geocode_cache')
-        .select('lat, lng, viewport')
+        .select('lat, lng, viewport, formatted_address, candidates')
         .eq('location_key', locationKey)
         .gte('created_at', cutoff)
         .maybeSingle();
 
-      // Use the cached row only if it has the viewport we now need (region mode);
-      // an older row predating the viewport column falls through to a re-geocode.
-      if (cached && (!needViewport || cached.viewport)) {
-        console.log(`[GEOCODE-CACHE] HIT for "${locationKey}" — lat: ${cached.lat}, lng: ${cached.lng}`);
-        return { lat: cached.lat, lng: cached.lng, viewport: (cached.viewport as Viewport | null) ?? null };
+      /* Use the cached row only if it carries everything this call needs. A row predating the
+         viewport column already fell through to a re-geocode; a row predating formatted_address now
+         does the same, for the same reason and by the same rule.
+         ⚠️ WITHOUT THIS the fix would be invisible on exactly the searches that matter: St Ives is
+         already cached from the Cornish run, so a cache hit would return coordinates with no place
+         name and the panel would show nothing — the bug intact behind a passing deploy. */
+      const cacheComplete = cached && (!needViewport || cached.viewport) && cached.formatted_address;
+      if (cacheComplete) {
+        console.log(`[GEOCODE-CACHE] HIT for "${locationKey}" — ${cached.formatted_address} (${cached.lat}, ${cached.lng})`);
+        return {
+          lat: cached.lat, lng: cached.lng,
+          viewport: (cached.viewport as Viewport | null) ?? null,
+          formattedAddress: cached.formatted_address as string,
+          candidates: Array.isArray(cached.candidates) ? cached.candidates as string[] : [],
+        };
       }
     } catch (e) {
       console.error('[GEOCODE-CACHE] Check failed (non-blocking):', e);
@@ -323,7 +356,19 @@ async function geocodeLocation(
 
     if (data.status === 'OK' && data.results?.[0]) {
       const r = data.results[0];
-      return { lat: r.geometry.location.lat, lng: r.geometry.location.lng, viewport: extractViewport(r.geometry), resultCountry: countryOfResult(r) };
+      /* EVERY candidate, not only the one taken. `results.length > 1` IS Google saying the name is
+         ambiguous, it is already in the response we paid for, and it costs nothing to read. */
+      const allCandidates: string[] = (data.results as any[])
+        .map((c) => String(c?.formatted_address ?? '').trim())
+        .filter(Boolean);
+      return {
+        lat: r.geometry.location.lat,
+        lng: r.geometry.location.lng,
+        viewport: extractViewport(r.geometry),
+        resultCountry: countryOfResult(r),
+        formattedAddress: String(r.formatted_address ?? '').trim() || null,
+        candidates: allCandidates.length > 1 ? allCandidates : [],
+      };
     }
     // Expected "no such place".
     if (data.status === 'ZERO_RESULTS' || !data.results?.[0]) {
@@ -356,7 +401,9 @@ async function geocodeLocation(
   if (serviceClient) {
     try {
       await serviceClient.from('geocode_cache').upsert(
-        { location_key: locationKey, lat: hit.lat, lng: hit.lng, viewport: hit.viewport, raw_location: location, created_at: new Date().toISOString() },
+        { location_key: locationKey, lat: hit.lat, lng: hit.lng, viewport: hit.viewport,
+          formatted_address: hit.formattedAddress ?? null, candidates: hit.candidates ?? [],
+          raw_location: location, created_at: new Date().toISOString() },
         { onConflict: 'location_key' }
       );
     } catch (e) {
@@ -783,6 +830,11 @@ async function performSearchGoogle(
   /* needViewport = townOnly. Same flag, same extraction, same geocode_cache.viewport column that
      region mode already uses — no second geocode path. */
   const geo = await geocodeLocation(location, apiKey, debug, serviceClient, townOnly, country);
+  /* ⛔ RECORDED ON THE DEBUG OBJECT, which both search paths already share and already return.
+     Threading a new return value out of two functions and three call sites is how a field arrives
+     in one path and not the other — which is exactly how marketProgress was computed and dropped. */
+  debug.resolvedLocation = geo.formattedAddress ?? null;
+  debug.locationCandidates = geo.candidates ?? [];
   const { lat, lng } = geo;
 
   /* THE FALLBACK IS REPORTED, NEVER SILENT. Some locations geocode to a point with no bounds and
@@ -1061,6 +1113,11 @@ async function tiledRegionSearch(
 ): Promise<{ leads: SearchLead[]; region: RegionMeta }> {
   const useRadiusBox = !!radiusKm && radiusKm > 0;
   const geo = await geocodeLocation(location, apiKey, debug, serviceClient, !useRadiusBox, country);
+  /* ⛔ RECORDED ON THE DEBUG OBJECT, which both search paths already share and already return.
+     Threading a new return value out of two functions and three call sites is how a field arrives
+     in one path and not the other — which is exactly how marketProgress was computed and dropped. */
+  debug.resolvedLocation = geo.formattedAddress ?? null;
+  debug.locationCandidates = geo.candidates ?? [];
   let vp: Viewport;
   if (useRadiusBox) {
     // Slider-driven extent: a square box of centre ± radiusKm.
@@ -1480,6 +1537,12 @@ Deno.serve(async (req) => {
       region: regionMeta,
       downgraded,
       townFilter,
+      /* ⛔ ALWAYS ECHOED, EVEN WHEN UNAMBIGUOUS — Paul's rule, and the right one: an unambiguous town
+         never blocks, but the resolution is still shown. A field that appears only when something is
+         wrong is a field nobody ever learns to read, and it would have been absent on the one search
+         that needed it. */
+      resolvedLocation: debug.resolvedLocation ?? null,
+      locationCandidates: debug.locationCandidates ?? [],
       gated: isGated,
       _debug: { ...debug, ...selectionDebug },
     });

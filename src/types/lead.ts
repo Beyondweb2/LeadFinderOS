@@ -69,6 +69,14 @@ export interface SearchResponse {
   cached?: boolean;
   expanded?: boolean;
   gated?: boolean;
+  /* ⛔ WHICH PLACE THE GEOCODER ACTUALLY CHOSE, in Google's own words: "St Ives, Cornwall, UK".
+     Returned on EVERY search, not only ambiguous ones — St Ives was measured in Cornwall for 22p
+     because nothing on screen ever named the county, and a field that appears only when something
+     is wrong is a field nobody learns to read. */
+  resolvedLocation?: string | null;
+  /** Every candidate Google returned, ONLY when it returned more than one. An empty array means the
+   *  name was unambiguous; it never means the check was skipped. */
+  locationCandidates?: string[];
   /** Present when the search ran in region tiling mode. */
   region?: RegionMeta;
   /** Present when region mode was downgraded to a single search (daily budget). */
