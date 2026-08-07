@@ -161,9 +161,54 @@ function dropConnectors(tokens: string[]): string[] {
   return tokens.filter((t) => t !== "and");
 }
 
+/* ══ "A / B" IS TWO FIRMS THE MODEL LISTED TOGETHER, NOT ONE FIRM WITH TWO NAMES ═══════════════
+   ⛔ THE FAULT THIS FIXES, and it produced a wrong VERDICT rather than a wrong row. Soham's market
+   contained "Ely & Soham Locksmiths / Homefront Locksmiths". It yielded candidates matching BOTH
+   "Ely Locksmiths" and "Homefront Locksmiths", and because groupNames is union-find, the compound
+   BRIDGED two unrelated firms into one group. Huntingdon's own Homefront then counted as Ely
+   appearing in another town, the leader was flagged a national brand on otherTowns=1, and the panel
+   told the operator to skip a market whose leader is a local firm in the next town.
+
+   ⚠️ THIS ONE COULD NOT BE DONE PURELY ADDITIVELY, unlike the camel/initials/connector readings
+   above. Those add candidates, and an added candidate can only create a merge. Here the whole
+   problem IS a merge, so a candidate has to be withheld — which is the riskier direction and the
+   reason the separator is defined as narrowly as the data allows.
+
+   MEASURED across all 5,156 competitor names ever extracted: 23 contain a slash (0.45%), and they
+   fall into exactly two classes with no overlap.
+     NOT a separator (7) — the slash sits between characters with NO surrounding whitespace:
+       "FLUSHING SUCCESS 24/7", "24/7 Emergency Plumbers Ely", "Lockout 24/7 Locksmiths",
+       "Prestige Maintenance 24/7 Ltd", "Locksmith Master 24/7", "...From £60/m"
+     A separator (16) — always written " / ", whitespace on BOTH sides:
+       "Able Group / Keytek Locksmiths", "Happy Drains / DrainChecker",
+       "Spalding Locksmiths / White Knight Locksmiths", "Eden Accounting Ltd / LE Accounts Ltd", ...
+   ⛔ THE PROOF THAT THESE ARE PAIRS AND NOT TRADING NAMES IS THE REVERSALS: both
+   "Happy Drains / DrainChecker" AND "DrainChecker / Happy Drains" appear, and both
+   "Ely & Soham Locksmiths / Homefront Locksmiths" AND "Homefront / Ely & Soham Locksmiths". A real
+   trading name does not occur in both orders; a pair the model listed does.
+
+   ⚠️ REQUIRING WHITESPACE ON BOTH SIDES IS THE ENTIRE SAFETY MARGIN, and it is what keeps "24/7"
+   intact — the over-splitting risk Paul named. On the measured corpus it is exact: 16 hits, 7
+   misses, zero errors either way. It also never touches an AMPERSAND: "Cambs Lock & Safe" and
+   "M&E Services Ltd" are single firms and stay single, because & is not a separator here.
+   ⚠️ AND IT DOES NOT TOUCH normalizeForMatch, which ai-search's nameMatches shares — that decides
+   whether an audited business was NAMED, and changing it would move a number on every report. */
+const FIRM_SEPARATOR = /\s+\/\s+/;
+
+/** The first firm named in a compound. Returns the name unchanged when there is no separator,
+ *  which is 99.55% of names.
+ *  ⚠️ THE FIRST HALF ONLY, deliberately. Keeping both halves is what bridges; keeping neither would
+ *  invent a third entity that is no firm at all. The first-named one is what the string is about,
+ *  and the reversed spellings mean the second firm is virtually always carried by its own row
+ *  elsewhere anyway — Homefront is a separate 7-mention entry in the very market that broke. */
+function firstFirmOf(name: string): string {
+  const parts = name.split(FIRM_SEPARATOR);
+  return parts.length > 1 ? (parts[0].trim() || name) : name;
+}
+
 export function candidateCores(name: string, ctx: MarketMatchContext): Candidate[] {
   const out = new Map<string, Candidate>();
-  for (const seg of segmentsOf(name)) {
+  for (const seg of segmentsOf(firstFirmOf(name))) {
     /* TWO READINGS OF THE SAME SEGMENT: as written, and with camel compounds split. Both are run
        through the whole pipeline, so "LockSolid Locksmiths" yields both "locksolid" and
        "lock solid" and can meet either spelling. Identical for any name without a camel boundary,

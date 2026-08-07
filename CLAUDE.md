@@ -301,6 +301,20 @@ so a Squarespace customer who had said no to moving **reached Stripe**. Three pl
 the `answers` object, `NEWER_COLS`, and the `optional` shedding list. Caught only by a live end-to-end
 test; no local check can see it.
 
+🔴 **THE TEST EXERCISED ONE PATH AND THE BUG LIVED ON THE OTHER. TWICE, ON THE SAME FEATURE.**
+Paul's framing, and it is the sharper version of the layer rule below: **ask not whether the guard
+is correct, but whether the case it guards can reach it.**
+| Guard | It was correct | The path it never ran on |
+|---|---|---|
+| The market **cooldown** | refused a 3rd audit per window, as designed | the measure flow's OWN second audit — verified against historical rows, while the two-audit sequence was only ever checked in logic-only tests. Norwich got one audit |
+| The **search gate** | blocked when a search returned 0 | it sat inside `if (!poolFresh)`, so a pool that was **fresh AND empty** — precisely what it exists for — could never reach it. Soham ran two paid audits against zero businesses, **reported twice** before it was found |
+- ⚠️ Both passed review because the reviewer checked the predicate, not its reachability. When you
+  add a guard, **enumerate the ways control can arrive at the decision** and assert one case on each
+  — `scripts/soham.test.ts` does this by restating the predicate and driving it with every
+  (skipGate × poolFresh × searched × poolCount) combination, including the null one.
+- ⚠️ The same shape hides in "optimisations": `poolFresh` was reviewed as a *pricing* shortcut ("the
+  search was free") and nobody asked what else was being skipped along with the search.
+
 **The mistake you keep making: reasoning from one layer without checking the next.** Real examples:
 - "No address is stored" — the insert writes one.
 - "`place_id` isn't available" — it's populated on **758 of 758** leads.
