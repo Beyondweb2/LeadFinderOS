@@ -207,6 +207,41 @@ HAVE NOW BEEN WRONG THIS WAY, ALL FOUND WHILE LOOKING AT SOMETHING ELSE.** Swept
   Paul's read, and it settles the pricing question: *the offer works at £19.99 and the constraint has
   never been cost.*
 
+🔴 **THE SHARED-FILE DEPLOY TRAP: `main` IS CORRECT AND THE FUNCTION IS STALE.** An edge function
+keeps running the code it was deployed with. Changing a file under `supabase/functions/_shared/` or
+`src/lib/` fixes nothing until **every consumer is redeployed** — and the consumers are invisible
+from the file you edited, which is why this keeps happening.
+- ⚠️ **THE RULE: after changing anything shared, walk the transitive import closure and redeploy
+  every function that reaches it — then NAME THEM IN THE REPORT.** "Deployed" without a list is how
+  a consumer gets missed. Walk it by following relative `from "..."` imports from each
+  `index.ts`, not by memory and not by `grep -l <module-name>` (that matches comments — §4).
+- Worked example, 2026-08-07 audit: 17 functions were behind. `render-audit-report`,
+  `send-whatsapp-message` and `run-seo-scan` were all stale on the SAME file
+  (`src/lib/aiAuditReportHtml.ts`); `findable-onboarding` was stale on `_shared/offer-price.ts`,
+  i.e. **on what a customer is charged**.
+- ⚠️ **Two functions are deployed with NO SOURCE IN THE REPO** — `claim-share` and
+  `create-claim-link`, both 2026-06-12, old product line. Left alone deliberately, but recorded:
+  a deployed function nobody can read is worse than one that is merely stale.
+
+🔴 **THE LIMIT OF THE TIMESTAMP METHOD — do not read "36 up to date" as proven.** Comparing a
+function's deploy time against the newest git commit in its import closure is the only cheap audit
+available (`supabase functions download` fails on any function with shared imports:
+*"invalid path in server response"*). It has two failure modes, and BOTH bit on 2026-08-07:
+- **False positives.** A commit landing seconds after a deploy reads as stale. Nine functions showed
+  sub-10-minute "gaps" that were pure commit-after-deploy ordering.
+- **False negatives.** The walker only follows relative `from "..."` imports. Any other import form
+  — dynamic, aliased, re-exported — is invisible, and the function reads as clean.
+- ⛔ **AND THE VERIFICATION ITSELF CAN BE WRONG IN BOTH DIRECTIONS AT ONCE.** I reported
+  `render-audit-report` as "verified stale, proven against a live document". It was not. I asserted
+  two strings that exist **only inside a code COMMENT** describing what had been REMOVED (§4's rule:
+  grep the SOURCE for your own search string first), and I rendered **ABLM**, which never shows the
+  offer block at all — `showFounderOffer` hides it once `amount_paid > 0`. Two independent errors,
+  both pointing the same way, producing a confident false alarm.
+  **The fix: assert on strings that are RENDERED (grep the source and confirm they are outside
+  comments), and render a document that actually contains the section under test.** Verified
+  properly afterwards on OMP Electrical: four bullets present, old wording absent, short guarantee
+  present, marketing tail absent.
+
 **Substring false positives. You have been fooled by both of these twice each:**
 - `"bing"` matches **plum*bing***.
 - `"acca"` matches **M*acca*-Gas**.
