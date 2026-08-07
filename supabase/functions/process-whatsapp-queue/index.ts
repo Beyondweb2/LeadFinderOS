@@ -19,7 +19,9 @@ import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, phone
 //
 // Guards (server-side, never UI-only):
 //   • 7am–9:30pm Europe/London window (DST-correct via Intl, not the cron schedule)
-//   • 40 sends/day GLOBAL cap (one WABA number) — counted from whatsapp_sends
+//   • DAILY_CAP sends/day GLOBAL cap (one WABA number) — counted from whatsapp_sends.
+//     ⛔ THIS SAID "40" WHILE THE CONSTANT WAS 100, and Paul believed his cap was 40 because of it.
+//     Never write the number here twice: name the constant, which cannot go stale.
 //   • randomised spacing via whatsapp_outreach_state.next_send_at
 //   • only status='queued' leads; never re-messages contacted/replied
 //
@@ -41,10 +43,15 @@ const GRAPH_VERSION = "v21.0";
    auto-replies, not just this campaign. On 2026-07-27 that mattered: 40 sends hit the cap exactly,
    13 of them automated audit_reply pitches rather than campaign sends.
 
-   ⚠️ RAISING THIS DOES NOT RAISE THROUGHPUT ONE-FOR-ONE. The pacing gap below is
-   minutesUntilWindowEnd() / (DAILY_CAP - sentToday), clamped to a 20-minute FLOOR. Past roughly 43
-   the floor binds before the cap does, so the real ceiling is the window length divided by 20
-   minutes — about 43 sends across the 07:00–21:30 London window. The cap is a brake, not a target.
+   ⚠️ RAISING THIS DOES NOT RAISE THROUGHPUT AT ALL AT PRESENT. The pacing gap below is
+   minutesUntilWindowEnd() / (DAILY_CAP - sentToday), clamped to a 20-minute FLOOR — and at 07:00
+   with 99 remaining the base gap is 870/99 ≈ 8.8 min, so the FLOOR lifts every single gap to 20 and
+   the cap never engages at any value above ~43.
+   ⛔ MEASURED 2026-08-07 across 377 real sends, because the arithmetic above understates it: the
+   median gap is 29.9 MINUTES, not 20, giving 2.0 sends/hour and ~29 sends/day. The cron wakes every
+   10 minutes and sends at most one per tick, so a 20-minute target lands on the 30-minute tick.
+   Window ÷ observed gap, not window ÷ floor, is the real ceiling. Busiest day ever: 66.
+   The cap is a brake, not a target, and today it is not the binding constraint — the floor is.
    process-sms-queue has its OWN separate DAILY_CAP; this constant does not affect it. */
 const DAILY_CAP = 100;
 const WINDOW_START = 7;              // 07:00 Europe/London (inclusive)
