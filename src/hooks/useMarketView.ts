@@ -18,8 +18,8 @@ export interface UseMarketView {
   error: string | null;
   /** force = skip the session cache and refetch. Used by reload() and after anything that changes
    *  the underlying data (an audit batch, a lead search, a re-extraction). */
-  load: (trade: string, town: string, force?: boolean) => Promise<void>;
-  reload: () => Promise<void>;
+  load: (trade: string, town: string, force?: boolean) => Promise<MarketViewResult | null>;
+  reload: () => Promise<MarketViewResult | null>;
   refreshOptions: () => Promise<void>;
 }
 
@@ -100,8 +100,17 @@ export function useMarketView(): UseMarketView {
     }
   }, []);
 
-  const load = useCallback(async (trade: string, town: string, force = false) => {
-    if (!trade || !town) return;
+  /* ⛔ RETURNS THE VIEW IT JUST FETCHED, as well as setting it.
+     A caller that needs the FRESH view immediately after a reload cannot get it from `view`: that
+     is React state, and the closure the caller was created in still holds the PREVIOUS value until
+     a re-render. autoCleanIfDirty did exactly that — `await onReload()` then read a stale `view` —
+     so on the first measurement of a market it read runIds: [] and shouldAutoClean() returned false
+     for want of a run, every time. Wisbech driving instructors sat at 125.5 distinct names per
+     audit against a threshold of 15 and the auto-clean never fired.
+     Returning the value makes the fresh view reachable at the one moment it is needed, without a
+     ref, a re-render dependency, or a second fetch. */
+  const load = useCallback(async (trade: string, town: string, force = false): Promise<MarketViewResult | null> => {
+    if (!trade || !town) return null;
     setLast({ trade, town });
     setError(null);
 
@@ -110,20 +119,22 @@ export function useMarketView(): UseMarketView {
        is meant to remove. */
     if (!force) {
       const hit = readCache(trade, town);
-      if (hit) { setView(hit); setLoading(false); return; }
+      if (hit) { setView(hit); setLoading(false); return hit; }
     }
 
     setLoading(true);
     try {
       const { data, error: fnErr } = await supabase.functions
         .invoke<MarketViewResult>('market-view', { body: { action: 'view', trade, town } });
-      if (fnErr) { setError(await realError(fnErr)); setView(null); return; }
-      if (data && data.ok === false) { setError(data.error ?? 'Could not load this market.'); setView(null); return; }
+      if (fnErr) { setError(await realError(fnErr)); setView(null); return null; }
+      if (data && data.ok === false) { setError(data.error ?? 'Could not load this market.'); setView(null); return null; }
       setView(data ?? null);
       if (data) writeCache(trade, town, data);
+      return data ?? null;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setView(null);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -132,8 +143,9 @@ export function useMarketView(): UseMarketView {
   /* reload() ALWAYS forces. Every caller is something that just changed the underlying data — an
      audit batch, a lead search, a re-extraction — so serving the pre-change cache would show the
      operator the state they were trying to move on from. */
-  const reload = useCallback(async () => {
-    if (last) await load(last.trade, last.town, true);
+  const reload = useCallback(async (): Promise<MarketViewResult | null> => {
+    if (!last) return null;
+    return await load(last.trade, last.town, true);
   }, [last, load]);
 
   /* No auto-fetch of the trade/town OPTIONS list any more. The picker it fed is gone: the market

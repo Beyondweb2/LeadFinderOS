@@ -7,7 +7,7 @@ import {
   MARKET_AUDIT_QUESTION_COUNT, MARKET_AUDIT_MIN_AUDITS, MARKET_POOL_FRESH_MS,
   asPence, auditsToRun, deriveRun, elapsedPhrase, measureAction, measureProgress, measureRunCost,
   stalledPhrase,
-  type MarketAuditProgress, type MeasureAction, type MeasurePhase,
+  type MarketAuditProgress, type MarketViewResult, type MeasureAction, type MeasurePhase,
 } from '@/lib/marketView';
 
 /* ============================================================
@@ -68,12 +68,13 @@ export interface MeasureMarketProps {
   locationCandidates: string[];
   /** Runs the same lead search the manual button runs. Resolves to the number of businesses found. */
   onSearch: () => Promise<number>;
-  /** Re-reads the market view. */
-  onReload: () => Promise<void>;
+  /** Re-reads the market view AND RETURNS IT. The return value is what makes the auto-clean
+   *  decidable: a caller cannot read React state it has just triggered an update to. */
+  onReload: () => Promise<MarketViewResult | null>;
   /** ⛔ CALLED ONLY WHEN A MEASUREMENT FINISHES, never on a refresh. The panel decides whether the
    *  extraction was dirty enough to be worth cleaning — it owns the view, so it owns the threshold.
    *  Separate from onReload because refreshing a settled market must never spend anything. */
-  onMeasureComplete?: () => Promise<void>;
+  onMeasureComplete?: (fresh: MarketViewResult | null) => Promise<void>;
 }
 
 interface QRow { status: string | null }
@@ -184,10 +185,12 @@ export default function MeasureMarket({
            a fake one. Once the view drops the audit from marketProgress, derived.phase goes idle. */
         setSessionPhase(null);
         setQuestions([]);
-        await onReload();
+        /* ⛔ THE FRESH VIEW IS THREADED THROUGH, not left to be re-read from state. The junk ratio
+           is only knowable AFTER this reload, and the callback runs before React has re-rendered. */
+        const fresh = await onReload();
         /* The one place a measurement is known to have just finished. The panel checks the junk
            ratio and cleans only if it is over — see shouldAutoClean. */
-        if (onMeasureComplete) await onMeasureComplete();
+        if (onMeasureComplete) await onMeasureComplete(fresh);
       }
     };
     void tick();

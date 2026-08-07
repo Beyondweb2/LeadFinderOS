@@ -22,6 +22,7 @@ import {
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
   MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase, shouldAutoClean, CLEANER_USD_PER_RUN, asPence,
   type MarketPoolRow,
+  type MarketViewResult,
 } from '@/lib/marketView';
 import type { Lead } from '@/types/lead';
 
@@ -188,10 +189,20 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
      never after a refresh. 6p against an 8.3p audit is a 72% surcharge, so it is not paid on every
      market — but a market whose extraction produced junk is a market whose numbers are wrong, and
      that is worth 6p to fix rather than leaving behind a button that gets forgotten.
-     ⚠️ IT RE-READS THE VIEW FIRST. The run ids and the junk ratio both come from the freshly
-     reloaded view; deciding from the pre-run state would clean the wrong thing or nothing. */
-  const autoCleanIfDirty = useCallback(async () => {
-    const c = view?.concentration;
+     ⚠️ THE FRESH VIEW ARRIVES AS AN ARGUMENT. The run ids and the junk ratio must come from the
+     view as it is AFTER the measurement; deciding from the pre-run state cleans nothing. */
+  const autoCleanIfDirty = useCallback(async (fresh: MarketViewResult | null) => {
+    /* ⛔ THE FRESH VIEW IS PASSED IN, NEVER READ FROM THE CLOSURE.
+       This used to read `view` — React state — immediately after `await onReload()`, and a closure
+       cannot see a state update that has not re-rendered yet. So it always judged the market as it
+       was BEFORE the measurement. On the first measurement of a market that means runIds: [], and
+       shouldAutoClean requires runs > 0, so it returned false every single time and the auto-clean
+       could not fire at all. Wisbech driving instructors: 125.5 distinct names per audit against a
+       threshold of 15, and the operator was still handed the manual button.
+       ⚠️ The old comment above claimed "IT RE-READS THE VIEW FIRST". It did re-read it — into state
+       nobody here could see. A comment asserting a guarantee the code does not provide is worse
+       than no comment: it is why this was not spotted in review. */
+    const c = fresh?.concentration;
     if (!c || !shouldAutoClean(c.distinctPerAudit ?? 0, c.runIds.length)) return;
     console.info('[market] auto-cleaning', { distinctPerAudit: c.distinctPerAudit, runs: c.runIds.length });
     toast({
@@ -202,7 +213,7 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
       try { await supabase.functions.invoke('extract-competitors', { body: { runId } }); } catch { /* one bad run must not stop the rest */ }
     }
     await reload();
-  }, [view, reload, toast]);
+  }, [reload, toast]);
 
   /** A pool row as the Lead shape addLead expects. The pool rows came out of search-leads in the
    *  first place, so this is a re-hydration, not an invention. */
