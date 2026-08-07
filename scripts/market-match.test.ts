@@ -63,4 +63,41 @@ ok(!same("Key Services", "Laser Services"), "connector removal must not merge ei
 ok(same("Smith and Sons", "Smith and Daughters"),
   "KNOWN LIMIT: two firms sharing a pre-connector stem merge (inherited from the Timpson fix)");
 
+console.log("\n── ⛔ SOHAM: \"A / B\" IS TWO FIRMS, NOT ONE ──");
+/* The compound used to yield candidates for BOTH halves, and groupNames is union-find, so it
+   BRIDGED two unrelated firms into one group. Huntingdon's own Homefront then counted as Ely
+   appearing in another town, and the panel said "Skip this one" about a market whose leader is a
+   local firm in the next town along. A wrong VERDICT, not a wrong row. */
+ok(!same("Ely & Soham Locksmiths / Homefront Locksmiths", "Homefront Locksmiths"),
+  "THE BRIDGE IS BROKEN: the compound no longer matches its SECOND half");
+ok(same("Ely & Soham Locksmiths / Homefront Locksmiths", "Ely Locksmiths"),
+  "  it still matches its FIRST half, which is the firm the string is about");
+ok(!same("Ely Locksmiths", "Homefront Locksmiths"),
+  "  and the two firms themselves never meet");
+// The reversed spelling exists in the corpus too, and attaches to the other firm. That both orders
+// occur is the evidence these are pairs rather than trading names.
+ok(same("Homefront / Ely & Soham Locksmiths", "Homefront Locksmiths"), "the reversal follows its own first half");
+ok(!same("Homefront / Ely & Soham Locksmiths", "Ely Locksmiths"), "  and not the other");
+// Two CHAINS listed together must not become one chain — this one would corrupt the national flag.
+ok(!same("Able Group / Keytek Locksmiths", "Keytek Locksmiths"), "Able Group / Keytek does not absorb Keytek");
+ok(same("Able Group / Keytek Locksmiths", "Able Group"), "  it is Able Group");
+ok(!same("Spalding Locksmiths / White Knight Locksmiths", "White Knight Locksmiths", LOCKS_WISBECH),
+  "Spalding / White Knight does not bridge");
+
+console.log("\n── ...AND \"24/7\" IS A NUMBER, NOT A SEPARATOR ──");
+/* ⚠️ THE OVER-SPLIT RISK, and the reason the separator demands whitespace on BOTH sides. All seven
+   slash-bearing names in the corpus that are NOT pairs are of this shape. */
+ok(same("Lockout 24/7 Locksmiths", "Lockout 24/7"), "'24/7' survives intact — no split");
+/* ⚠️ NOT `same("Locksmith Master 24/7", "Locksmith Master")` — that fails, and correctly so: both
+   are trade-stripped residues, so exactOnly applies and "master" may not absorb "master 24 7". It
+   is the Rapid guard doing its job and has nothing to do with slashes. Written down because it
+   looked like a slash regression for a minute and will again. */
+ok(same("Prestige Maintenance 24/7 Ltd", "Prestige Maintenance 24/7"),
+  "a trailing 24/7 is kept whole — the digits are not split off");
+ok(!same("Lockout 24/7 Locksmiths", "Master 24/7 Locksmiths"), "  and it still does not over-merge");
+// An AMPERSAND is not a separator. These are single firms and must stay single — the specific
+// over-splitting risk Paul named.
+ok(same("Cambs Lock & Safe", "Cambs Lock & Safe Ltd"), "an ampersand name is one firm, still merged");
+ok(same("M&E Services Ltd", "M&E Services"), "  M&E Services is one firm");
+
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
