@@ -75,6 +75,8 @@ import {
   CalendarClock,
   SlidersHorizontal,
   Sparkles,
+  MapPin,
+  Tag,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -117,6 +119,7 @@ import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { SingleSMSDialog } from '@/components/SingleSMSDialog';
 import { PushToInstantlyDialog } from '@/components/PushToInstantlyDialog';
+import { TRADES } from '@/lib/trades';
 import { AiOpenerModal } from '@/components/AiOpenerModal';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/hooks/useOutreachFindEmails';
@@ -980,6 +983,101 @@ export function OutreachTable({
     [auditNoWebsiteLeads, auditQuestionCount],
   );
 
+  /* ══ THE TWO REPAIRS FOR LEADS ADDED WITHOUT A TRADE OR A TOWN ══════════════════════════════
+     168 rows were written with neither, by the sessionStorage fault fixed in LeadSearchContext.
+     They are invisible to every audit path, because create-ai-audit needs a business type AND a
+     location. The two halves are repaired differently ON PURPOSE:
+       TOWN  Google's structured address genuinely knows it. One Essentials call, $0.005.
+       TRADE Nothing in a Place Details response reliably says what a UK business SELLS at a tier
+             anyone here has verified against a bill, so it is set BY HAND on a selection. The leads
+             arrived in homogeneous batches, so this is a handful of presses, not 90.
+     ⚠️ Guessing the trade would be worse than leaving it: a wrong business_type produces an audit
+     that measures the wrong market and reads as valid. An absent one refuses to run, loudly. */
+  const [townFixOpen, setTownFixOpen] = useState(false);
+  const [townFixPreview, setTownFixPreview] = useState<{ candidates: number; estimated_usd: number; names: string[] } | null>(null);
+  const [townFixBusy, setTownFixBusy] = useState(false);
+
+  /** Leads in the selection that an audit cannot use, so the buttons can say how many they help. */
+  const missingTownIds = useMemo(
+    () => leads.filter((l) => selectedIds.has(l.id) && !isDemoLead(l.id)
+      && !(l.search_location || l.address || l.derived_town) && !!l.place_id).map((l) => l.id),
+    [leads, selectedIds],
+  );
+  const missingTradeIds = useMemo(
+    () => leads.filter((l) => selectedIds.has(l.id) && !isDemoLead(l.id)
+      && !(l.search_keyword || l.category)).map((l) => l.id),
+    [leads, selectedIds],
+  );
+
+  /** Ask what it would do and what it would cost. Spends nothing. */
+  const openTownFix = async () => {
+    setTownFixOpen(true);
+    setTownFixPreview(null);
+    const { data, error } = await supabase.functions.invoke('backfill-lead-towns', {
+      body: { lead_ids: Array.from(selectedIds), dry_run: true },
+    });
+    if (error || !data?.ok) {
+      toast({ title: 'Could not check', description: error?.message ?? data?.error, variant: 'destructive' });
+      setTownFixOpen(false);
+      return;
+    }
+    setTownFixPreview({ candidates: data.candidates ?? 0, estimated_usd: data.estimated_usd ?? 0, names: data.names ?? [] });
+  };
+
+  const confirmTownFix = async () => {
+    setTownFixBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('backfill-lead-towns', {
+        body: { lead_ids: Array.from(selectedIds) },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'failed');
+      /* ⛔ EVERY OUTCOME NAMED. "Google has no town for this address" is not a failure to retry,
+         and reporting only the successes would leave the operator wondering about the rest. */
+      const bits = [`${data.filled} got a town`];
+      if (data.no_town) bits.push(`${data.no_town} have no town in their Google address`);
+      if (data.failed) bits.push(`${data.failed} failed`);
+      toast({
+        title: `Town backfill: ${data.filled} of ${data.candidates} filled`,
+        description: `${bits.join(' · ')} · spent ~$${Number(data.spent_usd ?? 0).toFixed(2)} (every attempt is billed, not just the hits)`,
+        variant: data.filled === 0 ? 'destructive' : undefined,
+      });
+      setTownFixOpen(false);
+      onRefreshLeads?.();
+    } catch (e) {
+      toast({ title: 'Town backfill failed', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setTownFixBusy(false);
+    }
+  };
+
+  const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
+  const [tradeChoice, setTradeChoice] = useState('');
+  const [tradeBusy, setTradeBusy] = useState(false);
+
+  /* Writes search_keyword, which is what create-ai-audit reads first (search_keyword || category).
+     The canonical LABEL is stored rather than the slug, because the stored string is what the audit
+     questions and the report print — and trades.ts maps labels back onto the fixed list at read
+     time, so grouping still collapses the spellings. */
+  const confirmSetTrade = async () => {
+    if (!tradeChoice || !onUpdateLead) return;
+    setTradeBusy(true);
+    try {
+      const ids = missingTradeIds.length ? missingTradeIds : Array.from(selectedIds);
+      const results = await Promise.allSettled(ids.map((id) => onUpdateLead(id, { search_keyword: tradeChoice })));
+      const okCount = results.filter((r) => r.status === 'fulfilled').length;
+      toast({
+        title: `Set trade on ${okCount} of ${ids.length} lead${ids.length === 1 ? '' : 's'}`,
+        description: okCount < ids.length ? `${ids.length - okCount} failed — try again` : `They can be audited as “${tradeChoice}” now.`,
+        variant: okCount === 0 ? 'destructive' : undefined,
+      });
+      setTradeDialogOpen(false);
+      setSelectedIds(new Set());
+      onRefreshLeads?.();
+    } finally {
+      setTradeBusy(false);
+    }
+  };
+
   // Open the question-count + cost-confirm dialog (validates there's something eligible first).
   const handleBulkRunAudit = () => {
     if (!onBulkJob || bulkJobActive) return;
@@ -1479,6 +1577,28 @@ export function OutreachTable({
                   >
                     <ClipboardList className="h-3.5 w-3.5 mr-1.5 text-sky-500" />
                     Run audits ({auditEligibleIds.length})
+                  </Button>
+                )}
+                {/* Shown only when the selection actually contains repairable rows, so they do not
+                    clutter the bar for the 846 leads that are fine. */}
+                {!readOnly && missingTownIds.length > 0 && (
+                  <Button
+                    variant="outline" size="sm" className="bg-background text-xs h-8"
+                    title="Ask Google for the real town of the selected leads that have none. One address-only Place Details call each ($0.005) — the cheapest tier there is."
+                    onClick={openTownFix}
+                  >
+                    <MapPin className="h-3.5 w-3.5 mr-1.5 text-emerald-500" />
+                    Fix missing town ({missingTownIds.length})
+                  </Button>
+                )}
+                {!readOnly && onUpdateLead && missingTradeIds.length > 0 && (
+                  <Button
+                    variant="outline" size="sm" className="bg-background text-xs h-8"
+                    title="Set the trade on the selected leads that have none — they cannot be audited without one"
+                    onClick={() => { setTradeChoice(''); setTradeDialogOpen(true); }}
+                  >
+                    <Tag className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
+                    Set trade ({missingTradeIds.length})
                   </Button>
                 )}
                 {!readOnly && onBulkJob && isAdmin && (
@@ -2509,6 +2629,91 @@ export function OutreachTable({
             <Button size="sm" onClick={confirmBulkAudit} disabled={bulkJobActive || !auditEligibleIds.length}>
               <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
               Audit {auditEligibleIds.length}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fix missing town — preview first, so the spend is on screen before it happens. */}
+      <Dialog open={townFixOpen} onOpenChange={setTownFixOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Fix missing town</DialogTitle>
+            <DialogDescription className="text-xs">
+              Asks Google for the real town of each selected lead that has none, using its stored
+              place id. Address-only call — the cheapest tier Google sells.
+            </DialogDescription>
+          </DialogHeader>
+          {!townFixPreview ? (
+            <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Checking which leads need one…
+            </div>
+          ) : townFixPreview.candidates === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              None of the selected leads need a town — or they have no Google place id, which means
+              there is nothing to ask.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
+                Look up <span className="font-semibold">{townFixPreview.candidates}</span> town
+                {townFixPreview.candidates === 1 ? '' : 's'} (~
+                <span className="font-semibold">${townFixPreview.estimated_usd.toFixed(2)}</span>). Proceed?
+              </p>
+              {townFixPreview.names.length > 0 && (
+                <ul className="max-h-32 space-y-0.5 overflow-y-auto text-xs text-muted-foreground">
+                  {townFixPreview.names.map((n, i) => <li key={i}>{n}</li>)}
+                </ul>
+              )}
+              {/* Stated up front rather than discovered in the result. */}
+              <p className="text-xs text-muted-foreground">
+                Some will come back with no town — Google's address genuinely has none for a few
+                places. Those are billed too, and named afterwards.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setTownFixOpen(false)} disabled={townFixBusy}>Cancel</Button>
+            <Button size="sm" onClick={confirmTownFix} disabled={townFixBusy || !townFixPreview?.candidates}>
+              {townFixBusy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <MapPin className="h-3.5 w-3.5 mr-1.5" />}
+              Look up {townFixPreview?.candidates ?? 0}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Set trade on a selection — the hand half of the repair. */}
+      <Dialog open={tradeDialogOpen} onOpenChange={setTradeDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Set trade on {missingTradeIds.length} lead{missingTradeIds.length === 1 ? '' : 's'}</DialogTitle>
+            <DialogDescription className="text-xs">
+              These have no business type stored, so they cannot be audited. Only the leads that are
+              missing one are changed — anything already set is left alone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Trade</label>
+            <Select value={tradeChoice} onValueChange={setTradeChoice}>
+              <SelectTrigger><SelectValue placeholder="Pick a trade" /></SelectTrigger>
+              <SelectContent>
+                {TRADES.map((t) => (
+                  <SelectItem key={t.slug} value={t.label}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* The fixed list is deliberately short (trades.ts): a free-text box here is how the
+                same trade ends up stored under six spellings again. */}
+            <p className="text-xs text-muted-foreground">
+              From the fixed list. Add a trade in <span className="font-mono">src/lib/trades.ts</span> if
+              one is missing.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setTradeDialogOpen(false)} disabled={tradeBusy}>Cancel</Button>
+            <Button size="sm" onClick={confirmSetTrade} disabled={!tradeChoice || tradeBusy}>
+              {tradeBusy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Tag className="h-3.5 w-3.5 mr-1.5" />}
+              Set on {missingTradeIds.length}
             </Button>
           </DialogFooter>
         </DialogContent>

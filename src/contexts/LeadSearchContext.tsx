@@ -5,7 +5,28 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { reportClientError } from '@/lib/errorReporting';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Lead, SearchFilters, SearchResponse, WebsiteStatus, RegionMeta } from '@/types/lead';
+import type { Country, Lead, SearchFilters, SearchResponse, WebsiteStatus, RegionMeta } from '@/types/lead';
+
+/* ══ THE SEARCH THAT PRODUCED THE RESULTS ══════════════════════════════════════════════
+   ⛔ THE BUG THIS EXISTS TO FIX, AND IT COST 168 LEADS. The keyword and town used to live in
+   useState in Index.tsx, set only by pressing Search — while the RESULTS were restored here from
+   sessionStorage. So: search, leave the page, come back. The results are on screen, the keyword and
+   town are null, and Add writes a lead with no trade and no town. 168 rows in the CRM have exactly
+   that shape (166 of them missing BOTH fields together, all with a place_id), and they cannot be
+   audited at all: create-ai-audit needs a business type and a location and there are none.
+
+   ⛔ THE FIX IS STRUCTURAL, NOT A SECOND setState. Two facts that describe one thing must not have
+   two lifetimes. The results and the search that produced them are now ONE object, written in one
+   sessionStorage put and read back in one get, so there is no sequence of events that restores
+   results without the search behind them. Adding another "remember to set this too" would have left
+   the same class of bug for the next person who forgot.
+
+   ⚠️ It is set inside search() rather than by the caller, so a new call site cannot omit it. */
+export interface LastSearch {
+  keyword: string | null;
+  location: string | null;
+  country: Country;
+}
 
 // Manual website-status overrides table isn't in the generated types yet, so its
 // reads/writes go through an untyped client (same pattern as other new tables).
@@ -26,6 +47,8 @@ interface LeadSearchContextType {
   leads: Lead[];
   isLoading: boolean;
   search: (filters: SearchFilters, skipTrialCount?: boolean, isDemo?: boolean) => Promise<void>;
+  /** What produced `leads`. Survives a reload because it is persisted WITH them. */
+  lastSearch: LastSearch | null;
   /** Manually correct a result's website status. Persists + wins over auto-detection. */
   setWebsiteOverride: (lead: Lead, status: WebsiteStatus) => void;
   retryLastSearch: () => void;
@@ -86,6 +109,10 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [freeSearchExhaustedPersisted, setFreeSearchExhaustedPersisted] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const lastSearchRef = useRef<{ filters: SearchFilters; skipTrialCount: boolean; isDemo: boolean } | null>(null);
+  /* State, not a ref: it is persisted and it is read during render by whoever adds a lead. The ref
+     above is the retry payload and is deliberately separate — it holds the whole filter object
+     including flags that must NOT be restored across a reload. */
+  const [lastSearch, setLastSearch] = useState<LastSearch | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   const { isPaidSubscriber, isStripeTrialing, isAdmin, isLoading: isSubLoading } = useSubscription();
@@ -162,23 +189,29 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       // Fall back to sessionStorage
       const cachedLeadsRaw = sessionStorage.getItem(storageKeys.leads);
       if (cachedLeadsRaw) {
-        const cached = JSON.parse(cachedLeadsRaw) as { leads?: Lead[] };
+        const cached = JSON.parse(cachedLeadsRaw) as { leads?: Lead[]; lastSearch?: LastSearch | null };
         if (Array.isArray(cached?.leads)) setLeads(cached.leads);
+        /* Restored in the SAME read as the leads. An entry written before this change has no
+           lastSearch and restores null — identical to today's behaviour, so nothing regresses; the
+           next search writes both. */
+        if (cached?.lastSearch?.country) setLastSearch(cached.lastSearch);
       }
     } catch {
       // ignore cache parse errors
     }
   }, [storageKeys, isSubLoading, hasProAccess]);
 
-  // Persist leads whenever they change
+  /* Persist the results AND the search that produced them, in ONE write. Separating these is the
+     whole bug: two writes can be restored independently, and the half that came back without the
+     other is what put 168 tradeless, townless leads in the CRM. */
   useEffect(() => {
     if (!storageKeys) return;
     try {
-      sessionStorage.setItem(storageKeys.leads, JSON.stringify({ leads }));
+      sessionStorage.setItem(storageKeys.leads, JSON.stringify({ leads, lastSearch }));
     } catch {
       // ignore quota/unavailable errors
     }
-  }, [leads, storageKeys]);
+  }, [leads, lastSearch, storageKeys]);
 
   // Load this user's manual website-status overrides (once per user).
   useEffect(() => {
@@ -286,6 +319,13 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
 
     // Store for retry
     lastSearchRef.current = { filters, skipTrialCount, isDemo };
+    /* ⛔ SET HERE, at the single point every search passes through, so no call site can forget it.
+       Index.tsx used to do this itself; a second caller would have silently reintroduced the fault. */
+    setLastSearch({
+      keyword: filters.keyword?.trim() || null,
+      location: filters.location?.trim() || null,
+      country: (filters.country || 'UK') as Country,
+    });
 
     setIsLoading(true);
     setTrialLimitError(null);
@@ -634,8 +674,9 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     regionDowngraded,
     townFilterFallback,
     resolvedLocation,
+    lastSearch,
     locationCandidates,
-  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates]);
+  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>
