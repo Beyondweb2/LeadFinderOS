@@ -71,15 +71,37 @@ export function PushToInstantlyDialog({ open, onOpenChange, leadIds, onPushed }:
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Push failed');
+      /* ⛔ EVERY REASON IS NAMED, AND A ZERO PUSH IS NEVER REPORTED AS A SUCCESS.
+         This summed only skippedAlreadyPushed + skippedNoEmail, so when the two newer reasons
+         fired the total read 0, the description was dropped, and a push of five leads produced
+         "Pushed 0 leads to Instantly" with no explanation — the same silent-failure shape as the
+         buttons that did nothing before. Paul pushed 5, all 5 were skipped for having no completed
+         audit, and the UI said nothing about it.
+         ⚠️ Reasons are listed from the response rather than recomputed here: instantly-push owns
+         the filter, and a second copy of the rules in the dialog would drift from it. */
       const pushed = data.pushed ?? 0;
-      const skipped = (data.skippedAlreadyPushed ?? 0) + (data.skippedNoEmail ?? 0);
+      const reasons: string[] = [];
+      const noAudit = data.skippedNoAudit ?? 0;
+      const suppressed = data.skippedSuppressed ?? 0;
+      const noEmail = data.skippedNoEmail ?? 0;
+      const already = data.skippedAlreadyPushed ?? 0;
+      if (noAudit) reasons.push(`${noAudit} skipped — no completed audit (no competitor names, so nothing to personalise)`);
+      if (suppressed) reasons.push(`${suppressed} skipped — suppressed (said no on some channel)`);
+      if (noEmail) reasons.push(`${noEmail} skipped — no email address`);
+      if (already) reasons.push(`${already} skipped — already pushed`);
+      const total = leadIds.length;
+
       toast({
-        title: `Pushed ${pushed} lead${pushed === 1 ? '' : 's'} to Instantly`,
-        description: skipped
-          ? `${data.skippedNoEmail ?? 0} had no email · ${data.skippedAlreadyPushed ?? 0} already pushed.`
-          : undefined,
+        title: pushed > 0
+          ? `Pushed ${pushed} of ${total} lead${total === 1 ? '' : 's'} to Instantly`
+          : `Nothing pushed — all ${total} lead${total === 1 ? '' : 's'} skipped`,
+        description: reasons.length ? reasons.join(' · ') : undefined,
+        /* Nothing pushed is a result the operator must NOTICE, not a quiet dismissal. */
+        variant: pushed === 0 ? 'destructive' : undefined,
       });
-      onOpenChange(false);
+      /* Keep the dialog OPEN when nothing went, so the toast is not the only trace of a push that
+         achieved nothing and the selection is still there to retry after auditing. */
+      if (pushed > 0) onOpenChange(false);
       onPushed?.();
     } catch (e) {
       toast({ title: 'Could not push to Instantly', description: (e as Error).message, variant: 'destructive' });
