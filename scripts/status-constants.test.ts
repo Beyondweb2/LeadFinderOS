@@ -67,39 +67,72 @@ for (const s of ["not_interested", "opted_out", "closed", "bounced"] as const) {
 }
 
 
-/* ── ⛔ NO TWO STATUSES MAY SHARE A LABEL ──────────────────────────────────────────────────────
-   THE FAULT THIS CATCHES, and it shipped: no_whatsapp and no_whatsapp_needs_sms both rendered the
-   words "No WhatsApp" in PipelineStatusBadge, distinguished ONLY by pill colour — grey vs cyan. The
-   component's own comment recorded that as a decision ("kept distinct cyan to still signal the
-   not-mobile state"), which is the fault written down as intent. Paul filtered by "No WhatsApp",
-   got grey pills, and reasonably concluded the filter was broken.
+/* ── ⛔ NO TWO STATUSES MAY SHARE A LABEL — WITH ONE NAMED EXCEPTION ──────────────────────────
+   WHAT THIS ORIGINALLY CAUGHT: no_whatsapp and no_whatsapp_needs_sms both rendered the words "No
+   WhatsApp" in PipelineStatusBadge, distinguished ONLY by pill colour. Paul filtered by "No
+   WhatsApp", got grey pills, and reasonably concluded the filter was broken.
 
-   ⚠️ AND THERE ARE THREE LABEL SOURCES, which is why one fix was not a fix: OutreachStatusBadge
-   (a pill), PipelineStatusBadge (the pill actually rendered in the Outreach table), and
-   OUTREACH_STATUS_OPTIONS (the filter dropdown, read BEFORE choosing). Relabelling one left the
-   other two disagreeing with it. This asserts the filter list is internally unambiguous — a
-   duplicate label there means two different things offered under one name. */
-console.log("\n── ⛔ EVERY STATUS THE OPERATOR CAN PICK IS DISTINGUISHABLE BY ITS WORDS ──");
+   ⚠️ THAT PAIR NOW SHARES A LABEL AGAIN, ON PURPOSE. Paul's call, 2026-08-08: he does no SMS
+   outreach, so a mobile without a WhatsApp account and a landline both mean "email instead" and the
+   distinction is noise on screen. The important difference is that it is now a DECISION with a
+   reason, rather than an accident nobody had noticed.
+
+   ⛔ SO THE ASSERTION IS NARROWED, NOT DELETED, AND NARROWED TO EXACTLY ONE PAIR. Any OTHER
+   collision still fails — including a future third status joining this one. Deleting the check
+   because one pair is now legitimate would give up the guard for the other fifteen, which is how a
+   rule dies: not by being argued with, but by being switched off to accommodate its first exception.
+
+   ⚠️ AND THE ALLOWLIST ITSELF IS ASSERTED. Widening it has to be a visible edit to a test that
+   says out loud why the exception exists, not a quiet extra member. */
+console.log("\n── ⛔ STATUSES ARE DISTINGUISHABLE BY THEIR WORDS, BAR ONE DELIBERATE PAIR ──");
 {
+  /* The one sanctioned collision. Order-independent; compared as a set. */
+  const ALLOWED_SHARED: string[][] = [["no_whatsapp", "no_whatsapp_needs_sms"]];
+  const key = (vs: string[]) => [...vs].sort().join("|");
+  const allowed = new Set(ALLOWED_SHARED.map(key));
+
+  ok(ALLOWED_SHARED.length === 1 && ALLOWED_SHARED[0].length === 2,
+    "exactly ONE pair is allowed to share a label — adding a second is an edit to this line");
+  ok(allowed.has(key(["no_whatsapp", "no_whatsapp_needs_sms"])),
+    "  and it is the two no-WhatsApp statuses, named");
+
   const byLabel = new Map<string, string[]>();
   for (const o of OUTREACH_STATUS_OPTIONS) {
     if (!byLabel.has(o.label)) byLabel.set(o.label, []);
     byLabel.get(o.label)!.push(o.value);
   }
-  let clashes = 0;
+  let unsanctioned = 0;
   for (const [label, values] of byLabel) {
-    if (values.length > 1) { clashes++; console.log(`  CLASH ${JSON.stringify(label)} -> ${values.join(", ")}`); }
+    if (values.length === 1) continue;
+    if (allowed.has(key(values))) { console.log(`  (allowed) ${JSON.stringify(label)} -> ${values.join(", ")}`); continue; }
+    unsanctioned++;
+    console.log(`  CLASH ${JSON.stringify(label)} -> ${values.join(", ")}`);
   }
-  ok(clashes === 0, `no two statuses share a filter label (${byLabel.size} labels for ${OUTREACH_STATUS_OPTIONS.length} statuses)`);
+  ok(unsanctioned === 0, `no UNSANCTIONED status shares a label (${byLabel.size} labels across ${OUTREACH_STATUS_OPTIONS.length} statuses)`);
+
+  /* ⛔ THE GUARD STILL BITES FOR THE OTHER FIFTEEN. Proven rather than asserted: a synthetic clash
+     between two statuses NOT on the allowlist must be rejected by the same code above. Without this
+     the narrowing could have been a no-op check that passes on anything. */
+  {
+    const fake = [...OUTREACH_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))];
+    const a = fake.find((o) => o.value === "replied")!;
+    const b = fake.find((o) => o.value === "bounced")!;
+    b.label = a.label;                                   // two unrelated statuses, one label
+    const m = new Map<string, string[]>();
+    for (const o of fake) { if (!m.has(o.label)) m.set(o.label, []); m.get(o.label)!.push(o.value); }
+    let caught = 0;
+    for (const [, values] of m) if (values.length > 1 && !allowed.has(key(values))) caught++;
+    ok(caught === 1, "a clash between two OTHER statuses is still caught (replied vs bounced)");
+  }
 
   const labelOf = (v: string) => OUTREACH_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? "";
-  ok(labelOf("no_whatsapp") !== labelOf("no_whatsapp_needs_sms"),
-    "the two no-WhatsApp statuses read differently in the filter");
-  /* The specific words, asserted by name: a mobile that can still take an SMS must not be described
-     as a landline, and a landline must not be described as needing one. */
-  ok(/mobile/i.test(labelOf("no_whatsapp")), `no_whatsapp says it is a mobile: ${JSON.stringify(labelOf("no_whatsapp"))}`);
-  ok(/landline/i.test(labelOf("no_whatsapp_needs_sms")), `no_whatsapp_needs_sms says landline: ${JSON.stringify(labelOf("no_whatsapp_needs_sms"))}`);
-  ok(!/needs sms/i.test(labelOf("no_whatsapp_needs_sms")), "  and no longer reads as an instruction to send an SMS that cannot arrive");
+  ok(labelOf("no_whatsapp") === "No WhatsApp", `no_whatsapp reads ${JSON.stringify(labelOf("no_whatsapp"))}`);
+  ok(labelOf("no_whatsapp_needs_sms") === "No WhatsApp", `no_whatsapp_needs_sms reads the same, as intended`);
+  /* ⚠️ The label merged; the VALUES must not. process-sms-queue targets one and excludes the
+     other, so a "tidy-up" that collapsed them into a single status would lose which leads can still
+     take an SMS. Both remain in the crawl defaults for the same reason. */
+  ok(labelOf("no_whatsapp") !== "" && OUTREACH_STATUS_OPTIONS.filter((o) => o.label === "No WhatsApp").length === 2,
+    "  and they are still TWO separate statuses wearing one label, not one merged status");
 }
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");

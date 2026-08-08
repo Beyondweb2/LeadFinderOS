@@ -28,27 +28,26 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Bounced',
     className: 'bg-red-700 text-white border-transparent font-semibold',
   },
-  /* ⛔ THESE TWO USED TO RENDER THE SAME WORDS. Both said "No WhatsApp" and differed only by
-     colour — grey here, cyan below — which is exactly the report: "I filtered by no WhatsApp and
-     the rows show a GREY pill, but the no-WhatsApp pill is light blue." A colour is not a label.
-     They are different populations and the words now say so:
-       no_whatsapp            a real MOBILE with no WhatsApp account -> SMS still works (53)
-       no_whatsapp_needs_sms  not a mobile at all -> neither WhatsApp nor SMS works (509)
-     process-sms-queue targets the first and explicitly excludes the second, so reading one as the
-     other costs a reachable channel. */
+  /* ⚠️ BOTH READ "No WhatsApp", AND THAT IS DELIBERATE — Paul's call, 2026-08-08. He does no SMS
+     outreach, so the difference between a mobile with no WhatsApp account and a landline changes
+     nothing about what he does next: both mean email instead. A label that draws a distinction the
+     operator never acts on is noise.
+     ⛔ WHAT MUST NOT BE "TIDIED" ON THE BACK OF THIS: the two statuses stay SEPARATE IN THE DATA and
+     keep different colours. process-sms-queue targets no_whatsapp and explicitly excludes
+     no_whatsapp_needs_sms, so merging the values would lose which leads can still take an SMS — a
+     channel that is unused today, not one that has been ruled out. The colour is what keeps them
+     tellable apart on screen if that ever changes.
+       no_whatsapp            a real mobile with no WhatsApp account — SMS would still work (53)
+       no_whatsapp_needs_sms  not a mobile at all — neither WhatsApp nor SMS can arrive (509) */
   no_whatsapp: {
-    label: 'Mobile, no WhatsApp',
-    shortLabel: 'Mobile, no WA',
+    label: 'No WhatsApp',
+    shortLabel: 'No WA',
     className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
   },
   no_whatsapp_needs_sms: {
-    /* The old comment said the display "reads No WhatsApp ... kept distinct cyan to still signal
-       the not-mobile state". That was the whole fault written down as a decision: the distinction
-       was carried entirely by a colour, so the two pills were indistinguishable in words. And
-       "Needs SMS" read as an instruction to send one — it is a landline, SMS cannot arrive, and
-       process-sms-queue skips it for that reason. Labels only; status value and routing unchanged. */
-    label: 'Landline — no WhatsApp or SMS',
-    shortLabel: 'Landline',
+    /* Same words as no_whatsapp above, different colour. See the block there for why. */
+    label: 'No WhatsApp',
+    shortLabel: 'No WA',
     className: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent font-semibold whitespace-nowrap',
   },
   whatsapp_failed: {
