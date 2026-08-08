@@ -147,16 +147,28 @@ interface TriageRow {
   bucket: TriageBucket;
   /** Empty for the two working buckets; on `cannot` it is what goes on screen, verbatim. */
   reason: string;
+  /* ⛔ WHETHER THIS RUN ACTUALLY TOUCHES IT. The bucket says what the lead NEEDS; will_run says
+     whether the cap leaves room for it. Keeping them apart is the fix for a confirm line that read
+     "Push 25 leads, auditing 138 first (~$13.97)" — quoting the cost of auditing 138 for a job that
+     would audit 25. A 5x overstatement on the one number that decides whether Paul presses.
+     It is computed HERE so the dialog cannot compute it differently: the cost, the counts and the
+     job's own item list are all read off this single field. */
+  will_run: boolean;
 }
 
 // deno-lint-ignore no-explicit-any
-async function triageForPush(service: any, userId: string, leadIds: string[]): Promise<TriageRow[]> {
+async function triageForPush(service: any, userId: string, leadIds: string[], cap: number): Promise<TriageRow[]> {
   if (!leadIds.length) return [];
   const { data: rows } = await service
     .from("outreach_leads")
     .select("id, business_name, email, phone, instantly_pushed_at, search_keyword, category, search_location, address")
     .eq("user_id", userId)
-    .in("id", leadIds);
+    .in("id", leadIds)
+    /* ⛔ A STABLE ORDER, because the cap slices this list. Without it PostgREST returns rows in
+       whatever order it likes, so the preview and the create — two separate queries — could pick
+       DIFFERENT 25 leads, and the confirm would describe a job that never ran. Same reason
+       fetchAllRows insists on a unique tiebreaker. */
+    .order("id", { ascending: true });
   const leads = (rows ?? []) as Array<Record<string, string | null>>;
   if (!leads.length) return [];
 
@@ -190,10 +202,12 @@ async function triageForPush(service: any, userId: string, leadIds: string[]): P
     hits.forEach((h, k) => { if (h.suppressed) suppressed.set(slice[k].id as string, h.matchedOn ?? "?"); });
   }
 
-  return leads.map((l): TriageRow => {
+  /* The bucket decision, before the cap has an opinion. Separating the two is the point. */
+  type GradedRow = Omit<TriageRow, "will_run">;
+  const graded = leads.map((l): GradedRow => {
     const id = l.id as string;
     const name = (l.business_name ?? "").trim() || "(no name)";
-    const cannot = (reason: string): TriageRow => ({ lead_id: id, business_name: name, bucket: "cannot", reason });
+    const cannot = (reason: string): GradedRow => ({ lead_id: id, business_name: name, bucket: "cannot", reason });
 
     /* Suppression is checked FIRST, before "already pushed". A lead that is both should be reported
        as the one that matters: someone who has said no, not an administrative dedupe. */
@@ -212,6 +226,23 @@ async function triageForPush(service: any, userId: string, leadIds: string[]): P
 
     return { lead_id: id, business_name: name, bucket: "needs_audit", reason: "" };
   });
+
+  /* ── THE CAP, APPLIED ONCE ──────────────────────────────────────────────────────────
+     ⚠️ ALREADY-AUDITED LEADS TAKE THE CAP FIRST. They cost nothing and go out in this run's upload,
+     so spending the budget on them before buying any audit gets the most email sent per run. The
+     old code sliced the two buckets together in database order, which meant a run could spend its
+     whole cap auditing while ready-to-send leads waited for a second pass. */
+  const order = (r: { bucket: TriageBucket }) => (r.bucket === "push_now" ? 0 : r.bucket === "needs_audit" ? 1 : 2);
+  const ranked = graded.map((r, i) => ({ r, i })).sort((a, b) => order(a.r) - order(b.r) || a.i - b.i);
+  let room = Math.max(0, cap);
+  const willRun = new Set<string>();
+  for (const { r } of ranked) {
+    if (r.bucket === "cannot") continue;
+    if (room <= 0) break;
+    willRun.add(r.lead_id);
+    room--;
+  }
+  return graded.map((r) => ({ ...r, will_run: willRun.has(r.lead_id) }));
 }
 
 /** Atomically claim a job and process ONE chunk INLINE, in the caller's invocation.
@@ -847,8 +878,13 @@ Deno.serve(async (req) => {
     if (action === "triage") {
       const leadIds: string[] = Array.from(new Set((body.lead_ids ?? []).filter((x: unknown) => typeof x === "string")));
       if (!leadIds.length) return json({ error: "lead_ids required" }, 400);
-      const rows = await triageForPush(service, user.id, leadIds);
+      const cap = JOB_CAPS.audit_and_push;
+      const rows = await triageForPush(service, user.id, leadIds, cap);
       const actionable = rows.filter((r) => r.bucket !== "cannot").length;
+      /* ⛔ THIS RUN's NUMBERS, NOT THE SELECTION's. These are what the confirm line quotes and what
+         the cost is multiplied by. Derived from will_run so they cannot disagree with the job. */
+      const auditsThisRun = rows.filter((r) => r.will_run && r.bucket === "needs_audit").length;
+      const pushThisRun = rows.filter((r) => r.will_run).length;
       return json({
         ok: true,
         triage: rows,
@@ -857,10 +893,13 @@ Deno.serve(async (req) => {
           needs_audit: rows.filter((r) => r.bucket === "needs_audit").length,
           cannot: rows.filter((r) => r.bucket === "cannot").length,
         },
-        cap: JOB_CAPS.audit_and_push,
+        /* What the job will actually do. */
+        audits_this_run: auditsThisRun,
+        push_this_run: pushThisRun,
+        cap,
         /* How many actionable leads would be left for a second run. Named rather than trimmed
            silently — a cap that quietly drops work reads as "everything was done". */
-        over_cap: Math.max(0, actionable - JOB_CAPS.audit_and_push),
+        over_cap: Math.max(0, actionable - cap),
       });
     }
 
@@ -913,15 +952,13 @@ Deno.serve(async (req) => {
            could send a different split, and the one thing this job must not do is audit or email
            someone the confirm screen listed under "cannot". Re-running also picks up a suppression
            added between the preview and the press. */
-        const rows = await triageForPush(service, user.id, finalIds);
-        const work = rows.filter((r) => r.bucket !== "cannot").slice(0, cap);
-        const workIds = new Set(work.map((r) => r.lead_id));
+        const rows = await triageForPush(service, user.id, finalIds, cap);
         items = rows.map((r): JobItem => {
           if (r.bucket === "cannot") {
             skippedAtCreate++;
             return { lead_id: r.lead_id, status: "skipped_ineligible", error: r.reason };
           }
-          if (!workIds.has(r.lead_id)) {
+          if (!r.will_run) {
             /* Over the cap. skipped_cap, with the reason spelled out, so it reads as "left for the
                next run" rather than as a failure or as work that quietly evaporated. */
             skippedAtCreate++;

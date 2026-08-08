@@ -19,6 +19,8 @@ interface TriageRow {
   business_name: string;
   bucket: 'push_now' | 'needs_audit' | 'cannot';
   reason: string;
+  /** Whether THIS run touches the lead. The cap is applied server-side, never recomputed here. */
+  will_run: boolean;
 }
 
 interface PushToInstantlyDialogProps {
@@ -71,6 +73,13 @@ export function PushToInstantlyDialog({
   const [triageError, setTriageError] = useState<string | null>(null);
   const [overCap, setOverCap] = useState(0);
   const [cap, setCap] = useState(25);
+  /* ⛔ WHAT THIS RUN DOES, FROM THE SERVER. The cost used to be quoted against every lead that
+     NEEDED an audit rather than the capped subset that would get one — "auditing 138 first
+     (~$13.97)" beside "113 over the 25-lead cap". Overstated 5x, on the number that decides whether
+     the button gets pressed. These two come from the same will_run flags the job itself is built
+     from, so they cannot drift from it. */
+  const [auditsThisRun, setAuditsThisRun] = useState(0);
+  const [pushThisRun, setPushThisRun] = useState(0);
   const [questionCount, setQuestionCount] = useState(3);
 
   const loadCampaigns = useCallback(async () => {
@@ -107,6 +116,8 @@ export function PushToInstantlyDialog({
       setTriage(Array.isArray(data.triage) ? data.triage : []);
       setOverCap(Number(data.over_cap) || 0);
       setCap(Number(data.cap) || 25);
+      setAuditsThisRun(Number(data.audits_this_run) || 0);
+      setPushThisRun(Number(data.push_this_run) || 0);
     } catch (e) {
       setTriageError((e as Error).message);
       setTriage(null);
@@ -134,12 +145,11 @@ export function PushToInstantlyDialog({
      this job type always passes skip_seo, so there is no $0.04-per-website charge to estimate.
      Leads already ready to push cost nothing — the push itself is one free API call. */
   const costUsd = useMemo(
-    () => groups.needsAudit.length * (questionCount * AUDIT_EST_USD_PER_QUESTION + CLEANER_USD_PER_RUN),
-    [groups.needsAudit.length, questionCount],
+    () => auditsThisRun * (questionCount * AUDIT_EST_USD_PER_QUESTION + CLEANER_USD_PER_RUN),
+    [auditsThisRun, questionCount],
   );
 
-  const actionable = groups.pushNow.length + groups.needsAudit.length;
-  const willRun = Math.min(actionable, cap);
+  const willRun = pushThisRun;
 
   const handleStart = async () => {
     if (!campaignId || starting || !onBulkJob) return;
@@ -154,10 +164,10 @@ export function PushToInstantlyDialog({
         return;
       }
       toast({
-        title: groups.needsAudit.length
-          ? `Started — auditing ${groups.needsAudit.length}, then pushing ${willRun}`
+        title: auditsThisRun
+          ? `Started — auditing ${auditsThisRun}, then pushing ${willRun}`
           : `Started — pushing ${willRun} to Instantly`,
-        description: groups.needsAudit.length
+        description: auditsThisRun
           ? 'Audits run first and take a few minutes each. The push happens once they have all answered. Safe to leave this page.'
           : 'Running server-side. Safe to leave this page.',
       });
@@ -237,7 +247,11 @@ export function PushToInstantlyDialog({
                   <ClipboardList className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>
                     <span className="font-semibold">{groups.needsAudit.length}</span> need an audit
-                    first — that runs before anything is pushed, and takes a few minutes each.
+                    first
+                    {auditsThisRun < groups.needsAudit.length
+                      ? <> — <span className="font-semibold">this run audits {auditsThisRun}</span> of
+                          them; the rest wait for the next run.</>
+                      : <> — that runs before anything is pushed, and takes a few minutes each.</>}
                   </span>
                 </p>
               )}
@@ -285,13 +299,15 @@ export function PushToInstantlyDialog({
                 </div>
               )}
 
+              {/* ⛔ ONE SENTENCE, AND EVERY NUMBER IN IT IS ABOUT THIS RUN. */}
               <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
                 {willRun > 0 ? (
                   <>
-                    Push <span className="font-semibold">{willRun}</span> lead{willRun === 1 ? '' : 's'}
-                    {groups.needsAudit.length > 0 && <>, auditing <span className="font-semibold">{groups.needsAudit.length}</span> first</>}
+                    This run performs <span className="font-semibold">{auditsThisRun}</span>{' '}
+                    audit{auditsThisRun === 1 ? '' : 's'} and pushes{' '}
+                    <span className="font-semibold">{willRun}</span> lead{willRun === 1 ? '' : 's'}
                     {' '}(~<span className="font-semibold">${costUsd.toFixed(2)}</span>
-                    {costUsd === 0 && ' — nothing to audit'}). Proceed?
+                    {auditsThisRun === 0 && ' — nothing to audit'}). Proceed?
                   </>
                 ) : (
                   <>Nothing to do — every selected lead is in the list above.</>
@@ -308,7 +324,7 @@ export function PushToInstantlyDialog({
             disabled={!campaignId || starting || busy || noCampaigns || willRun === 0 || !!bulkJobActive || !onBulkJob}
           >
             {starting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
-            {groups.needsAudit.length > 0 ? `Audit ${groups.needsAudit.length} and push ${willRun}` : `Push ${willRun}`}
+            {auditsThisRun > 0 ? `Audit ${auditsThisRun} and push ${willRun}` : `Push ${willRun}`}
           </Button>
         </DialogFooter>
       </DialogContent>

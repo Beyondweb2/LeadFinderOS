@@ -66,4 +66,40 @@ for (const s of ["not_interested", "opted_out", "closed", "bounced"] as const) {
   ok(!(CRAWLABLE_STATUSES_DEFAULT as string[]).includes(s), `default excludes ${JSON.stringify(s)}`);
 }
 
+
+/* ── ⛔ NO TWO STATUSES MAY SHARE A LABEL ──────────────────────────────────────────────────────
+   THE FAULT THIS CATCHES, and it shipped: no_whatsapp and no_whatsapp_needs_sms both rendered the
+   words "No WhatsApp" in PipelineStatusBadge, distinguished ONLY by pill colour — grey vs cyan. The
+   component's own comment recorded that as a decision ("kept distinct cyan to still signal the
+   not-mobile state"), which is the fault written down as intent. Paul filtered by "No WhatsApp",
+   got grey pills, and reasonably concluded the filter was broken.
+
+   ⚠️ AND THERE ARE THREE LABEL SOURCES, which is why one fix was not a fix: OutreachStatusBadge
+   (a pill), PipelineStatusBadge (the pill actually rendered in the Outreach table), and
+   OUTREACH_STATUS_OPTIONS (the filter dropdown, read BEFORE choosing). Relabelling one left the
+   other two disagreeing with it. This asserts the filter list is internally unambiguous — a
+   duplicate label there means two different things offered under one name. */
+console.log("\n── ⛔ EVERY STATUS THE OPERATOR CAN PICK IS DISTINGUISHABLE BY ITS WORDS ──");
+{
+  const byLabel = new Map<string, string[]>();
+  for (const o of OUTREACH_STATUS_OPTIONS) {
+    if (!byLabel.has(o.label)) byLabel.set(o.label, []);
+    byLabel.get(o.label)!.push(o.value);
+  }
+  let clashes = 0;
+  for (const [label, values] of byLabel) {
+    if (values.length > 1) { clashes++; console.log(`  CLASH ${JSON.stringify(label)} -> ${values.join(", ")}`); }
+  }
+  ok(clashes === 0, `no two statuses share a filter label (${byLabel.size} labels for ${OUTREACH_STATUS_OPTIONS.length} statuses)`);
+
+  const labelOf = (v: string) => OUTREACH_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? "";
+  ok(labelOf("no_whatsapp") !== labelOf("no_whatsapp_needs_sms"),
+    "the two no-WhatsApp statuses read differently in the filter");
+  /* The specific words, asserted by name: a mobile that can still take an SMS must not be described
+     as a landline, and a landline must not be described as needing one. */
+  ok(/mobile/i.test(labelOf("no_whatsapp")), `no_whatsapp says it is a mobile: ${JSON.stringify(labelOf("no_whatsapp"))}`);
+  ok(/landline/i.test(labelOf("no_whatsapp_needs_sms")), `no_whatsapp_needs_sms says landline: ${JSON.stringify(labelOf("no_whatsapp_needs_sms"))}`);
+  ok(!/needs sms/i.test(labelOf("no_whatsapp_needs_sms")), "  and no longer reads as an instruction to send an SMS that cannot arrive");
+}
+
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
