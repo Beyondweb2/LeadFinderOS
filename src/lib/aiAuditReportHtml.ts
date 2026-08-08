@@ -101,12 +101,79 @@ export function esc(s: string): string {
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-/** Hero verdict: severity band (drives the big number's colour) + a one-line gut-punch. */
-function heroVerdict(pct: number, named: number): { band: "crit" | "low" | "mid" | "high"; punch: string } {
-  if (named === 0) return { band: "crit", punch: "AI doesn’t know you exist." };
-  if (pct < 34) return { band: "low", punch: "AI sends your customers straight to your competitors." };
-  if (pct < 67) return { band: "mid", punch: "AI mentions you sometimes — your competitors get the rest." };
-  return { band: "high", punch: "AI names you in most answers — let’s make it every time." };
+/** Small numbers as words, so "once in six" reads like a sentence rather than a statistic. */
+function inWords(n: number): string {
+  return ["zero", "once", "twice", "three times", "four times", "five times", "six times"][n] ?? `${n} times`;
+}
+
+/* ══ THE HERO VERDICT ═══════════════════════════════════════════════════════════════════════════
+   ⛔ EVERY LINE MUST SURVIVE THE PROSPECT CHECKING IT. This is the first sentence on the artefact
+   that sells, and it is the easiest thing in the document to disprove — they can open ChatGPT and
+   look. Four faults were found at the EDGES of the old bands, all the same shape: a line that is
+   true in the middle of its range and an overclaim at one end.
+
+     1 of 6 read "AI sends your customers straight to your competitors."  A business AI DOES mention
+     was being told it is absent. 1/6 is 17%, so it shared a band with 0.  → the `rare` band below.
+
+     0 of 6 read "AI doesn’t know you exist."  That is a claim about what AI KNOWS, which we never
+     measured — we measured what it ANSWERED to three questions. Ask it "have you heard of X?" and
+     it may well say yes, and then the report is wrong.  → now states the measurement.
+
+     The mid band asserted "your competitors get the rest" and the rare band would have said
+     "your competitors are in nearly all of them" — unmeasured whenever the audit found no rival
+     names at all.  → both halves are conditional on hasRivals.
+
+     100% read "AI names you in most answers — let’s make it every time."  At 6 of 6 it already IS
+     every time, so the line asks them to fix something that is not broken.  → its own line.
+
+   ⚠️ THE NUMBERS ARE PASSED IN, NOT JUST THE PERCENTAGE. "once in six answers" is checkable and
+   unarguable; "17%" is neither, and a percentage of six is false precision anyway. */
+function heroVerdict(
+  named: number,
+  total: number,
+  hasRivals: boolean,
+): { band: "crit" | "low" | "mid" | "high"; punch: string } {
+  const of = `${total} answer${total === 1 ? "" : "s"}`;
+
+  // Never named. States what was measured, never what AI does or does not know.
+  if (named === 0) {
+    return {
+      band: "crit",
+      punch: hasRivals
+        ? `AI never named you in ${of}. It named your competitors instead.`
+        : `AI never named you in ${of}.`,
+    };
+  }
+
+  /* NAMED, BUT RARELY — the band this rewrite exists for, and the better pitch. Being occasionally
+     present and usually beaten is more uncomfortable than being invisible, and more obviously
+     fixable: the gap is the product. Threshold unchanged at a third, so only the 0 case moved out. */
+  if (named / total < 1 / 3) {
+    return {
+      band: "low",
+      punch: hasRivals
+        ? `AI named you ${inWords(named)} in ${of}. Your competitors are in nearly all of them.`
+        : `AI named you ${inWords(named)} in ${of}.`,
+    };
+  }
+
+  if (named / total < 2 / 3) {
+    return {
+      band: "mid",
+      punch: hasRivals
+        ? `AI names you ${inWords(named)} in ${of} — your competitors get the rest.`
+        : `AI names you ${inWords(named)} in ${of}.`,
+    };
+  }
+
+  // Already in every answer: nothing to make "every time".
+  if (named === total) {
+    return { band: "high", punch: `AI named you in all ${of}. The job now is keeping it that way.` };
+  }
+
+  /* Bare digits here, NOT inWords: "in five times of 6 answers" is what the word form produces in
+     this construction. "in 5 of 6 answers" is the one that reads. */
+  return { band: "high", punch: `AI names you in ${named} of ${of} — let’s make it every time.` };
 }
 
 /** De-duplicate competitor names (case-insensitive), preserving first-seen order. */
@@ -296,7 +363,9 @@ function seoSection(seo: AiAuditSeo | undefined): string {
  */
 export function renderReportHtml(d: AiAuditReportData): string {
   const type = d.businessType.trim() || "business like yours";
-  const v = heroVerdict(d.pct, d.named);
+  /* hasRivals gates every clause that mentions competitors: with no rival names measured, saying
+     they "get the rest" is a claim about data we do not have. */
+  const v = heroVerdict(d.named, d.total, dedupeNames(d.competitors ?? []).length > 0);
 
   // ── Gut-punch: a clean SUMMARY of the worst answer, with the competitors AI named
   //    instead. Never the raw AI paragraph.
