@@ -59,10 +59,26 @@ function json(body: unknown, status = 200): Response {
 interface JobItem {
   lead_id: string;
   /* skipped_suppressed: the lead has said no on some channel. Its own member rather than reusing
-     skipped_existing, so a suppression can never be misread as a dedupe in the job summary. */
-  status: "pending" | "running" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing" | "skipped_suppressed";
+     skipped_existing, so a suppression can never be misread as a dedupe in the job summary.
+
+     ⛔ awaiting_audit: THE AUDIT WAS ENQUEUED BUT HAS NOT BEEN ANSWERED YET, and it is the whole
+     point of this change. `done` used to be set the moment create-ai-audit returned — which is when
+     the QUESTIONS EXIST, not when they have been answered. Measured 2026-08-08: a 10-lead job
+     reported done=10 after 43 SECONDS while the last question finished 8.9 MINUTES later. Paul read
+     "done", pushed to Instantly, and got 0 pushed twice, because no run had completed.
+     A job is not finished while any item is awaiting_audit; the chunk releases back to 'queued' and
+     the next sweep re-checks. Non-terminal by construction, so nothing downstream can read it as
+     success. */
+  status: "pending" | "running" | "awaiting_audit" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing" | "skipped_suppressed";
   error?: string;
+  /** Set with awaiting_audit so the re-check knows which run to look at. */
+  audit_id?: string;
 }
+
+/** How long an enqueued audit may take before the item is called failed. Measured audits finish in
+ *  ~9 minutes; a question can legitimately run ~9 on Apify alone, so this is deliberately generous.
+ *  Its job is to stop a job re-queuing forever, not to be a timeout anyone tunes. */
+const AUDIT_WAIT_MAX_MS = 45 * 60 * 1000;
 
 interface JobRow {
   id: string;
@@ -143,7 +159,7 @@ async function getInternalKeys(service: any): Promise<{ service_key: string; ano
 
 /** Run ONE item through the existing edge function (internal-call branch). */
 // deno-lint-ignore no-explicit-any
-async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ status: JobItem["status"]; error?: string; capHit?: boolean }> {
+async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ status: JobItem["status"]; error?: string; capHit?: boolean; audit_id?: string }> {
   // Real vault keys for the gateway (the injected ones are stale) + x-cron-secret for
   // the target handler's isInternal check + x-internal-job.
   const keys = await getInternalKeys(service);
@@ -226,7 +242,7 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
       .gte("created_at", job.created_at)
       .limit(1)
       .maybeSingle();
-    if (prior) return { status: "done" };
+    if (prior) return { status: "awaiting_audit", audit_id: prior.id };
 
     // Inputs sourced the SAME way as the wizard's pickLead: type = search_keyword||category,
     // location = search_location||address. Eligibility (client-side) already ensures these exist.
@@ -269,7 +285,10 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (data?.ok && data?.audit_id) return { status: "done" };
+    /* ⛔ NOT done — awaiting_audit. create-ai-audit returning ok means the QUESTIONS EXIST, not that
+       they have been answered; the answering happens later on the process-ai-audit-queue cron. See
+       the JobItem comment: claiming done here is what made two pushes return 0. */
+    if (data?.ok && data?.audit_id) return { status: "awaiting_audit", audit_id: String(data.audit_id) };
     return { status: "failed", error: String(data?.error ?? `HTTP ${res.status}`).slice(0, 200) };
   }
 
@@ -299,6 +318,45 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
 /** Process pending items in WAVES of bounded concurrency under the time budget,
  *  persisting after every wave (and before it, to mark the wave in-flight). */
 // deno-lint-ignore no-explicit-any
+/* ── RESOLVE ITEMS WAITING ON AN AUDIT ─────────────────────────────────────────────────────────
+   Called at the top of every chunk. An enqueued audit is answered by a DIFFERENT cron, so the only
+   honest way to know it finished is to look at its run. complete/capped -> done; failed/cancelled ->
+   failed; anything still going stays awaiting and the job re-queues.
+   ⚠️ 'capped' counts as finished on purpose: a capped run has real answers, just fewer than asked
+   for, and the audit-reply resolver accepts it. Treating it as a failure would discard a usable
+   audit and re-spend on the next attempt. */
+// deno-lint-ignore no-explicit-any
+async function resolveAwaiting(service: any, job: JobRow): Promise<{ done: number; failed: number }> {
+  const waiting = job.items.filter((it) => it.status === "awaiting_audit" && it.audit_id);
+  if (!waiting.length) return { done: 0, failed: 0 };
+  const ids = [...new Set(waiting.map((it) => it.audit_id!))];
+  const { data: runs } = await service
+    .from("ai_audit_runs").select("audit_id, status").in("audit_id", ids);
+  const byAudit = new Map<string, string[]>();
+  for (const r of (runs ?? []) as Array<{ audit_id: string; status: string }>) {
+    if (!byAudit.has(r.audit_id)) byAudit.set(r.audit_id, []);
+    byAudit.get(r.audit_id)!.push(r.status);
+  }
+  const ageMs = Date.now() - new Date(job.created_at ?? Date.now()).getTime();
+  let done = 0, failed = 0;
+  for (const it of waiting) {
+    const sts = byAudit.get(it.audit_id!) ?? [];
+    if (sts.some((x) => x === "complete" || x === "capped")) { it.status = "done"; done++; continue; }
+    if (sts.length && sts.every((x) => x === "failed" || x === "cancelled")) {
+      it.status = "failed"; it.error = "audit run failed"; failed++; continue;
+    }
+    /* Still going — unless it has been going too long, in which case stop re-queuing forever and
+       say so. A stuck item must not keep a job alive indefinitely. */
+    if (ageMs > AUDIT_WAIT_MAX_MS) {
+      it.status = "failed";
+      it.error = `audit did not finish within ${Math.round(AUDIT_WAIT_MAX_MS / 60000)} minutes`;
+      failed++;
+    }
+  }
+  return { done, failed };
+}
+
+// deno-lint-ignore no-explicit-any
 async function processChunk(service: any, job: JobRow): Promise<void> {
   const started = Date.now();
   const items = job.items;
@@ -316,6 +374,13 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
   // (a clean chunk boundary never leaves "running"). Re-running is safe — generate-
   // barber-site's duplicate guard returns existing:true → skipped_existing.
   for (const it of items) if (it.status === "running") it.status = "pending";
+
+  /* Items enqueued on a PREVIOUS chunk may have finished since. Resolve them first, so a job whose
+     audits are all done closes on this tick rather than waiting for another sweep. */
+  {
+    const r = await resolveAwaiting(service, job);
+    done += r.done; failed += r.failed;
+  }
 
   const persist = async (extra: Record<string, unknown> = {}) => {
     await service.from("bulk_jobs").update({
@@ -374,9 +439,14 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
         const r = res.value;
         it.status = r.status;
         if (r.error) it.error = r.error;
-        if (r.status === "done" || r.status === "cached") done++;
+        if (r.audit_id) it.audit_id = r.audit_id;
+        /* awaiting_audit counts as NOTHING yet — not done, not failed, not skipped. It is resolved
+           on a later chunk by resolveAwaiting, which increments the right counter then. Counting it
+           here is precisely the bug: the totals would read complete while the work was outstanding. */
+        if (r.status === "awaiting_audit") { /* pending resolution */ }
+        else if (r.status === "done" || r.status === "cached") done++;
         else if (r.status === "failed") failed++;
-        else skipped++; // skipped_cap / skipped_existing
+        else skipped++; // skipped_cap / skipped_existing / skipped_suppressed
         if (r.capHit) capHit = true; // per-operator 20/24h 403 → cap the rest
       } else {
         it.status = "failed";
@@ -389,7 +459,16 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
     if (capHit) { capRemaining(); break; }
   }
 
-  // No pending items left → finished.
+  /* ⛔ NO PENDING ITEMS IS NOT THE SAME AS FINISHED. Items sitting at awaiting_audit have had their
+     questions enqueued and not yet answered; marking the job done here is the exact lie this change
+     removes. Release the claim back to 'queued' so the ≤1-minute sweep re-checks, and leave the job
+     visibly unfinished in the meantime. */
+  if (items.some((it) => it.status === "awaiting_audit")) {
+    await persist({ status: "queued", locked_until: null });
+    return;
+  }
+
+  // No pending and nothing awaiting → genuinely finished.
   await persist({
     status: "done",
     locked_until: null,
