@@ -33,7 +33,7 @@ const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 const ASK_CAMPAIGN_KEY = 'lf_ask_campaign_each_time';
 
 const Index = () => {
-  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates } = useLeadSearchContext();
+  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach, leads: crmLeads, removeFreshLead, refetch: refetchCrm } = useOutreach();
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
@@ -60,9 +60,14 @@ const Index = () => {
   );
   const [marketTrade, setMarketTrade] = useState(urlMode === 'market' ? urlTrade : '');
   const [marketTown, setMarketTown] = useState(urlMode === 'market' ? urlTown : '');
-  const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
-  const [lastSearchKeyword, setLastSearchKeyword] = useState<string | null>(null);
-  const [lastSearchLocation, setLastSearchLocation] = useState<string | null>(null);
+  /* ⛔ THESE WERE useState AND THAT WAS THE BUG. They were set only by pressing Search, while the
+     RESULTS came back from sessionStorage on mount — so returning to this page rather than
+     re-searching left the results on screen with no keyword or town behind them, and Add wrote a
+     lead with neither. 168 rows in the CRM are that exact shape and cannot be audited.
+     They now come from the context, which persists them alongside the leads in a single write. */
+  const lastSearchCountry: Country = lastSearch?.country ?? 'UK';
+  const lastSearchKeyword = lastSearch?.keyword ?? null;
+  const lastSearchLocation = lastSearch?.location ?? null;
   // One page, one search. The radius slider is the single control: ≤50km = a
   // normal single-centre search only — region tiling is capped out of the UI.
 
@@ -148,9 +153,8 @@ const Index = () => {
   const showLeadResults = activeMode === 'leads';
 
   const handleSearch = useCallback((filters: any) => {
-    setLastSearchCountry(filters.country || 'UK');
-    setLastSearchKeyword(filters.keyword?.trim() || null);
-    setLastSearchLocation(filters.location?.trim() || null);
+    /* No longer recorded here — the context records it inside search(), which is the one point every
+       search passes through, and persists it with the results. */
 
     /* MARKET MODE SPENDS NOTHING AND CALLS NO SEARCH. It reads audits and the cached pool for the
        trade and town in the boxes. The lead search is left completely untouched below. */
