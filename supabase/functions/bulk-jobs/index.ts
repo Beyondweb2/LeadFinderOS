@@ -33,6 +33,20 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 // set as a function secret (read here) AND in the vault (sent by the cron SQL).
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 
+/* The internal-call headers, in ONE place: real vault keys (the injected ones are stale, which is
+   why a service key taken from the CLI gets a 401 from these functions), plus both internal markers.
+   Lifted out of runItem so resolveAwaiting can make the same call. */
+// deno-lint-ignore no-explicit-any
+function internalHeadersFor(keys: any): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${keys.service_key}`,
+    "apikey": keys.anon_key,
+    "x-internal-job": "1",
+    "x-cron-secret": CRON_SECRET,
+  };
+}
+
 const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50, audit: 25 };
 const TIME_BUDGET_MS = 90_000;   // stop starting new WAVES once elapsed passes this…
 const WAVE_HEADROOM_MS = 55_000; // …minus headroom, so one full parallel wave + persist still fits under the 150s limit
@@ -169,13 +183,7 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
   // Real vault keys for the gateway (the injected ones are stale) + x-cron-secret for
   // the target handler's isInternal check + x-internal-job.
   const keys = await getInternalKeys(service);
-  const internalHeaders = {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${keys.service_key}`,
-    "apikey": keys.anon_key,
-    "x-internal-job": "1",
-    "x-cron-secret": CRON_SECRET,
-  };
+  const internalHeaders = internalHeadersFor(keys);
 
   if (job.job_type === "enrich") {
     // enrich-business needs the lead's fields — fetch the row (also re-checks it
@@ -368,7 +376,35 @@ async function resolveAwaiting(service: any, job: JobRow): Promise<{ done: numbe
     const sts = it.run_id
       ? (byRun.has(it.run_id) ? [byRun.get(it.run_id)!] : [])
       : (byAudit.get(it.audit_id!) ?? []);
-    if (sts.some((x) => x === "complete" || x === "capped")) { it.status = "done"; done++; continue; }
+    if (sts.some((x) => x === "complete" || x === "capped")) {
+      /* ⛔ CLEAN THE NAMES BEFORE ANYTHING READS THEM. The regex extractor that runs at audit time
+         grabs prose fragments — "Located" reached a live report, and HMRC/Xero/QuickBooks reached
+         the frequency list. The SAME names feed {{competitors}} in an Instantly email, so a junk
+         fragment does not just look sloppy on a document, it goes out in a sentence claiming those
+         are the businesses AI names instead of them.
+         Measured 2026-08-08: 1 of 9 pushed leads carried a non-business in its variable, and 20 of
+         181 extracted names for that one lead were junk.
+         The LLM cleaner is proven — Wisbech driving instructors went from 251 junk-laden names to
+         36 real driving schools. ~5.5p a run, which against a document whose entire argument is
+         honest measurement is not a cost worth weighing.
+         ⚠️ Fired HERE, at the moment the run is first known to be finished, so it runs exactly once
+         per run and before the push step or a prospect can read the report.
+         ⚠️ Fully guarded: a failed clean must never fail the audit item. Dirty names are worse than
+         clean ones, but a lost audit is worse than both. */
+      if (it.run_id) {
+        try {
+          const cr = await fetch(`${SUPABASE_URL}/functions/v1/extract-competitors`, {
+            method: "POST",
+            headers: internalHeadersFor(await getInternalKeys(service)),
+            body: JSON.stringify({ runId: it.run_id }),
+          });
+          console.log(`[bulk-jobs] cleaned names for run ${it.run_id}: HTTP ${cr.status}`);
+        } catch (e) {
+          console.error(`[bulk-jobs] name clean failed for run ${it.run_id} (audit kept):`, (e as Error).message);
+        }
+      }
+      it.status = "done"; done++; continue;
+    }
     if (sts.length && sts.every((x) => x === "failed" || x === "cancelled")) {
       it.status = "failed"; it.error = "audit run failed"; failed++; continue;
     }
