@@ -661,10 +661,31 @@ export function buildReportData(
   for (const r of queueRows) {
     if (r.status === 'done' && r.result) {
       done++;
-      for (const e of SCORED_ENGINES) { liveTotal++; if (r.result[e]?.named) liveNamed++; }
+      /* ⛔ COUNT THE ANSWERS THAT EXIST, NOT THE ONES WE ASKED FOR. liveTotal++ used to be
+         unconditional: it assumed both scored engines answered every question, so a single engine
+         timing out would put a denominator on the report that was one higher than the truth —
+         "out of 6 answers" when 5 came back — on the artefact that sells, with nothing to flag it.
+         Measured 2026-08-08 across all 835 completed questions: 1,670 claimed, 1,670 real, so no
+         report ever sent carried a wrong figure. This makes it true by construction rather than
+         true by luck.
+         ⚠️ Twenty lines below, perEngine already counted correctly (`if (r.result?.[engine])`).
+         Two counting rules in one file was the actual fault. */
+      for (const e of SCORED_ENGINES) {
+        if (!r.result[e]) continue;
+        liveTotal++;
+        if (r.result[e]?.named) liveNamed++;
+      }
     }
   }
   if (done === 0) return null;
+
+  /* The two numbers behind the total, so the report can show its working. enginesUsed counts the
+     SCORED engines that actually returned something on at least one question — not the ones asked
+     for, for the same reason the total is now conditional. */
+  const enginesSeen = new Set<string>();
+  for (const r of queueRows) {
+    if (r.status === "done" && r.result) for (const e of SCORED_ENGINES) if (r.result[e]) enginesSeen.add(e);
+  }
 
   const summary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number } } | null)?.summary;
   const named = summary?.named_datapoints ?? liveNamed;
@@ -708,6 +729,8 @@ export function buildReportData(
     businessType: ctx.businessType || '',
     named,
     total,
+    questionsAsked: done,          // questions with a completed answer, not questions requested
+    enginesUsed: enginesSeen.size, // scored engines that actually returned something
     pct: total > 0 ? Math.round((named / total) * 100) : 0,
     perEngine,
     competitors,

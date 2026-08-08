@@ -674,7 +674,12 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       if (r.status === "failed") failedQuestions++;
       if (result) {
         doneQuestions++;
+        /* ⛔ SAME FIX AS src/lib/auditReport.ts, and this is the copy that matters: the report
+           PREFERS this stored summary (`summary?.total_datapoints ?? liveTotal`), so a wrong number
+           here outlives any client fix. Count engine blocks that actually came back, never the ones
+           that were requested. */
         for (const e of engines) {
+          if (!result?.[e]) continue;
           total++;
           if (result?.[e]?.named === true) named++;
         }

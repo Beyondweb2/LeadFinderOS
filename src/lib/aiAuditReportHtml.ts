@@ -56,6 +56,13 @@ export interface AiAuditReportData {
   businessType: string;          // for copy; may be ""
   named: number;                 // AI answers that named the business
   total: number;                 // AI answers tested
+  /* How the total is made up, so the headline can SHOW ITS WORKING rather than assert a number.
+     Paul's call: "3 ways across 2 AI engines, 6 answers in total" is unarguable and sits right
+     beside the 6, where "several ways of asking" was technically true but vaguer than the evidence.
+     Optional so an older stored payload still renders — absent means the line is simply omitted,
+     never a sentence with a hole in it. */
+  questionsAsked?: number;
+  enginesUsed?: number;
   pct: number;                   // 0–100
   perEngine: ReportEngineRow[];
   competitors: string[];         // real brands AI named instead (aggregate)
@@ -394,6 +401,9 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .num-cap{ max-width:24ch; }
   .num-cap .l1{ font-size:17px; font-weight:700; color:var(--ink); line-height:1.1; }
   .num-cap .l2{ font-size:14px; font-weight:400; color:var(--muted); margin-top:3px; }
+  /* The working-out under the total: deliberately smaller and quieter than the total itself. It is
+     there for the prospect who checks, not for the one who skims. */
+  .num-cap .l3{ font-size:12px; font-weight:400; color:var(--muted); margin-top:2px; opacity:.85; }
   .hero-rule{ width:1px; background:var(--line); align-self:stretch; }
   .hero-verdict{ flex:1; display:flex; flex-direction:column; justify-content:center; }
   .hero-verdict .vk{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:700; margin-bottom:8px; }
@@ -586,6 +596,9 @@ export function renderReportHtml(d: AiAuditReportData): string {
         <div class="num-cap">
           <div class="l1">times ${esc(d.businessName)} showed up in AI search</div>
           <div class="l2">out of ${d.total} answers</div>
+          ${d.questionsAsked && d.enginesUsed
+            ? `<div class="l3">${d.questionsAsked} way${d.questionsAsked === 1 ? "" : "s"} of asking &times; ${d.enginesUsed} AI engine${d.enginesUsed === 1 ? "" : "s"}</div>`
+            : ""}
         </div>
       </div>
       <div class="hero-rule"></div>
