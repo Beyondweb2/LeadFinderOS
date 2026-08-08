@@ -10,6 +10,7 @@
    "Replied" was counting booking bots as replies. One definition, both sides, rather than two
    keyword lists drifting apart. Call sites keep importing them from here; nothing else changed. */
 export { isDecline, looksAutomated } from "../../../src/lib/inboundClassify.ts";
+import { isSuppressed } from "./suppression.ts";
 
 /** A real, human-typed text worth reacting to: non-empty, not a media/reaction placeholder
  *  ("[image]", "[reaction]", …) and at least a couple of characters. */
@@ -49,13 +50,15 @@ export async function pitchEverSent(service: any, leadId: string, templateName: 
  *  time, and the drainer/send paths have their own authoritative suppression guards. */
 // deno-lint-ignore no-explicit-any
 export async function phoneSuppressed(service: any, waDigits: string): Promise<boolean> {
-  try {
-    const { data } = await service
-      .from("contact_suppressions").select("id").eq("phone_e164", `+${waDigits}`).limit(1).maybeSingle();
-    return !!data;
-  } catch {
-    return false;
-  }
+  /* ⛔ DELEGATES. This used to be its own contact_suppressions query — one of three inline copies
+     of the same rule, and the one that swallowed a thrown lookup as `false` ("not suppressed"),
+     which is the wrong default for a guard whose false-pass costs you a customer relationship.
+     Kept as a named export so its three callers (whatsapp-inbound, process-ai-audit-queue,
+     process-whatsapp-queue) did not each need editing — but there is now exactly ONE
+     implementation, in _shared/suppression.ts, and it fails closed.
+     ⚠️ Phone-only by signature. A caller that also holds an email or a lead id should call
+     checkSuppressed directly rather than this: this can only match what it is given. */
+  return await isSuppressed(service, { phone: `+${waDigits}` });
 }
 
 /** The UI toggle on whatsapp_outreach_state (id=1). Defensive: if the column doesn't exist yet

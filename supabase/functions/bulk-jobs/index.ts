@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkSuppressed } from "../_shared/suppression.ts";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
@@ -57,7 +58,9 @@ function json(body: unknown, status = 200): Response {
 
 interface JobItem {
   lead_id: string;
-  status: "pending" | "running" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing";
+  /* skipped_suppressed: the lead has said no on some channel. Its own member rather than reusing
+     skipped_existing, so a suppression can never be misread as a dedupe in the job summary. */
+  status: "pending" | "running" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing" | "skipped_suppressed";
   error?: string;
 }
 
@@ -192,11 +195,23 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     // own concurrency/cost caps. So this branch only enqueues — it never fires Apify directly.
     const { data: lead } = await service
       .from("outreach_leads")
-      .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website")
+      .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website, phone, email, is_archived")
       .eq("id", item.lead_id)
       .eq("user_id", job.user_id)
       .maybeSingle();
     if (!lead) return { status: "failed", error: "lead not found" };
+
+    /* ⛔ SUPPRESSED MEANS SUPPRESSED EVERYWHERE, INCLUDING HERE. An audit contacts nobody, so this
+       is not a safety gate in the way instantly-push's is — it is a SPEND gate, and Paul's rule
+       rather than an inference: auditing someone who has said no is paying to prepare a pitch that
+       will never be sent. Measured 2026-08-08 this batch could reach all 142 of them.
+       Deliberately "skipped", not "failed": nothing went wrong, the lead is simply off-limits, and
+       a failed item invites a retry that would re-spend. */
+    const supp = await checkSuppressed(service, { phone: lead.phone, email: lead.email, leadId: lead.id });
+    if (supp.suppressed) {
+      console.log(`[bulk-jobs] audit skipped for suppressed lead ${lead.id} (matched on ${supp.matchedOn})`);
+      return { status: "skipped_suppressed", error: `suppressed (${supp.matchedOn})` };
+    }
 
     // Idempotency: create-ai-audit is NOT idempotent (every call inserts a fresh audit+run). If a
     // prior chunk already created an audit for this lead DURING this job (e.g. the isolate died

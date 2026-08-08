@@ -15,6 +15,7 @@ function ownWebsite(raw: string | null | undefined): string | null {
 }
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, phoneSuppressed, pitchEverSent } from "./auto-reply-rules.ts";
+import { suppress } from "./suppression.ts";
 
 // Inbound WhatsApp message handling — barber replies arriving on the SAME Meta
 // webhook that delivers statuses (Cloud API has ONE callback URL; inbound lives in
@@ -290,7 +291,15 @@ export async function handleInboundMessages(
                 });
                 console.log(`[auto-reply] lead ${leadId}: suppressed — recorded skipped_suppressed.`);
               } else if (isDecline(body)) {
-                // Obvious decline → flag for a human; never auto-send anything.
+                /* Obvious decline → flag for a human; never auto-send anything.
+                   ⛔ AND SUPPRESS, at the earliest moment the no is visible. The send-time path in
+                   process-whatsapp-queue also suppresses, but only for leads that had a pitch
+                   queued — a decline arriving from someone with nothing pending used to leave no
+                   trace outside this flag, which no other channel reads. Suppressing here covers
+                   both. The lead id rides along so the EMAIL channel is covered too. */
+                await suppress(service,
+                  { phone: waPhone, leadId, email: null },
+                  { reason: "replied_no", source: "whatsapp_decline_inbound" });
                 await service.from("whatsapp_auto_replies").insert({
                   lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
                   status: "flagged_decline", reason: body.slice(0, 300), fire_after: new Date().toISOString(),

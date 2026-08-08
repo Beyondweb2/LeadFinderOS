@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkSuppressed } from "../_shared/suppression.ts";
 // WA_DEFAULT_TEMPLATE deliberately NOT imported any more — see the strict resolution below. The
 // export still exists in _shared/whatsapp-send.ts and is now unused by anything; removing it would
 // change a shared module and so force a redeploy of all six importers, which is not worth it for
@@ -188,7 +189,7 @@ Deno.serve(async (req) => {
        pre-emptive — it must be here before anyone enables it, not after. */
     const { data: lead } = await service
       .from("outreach_leads")
-      .select("id, business_name, phone, country, whatsapp_template, sms_attempts, user_id, status")
+      .select("id, business_name, phone, email, country, whatsapp_template, sms_attempts, user_id, status")
       .in("status", ["no_whatsapp", "whatsapp_failed", "sms_queued"])
       .eq("is_archived", false)
       .not("phone", "is", null)
@@ -213,9 +214,10 @@ Deno.serve(async (req) => {
     }
 
     // Cross-channel suppression: if this number opted out (on ANY channel), NEVER send.
-    const { data: suppressed } = await service
-      .from("contact_suppressions").select("id").eq("phone_e164", e164).maybeSingle();
-    if (suppressed) {
+    /* The SHARED check — one implementation, failing closed. This was an inline phone-only lookup
+       that returned "not suppressed" if it threw. */
+    const smsSupp = await checkSuppressed(service, { phone: e164, email: lead.email ?? null, leadId: lead.id });
+    if (smsSupp.suppressed) {
       await service.from("outreach_leads").update({ status: "opted_out", sms_delivery_status: "suppressed", contact_method: null }).eq("id", lead.id);
       return json({ ok: true, skipped: "suppressed", lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }
