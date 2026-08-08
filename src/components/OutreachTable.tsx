@@ -1348,7 +1348,7 @@ export function OutreachTable({
   /* Which statuses the email crawl targets. Defaults to the two that make sense — WhatsApp could
      not reach them, or an opener went unanswered. Held here rather than in the hook so the count on
      the button and the set actually crawled can never disagree. */
-  const [crawlStatuses, setCrawlStatuses] = useState<readonly string[]>(CRAWLABLE_STATUSES_DEFAULT);
+  const [crawlStatuses, setCrawlStatuses] = useState<LeadStatus[]>([...CRAWLABLE_STATUSES_DEFAULT]);
 
   const {
     findEmails,
@@ -1705,7 +1705,7 @@ export function OutreachTable({
                             onChange={(e) => setCrawlStatuses((prev) =>
                               e.target.checked ? [...prev, st] : prev.filter((x) => x !== st))}
                           />
-                          <span className={CRAWLABLE_STATUSES_DEFAULT.includes(st as never) ? 'font-medium' : ''}>{st}</span>
+                          <span className={CRAWLABLE_STATUSES_DEFAULT.includes(st) ? 'font-medium' : ''}>{st}</span>
                         </label>
                       ))}
                       <button
