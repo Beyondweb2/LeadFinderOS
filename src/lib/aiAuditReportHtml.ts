@@ -110,6 +110,25 @@ function article(word: string): "a" | "an" {
   return /^[aeiou]/i.test(String(word ?? "").trim()) ? "an" : "a";
 }
 
+/* ⛔ THE DESIGN COMMENTARY IN THIS FILE MUST NEVER REACH A PROSPECT. Every <!-- --> written inside
+   the template literals below is served verbatim in the report, and 16 of them were: the rationale
+   for the offer block's bullet count ("more than anyone reads at the moment they are deciding to
+   pay"), and — added while fixing this document's own faults — sentences narrating those faults
+   back, e.g. "on a report whose own verdict, two sections above, said the business was named once".
+
+   This is a document a sceptical accountant is invited to check. Someone who opens view-source and
+   finds us discussing how much copy a buyer will tolerate, or listing our own contradictions, has
+   found something far worse than the contradictions themselves.
+
+   ⚠️ STRIPPED AT THE BOUNDARY, NOT DELETED FROM THE SOURCE. The comments are worth keeping — they
+   are why the copy is the way it is. Removing them at the point of render is the only version that
+   also catches the next one somebody writes.
+   ⚠️ Runs on the WHOLE document AFTER assembly, including any comment inside a nested helper's
+   output, and cannot touch conditional comments because this document has none. */
+function stripHtmlComments(html: string): string {
+  return html.replace(/<!--[\s\S]*?-->/g, "");
+}
+
 export function esc(s: string): string {
   return String(s ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -436,7 +455,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   const emailHref = esc(`mailto:${REPORT_CONTACT_EMAIL}?subject=${encodeURIComponent(`AI Visibility - ${d.businessName}`)}`);
   const waHref = esc(`https://wa.me/${REPORT_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
 
-  return `<!doctype html>
+  return stripHtmlComments(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -808,6 +827,6 @@ ${d.showFounderOffer === true ? founderOfferSection() : ""}
     </footer>
   </div>
 </body>
-</html>`;
+</html>`);
 }
 

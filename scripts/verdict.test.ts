@@ -108,3 +108,22 @@ ok(zeroNamed.includes("Why you&rsquo;re not in the answer"), "never named -> the
 ok(zeroNamed.includes("Being absent is not bad luck"), "  and its lead is kept too");
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
+
+console.log("\n── ⛔ NO DESIGN COMMENTARY REACHES THE PROSPECT ──");
+/* 16 HTML comments were being served in a live report, including the offer block's rationale
+   ("more than anyone reads at the moment they are deciding to pay") and, added while fixing this
+   document's own faults, sentences narrating those faults back. A sceptical accountant is invited
+   to check this document; finding that in view-source is worse than the faults were. */
+const rendered = htmlFor(1, 6, "accountant");
+const comments = [...rendered.matchAll(/<!--([\s\S]*?)-->/g)].map((m) => m[1]);
+ok(comments.length === 0, `no HTML comments in the served document (found ${comments.length})`);
+for (const phrase of [
+  "more than anyone reads at the moment they are deciding to pay",
+  "said the business was named once",
+  "Here's what's holding it back",
+]) ok(!rendered.includes(phrase), `  internal note absent: ${JSON.stringify(phrase.slice(0, 42))}`);
+/* And the document is still intact — stripping must not have eaten the content around them. */
+ok(rendered.includes("<!doctype html>") && rendered.trimEnd().endsWith("</html>"), "the document still opens and closes correctly");
+ok(rendered.includes("class=\"src\"") || rendered.includes("offer-gets"), "  and still carries its real sections");
+
+console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
