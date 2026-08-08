@@ -314,3 +314,35 @@ export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'remove_if_no_reply', label: 'Remove if no reply' },
   { value: 'none', label: 'Set Action' },
 ];
+
+/* ⛔ WHICH STATUSES MAY BE CRAWLED, AND WHY THE DEFAULT IS THESE TWO.
+   The crawl itself contacts nobody — but it MANUFACTURES THE ABILITY TO CONTACT, and that is what
+   makes it worth a filter. Before cross-channel suppression existed, running it over everything
+   would have handed an email address to 79 people who had already said no.
+     no_whatsapp_needs_sms  WhatsApp could not reach them, so email is the only channel left
+     contacted              an opener went out and they never replied — a fair second attempt
+   ⚠️ THE SUPPRESSION LIST IS THE REAL GUARD, NOT THIS. _shared/suppression.ts is checked at SEND
+   time by instantly-push, so a suppressed lead cannot be emailed even if it is crawled. This filter
+   is a convenience — it stops you paying attention to rows you were never going to mail — and it
+   must never be mistaken for the safety net, or someone will widen it and assume they are still
+   protected. */
+/* ⛔ 'contacted' WAS NOT A STATUS AND MATCHED NOTHING. It was here because Paul described the
+   population as "contacted — I sent an opener and they never replied" and I used his words as a
+   literal value without checking one existed. The filter silently targeted 289 leads instead of
+   ~446: no error, a real count on the button, and 157 leads left out of email entirely.
+   The four below are the real values that mean "WhatsApp is not the channel for this lead":
+     no_whatsapp_needs_sms  not a mobile — cannot take WhatsApp OR SMS (509)
+     no_whatsapp            a real mobile with no WhatsApp account — SMS still works (53)
+     initial_contact        opener sent, no reply (166)
+     report_sent            report sent, no reply (93)
+   ⚠️ Typed as LeadStatus[], not string[] — that plus the suite is what makes a value that does not
+   exist fail at build rather than quietly narrowing a campaign. */
+export const CRAWLABLE_STATUSES_DEFAULT: LeadStatus[] =
+  ['no_whatsapp_needs_sms', 'no_whatsapp', 'initial_contact', 'report_sent'];
+
+/** Statuses that have said no. Offered in the picker only so it is VISIBLE that they are excluded —
+ *  selecting one still cannot cause an email, because the send path checks suppression. */
+export const CRAWL_STATUS_OPTIONS: LeadStatus[] = [
+  'no_whatsapp_needs_sms', 'no_whatsapp', 'initial_contact', 'report_sent',
+  'not_contacted', 'queued', 'replied', 'interested',
+];

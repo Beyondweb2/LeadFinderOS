@@ -67,14 +67,22 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Not Int.',
     className: 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))] border-transparent font-semibold',
   },
+  /* ⛔ THE TWO no_whatsapp STATUSES ARE DIFFERENT THINGS AND MUST READ THAT WAY. "No WA" told the
+     operator nothing, and next to "Needs SMS" the pair looked like one concept under two names.
+     no_whatsapp        = a REAL MOBILE with no WhatsApp account  -> SMS still works
+     no_whatsapp_needs_sms = not a mobile at all                  -> neither WhatsApp nor SMS works
+     process-sms-queue targets the first and explicitly excludes the second, so confusing them
+     costs you a reachable channel. */
   no_whatsapp: {
-    label: 'No WhatsApp',
-    shortLabel: 'No WA',
+    label: 'Mobile, no WhatsApp',
+    shortLabel: 'Mobile, no WA',
     className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
   },
   no_whatsapp_needs_sms: {
-    label: 'Not Mobile — Needs SMS',
-    shortLabel: 'Needs SMS',
+    /* "Needs SMS" read as an instruction to send one. It is a landline: SMS is impossible too, and
+       process-sms-queue skips it for exactly that reason. Label only — no data change. */
+    label: 'Landline — no WhatsApp or SMS',
+    shortLabel: 'Landline',
     className: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent font-semibold',
   },
   completed: {

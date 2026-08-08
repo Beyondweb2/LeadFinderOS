@@ -1,7 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import type { OutreachLead } from '@/types/outreach';
+import type { OutreachLead, LeadStatus } from '@/types/outreach';
+/* Re-exported so existing call sites keep importing them from here; they LIVE in types/outreach
+   because a Deno test cannot resolve this file's '@/hooks/use-toast' import — and a constant no
+   test can reach is the constant that goes wrong. */
+export { CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/types/outreach';
+import { CRAWLABLE_STATUSES_DEFAULT } from '@/types/outreach';
 
 /**
  * Bulk "Find emails" for the Outreach CRM — the Outreach-side twin of useFindEmails
@@ -21,31 +26,11 @@ import type { OutreachLead } from '@/types/outreach';
 const CONCURRENCY = 10;   // website crawl is plain HTTP — safe to parallelise.
 const MAX_PER_RUN = 200;  // bound time per run.
 
-/* ⛔ WHICH STATUSES MAY BE CRAWLED, AND WHY THE DEFAULT IS THESE TWO.
-   The crawl itself contacts nobody — but it MANUFACTURES THE ABILITY TO CONTACT, and that is what
-   makes it worth a filter. Before cross-channel suppression existed, running it over everything
-   would have handed an email address to 79 people who had already said no.
-     no_whatsapp_needs_sms  WhatsApp could not reach them, so email is the only channel left
-     contacted              an opener went out and they never replied — a fair second attempt
-   ⚠️ THE SUPPRESSION LIST IS THE REAL GUARD, NOT THIS. _shared/suppression.ts is checked at SEND
-   time by instantly-push, so a suppressed lead cannot be emailed even if it is crawled. This filter
-   is a convenience — it stops you paying attention to rows you were never going to mail — and it
-   must never be mistaken for the safety net, or someone will widen it and assume they are still
-   protected. */
-export const CRAWLABLE_STATUSES_DEFAULT = ['no_whatsapp_needs_sms', 'contacted'] as const;
-
-/** Statuses that have said no. Offered in the picker only so it is VISIBLE that they are excluded —
- *  selecting one still cannot cause an email, because the send path checks suppression. */
-export const CRAWL_STATUS_OPTIONS = [
-  'no_whatsapp_needs_sms', 'contacted', 'not_contacted', 'queued',
-  'no_whatsapp', 'initial_contact', 'replied', 'interested', 'report_sent',
-] as const;
-
 export function useOutreachFindEmails(
   leads: OutreachLead[],
   updateLead: (leadId: string, data: Partial<OutreachLead>) => Promise<unknown>,
   /** Which lead statuses to crawl. Defaults to the two that make sense; the caller can widen it. */
-  statuses: readonly string[] = CRAWLABLE_STATUSES_DEFAULT,
+  statuses: readonly LeadStatus[] = CRAWLABLE_STATUSES_DEFAULT,
 ) {
   const { toast } = useToast();
   const [finding, setFinding] = useState(false);
@@ -60,7 +45,7 @@ export function useOutreachFindEmails(
     () => leads.filter((l) =>
       !!l.website?.trim() && !l.email?.trim()
       && !l.is_archived
-      && allowed.has(String(l.status ?? ''))),
+      && allowed.has(l.status as LeadStatus)),
     [leads, allowed],
   );
 
