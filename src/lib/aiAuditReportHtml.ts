@@ -95,6 +95,21 @@ export interface AiAuditReportData {
      inverted thresholds, citation-source analysis - is separate, scoped work. */
 }
 
+/* ⛔ "1 times ... showed up in AI search" was on a live report. Every count in this document is
+   interpolated, so every one of them needs its noun agreeing — there is no template engine doing it.
+   Kept as one helper so a new count cannot quietly reintroduce the fault. */
+function plural(n: number, one: string, many = `${one}s`): string {
+  return n === 1 ? one : many;
+}
+
+/* ⛔ "looking for a accountant". The trade word comes from the lead, so the article cannot be
+   hardcoded. Vowel-initial is the rule that covers accountant/electrician/optician; the exceptions
+   English has (a university, an hour) do not occur in trade nouns, and inventing a list for them
+   would be more likely to introduce a bug than fix one. */
+function article(word: string): "a" | "an" {
+  return /^[aeiou]/i.test(String(word ?? "").trim()) ? "an" : "a";
+}
+
 export function esc(s: string): string {
   return String(s ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -666,15 +681,15 @@ export function renderReportHtml(d: AiAuditReportData): string {
       </svg>
     </header>
 
-    <div class="explainer">We asked AI the kinds of questions customers ask when they&rsquo;re looking for a <b>${esc(type)}</b>, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
+    <div class="explainer">We asked AI the kinds of questions customers ask when they&rsquo;re looking for ${article(type)} <b>${esc(type)}</b>, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
 
     <!-- HERO -->
     <div class="hero">
       <div class="hero-num">
         <span class="num ${v.band}">${d.named}</span>
         <div class="num-cap">
-          <div class="l1">times ${esc(d.businessName)} showed up in AI search</div>
-          <div class="l2">out of ${d.total} answers</div>
+          <div class="l1">${plural(d.named, "time", "times")} ${esc(d.businessName)} showed up in AI search</div>
+          <div class="l2">out of ${d.total} ${plural(d.total, "answer")}</div>
           ${d.questionsAsked && d.enginesUsed
             ? `<div class="l3">${d.questionsAsked} way${d.questionsAsked === 1 ? "" : "s"} of asking &times; ${d.enginesUsed} AI engine${d.enginesUsed === 1 ? "" : "s"}</div>`
             : ""}
@@ -721,9 +736,16 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
            do" while the three steps below carried the deliverables; once those became three causal
            claims (it has to exist, be readable, agree with itself) that title described the offer
            block instead. "What's included" is the inventory, a screen below. -->
-      <div class="sec-title">Why you&rsquo;re not in the answer</div>
+      <!-- ⛔ CONDITIONAL ON THE BAND, like the SEO lead and the verdict. This said "Why you're not
+           in the answer" and opened "Being absent is not bad luck" on a report whose own verdict,
+           two sections above, said the business was named once. Three places in one document
+           disagreeing about whether the business exists in AI answers is the same fault three times,
+           and it is the one a sceptical reader notices first. -->
+      <div class="sec-title">${d.named > 0 ? "Why you&rsquo;re named so rarely" : "Why you&rsquo;re not in the answer"}</div>
       <div class="dowe-panel">
-        <p class="dowe-lead">Being absent is not bad luck. It comes down to <span class="hl">three things</span>, and all three are fixable.</p>
+        <p class="dowe-lead">${d.named > 0
+        ? "Being named occasionally rather than consistently is not bad luck."
+        : "Being absent is not bad luck."} It comes down to <span class="hl">three things</span>, and all three are fixable.</p>
         <!-- ⛔ THREE IDEAS, NO QUANTITIES. THIS SECTION IS THE ARGUMENT, NOT THE INVENTORY.
              It used to carry the deliverables too - "a page for each service you do, in your town",
              "we mark up your details" - which is word for word what "What's included" says in the
