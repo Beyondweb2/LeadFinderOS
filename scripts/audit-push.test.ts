@@ -188,4 +188,51 @@ ok(bulkJobProgress({ ...base, job_type: "audit_and_push" }).doneWord === "pushed
   "'done' on this job type is reported as 'pushed' — it is what the count means");
 ok(bulkJobProgress({ ...base, job_type: "audit", total: 0 }).pct === 0, "a zero-total job is 0%, not NaN");
 
+
+/* ── THE CAP, AND THE COST THAT MUST MATCH IT ────────────────────────────────────────────────
+   ⛔ THE BUG. The confirm read "Push 25 leads, auditing 138 first (~$13.97)" next to "113 over the
+   25-lead cap — this run takes 25". It quoted the cost of auditing 138 for a job that would audit
+   25: a 5x overstatement on the single number that decides whether the button gets pressed. Paul's
+   words: "A confirm that overstates by 5x is the kind of thing that makes me not press a button I
+   should press."
+   The cause was two different questions sharing one answer — the bucket says what a lead NEEDS, the
+   cap says what THIS RUN can afford — so will_run now exists alongside bucket, and the cost, the
+   counts and the job's items are all read off it. Restated from triageForPush below. */
+console.log("\n── ⛔ THE COST MUST DESCRIBE THE RUN, NOT THE SELECTION ──");
+const AUDIT_USD = 0.0104, CLEAN_USD = 0.070;
+function plan(buckets: TriageBucket[], cap: number) {
+  const rank = (b: TriageBucket) => (b === "push_now" ? 0 : b === "needs_audit" ? 1 : 2);
+  const ranked = buckets.map((b, i) => ({ b, i })).sort((x, y) => rank(x.b) - rank(y.b) || x.i - y.i);
+  let room = cap;
+  const run = new Set<number>();
+  for (const { b, i } of ranked) { if (b === "cannot") continue; if (room <= 0) break; run.add(i); room--; }
+  const audits = buckets.filter((b, i) => run.has(i) && b === "needs_audit").length;
+  return { audits, push: run.size, cost: audits * (3 * AUDIT_USD + CLEAN_USD) };
+}
+type TriageBucket = "push_now" | "needs_audit" | "cannot";
+
+/* Paul's actual selection: 138 needing an audit, 40 that cannot, cap 25. */
+const real = plan([...Array(138).fill("needs_audit"), ...Array(40).fill("cannot")] as TriageBucket[], 25);
+ok(real.push === 25, `pushes 25, not 138 (got ${real.push})`);
+ok(real.audits === 25, `audits 25, not 138 (got ${real.audits})`);
+ok(Math.abs(real.cost - 2.53) < 0.01, `costs ~$2.53, not ~$13.97 (got $${real.cost.toFixed(2)})`);
+
+/* ⛔ ALREADY-AUDITED LEADS TAKE THE CAP FIRST — they cost nothing and go out in this run's upload.
+   The old code sliced both buckets together in database order, so a run could spend its entire cap
+   auditing while ready-to-send leads waited for a second pass. */
+const mixed = plan([...Array(30).fill("needs_audit"), ...Array(10).fill("push_now")] as TriageBucket[], 25);
+ok(mixed.push === 25, "a 30+10 selection still pushes 25");
+ok(mixed.audits === 15, `the 10 free ones go first, so only 15 audits are bought (got ${mixed.audits})`);
+ok(Math.abs(mixed.cost - 1.52) < 0.01, `and the cost follows: $${mixed.cost.toFixed(2)}`);
+
+/* Under the cap, everything runs and the cost is the whole selection's. */
+const small = plan(["push_now", "needs_audit", "needs_audit", "cannot"] as TriageBucket[], 25);
+ok(small.push === 3 && small.audits === 2, "under the cap: 3 pushed, 2 audited");
+/* ⛔ 'cannot' NEVER CONSUMES THE CAP. A selection of 40 where 20 are already in Instantly is a
+   20-item job, not a refusal — and never a job that spends 20 of its 25 slots on leads it skips. */
+const heavy = plan([...Array(100).fill("cannot"), ...Array(10).fill("needs_audit")] as TriageBucket[], 25);
+ok(heavy.push === 10 && heavy.audits === 10, "100 'cannot' rows do not eat the cap — all 10 real ones run");
+ok(plan(["cannot", "cannot"] as TriageBucket[], 25).cost === 0, "nothing actionable costs nothing");
+ok(plan([] as TriageBucket[], 25).push === 0, "an empty selection runs nothing");
+
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");

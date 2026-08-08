@@ -28,18 +28,27 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Bounced',
     className: 'bg-red-700 text-white border-transparent font-semibold',
   },
+  /* ⛔ THESE TWO USED TO RENDER THE SAME WORDS. Both said "No WhatsApp" and differed only by
+     colour — grey here, cyan below — which is exactly the report: "I filtered by no WhatsApp and
+     the rows show a GREY pill, but the no-WhatsApp pill is light blue." A colour is not a label.
+     They are different populations and the words now say so:
+       no_whatsapp            a real MOBILE with no WhatsApp account -> SMS still works (53)
+       no_whatsapp_needs_sms  not a mobile at all -> neither WhatsApp nor SMS works (509)
+     process-sms-queue targets the first and explicitly excludes the second, so reading one as the
+     other costs a reachable channel. */
   no_whatsapp: {
-    label: 'No WhatsApp',
-    shortLabel: 'No WA',
+    label: 'Mobile, no WhatsApp',
+    shortLabel: 'Mobile, no WA',
     className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
   },
   no_whatsapp_needs_sms: {
-    // Display reads "No WhatsApp" (short → single line, same height as the WhatsApp/
-    // Queued pills). Kept distinct cyan to still signal the not-mobile/needs-SMS state.
-    // Only the label text differs from status 'no_whatsapp'; status value + SMS routing
-    // are unchanged. shortLabel stays "Needs SMS" for compact views that need the distinction.
-    label: 'No WhatsApp',
-    shortLabel: 'Needs SMS',
+    /* The old comment said the display "reads No WhatsApp ... kept distinct cyan to still signal
+       the not-mobile state". That was the whole fault written down as a decision: the distinction
+       was carried entirely by a colour, so the two pills were indistinguishable in words. And
+       "Needs SMS" read as an instruction to send one — it is a landline, SMS cannot arrive, and
+       process-sms-queue skips it for that reason. Labels only; status value and routing unchanged. */
+    label: 'Landline — no WhatsApp or SMS',
+    shortLabel: 'Landline',
     className: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent font-semibold whitespace-nowrap',
   },
   whatsapp_failed: {

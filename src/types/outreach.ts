@@ -202,8 +202,11 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'price_given', label: 'Price Given' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
-  { value: 'no_whatsapp', label: 'No WhatsApp' },
-  { value: 'no_whatsapp_needs_sms', label: 'Not Mobile — Needs SMS' },
+  /* ⚠️ THE FILTER LIST IS A THIRD LABEL SOURCE, and it is the one the operator reads BEFORE
+     choosing. It must match the pill exactly or the filter and the rows describe the same status in
+     different words — which is how "I filtered by no WhatsApp and got grey pills" happened. */
+  { value: 'no_whatsapp', label: 'Mobile, no WhatsApp' },
+  { value: 'no_whatsapp_needs_sms', label: 'Landline — no WhatsApp or SMS' },
   { value: 'whatsapp_failed', label: 'WhatsApp Failed' },
   { value: 'bounced', label: 'Bounced' },
   { value: 'payment_received', label: 'Paid' },
