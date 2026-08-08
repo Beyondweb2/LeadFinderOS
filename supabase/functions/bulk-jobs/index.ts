@@ -71,8 +71,14 @@ interface JobItem {
      success. */
   status: "pending" | "running" | "awaiting_audit" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing" | "skipped_suppressed";
   error?: string;
-  /** Set with awaiting_audit so the re-check knows which run to look at. */
+  /* Set with awaiting_audit so the re-check knows what to look at.
+     ⛔ run_id IS THE ONE THAT MATTERS, and audit_id alone was a bug I shipped and then watched fail
+     in production within the hour. Platinum Accounting already had a CAPPED run from an earlier
+     attempt; create-ai-audit added run #2 to the SAME audit; resolveAwaiting looked up runs by
+     audit_id, saw the old capped one, and marked the item done while run #2 was still pending.
+     A sibling run must never satisfy the check for a different attempt. */
   audit_id?: string;
+  run_id?: string;
 }
 
 /** How long an enqueued audit may take before the item is called failed. Measured audits finish in
@@ -159,7 +165,7 @@ async function getInternalKeys(service: any): Promise<{ service_key: string; ano
 
 /** Run ONE item through the existing edge function (internal-call branch). */
 // deno-lint-ignore no-explicit-any
-async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ status: JobItem["status"]; error?: string; capHit?: boolean; audit_id?: string }> {
+async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ status: JobItem["status"]; error?: string; capHit?: boolean; audit_id?: string; run_id?: string }> {
   // Real vault keys for the gateway (the injected ones are stale) + x-cron-secret for
   // the target handler's isInternal check + x-internal-job.
   const keys = await getInternalKeys(service);
@@ -288,7 +294,13 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     /* ⛔ NOT done — awaiting_audit. create-ai-audit returning ok means the QUESTIONS EXIST, not that
        they have been answered; the answering happens later on the process-ai-audit-queue cron. See
        the JobItem comment: claiming done here is what made two pushes return 0. */
-    if (data?.ok && data?.audit_id) return { status: "awaiting_audit", audit_id: String(data.audit_id) };
+    if (data?.ok && data?.audit_id) {
+      return {
+        status: "awaiting_audit",
+        audit_id: String(data.audit_id),
+        run_id: data.run_id ? String(data.run_id) : undefined,
+      };
+    }
     return { status: "failed", error: String(data?.error ?? `HTTP ${res.status}`).slice(0, 200) };
   }
 
@@ -327,20 +339,35 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
    audit and re-spend on the next attempt. */
 // deno-lint-ignore no-explicit-any
 async function resolveAwaiting(service: any, job: JobRow): Promise<{ done: number; failed: number }> {
-  const waiting = job.items.filter((it) => it.status === "awaiting_audit" && it.audit_id);
+  const waiting = job.items.filter((it) => it.status === "awaiting_audit" && (it.run_id || it.audit_id));
   if (!waiting.length) return { done: 0, failed: 0 };
-  const ids = [...new Set(waiting.map((it) => it.audit_id!))];
-  const { data: runs } = await service
-    .from("ai_audit_runs").select("audit_id, status").in("audit_id", ids);
+
+  /* Look up THIS attempt's run wherever we have its id. Falling back to audit_id is only for items
+     enqueued before run_id was stored, and even then the run must be NEWER than the job — otherwise
+     a pre-existing capped run answers for an attempt that has not finished. */
+  const runIds = [...new Set(waiting.map((it) => it.run_id).filter(Boolean))] as string[];
+  const auditIds = [...new Set(waiting.filter((it) => !it.run_id).map((it) => it.audit_id!))];
+  const byRun = new Map<string, string>();
   const byAudit = new Map<string, string[]>();
-  for (const r of (runs ?? []) as Array<{ audit_id: string; status: string }>) {
-    if (!byAudit.has(r.audit_id)) byAudit.set(r.audit_id, []);
-    byAudit.get(r.audit_id)!.push(r.status);
+  if (runIds.length) {
+    const { data } = await service.from("ai_audit_runs").select("id, status").in("id", runIds);
+    for (const r of (data ?? []) as Array<{ id: string; status: string }>) byRun.set(r.id, r.status);
+  }
+  if (auditIds.length) {
+    const { data } = await service.from("ai_audit_runs")
+      .select("audit_id, status, created_at").in("audit_id", auditIds)
+      .gte("created_at", job.created_at);
+    for (const r of (data ?? []) as Array<{ audit_id: string; status: string }>) {
+      if (!byAudit.has(r.audit_id)) byAudit.set(r.audit_id, []);
+      byAudit.get(r.audit_id)!.push(r.status);
+    }
   }
   const ageMs = Date.now() - new Date(job.created_at ?? Date.now()).getTime();
   let done = 0, failed = 0;
   for (const it of waiting) {
-    const sts = byAudit.get(it.audit_id!) ?? [];
+    const sts = it.run_id
+      ? (byRun.has(it.run_id) ? [byRun.get(it.run_id)!] : [])
+      : (byAudit.get(it.audit_id!) ?? []);
     if (sts.some((x) => x === "complete" || x === "capped")) { it.status = "done"; done++; continue; }
     if (sts.length && sts.every((x) => x === "failed" || x === "cancelled")) {
       it.status = "failed"; it.error = "audit run failed"; failed++; continue;
@@ -440,6 +467,7 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
         it.status = r.status;
         if (r.error) it.error = r.error;
         if (r.audit_id) it.audit_id = r.audit_id;
+        if (r.run_id) it.run_id = r.run_id;
         /* awaiting_audit counts as NOTHING yet — not done, not failed, not skipped. It is resolved
            on a later chunk by resolveAwaiting, which increments the right counter then. Counting it
            here is precisely the bug: the totals would read complete while the work was outstanding. */
