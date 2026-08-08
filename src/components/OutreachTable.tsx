@@ -180,7 +180,7 @@ interface OutreachTableProps {
   onLaunchConsumed?: () => void;
   /** Create a server-side bulk job (enrich / site_gen / audit) for the given lead ids.
    *  Runs in the bulk-jobs edge function — survives leaving the page. */
-  onBulkJob?: (type: 'enrich' | 'site_gen' | 'audit', leadIds: string[], params?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
+  onBulkJob?: (type: 'enrich' | 'site_gen' | 'audit' | 'audit_and_push', leadIds: string[], params?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
   /** True while a bulk job is queued/running (or being created) — disables new ones. */
   bulkJobActive?: boolean;
   /** Bumped when a site-gen bulk job completes → re-read generated_sites. */
@@ -2590,6 +2590,8 @@ export function OutreachTable({
         onOpenChange={setPushInstantlyOpen}
         leadIds={Array.from(selectedIds)}
         onPushed={() => { onRefreshLeads?.(); setSelectedIds(new Set()); }}
+        onBulkJob={onBulkJob}
+        bulkJobActive={bulkJobActive}
       />
 
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}

@@ -10,6 +10,7 @@ import { useOutreach } from '@/hooks/useOutreach';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { useAuth } from '@/hooks/useAuth';
 import { useBulkJobs } from '@/hooks/useBulkJobs';
+import { bulkJobProgress } from '@/lib/bulkJobProgress';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, X } from 'lucide-react';
@@ -223,30 +224,42 @@ const Outreach = () => {
       {/* Server-side bulk job progress — lives in bulk_jobs, so it survives
           leaving the page/browser. Shows a live job, or a finished-while-away
           summary (last 10 min) on return. */}
-      {activeJob && (
-        <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
-          <span className="text-muted-foreground">
-            Bulk {activeJob.job_type === 'enrich' ? 'enrich' : 'site generation'} running server-side:{' '}
-            <span className="font-medium text-foreground">
-              {activeJob.done_count + activeJob.failed_count + activeJob.skipped_count}/{activeJob.total}
-            </span>{' '}
-            processed
-            {activeJob.failed_count > 0 && <> · {activeJob.failed_count} failed</>}
-            {' '}— you can leave this page, it keeps running.
-          </span>
-          <Button variant="ghost" size="sm" className="ml-auto h-7 shrink-0 text-xs" onClick={() => cancelJob(activeJob.id)}>
-            Cancel
-          </Button>
-        </div>
-      )}
+      {activeJob && (() => {
+        /* ⚠️ LABEL AND PHASE COME FROM bulkJobProgress, not from an inline ternary. The old line
+           branched on 'enrich' and called EVERYTHING ELSE "site generation", so every bulk audit
+           announced itself as the wrong job. See the header of src/lib/bulkJobProgress.ts. */
+        const p = bulkJobProgress(activeJob);
+        return (
+          <div className="space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+              <span className="text-muted-foreground">
+                {p.label} running server-side{p.phase && <>, <span className="text-foreground">{p.phase}</span></>}:{' '}
+                <span className="font-medium text-foreground">{p.settled}/{p.total}</span> processed
+                {activeJob.failed_count > 0 && <> · {activeJob.failed_count} failed</>}
+                {' '}— you can leave this page, it keeps running.
+              </span>
+              <Button variant="ghost" size="sm" className="ml-auto h-7 shrink-0 text-xs" onClick={() => cancelJob(activeJob.id)}>
+                Cancel
+              </Button>
+            </div>
+            {/* A real bar. Phase A can sit on one number for nine minutes; a fraction alone reads as
+                a hang, and the operator's only recourse then is to press something. */}
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-primary/15">
+              <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${p.pct}%` }} />
+            </div>
+          </div>
+        );
+      })()}
       {!activeJob && recentJob && (
         <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
           <CheckCircle2 className={`h-4 w-4 shrink-0 ${recentJob.status === 'done' ? 'text-green-500' : 'text-muted-foreground'}`} />
           <span className="text-muted-foreground">
-            Bulk {recentJob.job_type === 'enrich' ? 'enrich' : 'site generation'}{' '}
+            {bulkJobProgress(recentJob).label}{' '}
             {recentJob.status === 'done' ? 'finished' : recentJob.status}:{' '}
-            <span className="font-medium text-foreground">{recentJob.done_count} done</span>
+            <span className="font-medium text-foreground">
+              {recentJob.done_count} {bulkJobProgress(recentJob).doneWord}
+            </span>
             {recentJob.failed_count > 0 && <> · {recentJob.failed_count} failed</>}
             {recentJob.skipped_count > 0 && <> · {recentJob.skipped_count} skipped</>}
             {recentJob.error && <> · {recentJob.error}</>}

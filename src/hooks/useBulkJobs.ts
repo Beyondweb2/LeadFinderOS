@@ -14,7 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 // bulk_jobs isn't in the generated types yet — RLS still enforces access.
 const sb = supabase as unknown as { from: (t: string) => any; functions: typeof supabase.functions };
 
-export type BulkJobType = 'enrich' | 'site_gen' | 'audit';
+export type BulkJobType = 'enrich' | 'site_gen' | 'audit' | 'audit_and_push';
 
 export interface BulkJob {
   id: string;
@@ -27,8 +27,11 @@ export interface BulkJob {
   error: string | null;
   created_at: string;
   updated_at: string;
-  /** Per-item state (drives per-row spinners). 'running' = currently generating. */
-  items?: { lead_id: string; status: string }[];
+  /** Per-item state (drives per-row spinners). 'running' = currently generating.
+   *  `phase` is audit_and_push only: 'audit' while the lead still needs measuring, 'push' once it
+   *  is ready to send. It is what lets the progress line say WHICH half is running rather than a
+   *  bare fraction that stalls for nine minutes with no explanation. */
+  items?: { lead_id: string; status: string; phase?: 'audit' | 'push' }[];
 }
 
 const RECENT_WINDOW_MS = 10 * 60 * 1000;

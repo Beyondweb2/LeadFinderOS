@@ -47,7 +47,11 @@ function internalHeadersFor(keys: any): Record<string, string> {
   };
 }
 
-const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50, audit: 25 };
+/* ⚠️ audit_and_push's cap counts ACTIONABLE items only — the ones that will be audited or pushed.
+   Leads triaged "cannot" are reported and carried on the job as already-terminal rows, but they are
+   not work and must not consume the budget: a selection of 40 where 20 are already in Instantly is a
+   20-item job, not a refusal. */
+const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50, audit: 25, audit_and_push: 25 };
 const TIME_BUDGET_MS = 90_000;   // stop starting new WAVES once elapsed passes this…
 const WAVE_HEADROOM_MS = 55_000; // …minus headroom, so one full parallel wave + persist still fits under the 150s limit
 const WAVE_SIZE = 3;             // site_gen bounded concurrency (enrich stays 1-at-a-time). Lowered 5->3: 5 concurrent 9a Apify Maps scrapes on the one shared token overran its concurrency limit → 4 of 5 got 429/contention and baked empty photo pools; 3 matches the proven-reliable per-row cap. Wave still runs in parallel (duration ~slowest generate, unchanged), so no time-budget regression.
@@ -83,8 +87,15 @@ interface JobItem {
      A job is not finished while any item is awaiting_audit; the chunk releases back to 'queued' and
      the next sweep re-checks. Non-terminal by construction, so nothing downstream can read it as
      success. */
-  status: "pending" | "running" | "awaiting_audit" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing" | "skipped_suppressed";
+  status: "pending" | "running" | "awaiting_audit" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing" | "skipped_suppressed" | "pushed" | "skipped_ineligible";
   error?: string;
+  /* ── audit_and_push ONLY ─────────────────────────────────────────────────────────────
+     Which half of the job this item is in. Set at CREATION from the triage, so the split between
+     "needs auditing first" and "ready to push" is a decision the operator saw and agreed to, not
+     something the runner works out later and could work out differently on a retry.
+     An item that finishes phase A does not become `done` — it returns to `pending` in phase `push`,
+     which is what makes "audited but never pushed" an impossible state rather than a likely one. */
+  phase?: "audit" | "push";
   /* Set with awaiting_audit so the re-check knows what to look at.
      ⛔ run_id IS THE ONE THAT MATTERS, and audit_id alone was a bug I shipped and then watched fail
      in production within the hour. Platinum Accounting already had a CAPPED run from an earlier
@@ -103,7 +114,7 @@ const AUDIT_WAIT_MAX_MS = 45 * 60 * 1000;
 interface JobRow {
   id: string;
   user_id: string;
-  job_type: "enrich" | "site_gen" | "audit";
+  job_type: "enrich" | "site_gen" | "audit" | "audit_and_push";
   status: string;
   items: JobItem[];
   total: number;
@@ -112,6 +123,95 @@ interface JobRow {
   skipped_count: number;
   params: Record<string, unknown> | null;
   created_at: string; // used by the audit branch's idempotency guard (skip if this job already made one)
+}
+
+/* ══ TRIAGE — WHICH LEADS NEED WHAT, DECIDED ONCE ═══════════════════════════════════════════
+   ⛔ ONE IMPLEMENTATION, CALLED BY BOTH THE PREVIEW AND THE CREATE. The operator agrees to a
+   confirm screen; the job must then do exactly what that screen said. A second copy of these rules
+   in the dialog would drift from this one the first time either changed, and the symptom would be a
+   job quietly auditing someone the confirm listed as "cannot" — i.e. spending money the operator
+   was shown he would not spend.
+
+   ⛔ THE LADDER ENDS IN "cannot", AND push_now REQUIRES A POSITIVE. Every exclusion is enumerated
+   before anything is allowed through, and the bucket that spends nothing and sends nothing is where
+   an unestablished lead lands. This is the absent-value rule CLAUDE.md records six instances of: a
+   lead whose state we cannot establish must never fall through into the bucket that emails.
+
+   ⚠️ ALREADY IN INSTANTLY MEANS NO AUDIT AND NO PUSH — Paul's rule, and the expensive one to get
+   wrong. Instantly already holds them; re-auditing is money spent preparing a pitch already sent. */
+type TriageBucket = "push_now" | "needs_audit" | "cannot";
+
+interface TriageRow {
+  lead_id: string;
+  business_name: string;
+  bucket: TriageBucket;
+  /** Empty for the two working buckets; on `cannot` it is what goes on screen, verbatim. */
+  reason: string;
+}
+
+// deno-lint-ignore no-explicit-any
+async function triageForPush(service: any, userId: string, leadIds: string[]): Promise<TriageRow[]> {
+  if (!leadIds.length) return [];
+  const { data: rows } = await service
+    .from("outreach_leads")
+    .select("id, business_name, email, phone, instantly_pushed_at, search_keyword, category, search_location, address")
+    .eq("user_id", userId)
+    .in("id", leadIds);
+  const leads = (rows ?? []) as Array<Record<string, string | null>>;
+  if (!leads.length) return [];
+
+  /* WHICH LEADS ALREADY HAVE AN ANSWERED AUDIT. Two reads rather than a join, because the
+     relationship name is not guaranteed and a wrong embed returns rows with the field silently
+     absent — which would read as "nobody has an audit" and put the whole selection into needs_audit.
+     ⚠️ `capped` counts as answered, exactly as resolveAwaiting and the audit-reply resolver treat
+     it: a capped run has real answers, just fewer than asked for. */
+  const { data: auditRows } = await service
+    .from("ai_audits").select("id, lead_id").in("lead_id", leads.map((l) => l.id as string));
+  const audits = (auditRows ?? []) as Array<{ id: string; lead_id: string }>;
+  const answeredAuditIds = new Set<string>();
+  if (audits.length) {
+    const { data: runRows } = await service
+      .from("ai_audit_runs").select("audit_id")
+      .in("audit_id", audits.map((a) => a.id))
+      .in("status", ["complete", "capped"]);
+    for (const r of (runRows ?? []) as Array<{ audit_id: string }>) answeredAuditIds.add(r.audit_id);
+  }
+  const leadHasAnsweredAudit = new Set(
+    audits.filter((a) => answeredAuditIds.has(a.id)).map((a) => a.lead_id),
+  );
+
+  /* Suppression, in slices — checkSuppressed is several reads each and the cap is 25. */
+  const suppressed = new Map<string, string>();
+  const SLICE = 8;
+  for (let i = 0; i < leads.length; i += SLICE) {
+    const slice = leads.slice(i, i + SLICE);
+    const hits = await Promise.all(slice.map((l) =>
+      checkSuppressed(service, { phone: l.phone, email: l.email, leadId: l.id as string })));
+    hits.forEach((h, k) => { if (h.suppressed) suppressed.set(slice[k].id as string, h.matchedOn ?? "?"); });
+  }
+
+  return leads.map((l): TriageRow => {
+    const id = l.id as string;
+    const name = (l.business_name ?? "").trim() || "(no name)";
+    const cannot = (reason: string): TriageRow => ({ lead_id: id, business_name: name, bucket: "cannot", reason });
+
+    /* Suppression is checked FIRST, before "already pushed". A lead that is both should be reported
+       as the one that matters: someone who has said no, not an administrative dedupe. */
+    const supp = suppressed.get(id);
+    if (supp) return cannot(`suppressed — they have said no (matched on ${supp})`);
+    if (l.instantly_pushed_at) return cannot("already in Instantly — no audit, no push");
+    if (!String(l.email ?? "").trim()) return cannot("no email address — run Find emails first");
+
+    if (leadHasAnsweredAudit.has(id)) return { lead_id: id, business_name: name, bucket: "push_now", reason: "" };
+
+    /* An audit needs a business type and a town. Sourced the same way the wizard and the existing
+       bulk audit source them, so a lead auditable here is auditable there. */
+    const type = (l.search_keyword || l.category || "").trim();
+    const town = (l.search_location || l.address || "").trim();
+    if (!type || !town) return cannot("no business type or town stored, so there is nothing to audit");
+
+    return { lead_id: id, business_name: name, bucket: "needs_audit", reason: "" };
+  });
 }
 
 /** Atomically claim a job and process ONE chunk INLINE, in the caller's invocation.
@@ -218,7 +318,10 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     return { status: "failed", error: String(data?.error ?? `HTTP ${res.status}`).slice(0, 200) };
   }
 
-  if (job.job_type === "audit") {
+  /* PHASE A of audit_and_push runs through the SAME branch as an ordinary bulk audit — same
+     create-ai-audit call, same suppression check, same idempotency guard. Only two things differ,
+     and both are stated below rather than inferred from the job type deeper in. */
+  if (job.job_type === "audit" || job.job_type === "audit_and_push") {
     // Bulk AI-visibility audit: create ONE queued audit per lead via create-ai-audit's internal
     // branch. create-ai-audit does NO Apify — it just generates the questions and inserts
     // ai_audit_queue rows; the existing 1-min process-ai-audit-queue cron drains them under its
@@ -277,7 +380,16 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
        for five businesses nobody has sold to, and the scan was ~60% of the batch's bill. Passed
        straight through; create-ai-audit seeds the run's results.seo skip marker. Absent/false on
        every other path, so ordinary audits still scan. */
-    const skipSeo = (job.params as { skip_seo?: unknown } | null)?.skip_seo === true;
+    const paramSkipSeo = (job.params as { skip_seo?: unknown } | null)?.skip_seo === true;
+    /* ⛔ audit_and_push ALWAYS SKIPS THE SEO SCAN. Paul's decision and the one that sets the price:
+       the email's hook is who AI names instead of them, and it carries no website grade at all, so a
+       $0.04 Apify scan per lead would be bought and never read. 25 leads = $1.00 of nothing. */
+    const skipSeo = paramSkipSeo || job.job_type === "audit_and_push";
+    /* ⚠️ BUT IT IS NOT A MARKET BATCH. purpose:'market' turns on cross-audit intent coverage, which
+       is right for the market panel and wrong for outreach. It stays keyed on the PARAM — the thing
+       only the market panel sends — not on the derived skipSeo above. Deriving both from one flag is
+       how an unrelated behaviour would have hitched a ride on a cost decision. */
+    const marketPurpose = paramSkipSeo && job.job_type === "audit";
     const res = await fetch(`${SUPABASE_URL}/functions/v1/create-ai-audit`, {
       method: "POST",
       headers: internalHeaders,
@@ -295,7 +407,7 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
         /* purpose='market' turns on cross-audit intent coverage in create-ai-audit. Sent for the
            market panel's batches only (it asks for skip_seo, which nothing else does), so ordinary
            outreach bulk audits keep generating exactly as before. */
-        ...(skipSeo ? { purpose: "market" } : {}),
+        ...(marketPurpose ? { purpose: "market" } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -403,6 +515,15 @@ async function resolveAwaiting(service: any, job: JobRow): Promise<{ done: numbe
           console.error(`[bulk-jobs] name clean failed for run ${it.run_id} (audit kept):`, (e as Error).message);
         }
       }
+      /* ⛔ A FINISHED AUDIT IS NOT A FINISHED ITEM ON audit_and_push — it is the HANDOVER to phase
+         B. Marking it `done` here would be the same lie in a new place: the counter would read
+         complete while the lead had been audited and never pushed, which is the exact outcome
+         (paid for the audit, no email sent) this job type exists to prevent.
+         Back to `pending` in phase `push`, and the done counter is NOT incremented — `done` on this
+         job type means pushed, and nothing else. */
+      if (job.job_type === "audit_and_push") {
+        it.status = "pending"; it.phase = "push"; continue;
+      }
       it.status = "done"; done++; continue;
     }
     if (sts.length && sts.every((x) => x === "failed" || x === "cancelled")) {
@@ -417,6 +538,92 @@ async function resolveAwaiting(service: any, job: JobRow): Promise<{ done: numbe
     }
   }
   return { done, failed };
+}
+
+/* ══ PHASE B — THE PUSH ══════════════════════════════════════════════════════════════════
+   ONE call for the whole job, not one per item: Instantly's bulk add takes an array, so a per-item
+   loop would be 25 HTTP calls to accomplish exactly what one does. It runs only once every phase-A
+   item has resolved, so a single upload carries the leads that were already ready together with the
+   ones this job just audited.
+
+   ⛔ EVERY ITEM IS ACCOUNTED FOR BY ID, AND AN UNEXPLAINED ITEM FAILS. instantly-push applies its
+   own gates — suppression, the completed-audit requirement, the already-pushed stamp — and it is the
+   authority on who was actually emailed. So the outcome is mapped from ITS id lists, and a lead that
+   appears in none of them is marked failed with "gave no reason" rather than assumed successful.
+   Assuming would mean the operator reads "pushed" for a lead Instantly never took. */
+// deno-lint-ignore no-explicit-any
+async function runPushPhase(service: any, job: JobRow): Promise<{ pushed: number; failed: number; skipped: number }> {
+  const ready = job.items.filter((it) => it.status === "pending" && it.phase === "push");
+  if (!ready.length) return { pushed: 0, failed: 0, skipped: 0 };
+
+  let pushed = 0, failed = 0, skipped = 0;
+  const failAll = (why: string) => {
+    for (const it of ready) { it.status = "failed"; it.error = why.slice(0, 200); failed++; }
+  };
+
+  const campaignId = String((job.params as { campaign_id?: unknown } | null)?.campaign_id ?? "").trim();
+  if (!campaignId) { failAll("no Instantly campaign on the job"); return { pushed, failed, skipped }; }
+
+  let data: Record<string, unknown> = {};
+  let httpStatus = 0;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/instantly-push`, {
+      method: "POST",
+      headers: internalHeadersFor(await getInternalKeys(service)),
+      body: JSON.stringify({
+        mode: "push",
+        /* The actor, for instantly-push's internal branch. It is the job's OWNER — the user whose
+           JWT created the job and whose leads create already filtered the selection down to. */
+        acting_user_id: job.user_id,
+        campaign_id: campaignId,
+        lead_ids: ready.map((it) => it.lead_id),
+      }),
+    });
+    httpStatus = res.status;
+    data = await res.json().catch(() => ({})) as Record<string, unknown>;
+  } catch (e) {
+    failAll(`push call failed: ${(e as Error).message}`);
+    return { pushed, failed, skipped };
+  }
+
+  if (httpStatus !== 200 || data?.success !== true) {
+    failAll(`push failed (HTTP ${httpStatus}): ${String(data?.error ?? "no error given")}`);
+    return { pushed, failed, skipped };
+  }
+
+  /* ⛔ A MISSING pushedIds IS A FAILURE, NOT A REASON TO GUESS. It means instantly-push is deployed
+     at a version older than this job type, which is a REAL state during a rollout — deploy
+     instantly-push first and it never happens. Reading absence as "they all went" is the
+     absent-value fault; reading it as "none went" would invite a retry. So: fail loudly, and note
+     that no retry can double-send because instantly_pushed_at is already stamped on whatever went. */
+  if (!Array.isArray(data.pushedIds)) {
+    failAll("instantly-push did not return pushedIds — it is deployed at an older version than this job type; deploy it, then re-run for anything not stamped");
+    return { pushed, failed, skipped };
+  }
+
+  const pushedIds = new Set<string>((data.pushedIds as string[]).filter((x) => typeof x === "string"));
+  const detail = (k: string): Array<{ id: string; reason?: string; matchedOn?: string }> =>
+    Array.isArray(data[k]) ? data[k] as Array<{ id: string; reason?: string; matchedOn?: string }> : [];
+  const noAudit = new Map(detail("skippedNoAuditDetail").map((d) => [d.id, d.reason ?? "no completed audit"]));
+  const supp = new Map(detail("skippedSuppressedDetail").map((d) => [d.id, d.matchedOn ?? "?"]));
+  const already = new Set<string>(Array.isArray(data.alreadyPushedIds) ? data.alreadyPushedIds as string[] : []);
+  const noEmail = new Set<string>(Array.isArray(data.noEmailIds) ? data.noEmailIds as string[] : []);
+
+  for (const it of ready) {
+    const id = it.lead_id;
+    if (pushedIds.has(id)) { it.status = "pushed"; pushed++; continue; }
+    if (supp.has(id)) { it.status = "skipped_suppressed"; it.error = `suppressed (${supp.get(id)})`; skipped++; continue; }
+    if (already.has(id)) { it.status = "skipped_existing"; it.error = "already in Instantly"; skipped++; continue; }
+    if (noEmail.has(id)) { it.status = "skipped_ineligible"; it.error = "no email address"; skipped++; continue; }
+    /* ⛔ THE AUDIT WAS RUN AND THE PUSH STILL REFUSED. Worth its own wording because it is the one
+       outcome that cost money and produced nothing — usually a run that finished with no usable
+       competitor names. failed, not skipped: something did go wrong and it should read that way. */
+    if (noAudit.has(id)) { it.status = "failed"; it.error = `not pushed — ${noAudit.get(id)}`; failed++; continue; }
+    it.status = "failed";
+    it.error = "not pushed — Instantly did not take this lead and gave no reason";
+    failed++;
+  }
+  return { pushed, failed, skipped };
 }
 
 // deno-lint-ignore no-explicit-any
@@ -459,11 +666,17 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
 
   // Mark every still-pending item skipped_cap (when the daily cap is reached).
   const capRemaining = () => {
-    for (const it of items) if (it.status === "pending") { it.status = "skipped_cap"; skipped++; }
+    for (const it of items) if (isRunnable(it)) { it.status = "skipped_cap"; skipped++; }
   };
 
+  /* ⛔ A PHASE-B ITEM IS PENDING BUT NOT RUNNABLE HERE. runItem knows how to audit; the push is one
+     batched call made after every audit has resolved. Without this the drain below would hand a
+     phase-`push` item to the audit branch and pay to re-audit a lead that was ready to send. */
+  const isRunnable = (it: JobItem) =>
+    it.status === "pending" && !(job.job_type === "audit_and_push" && it.phase === "push");
+
   while (true) {
-    const pending = items.filter((it) => it.status === "pending");
+    const pending = items.filter(isRunnable);
     if (pending.length === 0) break;
 
     // Out of time for THIS invocation → release the claim back to 'queued' so the next
@@ -530,6 +743,16 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
   if (items.some((it) => it.status === "awaiting_audit")) {
     await persist({ status: "queued", locked_until: null });
     return;
+  }
+
+  /* ══ PHASE A IS COMPLETE — PUSH ════════════════════════════════════════════════════════
+     Reached only when no item is pending and none is awaiting an audit, i.e. every lead that needed
+     auditing has an answered run. A job with nothing to push (every item triaged `cannot`, or every
+     audit failed) finds an empty `ready` list and returns zeros — it must still fall through to the
+     finish below rather than sitting queued forever. */
+  if (job.job_type === "audit_and_push") {
+    const r = await runPushPhase(service, job);
+    done += r.pushed; failed += r.failed; skipped += r.skipped;
   }
 
   // No pending and nothing awaiting → genuinely finished.
@@ -617,13 +840,41 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    /* ══ TRIAGE PREVIEW — WHAT WOULD HAPPEN, BEFORE ANYTHING HAPPENS ════════════════════════════
+       Read-only: no job row, no spend, no email. The confirm dialog renders exactly this, and
+       `create` re-runs the SAME function on the SAME leads, so what the operator agreed to and what
+       the job does cannot disagree. */
+    if (action === "triage") {
+      const leadIds: string[] = Array.from(new Set((body.lead_ids ?? []).filter((x: unknown) => typeof x === "string")));
+      if (!leadIds.length) return json({ error: "lead_ids required" }, 400);
+      const rows = await triageForPush(service, user.id, leadIds);
+      const actionable = rows.filter((r) => r.bucket !== "cannot").length;
+      return json({
+        ok: true,
+        triage: rows,
+        counts: {
+          push_now: rows.filter((r) => r.bucket === "push_now").length,
+          needs_audit: rows.filter((r) => r.bucket === "needs_audit").length,
+          cannot: rows.filter((r) => r.bucket === "cannot").length,
+        },
+        cap: JOB_CAPS.audit_and_push,
+        /* How many actionable leads would be left for a second run. Named rather than trimmed
+           silently — a cap that quietly drops work reads as "everything was done". */
+        over_cap: Math.max(0, actionable - JOB_CAPS.audit_and_push),
+      });
+    }
+
     if (action === "create") {
       const jobType: string = body.job_type ?? "";
-      if (jobType !== "enrich" && jobType !== "site_gen" && jobType !== "audit") return json({ error: "invalid job_type" }, 400);
+      if (jobType !== "enrich" && jobType !== "site_gen" && jobType !== "audit" && jobType !== "audit_and_push") return json({ error: "invalid job_type" }, 400);
       const cap = JOB_CAPS[jobType];
       const leadIds: string[] = Array.from(new Set((body.lead_ids ?? []).filter((x: unknown) => typeof x === "string")));
       if (!leadIds.length) return json({ error: "lead_ids required" }, 400);
-      if (leadIds.length > cap) return json({ error: `Too many leads — max ${cap} per ${jobType} job.` }, 400);
+      /* audit_and_push caps on ACTIONABLE items, counted after the triage below; every other job
+         type caps on the raw selection exactly as before. */
+      if (jobType !== "audit_and_push" && leadIds.length > cap) {
+        return json({ error: `Too many leads — max ${cap} per ${jobType} job.` }, 400);
+      }
 
       // One active job per user keeps progress unambiguous (and bounds load).
       const { data: existing } = await service
@@ -655,7 +906,35 @@ Deno.serve(async (req) => {
       const finalIds = leadIds.filter((id) => ownedIds.has(id));
       if (!finalIds.length) return json({ error: "No owned leads in the selection." }, 400);
 
-      const items: JobItem[] = finalIds.map((lead_id) => ({ lead_id, status: "pending" }));
+      let items: JobItem[];
+      let skippedAtCreate = 0;
+      if (jobType === "audit_and_push") {
+        /* ⛔ THE SAME TRIAGE THE OPERATOR SAW, RE-RUN. Not trusted from the request body: a client
+           could send a different split, and the one thing this job must not do is audit or email
+           someone the confirm screen listed under "cannot". Re-running also picks up a suppression
+           added between the preview and the press. */
+        const rows = await triageForPush(service, user.id, finalIds);
+        const work = rows.filter((r) => r.bucket !== "cannot").slice(0, cap);
+        const workIds = new Set(work.map((r) => r.lead_id));
+        items = rows.map((r): JobItem => {
+          if (r.bucket === "cannot") {
+            skippedAtCreate++;
+            return { lead_id: r.lead_id, status: "skipped_ineligible", error: r.reason };
+          }
+          if (!workIds.has(r.lead_id)) {
+            /* Over the cap. skipped_cap, with the reason spelled out, so it reads as "left for the
+               next run" rather than as a failure or as work that quietly evaporated. */
+            skippedAtCreate++;
+            return { lead_id: r.lead_id, status: "skipped_cap", error: `over the ${cap}-lead cap — run again for this one` };
+          }
+          return { lead_id: r.lead_id, status: "pending", phase: r.bucket === "push_now" ? "push" : "audit" };
+        });
+        if (!items.some((it) => it.status === "pending")) {
+          return json({ error: "Nothing to do — every selected lead is already pushed, suppressed, or has no email." }, 400);
+        }
+      } else {
+        items = finalIds.map((lead_id) => ({ lead_id, status: "pending" }));
+      }
       const { data: jobRow, error: insErr } = await service
         .from("bulk_jobs")
         .insert({
@@ -664,6 +943,9 @@ Deno.serve(async (req) => {
           status: "queued",
           items,
           total: items.length,
+          /* Items already terminal at creation must be in the counter from the start, or the
+             progress bar reads 0/40 for a job that has already resolved 15 of them. */
+          skipped_count: skippedAtCreate,
           params: body.params ?? null,
         })
         .select("id")
