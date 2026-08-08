@@ -119,7 +119,7 @@ import { SingleSMSDialog } from '@/components/SingleSMSDialog';
 import { PushToInstantlyDialog } from '@/components/PushToInstantlyDialog';
 import { AiOpenerModal } from '@/components/AiOpenerModal';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useOutreachFindEmails } from '@/hooks/useOutreachFindEmails';
+import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/hooks/useOutreachFindEmails';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -1345,13 +1345,18 @@ export function OutreachTable({
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
+  /* Which statuses the email crawl targets. Defaults to the two that make sense — WhatsApp could
+     not reach them, or an opener went unanswered. Held here rather than in the hook so the count on
+     the button and the set actually crawled can never disagree. */
+  const [crawlStatuses, setCrawlStatuses] = useState<readonly string[]>(CRAWLABLE_STATUSES_DEFAULT);
+
   const {
     findEmails,
     cancel: cancelFindEmails,
     finding: findingEmails,
     progress: emailProgress,
     withWebsiteCount,
-  } = useOutreachFindEmails(filteredAndSortedLeads, onUpdateLead ?? (async () => null));
+  } = useOutreachFindEmails(filteredAndSortedLeads, onUpdateLead ?? (async () => null), crawlStatuses);
 
   const newestLeadId = useMemo(() => {
     if (leads.length === 0) return null;
@@ -1668,13 +1673,50 @@ export function OutreachTable({
                     disabled={!withWebsiteCount}
                     className="bg-background text-xs h-8"
                     title={withWebsiteCount
-                      ? `Crawl ${withWebsiteCount} lead${withWebsiteCount === 1 ? '' : 's'} with a website (and no email yet) for a contact email — free, safe to leave running`
-                      : 'No leads with a website and no email yet'}
+                      ? `Crawl ${withWebsiteCount} lead${withWebsiteCount === 1 ? '' : 's'} for a contact email — free. Targeting: ${crawlStatuses.join(', ')}. Archived and suppressed leads are never crawled.`
+                      : `No leads to crawl in: ${crawlStatuses.join(', ')}`}
                   >
                     <Mail className="h-3.5 w-3.5 mr-1.5" />
-                    Find emails ({withWebsiteCount} with a website)
+                    Crawl {withWebsiteCount} lead{withWebsiteCount === 1 ? '' : 's'} for emails
                   </Button>
                 )
+              )}
+              {/* ⛔ THE STATUS PICKER, BESIDE THE COUNT. The count above is computed from exactly
+                    this selection, so "crawling 187 leads" is always the set that will be crawled —
+                    the two cannot disagree, which is the point of holding the selection here rather
+                    than inside the hook.
+                    ⚠️ It is a CONVENIENCE, not the safety net. Suppressed leads cannot be emailed
+                    whatever is ticked here, because instantly-push checks _shared/suppression.ts at
+                    send time. Widening this can waste a crawl; it cannot cause an email. */}
+              {!readOnly && onUpdateLead && !findingEmails && (
+                <details className="relative inline-block align-middle">
+                    <summary className="cursor-pointer select-none text-[11px] text-muted-foreground hover:text-foreground">
+                      targeting: {crawlStatuses.length} status{crawlStatuses.length === 1 ? '' : 'es'}
+                    </summary>
+                    <div className="absolute z-20 mt-1 w-64 rounded-md border border-border bg-popover p-2 shadow-md">
+                      <p className="mb-1.5 text-[11px] leading-snug text-muted-foreground">
+                        Archived and suppressed leads are never crawled, whatever is ticked.
+                      </p>
+                      {CRAWL_STATUS_OPTIONS.map((st) => (
+                        <label key={st} className="flex items-center gap-2 py-0.5 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={crawlStatuses.includes(st)}
+                            onChange={(e) => setCrawlStatuses((prev) =>
+                              e.target.checked ? [...prev, st] : prev.filter((x) => x !== st))}
+                          />
+                          <span className={CRAWLABLE_STATUSES_DEFAULT.includes(st as never) ? 'font-medium' : ''}>{st}</span>
+                        </label>
+                      ))}
+                      <button
+                        type="button"
+                        className="mt-1.5 text-[11px] text-muted-foreground underline"
+                        onClick={() => setCrawlStatuses(CRAWLABLE_STATUSES_DEFAULT)}
+                      >
+                        reset to default
+                      </button>
+                  </div>
+                </details>
               )}
               {/* Import button */}
               {!readOnly && onImportLeads && (
