@@ -1749,7 +1749,7 @@ const AiAudit = () => {
           <Sparkles className="h-5 w-5 text-primary" /> AI Visibility Audit
         </h1>
         <p className="text-sm text-muted-foreground">
-          See whether AI assistants (ChatGPT, Gemini, Google AI Overview) name a business when customers ask.
+          See whether AI assistants name a business when customers ask. Scored on ChatGPT and Gemini; Google's AI Overview is recorded where Google shows one.
         </p>
       </div>
 
