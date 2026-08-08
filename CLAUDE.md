@@ -417,6 +417,63 @@ Facts with numbers. These are measured, and several contradict the older docs.
   everywhere.**
 - **Paginate PostgREST reads** — it truncates at `db-max-rows` silently. Use `src/lib/fetchAllRows.ts` with
   `.order('id')` as a unique tiebreaker.
+- 🔴 **`instantly-push`'s INTERNAL GATE IS NARROWER THAN EVERY OTHER ONE, ON PURPOSE. Do not
+  "make it consistent".** It accepts **CRON_SECRET + `x-internal-job` ONLY** — not the service key,
+  which every other internal branch (bulk-jobs included) also accepts. The reason is blast radius:
+  this is the function that **sends email**, and a key whose job is database access should not also
+  be a licence to email 1,000 prospects. Built 2026-08-08 for `audit_and_push`.
+  - `acting_user_id` is read **only inside** the internal branch, so a stolen JWT cannot name a
+    different actor. UUID-checked, then confirmed to be a real user.
+  - **No admin escalation on the internal path** — owner-scoped only. bulk-jobs' create already
+    filters a job to leads the creator owns, so narrowing costs the flow nothing.
+  - Suppression, the completed-audit gate and the already-pushed stamp run **after** auth and are
+    identical on both paths. Auth decides *whose leads may be read*, never *who is safe to contact*.
+  - ⚠️ **`mode: 'auth_probe'` exists because there was no other honest way to test this.** Every
+    other mode either sends email or calls a paid API, so exercising the gate would have meant
+    emailing someone to find out whether the auth was right. It reaches no Instantly endpoint, reads
+    no lead, writes nothing, and reports only which branch admitted the caller.
+  - ⚠️ **PROVING A 401 PROVES NOTHING BY ITSELF.** Nine non-internal shapes were refused
+    2026-08-08 — and the OLD code would have refused all nine identically, so the negatives were
+    worthless until the new bytes were shown to be live. The marker that did it: **`x-cron-secret` in
+    the OPTIONS preflight's `Access-Control-Allow-Headers`**, which exists only in the new version and
+    needs no credential to read. Same rule as §4's report trap — assert on something only the target
+    can produce.
+  - ⚠️ **The positive path cannot be tested from here** — CRON_SECRET is not readable without
+    asking Paul to hand over a secret. It is proven by the first real job. **The failure mode is
+    safe**: a broken gate means `push failed (HTTP 401)` on every item and **zero emails sent**,
+    never a wrong send.
+
+- 🔴 **`audit_and_push` — THE TWO-PHASE JOB, AND THE THREE RULES THAT COST MONEY.**
+  `bulk-jobs` job type added 2026-08-08. Triage → phase A (audit, `skip_seo`) → phase B (one Instantly
+  call for the whole set). Cap **25 on ACTIONABLE items**, so a selection full of already-pushed
+  leads is not refused.
+  - **ALREADY IN INSTANTLY = no audit and no push.** Re-auditing is money spent preparing a pitch
+    that has already gone out.
+  - ⛔ **A FINISHED AUDIT HANDS OVER, IT DOES NOT COMPLETE.** `resolveAwaiting` returns the item to
+    `pending` + `phase: 'push'` and does **not** touch `done_count`. **`done` on this job type means
+    PUSHED.** Marking it done would be the 2026-08-08 bug in a new place: paid for the audit, never
+    sent the email, counter reads complete.
+  - ⛔ **AN ITEM INSTANTLY DID NOT TAKE IS NEVER RECORDED AS PUSHED.** Outcomes map from
+    instantly-push's own **id lists**; a lead in none of them fails with "gave no reason". A
+    **missing `pushedIds`** — the real state if instantly-push is deployed older than bulk-jobs —
+    fails loudly rather than guessing either way.
+  - ⚠️ **DEPLOY ORDER: SQL → `instantly-push` → `bulk-jobs` → SPA.** `bulk_jobs.job_type` carries a
+    CHECK constraint (§8: it lives only in the DB, not in migrations) that rejects the new value, and
+    the SPA's `action: 'triage'` 400s against an older bulk-jobs.
+  - ⚠️ `purpose: 'market'` stays keyed on the **param** `skip_seo`, not on the derived value —
+    audit_and_push forces `skip_seo` but is **not** a market batch, and deriving both from one flag
+    would have hitched cross-audit intent coverage onto a cost decision.
+  - ✅ **Seventh instance of the absent-value shape, caught by writing the test first.** The triage
+    ladder ends in `cannot` and `push_now` requires a positive; `scripts/audit-push.test.ts` drives
+    every rung with null / empty / whitespace and asserts none reaches the bucket that emails.
+
+- ⚠️ **THE BULK-JOB PROGRESS LINE CALLED EVERY BULK AUDIT "site generation" FOR MONTHS.** It was
+  `job_type === 'enrich' ? 'enrich' : 'site generation'` — a two-branch expression over a set that
+  has had four members since `audit` was added. Nothing broke, which is why it survived: the label
+  was wrong and the numbers beside it were right. Now `src/lib/bulkJobProgress.ts`, which labels from
+  a map and renders an **unknown job type raw** rather than borrowing the last branch's name. It also
+  derives the phase from `items` (never stored) and reports **no phase** when there are no items.
+
 - ⛔ **THE GUARANTEE IS BYTE-IDENTICAL ACROSS BOTH REPOS, AND A SCRIPT NOW ENFORCES IT.**
   `FINDABLE_GUARANTEE` (`src/lib/findableOffer.ts`) and findable-site's `GUARANTEE`
   (`src/lib/site.ts`) **had drifted** — this repo's ended at "…you will be named." while the site's
