@@ -203,10 +203,15 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   /* ⚠️ THE FILTER LIST IS A THIRD LABEL SOURCE, and it is the one the operator reads BEFORE
-     choosing. It must match the pill exactly or the filter and the rows describe the same status in
-     different words — which is how "I filtered by no WhatsApp and got grey pills" happened. */
-  { value: 'no_whatsapp', label: 'Mobile, no WhatsApp' },
-  { value: 'no_whatsapp_needs_sms', label: 'Landline — no WhatsApp or SMS' },
+     choosing. It must match the pill, so these carry the same simplification — see
+     PipelineStatusBadge for why both read "No WhatsApp".
+     ⚠️ KNOWN COST OF THAT CHOICE, FLAGGED AND ACCEPTED: this dropdown now offers TWO entries with
+     identical text and no colour to separate them, so picking the wrong one shows 53 rows instead of
+     509. On the pills the colour still distinguishes them; in a <select> there is nothing to. If
+     that becomes annoying the fix is one combined option that filters on both values, NOT a
+     re-split of the labels. */
+  { value: 'no_whatsapp', label: 'No WhatsApp' },
+  { value: 'no_whatsapp_needs_sms', label: 'No WhatsApp' },
   { value: 'whatsapp_failed', label: 'WhatsApp Failed' },
   { value: 'bounced', label: 'Bounced' },
   { value: 'payment_received', label: 'Paid' },
