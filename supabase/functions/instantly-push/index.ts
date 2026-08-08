@@ -17,6 +17,7 @@
 // If these differ, only the marked spots below change — the flow is unaffected.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 
 const INSTANTLY_BASE = "https://api.instantly.ai/api/v2";
 const MAX_BATCH = 1000;
@@ -104,7 +105,7 @@ Deno.serve(async (req) => {
     // their own rows; admins get no owner filter so they can push any lead by id.
     let leadQuery = service
       .from("outreach_leads")
-      .select("id, business_name, email, category, instantly_pushed_at")
+      .select("id, business_name, email, category, instantly_pushed_at, search_location, derived_town")
       .in("id", leadIds);
     if (!isAdmin) leadQuery = leadQuery.eq("user_id", userId);
     const { data: rows, error: lErr } = await leadQuery;
@@ -121,14 +122,60 @@ Deno.serve(async (req) => {
       return json({ success: true, pushed: 0, skippedAlreadyPushed, skippedNoEmail });
     }
 
+    /* ══ THE FIVE VARIABLES, FROM THE RESOLVER THE WHATSAPP PITCH ALREADY USES ══════════════════
+       ⛔ WHAT THIS REPLACED: business_name + category + `city: ""` — a hardcoded empty string, with
+       a comment claiming outreach_leads had no city column. It has two (search_location and the
+       derived_town added 2026-07-30), so every push carried a blank city into a variable a template
+       would have rendered as nothing, mid-sentence, in a real email.
+
+       ⚠️ REUSED, NOT REIMPLEMENTED. resolveAuditReplyVars is the SAME resolver send-whatsapp-message
+       uses for audit_reply. It already formats competitors as "X, Y and Z" capped at three, prefers
+       the report's HEADLINE rivals so the email names what the report leads with, and returns
+       {ok:false, reason} rather than something broken. Writing a second competitor formatter here
+       would drift from the WhatsApp one the first time either changed.
+
+       ⛔ NO COMPLETED AUDIT -> THE LEAD IS NOT PUSHED AT ALL. Touch 1 is reply-gated and carries no
+       link, so competitor names ARE the hook; without them the email is generic and burns both the
+       lead and the sending domain's reputation. Refusing is the whole point of resolving here
+       rather than sending a blank variable and finding out from a reply that never comes. */
+    const resolved: Array<{ row: typeof toPush[number]; vars: { trade: string; competitors: string; business: string; link: string } }> = [];
+    const skippedNoAudit: Array<{ id: string; business_name: string | null; reason: string }> = [];
+
+    /* Small concurrency: one resolver call is several reads, and MAX_BATCH is 1000. Sequential
+       would be minutes; unbounded would hammer PostgREST. */
+    const CONCURRENCY = 8;
+    for (let i = 0; i < toPush.length; i += CONCURRENCY) {
+      const slice = toPush.slice(i, i + CONCURRENCY);
+      const out = await Promise.all(slice.map(async (r) => ({ r, v: await resolveAuditReplyVars(service, r.id) })));
+      for (const { r, v } of out) {
+        if (v.ok) resolved.push({ row: r, vars: { trade: v.trade, competitors: v.competitors, business: v.business, link: v.link } });
+        else skippedNoAudit.push({ id: r.id, business_name: r.business_name ?? null, reason: v.reason });
+      }
+    }
+
+    if (resolved.length === 0) {
+      return json({
+        success: true, pushed: 0, skippedAlreadyPushed, skippedNoEmail,
+        skippedNoAudit: skippedNoAudit.length, skippedNoAuditDetail: skippedNoAudit,
+      });
+    }
+
     // ⚠️ VERIFY: V2 bulk-add body shape (campaign_id, leads[], custom_variables).
-    const leads = toPush.map((r) => ({
+    /* ⚠️ THE VARIABLE NAMES ARE THE CONTRACT. Instantly fills {{business_name}} etc. by EXACT name
+       against what was uploaded; a rename here silently renders as an empty string in a sent email
+       rather than erroring. Change these only alongside the campaign's templates. */
+    const leads = resolved.map(({ row: r, vars }) => ({
       email: String(r.email).trim(),
-      company_name: r.business_name ?? undefined,
+      company_name: vars.business || r.business_name || undefined,
       custom_variables: {
-        business_name: r.business_name ?? "",
-        city: "", // no city column on outreach_leads yet — flagged
-        category: r.category ?? "",
+        business_name: vars.business || r.business_name || "",
+        trade: vars.trade,
+        competitors: vars.competitors,
+        report_url: vars.link,
+        /* The real town, at last. derived_town is resolved from the Places address and is the
+           truthful one; search_location is what was typed and can be a neighbouring town (the
+           Huntingdon-from-a-Wisbech-search case). Prefer derived, fall back, never empty-string. */
+        city: (r.derived_town ?? "").trim() || (r.search_location ?? "").trim() || "",
       },
     }));
 
@@ -143,7 +190,7 @@ Deno.serve(async (req) => {
     }
 
     // Mark the pushed rows (contact method + status + dedup stamp).
-    const pushedIds = toPush.map((r) => r.id);
+    const pushedIds = resolved.map(({ row }) => row.id);
     const { error: uErr } = await service
       .from("outreach_leads")
       .update({
@@ -155,7 +202,14 @@ Deno.serve(async (req) => {
       .in("id", pushedIds);
     if (uErr) console.error("[instantly-push] status update failed:", uErr.message);
 
-    return json({ success: true, pushed: pushedIds.length, skippedAlreadyPushed, skippedNoEmail, instantly: pushData });
+    return json({
+      success: true, pushed: pushedIds.length,
+      skippedAlreadyPushed, skippedNoEmail,
+      skippedNoAudit: skippedNoAudit.length, skippedNoAuditDetail: skippedNoAudit,
+      sentVariables: Object.keys(leads[0].custom_variables),   // so a rename is visible in the response
+      sample: { email: leads[0].email, custom_variables: leads[0].custom_variables },
+      instantly: pushData,
+    });
   } catch (e) {
     console.error("[instantly-push] error:", (e as Error).message);
     return json({ success: false, error: "server_error", detail: (e as Error).message }, 500);
