@@ -71,4 +71,40 @@ for (const n of [1, 2, 3, 4, 5, 6]) {
   ok(!/doesn.t know you exist|never named/i.test(p), `${n} of 6 does not read as absent`);
 }
 
+console.log("\n── ⛔ SINGULAR / PLURAL, AND THE ARTICLE ──");
+/* All three were live on a real report: "1 times ... showed up", "out of 1 answers" (latent), and
+   "looking for a accountant". Every count in this document is interpolated, so nothing agrees a
+   noun for you — which is why the helpers exist rather than the fixes being made inline. */
+function htmlFor(named: number, total: number, type: string) {
+  return renderReportHtml({
+    businessName: "Test Co", businessType: type, town: "Chichester",
+    named, total, pct: total ? Math.round((named / total) * 100) : 0,
+    competitors: ["R"], perEngine: [], questions: [], hasWebsite: true,
+    questionsAsked: 3, enginesUsed: 2,
+  } as never);
+}
+const one = htmlFor(1, 6, "accountant");
+/* ⚠️ The number and its noun live in SEPARATE elements — <span class="num">1</span> then
+   <div class="l1">time …</div> — so assert on the l1 text, not on "1 time" as one string. My first
+   version of these two assertions failed against correct code for exactly that reason. */
+const l1 = (h: string) => (h.match(/class="l1">([^<]*)/) ?? [])[1] ?? "";
+ok(l1(one).startsWith("time Test Co showed up"), `1 -> "time": "${l1(one)}"`);
+ok(!l1(one).startsWith("times"), "  and the plural is gone");
+ok(l1(htmlFor(2, 6, "plumber")).startsWith("times Test Co showed up"), "2 -> 'times'");
+ok(htmlFor(1, 1, "plumber").includes("out of 1 answer<"), "a single answer reads 'out of 1 answer'");
+ok(one.includes("out of 6 answers"), "6 answers stays plural");
+
+ok(one.includes("looking for an <b>accountant"), "vowel trade -> 'an accountant'");
+ok(htmlFor(1, 6, "plumber").includes("looking for a <b>plumber"), "consonant trade -> 'a plumber'");
+ok(htmlFor(1, 6, "electrician").includes("looking for an <b>electrician"), "'an electrician'");
+
+console.log("\n── ⛔ THE FIX SECTION MUST NOT CALL A NAMED BUSINESS ABSENT ──");
+/* The third place in one document that disagreed about whether the business exists in AI answers. */
+ok(one.includes("Why you&rsquo;re named so rarely"), "named once -> 'Why you're named so rarely'");
+ok(!one.includes("Why you&rsquo;re not in the answer"), "  the absent heading is gone");
+ok(one.includes("Being named occasionally rather than consistently is not bad luck"), "  and the lead matches");
+const zeroNamed = htmlFor(0, 6, "accountant");
+ok(zeroNamed.includes("Why you&rsquo;re not in the answer"), "never named -> the absent heading is CORRECT and kept");
+ok(zeroNamed.includes("Being absent is not bad luck"), "  and its lead is kept too");
+
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
