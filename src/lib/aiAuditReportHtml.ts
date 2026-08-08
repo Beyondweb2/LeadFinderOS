@@ -261,7 +261,17 @@ function seoSection(seo: AiAuditSeo | undefined): string {
     <section class="seo">
       <div class="sec-eyebrow">Your website</div>
       <div class="sec-title">How findable is your website?</div>
-      <p class="seo-intro">Your site&rsquo;s overall SEO grade is <b style="color:${overallColour}">${esc(overallGrade)}</b>. This scores how well your pages are built for search engines and AI to read - the on-page and technical foundations. Here&rsquo;s what&rsquo;s holding it back.</p>
+      <!-- ⛔ THE LEAD FOLLOWS THE GRADE. It used to say "Here's what's holding it back" at EVERY
+           grade, so an A was announced and then immediately contradicted: a good result presented as
+           a problem. To a sceptical accountant that reads as manufacturing an issue to sell against,
+           which is the one thing that would undo the honest-measurement argument.
+           A/B: the site is in good shape, these are the remaining small things.
+           C and below: the original wording, which is accurate there. -->
+      <p class="seo-intro">Your site&rsquo;s overall SEO grade is <b style="color:${overallColour}">${esc(overallGrade)}</b>. This scores how well your pages are built for search engines and AI to read - the on-page and technical foundations. ${
+        /^[AB]/i.test(overallGrade.trim())
+          ? "That is a good result: the foundations are sound. These are the small things still worth tidying."
+          : "Here&rsquo;s what&rsquo;s holding it back."
+      }</p>
 
       <div class="seo-body">
         <div class="seo-grades">
