@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
+import { checkSuppressed, suppress } from "../_shared/suppression.ts";
 import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
@@ -348,6 +349,18 @@ Deno.serve(async (req) => {
             .select("body").eq("lead_id", row.lead_id).eq("direction", "inbound")
             .gt("created_at", row.created_at);
           if (((newer ?? []) as Array<{ body?: string }>).some((m) => isDecline(m.body ?? ""))) {
+            /* ⛔ A DECLINE NOW WRITES A SUPPRESSION ROW, not just a cancelled send. Before this the
+               only automatic writer was twilio-inbound on an SMS "STOP"; a WhatsApp "not interested"
+               cancelled the pending pitch and NOTHING else — no status change, no suppression — so
+               the same person stayed fully reachable by email, by the audit batch, and by any future
+               channel. It suppressed only if Paul read the reply and acted.
+               The lead id goes on the row as well as the phone, so this one "no" also covers the
+               EMAIL channel for a lead whose address we have not crawled yet. */
+            const { data: dl } = await service.from("outreach_leads")
+              .select("email").eq("id", row.lead_id).maybeSingle();
+            await suppress(service,
+              { phone: row.phone, email: dl?.email ?? null, leadId: row.lead_id },
+              { reason: "replied_no", source: "whatsapp_decline" });
             await finish("cancelled_decline");
             results[row.lead_id] = "cancelled_decline";
             continue;
@@ -365,7 +378,10 @@ Deno.serve(async (req) => {
             results[row.lead_id] = "skipped_archived";
             continue;
           }
-          if (["opted_out", "not_interested"].includes(lead.status as string) || (await phoneSuppressed(service, row.phone))) {
+          /* The SHARED check now — phone, email AND lead id, failing closed. phoneSuppressed()
+             was phone-only and returned "not suppressed" when the lookup threw. */
+          const sendSupp = await checkSuppressed(service, { phone: row.phone, leadId: row.lead_id });
+          if (["opted_out", "not_interested"].includes(lead.status as string) || sendSupp.suppressed) {
             await finish("skipped_suppressed");
             results[row.lead_id] = "skipped_suppressed";
             continue;
@@ -486,7 +502,7 @@ Deno.serve(async (req) => {
        them. Un-archiving restores the lead to the queue exactly where its queued_at puts it. */
     const { data: lead } = await service
       .from("outreach_leads")
-      .select("id, business_name, phone, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id")
+      .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id")
       .eq("status", "queued")
       .eq("is_archived", false)
       .not("phone", "is", null)
@@ -635,9 +651,10 @@ Deno.serve(async (req) => {
     // Cross-channel suppression: "one no = suppressed everywhere". If this number opted
     // out (e.g. an SMS STOP recorded by twilio-inbound), NEVER message it on WhatsApp
     // either. contact_suppressions is keyed by canonical E.164 (+…); toNumber is digits.
-    const { data: suppressed } = await service
-      .from("contact_suppressions").select("id").eq("phone_e164", `+${toNumber}`).maybeSingle();
-    if (suppressed) {
+    /* The SHARED check. This was the LAST inline copy of the rule — phone-only, and it swallowed a
+       failed lookup as "not suppressed". Now matches on phone, email and lead id, and fails closed. */
+    const mainSupp = await checkSuppressed(service, { phone: `+${toNumber}`, email: lead.email ?? null, leadId: lead.id });
+    if (mainSupp.suppressed) {
       await service.from("outreach_leads").update({
         status: "opted_out", whatsapp_delivery_status: "suppressed", contact_method: null,
       }).eq("id", lead.id);

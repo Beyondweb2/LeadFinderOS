@@ -18,6 +18,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
+import { checkSuppressed } from "../_shared/suppression.ts";
 
 const INSTANTLY_BASE = "https://api.instantly.ai/api/v2";
 const MAX_BATCH = 1000;
@@ -105,7 +106,7 @@ Deno.serve(async (req) => {
     // their own rows; admins get no owner filter so they can push any lead by id.
     let leadQuery = service
       .from("outreach_leads")
-      .select("id, business_name, email, category, instantly_pushed_at, search_location, derived_town")
+      .select("id, business_name, email, phone, is_archived, category, instantly_pushed_at, search_location, derived_town")
       .in("id", leadIds);
     if (!isAdmin) leadQuery = leadQuery.eq("user_id", userId);
     const { data: rows, error: lErr } = await leadQuery;
@@ -140,6 +141,13 @@ Deno.serve(async (req) => {
        rather than sending a blank variable and finding out from a reply that never comes. */
     const resolved: Array<{ row: typeof toPush[number]; vars: { trade: string; competitors: string; business: string; link: string } }> = [];
     const skippedNoAudit: Array<{ id: string; business_name: string | null; reason: string }> = [];
+    /* ⛔ SUPPRESSED PEOPLE ARE NEVER EMAILED, AND THIS FUNCTION USED TO HAVE NO SUCH CHECK AT ALL.
+       Its whole filter was "not already pushed AND has an email" — measured 2026-08-08, that let
+       142 people who had said no through, held back only by 141 of them not having an email
+       address yet. 79 of those had a website, so the Find emails crawl would have supplied one.
+       Checked per lead against phone, email AND lead id, because an archived row often has no
+       usable phone and the lead id is the only identifier left. */
+    const skippedSuppressed: Array<{ id: string; business_name: string | null; matchedOn: string }> = [];
 
     /* Small concurrency: one resolver call is several reads, and MAX_BATCH is 1000. Sequential
        would be minutes; unbounded would hammer PostgREST. */
@@ -147,7 +155,14 @@ Deno.serve(async (req) => {
     for (let i = 0; i < toPush.length; i += CONCURRENCY) {
       const slice = toPush.slice(i, i + CONCURRENCY);
       const out = await Promise.all(slice.map(async (r) => ({ r, v: await resolveAuditReplyVars(service, r.id) })));
-      for (const { r, v } of out) {
+      const supp = await Promise.all(slice.map((r) =>
+        checkSuppressed(service, { phone: r.phone, email: r.email, leadId: r.id })));
+      for (let k = 0; k < out.length; k++) {
+        const { r, v } = out[k];
+        const sp = supp[k];
+        /* Suppression is checked FIRST and reported separately from "no audit". Folding them into
+           one skip count would hide the only one that is a safety failure rather than a data gap. */
+        if (sp.suppressed) { skippedSuppressed.push({ id: r.id, business_name: r.business_name ?? null, matchedOn: sp.matchedOn ?? "?" }); continue; }
         if (v.ok) resolved.push({ row: r, vars: { trade: v.trade, competitors: v.competitors, business: v.business, link: v.link } });
         else skippedNoAudit.push({ id: r.id, business_name: r.business_name ?? null, reason: v.reason });
       }
@@ -157,6 +172,7 @@ Deno.serve(async (req) => {
       return json({
         success: true, pushed: 0, skippedAlreadyPushed, skippedNoEmail,
         skippedNoAudit: skippedNoAudit.length, skippedNoAuditDetail: skippedNoAudit,
+        skippedSuppressed: skippedSuppressed.length, skippedSuppressedDetail: skippedSuppressed,
       });
     }
 
@@ -206,6 +222,7 @@ Deno.serve(async (req) => {
       success: true, pushed: pushedIds.length,
       skippedAlreadyPushed, skippedNoEmail,
       skippedNoAudit: skippedNoAudit.length, skippedNoAuditDetail: skippedNoAudit,
+      skippedSuppressed: skippedSuppressed.length, skippedSuppressedDetail: skippedSuppressed,
       sentVariables: Object.keys(leads[0].custom_variables),   // so a rename is visible in the response
       sample: { email: leads[0].email, custom_variables: leads[0].custom_variables },
       instantly: pushData,
