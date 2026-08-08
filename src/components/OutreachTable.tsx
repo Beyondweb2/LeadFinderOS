@@ -114,7 +114,7 @@ import { isTestBarberLead, TEST_BARBER_LEAD_ID } from '@/config/testBarber';
 import { clearPendingBarberEdit } from '@/lib/barberEdits';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
-import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES } from '@/types/outreach';
+import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES } from '@/types/outreach';
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { SingleSMSDialog } from '@/components/SingleSMSDialog';
@@ -583,7 +583,12 @@ export function OutreachTable({
 
     if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery);
     if (typeof parsed.locationFilter === 'string') setLocationFilter(parsed.locationFilter);
-    if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
+    /* Normalised onto the filter list: a state saved before the no-WhatsApp options merged may hold
+       'no_whatsapp_needs_sms', which is no longer an option's own value. Without this the Select
+       would render blank while still filtering — the control disagreeing with the table. */
+    if (parsed.statusFilter) {
+      setStatusFilter(parsed.statusFilter === 'all' ? 'all' : canonicalFilterValue(parsed.statusFilter as LeadStatus));
+    }
     if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
     if (typeof parsed.trackedOnly === 'boolean') setTrackedOnly(parsed.trackedOnly);
     if (typeof parsed.hideNoWhatsApp === 'boolean') setHideNoWhatsApp(parsed.hideNoWhatsApp);
@@ -1380,7 +1385,12 @@ export function OutreachTable({
 
     // Filter by status
     if (statusFilter !== 'all') {
-      result = result.filter((lead) => lead.status === statusFilter);
+      /* ⚠️ A FILTER OPTION CAN COVER MORE THAN ONE STATUS. "No WhatsApp" means both the mobile with
+         no account and the landline — everyone unreachable that way. statusesForFilter returns the
+         group, and returns [value] for anything it does not recognise, so an unknown filter narrows
+         rather than widening to everything. */
+      const wanted = statusesForFilter(statusFilter);
+      result = result.filter((lead) => wanted.includes(lead.status as LeadStatus));
     }
 
     // Filter by country
@@ -1896,7 +1906,8 @@ export function OutreachTable({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                {OUTREACH_STATUS_OPTIONS.map((opt) => (
+                {/* The FILTER list, not the status list — statuses sharing a label are one option. */}
+                {OUTREACH_STATUS_FILTER_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>

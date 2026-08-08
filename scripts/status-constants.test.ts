@@ -20,7 +20,9 @@
    too — and it names the population each status contributes, so a future edit that narrows the
    campaign has to do so out loud.
    ============================================================ */
-import { OUTREACH_STATUS_OPTIONS } from "../src/types/outreach.ts";
+import {
+  OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue,
+} from "../src/types/outreach.ts";
 import { CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from "../src/types/outreach.ts";
 
 let f = 0;
@@ -133,6 +135,61 @@ console.log("\n── ⛔ STATUSES ARE DISTINGUISHABLE BY THEIR WORDS, BAR ONE D
      take an SMS. Both remain in the crawl defaults for the same reason. */
   ok(labelOf("no_whatsapp") !== "" && OUTREACH_STATUS_OPTIONS.filter((o) => o.label === "No WhatsApp").length === 2,
     "  and they are still TWO separate statuses wearing one label, not one merged status");
+}
+
+/* ── ⛔ THE FILTER IS ONE OPTION PER LABEL, AND EVERY STATUS IS STILL REACHABLE ────────────────
+   Two entries reading "No WhatsApp" that showed 53 rows or 509 depending on which one Paul clicked
+   was worse than the long labels it replaced, so the filter now offers ONE combined option matching
+   both statuses. Paul's framing: what he wants when he filters is everyone he cannot WhatsApp.
+
+   ⚠️ THE RISK IN MERGING FILTER OPTIONS IS A STATUS NOBODY CAN FILTER FOR — an invisible
+   population, which is the same shape as a filter constant that matches nothing: it renders as a
+   smaller number rather than an error. The list is DERIVED by grouping on the label so completeness
+   is structural, and this asserts it rather than trusting the derivation. */
+console.log("\n── ⛔ THE COMBINED FILTER COVERS EVERY STATUS, EXACTLY ONCE ──");
+{
+  const seen = new Map<string, number>();
+  for (const opt of OUTREACH_STATUS_FILTER_OPTIONS) {
+    for (const st of opt.statuses) seen.set(st, (seen.get(st) ?? 0) + 1);
+  }
+  let missing = 0, doubled = 0;
+  for (const o of OUTREACH_STATUS_OPTIONS) {
+    const n = seen.get(o.value) ?? 0;
+    if (n === 0) { missing++; console.log(`  UNFILTERABLE ${o.value}`); }
+    if (n > 1) { doubled++; console.log(`  IN TWO OPTIONS ${o.value}`); }
+  }
+  ok(missing === 0, "every status is reachable through some filter option — none is invisible");
+  ok(doubled === 0, "and none appears in two options, so a count cannot be double-reported");
+  ok(OUTREACH_STATUS_FILTER_OPTIONS.length === 16 && OUTREACH_STATUS_OPTIONS.length === 17,
+    `16 filter options for 17 statuses (got ${OUTREACH_STATUS_FILTER_OPTIONS.length} for ${OUTREACH_STATUS_OPTIONS.length})`);
+
+  const noWa = OUTREACH_STATUS_FILTER_OPTIONS.filter((o) => o.label === "No WhatsApp");
+  ok(noWa.length === 1, `"No WhatsApp" appears ONCE in the filter (got ${noWa.length})`);
+  ok(noWa[0].statuses.length === 2
+    && noWa[0].statuses.includes("no_whatsapp")
+    && noWa[0].statuses.includes("no_whatsapp_needs_sms"),
+    "  and it matches BOTH statuses — 53 + 509, not one or the other");
+  /* Every other option stays single, or the merge has leaked past the pair it was for. */
+  ok(OUTREACH_STATUS_FILTER_OPTIONS.filter((o) => o.statuses.length > 1).length === 1,
+    "exactly one option covers more than one status");
+
+  console.log("\n── A SAVED FILTER FROM BEFORE THE MERGE STILL WORKS ──");
+  /* Table state persisted earlier can hold a value that is no longer any option's own. It must keep
+     filtering, and the Select must show the option that owns it — a control disagreeing with the
+     table it drives is its own bug. */
+  ok(statusesForFilter("no_whatsapp_needs_sms").length === 2,
+    "a saved 'no_whatsapp_needs_sms' still matches the whole group rather than nothing");
+  ok(canonicalFilterValue("no_whatsapp_needs_sms") === "no_whatsapp",
+    "  and normalises onto the option that owns it, so the dropdown is not blank");
+  ok(canonicalFilterValue("replied") === "replied", "an unmerged status normalises to itself");
+
+  console.log("\n── ⛔ AN UNKNOWN FILTER NARROWS, IT NEVER WIDENS ──");
+  /* The absent-value rule, applied to a filter: a value we cannot place must match only itself, not
+     fall through to "show everything" — which would read as a working filter over the whole table. */
+  const unknown = statusesForFilter("some_status_that_does_not_exist" as never);
+  ok(unknown.length === 1, "an unrecognised filter value matches ONE thing, not all of them");
+  ok(OUTREACH_STATUS_FILTER_OPTIONS.every((o) => o.statuses.includes(o.value)),
+    "every option's own value is one of the statuses it matches");
 }
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
