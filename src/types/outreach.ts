@@ -212,12 +212,73 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
      re-split of the labels. */
   { value: 'no_whatsapp', label: 'No WhatsApp' },
   { value: 'no_whatsapp_needs_sms', label: 'No WhatsApp' },
+  /* ⚠️ Two entries, one label. That is right for this list, which is the canonical status -> label
+     map and is also what the per-row status SETTER renders — a setter must offer every status
+     individually, because setting one is choosing exactly one. The FILTER does not use this list;
+     see OUTREACH_STATUS_FILTER_OPTIONS below. */
   { value: 'whatsapp_failed', label: 'WhatsApp Failed' },
   { value: 'bounced', label: 'Bounced' },
   { value: 'payment_received', label: 'Paid' },
   { value: 'in_delivery', label: 'In Delivery' },
   { value: 'completed', label: 'Completed' },
 ];
+
+/* ══ THE STATUS FILTER, WHICH IS NOT THE STATUS LIST ═════════════════════════════════════
+   ⛔ FILTERING AND SETTING ARE DIFFERENT QUESTIONS AND THIS IS WHY THEY GET DIFFERENT LISTS.
+   Setting a status means choosing exactly one, so the setter must offer all seventeen separately.
+   Filtering means "show me everyone in this situation" — and when Paul filters by No WhatsApp he
+   wants everyone he cannot WhatsApp, not one of two arbitrary halves of them. Two identical entries
+   showing 53 rows or 509 depending on which he happened to click is worse than the long labels this
+   replaced.
+
+   ⚠️ DERIVED BY GROUPING ON THE LABEL, NOT HAND-MAINTAINED. That is the whole point: a second
+   hand-written list is a thing to forget, and forgetting it means a status nobody can filter for.
+   Grouping guarantees three properties for free —
+     * every status is reachable through exactly one filter option,
+     * any two statuses that share a label are automatically ONE option,
+     * and the decision about which labels may be shared stays in one place (the labels themselves,
+       policed by scripts/status-constants.test.ts's allowlist).
+   Give two more statuses a shared label tomorrow and the filter merges them with no edit here.
+
+   ⚠️ value IS THE FIRST STATUS IN THE GROUP, so for the sixteen single-status options it is
+   byte-identical to what it always was — persisted table state keeps working untouched. */
+export interface StatusFilterOption {
+  /** The filter's key. A real LeadStatus (the group's first), so saved filter state stays valid. */
+  value: LeadStatus;
+  label: string;
+  /** Every status this option matches. One member for all but the no-WhatsApp pair. */
+  statuses: LeadStatus[];
+}
+
+export const OUTREACH_STATUS_FILTER_OPTIONS: StatusFilterOption[] = (() => {
+  const byLabel = new Map<string, LeadStatus[]>();
+  for (const o of OUTREACH_STATUS_OPTIONS) {
+    if (!byLabel.has(o.label)) byLabel.set(o.label, []);
+    byLabel.get(o.label)!.push(o.value);
+  }
+  /* Map preserves insertion order, so the filter reads in the same order as the status list. */
+  return [...byLabel.entries()].map(([label, statuses]) => ({ value: statuses[0], label, statuses }));
+})();
+
+/**
+ * Which statuses a chosen filter value matches.
+ *
+ * ⚠️ TAKES ANY LeadStatus, not just a group's own value, and returns the WHOLE group. That is
+ * deliberate: a table state saved before this existed may hold 'no_whatsapp_needs_sms', which is no
+ * longer any option's value. Returning its group means such a filter keeps working rather than
+ * silently matching nothing — an empty table that reads as "no such leads" is precisely the failure
+ * mode a filter constant matching nothing already caused once.
+ * An unrecognised value matches only itself, never everything: a filter that cannot be understood
+ * must narrow, not widen.
+ */
+export function statusesForFilter(value: LeadStatus): LeadStatus[] {
+  return OUTREACH_STATUS_FILTER_OPTIONS.find((o) => o.statuses.includes(value))?.statuses ?? [value];
+}
+
+/** The option value that owns a status — used to normalise restored filter state onto the list. */
+export function canonicalFilterValue(value: LeadStatus): LeadStatus {
+  return OUTREACH_STATUS_FILTER_OPTIONS.find((o) => o.statuses.includes(value))?.value ?? value;
+}
 
 /** Approved WhatsApp outreach templates (Meta). value = template name; both carry
  *  {{1}} business name + {{2}} claim URL. Keep in sync with the edge function's
