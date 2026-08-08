@@ -64,4 +64,20 @@ ok(done + failed + awaiting === statuses.length, "every item is in exactly one b
 ok(done === 1 && failed === 1 && awaiting === 2, "awaiting is its own bucket, not folded into done");
 ok(awaiting > 0, "and while any item is awaiting, the JOB IS NOT DONE — it re-queues");
 
+console.log("\n── ⛔ A SIBLING RUN MUST NOT ANSWER FOR THIS ATTEMPT ──");
+/* CAUGHT IN PRODUCTION, an hour after shipping. Platinum Accounting already had a CAPPED run from an
+   earlier attempt. create-ai-audit added run #2 to the SAME audit. resolveAwaiting looked runs up by
+   audit_id, saw the old capped one, and marked the item done while run #2 was still pending — the
+   exact "done means enqueued" lie the change existed to remove, wearing a different hat.
+   The item now carries run_id, so only THIS attempt's run can answer for it. */
+const byRun = (thisRunStatus: string | undefined, jobAgeMs: number) =>
+  resolve(thisRunStatus ? [thisRunStatus] : [], jobAgeMs);
+
+ok(byRun("pending", 2 * MIN) === "awaiting_audit",
+  "a pending run stays awaiting EVEN IF the audit has an older capped run beside it");
+ok(resolve(["capped", "pending"], 2 * MIN) === "done",
+  "  (the bug, preserved: keyed on the AUDIT, the old capped run marks it done)");
+ok(byRun("complete", 9 * MIN) === "done", "and this attempt completing does resolve it");
+ok(byRun(undefined, 2 * MIN) === "awaiting_audit", "a run id that finds no row yet keeps waiting");
+
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
