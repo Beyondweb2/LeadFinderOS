@@ -551,7 +551,10 @@ Facts with numbers. These are measured, and several contradict the older docs.
 
 ---
 
-## 6b. 🔴 NEXT SESSION STARTS HERE — the report that cost two prospects
+## 6b. 🔴 THE REPORT THAT COST TWO PROSPECTS — QUEUED BEHIND §6c
+
+⚠️ **§6c IS FIRST.** Paul reordered on 2026-08-09: the "it loses my place" state work comes
+before this. Everything below is still current and measured — it is next, not now.
 
 Paul's order, agreed 2026-08-09. Build 1, then 2, then 3, then the derivation. All four measured, none
 built. **Wilson's Mobile Valeting rejected his report and was right to.**
@@ -666,6 +669,80 @@ Generate a prospect's report from the town's market audit instead of a per-busin
 - **Cost:** per prospect `3 × $0.0104 + $0.070` (cleaner) ≈ **8p** — 138 accountants = **£11**. One
   market audit `8 × $0.0104 + $0.070` ≈ **12p for the whole town**.
 - ⚠️ Sample is 6 businesses in one town. Suggestive, not settled.
+
+---
+
+## 6c. 🔴 NEXT SESSION STARTS HERE — "it loses my place", the state audit (2026-08-09)
+
+Paul's words: *"I use this all day and losing my place is the single most annoying thing about it."*
+Audited across every page. **It is ONE root cause with two halves, not a per-page bug** — so do not
+patch pages, fix the two.
+
+### THE ROOT CAUSE
+
+**Half 1: the operator app has no data cache.** React Query is installed and correctly configured in
+`App.tsx` (`staleTime: 5 min`, `refetchOnWindowFocus: false`) and is used by **6 files, every one a
+PUBLIC customer-facing page** — BookingPage, PublicSite, SiteByToken, SubdomainSite, the barber and
+salon shells. **Not one operator page or hook uses it.** Twelve data hooks own rows in `useState` and
+refetch in a mount effect:
+```
+useApifyUsage  useAvatar  useBulkJobs  useCampaignStats  useCampaigns  useCheckedBusinesses
+useContactTracking  useInbox  useLeadNotes  usePersonalActions  usePlaybook  useTeamFeedback
+```
+`useInbox:124` is `useEffect(() => { fetchAll(); }, [fetchAll])` with `isLoading` starting `true` —
+leave the Inbox, come back, full refetch and a spinner.
+
+**Half 2: the layout remounts on every navigation.** `App.tsx` has **12 `<AppLayout>` wrappers inside
+Route elements and 0 `<Outlet/>`**. Each route renders its own copy of the shell, so React unmounts
+and remounts sidebar and scroll container on every navigation. Nothing inside can survive by staying
+mounted; it can only be restored from storage afterwards.
+
+✅ **Checked and ruled out:** no `key=` anywhere forcing a remount. Normal navigation unmount is the
+whole story — there is no third cause to hunt.
+
+### THE SPLIT-LIFETIME FAULT IS THE PATTERN, NOT AN INSTANCE
+The search bug (results restoring without the search that produced them) is everywhere:
+```
+Inbox.tsx          2 persisted vs 22 plain useState
+AiAudit.tsx        6 persisted vs 61 plain
+Index.tsx          2 persisted vs 10 plain
+useOutreach.ts     2 persisted vs  6 plain
+useMarketView.ts   1 persisted vs  6 plain
+```
+
+### WHAT SURVIVES WHAT (before the work)
+| | navigate | reload | tab close |
+|---|---|---|---|
+| Data (all 12 hooks) | ✗ refetch + spinner | ✗ | ✗ |
+| Scroll (`usePersistedScroll`, in AppLayout) | ✓ | ✓ | ✓ |
+| A few filters (`usePersistedState`) | ✓ | ✓ | ✗ |
+| Selections, expanded rows, dialogs | ✗ | ✗ | ✗ |
+
+### ⛔ THE RULES AGREED WITH PAUL — APPLY THESE, DO NOT RE-DECIDE THEM
+- **The URL is for WHAT I AM LOOKING AT. `usePersistedState` is for HOW THE PAGE IS CONFIGURED.**
+  A conversation, a selected market, an open record → URL (back button, linkable, survives
+  everything). A filter, a sort, a toggle → persisted state. `Index.tsx` already says this for the
+  market view; it is now the app-wide line. **Report every move to the URL.**
+- ⛔ **NEVER PERSIST AN OPEN DIALOG.** A modal springing open on return is worse than losing it —
+  you did not ask for it and it blocks the page you came back for. `AiAudit.tsx` already refuses to
+  persist `formOpen` for this reason. Persist what you were LOOKING AT, never what was INTERRUPTING.
+- ⛔ **THE MUTATION RISK IS THE WORK, NOT THE MIGRATION.** Paul: *"losing my place annoys me, a stale
+  list makes me act on wrong data."* Take **one hook at a time and prove the invalidation** — never
+  migrate several and test at the end. Every mutation needs its `invalidateQueries` demonstrated.
+
+### THE ORDER
+1. ✅ **DONE 2026-08-09 (stage 1a, `9a0ba920`)** — Inbox conversation → URL (`?c=`), half-typed reply
+   → `src/lib/inboxDrafts.ts`, keyed BY CONVERSATION and in **localStorage** (the one place that tier
+   is right: a closed tab must not take a message you were partway through).
+   ⚠️ A bug caught before shipping: `startFromLead` called `setText('')` AFTER switching thread,
+   which with per-conversation drafts clears the thread you just LEFT. The line was removed, not
+   patched — a new thread opens empty by construction.
+2. **`useInbox` → React Query**, with invalidation proven on **`send`** and **`patchLeadStatus`**
+   specifically. This is the headline fix and the first real mutation test.
+3. **The layout route** — one `<Route element={<AppLayout/>}>` with `<Outlet/>` replacing the 12
+   wrappers. The shell stops remounting and scroll stops needing restoration at all.
+4. **The remaining 11 hooks, one at a time.** ⚠️ **`useOutreach` LAST** — its optimistic updates
+   (`leadsWithOptimistic`) are the hardest thing to keep correct under a cache.
 
 ---
 
