@@ -44,10 +44,14 @@ const GRAPH_VERSION = "v21.0";
    auto-replies, not just this campaign. On 2026-07-27 that mattered: 40 sends hit the cap exactly,
    13 of them automated audit_reply pitches rather than campaign sends.
 
-   ⛔ 60, NOT 100 — AND IT PACES RATHER THAN STOPS, WHICH IS THE THING TO UNDERSTAND. While the
+   ⛔ 100 — AND IT PACES RATHER THAN STOPS, WHICH IS THE THING TO UNDERSTAND. While the
    floor sat at 20 minutes this number could be anything above ~43 and change nothing: the floor
    bound everything. Halving the floor to 10 (2026-08-08) makes it matter, and Paul's advisor's
-   guidance is what it encodes — ramp only while the quality rating is Green, 60 a day.
+   guidance was 60 while ramping; raised to 100 on 2026-08-09 on Paul's call, reply rates good and
+   the rating Green. ⚠️ RAISED FROM 60 AFTER ONE DAY AT 60, WHICH IS FASTER THAN THE ADVICE THE
+   NUMBER ENCODES. Recorded here rather than argued away: the trigger to drop it back is the quality
+   rating leaving Green, and there is nothing automatic that will do that — it is a thing Paul
+   watches.
    ⚠️ IT IS NEVER ACTUALLY REACHED. Simulated over 5,000 days at the real jitter: the cap stops a
    day 0% of the time. It binds through the PACING formula instead — baseGap is
    minutesUntilWindowEnd() / (DAILY_CAP - sentToday), so the cap sets the target rate and the day
@@ -60,7 +64,7 @@ const GRAPH_VERSION = "v21.0";
    07:00 where 100 gave 8.7. The gap is derived from the cap by construction: the queue spreads
    whatever the cap is across the window rather than racing to it and stopping.
    process-sms-queue has its OWN separate DAILY_CAP; this constant does not affect it. */
-const DAILY_CAP = 60;
+const DAILY_CAP = 100;
 /* ══ THE SEND GAP ═══════════════════════════════════════════════════════════════════════
    ⚠️ THESE WERE BARE LITERALS INSIDE THE PACING EXPRESSION. The floor in particular — the single
    number that decided real throughput for months — had no name, so nothing could reference it, no
