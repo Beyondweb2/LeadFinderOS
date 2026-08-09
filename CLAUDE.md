@@ -572,12 +572,16 @@ for something that never happened. Render the document before diagnosing what it
   leader has **21** and ranks below a split of itself. Ranking by a split count names the wrong firms
   with MORE confidence. `_shared/market-match.ts`'s `groupNames` exists for exactly this.
 
-### 2. THE FRAMING AT LOW QUESTION COUNTS
-"1 of 6" from three questions is a weak measurement stated strongly. Paul's call: the market audit's
-16 questions is the real fix and he would rather that landed than a wording patch.
-⚠️ **The cheap honest change if one is wanted meanwhile: raise the audit_and_push question default
-from 3 to 5** (the dialog already offers 3/4/5). +2 questions = **+2p a lead** (8p → 10p) and turns
-"1 of 6" into "1 of 10". Fixes the MEASUREMENT rather than hedging the sentence.
+### 2. THE FRAMING AT LOW QUESTION COUNTS — DECIDED: 5 QUESTIONS, BUILD IT
+"1 of 6" from three questions is a weak measurement stated strongly.
+✅ **DECIDED 2026-08-09, not a proposal: raise the audit_and_push question default from 3 to 5.**
+The dialog already offers 3/4/5, so it is the default that changes. +2 questions = **+2p a lead**
+(8p → 10p) and "1 of 6" becomes "1 of 10".
+⚠️ **AND THE REASON MATTERS MORE THAN THE NUMBER**, because it is the rule to reach for next time:
+it fixes the MEASUREMENT rather than hedging the sentence. The alternative on the table was softening
+the verdict wording, which would have made a thin sample read as less thin without making it less
+thin. Paul rejected that and was right to.
+The market audit's 16 questions is still the real fix; this is the interim, not a substitute for it.
 
 ### 3. THE DISTANCE CHECK — AND WHY THE OBVIOUS ANSWER IS WRONG
 Measured 2026-08-09: **0 of 202** audits provably ask about a town their lead is not in — but that
