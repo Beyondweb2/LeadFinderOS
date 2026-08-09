@@ -434,8 +434,10 @@ export function renderReportHtml(d: AiAuditReportData): string {
         : `${chips.slice(0, -1).join(", ")} and ${chips[chips.length - 1]}`;
       /* The denominator is stated so the reader can size the claim themselves — the same reason
          the headline says "out of N answers" rather than a bare count. */
+      /* Parenthesised, because appended bare it read as part of the last firm's name:
+         "Get a Splash! 3× of 36 mentions across 3 questions". */
       const denom = d.competitorMentions && d.competitorMentions > 0
-        ? ` of ${d.competitorMentions} mentions across ${d.questionsAsked} question${d.questionsAsked === 1 ? "" : "s"}`
+        ? ` (from ${d.competitorMentions} competitor mentions across ${d.questionsAsked} question${d.questionsAsked === 1 ? "" : "s"})`
         : "";
       summary += ` Across the whole audit the firms AI named most often were ${list}${denom}.`;
     } else {
