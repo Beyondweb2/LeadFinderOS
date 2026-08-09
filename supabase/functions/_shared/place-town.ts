@@ -41,6 +41,21 @@ export type { TownFetchNote };
 
 /** 30 days. A business does not move often, and re-fetching on every audit would pay Google to be
  *  told the same thing. Keyed on the lead's place_id via town_fetched_at. */
+/* ══ THIS SOURCE'S OWN CEILING ══════════════════════════════════════════════════════════
+   ⛔ THE DEFAULT CAP IS $2 AND IT MEASURES *ALL* ENRICHMENT SPEND, NOT THIS SOURCE'S. Passing no
+   capUsd meant a town lookup was judged against the rolling 24h total of every paid source the
+   operator had used. Measured 2026-08-09: a day holding $2.72 of seo_audit and $1.74 of ai_search
+   ($4.49, already 2.2x the cap) refused all 89 town lookups before a single Google request — 89
+   refusals for a job whose whole bill would have been 45p.
+   ⚠️ AND IT GOT WORSE THE DAY audit_and_push SHIPPED. One 25-lead job at the 5-question default is
+   ~$1.30 of questions plus ~$1.75 of competitor cleaning, so a single batch exhausts a $2 pool on
+   its own and then locks out everything cheap behind it.
+   $6 is chosen against what this source can actually spend: the whole no-town backlog is 112 leads
+   = 56p, so the ceiling is an order of magnitude above any legitimate run and still stops a runaway.
+   ⚠️ process-ai-audit-queue already passes its own ($12), which is why audits kept running while
+   this did not. place_details was the only paid source left on the shared default. */
+export const PLACE_DETAILS_CAP_USD = 6.0;
+
 export const TOWN_CACHE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface DerivedTown {
@@ -171,6 +186,7 @@ export async function resolveDerivedTown(service: any, leadId: string | null): P
       type: "place_details",
       cacheKey: `place_details:${placeId}`,
       estCostUsd: est,
+      capUsd: PLACE_DETAILS_CAP_USD,
       run: async () => {
         const details = await fetchPlaceDetails(placeId, apiKey, ESSENTIALS_FIELDS);
         return { result: details, costUsd: details ? est : 0 };
