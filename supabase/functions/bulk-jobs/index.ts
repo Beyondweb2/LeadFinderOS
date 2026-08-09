@@ -513,12 +513,46 @@ async function resolveAwaiting(service: any, job: JobRow): Promise<{ done: numbe
       byAudit.get(r.audit_id)!.push(r.status);
     }
   }
+  /* ══ A CAPPED RUN IS NOT AUTOMATICALLY A FINISHED AUDIT ═════════════════════════════════
+     ⛔ THE ASSUMPTION THAT WAS WRONG. This code accepted 'capped' on the reasoning that "a capped
+     run has real answers, just fewer than asked for". That is true of a run stopped PART WAY. It is
+     false of a run that never started a single question — and on 2026-08-08 that was every one of
+     ten: 30 queue rows, all failed, zero answers, $0.0000 spent.
+     They were handed to phase B as though audited. instantly-push then refused them with "The audit
+     named no competitors yet" — a TRUE statement about a FALSE premise, which sent Paul looking at
+     competitor extraction when the cause was queue concurrency two layers up.
+     ⚠️ So: for a capped run, ASK WHETHER ANY QUESTION WAS ANSWERED. One extra query, and only for
+     capped runs, which are rare. A complete run is not questioned — it is complete by definition. */
+  const cappedRunIds = waiting
+    .filter((it) => it.run_id && (byRun.get(it.run_id) === "capped"))
+    .map((it) => it.run_id!) as string[];
+  const answeredByRun = new Map<string, number>();
+  if (cappedRunIds.length) {
+    const { data: qrows } = await service
+      .from("ai_audit_queue").select("run_id, status").in("run_id", cappedRunIds);
+    for (const r of (qrows ?? []) as Array<{ run_id: string; status: string }>) {
+      if (r.status === "done") answeredByRun.set(r.run_id, (answeredByRun.get(r.run_id) ?? 0) + 1);
+    }
+    /* ⚠️ A run with no rows AT ALL reads as zero answered, which is the honest reading: we cannot
+       show it answered anything. Absence is not evidence of a completed audit. */
+    for (const id of cappedRunIds) if (!answeredByRun.has(id)) answeredByRun.set(id, 0);
+  }
+
   const ageMs = Date.now() - new Date(job.created_at ?? Date.now()).getTime();
   let done = 0, failed = 0;
   for (const it of waiting) {
     const sts = it.run_id
       ? (byRun.has(it.run_id) ? [byRun.get(it.run_id)!] : [])
       : (byAudit.get(it.audit_id!) ?? []);
+    /* ⛔ THE ZERO-ANSWER CAPPED RUN. Fail the item HERE, naming the real cause, rather than passing
+       it to a push that can only report the symptom. Nothing was spent — the audit never ran — so
+       this is a retry candidate, and the message says so. */
+    if (it.run_id && byRun.get(it.run_id) === "capped" && (answeredByRun.get(it.run_id) ?? 0) === 0) {
+      it.status = "failed";
+      it.error = "audit did not run — the audit queue was full or its cost cap was reached, and no question was answered. Nothing was spent; select this lead and run it again.";
+      failed++;
+      continue;
+    }
     if (sts.some((x) => x === "complete" || x === "capped")) {
       /* ⛔ CLEAN THE NAMES BEFORE ANYTHING READS THEM. The regex extractor that runs at audit time
          grabs prose fragments — "Located" reached a live report, and HMRC/Xero/QuickBooks reached

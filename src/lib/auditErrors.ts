@@ -96,7 +96,10 @@ export function explainAuditFailure(
       raw: r,
     };
   }
-  if (r === 'capped') {
+  /* ⚠️ 'capped' IS THE LEGACY TOKEN AND STILL APPEARS ON HISTORIC ROWS. It is kept alongside the
+     new 'cost_cap' rather than replaced, because rewriting history is not this function's job — and
+     a row written before 2026-08-08 genuinely cannot say which of the two gates stopped it. */
+  if (r === 'capped' || r === 'cost_cap') {
     return {
       kind: 'our_cap',
       headline: 'Stopped at this audit’s own cost ceiling.',

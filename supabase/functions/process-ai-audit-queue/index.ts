@@ -23,7 +23,8 @@ import { isAggregatorUrl } from "../_shared/aggregators.ts";
 // ai_audit_runs.results and mention_rate.
 //
 // A PER-AUDIT/RUN cost cap (CAP_USD) stops a run that would exceed the cap: its
-// remaining rows are dropped and the run is marked 'capped'. All writes use the
+// remaining rows are dropped and the run is marked 'capped' (rows carry error 'cost_cap'). A full
+// queue is NOT a cap: those rows are deferred back to 'pending' and retried next tick. All writes use the
 // service key; user_id is carried explicitly from the queue/audit rows.
 
 const corsHeaders = {
@@ -351,42 +352,79 @@ Deno.serve(async (req) => {
       const claimed = (claimedRows ?? []) as Row[];
       for (const r of claimed) touchedRuns.add(r.run_id);
 
-      // Per-RUN cost gate: only start as many rows per run as CAP_USD covers; mark the rest 'capped'.
-      const toStart: Row[] = [];
-      const perRunBudget = new Map<string, number>();
-      for (const row of claimed) {
-        let remaining = perRunBudget.get(row.run_id);
-        if (remaining === undefined) {
-          const spent = await accumulatedCost(row.run_id);
-          remaining = Math.max(0, Math.floor((CAP_USD - spent) / estCost + 1e-9));
+      /* ══ TWO GATES, AND THEY MEAN OPPOSITE THINGS ═════════════════════════════════════════
+         ⛔ THEY USED TO SHARE ONE VARIABLE AND ONE OUTCOME, AND IT COST A BATCH. Both the per-run
+         COST budget and the global CONCURRENCY headroom were folded into `remaining`, so a row that
+         merely arrived while the queue was full was marked `failed` with error 'capped' — the same
+         label a real spend cap writes. Measured 2026-08-08: an audit_and_push job of 25 leads got 15
+         through and 10 marked 'capped' with **$0.0000 spent**, rolling 24h spend at $4.67 against a
+         $12 cap. Nothing was unaffordable. The batch had simply filled all 24 in-flight slots, and
+         the last 10 rows were destroyed rather than retried. Paul went looking at spend because the
+         label said cost.
 
-      // GLOBAL CEILING: count actor runs already live across every audit and every user, and
-      // never start more than the headroom allows. This is what keeps concurrency available for
-      // directory scrapes rather than letting a big audit batch take everything.
-      // Counts every 'running' row, NOT just those carrying result._apify.runId. The actor is
-      // started before that runId is persisted, so a row mid-start is already holding an Apify
-      // slot - and a row whose runId write failed is exactly the leaked run we most want counted.
-      // Filtering on the runId would undercount precisely the dangerous cases. Over-counting a
-      // stale row is self-healing: the reclaim at the top of each tick releases it after 3 min.
+           COST is terminal    — the money for this run is gone; failing the row is correct.
+           HEADROOM is transient — the slot is free again in a minute; the row must be DEFERRED.
+
+         ⚠️ The headroom count also moved OUT of the per-run branch. It was computed inside
+         `if (remaining === undefined)`, i.e. once per run rather than once per tick, and never
+         decremented as rows were selected — so within a single tick every run measured the same
+         stale `liveNow` and could collectively overshoot the ceiling. It is now counted once and
+         decremented locally as slots are handed out. */
+      const toStart: Row[] = [];
+      const deferred: Row[] = [];
+      const perRunCostBudget = new Map<string, number>();
+
+      /* GLOBAL CEILING: actor runs already live across every audit and every user. Keeps concurrency
+         available for directory scrapes rather than letting a big audit batch take everything.
+         Counts every 'running' row, NOT just those carrying result._apify.runId — the actor is
+         started before that runId is persisted, so a row mid-start already holds an Apify slot, and
+         a row whose runId write failed is exactly the leaked run we most want counted. Over-counting
+         a stale row is self-healing: the reclaim at the top of each tick releases it after 3 min.
+         ⚠️ The rows we just claimed are themselves 'running', so they are inside this count — which
+         is why the headroom is measured before any of them is handed a slot. */
       const { count: liveNow } = await service
         .from("ai_audit_queue")
         .select("id", { count: "exact", head: true })
         .eq("status", "running");
-      const headroom = Math.max(0, AUDIT_IN_FLIGHT_CEILING - (liveNow ?? 0));
-      if (headroom < remaining) {
-        console.log(`[process-ai-audit-queue] in-flight ceiling: ${liveNow ?? 0}/${AUDIT_IN_FLIGHT_CEILING} actor runs live, starting at most ${headroom} this tick (headroom reserved for directory scrapes)`);
-        remaining = headroom;
-      }
-          perRunBudget.set(row.run_id, remaining);
+      let headroomLeft = Math.max(0, AUDIT_IN_FLIGHT_CEILING - ((liveNow ?? 0) - claimed.length));
+
+      for (const row of claimed) {
+        let costLeft = perRunCostBudget.get(row.run_id);
+        if (costLeft === undefined) {
+          const spent = await accumulatedCost(row.run_id);
+          costLeft = Math.max(0, Math.floor((CAP_USD - spent) / estCost + 1e-9));
+          perRunCostBudget.set(row.run_id, costLeft);
         }
-        if (remaining > 0) {
-          toStart.push(row);
-          perRunBudget.set(row.run_id, remaining - 1);
-        } else {
+
+        /* ⛔ A REAL CAP. This run has spent its budget; the row will never be affordable, so it is
+           terminal. 'cost_cap' rather than 'capped' so the reason is legible at a glance and cannot
+           be confused with a full queue ever again. */
+        if (costLeft <= 0) {
           cappedRuns.add(row.run_id);
           await service.from("ai_audit_queue")
-            .update({ status: "failed", result: { error: "capped" } }).eq("id", row.id);
+            .update({ status: "failed", result: { error: "cost_cap" } }).eq("id", row.id);
+          continue;
         }
+
+        /* ⛔ NOT A CAP AT ALL. The queue is busy. Put the row back to 'pending' and let the next
+           tick claim it — it costs nothing, nothing has been started, and the work is still wanted.
+           It is deliberately NOT added to cappedRuns: marking the run capped here would finalise an
+           audit that has not been attempted. */
+        if (headroomLeft <= 0) { deferred.push(row); continue; }
+
+        toStart.push(row);
+        perRunCostBudget.set(row.run_id, costLeft - 1);
+        headroomLeft--;
+      }
+
+      if (deferred.length) {
+        /* Back to pending in one write. Guarded on 'running' so a row someone else has already
+           moved on is left alone. */
+        await service.from("ai_audit_queue")
+          .update({ status: "pending" })
+          .in("id", deferred.map((r) => r.id))
+          .eq("status", "running");
+        console.log(`[process-ai-audit-queue] in-flight ceiling ${liveNow ?? 0}/${AUDIT_IN_FLIGHT_CEILING}: DEFERRED ${deferred.length} row(s) back to pending for the next tick (not failed, nothing spent)`);
       }
 
       // START one row: daily-cap check + cost/usage recording via runEnrichSource (the billable event
@@ -655,7 +693,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       const leftover = rows.filter((r: Row) => r.status === "pending" || r.status === "running");
       if (leftover.length) {
         await service.from("ai_audit_queue")
-          .update({ status: "failed", result: { error: "capped" } })
+          .update({ status: "failed", result: { error: "cost_cap" } })
           .eq("run_id", runId).in("status", ["pending", "running"]);
         for (const r of leftover) r.status = "failed";
       }
