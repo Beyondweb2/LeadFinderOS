@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConversation, type LeadLite } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS } from '@/lib/whatsappTemplates';
 import { useToast } from '@/hooks/use-toast';
@@ -193,7 +194,26 @@ const Inbox = () => {
     }
   };
 
-  const [activeKey, setActiveKey] = useState<string | null>(null);
+  /* ══ THE CONVERSATION LIVES IN THE URL ═════════════════════════════════════════════════
+     ⛔ IT WAS useState, AND THAT IS WHY THE INBOX LOST YOUR PLACE. React Router unmounts a route
+     component on navigation, so the thread you were reading died the moment you left — while the
+     campaign and status filters right below survived, because they use usePersistedState. Two halves
+     of "where I was" with two different lifetimes: the same fault as the search results restoring
+     without the search that produced them.
+     ⚠️ THE URL, NOT sessionStorage, and for the reason Index.tsx already gives for the market view:
+     one mechanism covers the back button, a refresh, a pasted link and returning to the page. A
+     conversation is WHAT I AM LOOKING AT, not how the page is configured — that is the line for
+     deciding what goes in the URL and what stays in usePersistedState.
+     ⚠️ PUSHED, not replaced, so Back steps out of a thread the way it does in any mail client. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeKey = searchParams.get('c');
+  const setActiveKey = useCallback((key: string | null) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (key) next.set('c', key); else next.delete('c');
+      return next;
+    });
+  }, [setSearchParams]);
   const [synthetic, setSynthetic] = useState<WaConversation | null>(null);
   // Campaign filter (null = all). Unassigned conversations are ALWAYS shown, even
   // when a specific campaign is selected — that's where mis-routed / unknown-sender
@@ -211,7 +231,26 @@ const Inbox = () => {
   // Remove-from-inbox (status → 'closed'): in-flight spinner + optimistic hide keys.
   const [removingKey, setRemovingKey] = useState<string | null>(null);
   const [removedKeys, setRemovedKeys] = useState<Set<string>>(new Set());
-  const [text, setText] = useState('');
+  /* ══ THE HALF-TYPED REPLY ════════════════════════════════════════════════════════════
+     ⛔ KEYED BY CONVERSATION, NOT BY PAGE. One shared draft string would be worse than losing it:
+     open another thread and your half-written message would follow you into it, ready to send to the
+     wrong person. The draft belongs to the thread, so it is stored against the thread.
+     ⚠️ 'local', NOT 'session' — the one place in this app where that is right. Paul: losing a
+     message partway through writing is worse than losing your place, and worth a slightly ugly fix.
+     A closed tab must not take it.
+     ⚠️ AN EMPTY DRAFT IS DELETED, not stored as "". That is what makes a successful send clear it
+     (the send path already calls setText('')), and it is what stops the map growing a key per
+     thread ever opened. The cap below is a backstop for a map that somehow still grows. */
+  const [drafts, setDrafts] = usePersistedState<DraftMap>(
+    'inbox-drafts', {}, { tier: 'local', scope: user?.id },
+  );
+  /* The rules live in src/lib/inboxDrafts.ts so they can be tested — scripts/inbox-drafts.test.ts
+     drives the cross-thread leak, the post-send clear, whitespace, the cap and a corrupt store.
+     None of that is reachable from a component. */
+  const text = getDraft(drafts, activeKey);
+  const setText = useCallback((v: string) => {
+    setDrafts((prev) => setDraft(prev, activeKey, v));
+  }, [activeKey, setDrafts]);
   /* Starts UNSELECTED, deliberately. This used to default to WA_REPLY_TEMPLATES[0], which is
      booking_page_intro — the barber booking pitch — so every thread opened with a barber template
      armed regardless of trade. On an accountant thread only the "no site link yet" guard stood
@@ -532,7 +571,11 @@ const Inbox = () => {
       setActiveKey(key);
     }
     setNewOpen(false);
-    setText('');
+    /* ⛔ NO setText('') HERE ANY MORE, AND REMOVING IT IS THE POINT. It used to clear the single
+       shared composer so a new thread opened empty. Drafts are now keyed by conversation, so this
+       would clear the draft of the thread we just LEFT — setText closes over the current activeKey,
+       which at this moment is still the old one. The new thread already opens empty by construction,
+       or with its own saved draft if one was left there, which is what you would want. */
   };
 
   // Launch from the Outreach WhatsApp button / dashboard jump: open that lead's thread.
