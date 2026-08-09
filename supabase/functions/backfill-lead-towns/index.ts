@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveDerivedTown } from "../_shared/place-town.ts";
+import { selectInChunks } from "../_shared/chunked-in.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    BACKFILL THE TOWN ON LEADS THAT WERE ADDED WITHOUT ONE.
@@ -78,17 +79,37 @@ Deno.serve(async (req) => {
     /* Candidates: the caller's OWN leads, not archived, WITH a place_id (Google has nothing to say
        about a lead without one) and with no town yet. When lead_ids is given the selection is
        filtered to the same rule rather than trusted — a selection is a request, not a verdict. */
-    let q = service
-      .from("outreach_leads")
-      .select("id, business_name, place_id, derived_town, search_location, address, is_archived")
-      .eq("user_id", user.id)
-      .eq("is_archived", false)
-      .not("place_id", "is", null)
-      .order("id", { ascending: true })
-      .limit(MAX_PER_CALL);
-    if (leadIds.length) q = q.in("id", leadIds);
-    const { data: rows, error: qErr } = await q;
-    if (qErr) return json({ error: qErr.message }, 500);
+    const COLS = "id, business_name, place_id, derived_town, search_location, address, is_archived";
+    const base = () => service.from("outreach_leads").select(COLS)
+      .eq("user_id", user.id).eq("is_archived", false).not("place_id", "is", null);
+
+    /* The exact shape the eligibility filter below reads. Typed rather than Record<string, unknown>
+       so `blank(l.derived_town)` stays checkable — an unknown would have compiled and told us
+       nothing. */
+    interface LeadRow {
+      id: string; business_name: string | null; place_id: string | null;
+      derived_town: string | null; search_location: string | null; address: string | null;
+      is_archived: boolean | null;
+    }
+    let rows: LeadRow[] = [];
+    try {
+      if (leadIds.length) {
+        /* ⛔ CHUNKED. A single .in() with the operator's whole selection puts every id in the URL
+           and the request line is dropped before PostgREST sees it — measured 2026-08-09: 200 ids
+           fine, 400 ids "TypeError: fetch failed". Paul pressed this with ~1,000 leads selected and
+           got a bare 500 from the catch below. See _shared/chunked-in.ts.
+           ⚠️ The LIMIT is applied after merging, not per chunk, or it would mean something else. */
+        rows = await selectInChunks<LeadRow>(leadIds, (chunk) => base().in("id", chunk));
+        rows.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      } else {
+        const { data, error } = await base().order("id", { ascending: true }).limit(MAX_PER_CALL);
+        if (error) return json({ error: error.message }, 500);
+        rows = (data ?? []) as LeadRow[];
+      }
+    } catch (e) {
+      /* Named, not swallowed. "internal" is what made this take a diagnosis instead of a glance. */
+      return json({ error: `candidate lookup failed: ${(e as Error).message}` }, 500);
+    }
 
     /* ⛔ "HAS A TOWN" IS A POSITIVE TEST, and it is the whole eligibility rule. A lead is a
        candidate only when we can see that every town field is genuinely empty — never "not one of

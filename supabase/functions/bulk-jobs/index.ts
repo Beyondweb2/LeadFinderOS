@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkSuppressed } from "../_shared/suppression.ts";
+import { selectInChunks } from "../_shared/chunked-in.ts";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
@@ -159,17 +160,20 @@ interface TriageRow {
 // deno-lint-ignore no-explicit-any
 async function triageForPush(service: any, userId: string, leadIds: string[], cap: number): Promise<TriageRow[]> {
   if (!leadIds.length) return [];
-  const { data: rows } = await service
+  /* ⛔ CHUNKED, FOR THE SAME REASON backfill-lead-towns is. This takes the operator's RAW
+     selection, so it is unbounded: 316 leads (~11,700 URL bytes) worked on 2026-08-08 and 400
+     (~14,800) is measured to fail outright. That was luck. See _shared/chunked-in.ts. */
+  const rowsAll = await selectInChunks<Record<string, string | null>>(leadIds, (chunk) => service
     .from("outreach_leads")
     .select("id, business_name, email, phone, instantly_pushed_at, search_keyword, category, search_location, address")
     .eq("user_id", userId)
-    .in("id", leadIds)
-    /* ⛔ A STABLE ORDER, because the cap slices this list. Without it PostgREST returns rows in
-       whatever order it likes, so the preview and the create — two separate queries — could pick
-       DIFFERENT 25 leads, and the confirm would describe a job that never ran. Same reason
-       fetchAllRows insists on a unique tiebreaker. */
-    .order("id", { ascending: true });
-  const leads = (rows ?? []) as Array<Record<string, string | null>>;
+    .in("id", chunk)
+    .order("id", { ascending: true }));
+  /* ⛔ A STABLE ORDER, because the cap slices this list. Without it the preview and the create —
+     two separate queries — could pick DIFFERENT 25 leads and the confirm would describe a job that
+     never ran. Sorted HERE rather than relying on the database, because chunked reads arrive in
+     chunk order and a per-chunk ORDER BY does not order the whole. */
+  const leads = rowsAll.sort((a, b) => String(a.id).localeCompare(String(b.id)));
   if (!leads.length) return [];
 
   /* WHICH LEADS ALREADY HAVE AN ANSWERED AUDIT. Two reads rather than a join, because the

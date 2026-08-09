@@ -1014,6 +1014,29 @@ export function OutreachTable({
     [leads, selectedIds],
   );
 
+  /* ⛔ "non 2xx error" IS NOT AN ERROR MESSAGE. supabase.functions.invoke throws a
+     FunctionsHttpError whose .message is that generic string and whose .context is the actual
+     Response — body and all. Reading only .message threw away the server's own explanation, which
+     turned a one-line diagnosis into a hunt: the real body said the candidate lookup had failed.
+     Same rule as src/lib/auditErrors.ts — when a UI explains a failure, the explanation must be
+     derived from the failure. */
+  const edgeErrorText = async (error: unknown, data: unknown): Promise<string> => {
+    const ctx = (error as { context?: Response } | null)?.context;
+    if (ctx && typeof ctx.text === "function") {
+      try {
+        const raw = await ctx.text();
+        try {
+          const j = JSON.parse(raw);
+          if (typeof j?.error === "string" && j.error) return `${j.error} (HTTP ${ctx.status})`;
+        } catch { /* not JSON — fall through to the raw text, which is still better than nothing */ }
+        if (raw.trim()) return `${raw.trim().slice(0, 300)} (HTTP ${ctx.status})`;
+      } catch { /* body already consumed or unreadable */ }
+    }
+    const d = (data as { error?: string } | null)?.error;
+    if (typeof d === "string" && d) return d;
+    return (error as Error)?.message || "unknown error";
+  };
+
   /** Ask what it would do and what it would cost. Spends nothing. */
   const openTownFix = async () => {
     setTownFixOpen(true);
@@ -1022,7 +1045,7 @@ export function OutreachTable({
       body: { lead_ids: Array.from(selectedIds), dry_run: true },
     });
     if (error || !data?.ok) {
-      toast({ title: 'Could not check', description: error?.message ?? data?.error, variant: 'destructive' });
+      toast({ title: 'Could not check', description: await edgeErrorText(error, data), variant: 'destructive' });
       setTownFixOpen(false);
       return;
     }
@@ -1035,7 +1058,7 @@ export function OutreachTable({
       const { data, error } = await supabase.functions.invoke('backfill-lead-towns', {
         body: { lead_ids: Array.from(selectedIds) },
       });
-      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'failed');
+      if (error || !data?.ok) throw new Error(await edgeErrorText(error, data));
       /* ⛔ EVERY OUTCOME NAMED. "Google has no town for this address" is not a failure to retry,
          and reporting only the successes would leave the operator wondering about the rest. */
       const bits = [`${data.filled} got a town`];
