@@ -593,6 +593,53 @@ number must not be reported as "none".
   built-up area — the Southsea/Portsmouth caveat in §8, live again. A real answer needs distance from
   the town centroid: `uk_towns` already holds lat/lng.
 
+### 🔴 0. THE WRONG-TOWN RATE, MEASURED 2026-08-09 — THIS IS NOW FIRST
+Paul reordered the list after this landed, and he is right: cheaper reports about the wrong town are
+worse, not better, and the derivation keys a prospect to their town's market audit so it inherits the
+fault.
+
+**Of 44 audits now measurable, 31 (70%) are more than 10 km from the town they were audited against.**
+```
+>  5 km: 34      > 10 km: 31      > 15 km: 29      > 25 km: 28
+71.5 km  Locksmith Northampton - KMI   audited against "spalding"
+58.2 km  DSB Locksmiths                audited against "wisbech"
+57.6 km  Uno Accountancy Services      audited against "spalding"
+```
+A locksmith with **Northampton in its own name** was asked who AI recommends in Spalding and told it
+does not appear. That is RG Locksmiths and Wilson, thirty-one times over.
+
+⚠️ **THE 70% IS A WORST-CASE SUBSET, NOT A RATE — do not quote it as one.** Those 44 are exactly the
+leads that had NO location evidence, i.e. the ones whose audit had to fall back to `search_location`.
+The true rate across all audits is unknown until more leads carry coordinates.
+
+✅ **How it became measurable:** `outreach_leads.lat/lng` (migration 20260809120000) storing the
+`location` field that ESSENTIALS_FIELDS had always fetched and place-town.ts discarded, plus
+`uk_towns` lat/lng on all 733 rows. 262 lookups run 2026-08-09, 49 of them audited leads
+(25 locksmiths + 24 accountants), **100% got a town** — not one "no town in address".
+
+**THE ORDER, agreed with Paul:**
+1. **Backfill the remaining 63 audited leads without coordinates (~32p)** and report the TRUE rate
+   across all audited leads, not the worst-case subset.
+2. **The >10 km guard**, which is what stops this recurring. ⚠️ **PROPOSE BLOCK-vs-WARN BEFORE
+   BUILDING IT.** Blocking means Paul cannot audit a business whose coordinates we do not have, which
+   is most of them today — so a naive block would stop the product working. Warn-with-the-distance,
+   block only when we KNOW it is far, is the shape to argue for.
+3. Then the derivation (§4 below).
+
+**TWO QUESTIONS PAUL WANTS ANSWERED WHEN THIS IS PICKED UP:**
+- **How many of the 31 had a REPORT SENT to them?** Those prospects were told something wrong about a
+  town they do not work in. He would rather have the number than meet it one complaint at a time.
+  (§8 already records 37 reports sent with the wrong-town problem — reconcile the two figures.)
+- **Why did the audit use `search_location` at all when the business had no location evidence?** A
+  71 km gap means a radius search pulled in a business from another county and nothing questioned it.
+  Say whether the fix belongs at audit time, at lead-add time, or both.
+
+⚠️ **AND QUOTE THE REAL NUMBER OF LEADS, NOT THE INTERESTING ONE.** I told Paul the backfill would
+cost ~56p, from the 112 AUDITED leads with no location evidence. The button's rule is not restricted
+to audited leads, so it ran 262 lookups and cost **$1.31** — 2.3x the quote, on a spend he had
+approved on the strength of it. Fine in itself; the quote was still wrong. Count what the code will
+actually do, not the subset the analysis was about.
+
 ### 4. THEN THE MARKET-AUDIT DERIVATION — RECON DONE 2026-08-09, IT HOLDS UP
 Generate a prospect's report from the town's market audit instead of a per-business audit.
 - ✅ **Business audits ask NOTHING business-specific.** 925 questions: **0** carry a business-identity
@@ -607,6 +654,11 @@ Generate a prospect's report from the town's market audit instead of a per-busin
 - ⚠️ **But `named` is STORED, not derived**, and a market audit's stored flags are against its own
   (non-)business name. A derived report must **recompute per prospect**. Free, no API call, and it is
   the one real code change: `buildReportData` reads `r.result[e].named`.
+- ✅ **THE GATE IS ALREADY BUILT AND TESTED: `_shared/derivable.ts` + `scripts/derivable.test.ts`.**
+  Nothing calls it yet — wire it, do not rebuild it. Two bugs in it were caught by writing the test
+  first: it leaned on `candidateCores` to strip the trade and town (it does not — that truncates for
+  MERGE purposes, a different job), and a trade word in another grammatical form still passed
+  ("Chichester Accountancy" vs trade "accountants"), now a shared 5-character stem.
 - ⚠️ **THE FAIL-SAFE PAUL ASKED FOR:** strip trade and town tokens from the business name; if nothing
   distinctive remains ("Chichester Accountants Ltd"), **refuse to derive** and fall back to a paid
   per-business audit. A zero there means "we could not tell", not "you are invisible", and those must
