@@ -1059,14 +1059,31 @@ export function OutreachTable({
         body: { lead_ids: Array.from(selectedIds) },
       });
       if (error || !data?.ok) throw new Error(await edgeErrorText(error, data));
-      /* ⛔ EVERY OUTCOME NAMED. "Google has no town for this address" is not a failure to retry,
-         and reporting only the successes would leave the operator wondering about the rest. */
+      /* ⛔ EVERY OUTCOME NAMED, AND THE CAP NAMED LOUDEST. This used to print "89 failed" and a
+         spend figure, both wrong: the daily enrichment cost cap had refused every lead before any
+         Google call, so nothing failed and nothing was spent. A count with no cause is what sent
+         Paul hunting a Google problem that did not exist — and the reasons were in the response all
+         along, in data.unresolved, thrown away by this toast. */
+      if (data.cap_blocked) {
+        toast({
+          title: 'Stopped — the daily enrichment budget is used up',
+          description: `Nothing was spent and nothing is wrong with these leads. The $2/day cap covers `
+            + `all enrichment (audits and SEO scans too), and today's is gone. None of the `
+            + `${data.candidates} were looked up — try again tomorrow.`,
+          variant: 'destructive',
+        });
+        return;
+      }
       const bits = [`${data.filled} got a town`];
       if (data.no_town) bits.push(`${data.no_town} have no town in their Google address`);
       if (data.failed) bits.push(`${data.failed} failed`);
+      /* The server's own reasons, not a recount. First distinct one is enough for a toast. */
+      const firstReason = (data.unresolved ?? [])[0]?.reason;
+      if (data.failed && firstReason) bits.push(`first reason: ${firstReason}`);
       toast({
         title: `Town backfill: ${data.filled} of ${data.candidates} filled`,
-        description: `${bits.join(' · ')} · spent ~$${Number(data.spent_usd ?? 0).toFixed(2)} (every attempt is billed, not just the hits)`,
+        description: `${bits.join(' · ')} · spent ~$${Number(data.spent_usd ?? 0).toFixed(2)} across `
+          + `${data.attempted ?? 0} lookup${(data.attempted ?? 0) === 1 ? '' : 's'} that reached Google`,
         variant: data.filled === 0 ? 'destructive' : undefined,
       });
       setTownFixOpen(false);
