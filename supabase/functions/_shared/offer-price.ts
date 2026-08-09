@@ -46,7 +46,8 @@ export interface OfferPrice {
   /** True when the founder price applies to this lead. */
   isFounder: boolean;
   /** Why, in one word, for the log and for a human reading a refusal. */
-  reason: "founder_eligible" | "offer_closed" | "no_lead" | "already_paid" | "no_completed_audit" | "lookup_failed";
+  reason: "founder_eligible" | "offer_closed" | "no_lead" | "already_paid" | "no_completed_audit"
+    | "audit_never_ran" | "lookup_failed";
 }
 
 const full = (reason: OfferPrice["reason"]): OfferPrice => ({
@@ -57,17 +58,19 @@ const full = (reason: OfferPrice["reason"]): OfferPrice => ({
 });
 
 /* A minimal structural type. This file is imported by two edge functions and must not drag in
-   supabase-js generics, which are what put three pre-existing errors in generate-barber-site. */
-interface Queryable {
-  from: (t: string) => {
-    select: (c: string) => {
-      eq: (c: string, v: unknown) => {
-        maybeSingle: () => Promise<{ data: Record<string, unknown> | null }>;
-        limit: (n: number) => Promise<{ data: Record<string, unknown>[] | null }>;
-        in: (c: string, v: unknown[]) => { limit: (n: number) => Promise<{ data: Record<string, unknown>[] | null }> };
-      };
-    };
-  };
+   supabase-js generics, which are what put three pre-existing errors in generate-barber-site.
+   Chainable and recursive, which is what PostgREST's builder actually is — the previous shape
+   hardcoded one exact call order and had to be widened the moment a second query shape was needed.
+   ⚠️ It is also what makes this function testable: a plain object satisfies it, so the REAL
+   function can be driven against fake rows rather than a restatement of it. */
+interface Filterable {
+  eq: (c: string, v: unknown) => Filterable;
+  in: (c: string, v: unknown[]) => Filterable;
+  limit: (n: number) => Promise<{ data: Record<string, unknown>[] | null }>;
+  maybeSingle: () => Promise<{ data: Record<string, unknown> | null }>;
+}
+export interface Queryable {
+  from: (t: string) => { select: (c: string) => Filterable };
 }
 
 /**
@@ -86,17 +89,50 @@ export async function offerPriceForLead(service: Queryable, leadId: string | nul
     if (!lead) return full("no_lead");
     if ((Number(lead.amount_paid) || 0) > 0) return full("already_paid");
 
-    /* 2. HAS A COMPLETED AUDIT. The non-forgeable half: the offer lives at the bottom of a report,
-       and a report only exists because an audit ran. `status = complete` and not just an audit row,
-       so a queued audit somebody triggered a second ago does not unlock the price. */
+    /* 2. HAS AN AUDIT THAT PRODUCED ANSWERS. The non-forgeable half: the offer lives at the bottom
+       of a report, and a report only exists because an audit ran. Not merely an audit ROW, so a
+       queued audit somebody triggered a second ago does not unlock the price.
+
+       ⛔ 'capped' COUNTS — BUT ONLY WHEN IT ANSWERED SOMETHING, AND THE DIFFERENCE IS THE WHOLE
+       POINT. This used to accept `status = complete` alone, which put it out of step with every
+       other reader: resolveAuditReplyVars, bulk-jobs' triage, useInbox and the audit pills all treat
+       a capped run as usable, because a capped run normally has real answers and just fewer than
+       asked for. Ten leads sat with a readable report and a £99 plan card because of it — two
+       surfaces disagreeing about one lead.
+       ⚠️ BUT ALIGNING ON THE TOKEN WOULD HAVE BEEN WRONG. 'capped' spans two different realities,
+       and on 2026-08-08 those same ten leads were the OTHER one: capped with ZERO questions answered,
+       because the queue was full rather than because money ran out. There is no report at the end of
+       that, so the premise of the offer — you have seen what AI says about you — is simply false.
+       Accepting the token blindly would hand the founder price to someone who has seen nothing.
+       So the rule is what the rest of the system MEANS by capped-is-usable, not what it says:
+       complete, OR capped with at least one answered question. Same absent-value discipline as
+       everywhere else — assert on the state you want, never on the label that usually implies it. */
     const { data: audits } = await service.from("ai_audits").select("id").eq("lead_id", leadId).limit(50);
     const auditIds = (audits ?? []).map((a) => String(a.id)).filter(Boolean);
     if (auditIds.length === 0) return full("no_completed_audit");
 
-    const { data: runs } = await service.from("ai_audit_runs").select("id").eq("status", "complete").in("audit_id", auditIds).limit(1);
-    if (!runs || runs.length === 0) return full("no_completed_audit");
+    const { data: runRows } = await service.from("ai_audit_runs")
+      .select("id, status").in("audit_id", auditIds).limit(100);
+    const runs = runRows ?? [];
+    const founder: OfferPrice = {
+      gbp: FOUNDER_PRICE_GBP, label: `£${FOUNDER_PRICE_GBP}`, isFounder: true, reason: "founder_eligible",
+    };
 
-    return { gbp: FOUNDER_PRICE_GBP, label: `£${FOUNDER_PRICE_GBP}`, isFounder: true, reason: "founder_eligible" };
+    /* The fast path, and the one that carries almost everything: a complete run needs no checking. */
+    if (runs.some((r) => r.status === "complete")) return founder;
+
+    const cappedIds = runs.filter((r) => r.status === "capped").map((r) => String(r.id)).filter(Boolean);
+    if (cappedIds.length === 0) return full("no_completed_audit");
+
+    /* One extra query, and only for a lead whose best run is capped — rare. A single answered
+       question is enough: that is a report with something in it, which is all the offer claims. */
+    const { data: qRows } = await service.from("ai_audit_queue")
+      .select("run_id, status").in("run_id", cappedIds).limit(500);
+    if ((qRows ?? []).some((q) => q.status === "done")) return founder;
+
+    /* Capped and empty. Named separately from no_completed_audit so the log says which it was —
+       "there is no audit" and "the audit never got to run" send you to different places. */
+    return full("audit_never_ran");
   } catch (e) {
     /* ⛔ FAIL CLOSED. A lookup that throws charges the standard price. Anything else would let a
        transient database error hand out a 80% discount, silently, to everyone. */
