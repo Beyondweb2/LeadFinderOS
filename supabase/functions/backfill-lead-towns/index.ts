@@ -127,16 +127,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    let filled = 0, noTown = 0, failed = 0;
+    let filled = 0, noTown = 0, failed = 0, capped = 0, attempted = 0;
     const unresolved: Array<{ id: string; business_name: string | null; reason: string }> = [];
 
     for (let i = 0; i < candidates.length; i += CONCURRENCY) {
+      /* ⛔ STOP THE MOMENT THE COST CAP REFUSES. runEnrichSource checks a rolling 24h spend against
+         DAILY_CAP_USD ($2, per user, across ALL enrichment) BEFORE it fetches, so once it says no it
+         will say no to every remaining lead. On 2026-08-09 that produced 89 identical refusals in
+         one run — free, but reported as "89 failed" with no cause, which sent Paul hunting a Google
+         problem that did not exist. One refusal is the answer; 88 more are noise. */
+      if (capped > 0) break;
       const slice = candidates.slice(i, i + CONCURRENCY);
       const out = await Promise.allSettled(slice.map((l) => resolveDerivedTown(service, l.id)));
       out.forEach((r, k) => {
         const lead = slice[k];
         if (r.status !== "fulfilled") {
-          failed++;
+          failed++; attempted++;
           unresolved.push({ id: lead.id, business_name: lead.business_name, reason: String((r.reason as Error)?.message ?? r.reason).slice(0, 140) });
           return;
         }
@@ -144,7 +150,17 @@ Deno.serve(async (req) => {
            is not the same as "the call failed", and folding them together would send the operator
            to retry something that will never work. resolveDerivedTown already stamps the reason on
            the row; this reports it back so the button can say what happened. */
-        if (r.value.town) { filled++; return; }
+        if (r.value.town) { filled++; attempted++; return; }
+        /* ⛔ THE COST CAP IS NOT A FAILURE AND IT IS NOT BILLED. runEnrichSource returns
+           costUsd: 0 and never calls Google, so nothing was spent and nothing is wrong with the
+           lead — the day's enrichment budget is simply used up. Counting it as "failed" is what made
+           a free no-op look like 89 broken lookups. */
+        if (/cost cap/i.test(r.value.error ?? "")) {
+          capped++;
+          unresolved.push({ id: lead.id, business_name: lead.business_name, reason: "daily enrichment cost cap reached — nothing spent" });
+          return;
+        }
+        attempted++;
         if (r.value.error) {
           failed++;
           unresolved.push({ id: lead.id, business_name: lead.business_name, reason: r.value.error.slice(0, 140) });
@@ -155,13 +171,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`[backfill-lead-towns] user=${user.id} candidates=${candidates.length} filled=${filled} noTown=${noTown} failed=${failed}`);
+    console.log(`[backfill-lead-towns] user=${user.id} candidates=${candidates.length} attempted=${attempted} filled=${filled} noTown=${noTown} failed=${failed} capped=${capped}`);
     return json({
       ok: true,
       candidates: candidates.length,
-      filled, no_town: noTown, failed,
-      /* An honest spend figure: every ATTEMPT is billed, not just the ones that found a town. */
-      spent_usd: Number((candidates.length * ESSENTIALS_USD).toFixed(2)),
+      filled, no_town: noTown, failed, capped,
+      /* ⛔ MEASURED, NOT ESTIMATED, AND THIS LINE USED TO LIE. It was candidates.length × the rate,
+         under a comment calling itself "an honest spend figure" — which is only true if every
+         attempt reached Google. On 2026-08-09 the cost cap refused all 89 before any request and
+         this reported ~$0.45 of spend that never happened. Paul believed it, because why would the
+         function be wrong about its own bill.
+         attempted counts only the leads that actually got as far as a Google call. */
+      attempted,
+      spent_usd: Number((attempted * ESSENTIALS_USD).toFixed(2)),
+      /* Stated so a zero is legible as "nothing was bought" rather than "nothing was found". */
+      cap_blocked: capped > 0,
       unresolved: unresolved.slice(0, 40),
     });
   } catch (e) {
