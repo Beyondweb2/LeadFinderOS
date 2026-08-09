@@ -21,7 +21,7 @@ let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
 
 /* Restated from process-whatsapp-queue. */
-const DAILY_CAP = 60;
+const DAILY_CAP = 100;
 const SEND_GAP_FLOOR_MIN = 10;
 const SEND_GAP_CEILING_MIN = 180;
 const SEND_GAP_JITTER_LOW = 0.55;
