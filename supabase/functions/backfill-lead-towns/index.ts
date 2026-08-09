@@ -111,13 +111,20 @@ Deno.serve(async (req) => {
       return json({ error: `candidate lookup failed: ${(e as Error).message}` }, 500);
     }
 
-    /* ⛔ "HAS A TOWN" IS A POSITIVE TEST, and it is the whole eligibility rule. A lead is a
-       candidate only when we can see that every town field is genuinely empty — never "not one of
-       the shapes I expected". derived_town is what an audit prefers; search_location and address
-       are the fallbacks it accepts, so a lead holding either is already auditable and must not be
-       paid for again. */
+    /* ⛔ "WHERE IS THIS BUSINESS?" IS NOT "CAN THIS BE AUDITED?", AND CONFLATING THEM AIMED THIS
+       BUTTON AT THE WRONG LEADS. The first version also required search_location to be blank, on the
+       reasoning that a lead holding one is already auditable and must not be paid for twice. True
+       for auditing — and exactly wrong here, because search_location is the town Paul SEARCHED, not
+       where the business is, and it is the thing under suspicion. Requiring it blank disqualified
+       precisely the leads that need checking.
+       Measured 2026-08-09: the old rule targeted 89 leads, mostly barbers from the retired product
+       line, while missing 112 audited leads with no location evidence at all — 51 plumbers, 25
+       locksmiths, 24 accountants, 12 electricians, every one in a trade Paul works and unarchived.
+       ⚠️ STILL A POSITIVE TEST. A lead is a candidate only when derived_town AND address are both
+       provably empty and a place_id exists — never "not one of the shapes I expected". Those two are
+       the only fields that say where a business IS. */
     const candidates = (rows ?? []).filter((l) =>
-      blank(l.derived_town) && blank(l.search_location) && blank(l.address) && !blank(l.place_id));
+      blank(l.derived_town) && blank(l.address) && !blank(l.place_id));
 
     if (dryRun || !candidates.length) {
       return json({
