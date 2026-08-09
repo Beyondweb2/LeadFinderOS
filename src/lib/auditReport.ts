@@ -3,6 +3,14 @@
 // React, NO browser/DOM deps, so it runs in BOTH the SPA and a Deno edge function (automation
 // B's server-side report renderer). Extracted VERBATIM from src/pages/AiAudit.tsx — logic
 // unchanged; only `export` added to the symbols the app + server consume.
+/* ⛔ THE REAL GROUPER, NOT A SECOND ONE. market-match.ts already knows that "Chapman’s Valeting"
+   and "Chapman's Valeting" are one firm, and a private copy here would drift from the market view
+   the first time either changed — the exact failure mode this report already suffered.
+   ⚠️ RELATIVE PATH WITH AN EXPLICIT .ts, never "@/": this file is bundled into render-audit-report
+   and Deno cannot resolve the Vite alias (CLAUDE.md §4). Verified browser-safe before wiring it —
+   the whole chain (market-match -> ai-search -> apify) uses no Deno globals, so the SPA can import
+   it too and both sides group names identically. */
+import { buildMatchContext, groupNames } from "../../supabase/functions/_shared/market-match.ts";
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
 
 // Engines shown in results (queue targets chatgpt+gemini; the actor also returns
@@ -16,6 +24,8 @@ export interface EngineResult {
   named: boolean;
   position: number | null;
   competitors: string[];
+  topCompetitors?: { name: string; count: number }[];
+  competitorMentions?: number;
   citations: { title: string; url: string }[];
   answer_text: string;
 }
@@ -716,7 +726,37 @@ export function buildReportData(
       }
     }
   }
-  const competitors = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 4).map((x) => x.name);
+  /* ══ WHO AI ACTUALLY RECOMMENDS MOST ══════════════════════════════════════════════════
+     ⛔ GROUPING IS A PRECONDITION, NOT A REFINEMENT. Ranking a SPLIT count names the wrong firms
+     with more confidence than not ranking at all. Measured on Wilson's Cambridge market
+     2026-08-09: "Chapman’s Valeting & Detailing Specialists" (13, curly apostrophe) and
+     "Chapman's …" (8, straight) are one firm with 21 — the real leader, ranking below a split of
+     itself. Group first, then rank.
+
+     ⚠️ THE DISPLAY NAME IS THE MOST-MENTIONED SPELLING in the group, not the first or the longest.
+     It is the form the engines actually use most, which is the one a reader will recognise. */
+  const ctxMatch = buildMatchContext(ctx.businessType ?? '', ctx.locationText ?? '');
+  const groups = groupNames([...counts.values()].map((c) => c.name), ctxMatch);
+  const byGroup = new Map<string, { name: string; count: number; spellings: string[] }>();
+  for (const grp of groups.values()) {
+    let total = 0;
+    let best = { name: grp.names[0] ?? '', count: -1 };
+    for (const n of grp.names) {
+      const c = counts.get(n.trim().toLowerCase());
+      const got = c?.count ?? 0;
+      total += got;
+      if (got > best.count) best = { name: n, count: got };
+    }
+    if (total > 0) byGroup.set(grp.key, { name: best.name, count: total, spellings: grp.names });
+  }
+  /* Ranked by grouped count, ties broken by name so the order is stable between renders of the
+     same audit — a report that reshuffles its competitors on refresh reads as made up. */
+  const ranked = [...byGroup.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const competitors = ranked.slice(0, 4).map((x) => x.name);
+  /* Carried WITH counts so the document can say how often, which is the part that makes it
+     credible: "Ultimate Valet Cambridge (5)" is checkable, "Ultimate Valet Cambridge" is a claim. */
+  const topCompetitors = ranked.slice(0, 3).map((x) => ({ name: x.name, count: x.count }));
+  const competitorMentions = ranked.reduce((n, x) => n + x.count, 0);
 
   /* Per-term winnability is NOT built into the customer report's data. The verdict is not
      defensible yet (77.6% of 402 stored questions read "winnable", 0% ever read "locked", and
@@ -734,6 +774,11 @@ export function buildReportData(
     pct: total > 0 ? Math.round((named / total) * 100) : 0,
     perEngine,
     competitors,
+    /* The audit-wide leaders. The report names THESE, not whoever happened to appear in the one
+       answer gutPunch quotes — that is what put "Get A Splash, Fresh Car, Clean Me" on Wilson's
+       report while Ultimate Valet, the top firm in his own data, went unmentioned. */
+    topCompetitors,
+    competitorMentions,
     gutPunch: pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
     // The date the AUDIT WAS MEASURED, not the date someone happened to open the link.
     // render-audit-report rebuilds this on every request, so new Date() re-dated a three-week-old

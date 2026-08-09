@@ -77,8 +77,18 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
   // the raw frequency count (the exact bug this fixes). gutPunch rivals are already curated —
   // never filtered here.
   const US_MARKERS = /\b(LLC|L\.L\.C\.?|Inc\.?|Corp\.?)\b|,\s*(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\.?\s*$/i;
+  /* ⛔ THE AUDIT-WIDE LEADERS FIRST, NOT THE ONE ANSWER'S RIVALS. This used to prefer
+     gutPunch.rivals so the pitch would name exactly what the report led with — which was right as
+     a principle and wrong in fact, because the report led with whoever appeared in ONE curated
+     answer. Wilson's report named Get A Splash / Fresh Car / Clean Me while Ultimate Valet
+     Cambridge, the most-named firm in his own audit, went unmentioned; he rejected the report and
+     was right to. topCompetitors is grouped and frequency-ranked (Chapman’s and Chapman's are one
+     firm), so the pitch and the report still agree BY CONSTRUCTION — they now agree on the right
+     names. gutPunch rivals remain the fallback for an audit built before topCompetitors existed. */
+  const topNames = (data?.topCompetitors ?? [])
+    .map((c: { name?: string }) => (c?.name ?? "").trim()).filter(Boolean);
   const gutRivals = (data?.gutPunch?.rivals ?? []).map((c: string) => (c ?? "").trim()).filter(Boolean);
-  let pool: string[] = gutRivals;
+  let pool: string[] = topNames.length ? topNames : gutRivals;
   if (pool.length === 0) {
     pool = data?.competitors ?? [];
     const cc = (audit.country ?? "").trim().toUpperCase();

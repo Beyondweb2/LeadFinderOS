@@ -80,7 +80,14 @@ export function PushToInstantlyDialog({
      from, so they cannot drift from it. */
   const [auditsThisRun, setAuditsThisRun] = useState(0);
   const [pushThisRun, setPushThisRun] = useState(0);
-  const [questionCount, setQuestionCount] = useState(3);
+  /* ⛔ FIVE, NOT THREE. Three questions x two engines is six datapoints, and "AI named you once in
+     6 answers" is a weak measurement stated strongly — Wilson's report said exactly that and he was
+     entitled to disbelieve it. Five makes it "1 of 10" for +2 questions = +2p a lead (8p -> 10p).
+     ⚠️ IT FIXES THE MEASUREMENT RATHER THAN HEDGING THE SENTENCE. The alternative on the table was
+     softening the verdict wording, which would have made a thin sample READ as less thin without
+     making it less thin. Paul rejected that.
+     Still an interim: the real fix is deriving from the market audit's 16 questions. */
+  const [questionCount, setQuestionCount] = useState(5);
 
   const loadCampaigns = useCallback(async () => {
     setLoadingCampaigns(true);

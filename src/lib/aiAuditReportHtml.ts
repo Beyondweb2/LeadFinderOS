@@ -66,6 +66,12 @@ export interface AiAuditReportData {
   pct: number;                   // 0–100
   perEngine: ReportEngineRow[];
   competitors: string[];         // real brands AI named instead (aggregate)
+  /* The audit-wide leaders WITH their grouped mention counts, most-named first. Optional so a
+     caller built before this existed still renders — absent means the document simply omits the
+     line rather than inventing one. */
+  topCompetitors?: { name: string; count: number }[];
+  /** Total grouped competitor mentions across the audit, for the denominator. */
+  competitorMentions?: number;
   // The single worst example to lead with: the question, the engine, and the REAL
   // competitors AI recommended in that answer. The report writes a clean summary of
   // this — it never dumps the raw AI paragraph.
@@ -406,21 +412,41 @@ export function renderReportHtml(d: AiAuditReportData): string {
   let gutbox = "";
   if (d.gutPunch) {
     const g = d.gutPunch;
-    const uniq = dedupeNames(g.rivals);
-    const shown = uniq.slice(0, 3);
-    const more = uniq.length - shown.length;
-    const chips = shown.map((c) => `<span class="rv">${esc(c)}</span>`);
-    let summary: string;
-    if (chips.length === 0) {
-      summary = `When someone searched &ldquo;<span class="gb-q">${esc(g.question)}</span>&rdquo;, AI didn&rsquo;t mention <b>${esc(d.businessName)}</b> at all.`;
+    /* ══ TWO SENTENCES, BECAUSE THEY ARE TWO DIFFERENT CLAIMS ══════════════════════════════
+       ⛔ THE OLD ONE NAMED THE WRONG FIRMS AND COST A PROSPECT. It read "When we asked AI <q>, it
+       recommended X, Y and Z", where X/Y/Z were the rivals in THAT ONE ANSWER. Wilson's Mobile
+       Valeting got "Get A Splash, Fresh Car, Clean Me" while Ultimate Valet Cambridge — the most
+       named firm in his own audit, 5 mentions — never appeared. He read it as random and rejected
+       the report. He was right.
+       ⚠️ THE FIX IS NOT TO SWAP THE NAMES INTO THAT SENTENCE. "When we asked <q>, it recommended
+       <audit-wide leaders>" would be FALSE of that answer. So the quoted question keeps its own
+       true statement, and the leaders get a second sentence that is true of the whole audit.
+       ⚠️ COUNTS ARE SHOWN. "Ultimate Valet Cambridge (5)" is checkable; a bare name is a claim. */
+    const leaders = (d.topCompetitors ?? []).filter((c) => c.name && c.count > 0);
+    const notMentioned = `<b>${esc(d.businessName)}</b> wasn&rsquo;t mentioned at all`;
+    // "When we asked" not "when someone searched": the question is one WE generated and put to
+    // the engines, so asserting a real customer typed it is a claim we cannot support.
+    let summary = `When we asked AI &ldquo;<span class="gb-q">${esc(g.question)}</span>&rdquo;, ${notMentioned}.`;
+    if (leaders.length > 0) {
+      const chips = leaders.map((c) => `<span class="rv">${esc(c.name)}</span> <span class="rvn">${c.count}×</span>`);
+      const list = chips.length === 1
+        ? chips[0]
+        : `${chips.slice(0, -1).join(", ")} and ${chips[chips.length - 1]}`;
+      /* The denominator is stated so the reader can size the claim themselves — the same reason
+         the headline says "out of N answers" rather than a bare count. */
+      /* Parenthesised, because appended bare it read as part of the last firm's name:
+         "Get a Splash! 3× of 36 mentions across 3 questions". */
+      const denom = d.competitorMentions && d.competitorMentions > 0
+        ? ` (from ${d.competitorMentions} competitor mentions across ${d.questionsAsked} question${d.questionsAsked === 1 ? "" : "s"})`
+        : "";
+      summary += ` Across the whole audit the firms AI named most often were ${list}${denom}.`;
     } else {
-      let list: string;
-      if (chips.length === 1) list = more > 0 ? `${chips[0]} and others` : chips[0];
-      else if (more > 0) list = `${chips.join(", ")} and others`;
-      else list = `${chips.slice(0, -1).join(", ")} and ${chips[chips.length - 1]}`;
-      // "When we asked" not "when someone searched": the question is one WE generated and put to
-      // the engines, so asserting a real customer typed it is a claim we cannot support.
-      summary = `When we asked AI &ldquo;<span class="gb-q">${esc(g.question)}</span>&rdquo;, it recommended ${list} &mdash; <b>${esc(d.businessName)}</b> wasn&rsquo;t mentioned at all.`;
+      /* No competitors extracted anywhere. Say that, rather than falling back to the one answer's
+         rivals — which is how the wrong firms got named in the first place. */
+      const uniq = dedupeNames(g.rivals);
+      if (uniq.length) {
+        summary += ` In that answer AI pointed to <span class="rv">${esc(uniq[0])}</span> instead.`;
+      }
     }
     gutbox = `
     <section class="gutbox">
@@ -528,6 +554,9 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .gb-sum{ margin:0 0 7px; font-size:14px; line-height:1.4; font-weight:400; color:#3d0f12; }
   .gb-sum .gb-q{ color:var(--ink); font-weight:700; }
   .gb-sum .rv{ color:var(--red); font-weight:700; white-space:normal; }
+  /* The mention count beside each leader. Deliberately quieter than the name: it is the evidence
+     for the name, not a second thing to read. */
+  .gb-sum .rvn{ color:var(--muted); font-weight:600; font-size:.85em; white-space:nowrap; }
   .gb-sum b{ color:var(--ink); font-weight:700; }
   .gb-attr{ font-size:11px; color:var(--muted); font-weight:400; }
 
