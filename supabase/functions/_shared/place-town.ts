@@ -72,6 +72,8 @@ async function stampTownFetch(service: any, leadId: string, patch: {
   address?: string | null;
   derived_town: string | null;
   town_fetch_note: TownFetchNote;
+  lat?: number | null;
+  lng?: number | null;
 }): Promise<void> {
   const base: Record<string, unknown> = {
     derived_town: patch.derived_town,
@@ -79,10 +81,26 @@ async function stampTownFetch(service: any, leadId: string, patch: {
   };
   if (patch.address !== undefined) base.address = patch.address;
 
+  /* ⛔ COORDINATES, WHICH WE HAVE ALWAYS BEEN PAYING FOR AND THROWING AWAY. ESSENTIALS_FIELDS asks
+     Google for "location" on every one of these calls; nothing stored it. They are what makes
+     "is this business inside the town its audit asked about?" answerable — derived_town cannot
+     answer it, because Wilson's postal_town IS Cambridge while he sits outside the built-up area.
+     ⚠️ Only written when Google actually returned a pair. A missing coordinate stays NULL, never
+     0/0 — which is a real place in the Gulf of Guinea and would read as 5,000 km from everywhere. */
+  const optional: Record<string, unknown> = { town_fetch_note: patch.town_fetch_note };
+  if (typeof patch.lat === "number" && typeof patch.lng === "number"
+      && Number.isFinite(patch.lat) && Number.isFinite(patch.lng)) {
+    optional.lat = patch.lat;
+    optional.lng = patch.lng;
+  }
+
+  /* MIGRATION-TOLERANT IN BOTH DIRECTIONS. town_fetch_note, lat and lng are all applied by hand in
+     the SQL editor, and PostgREST rejects the WHOLE update for one unknown column — so a column
+     that has not landed yet must never cost us the town itself. Retry with the base only. */
   const { error } = await service.from("outreach_leads")
-    .update({ ...base, town_fetch_note: patch.town_fetch_note }).eq("id", leadId);
-  if (error && /town_fetch_note/i.test(error.message ?? "")) {
-    console.warn("[place-town] town_fetch_note column not present yet — stamping without it");
+    .update({ ...base, ...optional }).eq("id", leadId);
+  if (error && /town_fetch_note|lat|lng|column/i.test(error.message ?? "")) {
+    console.warn(`[place-town] optional column missing (${error.message}) — stamping without them`);
     await service.from("outreach_leads").update(base).eq("id", leadId);
   } else if (error) {
     console.warn(`[place-town] stamp failed for ${leadId}: ${error.message}`);
@@ -181,6 +199,11 @@ export async function resolveDerivedTown(service: any, leadId: string | null): P
       address: address ?? lead.address ?? null,
       derived_town: town,
       town_fetch_note: town ? TOWN_FOUND : "no_town_in_address",
+      /* Free: the Essentials mask already asked for it. This is the ONLY thing that can answer
+         whether a business sits outside the town its audit asked about — see the column comment
+         in 20260809120000_lead_coordinates.sql. */
+      lat: details.location?.latitude ?? null,
+      lng: details.location?.longitude ?? null,
     });
 
     return { town, address, source: "fetched", error: town ? null : "no town in address components" };
