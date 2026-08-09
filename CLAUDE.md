@@ -551,6 +551,68 @@ Facts with numbers. These are measured, and several contradict the older docs.
 
 ---
 
+## 6b. 🔴 NEXT SESSION STARTS HERE — the report that cost two prospects
+
+Paul's order, agreed 2026-08-09. Build 1, then 2, then 3, then the derivation. All four measured, none
+built. **Wilson's Mobile Valeting rejected his report and was right to.**
+
+⚠️ **FIRST, A PREMISE THAT WAS WRONG AND WILL BE REPEATED IF NOT WRITTEN DOWN.** Wilson's report did
+NOT say "0 of 6". Rendered live it says **"1 time … out of 6 answers"**. Paul was about to apologise
+for something that never happened. Render the document before diagnosing what it says (§4's rule).
+
+### 1. RANK REPORT COMPETITORS BY FREQUENCY, AFTER NAME-GROUPING
+- The report leads with **`gutPunch.rivals`** — the competitors from the ONE curated best answer —
+  not the cross-question frequency ranking. `auditReport.ts:719` already computes the frequency list
+  and the report does not lead with it.
+- Wilson's report printed **Get A Splash, Fresh Car, Clean Me**. His OWN audit ranked by frequency:
+  **Ultimate Valet Cambridge (5)**, Washdoctors (3), Get a Splash! (2), Chapman's (2). The top firm in
+  his own data never appeared on his document. That is what lost the prospect.
+- ⛔ **GROUPING MUST COME FIRST OR THE FIX MAKES IT WORSE.** The counter does not normalise
+  apostrophes: `Chapman’s … (13)` and `Chapman's … (8)` are counted separately, so the market's real
+  leader has **21** and ranks below a split of itself. Ranking by a split count names the wrong firms
+  with MORE confidence. `_shared/market-match.ts`'s `groupNames` exists for exactly this.
+
+### 2. THE FRAMING AT LOW QUESTION COUNTS
+"1 of 6" from three questions is a weak measurement stated strongly. Paul's call: the market audit's
+16 questions is the real fix and he would rather that landed than a wording patch.
+⚠️ **The cheap honest change if one is wanted meanwhile: raise the audit_and_push question default
+from 3 to 5** (the dialog already offers 3/4/5). +2 questions = **+2p a lead** (8p → 10p) and turns
+"1 of 6" into "1 of 10". Fixes the MEASUREMENT rather than hedging the sentence.
+
+### 3. THE DISTANCE CHECK — AND WHY THE OBVIOUS ANSWER IS WRONG
+Measured 2026-08-09: **0 of 202** audits provably ask about a town their lead is not in — but that
+number must not be reported as "none".
+- **124 of 326 (38%) have no `derived_town` AND no `address`**, so the question cannot be answered for
+  them. Mostly the 168 rows from the sessionStorage bug.
+- ⛔ **STRING EQUALITY CANNOT ANSWER THIS.** Wilson is a village-near-Cambridge case whose
+  `postal_town` is very likely *Cambridge*, so he PASSES an equality test while sitting outside the
+  built-up area — the Southsea/Portsmouth caveat in §8, live again. A real answer needs distance from
+  the town centroid: `uk_towns` already holds lat/lng.
+
+### 4. THEN THE MARKET-AUDIT DERIVATION — RECON DONE 2026-08-09, IT HOLDS UP
+Generate a prospect's report from the town's market audit instead of a per-business audit.
+- ✅ **Business audits ask NOTHING business-specific.** 925 questions: **0** carry a business-identity
+  token. Naive passes read 47% then 20% then 3.46% — every apparent hit at every level is a generic
+  trade noun ("plumbing", "gasman", "recovery"). The substring trap in a new coat, three times.
+- ✅ **Specialisms: 4 of 223 audits (2%)**, one of them Paul's own bar. Nothing lost.
+- ✅ **The decisive test** (accountant/Chichester, the only trade+town with both): 6 businesses,
+  **5 agree, 0 FALSE NEGATIVES**, 1 case where the market audit found a firm its own 3-question audit
+  MISSED. Structural reason: 8 questions give strictly more chances to appear than 3.
+- ✅ **No new matcher risk.** `named` is already set by `nameMatches(answer_text, businessName)` at
+  scan time (`ai-search.ts:430`) — same function, same answer text.
+- ⚠️ **But `named` is STORED, not derived**, and a market audit's stored flags are against its own
+  (non-)business name. A derived report must **recompute per prospect**. Free, no API call, and it is
+  the one real code change: `buildReportData` reads `r.result[e].named`.
+- ⚠️ **THE FAIL-SAFE PAUL ASKED FOR:** strip trade and town tokens from the business name; if nothing
+  distinctive remains ("Chichester Accountants Ltd"), **refuse to derive** and fall back to a paid
+  per-business audit. A zero there means "we could not tell", not "you are invisible", and those must
+  never print the same sentence.
+- **Cost:** per prospect `3 × $0.0104 + $0.070` (cleaner) ≈ **8p** — 138 accountants = **£11**. One
+  market audit `8 × $0.0104 + $0.070` ≈ **12p for the whole town**.
+- ⚠️ Sample is 6 businesses in one town. Suggestive, not settled.
+
+---
+
 ## 7. Parked and unmerged — do not merge these
 
 | Branch | Hash |
