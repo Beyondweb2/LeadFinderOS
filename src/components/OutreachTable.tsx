@@ -1003,9 +1003,14 @@ export function OutreachTable({
   const [townFixBusy, setTownFixBusy] = useState(false);
 
   /** Leads in the selection that an audit cannot use, so the buttons can say how many they help. */
+  /* ⚠️ MUST MATCH backfill-lead-towns' OWN RULE, and it did not: this also excluded any lead with a
+     search_location, so the button offered 89 when the real backlog was 112. search_location is the
+     town that was SEARCHED, not where the business is — see the eligibility comment in that
+     function. The server re-filters regardless, so a mismatch here understates rather than
+     overspends, but an understated count is still the button lying about its own job. */
   const missingTownIds = useMemo(
     () => leads.filter((l) => selectedIds.has(l.id) && !isDemoLead(l.id)
-      && !(l.search_location || l.address || l.derived_town) && !!l.place_id).map((l) => l.id),
+      && !(l.address || l.derived_town) && !!l.place_id).map((l) => l.id),
     [leads, selectedIds],
   );
   const missingTradeIds = useMemo(
