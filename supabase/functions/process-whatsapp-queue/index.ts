@@ -44,17 +44,51 @@ const GRAPH_VERSION = "v21.0";
    auto-replies, not just this campaign. On 2026-07-27 that mattered: 40 sends hit the cap exactly,
    13 of them automated audit_reply pitches rather than campaign sends.
 
-   ⚠️ RAISING THIS DOES NOT RAISE THROUGHPUT AT ALL AT PRESENT. The pacing gap below is
-   minutesUntilWindowEnd() / (DAILY_CAP - sentToday), clamped to a 20-minute FLOOR — and at 07:00
-   with 99 remaining the base gap is 870/99 ≈ 8.8 min, so the FLOOR lifts every single gap to 20 and
-   the cap never engages at any value above ~43.
-   ⛔ MEASURED 2026-08-07 across 377 real sends, because the arithmetic above understates it: the
-   median gap is 29.9 MINUTES, not 20, giving 2.0 sends/hour and ~29 sends/day. The cron wakes every
-   10 minutes and sends at most one per tick, so a 20-minute target lands on the 30-minute tick.
-   Window ÷ observed gap, not window ÷ floor, is the real ceiling. Busiest day ever: 66.
-   The cap is a brake, not a target, and today it is not the binding constraint — the floor is.
+   ⛔ 60, NOT 100 — AND IT PACES RATHER THAN STOPS, WHICH IS THE THING TO UNDERSTAND. While the
+   floor sat at 20 minutes this number could be anything above ~43 and change nothing: the floor
+   bound everything. Halving the floor to 10 (2026-08-08) makes it matter, and Paul's advisor's
+   guidance is what it encodes — ramp only while the quality rating is Green, 60 a day.
+   ⚠️ IT IS NEVER ACTUALLY REACHED. Simulated over 5,000 days at the real jitter: the cap stops a
+   day 0% of the time. It binds through the PACING formula instead — baseGap is
+   minutesUntilWindowEnd() / (DAILY_CAP - sentToday), so the cap sets the target rate and the day
+   lands just under it. Measured effect of this constant, everything else equal:
+       DAILY_CAP 60  -> ~54 sends/day (p10 53, p90 56), median gap 20 min, 3.0/hour
+       DAILY_CAP 100 -> ~77 sends/day,                  median gap 10 min
+   So raising it is how you go faster, and it should only be raised while the rating is Green.
+   ⚠️ LOWERING THE CAP ALSO SLOWS THE PACING, WHICH IS THE POINT AND IS EASY TO MISREAD AS A BUG.
+   baseGap is minutesUntilWindowEnd() / (DAILY_CAP - sentToday), so 60 gives 870/60 ≈ 14.5 min at
+   07:00 where 100 gave 8.7. The gap is derived from the cap by construction: the queue spreads
+   whatever the cap is across the window rather than racing to it and stopping.
    process-sms-queue has its OWN separate DAILY_CAP; this constant does not affect it. */
-const DAILY_CAP = 100;
+const DAILY_CAP = 60;
+/* ══ THE SEND GAP ═══════════════════════════════════════════════════════════════════════
+   ⚠️ THESE WERE BARE LITERALS INSIDE THE PACING EXPRESSION. The floor in particular — the single
+   number that decided real throughput for months — had no name, so nothing could reference it, no
+   comment could be attached to it, and the header comment above described it from memory.
+
+   SEND_GAP_FLOOR_MIN: 20 → 10 on 2026-08-08. At 20 the queue managed a measured 2.0 sends/hour and
+   ~29 a day across 377 real sends. Paul's engagement and quality rating are fine, so the brake came
+   off.
+   ⛔ BUT THE FLOOR IS NOT WHAT BINDS AFTERWARDS — THE CRON TICK IS. This function wakes on a fixed
+   ~10-minute schedule and sends AT MOST ONE lead per tick, so a target gap is rounded UP to the next
+   tick. That is why the measured median under a 20-minute floor was 29.9 minutes and not 20: the
+   +20 mark is missed by a hair and the send lands on +30. Under a 10-minute floor the same effect
+   puts most gaps at 20 rather than 10. Halving the floor therefore roughly halves the gap — it does
+   not deliver one send every ten minutes. Sends can only ever occur on the cron's grid; going faster
+   than ~3/hour needs the SCHEDULE changed, not this constant.
+   ⚠️ The cron schedule lives ONLY in the database (CLAUDE.md §8) — there is no migration for it,
+   so it cannot be read or changed from this repo.
+
+   SEND_GAP_JITTER_*: widened from 0.6–1.4 to 0.55–1.65 so consecutive gaps differ by more ticks.
+   ⚠️ Jitter cannot hide the grid. Sends happen when the cron fires, so their clock times are
+   always near 10-minute marks whatever this band is; what the band varies is HOW MANY ticks are
+   skipped between sends, which is what stops a visible fixed cadence. Widening it further would not
+   change the first fact. */
+const SEND_GAP_FLOOR_MIN = 10;
+const SEND_GAP_CEILING_MIN = 180;
+const SEND_GAP_JITTER_LOW = 0.55;
+const SEND_GAP_JITTER_HIGH = 1.65;
+
 const WINDOW_START = 7;              // 07:00 Europe/London (inclusive)
 const WINDOW_END_MIN = 21 * 60 + 30; // 21:30 Europe/London (exclusive) — minutes-from-midnight so the :30 is honoured
 const CLAIM_ORIGIN = "https://yoursites.uk"; // claim links live at /s/<share_token>
@@ -818,7 +852,11 @@ Deno.serve(async (req) => {
       const remaining = Math.max(1, DAILY_CAP - ((sentToday ?? 0) + 1));
       const minsLeft = minutesUntilWindowEnd();
       const baseGap = minsLeft / remaining;
-      const gapMin = Math.min(180, Math.max(20, Math.round(baseGap * (0.6 + Math.random() * 0.8))));
+      const jitter = SEND_GAP_JITTER_LOW + Math.random() * (SEND_GAP_JITTER_HIGH - SEND_GAP_JITTER_LOW);
+      const gapMin = Math.min(
+        SEND_GAP_CEILING_MIN,
+        Math.max(SEND_GAP_FLOOR_MIN, Math.round(baseGap * jitter)),
+      );
       const next = new Date(Date.now() + gapMin * 60000).toISOString();
       await service.from("whatsapp_outreach_state").update({ next_send_at: next, updated_at: nowIso }).eq("id", 1);
     }
