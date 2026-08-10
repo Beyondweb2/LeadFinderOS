@@ -405,6 +405,29 @@ export async function startPaidBaseline(
       .find((a) => Number(a.baseline_target_runs ?? 0) > 1);
     if (already) return { ok: true, audit_id: already.id, skipped: "already_has_baseline" };
 
+    /* ⛔ THE BASELINE WAITS FOR THE ANSWERS IT IS MEASURED ON. This is the guarantee path: week
+       eight is compared against this run, so it must be scoped to the town the customer confirmed
+       and the services they named — not to whatever can be inferred without them.
+       Without this gate the fallbacks below quietly rescue a missing answer: the town precedence is
+       confirmed_location || derived_town || search_location, and specialisms become "". That would
+       put the wrong-town fault (31 of 44 measurable audits were >10km out) directly on the one
+       measurement a refund depends on.
+       ⚠️ ok: true, NOT an error. A deferred baseline is the normal state between paying and
+       finishing the second questionnaire; returning !ok would file a payment failure on every
+       customer. process-ai-audit-queue's ensureBaselinesForPaidOnboardings already re-attempts
+       every tick for any paid row whose lead has no baseline, so the moment the answers land the
+       baseline starts on its own. Nothing new schedules it.
+       ⚠️ AND IT IS CORRECT UNDER THE CURRENT ONE-QUESTIONNAIRE FLOW TOO — there both answers exist
+       at payment, so this passes on the first attempt and nothing changes. */
+    const q2Town = String(row.confirmed_location ?? "").trim();
+    const q2Services = String(row.services ?? "").trim();
+    if (!q2Town || !q2Services) {
+      return {
+        ok: true,
+        skipped: `awaiting_questionnaire_2 (${!q2Town ? "no confirmed town" : ""}${!q2Town && !q2Services ? ", " : ""}${!q2Services ? "no services" : ""})`,
+      };
+    }
+
     // deno-lint-ignore no-explicit-any
     let lead: any; // eslint-disable-line
     // deno-lint-ignore no-explicit-any
