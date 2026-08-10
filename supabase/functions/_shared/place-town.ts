@@ -63,6 +63,10 @@ export interface DerivedTown {
   town: string | null;
   /** Google's formatted address, stored so a directory signup has something to paste. */
   address: string | null;
+  /** Where the business actually is. NULL means we do not know — never 0/0, which is a real place
+   *  in the Gulf of Guinea and would read as 5,000 km from every town in Britain. */
+  lat: number | null;
+  lng: number | null;
   /** How this was obtained — surfaced on the audit so a wrong town is diagnosable later. */
   source: "cache" | "fetched" | "unavailable";
   /** Set when the fetch was attempted and failed. The audit still proceeds — see the caller. */
@@ -131,12 +135,12 @@ async function stampTownFetch(service: any, leadId: string, patch: {
  */
 // deno-lint-ignore no-explicit-any
 export async function resolveDerivedTown(service: any, leadId: string | null): Promise<DerivedTown> {
-  const none: DerivedTown = { town: null, address: null, source: "unavailable", error: null };
+  const none: DerivedTown = { town: null, address: null, lat: null, lng: null, source: "unavailable", error: null };
   if (!leadId) return none;
   try {
     /* MIGRATION-TOLERANT read. town_fetch_note is applied BY HAND, and one unknown column fails the
        WHOLE select — which would make every audit re-fetch. Try with it, fall back without. */
-    const LEAD_COLS = "id, user_id, place_id, address, derived_town, town_fetched_at";
+    const LEAD_COLS = "id, user_id, place_id, address, derived_town, town_fetched_at, lat, lng";
     let lead = (await service.from("outreach_leads")
       .select(`${LEAD_COLS}, town_fetch_note`).eq("id", leadId).maybeSingle()).data;
     if (!lead) {
@@ -153,10 +157,21 @@ export async function resolveDerivedTown(service: any, leadId: string | null): P
     const fetchedAt = lead.town_fetched_at ? Date.parse(String(lead.town_fetched_at)) : 0;
     const fresh = !!fetchedAt && Date.now() - fetchedAt < TOWN_CACHE_MS;
     const settled = SETTLED_TOWN_NOTES.has(String(lead.town_fetch_note ?? ""));
-    if (fresh && (lead.derived_town || settled)) {
+    /* ⛔ A STAMP FROM BEFORE COORDINATES EXISTED IS NOT AN ANSWER TO THE QUESTION WE NOW ASK.
+       lat/lng were added 2026-08-09; every stamp written before that says only "we asked about the
+       TOWN". Treating those as a cache hit would leave 316 leads coordinate-less — and therefore
+       un-checkable by the distance guard — for up to 30 days, for want of half a penny.
+       So: a hit requires the coordinates too. The re-fetch costs $0.005 and settles the lead
+       permanently, which is cheaper than a month of not being able to tell.
+       ⚠️ Only when the place could HAVE coordinates. A settled note means Google has already told us
+       there is nothing here; re-asking would buy the same nothing again. */
+    const hasCoords = lead.lat !== null && lead.lat !== undefined;
+    if (fresh && hasCoords && (lead.derived_town || settled)) {
       return {
         town: lead.derived_town ? String(lead.derived_town) : null,
         address: lead.address ?? null,
+        lat: typeof lead.lat === "number" ? lead.lat : null,
+        lng: typeof lead.lng === "number" ? lead.lng : null,
         source: "cache",
         error: lead.derived_town ? null : String(lead.town_fetch_note ?? "no town for this place"),
       };
@@ -222,7 +237,12 @@ export async function resolveDerivedTown(service: any, leadId: string | null): P
       lng: details.location?.longitude ?? null,
     });
 
-    return { town, address, source: "fetched", error: town ? null : "no town in address components" };
+    return {
+      town, address, source: "fetched",
+      lat: details.location?.latitude ?? null,
+      lng: details.location?.longitude ?? null,
+      error: town ? null : "no town in address components",
+    };
   } catch (e) {
     return { ...none, error: e instanceof Error ? e.message : String(e) };
   }

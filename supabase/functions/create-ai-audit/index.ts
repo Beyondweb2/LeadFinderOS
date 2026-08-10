@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
+import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { applySeed, dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
@@ -473,6 +474,11 @@ Deno.serve(async (req) => {
        failure the searched town is used and location_source records that it was not verified. */
     let locationSource: "confirmed" | "derived" | "search" | "none" = locationText ? "search" : "none";
     let townNote: string | null = null;
+    /* ══ IS THIS BUSINESS ACTUALLY IN THAT TOWN? ══════════════════════════════════════════
+       Filled in below once the town is resolved. Declared here so the response can carry it
+       whatever happens — an audit that proceeds on a warning must still SAY the distance, or the
+       warning is only in a log nobody reads (the auditErrors lesson). */
+    let distance: TownDistanceCheck | null = null;
     if (!effectiveReuseId && leadId) {
       try {
         const [onbRes, derived] = await Promise.all([
@@ -487,6 +493,31 @@ Deno.serve(async (req) => {
         });
         if (picked.town) { locationText = picked.town; locationSource = picked.source; }
         townNote = derived.error;
+
+        /* ⛔ THE WRONG-TOWN GUARD. Measured 2026-08-09: 31 of 44 measurable audits asked about a town
+           more than 10 km from the business, up to 79 km; 28 of those reached a prospect and 20 were
+           opened. A locksmith with Northampton in its name was asked about Spalding.
+           ⚠️ RUN AFTER pickAuditTown, against the town the questions will ACTUALLY use — checking
+           the requested town would pass a lead whose derived town then overrode it, and vice versa.
+           ⚠️ WRAPPED IN ITS OWN try: a gazetteer read must never be able to stop an audit. The catch
+           leaves `distance` null, which reads as "not checked" and blocks nothing. */
+        try {
+          const { data: townRows } = await service
+            .from("uk_towns").select("name, lat, lng").not("lat", "is", null);
+          const index = buildTownIndex((townRows ?? []) as Array<{ name: string; lat: number; lng: number }>);
+          distance = checkTownDistance({
+            businessLat: derived.lat,
+            businessLng: derived.lng,
+            townName: locationText,
+            townCentroid: lookupTownCentroid(index, locationText),
+          });
+          console.log(
+            `[create-ai-audit] lead ${leadId}: distance ${distance.verdict}`
+            + (distance.km === null ? ` (${distance.unknownReason})` : ` ${Math.round(distance.km)}km from "${locationText}"`),
+          );
+        } catch (e) {
+          console.warn(`[create-ai-audit] distance check unavailable, not blocking: ${(e as Error).message}`);
+        }
         console.log(
           `[create-ai-audit] lead ${leadId}: town "${locationText}" via ${locationSource}`
           + ` (derive: ${derived.source}${derived.error ? ` — ${derived.error}` : ""})`,
@@ -495,6 +526,39 @@ Deno.serve(async (req) => {
         townNote = e instanceof Error ? e.message : String(e);
         console.warn(`[create-ai-audit] town derivation failed, proceeding on the searched town: ${townNote}`);
       }
+    }
+
+    /* ══ REFUSE AN AUDIT OF A BUSINESS THAT IS NOWHERE NEAR THE TOWN ════════════════════════
+       ⛔ PLACED BEFORE ANY SPEND. Questions are generated below and queue rows are inserted after
+       that; refusing here means a blocked audit costs nothing at all, which is the point — the
+       31 measured cases each bought a report about a town the business does not work in.
+
+       ⛔ ONLY ON A VERDICT OF `block`, i.e. >25km with REAL coordinates on both sides. `warn` and
+       `unknown` fall through deliberately: a village 12km outside Cambridge trades in Cambridge,
+       and "we have not fetched coordinates" is our ignorance rather than their distance. Blocking
+       on absence would refuse 638 of 900 leads.
+
+       ⚠️ OVERRIDABLE, AND THE OVERRIDE IS LOGGED. Paul: "if I override it more than a couple of
+       times the threshold is wrong and I want the evidence rather than my memory of it." The count
+       lives in the function logs, which is where the 2026-08-09 measurement will be repeated from. */
+    if (distance?.verdict === "block") {
+      const overridden = body.override_distance === true;
+      if (!overridden) {
+        console.log(`[create-ai-audit] BLOCKED lead ${leadId}: ${Math.round(distance.km ?? 0)}km from "${locationText}"`);
+        return json({
+          ok: false,
+          error: "business_not_in_town",
+          message: distance.message,
+          distance_km: Math.round(distance.km ?? 0),
+          town: locationText,
+          /* Named so the caller can offer the override without hardcoding the flag. */
+          override_field: "override_distance",
+        }, 409);
+      }
+      console.warn(
+        `[create-ai-audit] DISTANCE OVERRIDE USED: lead ${leadId}, `
+        + `${Math.round(distance.km ?? 0)}km from "${locationText}" — audit proceeding on the operator's say-so`,
+      );
     }
 
     // Forced LOCAL needs a real town — otherwise "[service] in [town]" has no town and we'd
