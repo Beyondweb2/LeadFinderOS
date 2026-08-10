@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import {
-  coverageKey, coverageStateFor, summarise, applyFilters,
+  coverageKey, coverageStateFor, summarise, applyFilters, applySuppressionPatch,
   type CoverageFacts, type CoverageRow, type CoverageTown, type CoverageSummary,
+  type SuppressionPatch,
 } from '@/lib/coverageState';
 
 /* ⚠️ The grading lives in src/lib/coverageState.ts and is unit-tested there. This hook fetches the
@@ -21,29 +24,43 @@ export type GradedTown = CoverageTownRow & { state: CoverageRow['state'] };
 
 interface Pair { trade: string; town: string }
 
+interface CoverageData {
+  towns: CoverageTownRow[];
+  pairs: { measured: Pair[]; leads: Pair[]; worked: Pair[] };
+}
+
+/* ⛔ SCOPED TO THE USER. Every fact behind this view is owner-filtered server-side, so a cache
+   shared across sign-ins would show one operator another's coverage until it went stale. */
+const coverageQueryKey = (userId: string | undefined) => ['coverage', userId] as const;
+
 export function useCoverage() {
-  const [towns, setTowns] = useState<CoverageTownRow[]>([]);
-  const [pairs, setPairs] = useState<{ measured: Pair[]; leads: Pair[]; worked: Pair[] } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const fetchAll = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const { data, error: e } = await supabase.functions.invoke('coverage', { body: { action: 'view' } });
+  /* ⛔ WAS A MOUNT EFFECT, AND THAT IS THE BUG PAUL FELT. `useEffect(() => fetchAll(), [fetchAll])`
+     with isLoading starting `true` meant leaving the page and coming back refetched 733 towns and
+     showed a spinner every time — CLAUDE.md §6c's "it loses my place", the same fault as useInbox.
+     React Query is already configured in App.tsx (staleTime 5 min, no refetch on focus), so the
+     second visit inside five minutes now renders from cache with no request and no spinner. */
+  const { data, isLoading, error: queryError, refetch } = useQuery({
+    queryKey: coverageQueryKey(user?.id),
+    queryFn: async (): Promise<CoverageData> => {
+      const { data: res, error: e } = await supabase.functions.invoke('coverage', { body: { action: 'view' } });
       if (e) throw new Error(e.message);
-      if (!data?.ok) throw new Error(data?.error ?? 'coverage failed');
-      setTowns((data.towns ?? []) as CoverageTownRow[]);
-      setPairs(data.pairs ?? { measured: [], leads: [], worked: [] });
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      if (!res?.ok) throw new Error(res?.error ?? 'coverage failed');
+      return {
+        towns: (res.towns ?? []) as CoverageTownRow[],
+        pairs: res.pairs ?? { measured: [], leads: [], worked: [] },
+      };
+    },
+    /* The page is auth-gated, but the key includes the id — firing before it resolves would cache
+       the result under `undefined` and then never be read again under the real id. */
+    enabled: !!user?.id,
+  });
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  const towns = useMemo(() => data?.towns ?? [], [data]);
+  const pairs = data?.pairs ?? null;
+  const error = queryError ? (queryError as Error).message : null;
 
   /* Built once per fetch, not per row: coverageKey canonicalises the trade, and doing that inside a
      733-row render loop would be the same work 733 times. */
@@ -60,23 +77,40 @@ export function useCoverage() {
   }, [towns, facts]);
 
   const setSuppressed = useCallback(async (townId: string, suppress: boolean, reason?: string) => {
-    const { data, error: e } = await supabase.functions.invoke('coverage', {
+    const { data: res, error: e } = await supabase.functions.invoke('coverage', {
       body: { action: suppress ? 'suppress' : 'unsuppress', town_id: townId, reason },
     });
-    if (e || !data?.ok) throw new Error(e?.message ?? data?.error ?? 'could not update');
-    /* Patch in place rather than refetching: the list is 733 rows and the change is one field.
-       A refetch here would also reset the operator's scroll, which is the thing §6c is about. */
-    setTowns((prev) => prev.map((t) => t.id === townId
-      ? { ...t, suppressed_at: suppress ? new Date().toISOString() : null, suppressed_reason: suppress ? (reason ?? null) : null }
-      : t));
-  }, []);
+    if (e || !res?.ok) throw new Error(e?.message ?? res?.error ?? 'could not update');
+
+    /* ⛔ THE CACHE IS PATCHED FROM THE ROW THE SERVER RETURNED, NOT FROM WHAT WE ASSUME IT WROTE.
+       This is the invalidation half of the migration, and the part CLAUDE.md §6c says to prove:
+       a stale list is worse than a lost scroll position, because it makes you act on wrong data.
+       Patching rather than invalidating is deliberate — invalidating refetches all 733 towns for a
+       one-field change — but it is only honest because `town` below is the database's own row.
+       The previous code invented `new Date().toISOString()` client-side, a timestamp nobody wrote.
+       ⚠️ If the endpoint is ever deployed older than this hook it returns no `town`, and we fall
+       back to invalidating rather than guessing. An absent value is not an answer (§6). */
+    const key = coverageQueryKey(user?.id);
+    const cached = queryClient.getQueryData<CoverageData>(key);
+    const patched = cached
+      ? applySuppressionPatch(cached.towns, townId, (res as { town?: SuppressionPatch }).town)
+      : null;
+
+    if (!patched) {
+      /* Could not patch honestly — no row returned, or nothing in the cache matches it. Refetch
+         rather than leave the screen disagreeing with the database about a write that happened. */
+      await queryClient.invalidateQueries({ queryKey: key });
+      return;
+    }
+    queryClient.setQueryData<CoverageData>(key, { ...cached!, towns: patched });
+  }, [queryClient, user?.id]);
 
   const regions = useMemo(
     () => [...new Set(towns.map((t) => t.region).filter(Boolean) as string[])].sort(),
     [towns],
   );
 
-  return { towns, isLoading, error, gradeFor, setSuppressed, regions, refetch: fetchAll, applyFilters, summarise };
+  return { towns, isLoading, error, gradeFor, setSuppressed, regions, refetch, applyFilters, summarise };
 }
 
 export type { CoverageRow, CoverageSummary };

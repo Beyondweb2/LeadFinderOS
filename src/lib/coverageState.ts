@@ -141,3 +141,50 @@ export function applyFilters<T extends CoverageRow>(rows: readonly T[], f: Cover
     return r.population >= f.minPopulation && r.population <= f.maxPopulation;
   });
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   THE MUTATION'S CACHE PATCH — pure, so it can be tested without a browser.
+
+   ⛔ IT LIVES HERE RATHER THAN INSIDE useCoverage FOR THE SAME REASON THE GRADING DOES: a cache
+   patch that only exists inside a hook closure cannot be asserted, and CLAUDE.md §6c is explicit
+   that the mutation is the risky half of a React Query migration — "losing my place annoys me, a
+   stale list makes me act on wrong data."
+
+   ⛔ IT TAKES THE ROW THE SERVER RETURNED. Re-deriving what we assume the server wrote is how a
+   cache starts lying: the previous implementation invented `new Date().toISOString()` for
+   suppressed_at, a timestamp no row ever held.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** What the endpoint returns from suppress/unsuppress. Partial on purpose — see below. */
+export interface SuppressionPatch {
+  id?: string | null;
+  suppressed_at?: string | null;
+  suppressed_reason?: string | null;
+}
+
+export interface SuppressibleTown {
+  id: string;
+  suppressed_at: string | null;
+  suppressed_reason: string | null;
+}
+
+/**
+ * Patch one town's suppression from the server's own row.
+ *
+ * ⛔ RETURNS null WHEN IT CANNOT DO SO HONESTLY — no row, no id, or an id nothing matches. null
+ * means "refetch instead", never "nothing changed": an endpoint deployed older than this code
+ * returns no `town`, and guessing there would leave the operator looking at a list that disagrees
+ * with the database. The absent value gets its own branch rather than falling through the else,
+ * which is the shape CLAUDE.md records seven times.
+ */
+export function applySuppressionPatch<T extends SuppressibleTown>(
+  towns: readonly T[],
+  townId: string,
+  updated: SuppressionPatch | null | undefined,
+): T[] | null {
+  if (!updated || !updated.id) return null;
+  if (!towns.some((t) => t.id === townId)) return null;
+  return towns.map((t) => (t.id === townId
+    ? { ...t, suppressed_at: updated.suppressed_at ?? null, suppressed_reason: updated.suppressed_reason ?? null }
+    : t));
+}

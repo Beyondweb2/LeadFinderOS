@@ -81,10 +81,17 @@ Deno.serve(async (req) => {
             suppressed_reason: String(body.reason ?? "").trim() || null,
           }
         : { suppressed_at: null, suppressed_reason: null };
-      const { error } = await service.from("uk_towns").update(patch).eq("id", townId);
+      /* ⛔ RETURNS THE ROW IT WROTE. The page patches its cache from this rather than re-deriving
+         what it thinks the server did — a client-invented `suppressed_at` is a value nobody wrote,
+         and the moment the two disagree the cache is quietly lying about the database. Returning
+         the row is also what lets the page skip a 733-row refetch honestly. */
+      const { data: updated, error } = await service
+        .from("uk_towns").update(patch).eq("id", townId)
+        .select("id, suppressed_at, suppressed_reason").maybeSingle();
       if (error) return json({ ok: false, error: error.message }, 500);
+      if (!updated) return json({ ok: false, error: "unknown town" }, 404);
       console.log(`[coverage] ${action} town ${townId} by ${userId}${body.reason ? ` — ${body.reason}` : ""}`);
-      return json({ ok: true });
+      return json({ ok: true, town: updated });
     }
 
     if (action !== "view") return json({ ok: false, error: `unknown action "${action}"` }, 400);
