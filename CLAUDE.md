@@ -981,6 +981,44 @@ useMarketView.ts   1 persisted vs  6 plain
     ```
     Then grep the SPA for a direct `.from('<table>')` on every name it returns. **Every hit is a
     feature that silently does nothing.**
+  - ✅ **SWEEP DONE 2026-08-10. 11 tables had RLS with no policy; only THREE are read from the SPA:**
+    | Read | Costs |
+    |---|---|
+    | `OutreachTable:1251` `contact_suppressions` | pre-queue UX filter → the queue count **overstates**. ✅ **THE SEND PATH IS SAFE**: `checkSuppressed` is always passed the **service-role** client (`process-whatsapp-queue:421`/`:694`, `process-sms-queue:219`, `twilio-inbound`), which bypasses RLS. Nobody who said no has been contacted |
+    | `usePlaybook:240` `onboarding_responses` | the client sheet thinks **nothing is held** → prints "NOT HELD — ask the client" for every field. Costs nothing today (2 test rows); **becomes actively wrong after the questionnaire split** |
+    | `useDashboardMetrics:183` + `useCampaignStats:132` | the dead chase task, and a campaign count reading low |
+    | `useDashboardMetrics:191` `sms_sends` | **zero cost today** — no SMS has ever been sent, so `[]` is also the true answer. A latent trap: the day SMS starts, the figure stays 0 |
+  - ✅ **`whatsapp_sends` and `whatsapp_outreach_state` are NEVER read from the SPA.** Volume and
+    pacing come from **`whatsapp_messages`**, which is not on the no-policy list — so those figures
+    were never zero-because-empty. Do not "fix" them.
+  - ⛔ **ENDPOINT vs POLICY — THE TEST IS WHETHER THE TABLE HAS AN OWNER COLUMN.** `sms_sends` has
+    `user_id`, so "my own sends" is expressible and it got a **policy** 2026-08-10 (verified by the
+    sweep query dropping it — the table is EMPTY, so no data read can tell a policy from its
+    absence; the RLS trap blocks its own verification). `contact_suppressions` is deliberately
+    cross-channel and one-no-forever with **no owner to scope to**, so it gets an endpoint;
+    `onboarding_responses` already has `submissions`.
+  - **Still to fix (order agreed):** `usePlaybook` (needs a NEW `submissions` action — the existing
+    one deliberately returns card columns, not the answers), `contact_suppressions`, then the two
+    dashboard reads.
+- 🔴 **THE MARKETPLACE-LED VERDICT MAY BE WRONG, AND IT HAS COST FIVE MARKETS.** Paul has skipped
+  **Eastbourne, Chichester, Portsmouth, Loughborough and Kettering** on "an aggregator is the top
+  cited host → a local firm is competing with a platform". His counter-evidence: Eastbourne
+  locksmiths has Checkatrade top-cited at 14% while **J&J Locksmiths leads the naming with 32
+  mentions**, and §5 already records **Checkatrade in 59 of 62 plumber audits with AI still naming
+  local plumbers**. So AI reads the aggregator and then names local firms — being cited is not being
+  named (§5 says this already, in the other direction).
+  - ⚠️ **NOT YET CHECKED AGAINST THE DATA. Do not change the verdict until it is.** Three queries:
+    in markets where an aggregator is top-cited, who is actually NAMED; does the aggregator's own
+    brand ever appear in the NAMED list; how many markets were skipped and would they have been
+    workable. Paul's hypothesis for the real signal: **the aggregator's brand in the NAMED list, or
+    no local firm in the top three** — both about naming, not citation.
+  - ✅ **START WITH CHICHESTER — the data may already exist and cost nothing.** It is the
+    accountant trade+town the derivation test used (6 businesses, 5 agreed, the market audit found a
+    firm its own 3-question audit missed).
+  - ⚠️ **DO NOT TEST THE RULE ON LOUGHBOROUGH.** `loughborough.org.uk` is one of only two `townOnly`
+    hosts, so its citation mix is atypical.
+  - If being most-cited predicts nothing about naming, **drop that half of the verdict** — Paul's
+    own words, and he is ready for that answer.
 - 🔴 **THE QUESTIONNAIRE SPLIT — AGREED WITH PAUL 2026-08-10, NOT YET BUILT. Take a fresh session:
   it is the flow that takes the money and deserves one clean pass.** Money sooner, detail later.
   - **Before payment, ONE screen** (down from 5): the website questions + contact email.
