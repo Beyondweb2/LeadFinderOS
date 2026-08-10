@@ -63,6 +63,22 @@ ok(canonicalTrade(null) === null, "null returns null");
 ok(canonicalTrade("plumbing supplies wholesaler") === null, "a near-miss is NOT force-fitted to plumbers");
 ok(tradeKey("kava cafe, pool bar") === "kava cafe pool bar", "  but it still gets a stable key so it can be listed separately");
 
+console.log("\n── ⛔ EVERY LABEL RESOLVES TO ITS OWN TRADE ──");
+/* The picker offers t.label; canonicalTrade(t.label) must return t. It did not for
+   "Mobile valeting & detailing": the index was keyed raw and looked up normalised, so the ampersand
+   broke it and the Coverage page reported that trade as 0 of 590 untouched while its market audit
+   and leads sat in the database. Every OTHER label round-tripped, which is why nothing caught it. */
+for (const t of TRADES) {
+  const back = canonicalTrade(t.label);
+  ok(back?.slug === t.slug, `${JSON.stringify(t.label)} -> ${back?.slug ?? "NULL"}`);
+}
+/* And the same for the aliases, which is the other half of the index. */
+for (const t of TRADES) {
+  for (const a of t.aliases) {
+    ok(canonicalTrade(a)?.slug === t.slug, `  alias ${JSON.stringify(a)} -> ${t.slug}`);
+  }
+}
+
 console.log("\n── THE SIZE BAND ──");
 /* Norwich is 200,770 and has been worked. A 200k ceiling would have hidden it. */
 const NORWICH = 200_770;

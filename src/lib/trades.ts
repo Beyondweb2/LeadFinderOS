@@ -53,16 +53,28 @@ export const TRADES: Trade[] = [
   { slug: "mobile-valeting", label: "Mobile valeting & detailing", aliases: ["mobile valeting and detailing", "mobile valeting", "car valeting", "valeting"] },
 ];
 
-const BY_ALIAS = new Map<string, Trade>();
-for (const t of TRADES) {
-  BY_ALIAS.set(t.label.toLowerCase(), t);
-  BY_ALIAS.set(t.slug, t);
-  for (const a of t.aliases) BY_ALIAS.set(a.toLowerCase(), t);
-}
-
-/** Normalise the way market-view's own `norm()` does, so the two agree about what a trade string is. */
+/** Normalise the way market-view's own `norm()` does, so the two agree about what a trade string is.
+ *  Declared ABOVE the index because the index is built with it — see the block below. */
 function norm(s: string): string {
   return String(s ?? "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+const BY_ALIAS = new Map<string, Trade>();
+for (const t of TRADES) {
+  /* ⛔ KEYED ON THE NORMALISED FORM, BECAUSE THAT IS WHAT THE LOOKUP USES. They used to disagree:
+     keys were raw-lowercased, lookups were normalised. Invisible for every name without
+     punctuation, and silently fatal for one with it.
+     "Mobile valeting & detailing" — the label in the trade PICKER — normalises to
+     "mobile valeting detailing" and matched neither its own raw key nor the alias
+     "mobile valeting and detailing". So canonicalTrade(its own label) returned NULL, and the
+     Coverage page graded that trade 0 of 590 untouched while a Cambridge market audit and its leads
+     sat in the database.
+     ⚠️ FOUND BY READING REAL OUTPUT, NOT BY A TEST. Every other label round-trips, so the suite
+     passed and the page was quietly wrong — the shape CLAUDE.md keeps recording. The round trip is
+     now asserted for ALL labels, which is the assertion that would have caught it. */
+  BY_ALIAS.set(norm(t.label), t);
+  BY_ALIAS.set(t.slug, t);
+  for (const a of t.aliases) BY_ALIAS.set(norm(a), t);
 }
 
 /**
