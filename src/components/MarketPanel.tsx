@@ -23,7 +23,7 @@ import {
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
   MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase, shouldAutoClean, CLEANER_USD_PER_RUN, asPence,
-  auditsInView, openArrivalSearchConfirm,
+  auditsInView, openArrivalSearchConfirm, marketNamesUncleaned,
   type MarketPoolRow,
   type MarketViewResult,
 } from '@/lib/marketView';
@@ -270,11 +270,15 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
        nobody here could see. A comment asserting a guarantee the code does not provide is worse
        than no comment: it is why this was not spotted in review. */
     const c = fresh?.concentration;
-    if (!c || !shouldAutoClean(c.distinctPerAudit ?? 0, c.runIds.length)) return;
-    console.info('[market] auto-cleaning', { distinctPerAudit: c.distinctPerAudit, runs: c.runIds.length });
+    if (!c || !shouldAutoClean(marketNamesUncleaned(c), c.runIds.length)) return;
+    console.info('[market] auto-cleaning', { uncleaned: c.uncleanedCount, examples: c.uncleanedExamples, runs: c.runIds.length });
     toast({
       title: 'Cleaning up the names',
-      description: `${c.distinctPerAudit} distinct names per audit is above ${JUNK_RATIO_PER_AUDIT}, so the answers are being re-read. About ${asPence(c.runIds.length * CLEANER_USD_PER_RUN)}.`,
+      /* ⛔ QUOTES THE PROOF, NOT A RATIO. "125.5 distinct names per audit is above 15" told the
+         operator a number about a threshold; "the list contains \"always\", \"here\"" tells them
+         what is wrong with their data in words they can check against the answers themselves. */
+      description: `The extracted names include ${(c.uncleanedExamples ?? []).slice(0, 3).map((e) => `"${e}"`).join(', ')}`
+        + `, so the answers are being re-read. About ${asPence(c.runIds.length * CLEANER_USD_PER_RUN)}.`,
     });
     for (const runId of c.runIds) {
       try { await supabase.functions.invoke('extract-competitors', { body: { runId } }); } catch { /* one bad run must not stop the rest */ }
@@ -565,6 +569,12 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
          the degeneracy the bar exists to prevent. */
       marketAuditsComplete: view.concentration.marketAuditsComplete ?? 0,
       businessAuditsComplete: view.concentration.businessAuditsComplete ?? 0,
+      /* ⛔ REFUSE TO GRADE A SHAPE ON A LIST THAT WAS NEVER CLEANED. Read through
+         marketNamesUncleaned so an older cached view — which carries no uncleanedCount — passes
+         false and behaves exactly as before, rather than blanking every verdict on the app. */
+      namesUncleaned: marketNamesUncleaned(view.concentration),
+      uncleanedExamples: view.concentration.uncleanedExamples ?? [],
+      runsToClean: view.concentration.runIds.length,
     })
     : null;
   /* THE PLAIN READ. Same decision as the verdict, rendered as two sentences. Presentation only:
@@ -701,12 +711,31 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
             ? 'border-flag-green/50 bg-green-500/5'
             : shape.kind === 'marketplace_led'
               ? 'border-destructive/40 bg-destructive/5'
-              : shape.kind === 'thin_market'
+              : shape.kind === 'thin_market' || shape.kind === 'names_uncleaned'
                 ? 'border-amber-500/50 bg-amber-500/10'
                 : 'border-border bg-muted/30'
         }`}>
           <p className="text-[17px] font-semibold leading-snug sm:text-xl">{plain.market}</p>
           <p className="text-[15px] leading-snug text-foreground/85 sm:text-lg">{plain.contact}</p>
+
+          {/* ⛔ THE FIX, IN THE STATE THAT NEEDS IT. A refusal with the remedy three clicks away
+              under "Show the numbers" is how a market stays ungraded for a month. The verdict is
+              withheld and the button that restores it sits directly under the sentence. */}
+          {shape.kind === 'names_uncleaned' && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-2">
+              <Button
+                size="sm"
+                onClick={() => setReExtractOpen(true)}
+                disabled={reExtractBusy || (conc?.runIds.length ?? 0) === 0}
+              >
+                {reExtractBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+                Clean the names · ~{asPence((conc?.runIds.length ?? 0) * CLEANER_USD_PER_RUN)}
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                Re-reads {conc?.runIds.length ?? 0} stored run{(conc?.runIds.length ?? 0) === 1 ? '' : 's'}. No re-auditing, no Apify, nothing re-measured.
+              </span>
+            </div>
+          )}
 
           {/* ══ AUDITS THAT HAVE NOT FINISHED ══════════════════════════════════════════════════
               A market audit that fails is money spent AND a market the operator believes is
@@ -910,13 +939,23 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
 
               {/* JUNK FLAG. A suspicion with its ratio attached, never a verdict — and the fix is
                   offered, not run, because re-extraction is an unmetered LLM call per run. */}
-              {conc.likelyJunk && (
+              {/* ⛔ THE FLAG IS NOW A QUOTE FROM THE DATA, NOT A RATIO AGAINST A THRESHOLD. It used
+                  to say "125.5 distinct names per audit, against a threshold of 15" — a number the
+                  operator had to take on trust, computed on a denominator that moves with the
+                  question count. It now names the words that prove it, which can be checked against
+                  the stored answers. `likelyJunk` is still honoured so a market flagged by the old
+                  ratio alone still says something. */}
+              {(marketNamesUncleaned(conc) || conc.likelyJunk) && (
                 <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
                   <p className="text-xs leading-snug text-amber-700 dark:text-amber-400">
-                    <span className="font-semibold">These names are probably not clean.</span>{' '}
-                    {conc.distinctPerAudit} distinct names per audit, against a threshold of {JUNK_RATIO_PER_AUDIT}.
-                    The AI cleaner never ran on older audits, so this fold may be full of headings and stray words
-                    rather than firms. Treat the figures above as unreliable until it is re-read.
+                    <span className="font-semibold">These names are not clean.</span>{' '}
+                    {marketNamesUncleaned(conc)
+                      ? <>The extracted list contains {(conc.uncleanedExamples ?? []).map((e) => `"${e}"`).join(', ')}
+                        {(conc.uncleanedCount ?? 0) > (conc.uncleanedExamples ?? []).length
+                          && ` and ${(conc.uncleanedCount ?? 0) - (conc.uncleanedExamples ?? []).length} more like them`}
+                        {' '}— words rather than firms, which is raw scraper output. </>
+                      : <>{conc.distinctPerAudit} distinct names per audit, above the old ratio flag of {JUNK_RATIO_PER_AUDIT}. </>}
+                    The AI cleaner never ran on older audits. Treat every figure above as unreliable until it is re-read.
                   </p>
                   <Button size="sm" variant="outline" onClick={() => setReExtractOpen(true)} disabled={reExtractBusy || conc.runIds.length === 0}>
                     {reExtractBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
@@ -938,10 +977,16 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                   healthy market as abnormal. The junk threshold is unchanged; only the claim
                   about what normal looks like is gone, because there is no post-merge
                   measurement to support one yet. */}
-              {!conc.likelyJunk && conc.distinctPerAudit > 0 && (
+              {/* ⛔ PER QUESTION, AND WITH NO CLAIM ATTACHED. An audit is 3 questions or 8 depending
+                  on how it was started, so the per-audit figure moves with the question count — which
+                  is why the per-audit threshold never separated anything. Measured across all 20
+                  markets: clean ones run 2.1–4.8 per question, and the marker-word test above is what
+                  decides cleanliness, not this number. */}
+              {!marketNamesUncleaned(conc) && !conc.likelyJunk && (conc.distinctPerQuestion ?? 0) > 0 && (
                 <p className="text-[11px] text-muted-foreground">
-                  {conc.distinctPerAudit} distinct names per audit. Only the high end means anything:
-                  {' '}{JUNK_RATIO_PER_AUDIT}+ suggests the names were never cleaned.
+                  {conc.distinctPerQuestion} distinct names per question across {conc.questions} question
+                  {conc.questions === 1 ? '' : 's'}. Measured clean markets run 2.1–4.8; this is a fragmentation
+                  signal, not a cleanliness one.
                 </p>
               )}
             </CardContent>

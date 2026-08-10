@@ -15,45 +15,50 @@
    ⚠️ NO TYPE CHECK CATCHES THIS. Both readings are a MarketViewResult; only the timing differs.
    That is why the fix is structural — reload() now RETURNS the fresh view and it is passed in as
    an argument, so the stale one is not reachable from inside the callback at all.
+
+   ⛔ AND THE DIRTINESS TEST HAS SINCE CHANGED, from a ratio to a fact — see
+   scripts/uncleaned-names.test.ts for the measurement that killed the ratio. What survives unchanged
+   is the `runs > 0` half and the whole lesson above: WHICH VIEW the decision is made from.
    ============================================================ */
-import { shouldAutoClean, JUNK_RATIO_PER_AUDIT, CLEANER_USD_PER_RUN, asPence } from "../src/lib/marketView.ts";
+import {
+  shouldAutoClean, marketNamesUncleaned, CLEANER_USD_PER_RUN, asPence,
+} from "../src/lib/marketView.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
 
-type Conc = { distinctPerAudit: number; runIds: string[] };
+type Conc = { uncleanedCount?: number; runIds: string[] };
 /** autoCleanIfDirty's decision, restated exactly as the component now makes it. */
-const decides = (c: Conc | null) => !!c && shouldAutoClean(c.distinctPerAudit ?? 0, c.runIds.length);
+const decides = (c: Conc | null) => !!c && shouldAutoClean(marketNamesUncleaned(c), c.runIds.length);
 
 // The two views that exist at the moment the callback runs.
-const BEFORE: Conc = { distinctPerAudit: 0, runIds: [] };                    // first measurement
-const AFTER: Conc = { distinctPerAudit: 125.5, runIds: ["r1", "r2"] };       // Wisbech, as measured
+const BEFORE: Conc = { uncleanedCount: 0, runIds: [] };                 // first measurement
+const AFTER: Conc = { uncleanedCount: 33, runIds: ["r1", "r2"] };       // eastbourne, as measured
 
 console.log("── ⛔ THE BUG: WHICH VIEW THE DECISION IS MADE FROM ──");
 ok(!decides(BEFORE), "the PRE-measurement view says do not clean (0 runs) — this is what it used to read");
-ok(decides(AFTER), "the POST-measurement view says CLEAN — 125.5 per audit over a threshold of 15");
+ok(decides(AFTER), "the POST-measurement view says CLEAN — 33 markers in the extracted names");
 ok(decides(BEFORE) !== decides(AFTER),
   "THE TWO DISAGREE, so which one is read is the whole bug — and no type distinguishes them");
 
-console.log("\n── THE THRESHOLD ITSELF (unchanged, and correct) ──");
-ok(!shouldAutoClean(125.5, 0), "runs = 0 never cleans, however dirty — there is nothing to re-read");
-ok(!shouldAutoClean(0, 2), "a clean market with runs does not clean");
-ok(!shouldAutoClean(JUNK_RATIO_PER_AUDIT, 2), `exactly ${JUNK_RATIO_PER_AUDIT} does not clean (strictly above)`);
-ok(shouldAutoClean(JUNK_RATIO_PER_AUDIT + 0.5, 2), "just above does");
-ok(shouldAutoClean(125.5, 2), "Wisbech driving instructors cleans");
+console.log("\n── THE RUN GUARD (unchanged, and still right) ──");
+ok(!shouldAutoClean(true, 0), "runs = 0 never cleans, however dirty — there is nothing to re-read");
+ok(!shouldAutoClean(false, 2), "a clean market with runs does not clean");
+ok(shouldAutoClean(true, 2), "a dirty market with runs does");
 
-console.log("\n── A SECOND MEASUREMENT MUST NOT RE-CLEAN WHAT IS ALREADY CLEAN ──");
-/* ⚠️ THE LIVE CONSEQUENCE OF FIXING THIS, and it is Paul's call not mine. The Wisbech cleaner took
-   the market from 125.5 to 16.5 distinct names per audit — every prose fragment gone, 36 real
-   driving schools left — and 16.5 IS STILL ABOVE THE THRESHOLD OF 15. So with the auto-clean
-   working, the next measurement of that market pays to clean it again for nothing.
-   Asserted as CURRENT BEHAVIOUR rather than silently changed: the threshold is a judgement about
-   money, and 28 of 42 measured markets sit above it. */
-const CLEANED: Conc = { distinctPerAudit: 16.5, runIds: ["r1", "r2"] };
-ok(decides(CLEANED),
-  `KNOWN: an already-cleaned market (16.5) still re-cleans at ${asPence(2 * CLEANER_USD_PER_RUN)} — threshold is ${JUNK_RATIO_PER_AUDIT}`);
+console.log("\n── ✅ THE KNOWN RE-CLEAN LOOP IS GONE, AND THAT IS THE RATIO'S FAULT REMOVED ──");
+/* THIS USED TO BE A RECORDED DEFECT. The Wisbech cleaner took that market from 125.5 to 16.5 distinct
+   names per audit — every prose fragment gone, 36 real driving schools left — and 16.5 was STILL
+   above the threshold of 15, so the next measurement paid to clean it again for nothing. 28 of 42
+   measured markets sat above that line.
+   With the fact test there is nothing left to fire on: a cleaned fold contains no marker words, so it
+   cannot re-clean however many firms it names. A fragmented market is no longer mistaken for a dirty
+   one, which is the same error in the opposite direction. */
+const CLEANED: Conc = { uncleanedCount: 0, runIds: ["r1", "r2"] };
+ok(!decides(CLEANED), `an already-cleaned market does NOT re-clean — no ${asPence(2 * CLEANER_USD_PER_RUN)} for nothing`);
 
 console.log("\n── THE ABSENT CASE ──");
 ok(!decides(null), "a view that failed to load never cleans — absence is not dirt");
+ok(!decides({ runIds: ["r1"] }), "a view from an older market-view deploy carries no count, and never cleans on a guess");
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");

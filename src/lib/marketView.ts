@@ -34,6 +34,81 @@ export { EVIDENCE_MIN_AUDITS };
  *  re-extraction costs an LLM call per run and nothing meters that. */
 export const JUNK_RATIO_PER_AUDIT = 15;
 
+/* ══ IS THIS LIST CLEAN? MEASURED 2026-08-10, AND THE RATIO IS NOT THE ANSWER ══════════════════
+   The queued plan was to re-measure distinct names per QUESTION and put the threshold in the empty
+   band. It was re-measured, against every market, and the band had closed:
+
+     perQ   junk words   market                       verdict by eye
+     27.8       39       locksmiths / rowley regis    DIRTY  ("they", "ask", "always", "check")
+     25.1       39       locksmiths / wakefield       DIRTY  ("here", "why", "i'd", "good")
+     17.9       33       locksmiths / eastbourne      DIRTY  ("give", "particularly", "another")
+      9.6       24       locksmiths / chorley         DIRTY  ("fully", "call", "always", "ask")
+      5.8       18       accountant / chichester      DIRTY  ("their", "you", "many")
+      4.8        0       mobile mechanics / wisbech   clean
+      4.4        0       electricians / portsmouth    clean
+      3.9 … 2.1  0       the other 13 markets         clean
+
+   ⛔ A THRESHOLD OF 10 WOULD HAVE MISSED TWO PROVABLY DIRTY MARKETS, one of them the accountant /
+   Chichester fold the derivation test and the winnability question both rest on. The recorded
+   "nothing at all between 5.4 and 17.9" gap is gone: chorley (9.6) arrived inside it, and the real
+   dirty/clean boundary on the ratio is now 5.8 vs 4.8 — a 1.2× band, which is not a gap, it is a
+   coincidence. Any number placed in it would be the fifth constant in §4 that looked plausible.
+
+   ⛔ SO THE GATE IS A FACT, NOT A RATIO. A SINGLE-TOKEN English function word cannot be the name of
+   a firm, and the LLM cleaner would never return one — so one of these in the fold PROVES the list
+   is raw regex output. It partitions all 20 markets with nothing in between: 39/39/33/24/18 on the
+   five dirty ones, and EXACTLY ZERO across 793 distinct names in the other fifteen.
+
+   ⚠️ SINGLE TOKEN ONLY, so "One Call Locksmiths", "Always Secure Ltd" and "First Pick Locksmiths"
+   are untouched — every real multi-word firm passes by construction. The 793-name clean sweep is the
+   evidence that there are no single-token false positives to worry about either.
+   ⚠️ AND THE RATIO IS STILL REPORTED, per QUESTION, as context beside the flag. It is a real signal
+   about fragmentation; it just cannot carry a yes/no about cleanliness. Per QUESTION rather than per
+   AUDIT because an audit is 3 questions or 8 depending on how it was started, so the per-audit
+   figure moves with the question count and JUNK_RATIO_PER_AUDIT has never separated anything. */
+export const UNCLEANED_MARKER_WORDS: ReadonlySet<string> = new Set([
+  "a", "about", "above", "after", "again", "all", "already", "also", "although", "always", "am", "an",
+  "and", "another", "any", "anyone", "are", "as", "ask", "asked", "at", "available", "back", "based",
+  "be", "because", "been", "before", "being", "below", "best", "better", "between", "both", "but",
+  "by", "call", "called", "can", "cannot", "check", "come", "could", "did", "do", "does", "doing",
+  "done", "down", "during", "each", "either", "else", "enough", "even", "ever", "every", "few",
+  "find", "first", "for", "found", "from", "fully", "further", "get", "getting", "give", "given",
+  "go", "going", "good", "got", "had", "has", "have", "having", "he", "help", "her", "here", "hers",
+  "him", "his", "how", "however", "i", "i'd", "i'll", "i'm", "i've", "if", "in", "into", "is", "it",
+  "it's", "its", "just", "keep", "know", "known", "last", "less", "let", "like", "likely", "look",
+  "looking", "made", "make", "many", "may", "maybe", "me", "might", "mine", "more", "most", "much",
+  "must", "my", "need", "needed", "needs", "never", "new", "next", "no", "none", "nor", "not",
+  "note", "now", "of", "off", "often", "on", "once", "one", "only", "or", "other", "others", "our",
+  "ours", "out", "over", "own", "particularly", "per", "perhaps", "please", "prices", "provide",
+  "quite", "rather", "really", "right", "said", "same", "say", "see", "seen", "several", "shall",
+  "she", "should", "since", "so", "some", "someone", "something", "still", "such", "sure", "take",
+  "than", "that", "the", "their", "theirs", "them", "then", "there", "these", "they", "this",
+  "those", "though", "through", "thus", "to", "too", "typically", "under", "until", "up", "upon",
+  "us", "use", "used", "usually", "very", "via", "want", "was", "we", "well", "were", "what",
+  "when", "where", "whether", "which", "while", "who", "whom", "why", "will", "with", "within",
+  "without", "work", "worth", "would", "yes", "yet", "you", "your", "yours",
+]);
+
+/** One extracted "competitor" that proves the fold was never cleaned. */
+export function isUncleanedName(name: string): boolean {
+  const t = String(name ?? "").trim().toLowerCase().replace(/[.,;:!?]+$/, "");
+  if (!t || t.includes(" ")) return false;
+  return UNCLEANED_MARKER_WORDS.has(t);
+}
+
+/** Every distinct marker in a fold, sorted — so the flag can show its working rather than assert. */
+export function uncleanedNames(names: Iterable<string>): string[] {
+  const found = new Set<string>();
+  for (const n of names) {
+    const t = String(n ?? "").trim().toLowerCase().replace(/[.,;:!?]+$/, "");
+    if (isUncleanedName(t)) found.add(t);
+  }
+  return [...found].sort();
+}
+
+/** How many markers are shown on screen. Enough to be convincing, short enough to read. */
+export const UNCLEANED_EXAMPLES_SHOWN = 6;
+
 /** extract-competitors' MAX_PER_ENGINE. An engine block holding exactly this many competitors was
  *  probably cut short, so a fragmented market reads as less fragmented than it is. Mirrored here to
  *  caption the concentration figures; the cap itself is owned by that function. */
@@ -53,8 +128,19 @@ export interface MarketConcentration {
   /** Fewer audits than EVIDENCE_MIN_AUDITS — the same bar the playbook uses to call evidence thin. */
   thin: boolean;
   distinctPerAudit: number;
-  /** distinctPerAudit >= JUNK_RATIO_PER_AUDIT. Flag, not fact. */
+  /** distinctPerAudit >= JUNK_RATIO_PER_AUDIT. Flag, not fact, and it has never separated anything —
+   *  see UNCLEANED_MARKER_WORDS. Kept so an older cached view still renders. */
   likelyJunk: boolean;
+  /** Deduped questions behind the fold — the denominator that does not move with how an audit was
+   *  started. Optional: a view cached before this shipped does not carry it. */
+  questions?: number;
+  /** Distinct extracted names per QUESTION. Reported, never a gate. */
+  distinctPerQuestion?: number;
+  /** ⛔ THE GATE. How many single-token function words are in the fold; one is proof it was never
+   *  cleaned. Optional, and absent means UNKNOWN — see marketNamesUncleaned. */
+  uncleanedCount?: number;
+  /** The first few markers found, so the refusal shows its working instead of asserting. */
+  uncleanedExamples?: string[];
   /** Engine blocks that came back sitting exactly on MAX_PER_ENGINE_CAP. */
   truncatedBlocks: number;
   engineBlocks: number;
@@ -67,6 +153,26 @@ export interface MarketConcentration {
    *  counts: two audits with one completed run must not pass a two-audit bar. */
   marketAuditsComplete?: number;
   businessAuditsComplete?: number;
+}
+
+/**
+ * Is this market's competitor list KNOWN to be uncleaned?
+ *
+ * ⛔ THE ABSENT CASE IS "NO", AND THAT IS A DECISION, NOT AN OVERSIGHT. `uncleanedCount` arrives from
+ * market-view; a view cached in sessionStorage before this shipped, or an older deploy of the
+ * function, carries neither field. Refusing to grade a shape on absence would blank the verdict on
+ * every market at once — including the fifteen measured to be clean — so absence keeps the previous
+ * behaviour and only a count we have actually read refuses. Deploy market-view BEFORE the SPA and
+ * the window is a 10-minute stale cache, nothing more.
+ *
+ * ⚠️ NOT `?? 0 > 0`, WHICH READS THE SAME AND MEANS SOMETHING ELSE: that would let a missing field
+ * assert cleanliness rather than admit ignorance. Here the two both return false, but they say
+ * different things, and the next person to add a third state needs the difference to be visible.
+ */
+export function marketNamesUncleaned(conc: Pick<MarketConcentration, "uncleanedCount"> | null | undefined): boolean {
+  const n = conc?.uncleanedCount;
+  if (typeof n !== "number" || !Number.isFinite(n)) return false;   // not known — see above
+  return n > 0;
 }
 
 /* ── GRADED, NOT BINARY ────────────────────────────────────────────────────────────────────────
@@ -413,7 +519,14 @@ export function marketBatchCost(
    resolving it: "a local firm leads the naming, but a marketplace leads the sources" is the read
    that stops someone walking into Loughborough on fragmentation alone. */
 
-export type MarketShapeKind = "unmeasured" | "marketplace_led" | "local_leader" | "thin_market";
+export type MarketShapeKind =
+  | "unmeasured"
+  /** ⛔ A REFUSAL, NOT A SHAPE. The names this verdict would be computed from are raw regex output,
+   *  so every figure downstream — who leads, the top share, the concentration — is about fragments
+   *  rather than firms. Grading it anyway is how a market gets skipped or worked on arithmetic
+   *  performed over the word "always". */
+  | "names_uncleaned"
+  | "marketplace_led" | "local_leader" | "thin_market";
 
 export interface MarketShape {
   kind: MarketShapeKind;
@@ -516,15 +629,24 @@ export const MARKET_COOLDOWN_MS = 10 * 60 * 1000;
    MEASURED on the real Norwich run, not estimated: 8 queue rows, ~79,600 characters of answers,
    ~19,900 input tokens at $2.50/M plus ~2k output at $10.00/M = $0.070 per run.
    ⚠️ 6p AGAINST AN 8.3p AUDIT IS A 72% SURCHARGE, so it does NOT run on every measurement. It runs
-   when distinctPerAudit is over JUNK_RATIO_PER_AUDIT — which is exactly when the figures cannot be
-   trusted, and a market whose figures cannot be trusted is worth 6p to fix. Clean markets run 4-9
-   distinct names per audit and junk ones 30-970; the threshold sits in the empty gap between. */
+   when the fold is PROVEN uncleaned — which is exactly when the figures cannot be trusted, and a
+   market whose figures cannot be trusted is worth 6p to fix.
+   ⛔ IT USED TO RUN ON distinctPerAudit > 15 AND THAT WAS BOTH TOO LOOSE AND TOO TIGHT. Too loose
+   because a genuinely fragmented clean market can exceed it (an 8-question audit naming 20 real
+   firms scores 20); too tight because chorley's fold of "always"/"i'd"/"vat" scores 9.6 per question
+   and would never have fired. Now keyed on the marker words, which is a fact about the list. */
 export const CLEANER_USD_PER_RUN = 0.070;
 
-/** Should a finished measurement be cleaned automatically? True only when the extraction looks
- *  dirty enough for the figures to be untrustworthy. */
-export function shouldAutoClean(distinctPerAudit: number, runs: number): boolean {
-  return runs > 0 && distinctPerAudit > JUNK_RATIO_PER_AUDIT;
+/**
+ * Should a finished measurement be cleaned automatically?
+ *
+ * ⛔ THE RUN COUNT IS LOAD-BEARING and stays: with no completed run there is nothing to re-read, and
+ * cleaning would pay for zero LLM calls that change nothing. That half of the old guard was always
+ * right — see scripts/auto-clean.test.ts, where it was the guard's correctness that hid the fact
+ * that it was being handed the PRE-measurement view and so could never fire.
+ */
+export function shouldAutoClean(namesUncleaned: boolean, runs: number): boolean {
+  return runs > 0 && namesUncleaned;
 }
 
 /** What one press costs, stated on the button rather than in a dialog nobody reads twice. */
@@ -786,6 +908,13 @@ export interface MarketShapeInput {
   marketAuditsComplete: number;
   /** Per-business audits of this trade and town with a COMPLETED run. */
   businessAuditsComplete: number;
+  /** ⛔ THE COMPETITOR LIST IS PROVEN RAW. Read from the fold via marketNamesUncleaned, so an older
+   *  view that cannot answer the question passes `false` and the verdict behaves as it always did. */
+  namesUncleaned?: boolean;
+  /** The markers found, for the refusal's own reasoning lines. */
+  uncleanedExamples?: string[];
+  /** Completed runs the cleaner would re-read, so the refusal can price its own fix. */
+  runsToClean?: number;
   /* NO POOL FIELDS, DELIBERATELY. The shape is decided by citations and naming alone, so an
      incomplete Places pool cannot overrule them. The contactable count lives in marketPlainRead. */
 }
@@ -807,6 +936,31 @@ export function marketShape(input: MarketShapeInput): MarketShape {
         completeRuns === 0
           ? `${audits} audit${audits === 1 ? "" : "s"} exist${audits === 1 ? "s" : ""} but none has finished, so nothing has been measured yet.`
           : `${completeRuns} completed run${completeRuns === 1 ? "" : "s"} behind it so far.`,
+      ],
+    };
+  }
+
+  /* ⛔ SECOND, AND BEFORE ANYTHING THAT READS A NAME. The evidence gate above comes first because
+     "not measured enough" is the more basic statement and needs no names at all. Everything BELOW
+     this point — who leads, which host dominates, how many firms are named — is arithmetic over the
+     extracted list, so if that list is raw regex output the verdict is about fragments.
+     Eastbourne is the case that proves it matters: 287 names over 16 questions, 33 of them function
+     words, Checkatrade top-cited at 14% — and it was SKIPPED on a marketplace-led verdict computed
+     over that fold. A refusal Paul can act on beats a verdict he cannot audit. */
+  if (input.namesUncleaned) {
+    const examples = (input.uncleanedExamples ?? []).slice(0, UNCLEANED_EXAMPLES_SHOWN);
+    const runs = input.runsToClean ?? 0;
+    return {
+      kind: "names_uncleaned",
+      headline: "Names not cleaned · no verdict until they are",
+      reasoning: [
+        examples.length > 0
+          ? `The extracted competitor list contains ${examples.map((e) => `"${e}"`).join(", ")} — words, not firms, so it is raw scraper output rather than businesses.`
+          : "The extracted competitor list contains single words rather than business names, so it is raw scraper output.",
+        `Every figure a verdict would rest on — who leads, the top share, how many firms are named — would be counted over that list, so it is not being graded.`,
+        runs > 0
+          ? `Re-read the ${runs} completed run${runs === 1 ? "" : "s"} with the AI cleaner (about ${asPence(runs * CLEANER_USD_PER_RUN)}, no re-auditing) and this market will grade itself.`
+          : "There is no completed run to re-read, so the names cannot be cleaned yet.",
       ],
     };
   }
@@ -933,6 +1087,14 @@ export function marketPlainRead(
         marketAudits: conc.marketAuditsComplete ?? 0,
         businessAudits: conc.businessAuditsComplete ?? 0,
       })}`;
+      break;
+    case "names_uncleaned":
+      /* ⛔ SAYS WHAT IS WRONG AND WHAT FIXES IT, and never a number off the dirty fold. Quoting
+         "AI names 239 firms in Eastbourne" here would be repeating the very count the refusal
+         exists to distrust. */
+      market = `No verdict yet — the competitor names for ${plural} in ${town} were never cleaned, so `
+        + 'every figure would be counted over scraped words rather than firms. Re-read them with the '
+        + 'AI cleaner and this market grades itself. Nothing needs re-auditing.';
       break;
     case "marketplace_led":
       market = topHost?.isAggregator
