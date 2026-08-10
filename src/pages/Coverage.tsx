@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Loader2, EyeOff, Eye, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -218,6 +218,18 @@ export default function Coverage() {
                     </Badge>
                   </td>
                   <td className="px-3 py-1.5 text-right">
+                    {/* ⛔ THE WHOLE POINT OF THE PAGE, FINISHED. Reading a town off Coverage and
+                        retyping it into Find Leads was the retyping this page exists to remove —
+                        Coverage already knows both values and the market view already reads them
+                        from the URL, so this is a link, not new machinery.
+                        ⚠️ confirm=search OPENS the confirm; it never runs the search. A town on this
+                        list is untouched almost by definition, so its pool is stale almost every
+                        time and the search would cost ~$0.11 on a click that reads as navigation. */}
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                      <Link to={`/find-leads?mode=market&trade=${encodeURIComponent(trade)}&town=${encodeURIComponent(t.name)}&confirm=search`}>
+                        Find leads
+                      </Link>
+                    </Button>
                     <Button
                       variant="ghost" size="sm" className="h-7 text-xs"
                       disabled={busyId === t.id}

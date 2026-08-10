@@ -53,6 +53,11 @@ const Index = () => {
   const urlMode = searchParams.get('mode') === 'market' ? 'market' : 'leads';
   const urlTrade = (searchParams.get('trade') ?? '').trim();
   const urlTown = (searchParams.get('town') ?? '').trim();
+  /* ⛔ READ ON FIRST RENDER AND NEVER RE-READ. `confirm=search` is an INTENT that arrived with a
+     click on Coverage, not a piece of page state — so it is captured once into a ref and the param
+     is stripped below. Left in the URL it would re-open the dialog on a refresh or a back button,
+     which is the "modal springs open on return" §6c forbids. */
+  const openSearchConfirm = useRef(searchParams.get('confirm') === 'search').current;
   /* Seeded from the URL on FIRST RENDER, not in an effect, so the panel never paints an empty
      market for a frame before correcting itself. */
   const [activeMode, setActiveMode] = useState<SearchMode>(
@@ -146,6 +151,16 @@ const Index = () => {
       setMarketTown((w) => (w === urlTown ? w : urlTown));
     }
   }, [urlMode, urlTrade, urlTown]);
+
+  /* Consume the one-shot intent. `replace` so it does not become a history entry you can go BACK
+     to and re-trigger, and the trade/town params are deliberately left alone — those ARE page
+     state (what am I looking at) and belong in the URL. */
+  useEffect(() => {
+    if (searchParams.get('confirm') !== 'search') return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('confirm');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   /* Lead results and market output are mutually exclusive. Gating each block on the mode the last
      search RAN in (rather than hiding them by clearing `leads`) keeps the lead results intact
@@ -449,7 +464,7 @@ const Index = () => {
           in this town. Spends nothing on mount — it reads audits and the cached lead pool. */}
       {activeMode === 'market' && (
         <section>
-          <MarketPanel trade={marketTrade} town={marketTown} />
+          <MarketPanel trade={marketTrade} town={marketTown} openSearchConfirm={openSearchConfirm} />
         </section>
       )}
 
