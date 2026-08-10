@@ -6,6 +6,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { PipelineCard } from '@/components/dashboard/PipelineCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
+import { SubmissionsCard } from '@/components/dashboard/SubmissionsCard';
 import { ChannelPerformanceCard } from '@/components/dashboard/ChannelPerformanceCard';
 import { AuditFunnelCard } from '@/components/dashboard/AuditFunnelCard';
 import { CampaignStatsSection } from '@/components/dashboard/CampaignStatsSection';
@@ -126,6 +127,9 @@ const Dashboard = () => {
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Activity &amp; next steps</h2>
         <div className="grid gap-3 sm:gap-4 grid-cols-1">
           <NextActionsCard tasks={metrics.dashTasks} onClearTask={handleClearTask} />
+          {/* Beside Next Actions on purpose: its chase task is keyed on a LEAD and only fires after
+              a day, so a lead-less submission never appears there at all. */}
+          <SubmissionsCard />
         </div>
       </section>
 
