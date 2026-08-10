@@ -61,7 +61,18 @@ export function SearchForm({
   const [selectedCountry, setSelectedCountry] = usePersistedState<Country>('find-leads-country', 'UK' as Country, persist);
   // Persisted exactly like radius — same tier, same per-user scope — so the mode survives a
   // reload instead of quietly reverting to a radius search between sessions.
-  const [townOnly, setTownOnly] = usePersistedState('find-leads-town-only', false, persist);
+  /* ⛔ DEFAULT ON, 2026-08-09. locationBias is a HINT — Google returns results outside the circle
+     whatever the radius — so the old default let a Corby locksmith arrive from a Wisbech search and
+     be audited against Wisbech. 31 of 44 measurable audits were more than 10km from the town they
+     asked about; 28 of those reached a prospect.
+     ⚠️ IT DOES NOT LOSE LEADS. townOnly runs a nearby pass and returns out-of-boundary results
+     ALONGSIDE the town ones, tagged outsideTown, now rendered as an "Outside town" badge. Measured
+     against Google's own cached viewports: 63% of leads with coordinates sit outside the town they
+     were searched from — 91% for Wisbech, 92% for Bourne. Those are the leads that were quietly
+     becoming wrong-town audits; they are still returned, just no longer indistinguishable.
+     ⚠️ IT COSTS ONE EXTRA GOOGLE PAGE per search (~$0.035) for the nearby pass. A persisted toggle,
+     so turning it off once turns it off for good. */
+  const [townOnly, setTownOnly] = usePersistedState('find-leads-town-only', true, persist);
   /* SEARCH MODE. 'leads' = the existing lead search, unchanged. 'market' = read what we already
      know about this trade in this town. Persisted like the other inputs so the page comes back the
      way it was left. */

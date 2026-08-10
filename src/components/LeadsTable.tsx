@@ -619,6 +619,11 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     {lead.isExpanded && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
                     )}
+                    {/* Distinct from "Nearby", which means the radius was widened. This one means
+                        Google's own boundary for the town excludes them. */}
+                    {lead.outsideTown && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-medium shrink-0">Outside town</span>
+                    )}
                   </div>
                   <div className="mt-1 flex items-center gap-1.5">
                     <WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} compact />
@@ -773,6 +778,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                       <span className="min-w-0 break-words max-w-[220px]">{lead.name}</span>
                       {lead.isExpanded && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
+                      )}
+                      {lead.outsideTown && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-medium shrink-0">Outside town</span>
                       )}
                     </div>
                   </TableCell>
