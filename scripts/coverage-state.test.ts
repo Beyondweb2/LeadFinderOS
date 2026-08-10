@@ -8,7 +8,8 @@
    ============================================================ */
 import {
   coverageStateFor, coverageKey, coverageTownKey, summarise, applyFilters,
-  COVERAGE_STATES, type CoverageRow, type CoverageFacts, type CoverageTown,
+  COVERAGE_STATES, applySuppressionPatch, type CoverageRow, type CoverageFacts, type CoverageTown,
+  type SuppressibleTown,
 } from "../src/lib/coverageState.ts";
 import { TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX, TOWN_SEED_MIN, TOWN_SEED_MAX } from "../src/lib/trades.ts";
 
@@ -129,3 +130,48 @@ console.log("\n── ⚠️ EVERY STATE HAS A LABEL AND AN ORDER ──");
 }
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   THE MUTATION'S CACHE PATCH — the half CLAUDE.md §6c says to prove before migrating a hook.
+   A wrong patch here does not lose your place; it shows you a list that disagrees with the
+   database, which is the failure Paul called worse.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+console.log("\n── SUPPRESSION CACHE PATCH ──");
+{
+  const rows: SuppressibleTown[] = [
+    { id: "a", suppressed_at: null, suppressed_reason: null },
+    { id: "b", suppressed_at: "2026-01-01T00:00:00Z", suppressed_reason: "conurbation fragment" },
+  ];
+
+  // SUPPRESS: the server's timestamp and reason are what land, not anything invented here.
+  const sup = applySuppressionPatch(rows, "a", {
+    id: "a", suppressed_at: "2026-08-10T09:00:00Z", suppressed_reason: "part of Manchester",
+  });
+  ok(sup?.[0].suppressed_at === "2026-08-10T09:00:00Z", "suppress takes the SERVER's timestamp");
+  ok(sup?.[0].suppressed_reason === "part of Manchester", "suppress takes the server's reason");
+  ok(sup?.[1].suppressed_at === "2026-01-01T00:00:00Z", "the other rows are untouched");
+  ok(rows[0].suppressed_at === null, "the input array is not mutated");
+
+  // UNSUPPRESS: nulls must land as nulls, not be skipped by a truthiness test.
+  const un = applySuppressionPatch(rows, "b", { id: "b", suppressed_at: null, suppressed_reason: null });
+  ok(un?.[1].suppressed_at === null, "unsuppress clears the timestamp");
+  ok(un?.[1].suppressed_reason === null, "unsuppress clears the reason");
+
+  // A suppression with no reason given — optional, and must store null rather than undefined.
+  const noReason = applySuppressionPatch(rows, "a", { id: "a", suppressed_at: "2026-08-10T09:00:00Z" });
+  ok(noReason?.[0].suppressed_reason === null, "a missing reason becomes null, never undefined");
+
+  /* ⛔ THE ABSENT CASES, EACH ONE EXPLICIT. Every one of these means "refetch", and none of them
+     may mean "nothing changed" — that is the branch that would leave a stale row on screen after
+     a write that really happened. An endpoint deployed older than the hook produces exactly the
+     first two. */
+  ok(applySuppressionPatch(rows, "a", undefined) === null, "no town returned -> null (refetch)");
+  ok(applySuppressionPatch(rows, "a", null) === null, "explicit null -> null (refetch)");
+  ok(applySuppressionPatch(rows, "a", {}) === null, "town with no id -> null (refetch)");
+  ok(applySuppressionPatch(rows, "a", { id: null }) === null, "null id -> null (refetch)");
+  ok(applySuppressionPatch(rows, "zz", { id: "zz", suppressed_at: null }) === null,
+     "an id matching no cached row -> null (refetch), never a silent no-op");
+  ok(applySuppressionPatch([], "a", { id: "a" }) === null, "empty cache -> null (refetch)");
+}
+
+console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILED`);

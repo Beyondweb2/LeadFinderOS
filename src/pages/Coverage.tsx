@@ -8,6 +8,8 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { usePersistedState } from '@/hooks/usePersistedState';
 import { useCoverage } from '@/hooks/useCoverage';
 import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX } from '@/lib/trades';
 import {
@@ -19,10 +21,13 @@ import {
    ones already measured or worked marked, so "locksmiths in the East of England: 6 of 87 done"
    reads in one look.
 
-   ⚠️ THE TRADE AND THE REGION ARE IN THE URL, the size band and the show-suppressed toggle are not.
-   That is §6c's line: the URL is for WHAT I AM LOOKING AT — a trade's coverage is a view you would
-   link to or come back to — and usePersistedState is for HOW THE PAGE IS CONFIGURED. A size band is
-   a configuration. Nothing here persists an open dialog. */
+   ⚠️ THE TRADE AND THE REGION ARE IN THE URL; the size band and the show-suppressed toggle are in
+   usePersistedState. That is §6c's line, and BOTH halves of it now hold: the URL is for WHAT I AM
+   LOOKING AT — a trade's coverage is a view you would link to or come back to — and
+   usePersistedState is for HOW THE PAGE IS CONFIGURED. A band and a toggle are configuration; you
+   would not send someone a link to them, and losing them on every navigation is the complaint.
+   ⛔ NOTHING ELSE MOVES. `busyId` is which row is mid-request — happening, not configuration — and
+   nothing here persists an open dialog. The sort is fixed, so there is no sort to keep. */
 
 const STATE_STYLE: Record<CoverageState, string> = {
   worked: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
@@ -33,6 +38,7 @@ const STATE_STYLE: Record<CoverageState, string> = {
 
 export default function Coverage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { isLoading, error, gradeFor, setSuppressed, regions, applyFilters, summarise, refetch } = useCoverage();
 
   const [params, setParams] = useSearchParams();
@@ -44,9 +50,35 @@ export default function Coverage() {
     setParams(next, { replace: true });
   };
 
-  const [minPop, setMinPop] = useState(TOWN_BAND_DEFAULT_MIN);
-  const [maxPop, setMaxPop] = useState(TOWN_BAND_DEFAULT_MAX);
-  const [showSuppressed, setShowSuppressed] = useState(false);
+  /* ⛔ THE BAND IS ONE SETTING, SO IT PERSISTS AS ONE VALUE. Two keys could restore a half-band
+     (a new min against a stale max) and silently show the wrong rows. `validate` rejects any stored
+     shape that is not two finite numbers, so a corrupted or older payload falls back to the default
+     rather than rendering NaN — the page filters on these, and NaN comparisons are all false, which
+     would read as "no towns match" and look like missing data. */
+  const [band, setBand] = usePersistedState<{ min: number; max: number }>(
+    'coverage-population-band',
+    { min: TOWN_BAND_DEFAULT_MIN, max: TOWN_BAND_DEFAULT_MAX },
+    {
+      tier: 'session',
+      scope: user?.id,
+      validate: (d) => {
+        const v = d as { min?: unknown; max?: unknown } | null;
+        return v && Number.isFinite(v.min) && Number.isFinite(v.max)
+          ? { min: Number(v.min), max: Number(v.max) }
+          : null;
+      },
+    },
+  );
+  const minPop = band.min;
+  const maxPop = band.max;
+
+  const [showSuppressed, setShowSuppressed] = usePersistedState<boolean>(
+    'coverage-show-suppressed', false, { tier: 'session', scope: user?.id },
+  );
+
+  /* ⛔ STAYS useState, DELIBERATELY. This is which row is mid-request, not how the page is
+     configured — persisting it would restore a permanently disabled button for a request that
+     finished on another visit. §6c: persist what you were LOOKING AT, never what was happening. */
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const rows = useMemo(
@@ -106,9 +138,9 @@ export default function Coverage() {
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Population</label>
           <div className="flex items-center gap-1.5">
-            <Input type="number" value={minPop} onChange={(e) => setMinPop(Number(e.target.value) || 0)} className="h-9 w-[100px]" />
+            <Input type="number" value={minPop} onChange={(e) => setBand((b) => ({ ...b, min: Number(e.target.value) || 0 }))} className="h-9 w-[100px]" />
             <span className="text-xs text-muted-foreground">to</span>
-            <Input type="number" value={maxPop} onChange={(e) => setMaxPop(Number(e.target.value) || 0)} className="h-9 w-[100px]" />
+            <Input type="number" value={maxPop} onChange={(e) => setBand((b) => ({ ...b, max: Number(e.target.value) || 0 }))} className="h-9 w-[100px]" />
           </div>
         </div>
         <Button variant="outline" size="sm" className="h-9" onClick={() => setShowSuppressed((v) => !v)}>
@@ -143,7 +175,10 @@ export default function Coverage() {
       ) : error ? (
         <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
           <p className="text-sm text-destructive">{error}</p>
-          <Button variant="outline" size="sm" onClick={refetch}>Retry</Button>
+          {/* ⛔ WRAPPED, NOT PASSED. onClick={refetch} hands React Query the click event as its
+              RefetchOptions — the same shape as the confirmAndRun bug, where the event arrived as a
+              boolean override and permanently disabled a guard. tsc caught this one. */}
+          <Button variant="outline" size="sm" onClick={() => { void refetch(); }}>Retry</Button>
         </div>
       ) : sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">
