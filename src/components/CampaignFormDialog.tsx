@@ -6,6 +6,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { TRADES } from '@/lib/trades';
 import {
   Select,
   SelectContent,
@@ -29,6 +30,7 @@ interface CampaignFormDialogProps {
   onSubmit: (values: CampaignInput) => Promise<unknown>;
 }
 
+const NO_TRADE = '__none';
 const NO_METHOD = '__none__';
 const NO_TEMPLATE = '__none__';
 
@@ -41,6 +43,7 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
   const [method, setMethod] = useState<string>(NO_METHOD);
   const [saleType, setSaleType] = useState<SaleType>('website');
   const [defaultTemplate, setDefaultTemplate] = useState<string>(NO_TEMPLATE);
+  const [tradeSlug, setTradeSlug] = useState<string>(NO_TRADE);
   const [campaignType, setCampaignType] = useState<CampaignType>('audit');
   const [saving, setSaving] = useState(false);
 
@@ -55,6 +58,10 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
     setSaleType((campaign?.default_sale_type as SaleType) ?? 'website');
     const t = campaign?.default_template;
     setDefaultTemplate(t && WHATSAPP_TEMPLATES.some((o) => o.value === t) ? t : NO_TEMPLATE);
+    /* ⛔ VALIDATED AGAINST TRADES, so a slug removed from trades.ts shows as "not set" rather than
+       as a value the picker cannot display. */
+    const ts = campaign?.trade_slug;
+    setTradeSlug(ts && TRADES.some((t) => t.slug === ts) ? ts : NO_TRADE);
     const ct = campaign?.campaign_type;
     setCampaignType(CAMPAIGN_TYPE_OPTIONS.some((o) => o.value === ct) ? (ct as CampaignType) : 'audit');
   }, [open, campaign]);
@@ -72,6 +79,9 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
       default_sale_type: saleType,
       default_template: templateValid ? defaultTemplate : null,
       campaign_type: campaignType,
+      /* ⛔ NO_TRADE STORES NULL, which means "nobody has said yet" — never an empty string, which
+         would be a value that matches no trade and reads as if someone HAD answered. */
+      trade_slug: tradeSlug === NO_TRADE ? null : tradeSlug,
     });
     setSaving(false);
     if (result) onOpenChange(false);
@@ -111,6 +121,26 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground/60 mt-1">Drives which metrics this campaign's dashboard card shows.</p>
+          </div>
+
+          {/* ⛔ THIS IS WHAT PUTS A LEAD IN THE RIGHT PLACE. Adding from Coverage or the market view
+              matches the lead's trade to this, so it cannot depend on the campaign's NAME — only 4
+              of 12 names resolve, and renaming a campaign must never move leads. */}
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Trade</label>
+            <Select value={tradeSlug} onValueChange={setTradeSlug}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_TRADE}>Not set</SelectItem>
+                {TRADES.map((t) => (
+                  <SelectItem key={t.slug} value={t.slug}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground/60 mt-1">
+              Leads added from Coverage or the market view land here when their trade matches. Left
+              unset, they fall back to whichever campaign is selected &mdash; and say so.
+            </p>
           </div>
 
           <div>
