@@ -726,6 +726,16 @@ useMarketView.ts   1 persisted vs  6 plain
   A conversation, a selected market, an open record → URL (back button, linkable, survives
   everything). A filter, a sort, a toggle → persisted state. `Index.tsx` already says this for the
   market view; it is now the app-wide line. **Report every move to the URL.**
+- ✅ **AND A MODAL MUST NOT ARRIVE OVER THE THING THAT WAS CLICKED, EITHER — fixed 2026-08-10.**
+  Coverage's "Find leads" carried `confirm=search` on every row, so clicking through to a town already
+  measured opened "Run the lead search? ~$0.14" on top of the market numbers that were the reason for
+  the click. Two guards, and the second decides: `wantsSearchConfirm(state)` (`coverageState.ts`) keeps
+  the param off the measured/worked rungs, and `openArrivalSearchConfirm` + `auditsInView`
+  (`marketView.ts`) refuse it in the panel off the market's own audit count — which is what covers a
+  bookmarked URL and a stale Coverage cache. The panel decision now happens **in the same effect as the
+  load, on the view `load` RETURNED**; it used to fire before any market data existed, so it could not
+  consult the fact that decides it. A refusal states itself with the override beside it — Find leads
+  must not become a link that visibly does nothing.
 - ⛔ **NEVER PERSIST AN OPEN DIALOG.** A modal springing open on return is worse than losing it —
   you did not ask for it and it blocks the page you came back for. `AiAudit.tsx` already refuses to
   persist `formOpen` for this reason. Persist what you were LOOKING AT, never what was INTERRUPTING.
@@ -1003,12 +1013,16 @@ useMarketView.ts   1 persisted vs  6 plain
 - 🔴 **THE ORDER, RE-AGREED 2026-08-10 — THE VERDICT FAULTS COME BEFORE THE SPLIT.** Paul's reason,
   and it overrides the "split is next" note further down: *the split changes a flow nobody has used
   yet, and the verdict faults are corrupting decisions I am making today.*
-  1. **The dirty-list signal** — measure the distinct-names-per-QUESTION distribution, set the
-     threshold from it, refuse to grade a shape on an uncleaned list (with the cleaner button in
-     that state), auto-clean Wakefield, then re-check every market.
-  2. **Winnability** (below), Chichester first.
-  3. The questionnaire split.
-  4. `usePlaybook`, `contact_suppressions`, the two dashboard reads.
+  1. ✅ **The dirty-list signal — BUILT 2026-08-10**, and the measurement replaced the plan (below).
+     The refusal, the cleaner button in that state and the auto-clean are done. ⚠️ **Wakefield is NOT
+     cleaned** — `extract-competitors` 401s on a service-role call because the DEPLOYED copy predates
+     its own internal branch. Redeploy it first.
+  2. ✅ **Winnability — MEASURED AND FIXED 2026-08-10** (below). The citation half of the verdict is
+     gone; 11 markets flip from skip to workable.
+  3. 🔴 **NEXT: deploy, then clean, then re-read the eight refused markets.** Deploy order is
+     `market-view` → `extract-competitors` → SPA. Nothing in items 1 or 2 is live until that happens.
+  4. The questionnaire split.
+  5. `usePlaybook`, `contact_suppressions`, the two dashboard reads.
   ⚠️ **DO 1 AND 2 IN ONE SESSION.** Both decide market verdicts Paul picks towns from, so the two
   faults are independent but compound: fixing either alone leaves the Coverage numbers wrong in the
   other way, and each one's answer can move the other's.
@@ -1016,6 +1030,42 @@ useMarketView.ts   1 persisted vs  6 plain
   and skipped ones he should have. Not a corrected rule; the towns.
   ⚠️ **NO RE-AUDITING.** Cleaning re-reads stored answers, so the only spend is the cleaner itself
   (`CLEANER_USD_PER_RUN` = $0.070) on markets deliberately chosen.
+  🔴 **RE-MEASURED 2026-08-10 (LATER SESSION) — THE RATIO IS NOT THE SIGNAL AND 10 WOULD HAVE MISSED
+  TWO DIRTY MARKETS. Everything in the block below is superseded; it is kept because the mistake is
+  the lesson.** The distribution was reproduced exactly (rowley regis 444/16 = 27.8, wakefield
+  401/16 = 25.1, eastbourne 287/16 = 17.9) — and the "empty band" had closed:
+  ```
+  perQ  markers  market                     eyeballed
+  27.8      39   locksmiths/rowleyregis     DIRTY  "they" "ask" "always" "check"
+  25.1      39   locksmiths/wakefield       DIRTY  "here" "why" "i'd" "good"
+  17.9      33   locksmiths/eastbourne      DIRTY  "give" "particularly" "another"
+   9.6      24   locksmiths/chorley         DIRTY  "fully" "call" "always" "ask"   <- NEW, inside the "gap"
+   5.8      18   accountant/chichester      DIRTY  "their" "you" "many"            <- BELOW two clean markets
+   4.8       0   mobile mechanics/wisbech   clean
+   4.4       0   electricians/portsmouth    clean
+   3.9…2.1   0   the other thirteen         clean
+  ```
+  - ⛔ **THE GATE IS NOW A FACT, NOT A RATIO: a SINGLE-TOKEN English function word cannot be a firm's
+    name, and the LLM cleaner would never return one.** `UNCLEANED_MARKER_WORDS` in `marketView.ts`.
+    It separates all 20 with nothing in between — 39/39/33/24/18 on the five dirty ones and **exactly
+    zero across 793 distinct names** in the other fifteen. Multi-word names pass by construction, so
+    "First Pick Locksmiths" and "Always Secure Ltd" are untouched.
+  - ⛔ **`marketShape` now returns `names_uncleaned` — a REFUSAL, not a shape** — with the cleaner
+    button directly under it, and `shouldAutoClean` keys on the fact. That also removes the recorded
+    re-clean loop: a cleaned fold has no markers, so 16.5-per-audit can no longer re-fire forever.
+  - ⚠️ **THE LIST IS DELIBERATELY INCOMPLETE.** Chorley's fold also holds "vat", "matthew",
+    "chorley", "pvc" — obvious junk it does not catch. It only needs ONE marker to prove a fold is
+    raw, and every word added is a word some real firm might be called. **The measured zeros belong to
+    the list AS IT STANDS; grow it and re-run the sweep before quoting them.**
+  - ⚠️ **The markers are counted on the RAW mentions, before `groupNames`.** A junk fragment can
+    merge into a group labelled with a real firm's name and vanish from `named` entirely.
+  - ⚠️ **Absence is NOT dirt here, deliberately, and it is the one place that direction is right:**
+    `uncleanedCount` is optional, and refusing to grade on a missing field would blank the verdict on
+    every market at once — including the fifteen measured clean. **Deploy `market-view` BEFORE the
+    SPA** and the exposure is a 10-minute stale sessionStorage cache.
+
+  <details><summary>SUPERSEDED: the per-question threshold of 10 (kept for the lesson)</summary>
+
   ✅ **MEASURED 2026-08-10 — THE THRESHOLD IS 10 PER QUESTION, AND THE DATA PICKS IT.** Distinct
   extracted names per QUESTION across all 20 markets with completed questions:
   ```
@@ -1045,7 +1095,43 @@ useMarketView.ts   1 persisted vs  6 plain
   exceed 15 once a market has two audits, which is exactly why it has never fired. Re-measure the
   distribution before drawing a line, or it becomes the fifth constant in §4 that was copied from
   somewhere plausible and never checked.
-- 🔴 **THE MARKETPLACE-LED VERDICT MAY BE WRONG, AND IT HAS COST FIVE MARKETS.** Paul has skipped
+
+  </details>
+
+  🔴 **CLEANING IS BLOCKED AND IT IS AN AUTH PROBLEM, NOT A MONEY ONE.** `extract-competitors`
+  refuses a service-role call with **HTTP 401 `unauthorized`** even with `x-internal-job` set, so
+  Wakefield could not be cleaned from a harness. Its SOURCE accepts `service key + x-internal-job`
+  (`index.ts:136-138`), which means **the DEPLOYED function predates that branch** — §4's shared-file
+  deploy trap, on the function this whole item depends on. The new secret key (`sb_secret_…`) is
+  masked in `supabase projects api-keys`, so that is not a workaround either.
+  **To unblock: redeploy `extract-competitors`, then the cleaner works from a harness or from the
+  panel button.** 8 markets need it, 26 completed runs, **$1.82 total at $0.070/run, no re-auditing.**
+- ✅ **THE MARKETPLACE-LED VERDICT WAS WRONG. MEASURED AND FIXED 2026-08-10 — the citation half is
+  GONE.** Across every market with a completed run, **17 have an aggregator as the most-cited host and
+  in all 17 AI names local firms anyway**: in 15 the aggregator's brand is not in the named list at
+  all, and in the 2 where it is (Stamford 9 mentions against 68, Eastbourne 13 against 32) it sits far
+  behind the local leader. Local firms hold all three top spots in 10 of the 17.
+  - 🔴 **THE DECISIVE CASE IS plumber/WISBECH** — Checkatrade at **27% of citations, the highest share
+    in the book**, and the three most-named firms are all local (Fen Property Services 52, DC Plumbing
+    49, Mr Gas 37). **That is the town Paul has actually worked.** The rule would have told him to skip
+    the one market he has proven.
+  - The naming half survives and is **widened from the leader to the top three** (`NATIONAL_TOP_N`),
+    Paul's own proposal. locksmiths/Colchester is why: LockRite, Lockforce and LockFit hold all three
+    spots with no local firm near them, which the leader-only test could not distinguish from a market
+    whose #2 is local. Kind renamed `marketplace_led` → **`national_led`**.
+  - The citation fact is still printed, as intelligence, with the measurement attached. Same rule §6
+    applies to unknown hosts: they route to who's-winning, never to a verdict.
+  - ⚠️ **THE TOWN LIST IS IN THE SESSION REPORT, and 11 markets flip from skip to workable** —
+    including electrician/Chichester, both Portsmouth trades, plumber/Kettering and plumber/Wisbech.
+    Four more (Eastbourne, Loughborough, Stamford, Rowley Regis) were skipped AND are dirty, so they
+    are refused rather than flipped until the cleaner runs.
+  - ⚠️ **`otherTowns` IN THE OFFLINE ANALYSIS IS AN APPROXIMATION.** The harness matched on merged
+    group keys across the pairs it read; `market-view` runs its own cross-town scan with a read cap.
+    Expect small differences in which leaders are flagged national.
+
+  <details><summary>SUPERSEDED: the open question this answered</summary>
+
+  🔴 **THE MARKETPLACE-LED VERDICT MAY BE WRONG, AND IT HAS COST FIVE MARKETS.** Paul has skipped
   **Eastbourne, Chichester, Portsmouth, Loughborough and Kettering** on "an aggregator is the top
   cited host → a local firm is competing with a platform". His counter-evidence: Eastbourne
   locksmiths has Checkatrade top-cited at 14% while **J&J Locksmiths leads the naming with 32
@@ -1064,6 +1150,8 @@ useMarketView.ts   1 persisted vs  6 plain
     hosts, so its citation mix is atypical.
   - If being most-cited predicts nothing about naming, **drop that half of the verdict** — Paul's
     own words, and he is ready for that answer.
+
+  </details>
 - 🔴 **THE QUESTIONNAIRE SPLIT — AGREED WITH PAUL 2026-08-10, NOT YET BUILT. Take a fresh session:
   it is the flow that takes the money and deserves one clean pass.** Money sooner, detail later.
   - **Before payment, ONE screen** (down from 5): the website questions + contact email.
