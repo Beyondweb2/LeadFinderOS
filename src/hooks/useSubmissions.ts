@@ -30,6 +30,9 @@ export interface SubmissionRow {
   business_name: string | null;
   contact_email: string | null;
   confirmed_location: string | null;
+  /** Q2 answers. Read ONLY to decide whether the second questionnaire is done — see needsQ2. */
+  services: string | null;
+  business_address: string | null;
   status: string | null;
   incomplete: boolean | null;
   created_at: string;
@@ -65,6 +68,30 @@ export function notifyStateFor(r: Pick<SubmissionRow, 'notify_sent_at' | 'notify
 const PAID_STATUSES = new Set(['paid', 'payment_received', 'in_delivery', 'completed']);
 export const isPaidSubmission = (r: SubmissionRow) => PAID_STATUSES.has(String(r.status ?? ''));
 
+/**
+ * ⛔ PAID, AND THE SECOND QUESTIONNAIRE IS STILL OUTSTANDING — its own state, never mixed in.
+ * This is the one that costs money to miss: no confirmed town and no services means
+ * startPaidBaseline defers, so there is no week-eight measurement, so the guarantee cannot be
+ * delivered and the exposure is a refund. Finding that out at week eight is finding out too late.
+ *
+ * ⚠️ DERIVED FROM THE ANSWERS, NOT STORED. Same rule as serveGate: a stored "q2_done" flag would
+ * freeze old rows against a stale definition and let the readers drift. The three fields are
+ * exactly the ones Q2 makes required, so "we have them" and "they finished" cannot disagree.
+ *
+ * ⚠️ Unpaid rows are NOT in this state. Someone who has not paid has nothing outstanding — they
+ * are a chase about money, which the card already shows separately.
+ */
+export function needsQ2(r: SubmissionRow): boolean {
+  if (!isPaidSubmission(r)) return false;
+  const has = (v: string | null) => !!(v ?? '').trim();
+  return !(has(r.confirmed_location) && has(r.services) && has(r.business_address));
+}
+
+/** Whole days since payment-era submission — what the day 2 / day 5 / day 7 chase counts. */
+export function daysSince(iso: string, now = Date.now()): number {
+  return Math.floor((now - new Date(iso).getTime()) / 86_400_000);
+}
+
 export function useSubmissions(limit = 25) {
   const { user } = useAuth();
 
@@ -87,12 +114,15 @@ export function useSubmissions(limit = 25) {
   /* The two counts worth putting on a card: how many have not paid, and how many the email did not
      reach. Both derived here so the card renders and does not decide. */
   const summary = useMemo(() => {
-    let unpaid = 0, undelivered = 0;
+    let unpaid = 0, undelivered = 0, awaitingQ2 = 0;
     for (const r of rows) {
       if (!isPaidSubmission(r)) unpaid += 1;
       if (notifyStateFor(r) === 'failed') undelivered += 1;
+      /* Counted separately and shown first: a paid customer whose delivery cannot start is the
+         only row here with a refund attached to it. */
+      if (needsQ2(r)) awaitingQ2 += 1;
     }
-    return { total: rows.length, unpaid, undelivered };
+    return { total: rows.length, unpaid, undelivered, awaitingQ2 };
   }, [rows]);
 
   return {

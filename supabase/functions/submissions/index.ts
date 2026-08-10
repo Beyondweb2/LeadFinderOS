@@ -30,7 +30,7 @@ const json = (b: unknown, s = 200) =>
 
 /** Enough to render a card. Deliberately NOT the answers themselves — this is a "who and what
  *  happened next" list, and the full questionnaire belongs on a record page, not a dashboard. */
-const COLS = "id, lead_id, business_name, contact_email, confirmed_location, status, incomplete, created_at, notify_sent_at, notify_attempts, notify_error";
+const COLS = "id, lead_id, business_name, contact_email, confirmed_location, services, business_address, status, incomplete, created_at, notify_sent_at, notify_attempts, notify_error";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });

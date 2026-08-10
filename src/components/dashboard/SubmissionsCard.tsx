@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ClipboardList, Loader2, MailWarning } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useSubmissions, notifyStateFor, isPaidSubmission, type NotifyState } from '@/hooks/useSubmissions';
+import { useSubmissions, notifyStateFor, isPaidSubmission, needsQ2, daysSince, type NotifyState } from '@/hooks/useSubmissions';
 
 /* ══ WHO FILLED IN MY FORM? ═══════════════════════════════════════════════════════════════════
    ⛔ THE POINT: email stops being the only thing that says somebody filled the questionnaire in.
@@ -43,6 +43,13 @@ export function SubmissionsCard() {
         <CardTitle className="flex items-center gap-2 text-base">
           <ClipboardList className="h-4 w-4" />
           Questionnaire submissions
+          {/* ⛔ FIRST, AND IN RED. A paid customer whose delivery cannot start is the only row here
+              with a refund attached to it, and the whole point is not discovering it at week eight. */}
+          {summary.awaitingQ2 > 0 && (
+            <Badge variant="outline" className="ml-1 border-red-500/30 bg-red-500/15 text-xs text-red-600">
+              {summary.awaitingQ2} awaiting details
+            </Badge>
+          )}
           {summary.undelivered > 0 && (
             <Badge variant="outline" className="ml-1 border-red-500/30 bg-red-500/15 text-xs text-red-600">
               <MailWarning className="mr-1 h-3 w-3" />
@@ -90,6 +97,13 @@ export function SubmissionsCard() {
                   {paid
                     ? <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/15 text-xs text-emerald-600">paid</Badge>
                     : <Badge variant="outline" className="border-amber-500/30 bg-amber-500/15 text-xs text-amber-600">not paid</Badge>}
+                  {/* ⛔ ITS OWN STATE, NOT MIXED IN. "paid" alone would read as done; this row is
+                      paid AND blocked, and the day count is what turns it into a chase. */}
+                  {needsQ2(r) && (
+                    <Badge variant="outline" className="border-red-500/30 bg-red-500/15 text-xs text-red-600">
+                      no details yet &middot; day {daysSince(r.created_at)}
+                    </Badge>
+                  )}
                   {r.incomplete && (
                     <Badge variant="outline" className="text-xs text-muted-foreground">partial</Badge>
                   )}
@@ -100,6 +114,12 @@ export function SubmissionsCard() {
                   )}
                   {badge && (
                     <Badge variant="outline" className={`text-xs ${badge.className}`}>{badge.label}</Badge>
+                  )}
+                  {needsQ2(r) && (
+                    <span className="w-full text-xs text-red-600/80">
+                      Delivery cannot start until they give their town, services and address &mdash; and
+                      the baseline the guarantee is measured against waits for the same answers.
+                    </span>
                   )}
                   {r.notify_error && notifyStateFor(r) === 'failed' && (
                     <span className="w-full text-xs text-red-600/80">{r.notify_error}</span>
