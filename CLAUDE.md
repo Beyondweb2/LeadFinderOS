@@ -548,6 +548,9 @@ Facts with numbers. These are measured, and several contradict the older docs.
   ⚠️ **`onboarding_responses` had ZERO rows on 2026-08-06** (`client_listings` too). So the
   no-questionnaire path is not an edge case — it is the only path that has ever rendered, and any
   questionnaire-driven branching is untested until Paul submits one for real.
+  ✅ **NO LONGER ZERO — 2 rows as of 2026-08-10** (`gbp_exists` = `not_sure` and `yes`). Small, but it
+  means the questionnaire path has now rendered for real and the line above has stopped being true.
+  **Re-count before quoting it; do not inherit either number.**
 
 ---
 
@@ -889,6 +892,52 @@ useMarketView.ts   1 persisted vs  6 plain
     shape on ONE audit's data — the degenerate-`auditShare` case the bar exists to prevent. The
     `MarketShapeInput` fields are named `marketAuditsComplete` / `businessAuditsComplete` so the
     audit counts cannot be passed in again by accident.
+- ⛔ **REVIEW REPLIES — RESEARCHED 2026-08-10, DECIDED: BUILD NOTHING. Do not re-run this recon.**
+  Nothing in either repo touches the Google Business Profile API today (only Places and Geocoding),
+  and nothing should.
+  - ⚠️ **THE ACCESS APPLICATION IS NOT THE CONSTRAINT — SCOPE IS.** Approval is *reviewed within 14
+    days* (Google's own FAQ), prerequisites are a verified GBP active **60+ days** with a website,
+    applied for from an owner/manager email; 0 QPM in Cloud Console means not approved, 300 means
+    approved. That is the easy part.
+  - 🔴 **YOU CAN ONLY READ REVIEWS FOR PROFILES YOU MANAGE.** Not prospects, not competitors. Google
+    filters applications for anything resembling third-party access.
+  - ⚠️ **SO THE "NOTIFY-ONLY vs REPLY-DRAFTING" SPLIT IS A FALSE ONE** — the shape the question was
+    first asked in. Push notification genuinely exists (Cloud Pub/Sub, `NEW_REVIEW` among the types,
+    so no polling), but it is per-account and managed-locations-only. **Both halves need the same
+    grant.** The real split is customers vs prospects.
+  - Customers are viable, and the grant is **already in the product**: `gbp_status` asks them to add
+    `paul@move37.fun` as a Manager. Prospects are impossible on the official API.
+  - Reviews live **only on v4** (`mybusiness.googleapis.com/v4`), never migrated to the v1 APIs.
+  - **The no-approval alternative and its ceiling:** Places API returns reviews for any business —
+    but max **5**, sorted by relevance not date, and the review object has **no owner-reply field**.
+    So "you have 3 unanswered reviews" as an outreach hook **cannot be built**: answered and
+    unanswered are indistinguishable. Cost would be **+$0.005**/business (Place Details Enterprise
+    $20/1,000 → Enterprise + Atmosphere $25/1,000, the tier `reviews` triggers).
+  - ✅ **Google's own pricing page cross-validates two §4 constants:** Text Search Enterprise
+    **$35/1,000** and Place Details Enterprise **$20/1,000**. Both correct as recorded.
+  - ⛔ **AND IT CONTRADICTS §5 IF SOLD AS FINDABLE.** Reviews are *tested and negative* for being
+    named by AI — three named businesses have 0–1 reviews. This is a **separate product** for
+    existing customers, not an enhancement. Paul's call 2026-08-10, with zero paying customers: build
+    nothing, create a verified Findable GBP so the 60-day clock runs in the background, revisit when
+    there are customers to serve.
+- ✅ **`onboarding_responses.gbp_verified` — added 2026-08-10.** `gbp_exists` asks about **claim and
+  access**; "Yes, and I can get into it" is equally true of a profile awaiting verification and of a
+  suspended one. An unverified profile **does not show on Maps or Search**, so profile work publishes
+  to nobody — and it is the plainest explanation there is for "AI has never heard of me".
+  `yes | pending | no | not_sure`, asked only on the `gbp_exists = yes` branch, NULL = not answered.
+  Four states because four different things happen; `pending` is a chase, `no` is a piece of work.
+  Read by `notify-onboarding-submit` (a **Verified:** line, and `no` joins `needsYou` beside
+  `no_access` — only `no`, because padding that list is how the entries that matter get skimmed past).
+  ⚠️ It is also the exact gate on review replies ever working for a client (see above).
+- 🔴 **A FOLLOW-UP ANSWER SURVIVES THE ANSWER IT HANGS OFF — fixed 2026-08-10, and it was live for
+  `gbp_status`.** Answer "Yes, I have a profile" → "Done, I've added you", then change to "I don't
+  think I have one", and the questionnaire submitted a **contradiction**: no profile at all, *and*
+  already added us as a manager on it. **The stale value is invisible on screen because the panel
+  holding it has closed**, which is exactly what let it survive. Both follow-ups now clear when
+  `gbp_exists` moves off `yes`.
+  ⚠️ **THE RULE: a conditionally-shown question owns its answer's LIFETIME, not just its display.**
+  Hiding a field is not clearing it. Grep any other branch-revealed input for the same shape before
+  assuming this was the only one.
 - **No Baseline Test button.** Baselines are gated to internal callers (cron secret or service role +
   `x-internal-job`) and currently only start from `stripe-webhook` after payment. A button needs an
   authenticated path. Cost ≈ **30p** (measured — see above).
