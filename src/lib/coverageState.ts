@@ -105,6 +105,30 @@ export interface CoverageRow extends CoverageTown {
   state: CoverageState;
 }
 
+/**
+ * Should a "Find leads" click on this row arrive with the lead-search confirm already open?
+ *
+ * ⛔ WHAT WENT WRONG. The link carried `confirm=search` unconditionally, so clicking Find leads on a
+ * town Paul had already measured opened a "Run the lead search? ~$0.14" modal ON TOP of the market
+ * he had clicked through to READ. A dialog he did not ask for, covering the numbers he did, on the
+ * page he uses all day. §6c's rule is about persisting a dialog; this is the same harm arriving by
+ * another route.
+ *
+ * ⚠️ POSITIVE TEST, and on the rungs that mean NOTHING HAS BEEN MEASURED. `untouched` and `leads`
+ * both have no completed market audit behind them, so their pool is stale or absent and the confirm
+ * is the entire reason the link exists. Written this way round deliberately: a fifth rung added
+ * later falls to `false`, which loses nobody a dialog they cannot re-open — the note on the market
+ * panel carries the button. Written as `!== 'measured'` it would join the auto-modal side instead.
+ *
+ * ⚠️ AND IT IS ONLY A HINT. Coverage grades `measured` off a COMPLETED run, so a town whose audits
+ * all failed still reads `leads` here and still carries the param. The decision that matters is
+ * openArrivalSearchConfirm() in marketView.ts, which reads the market's own audit count once the
+ * view has loaded. Same split as serveGate: the panel is presentation, the reader is the block.
+ */
+export function wantsSearchConfirm(state: CoverageState): boolean {
+  return state === 'untouched' || state === 'leads';
+}
+
 export interface CoverageSummary {
   total: number;
   counts: Record<CoverageState, number>;

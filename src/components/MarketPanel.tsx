@@ -23,6 +23,7 @@ import {
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
   MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase, shouldAutoClean, CLEANER_USD_PER_RUN, asPence,
+  auditsInView, openArrivalSearchConfirm,
   type MarketPoolRow,
   type MarketViewResult,
 } from '@/lib/marketView';
@@ -118,6 +119,9 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditBusy, setAuditBusy] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  /** Set when the arrival intent was REFUSED because the market already has audits. Carries its own
+   *  override button, so the click that navigated here is answered rather than ignored. */
+  const [arrivalNote, setArrivalNote] = useState<string | null>(null);
   const [reExtractOpen, setReExtractOpen] = useState(false);
   const [reExtractBusy, setReExtractBusy] = useState(false);
   const [addingKey, setAddingKey] = useState<string | null>(null);
@@ -164,22 +168,43 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
     () => (trade.trim() && town.trim() ? { trade: trade.trim(), town: town.trim() } : null),
     [trade, town],
   );
-  useEffect(() => {
-    if (!chosen) return;
-    setAddedKeys(new Set());
-    void load(chosen.trade, chosen.town);
-  }, [chosen, load]);
-
   /* ⛔ ONCE, AND ONLY WITH A MARKET TO SEARCH. The ref is what makes it once: without it, dismissing
      the dialog and then changing either box would re-open it, so a confirm you had already declined
      would come back on an action that had nothing to do with it. Guarded on `chosen` too — an open
      "Run the lead search?" with no trade or town is a dialog whose button cannot do anything. */
   const searchConfirmShown = useRef(false);
+
+  /* ⛔ THE ARRIVAL DECISION IS MADE ON THE VIEW `load` RETURNED, AND IN THE SAME EFFECT AS THE LOAD.
+     It used to be its own effect firing the moment `chosen` existed — i.e. BEFORE any market data
+     had arrived — so it could not consult the one fact that decides it, and every town clicked from
+     Coverage got the modal. Reading `view` here instead would be the auto-clean bug again: a closure
+     cannot see a state update it has just triggered. load() returns the market it fetched for these
+     exact arguments, which is both fresher and unambiguously the RIGHT market — no comparing our
+     trade/town against the server's normalised ones.
+     ⚠️ `stale` guards the market changing mid-flight: the confirm for a town you have navigated
+     away from must not open over the one you are now looking at, and must not burn the once-only
+     ref either. */
   useEffect(() => {
-    if (!openSearchConfirm || !chosen || searchConfirmShown.current) return;
-    searchConfirmShown.current = true;
-    setSearchOpen(true);
-  }, [openSearchConfirm, chosen]);
+    if (!chosen) return;
+    setAddedKeys(new Set());
+    let stale = false;
+    void (async () => {
+      const fresh = await load(chosen.trade, chosen.town);
+      if (stale || !openSearchConfirm || searchConfirmShown.current) return;
+      searchConfirmShown.current = true;
+      const audits = auditsInView(fresh);
+      if (openArrivalSearchConfirm(true, audits)) { setSearchOpen(true); return; }
+      /* REFUSED, AND SAID SO, WITH THE OVERRIDE BESIDE IT. Silently dropping the intent would make
+         Find leads a link that visibly does nothing — the worst thing this panel can do, and the
+         reason the audit button stopped disabling itself. Same shape as MeasureMarket's gate: the
+         refusal first, the way past it after, never a checkbox armed in advance. */
+      setArrivalNote(
+        `${chosen.trade} in ${chosen.town} already has ${audits} audit${audits === 1 ? '' : 's'}, so the `
+        + 'lead search confirm was not opened over them. Nothing has been spent.',
+      );
+    })();
+    return () => { stale = true; };
+  }, [chosen, load, openSearchConfirm]);
 
   /* ── THE LEAD SEARCH. Reuses the Find Leads context call verbatim, so it goes through the same
      search-leads function, writes the same search_history row and fills the same search_cache the
@@ -596,6 +621,22 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
       {error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <span className="font-semibold">Market view failed.</span> {error}
+        </div>
+      )}
+
+      {/* ⛔ THE REFUSED ARRIVAL INTENT. A quiet line, not a warning — nothing has gone wrong, a modal
+          simply did not open over a market that had already been measured. It carries the way past
+          itself, so the Find leads click is answered either way. */}
+      {arrivalNote && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p className="flex-1 text-xs text-muted-foreground">{arrivalNote}</p>
+          <Button
+            size="sm" variant="outline" className="h-7 text-xs"
+            onClick={() => { setArrivalNote(null); setSearchOpen(true); }}
+          >
+            Run the lead search anyway
+          </Button>
         </div>
       )}
 

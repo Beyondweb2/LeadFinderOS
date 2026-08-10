@@ -257,6 +257,40 @@ export interface MarketViewResult {
 
 export interface MarketOption { trade: string; town: string; audits: number }
 
+/* ── ARRIVING FROM COVERAGE WITH `confirm=search` ──────────────────────────────────────────────
+   Coverage's "Find leads" button can ask the market panel to open the lead-search confirm on
+   arrival, so a town read off that page does not have to be retyped into Find Leads. That intent
+   used to be obeyed unconditionally, which put a "Run the lead search? ~$0.14" modal over the
+   numbers of every market that had already been measured.
+
+   ⛔ THE SUPPRESSION NEEDS A KNOWN POSITIVE. serveGate's rule, and the one this codebase has now
+   broken six times in the other direction: `audits` is null when the view has not loaded or failed
+   to load, and an unknown market is NOT a measured one. Null therefore OPENS the confirm — the
+   pre-existing behaviour, cancellable, costing nothing until the operator presses Run. Only a
+   count we have actually read, and read as above zero, closes it.
+
+   ⚠️ `audits`, NOT `completeRuns`. A market with two failed audits has been worked at, and the
+   operator arriving there is looking rather than searching. That is deliberately a wider net than
+   Coverage's own `measured` rung, which needs a completed run — see wantsSearchConfirm. */
+
+/** True only when we KNOW this market already has audits. Null = not loaded = not known. */
+export function suppressArrivalSearchConfirm(auditsInMarket: number | null): boolean {
+  return typeof auditsInMarket === "number" && Number.isFinite(auditsInMarket) && auditsInMarket > 0;
+}
+
+/** The whole decision: obey the URL's one-shot intent unless the market is known to have audits. */
+export function openArrivalSearchConfirm(intent: boolean, auditsInMarket: number | null): boolean {
+  return intent && !suppressArrivalSearchConfirm(auditsInMarket);
+}
+
+/** How many audits the freshly loaded view reports, or null when that cannot be read.
+ *  ⛔ A MISSING FIELD READS AS null, NEVER 0. `?? 0` here would turn a payload from an older
+ *  market-view deploy into "this market has no audits" and re-open the modal it exists to stop. */
+export function auditsInView(view: { concentration?: { audits?: number } } | null | undefined): number | null {
+  const n = view?.concentration?.audits;
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
 /* Per-question audit cost. Measured, never guessed — see CLAUDE.md §8.
    ⛔ RE-MEASURED 2026-08-06 against 60 completed runs / 206 questions of real
    ai_audit_runs.actor_cost_usd: mean $0.01095, median $0.01038, range $0.0052–$0.0135.
