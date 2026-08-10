@@ -1000,6 +1000,28 @@ useMarketView.ts   1 persisted vs  6 plain
   - **Still to fix (order agreed):** `usePlaybook` (needs a NEW `submissions` action — the existing
     one deliberately returns card columns, not the answers), `contact_suppressions`, then the two
     dashboard reads.
+- 🔴 **THE ORDER, RE-AGREED 2026-08-10 — THE VERDICT FAULTS COME BEFORE THE SPLIT.** Paul's reason,
+  and it overrides the "split is next" note further down: *the split changes a flow nobody has used
+  yet, and the verdict faults are corrupting decisions I am making today.*
+  1. **The dirty-list signal** — measure the distinct-names-per-QUESTION distribution, set the
+     threshold from it, refuse to grade a shape on an uncleaned list (with the cleaner button in
+     that state), auto-clean Wakefield, then re-check every market.
+  2. **Winnability** (below), Chichester first.
+  3. The questionnaire split.
+  4. `usePlaybook`, `contact_suppressions`, the two dashboard reads.
+  ⚠️ **DO 1 AND 2 IN ONE SESSION.** Both decide market verdicts Paul picks towns from, so the two
+  faults are independent but compound: fixing either alone leaves the Coverage numbers wrong in the
+  other way, and each one's answer can move the other's.
+  ⛔ **THE DELIVERABLE IS A LIST OF TOWNS WHOSE VERDICT CHANGES** — worked ones he should not have,
+  and skipped ones he should have. Not a corrected rule; the towns.
+  ⚠️ **NO RE-AUDITING.** Cleaning re-reads stored answers, so the only spend is the cleaner itself
+  (`CLEANER_USD_PER_RUN` = $0.070) on markets deliberately chosen.
+  ⛔ **AND THE THRESHOLD MUST BE MEASURED, NOT PICKED.** `shouldAutoClean` (`marketView.ts:493`)
+  gates on `JUNK_RATIO_PER_AUDIT`, whose comment cites a **per-audit** spread (clean 4–9, junk
+  30–970). **Those numbers do not carry to a per-question ratio** — a per-audit average cannot
+  exceed 15 once a market has two audits, which is exactly why it has never fired. Re-measure the
+  distribution before drawing a line, or it becomes the fifth constant in §4 that was copied from
+  somewhere plausible and never checked.
 - 🔴 **THE MARKETPLACE-LED VERDICT MAY BE WRONG, AND IT HAS COST FIVE MARKETS.** Paul has skipped
   **Eastbourne, Chichester, Portsmouth, Loughborough and Kettering** on "an aggregator is the top
   cited host → a local firm is competing with a platform". His counter-evidence: Eastbourne
