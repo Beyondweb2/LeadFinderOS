@@ -176,7 +176,9 @@ Deno.serve(async (req) => {
         const text = String(e.answer_text ?? "");
         /* ⛔ THE ONE LINE THIS WHOLE FUNCTION EXISTS FOR. Same matcher, same answer text, this
            prospect's name. Copying e.named would report the market placeholder's result as theirs. */
-        const named = text ? nameMatches(text, businessName) : false;
+        /* Same context the live scan passes, so a derived verdict and a paid one are decided by
+           exactly the same reading of exactly the same text. */
+        const named = text ? nameMatches(text, businessName, { trade, town }) : false;
         if ((SCORED as readonly string[]).includes(key) && text && named) namedDatapoints++;
         out[key] = { ...e, named };
       }

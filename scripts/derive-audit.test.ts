@@ -114,4 +114,51 @@ console.log("\n── ⛔ NOTHING WAS SPENT, AND THE RECORD MUST SAY SO ──")
   ok(rate > 0 && rate < 1, `mention_rate ${rate.toFixed(2)} is a real fraction`);
 }
 
+
+/* ── ⛔ THE SHORTENED-NAME SECOND READING ─────────────────────────────────────────────────────
+   Added 2026-08-09. The strict match runs FIRST and unchanged, so nothing that matched before can
+   stop matching; the prefix is only tried after it fails, and only with trade/town context. */
+console.log("\n── ⛔ THE SECOND READING FIXES THE REAL CASES ──");
+/* All five are real businesses whose audits stored not-named while the answer names them. */
+for (const [answer, name, trade, town] of [
+  ["a few good options 1 M. Innes Autos Mobile Mechanic, highly rated 4.9", "M. Innes Autos Mobile Mechanic Thetford", "mobile mechanics", "Thetford"],
+  ["contact 01509 738540 2 DK Gas Professional Ltd, specialties boiler replacements", "DK Gas Professional | Heating, Plumbing", "plumbers", "Loughborough"],
+  ["and nervous learners 2 Drive With Simon Driving Lessons Spalding 5.0", "Drive With Simon - Driving Lessons", "driving instructors", "Spalding"],
+  ["services location contact notes Plus Accounting personal tax planning", "Plus Accounting Chartered Accountants", "accountants", "Brighton"],
+  ["and booking MH Driving School offers professional instruction", "MH DRIVING SCHOOL PETERBOROUGH", "driving instructors", "Peterborough"],
+] as Array<[string, string, string, string]>) {
+  /* ⚠️ THE OUTCOME IS WHAT MATTERS: the business ends up named. Whether the STRICT pass already
+     found it depends on the exact answer wording, and shortening these five for the test made one of
+     them match strictly — asserting "strict misses" would have been asserting my own paraphrase.
+     What must hold for every one is that the context version finds it. */
+  ok(nameMatches(answer, name, { trade, town }), `named: ${JSON.stringify(name.slice(0, 28))}`);
+  /* And the second reading can only ADD: if strict found it, context must not lose it. */
+  if (nameMatches(answer, name)) {
+    ok(nameMatches(answer, name, { trade, town }), `  strict already matched, and context keeps it`);
+  }
+}
+
+console.log("\n── ⛔ AND REFUSES THE SHAPES THAT WOULD BE FALSE POSITIVES ──");
+/* Both are names that BEGIN with a service phrase. Without the naming-token test the rule matched
+   ordinary prose: "24 hour" found "open 24 hours". Digits and service words cannot name a firm. */
+ok(!nameMatches("currently listed as open 24 hours, Plumb Medics 247 Ltd", "24 hour Emergency Plumber", { trade: "plumbers", town: "Norwich" }),
+  '"24 hour Emergency Plumber" does not match "open 24 hours"');
+ok(!nameMatches("here are reputable 24 7 emergency plumbing options available", "24/7 Emergency Plumbers Norwich", { trade: "plumbers", town: "Norwich" }),
+  '"24/7 Emergency Plumbers" does not match generic prose');
+/* Paul's own example: trade + town is not distinctive, so no shortening is offered at all. */
+ok(!nameMatches("about Cambridge Driving Academy and other schools", "Cambridge Driving Instructors", { trade: "driving instructors", town: "Cambridge" }),
+  '"Cambridge Driving Instructors" never matches "Cambridge Driving Academy"');
+/* A weak remainder would match half a town, so it is declined rather than risked. */
+ok(!nameMatches("locksmiths in hastings s t locksmiths services", "S.T Locksmiths | Hastings Locksmith", { trade: "locksmiths", town: "Hastings" }),
+  '"S.T Locksmiths" strips to "s t" and is declined - a known miss, not a silent one');
+
+console.log("\n── ⛔ NO CONTEXT MEANS THE OLD BEHAVIOUR, EXACTLY ──");
+/* The safety property: every existing two-argument caller is bit-for-bit unchanged. */
+for (const [answer, name] of [
+  ["contact 2 DK Gas Professional Ltd specialties", "DK Gas Professional | Heating, Plumbing"],
+  ["Try James Todd & Co in Chichester.", "James Todd & Co"],
+] as Array<[string, string]>) {
+  ok(nameMatches(answer, name) === nameMatches(answer, name, {}),
+    `${JSON.stringify(name.slice(0, 24))}: empty context behaves as no context`);
+}
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");

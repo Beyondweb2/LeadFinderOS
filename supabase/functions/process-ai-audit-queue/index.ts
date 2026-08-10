@@ -231,13 +231,20 @@ Deno.serve(async (req) => {
 
     // Shared helpers ────────────────────────────────────────────────────────────
     // Cache audit lookups (country + business name) per audit_id.
-    const auditCache = new Map<string, { businessName: string; countryCode: string; userId: string }>();
+    /* ⚠️ businessType and locationText are fetched for the NAME MATCHER, not for the scrape. They
+       let nameMatches try a shortened prefix of the business name when the strict core misses —
+       "DK Gas Professional" where the answer says exactly that but the stored core demands more.
+       Distinctiveness is judged by stripping the trade and the town, so it needs both. Absent, the
+       matcher keeps its strict behaviour. */
+    const auditCache = new Map<string, { businessName: string; businessType: string; locationText: string; countryCode: string; userId: string }>();
     async function getAudit(auditId: string) {
       if (auditCache.has(auditId)) return auditCache.get(auditId)!;
       const { data: a } = await service
-        .from("ai_audits").select("business_name, country, user_id").eq("id", auditId).maybeSingle();
+        .from("ai_audits").select("business_name, business_type, location_text, country, user_id").eq("id", auditId).maybeSingle();
       const v = {
         businessName: a?.business_name ?? "",
+        businessType: a?.business_type ?? "",
+        locationText: a?.location_text ?? "",
         countryCode: toCountryCode(a?.country ?? null),
         userId: a?.user_id ?? "",
       };
@@ -287,7 +294,9 @@ Deno.serve(async (req) => {
         if (status === "SUCCEEDED") {
           const items = await fetchAiSearchItems(runId, apifyToken);
           const audit = await getAudit(row.audit_id);
-          const result = normalizeAiSearch(items, audit.businessName) as Record<string, unknown>;
+          const result = normalizeAiSearch(items, audit.businessName, {
+            trade: audit.businessType, town: audit.locationText,
+          }) as Record<string, unknown>;
           // What Apify says this question actually cost. Stored under a leading-underscore meta
           // key (same convention as _apify) so nothing that walks the engine keys trips on it.
           if (usageTotalUsd != null || computeUnits != null) {
