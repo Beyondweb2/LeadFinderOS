@@ -936,8 +936,24 @@ useMarketView.ts   1 persisted vs  6 plain
   holding it has closed**, which is exactly what let it survive. Both follow-ups now clear when
   `gbp_exists` moves off `yes`.
   ⚠️ **THE RULE: a conditionally-shown question owns its answer's LIFETIME, not just its display.**
-  Hiding a field is not clearing it. Grep any other branch-revealed input for the same shape before
-  assuming this was the only one.
+  Hiding a field is not clearing it — **and clearing it is not the same as not sending it.**
+  ✅ **SWEPT 2026-08-10, all four branch-revealed inputs. Two were ALREADY correct** and are the
+  model: `website_platform_other` (guarded on `websitePlatform === "other"`) and `willing_to_migrate`
+  (guarded on `migrateAsked`) **derive what is SENT from the same condition that decides what is
+  SHOWN**, so the two cannot disagree. The other two now match:
+  - `website_manager_email` — revealed by "a web company manages it"; typing the address then
+    changing to "I do it myself" sent a contractor's email for someone with no contractor.
+  - **The whole Google block** (`gbp_exists`/`gbp_status`/`gbp_verified`), revealed by consent
+    `yes_all` — answering them then changing to "pages only" recorded that they had added us as a
+    manager on a profile they had **just refused us**. Worst of the four because the other two
+    consent options **submit on selection**: one click, straight out, stale answers attached.
+  ⛔ **AND THE FIX HAD TO BE IN THE PAYLOAD, NOT THE CLICK HANDLER.** `submit()` runs in the same
+  tick as `setConsent` and closes over the previous render's state — the identical race the
+  `consentOverride` comment in that file already documents **for the same button**. Clearing state in
+  the handler would have looked right, hand-tested right, and sent the stale value anyway. State is
+  cleared too (the draft and panel stay honest), but the payload line is what decides.
+  ⚠️ Both send sites — `submit` **and** the `bail` escape hatch — post the same object. A bailed
+  submission is partial by design; it is not allowed to be wrong.
 - **No Baseline Test button.** Baselines are gated to internal callers (cron secret or service role +
   `x-internal-job`) and currently only start from `stripe-webhook` after payment. A button needs an
   authenticated path. Cost ≈ **30p** (measured — see above).
