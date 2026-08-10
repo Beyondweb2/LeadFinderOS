@@ -39,6 +39,14 @@ const ADMIN_EMAIL = "paul@move37.fun";
 const DELAY_MINUTES = 20;
 /** Rows per sweep. Cron runs every minute, so a backlog drains quickly without a long request. */
 const BATCH = 20;
+/* ⛔ THE RETRY CEILING. A send that never left used to be indistinguishable from one that arrived:
+   the row was claimed before the attempt, the failure went to a console log nobody reads, and
+   nothing ever tried again. Three attempts, one a minute, recovers a transient Resend blip while
+   still making a dead provider stop rather than becoming an email loop — the property the
+   claim-before-send design was protecting, kept.
+   ⚠️ AT THE CEILING WITH notify_sent_at NULL IS A REAL STATE SOMEBODY MUST LOOK AT. It is not a
+   quiet success, and the dashboard card reads it for exactly that reason. */
+const MAX_SEND_ATTEMPTS = 3;
 
 const PAID_STATUSES = new Set(["payment_received", "in_delivery", "completed"]);
 
@@ -76,6 +84,8 @@ interface Row {
   photos_status: string | null;
   /** An escape-hatch bail-out. Its answers are partial, so it is never given a verdict. */
   incomplete: boolean | null;
+  /** Attempts already made. Read so the claim below can be conditional on it. */
+  notify_attempts: number | null;
 }
 
 Deno.serve(async (req) => {
@@ -104,8 +114,12 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // ONE STRING LITERAL, not a concatenation. supabase-js types the select on the literal, so
       // splitting it across two lines makes `data` GenericStringError[] and the cast below a TS2352.
-      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete")
-      .is("notified_at", null)
+      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete, notify_attempts")
+      /* ⛔ THE GATE IS notify_sent_at, NOT notified_at. notified_at is the CLAIM stamp, written
+         before the attempt — gating on it is what made a failed send permanent and invisible.
+         Gating on delivery, bounded by attempts, is what lets a failure come back. */
+      .is("notify_sent_at", null)
+      .lt("notify_attempts", MAX_SEND_ATTEMPTS)
       .lte("created_at", cutoff)
       .order("created_at", { ascending: true })
       .limit(BATCH);
@@ -123,12 +137,23 @@ Deno.serve(async (req) => {
          two overlapping sweeps both issue it, the database serialises them, and only one gets a row
          back. Claiming BEFORE sending also means a crash mid-send costs one missed email rather than
          a loop that emails forever. */
+      /* ⛔ CLAIMED BY INCREMENTING THE ATTEMPT COUNT, CONDITIONAL ON ITS CURRENT VALUE. The old
+         claim was `.is("notified_at", null)`, which is unrepeatable by construction — correct when
+         one attempt was all there would ever be, and the reason a failure could never come back.
+         Optimistic concurrency on the counter keeps double-sending impossible (two overlapping
+         sweeps both issue this; the database serialises them and only one matches the old value)
+         while still permitting attempt 2 and 3. */
+      const attempts = row.notify_attempts ?? 0;
       const { data: claimed } = await service
         .from("onboarding_responses")
-        .update({ notified_at: new Date().toISOString() })
-        .eq("id", row.id).is("notified_at", null)
+        .update({ notified_at: new Date().toISOString(), notify_attempts: attempts + 1 })
+        .eq("id", row.id).eq("notify_attempts", attempts)
         .select("id");
       if (!Array.isArray(claimed) || claimed.length === 0) { lostRace += 1; continue; }
+
+      /** Terminal states. Recorded so nothing re-picks the row, and so the reason survives. */
+      const finish = (patch: Record<string, unknown>) =>
+        service.from("onboarding_responses").update(patch).eq("id", row.id);
 
       /* RE-CHECK PAYMENT AT SEND TIME — the point of the delay. Someone who paid inside the window
          must not be reported as having bailed. They stay claimed, so this never runs again for them,
@@ -148,7 +173,19 @@ Deno.serve(async (req) => {
           trade = ((l.category as string) || (l.search_keyword as string) || "").trim() || null;
         }
       }
-      if (paid) { skippedPaid += 1; continue; }
+      /* ⛔ RETIRED EXPLICITLY, NOT LEFT TO THE CLAIM. Under the old gate this row simply never came
+         back, because being claimed was permanent. The gate is now delivery, so a paid row would be
+         re-picked every minute until it burned all three attempts on an email nobody wants. It is
+         given a terminal state instead, and the reason is stored rather than inferred: no email was
+         sent and none is needed, which is not the same as a failure. */
+      if (paid) {
+        skippedPaid += 1;
+        await finish({
+          notify_attempts: MAX_SEND_ATTEMPTS,
+          notify_error: "not sent: they paid inside the delay window, so the payment notification covers them",
+        });
+        continue;
+      }
 
       const name = (row.business_name ?? "").trim() || "A prospect";
       const town = (row.confirmed_location ?? "").trim();
@@ -260,7 +297,16 @@ Deno.serve(async (req) => {
          claimed, so a failure costs exactly one email — it is logged loudly rather than retried,
          because a retry loop against a dead provider is worse than a missed notification. */
       const resendKey = Deno.env.get("RESEND_API_KEY");
-      if (!resendKey) { console.warn("[notify-onboarding-submit] RESEND_API_KEY not set; skipping send"); failed += 1; continue; }
+      /* ⛔ A MISSING KEY IS RECORDED, NOT SHRUGGED OFF. This branch used to increment a counter and
+         `continue` on an already-claimed row, so an unset key would have dropped EVERY submission
+         silently and for ever — the worst version of the fault this whole change exists to fix, and
+         it needed no outage to happen. It now fails like any other failure: stored, and retried. */
+      if (!resendKey) {
+        console.error("[notify-onboarding-submit] RESEND_API_KEY not set");
+        failed += 1;
+        await finish({ notify_error: "RESEND_API_KEY is not set on the function" });
+        continue;
+      }
       try {
         const res = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -274,14 +320,34 @@ Deno.serve(async (req) => {
             text, html,
           }),
         });
-        if (!res.ok) { failed += 1; console.error(`[notify-onboarding-submit] resend ${res.status} for ${row.id}: ${(await res.text()).slice(0, 200)}`); }
-        else { sent += 1; console.log(`[notify-onboarding-submit] emailed about ${name} (${row.id})`); }
+        if (!res.ok) {
+          failed += 1;
+          /* THE RAW PROVIDER RESPONSE, not a friendly summary. A catch-all error message is worse
+             than none — CLAUDE.md §4, from the audit page that explained every failure as "term too
+             broad" while the real error sat unread. */
+          const body = (await res.text()).slice(0, 400);
+          console.error(`[notify-onboarding-submit] resend ${res.status} for ${row.id}: ${body}`);
+          await finish({ notify_error: `resend HTTP ${res.status}: ${body}` });
+        } else {
+          sent += 1;
+          console.log(`[notify-onboarding-submit] emailed about ${name} (${row.id})`);
+          /* THE ONLY PLACE notify_sent_at IS EVER WRITTEN: the provider accepted it. The error is
+             cleared so a row that succeeded on attempt 2 does not keep showing attempt 1's failure. */
+          await finish({ notify_sent_at: new Date().toISOString(), notify_error: null });
+        }
       } catch (e) {
         failed += 1;
-        console.error(`[notify-onboarding-submit] send failed for ${row.id} (non-blocking):`, (e as Error).message);
+        const msg = (e as Error).message;
+        console.error(`[notify-onboarding-submit] send failed for ${row.id} (non-blocking):`, msg);
+        await finish({ notify_error: `send threw: ${msg}` });
       }
     }
 
+    /* ⚠️ NO "stuck" COUNT HERE, DELIBERATELY. A count of rows at the ceiling with no delivery reads
+       as "N notifications lost", and it is not: deliberately retired rows (paid inside the window,
+       and the pre-2026-08-10 backfill) sit in exactly that state on purpose. Telling them apart
+       needs the REASON, so the dashboard card lists the rows with their notify_error rather than
+       reducing them to a number that would be wrong in both directions. */
     return json({ ok: true, considered: rows.length, sent, skipped_paid: skippedPaid, lost_race: lostRace, failed });
   } catch (e) {
     // Never throw out of a cron target: a 500 loop is noise, and nothing here is load-bearing.
