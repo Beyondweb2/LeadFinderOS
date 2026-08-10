@@ -67,6 +67,11 @@ interface Row {
      and photos_status change what the delivery looks like before it starts. */
   gbp_exists: string | null;
   gbp_status: string | null;
+  /* ⛔ CARRIED HERE FOR THE SAME REASON AS THE OTHERS — and it is the one most likely to change what
+     you do first. An unverified profile is invisible on Maps and Search, so profile work publishes
+     to nobody; a column nobody reads is the gbp_manager_email mistake, which this table already
+     records once. */
+  gbp_verified: string | null;
   must_not_say: string | null;
   photos_status: string | null;
   /** An escape-hatch bail-out. Its answers are partial, so it is never given a verdict. */
@@ -99,7 +104,7 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // ONE STRING LITERAL, not a concatenation. supabase-js types the select on the literal, so
       // splitting it across two lines makes `data` GenericStringError[] and the cast below a TS2352.
-      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, must_not_say, photos_status, incomplete")
+      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete")
       .is("notified_at", null)
       .lte("created_at", cutoff)
       .order("created_at", { ascending: true })
@@ -180,6 +185,12 @@ Deno.serve(async (req) => {
         will_do: "Says they will add us",
         no_access: "CANNOT GET INTO THEIR PROFILE",
       };
+      const GBP_VERIFIED_LABEL: Record<string, string> = {
+        yes: "Profile is verified",
+        pending: "Verification in progress — chase, do not start profile work yet",
+        no: "PROFILE IS NOT VERIFIED — nothing on it shows on Maps or Search",
+        not_sure: "Does not know if it is verified — check this yourself",
+      };
       const PHOTOS_LABEL: Record<string, string> = {
         phone: "Has photos on their phone",
         online: "Has photos on their site or social",
@@ -188,6 +199,7 @@ Deno.serve(async (req) => {
       const label = (m: Record<string, string>, v: string | null) => (v ? (m[v] ?? v) : null);
       const gbpExistsLine = label(GBP_EXISTS_LABEL, row.gbp_exists);
       const gbpStatusLine = label(GBP_STATUS_LABEL, row.gbp_status);
+      const gbpVerifiedLine = label(GBP_VERIFIED_LABEL, row.gbp_verified);
       const photosLine = label(PHOTOS_LABEL, row.photos_status);
       const mustNotSay = (row.must_not_say ?? "").trim() || null;
 
@@ -195,6 +207,11 @@ Deno.serve(async (req) => {
          cannot be skimmed past: someone locked out of their profile cannot start at all, and a
          must-not-say note is the only thing here that can embarrass us in public once published. */
       const needsYou: string[] = [];
+      /* ⛔ ONLY "no". "pending" resolves itself and "not_sure" we answer ourselves — neither needs a
+         reply, and padding this list is how the two that do get skimmed past. Verification is not
+         something you can clear alone: it needs the client to take a postcard or a video call, and
+         it takes days, so it belongs in front of you in week one rather than week three. */
+      if (row.gbp_verified === "no") needsYou.push("Their Google Business Profile is NOT verified, so nothing on it shows on Maps or Search. Profile work would publish to nobody. Verification needs them (postcard or video call) and takes days — start it before anything else.");
       if (row.gbp_status === "no_access") needsYou.push("They cannot get into their Google Business Profile. They cannot add us, so nothing on the profile can start until this is sorted.");
       if (mustNotSay) needsYou.push(`They told us something we must not say: "${mustNotSay}"`);
 
@@ -207,7 +224,7 @@ Deno.serve(async (req) => {
         (verdictLabel ? `  ${verdictLabel}\n  ${gate!.reason}\n\n` : "") +
         line("Trade:", trade) + line("Town:", town) + line("Phone:", phone) + line("Email:", row.contact_email) +
         (gate ? line("Site:", siteLine) : "") +
-        line("Profile:", gbpExistsLine) + line("Added us:", gbpStatusLine) + line("Photos:", photosLine) +
+        line("Profile:", gbpExistsLine) + line("Verified:", gbpVerifiedLine) + line("Added us:", gbpStatusLine) + line("Photos:", photosLine) +
         (mustNotSay ? line("Must not say:", mustNotSay) : "") +
         (needsYou.length ? `\n  NEEDS YOU:\n${needsYou.map((x) => `  - ${x}`).join("\n")}\n` : "") +
         `\n${tail}\n`;
@@ -227,6 +244,7 @@ Deno.serve(async (req) => {
         (row.contact_email ? `<p style="margin:0 0 2px"><strong>Email:</strong> ${escapeHtml(row.contact_email)}</p>` : "") +
         (siteLine ? `<p style="margin:0 0 2px"><strong>Site:</strong> ${escapeHtml(siteLine)}</p>` : "") +
         (gbpExistsLine ? `<p style="margin:0 0 2px"><strong>Profile:</strong> ${escapeHtml(gbpExistsLine)}</p>` : "") +
+        (gbpVerifiedLine ? `<p style="margin:0 0 2px"><strong>Verified:</strong> ${escapeHtml(gbpVerifiedLine)}</p>` : "") +
         (gbpStatusLine ? `<p style="margin:0 0 2px"><strong>Added us:</strong> ${escapeHtml(gbpStatusLine)}</p>` : "") +
         (photosLine ? `<p style="margin:0 0 2px"><strong>Photos:</strong> ${escapeHtml(photosLine)}</p>` : "") +
         (mustNotSay ? `<p style="margin:0 0 2px"><strong>Must not say:</strong> ${escapeHtml(mustNotSay)}</p>` : "") +
