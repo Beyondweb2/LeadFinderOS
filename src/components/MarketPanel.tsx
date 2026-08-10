@@ -12,6 +12,8 @@ import { useMarketView } from '@/hooks/useMarketView';
 import MeasureMarket from '@/components/MeasureMarket';
 import { useApifyUsage, apifyTone } from '@/hooks/useApifyUsage';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
+import { useCampaigns } from '@/hooks/useCampaigns';
+import { pickCampaignForTrade, describeCampaignPick } from '@/lib/campaignForTrade';
 import { useOutreach } from '@/hooks/useOutreach';
 import { shortDate } from '@/lib/auditErrors';
 import {
@@ -79,6 +81,9 @@ export interface MarketPanelProps {
    * that arrives once) and never from stored state, and why it is consumed below.
    */
   openSearchConfirm?: boolean;
+  /** The campaign the operator has selected on Find Leads — the FALLBACK only, never the default.
+   *  A lead's own trade decides first; this is what gets used, and named, when nothing matches. */
+  selectedCampaignId?: string | null;
 }
 
 /**
@@ -87,7 +92,7 @@ export interface MarketPanelProps {
  * here and no restriction to trades that already have audits, because "what do I have for
  * locksmiths in Peterborough, and what would it cost to get the rest" is the question.
  */
-export default function MarketPanel({ trade, town, openSearchConfirm }: MarketPanelProps) {
+export default function MarketPanel({ trade, town, openSearchConfirm, selectedCampaignId = null }: MarketPanelProps) {
   const { view, loading, error, load, reload } = useMarketView();
   const { usage: apifyUsage } = useApifyUsage();
   const { search, isLoading: searching, townFilterFallback, leads, resolvedLocation, locationCandidates } = useLeadSearchContext();
@@ -96,6 +101,17 @@ export default function MarketPanel({ trade, town, openSearchConfirm }: MarketPa
   const leadsRef = useRef(leads);
   useEffect(() => { leadsRef.current = leads; }, [leads]);
   const { addLead } = useOutreach();
+  const { campaigns } = useCampaigns();
+
+  /* ⛔ THE FIX. Both add paths below passed campaignId `null`, so every lead added from Coverage or
+     the market view landed with NO campaign — invisible to a campaign filter. The measure path is
+     the worse half: it adds silently, so it had been happening on every market measure with nothing
+     on screen saying so. Resolved from the lead's trade via campaigns.trade_slug, falling back to
+     the selected campaign and SAYING WHICH — never creating one. */
+  const campaignPick = useMemo(
+    () => pickCampaignForTrade(trade, campaigns, selectedCampaignId),
+    [trade, campaigns, selectedCampaignId],
+  );
   const { toast } = useToast();
 
   const [auditCount, setAuditCount] = useState(5);
@@ -257,12 +273,17 @@ export default function MarketPanel({ trade, town, openSearchConfirm }: MarketPa
     if (!chosen) return;
     setAddingKey(row.key);
     try {
-      const id = await addLead(asLead(row), 'UK', 'no_website', null, null, false, chosen.trade, chosen.town);
-      if (id) setAddedKeys((s) => new Set(s).add(row.key));
+      const id = await addLead(asLead(row), 'UK', 'no_website', campaignPick.campaignId, null, false, chosen.trade, chosen.town);
+      if (id) {
+        setAddedKeys((s) => new Set(s).add(row.key));
+        /* Names the campaign every time, not only on the fallback. "Added" alone is what let a
+           campaign-less lead look like a success for months. */
+        toast({ title: row.name, description: describeCampaignPick(campaignPick) });
+      }
     } finally {
       setAddingKey(null);
     }
-  }, [chosen, addLead, asLead]);
+  }, [chosen, addLead, asLead, campaignPick, toast]);
 
   /* ── A LIVE AUDIT BATCH, POLLED ───────────────────────────────────────────────────────────────
      Reads the caller's own audit jobs (RLS scopes bulk_jobs to them) and keeps polling while one is
@@ -369,7 +390,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm }: MarketPa
         // addLead returns the CREATED ROW, or null when it was a duplicate or failed. A duplicate
         // is skipped rather than counted: bulk-jobs would reject an id we never got, and quietly
         // auditing fewer businesses than the confirm promised is worse than saying so.
-        const created = await addLead(asLead(row), 'UK', 'no_website', null, null, true, chosen.trade, chosen.town);
+        const created = await addLead(asLead(row), 'UK', 'no_website', campaignPick.campaignId, null, true, chosen.trade, chosen.town);
         if (created?.id) leadIds.push(created.id);
       }
       if (leadIds.length === 0) {
@@ -401,7 +422,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm }: MarketPa
         console.info('[market] audit batch refused after CRM writes', { leadIds, error: real });
         toast({
           title: `${leadIds.length} lead${leadIds.length === 1 ? '' : 's'} added, but NO audits started`,
-          description: `${real} The ${leadIds.length} business${leadIds.length === 1 ? '' : 'es'} ${leadIds.length === 1 ? 'is' : 'are'} now in your CRM with nothing measuring them. Run the audits from Outreach when the other job finishes, or delete them.`,
+          description: `${real} ${describeCampaignPick(campaignPick, leadIds.length)} They are in your CRM with nothing measuring them. Run the audits from Outreach when the other job finishes, or delete them.`,
           variant: 'destructive',
         });
         return;
@@ -409,7 +430,10 @@ export default function MarketPanel({ trade, town, openSearchConfirm }: MarketPa
       setAuditOpen(false);
       toast({
         title: `${leadIds.length} audit${leadIds.length === 1 ? '' : 's'} queued`,
-        description: 'The panel now tracks them. They drain through the audit queue, roughly a minute per tick.',
+        /* ⛔ NAMES THE CAMPAIGN, same sentence as the single-add toast. This is the path that adds
+           SILENTLY: it had been creating campaign-less leads on every market measure with nothing on
+           screen saying so, which is why the summary now has to speak for it. */
+        description: `${describeCampaignPick(campaignPick, leadIds.length)} The panel now tracks them. They drain through the audit queue, roughly a minute per tick.`,
       });
       /* Seed the progress strip immediately rather than waiting up to JOB_POLL_MS for the first
          poll — the whole complaint was that nothing visibly happened after the click. */

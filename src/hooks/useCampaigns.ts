@@ -29,6 +29,12 @@ export interface Campaign {
   method: string | null;
   default_template: string | null;
   campaign_type: CampaignType | null; // null/unknown → treated as 'audit'
+  /* ⛔ WHICH TRADE THIS CAMPAIGN IS FOR — a src/lib/trades.ts slug, set by hand in campaign
+     settings so leads added from Coverage and the market view land in the right place.
+     NULL = nobody has said yet, which is NOT "for no trade": the add path falls back to the
+     selected campaign and says so. Never inferred from `name` — only 4 of 12 names resolve, and a
+     rename must not move leads. */
+  trade_slug: string | null;
 }
 
 export interface CampaignInput {
@@ -38,6 +44,8 @@ export interface CampaignInput {
   default_sale_type?: string | null;
   default_template?: string | null;
   campaign_type?: CampaignType | null;
+  /** Optional so an existing caller that never mentions it cannot blank an already-set trade. */
+  trade_slug?: string | null;
 }
 
 // select('*') rather than a fixed column list: reads keep working whether or not the

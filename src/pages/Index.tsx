@@ -464,7 +464,7 @@ const Index = () => {
           in this town. Spends nothing on mount — it reads audits and the cached lead pool. */}
       {activeMode === 'market' && (
         <section>
-          <MarketPanel trade={marketTrade} town={marketTown} openSearchConfirm={openSearchConfirm} />
+          <MarketPanel trade={marketTrade} town={marketTown} openSearchConfirm={openSearchConfirm} selectedCampaignId={activeCampaign} />
         </section>
       )}
 
