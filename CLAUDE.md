@@ -817,7 +817,18 @@ useMarketView.ts   1 persisted vs  6 plain
     Also a setter: `_shared/audit-baseline.ts:412` — `confirmed_location || search_location`, **the paid
     baseline, i.e. the guarantee path.** And `src/pages/AiAudit.tsx:753` for the wizard.
     Intended precedence everywhere: `confirmed_location || derived_town || search_location`.
-- **37 reports already went out with the wrong-town problem.**
+- 🔴 **HOW MANY REPORTS WENT OUT WITH THE WRONG TOWN — TWO NUMBERS, AND THEY MEASURE DIFFERENT
+  THINGS.** Leaving both without this note reads as a contradiction.
+  - **37** was the earlier estimate: every report sent before the `derived_town` fix, regardless of
+    whether the distance was ever checked.
+  - **28** is *proven*, measured 2026-08-09 once `outreach_leads.lat/lng` existed: of the 31 audits
+    now known to be >10 km from their town, 28 had a report reach the prospect on some channel
+    (26 WhatsApp carrying a report link or `audit_reply`, 6 pushed to Instantly, 10 with status
+    `report_sent`) and **20 were opened**. RG Locksmiths cambs is in that list at 42 km — the
+    prospect who complained.
+  - ⚠️ **28 IS A FLOOR, NOT A TOTAL.** It counts only the 44 audits whose business coordinates are
+    known, out of **195** audited leads. The real figure is very likely above 37. It rises as
+    coordinates are backfilled — do not quote 28 as "the number affected".
 - ✅ **AUDIT COST — SETTLED 2026-07-30 from measured spend.** Paul ran the query against
   `ai_audit_runs.actor_cost_usd`: **81 runs, mean $0.04207 per run, $3.41 total, 26–30 July.** Those runs are
   the 3–5 question outreach size that dominates the table, which puts a question at roughly **$0.0125**.
