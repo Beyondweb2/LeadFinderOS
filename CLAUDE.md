@@ -1105,7 +1105,14 @@ useMarketView.ts   1 persisted vs  6 plain
   deploy trap, on the function this whole item depends on. The new secret key (`sb_secret_…`) is
   masked in `supabase projects api-keys`, so that is not a workaround either.
   **To unblock: redeploy `extract-competitors`, then the cleaner works from a harness or from the
-  panel button.** 8 markets need it, 26 completed runs, **$1.82 total at $0.070/run, no re-auditing.**
+  panel button.** Counted, not estimated, at $0.070/run and with no re-auditing:
+  | Scope | Runs | Cost |
+  |---|---|---|
+  | The **8 markets that carry a verdict today** — rowley regis 2, loughborough 20, stamford 9, wrexham 12, accountant/chichester 11, wakefield 2, eastbourne 2, chorley 3 | **61** | **$4.27** |
+  | Of those, the five that are MARKET-audited (the 20-market set) | 20 | $1.40 |
+  | Every market with markers, including 5 `unmeasured` ones (accountant/wisbech alone is 22 runs and 99 markers) | 91 | $6.37 |
+  ⚠️ **A first pass of ~$1.40 answers the question that matters** — does the cleaner actually remove
+  the markers? Nobody has measured that; Wisbech's earlier clean was measured on the old ratio.
 - ✅ **THE MARKETPLACE-LED VERDICT WAS WRONG. MEASURED AND FIXED 2026-08-10 — the citation half is
   GONE.** Across every market with a completed run, **17 have an aggregator as the most-cited host and
   in all 17 AI names local firms anyway**: in 15 the aggregator's brand is not in the named list at
