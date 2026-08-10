@@ -51,6 +51,17 @@ const GBP_EXISTS = new Set(["yes", "not_claimed", "no", "not_sure"]);
    needs Paul. Two options (done / will do) force someone locked out to lie or stall, and it surfaces
    in week three instead of week one. */
 const GBP_STATUS = new Set(["done", "will_do", "no_access"]);
+/* ⛔ VERIFIED IS NOT THE SAME QUESTION AS EXISTS, AND GBP_EXISTS CANNOT ANSWER IT. "Yes, and I can
+   get into it" is equally true of a profile that is pending verification and of a suspended one —
+   claim and access are one thing, verification is another. It matters because an unverified profile
+   does not show on Maps or Search: every hour of profile work publishes to nobody, and it is the
+   likeliest plain explanation for "AI has never heard of me", since there is nothing of theirs to
+   read.
+   FOUR STATES BECAUSE FOUR DIFFERENT THINGS HAPPEN: yes proceeds; "pending" is in flight and only
+   needs chasing; "no" is a delivery task in its own right and often the most valuable thing we can
+   do for them; "not_sure" we check ourselves. Collapsing pending into no would put a chase and a
+   piece of work in the same bucket. */
+const GBP_VERIFIED = new Set(["yes", "pending", "no", "not_sure"]);
 /* Photo READINESS, never files. Nothing in this flow uploads anything, and the Places photo route is
    closed: Maps ToS 3.2.3(a) names "rehost" as a prohibited use of Maps Content, so a profile photo
    cannot legally be put on a client's own website. Asking is the route, not the fallback. */
@@ -259,6 +270,11 @@ Deno.serve(async (req) => {
          stop being written. */
       const gbpExists = typeof a.gbp_exists === "string" && GBP_EXISTS.has(a.gbp_exists) ? a.gbp_exists : null;
       const gbpStatus = typeof a.gbp_status === "string" && GBP_STATUS.has(a.gbp_status) ? a.gbp_status : null;
+      /* Optional like its two neighbours: it is asked only on the gbp_exists = "yes" branch, and
+         someone who does not know must still be able to finish and pay. An unrecognised value
+         stores NULL — "not answered" — rather than being passed through, so a stale client can
+         never invent a fifth state that no reader knows how to render. */
+      const gbpVerified = typeof a.gbp_verified === "string" && GBP_VERIFIED.has(a.gbp_verified) ? a.gbp_verified : null;
       const photosStatus = typeof a.photos_status === "string" && PHOTOS_STATUS.has(a.photos_status) ? a.photos_status : null;
       /* CONTACT EMAIL — where the report and documents go. Validated with the same shape the client
          gates on, so a submission that got past the button is not silently downgraded here. Stored
@@ -316,6 +332,7 @@ Deno.serve(async (req) => {
         gbp_consent: gbpConsent,
         gbp_exists: gbpExists,
         gbp_status: gbpStatus,
+        gbp_verified: gbpVerified,
         // The only question here that can embarrass us publicly. Far cheaper to know before we write
         // the pages than to correct after they are published.
         must_not_say: clip(a.must_not_say, 2000),
@@ -335,7 +352,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "must_not_say", "photos_status"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -351,7 +368,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"];
+        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
