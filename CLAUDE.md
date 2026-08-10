@@ -954,6 +954,62 @@ useMarketView.ts   1 persisted vs  6 plain
   cleared too (the draft and panel stay honest), but the payload line is what decides.
   ⚠️ Both send sites — `submit` **and** the `bail` escape hatch — post the same object. A bailed
   submission is partial by design; it is not allowed to be wrong.
+- 🔴 **RLS ENABLED WITH ZERO POLICIES — THIS HAS NOW COST A WORKING FEATURE, AND IT IS THE THIRD
+  INSTANCE.** A denied read returns **HTTP 200 with `[]`**, which is indistinguishable from a table
+  that is genuinely empty. Nothing throws, nothing logs, and the feature silently does nothing.
+  | Where | What it cost |
+  |---|---|
+  | `apify_account_usage` | its own migration comment promised the figure would be visible in the app; the policy was never added, so nothing ever displayed it |
+  | The submissions card | caught **before** shipping, 2026-08-10, by checking the policies first — this is the check that works |
+  | **`useDashboardMetrics.onboardingByLead`** | **the NextActionsCard chase task ("filled the questionnaire and hasn't paid") has NEVER fired for anyone.** The code carries a comment asserting *"RLS scopes them as it scopes allLeads"* — it does not |
+  - ✅ **PROVEN 2026-08-10, both directions**: the anon key reads `onboarding_responses` and gets
+    `200 []` while the service role sees 2 rows, and `select policyname from pg_policies where
+    tablename='onboarding_responses'` returns **no rows**. Paul ran the policy query.
+  - ⚠️ **A COMMENT CLAIMING RLS SCOPES A TABLE IS NOT EVIDENCE.** Both failures were introduced by
+    someone believing one. Check `pg_policies`, not the prose.
+  - ⛔ **THE FIX WHEN A TABLE HAS NO POLICY: route the read through an edge function on the service
+    role, behind an operator check** — as `coverage` and `submissions` do. Adding a policy is the
+    other option and is Paul's call, not a default.
+  - 🔴 **THE FULL SWEEP IS NOT DONE.** PostgREST cannot read `pg_catalog`, so it needs one query in
+    the SQL editor — hand Paul this and act on the result:
+    ```sql
+    select c.relname, count(p.polname) as policies
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      left join pg_policy p on p.polrelid = c.oid
+     where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
+     group by 1 having count(p.polname) = 0 order by 1;
+    ```
+    Then grep the SPA for a direct `.from('<table>')` on every name it returns. **Every hit is a
+    feature that silently does nothing.**
+- 🔴 **THE QUESTIONNAIRE SPLIT — AGREED WITH PAUL 2026-08-10, NOT YET BUILT. Take a fresh session:
+  it is the flow that takes the money and deserves one clean pass.** Money sooner, detail later.
+  - **Before payment, ONE screen** (down from 5): the website questions + contact email.
+    `website_platform`, `website_platform_other`, `website_manager`, `willing_to_migrate` — which is
+    **exactly** what `findable-checkout` reads, so **the serve gate survives untouched** (verified).
+    Contact email stays because without it someone who does the work and balks at the price is
+    unreachable, and `notify-onboarding-submit` calls that the warmest lead there is.
+  - **After payment, Q2:** services, town, areas, address, accreditations, competitor, photos, the
+    whole Google block, must-not-say.
+  - ✅ **Q2's delivery address is FREE** — `stripe-webhook` already backfills `contact_email` from
+    the Stripe payer email where it is null.
+  - **THE MAP** (`findable-site/src/components/OnboardingFlow.tsx`, 2802 lines): `questions` array
+    entries at **1814** "What you do", **1939** "Where you want work", **1990** "Your details",
+    **2092** "Your website", **2299** "Access". `STEPS = 5` at **269**, `const q = questions[step]`
+    at **2479**, validation switch at **1497**. Contact email is inside "Your details" and must be
+    lifted into "Your website". ⚠️ **Both payload sites change together** — `submit()` and `bail()` —
+    and the six reachability guards must stay keyed to whichever questionnaire owns each question.
+  - ✅ **THE BASELINE HALF IS ALREADY BUILT AND DEPLOYED** (`audit-baseline.ts`): `startPaidBaseline`
+    defers with `ok:true, skipped:"awaiting_questionnaire_2"` until `confirmed_location` **and**
+    `services` exist, because the fallbacks would otherwise rescue a missing answer
+    (`confirmed_location || derived_town || search_location`, specialisms `""`) and put the
+    wrong-town fault on the **guarantee's evidence**. **Nothing new schedules it** —
+    `process-ai-audit-queue`'s `ensureBaselinesForPaidOnboardings` already retries every tick.
+  - ✅ **The paid-with-no-Q2 card state is built** (`needsQ2` in `useSubmissions.ts`, derived from the
+    three fields Q2 makes required, never stored).
+  - **Still to build:** the split itself; the day-2/day-5 chase emails (columns `q2_chased_at` +
+    `q2_chase_count` are **live** — the count exists because a stamp cannot answer *which* chase is
+    next); the **day-7 dashboard task**, which must go **through the `submissions` endpoint**, not
+    the direct read, for the RLS reason above.
 - **No Baseline Test button.** Baselines are gated to internal callers (cron secret or service role +
   `x-internal-job`) and currently only start from `stripe-webhook` after payment. A button needs an
   authenticated path. Cost ≈ **30p** (measured — see above).
