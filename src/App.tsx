@@ -45,6 +45,7 @@ const Terms = lazy(() => import("./pages/Terms"));
 const Feedback = lazy(() => import("./pages/Feedback"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
+const Coverage = lazy(() => import("./pages/Coverage"));
 const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
@@ -472,6 +473,18 @@ const App = () => {
             {/* The market view is a MODE on Find Leads now, not a page of its own. Kept as a
                 redirect so an old bookmark or link lands somewhere sensible instead of a 404. */}
             <Route path="/market" element={<Navigate to="/find-leads" replace />} />
+            <Route
+              path="/coverage"
+              element={
+                <ProtectedRoute>
+                  <SubscriptionGate>
+                    <AppLayout>
+                      <Coverage />
+                    </AppLayout>
+                  </SubscriptionGate>
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/ai-audit"
               element={

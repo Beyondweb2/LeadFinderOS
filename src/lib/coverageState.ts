@@ -112,7 +112,9 @@ export interface CoverageSummary {
   started: number;
 }
 
-export function summarise(rows: CoverageRow[]): CoverageSummary {
+/* Generic over the row so callers keep their own extra fields — the page carries suppression
+   state alongside, and a signature fixed to CoverageRow would silently drop it. */
+export function summarise(rows: readonly CoverageRow[]): CoverageSummary {
   const counts: Record<CoverageState, number> = { worked: 0, measured: 0, leads: 0, untouched: 0 };
   for (const r of rows) counts[r.state]++;
   return { total: rows.length, counts, started: rows.length - counts.untouched };
@@ -132,7 +134,7 @@ export interface CoverageFilters {
  * unknown size cannot honestly be said to be inside a 15k–210k band. Silently including it would
  * put an unknown quantity in a list whose whole purpose is deciding where to spend next.
  */
-export function applyFilters(rows: CoverageRow[], f: CoverageFilters): CoverageRow[] {
+export function applyFilters<T extends CoverageRow>(rows: readonly T[], f: CoverageFilters): T[] {
   return rows.filter((r) => {
     if (f.region && r.region !== f.region) return false;
     if (r.population === null || r.population === undefined) return false;

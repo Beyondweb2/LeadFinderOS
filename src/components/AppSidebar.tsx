@@ -12,7 +12,7 @@ import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Search, ClipboardList, FileText,
-  DollarSign, HelpCircle, Users, MessageSquare, Inbox, Sparkles
+  DollarSign, HelpCircle, Users, MessageSquare, Inbox, Sparkles, Map
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
@@ -30,6 +30,7 @@ export function AppSidebar() {
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
     { title: 'Inbox', url: '/inbox', icon: Inbox, description: 'WhatsApp conversations' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
+    { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },
     { title: t('nav.paidClients'), url: '/paid-clients', icon: DollarSign, description: t('nav.paidClientsDesc') },
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
     { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle, description: t('nav.howToUseDesc') },
