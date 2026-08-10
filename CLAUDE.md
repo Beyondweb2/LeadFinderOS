@@ -1016,6 +1016,29 @@ useMarketView.ts   1 persisted vs  6 plain
   and skipped ones he should have. Not a corrected rule; the towns.
   ⚠️ **NO RE-AUDITING.** Cleaning re-reads stored answers, so the only spend is the cleaner itself
   (`CLEANER_USD_PER_RUN` = $0.070) on markets deliberately chosen.
+  ✅ **MEASURED 2026-08-10 — THE THRESHOLD IS 10 PER QUESTION, AND THE DATA PICKS IT.** Distinct
+  extracted names per QUESTION across all 20 markets with completed questions:
+  ```
+  27.8  locksmiths / rowley regis   (444 names, 16 questions)
+  25.1  locksmiths / wakefield      (401, 16)
+  17.9  locksmiths / eastbourne     (287, 16)
+  ──────────── nothing at all between 5.4 and 17.9 ────────────
+   5.4  mobile mechanics / wisbech      4.4  electricians / portsmouth
+   3.9 … 2.1   the other 15 markets
+  ```
+  **Three dirty, seventeen clean, a 3.3× empty band.** 10 sits mid-gap and survives new markets
+  landing either side without re-tuning. Names come from `ai_audit_queue.result[engine].competitors`
+  on **complete** runs only.
+  - ⚠️ **ONLY THREE MARKETS CAN CHANGE FROM CLEANING.** The other 17 were graded on clean lists, so
+    whatever is wrong with them is the **aggregator rule, not the extraction** — which splits the
+    two faults cleanly and means most of the town list comes from winnability, not from cleaning.
+  - 🔴 **EASTBOURNE CARRIES BOTH FAULTS.** It is dirty (287 fragments over 16 questions) *and* one
+    of the five towns skipped on the aggregator verdict, so its 14% Checkatrade figure was computed
+    on a fragmented list. Do it straight after Wakefield.
+  - ✅ **Chichester (3.6) and Portsmouth (4.4) are CLEAN**, so two of the five skipped towns need no
+    cleaning before their winnability can be judged.
+  - The current `JUNK_RATIO_PER_AUDIT = 15` is per-AUDIT and **every one of the 20 markets scores
+    above it on that basis**, so it separates nothing.
   ⛔ **AND THE THRESHOLD MUST BE MEASURED, NOT PICKED.** `shouldAutoClean` (`marketView.ts:493`)
   gates on `JUNK_RATIO_PER_AUDIT`, whose comment cites a **per-audit** spread (clean 4–9, junk
   30–970). **Those numbers do not carry to a per-question ratio** — a per-audit average cannot
