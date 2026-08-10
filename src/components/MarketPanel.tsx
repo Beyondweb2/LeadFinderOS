@@ -64,6 +64,21 @@ export interface MarketPanelProps {
   trade: string;
   /** Town as typed on Find Leads. */
   town: string;
+  /**
+   * Arrive with the lead-search confirm already open — set by the Coverage page's "Find leads"
+   * button, which knows the trade and town and exists to stop them being retyped.
+   *
+   * ⛔ IT OPENS THE CONFIRM, IT DOES NOT RUN THE SEARCH. The search costs ~$0.11 against a stale
+   * pool, and a town reached from Coverage is untouched almost by definition, so the pool is stale
+   * almost every time. A link that spent money on arrival would be a dialog-free payment on a click
+   * that reads like navigation.
+   *
+   * ⚠️ AND IT IS THE ONE LEGITIMATE CASE OF AN AUTO-OPENING MODAL. §6c bans PERSISTING an open
+   * dialog, because a modal springing open on return is something you did not ask for. This one is
+   * asked for, by the click that navigated here — which is why it comes from the URL (an intent
+   * that arrives once) and never from stored state, and why it is consumed below.
+   */
+  openSearchConfirm?: boolean;
 }
 
 /**
@@ -72,7 +87,7 @@ export interface MarketPanelProps {
  * here and no restriction to trades that already have audits, because "what do I have for
  * locksmiths in Peterborough, and what would it cost to get the rest" is the question.
  */
-export default function MarketPanel({ trade, town }: MarketPanelProps) {
+export default function MarketPanel({ trade, town, openSearchConfirm }: MarketPanelProps) {
   const { view, loading, error, load, reload } = useMarketView();
   const { usage: apifyUsage } = useApifyUsage();
   const { search, isLoading: searching, townFilterFallback, leads, resolvedLocation, locationCandidates } = useLeadSearchContext();
@@ -138,6 +153,17 @@ export default function MarketPanel({ trade, town }: MarketPanelProps) {
     setAddedKeys(new Set());
     void load(chosen.trade, chosen.town);
   }, [chosen, load]);
+
+  /* ⛔ ONCE, AND ONLY WITH A MARKET TO SEARCH. The ref is what makes it once: without it, dismissing
+     the dialog and then changing either box would re-open it, so a confirm you had already declined
+     would come back on an action that had nothing to do with it. Guarded on `chosen` too — an open
+     "Run the lead search?" with no trade or town is a dialog whose button cannot do anything. */
+  const searchConfirmShown = useRef(false);
+  useEffect(() => {
+    if (!openSearchConfirm || !chosen || searchConfirmShown.current) return;
+    searchConfirmShown.current = true;
+    setSearchOpen(true);
+  }, [openSearchConfirm, chosen]);
 
   /* ── THE LEAD SEARCH. Reuses the Find Leads context call verbatim, so it goes through the same
      search-leads function, writes the same search_history row and fills the same search_cache the
