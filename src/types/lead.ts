@@ -19,6 +19,15 @@ export interface Lead {
   reason: string;
   businessStatus?: string;
   isExpanded?: boolean;
+  /* ⛔ OUTSIDE THE TOWN'S OWN BOUNDARY. Set by search-leads' townOnly nearby pass, which returns
+     these ALONGSIDE the town results rather than dropping them — tagged so they can be shown
+     without ever being counted as businesses in the town.
+     ⚠️ IT MUST BE RENDERED. Until 2026-08-09 only marketView.ts read this field, so a townOnly
+     search in Find Leads looked identical to a wide one: the same rows, no indication which were
+     outside. Measured against Google's own viewports, 63% of leads with coordinates sit outside the
+     town they were searched from — Keyworx Auto Locksmiths CORBY from a Wisbech search. A mark
+     nobody can see is worse than no mark, because the search LOOKS town-scoped. */
+  outsideTown?: boolean;
 }
 
 export type Country = 'UK' | 'Australia' | 'USA' | 'Canada' | 'Germany' | 'France' | 'Spain' | 'Italy' | 'Netherlands' | 'Belgium' | 'Ireland' | 'NewZealand' | 'SouthAfrica' | 'India' | 'Singapore' | 'UAE' | 'Brazil' | 'Mexico' | 'Japan' | 'Sweden';
