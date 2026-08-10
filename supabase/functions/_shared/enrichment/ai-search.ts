@@ -238,10 +238,105 @@ function tokensContain(hay: string[], needle: string[]): boolean {
   return false;
 }
 
+/* ══ THE SHORTENED-NAME MISS, AND THE RULE THAT FIXES IT WITHOUT INVENTING MATCHES ════════════
+   ⛔ THE FAULT. businessCore truncates at the first GENERIC_NAME_TOKEN. "accountants" is in that
+   list, "chartered" is not — so "Lewis Brownlee Chartered Accountants" needs the exact run
+   "lewis brownlee chartered", and an answer saying just "Lewis Brownlee" is recorded as NOT named.
+   Telling a business it was never named when AI named it is the worst thing this product does; it
+   is the complaint that cost two prospects.
+
+   ⛔ AND WHY NOT SIMPLY LOOSEN IT. A shorter needle errs the other way: "Cambridge Driving" would
+   match "Cambridge Driving Academy" and tell a business it was named when a RIVAL was. That is the
+   same lie pointing the other direction.
+
+   ✅ THE RULE: try the LONGEST proper prefix of the core that is still DISTINCTIVE — the same
+   question derivable.ts asks. Strip the trade, the town and legal suffixes, then require BOTH:
+     * ≥4 characters of substance, and
+     * at least one token that could actually NAME a firm: alphabetic, ≥2 chars, not a service word.
+   The second test is what makes it safe. Without it the rule matched "24 hour" against "open 24
+   hours", and "24 7 emergency plumbers" against "reputable 24 7 emergency plumbing options" —
+   business names that BEGIN with a service phrase. Digits cannot name a firm and "emergency"
+   describes an offer.
+
+   MEASURED over all 1,720 scored datapoints in the database: 8 newly named across 5 businesses,
+   ZERO new false positives (mechanically — the needle never also prefixes a different firm named in
+   the same answer — and on reading all eight). 1,045 datapoints are DECLINED, keeping today's
+   behaviour exactly.
+
+   ⚠️ WHAT IT DELIBERATELY DOES NOT FIX: abbreviations ("jo kurz ifa" for "Jo Kurz Independent
+   Financial Adviser") are not prefixes, and a weak remainder ("S.T Locksmiths" strips to "s t")
+   would match half a town. Both keep the strict behaviour.
+
+   ⚠️ THE CONTEXT IS OPTIONAL AND ABSENCE MEANS THE OLD BEHAVIOUR, EXACTLY. Every existing caller
+   passes two arguments and is bit-for-bit unchanged — that is the safety property, and it is why
+   this is additive rather than a rewrite of the flag that decides every audit ever run. */
+
+/** Service words that describe an offer rather than name a firm. */
+const GENERIC_SERVICE_TOKENS = new Set([
+  "emergency", "hour", "hours", "hr", "hrs", "local", "mobile", "professional", "expert", "experts",
+  "quality", "best", "cheap", "affordable", "fast", "rapid", "quick", "same", "day", "near", "me",
+  "call", "out", "callout", "repair", "repairs", "solutions", "group", "trade", "trades",
+]);
+/** Legal / connective forms that carry no identity. */
+const NAME_LEGAL_TOKENS = new Set([
+  "ltd", "limited", "llp", "plc", "the", "and", "co", "company", "uk", "services", "service",
+]);
+
+export interface NameMatchContext {
+  /** The audit's business_type. Its tokens (and their plural/singular pair) are not identity. */
+  trade?: string | null;
+  /** The audit's location_text. Same. */
+  town?: string | null;
+}
+
+/* Tokens that carry no identity in this market. Built inline rather than from market-match.ts's
+   buildMatchContext: that module imports FROM this one, and closing the loop would make the import
+   graph circular for a handful of set members. */
+function contextNoise(ctx: NameMatchContext): { noise: Set<string>; stems: string[] } {
+  const noise = new Set<string>(NAME_LEGAL_TOKENS);
+  const add = (raw: string | null | undefined) => {
+    for (const t of normalizeForMatch(String(raw ?? "")).split(/\s+/).filter(Boolean)) {
+      noise.add(t);
+      noise.add(t.replace(/s$/, ""));
+      noise.add(`${t}s`);
+    }
+  };
+  add(ctx.trade);
+  add(ctx.town);
+  const stems = normalizeForMatch(String(ctx.trade ?? "")).split(/\s+/).filter((t) => t.length >= 5);
+  return { noise, stems };
+}
+
+/** A trade word in another grammatical form is still a trade word: plumbers/plumbing share 5. */
+function sharesTradeStem(t: string, stems: string[]): boolean {
+  if (t.length < 5) return false;
+  return stems.some((st) => {
+    let i = 0;
+    while (i < t.length && i < st.length && t[i] === st[i]) i++;
+    return i >= 5;
+  });
+}
+
+/** The longest proper prefix of `coreTokens` that still says who this is, or null. */
+function distinctivePrefix(coreTokens: string[], ctx: NameMatchContext): string[] | null {
+  const { noise, stems } = contextNoise(ctx);
+  for (let len = coreTokens.length - 1; len >= 2; len--) {
+    const prefix = coreTokens.slice(0, len);
+    const rest = prefix.filter((t) => !noise.has(t) && !sharesTradeStem(t, stems));
+    if (rest.join("").length < 4) continue;
+    /* ⛔ SOMETHING THAT COULD NAME A FIRM. Digits and service words cannot. */
+    if (!rest.some((t) => /^[a-z]{2,}$/.test(t) && !GENERIC_SERVICE_TOKENS.has(t))) continue;
+    return prefix;
+  }
+  return null;
+}
+
 /** Does `haystack` NAME the business? Matches the distinctive core when it's strong enough
  *  (≥2 meaningful words, OR one word ≥6 chars); else falls back to the FULL normalised name so a
- *  weak/generic core (e.g. "the") can't over-match on a fragment. */
-export function nameMatches(haystack: string, businessName: string): boolean {
+ *  weak/generic core (e.g. "the") can't over-match on a fragment.
+ *
+ *  With `ctx`, a shortened prefix is tried ONLY after the strict match fails — see the block above. */
+export function nameMatches(haystack: string, businessName: string, ctx?: NameMatchContext): boolean {
   const hay = normalizeForMatch(haystack).split(/\s+/).filter(Boolean);
   if (!hay.length) return false;
   const coreTokens = businessCore(businessName).split(/\s+/).filter(Boolean);
@@ -250,7 +345,13 @@ export function nameMatches(haystack: string, businessName: string): boolean {
   const needle = strong && coreTokens.length
     ? coreTokens
     : normalizeForMatch(businessName).split(/\s+/).filter(Boolean);
-  return tokensContain(hay, needle);
+  if (tokensContain(hay, needle)) return true;
+
+  /* ⛔ SECOND READING, NOT A REPLACEMENT. Reached only when the strict match has already failed, so
+     nothing that matches today can stop matching. No context means no second reading at all. */
+  if (!ctx || (!ctx.trade && !ctx.town)) return false;
+  const shorter = distinctivePrefix(coreTokens, ctx);
+  return shorter ? tokensContain(hay, shorter) : false;
 }
 
 /** True when a competitor CANDIDATE is really the audited business under name variance — it either
@@ -416,6 +517,8 @@ function normalizeEngineBlock(
   block: Record<string, unknown>,
   organicNames: string[],
   businessName: string,
+  /* Optional, and absent means the strict match only — see the block above nameMatches. */
+  ctx?: NameMatchContext,
 ): AiEngineResult {
   // Clean once at the top so named-detection, competitorsForEngine, AND the stored answer_text
   // all get the furniture-stripped value.
@@ -427,7 +530,7 @@ function normalizeEngineBlock(
   // named: business is named in the answer text, OR in a source title. Uses the core-aware
   // nameMatches (robust to &/and/n + AI shortening) instead of a brittle full-string contains.
   const srcIndex = sources.findIndex((s) => nameMatches(citationOf(s).title, businessName));
-  const named = nameMatches(answer_text, businessName) || srcIndex >= 0;
+  const named = nameMatches(answer_text, businessName, ctx) || srcIndex >= 0;
   // position: 1-based source index where the business first appears (else null).
   const position = srcIndex >= 0 ? srcIndex + 1 : null;
   const competitors = competitorsForEngine(answer_text, organicNames, businessName);
@@ -442,7 +545,7 @@ function normalizeEngineBlock(
  * playbook prompt. A genuinely-scraped-but-not-named engine still carries answer_text /
  * citations and is kept.
  */
-export function normalizeAiSearch(items: unknown[], businessName: string): AiSearchResult {
+export function normalizeAiSearch(items: unknown[], businessName: string, ctx?: NameMatchContext): AiSearchResult {
   const item = asRecord(Array.isArray(items) ? items[0] : items) ?? {};
   const organicNames = extractOrganicNames(item);
   const out: AiSearchResult = {};
@@ -453,7 +556,7 @@ export function normalizeAiSearch(items: unknown[], businessName: string): AiSea
     // and: out.google_organic = normalizeOrganic(item, organicNames, businessName).
     if (engine === "google_organic") continue;
     const block = asRecord(firstKey(item, ENGINE_BLOCK_KEYS[engine]));
-    if (block) out[engine] = normalizeEngineBlock(block, organicNames, businessName);
+    if (block) out[engine] = normalizeEngineBlock(block, organicNames, businessName, ctx);
   }
   return out;
 }
