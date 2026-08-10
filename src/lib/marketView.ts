@@ -526,7 +526,12 @@ export type MarketShapeKind =
    *  rather than firms. Grading it anyway is how a market gets skipped or worked on arithmetic
    *  performed over the word "always". */
   | "names_uncleaned"
-  | "marketplace_led" | "local_leader" | "thin_market";
+  /** ⛔ WAS `marketplace_led`, AND THE RENAME IS THE FINDING. It used to fire when an aggregator was
+   *  the most-CITED host, which is measured to predict nothing about who gets NAMED (see
+   *  NATIONAL_TOP_N). It now means one thing only: every firm at the top of the naming is a national
+   *  brand. */
+  | "national_led"
+  | "local_leader" | "thin_market";
 
 export interface MarketShape {
   kind: MarketShapeKind;
@@ -898,6 +903,11 @@ export interface MarketShapeInput {
   leader: MarketLeader | null;
   /** The leader's row, for its national flag and audit share. */
   leaderRow: MarketNamedRow | null;
+  /** ⛔ THE TOP OF THE NAMING, most-mentioned first — the list the national test reads. The leader
+   *  alone was not enough: a market whose leader is a franchise but whose #2 and #3 are local firms
+   *  is a market with local firms in it, and it was being skipped.
+   *  Absent (an older caller) falls back to the leader alone, i.e. the previous behaviour. */
+  topNamed?: MarketNamedRow[];
   citationHosts: MarketCitationHost[];
   citationTotal: number;
   /** Distinct businesses AI names here - the only size signal the shape uses. */
@@ -966,7 +976,28 @@ export function marketShape(input: MarketShapeInput): MarketShape {
   }
 
   const topHost = citationHosts[0] ?? null;
-  const aggregatorLeads = !!topHost?.isAggregator;
+  /* ⛔ CITED IS NOT NAMED, AND THIS IS NOW A FACT ON SCREEN RATHER THAN HALF A VERDICT.
+     MEASURED 2026-08-10 across every market with a completed run. 17 have an aggregator as the
+     most-cited host, and in ALL SEVENTEEN AI names local firms anyway:
+       * in 15 of 17 the aggregator's own brand is not in the named list at all;
+       * in the other 2 it is named far behind the local leader — Stamford 9 mentions against 68,
+         Eastbourne 13 against 32;
+       * local firms hold all three top spots in 10 of the 17, two of three in another 4.
+     The clearest case is plumber/Wisbech: Checkatrade takes 27% of citations, the highest share in
+     the book, and the three most-named firms are Fen Property Services (52), DC Plumbing (49) and
+     Mr Gas and Heating (37) — every one of them local. That is the town Paul has actually worked.
+     Five markets — Eastbourne, Chichester, Portsmouth, Loughborough, Kettering — were skipped on
+     this signal. It is not a signal. It is now stated as intelligence, in the reasoning of whatever
+     shape the naming actually supports. */
+  const aggregatorTopCited = !!topHost?.isAggregator;
+  /* ⛔ THE SURVIVING HALF, WIDENED FROM THE LEADER TO THE TOP THREE. Paul's own proposal, and the
+     data supports it: locksmiths/Colchester is led by LockRite, Lockforce and LockFit — three
+     national franchises and no local firm anywhere near the top — which the leader-only test called
+     the same thing as a market whose leader is a franchise and whose #2 is a local firm. Those are
+     different markets, and only one of them is unworkable. */
+  const topNamed = (input.topNamed ?? (leaderRow ? [leaderRow] : [])).slice(0, NATIONAL_TOP_N);
+  const localAtTheTop = topNamed.filter((n) => (n.otherTowns ?? 0) < NATIONAL_MIN_OTHER_TOWNS);
+  const nationalDominated = topNamed.length > 0 && localAtTheTop.length === 0;
   const leaderIsNational = (leaderRow?.otherTowns ?? 0) >= NATIONAL_MIN_OTHER_TOWNS;
   const hostShare = topHost && citationTotal > 0 ? Math.round((topHost.citations / citationTotal) * 100) : 0;
   /* ⛔ THE DENOMINATOR IS PRINTED, NOT JUST DIVIDED BY, AND THAT IS WHERE IT WENT WRONG.
@@ -977,30 +1008,25 @@ export function marketShape(input: MarketShapeInput): MarketShape {
      guard on the sentence. */
   const ofTotal = (n: number) => (citationTotal > 0 ? `${n} of ${citationTotal}` : `${n}`);
 
-  // -- SHAPE 1: a marketplace or a national platform owns the market.
-  if (aggregatorLeads || leaderIsNational) {
+  /* THE CITATION FACT, AS INTELLIGENCE. Said in every shape, never deciding one \u2014 the same rule \u00a76
+     already applies to unknown hosts: they route to who's-winning, never to a task. */
+  const citationLine = topHost
+    ? aggregatorTopCited
+      ? `${topHost.host} is the most-cited source here: ${ofTotal(topHost.citations)} citations${citationTotal > 0 ? ` (${hostShare}%)` : ""}. Worth knowing, but measured across 17 markets it does not predict who gets named.`
+      : `The most-cited source is ${topHost.host} (${ofTotal(topHost.citations)}), a business's own site rather than a directory.`
+    : null;
+
+  // -- SHAPE 1: every firm at the top of the naming is a national brand.
+  if (nationalDominated) {
     const reasoning: string[] = [];
-    if (aggregatorLeads && topHost) {
-      reasoning.push(
-        `${topHost.host} is the most-cited source here: ${ofTotal(topHost.citations)} citations${citationTotal > 0 ? ` (${hostShare}%)` : ""}, ahead of every business's own site.`,
-      );
-    }
-    if (leaderIsNational && leaderRow) {
-      reasoning.push(
-        `The most-named business, ${leader.name}, is cited in ${leaderRow.otherTowns} other town${leaderRow.otherTowns === 1 ? "" : "s"} for this trade, so it is a national brand rather than a local firm.`,
-      );
-    }
-    /* THE DISAGREEMENT, SPELLED OUT. Resolving it in favour of one signal would hide the read that
-       matters: Loughborough looks fragmented and healthy on the naming alone. */
-    if (aggregatorLeads && !leaderIsNational) {
-      reasoning.push(
-        `A local firm leads the naming (${leader.name}, ${leader.mentions} mentions) but a marketplace leads the sources - so getting a local business named competes with the platform, not with that firm.`,
-      );
-    }
-    if (!aggregatorLeads && leaderIsNational && topHost) {
-      reasoning.push(`The top cited host is ${topHost.host} (${ofTotal(topHost.citations)}).`);
-    }
-    return { kind: "marketplace_led", headline: "Marketplace-led \u00b7 probably skip this market", reasoning };
+    reasoning.push(
+      topNamed.length === 1
+        ? `The only business AI names here, ${topNamed[0].name}, is cited in ${topNamed[0].otherTowns} other towns for this trade, so it is a national brand rather than a local firm.`
+        : `All ${topNamed.length} of the most-named businesses here \u2014 ${topNamed.map((n) => n.name).join(", ")} \u2014 are cited in ${NATIONAL_MIN_OTHER_TOWNS}+ other towns for this trade, so they are national brands rather than local firms.`,
+    );
+    reasoning.push("A local business would be competing with a franchise's national footprint, not with another local firm.");
+    if (citationLine) reasoning.push(citationLine);
+    return { kind: "national_led", headline: "National brands hold the naming \u00b7 probably skip this market", reasoning };
   }
 
   /* -- SHAPE 3: the MARKET is thin, not the pool. See THIN_MARKET_MAX_NAMED - this has never fired
@@ -1017,14 +1043,18 @@ export function marketShape(input: MarketShapeInput): MarketShape {
     };
   }
 
-  // -- SHAPE 2: a beatable local firm leads. The one worth working.
+  // -- SHAPE 2: a beatable local firm is named at the top. The one worth working.
+  /* \u26d4 AND IT NO LONGER MATTERS WHETHER A DIRECTORY OWNS THE SOURCES. A market can reach here with
+     Checkatrade top-cited \u2014 plumber/Wisbech does, at 27% \u2014 because what a client competes for is
+     being NAMED, and the naming in these markets is local. */
+  const localLeader = localAtTheTop[0] ?? null;
   const reasoning = [
-    `${leader.name} takes ${leader.mentions} mentions across ${leaderRow?.audits ?? 0} of ${audits} audits and is a local firm, not a national brand or a platform.`,
-    "A local leader is beatable, and this is the comparison to sell with.",
+    leaderIsNational && localLeader
+      ? `${leader.name} is named most but is a national brand; the best-named LOCAL firm is ${localLeader.name} (${localLeader.mentions} mentions across ${localLeader.audits} of ${audits} audits), which is what a client would be compared against.`
+      : `${leader.name} takes ${leader.mentions} mentions across ${leaderRow?.audits ?? 0} of ${audits} audits and is a local firm, not a national brand.`,
+    "A local firm at the top is beatable, and this is the comparison to sell with.",
   ];
-  if (topHost) {
-    reasoning.push(`The most-cited source is ${topHost.host} (${ofTotal(topHost.citations)}), a business's own site rather than a directory.`);
-  }
+  if (citationLine) reasoning.push(citationLine);
   return { kind: "local_leader", headline: "Local leader \u00b7 the best shape to work", reasoning };
 }
 
@@ -1096,10 +1126,12 @@ export function marketPlainRead(
         + 'every figure would be counted over scraped words rather than firms. Re-read them with the '
         + 'AI cleaner and this market grades itself. Nothing needs re-auditing.';
       break;
-    case "marketplace_led":
-      market = topHost?.isAggregator
-        ? `Skip this one. ${topHost.host} is the source AI trusts most for ${plural} in ${town}, so a local business is competing with a platform rather than with other ${plural}.`
-        : `Skip this one. The business AI names most here, ${leader?.name ?? "the leader"}, is a national brand rather than a local firm, so a local business is competing with a chain.`;
+    case "national_led":
+      /* ⛔ NO LONGER MENTIONS THE CITED HOST AT ALL. It used to say "Checkatrade is the source AI
+         trusts most, so skip" — a sentence measured to be wrong about 17 markets, including the one
+         Paul has worked. The skip is now about the naming, which is the thing a client competes for. */
+      market = `Skip this one. Every ${plural.replace(/s$/, "")} AI names at the top in ${town} is a national brand`
+        + ` rather than a local firm, so a local business is competing with a franchise's footprint.`;
       break;
     case "thin_market":
       market = `Barely a market. AI names only ${conc.distinctBusinesses} ${plural} in ${town} across ${conc.audits} audits, so there is no competitive picture to show anybody.`;
@@ -1203,6 +1235,12 @@ export function marketPlainRead(
    ⚠️ A FIXED number is right and does not need to scale with how many towns get measured: a local
    firm does not gain towns as more markets are added, only a chain does. */
 export const NATIONAL_MIN_OTHER_TOWNS = 3;
+
+/** How many of the most-named firms the national test looks at. THREE, because that is the width of
+ *  the list Paul reads off the panel and quotes to a prospect — and because the leader alone called
+ *  Colchester (LockRite, Lockforce, LockFit: no local firm anywhere) the same thing as a market whose
+ *  #2 is local. A market with a local firm in the top three has somebody to be compared against. */
+export const NATIONAL_TOP_N = 3;
 
 export const OFF_TRADE_MIN_SHARE = 0.5;
 /** Fewer typed rows than this and the mode is noise — 2 of 3 is not a consensus. */

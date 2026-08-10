@@ -116,7 +116,9 @@ const base: MarketShapeInput = {
 };
 {
   const graded = marketShape(base);
-  ok(graded.kind === "marketplace_led", `without the flag, eastbourne grades "${graded.kind}" — a verdict computed over "here"`);
+  /* Without the flag it grades — and on the corrected rule it grades eastbourne WORTH WORKING, off a
+     leader called "here". Wrong in the friendlier direction than the old skip, and still wrong. */
+  ok(graded.kind === "local_leader", `without the flag, eastbourne grades "${graded.kind}" — a verdict computed over "here"`);
 
   const refused = marketShape({ ...base, namesUncleaned: true, uncleanedExamples: ["always", "here", "they"], runsToClean: 2 });
   ok(refused.kind === "names_uncleaned", "with the flag it refuses to grade");

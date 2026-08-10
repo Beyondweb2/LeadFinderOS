@@ -561,6 +561,10 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
       leaderRow: view.leader
         ? (view.named.find((n) => n.name === view.leader!.name) ?? null)
         : null,
+      /* ⛔ SORTED BY MENTIONS HERE, NOT TRUSTED TO ARRIVE THAT WAY. `view.named` is sorted by AUDIT
+         count first (that is what the list on screen wants), so passing it raw would hand the
+         national test the most-widespread firm rather than the most-named one. */
+      topNamed: [...view.named].sort((a, b) => b.mentions - a.mentions),
       citationHosts: view.citationHosts ?? [],
       citationTotal: view.citationTotal ?? 0,
       distinctBusinesses: view.concentration.distinctBusinesses,
@@ -709,7 +713,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
         <div className={`space-y-3 rounded-xl border-2 p-4 sm:p-5 ${
           shape.kind === 'local_leader'
             ? 'border-flag-green/50 bg-green-500/5'
-            : shape.kind === 'marketplace_led'
+            : shape.kind === 'national_led'
               ? 'border-destructive/40 bg-destructive/5'
               : shape.kind === 'thin_market' || shape.kind === 'names_uncleaned'
                 ? 'border-amber-500/50 bg-amber-500/10'
