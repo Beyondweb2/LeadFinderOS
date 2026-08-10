@@ -21,7 +21,7 @@ import {
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
 import type { Country } from '@/types/outreach';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
@@ -903,7 +903,14 @@ const AiAudit = () => {
   }, [revealed]);
 
   // ── Confirm & run ───────────────────────────────────────────────────────────
-  const confirmAndRun = async () => {
+  /* ══ THE WRONG-TOWN REFUSAL ═════════════════════════════════════════════════════
+     create-ai-audit refuses with 409 business_not_in_town when the business is more than 25km from
+     the town the questions would ask about. Held in STATE rather than thrown into a toast, because
+     the operator needs a decision here, not a notification — and because "business_not_in_town" on
+     its own is the catch-all-error fault again. The dialog carries the server's sentence verbatim. */
+  const [distanceBlock, setDistanceBlock] = useState<{ message: string; km: number; town: string } | null>(null);
+
+  const confirmAndRun = async (overrideDistance = false) => {
     const clean = questions.map((q) => q.trim()).filter(Boolean);
     if (clean.length === 0) { toast({ title: 'Add at least one question', variant: 'destructive' }); return; }
     setRunning(true);
@@ -917,8 +924,19 @@ const AiAudit = () => {
           specialisms: specialisms || undefined,
           question_count: questionCount,
           questions: clean,
+          ...(overrideDistance ? { override_distance: true } : {}),
         },
       });
+      /* ⛔ NOT AN ERROR TO THROW. It is a question to put to the operator, so it opens the dialog
+         and returns rather than landing in the generic catch as a red toast with a machine string. */
+      if (!error && data?.error === 'business_not_in_town') {
+        setDistanceBlock({
+          message: String(data.message ?? ''),
+          km: Number(data.distance_km) || 0,
+          town: String(data.town ?? ''),
+        });
+        return;
+      }
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'run failed');
       // Persist the operator's typed audit inputs BACK to the lead, so the next audit / bulk
       // audit prefills instead of re-asking (~80% of leads have no search_keyword/location).
@@ -2238,7 +2256,10 @@ const AiAudit = () => {
                     <span className="text-xs text-muted-foreground">
                       {questions.length} question{questions.length === 1 ? '' : 's'} · est. cost ~${estimatedCost.toFixed(2)}
                     </span>
-                    <Button onClick={confirmAndRun} disabled={running || questions.length === 0}>
+                    {/* ⛔ ARROW, NOT A BARE REFERENCE. onClick={confirmAndRun} passes the click EVENT as the
+                        first argument, which is truthy — the distance override would be ON for every
+                        single audit and the guard would never fire once. */}
+                    <Button onClick={() => confirmAndRun()} disabled={running || questions.length === 0}>
                       {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                       Confirm & run
                     </Button>
@@ -2247,6 +2268,38 @@ const AiAudit = () => {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ══ THE WRONG-TOWN BLOCK ════════════════════════════════════════════════════
+          Nothing has been spent at this point — create-ai-audit refuses before generating questions
+          or inserting queue rows, so cancelling costs nothing and overriding costs the normal audit. */}
+      <Dialog open={!!distanceBlock} onOpenChange={(o) => { if (!o) setDistanceBlock(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              This business is {distanceBlock?.km} km from {distanceBlock?.town}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {/* The server's own sentence, verbatim. One wording, one place to change it. */}
+              {distanceBlock?.message}
+            </DialogDescription>
+          </DialogHeader>
+          <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
+            Nothing has been spent. Cancel and fix the town on the lead, or audit anyway if you know
+            they work there.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setDistanceBlock(null)}>Cancel</Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={running}
+              onClick={() => { setDistanceBlock(null); confirmAndRun(true); }}
+            >
+              Audit anyway
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

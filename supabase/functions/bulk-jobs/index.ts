@@ -456,7 +456,12 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
         run_id: data.run_id ? String(data.run_id) : undefined,
       };
     }
-    return { status: "failed", error: String(data?.error ?? `HTTP ${res.status}`).slice(0, 200) };
+    /* ⚠️ PREFER THE MESSAGE OVER THE CODE. create-ai-audit's distance guard returns 409 with
+       error:"business_not_in_town" plus a sentence naming the distance and the town. Reporting only
+       the code would put "business_not_in_town" on a job item and make Paul look it up — the same
+       catch-all-error fault as the AI Audit page's old hardcoded line. */
+    const why = String(data?.message ?? data?.error ?? `HTTP ${res.status}`);
+    return { status: "failed", error: why.slice(0, 200) };
   }
 
   // site_gen
