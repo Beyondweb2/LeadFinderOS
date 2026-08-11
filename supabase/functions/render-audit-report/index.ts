@@ -15,6 +15,7 @@ import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/au
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 import { showFounderOffer } from "../../../src/lib/founderOffer.ts";
+import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
 
 import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
 
@@ -196,6 +197,33 @@ Deno.serve(async (req) => {
       amountPaid = Number((lead as { amount_paid?: unknown } | null)?.amount_paid ?? 0) || 0;
     }
     data.showFounderOffer = showFounderOffer({ auditId: audit.id, amountPaid });
+
+    /* ── WHERE THE OFFER BUTTON GOES ────────────────────────────────────────────────────────────
+       ⛔ THE ONBOARDING FLOW, NOT STRIPE. It used to be a raw Stripe Payment Link, which skipped the
+       serve gate AND left the payment invisible: stripe-webhook's Findable branch is keyed on
+       `metadata.onboarding_id`, and a static link cannot carry a per-payer row id, so nothing was
+       marked paid, no lead was updated and no baseline started. Through the flow it becomes
+       questionnaire -> findable-checkout -> stripe-webhook, which records all three.
+
+       ⛔ NO LEAD, NO LINK, AND THAT IS THE PRICE GUARD. offerPriceForLead charges the FULL £99 for
+       `no_lead`, so a button without one would advertise £19.99 and charge £99. Same for an
+       unconfigured origin: a relative or wrong-host link is worse than no button, which is why
+       resolveSiteOrigin() has no fallback. Either missing → founderOfferUrl stays null → the offer
+       renders its copy and guarantee with no button, and Email us / WhatsApp us still work.
+
+       ⚠️ SAME BUILDER AS THE LIVE onboarding_followup TEMPLATE (_shared/onboarding-followup.ts), so
+       the URL shape lives in exactly one place — and that shape is proven: three of those links were
+       sent and opened on 28 July. */
+    const offerOrigin = resolveSiteOrigin();
+    data.founderOfferUrl = leadId && offerOrigin
+      ? onboardingUrl(offerOrigin, leadId, audit.business_name ?? null)
+      : null;
+    if (data.showFounderOffer === true && !data.founderOfferUrl) {
+      console.warn(
+        `[render-audit-report] audit ${audit.id}: offer shown WITHOUT a button — `
+        + `${!leadId ? "no lead_id on the audit" : `${ORIGIN_ENV} not configured`}`,
+      );
+    }
 
     data.shareUrl = shareUrlFor(supabaseUrl, audit.id); // "View online" footer link — see shareUrlFor
     // Genuine render succeeded → record the open (non-bot only). Awaited but fully guarded, so a

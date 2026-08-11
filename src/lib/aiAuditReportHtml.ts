@@ -18,7 +18,7 @@
 import { FINDABLE_GUARANTEE } from './findableOffer.ts';
 import {
   FOUNDER_OFFER_AFTER_PAYMENT, FOUNDER_OFFER_COUNT, FOUNDER_OFFER_NORMAL_LABEL,
-  FOUNDER_OFFER_PRICE_LABEL, FOUNDER_OFFER_STRIPE_URL,
+  FOUNDER_OFFER_PRICE_LABEL,
 } from './founderOffer.ts';
 
 export interface ReportEngineRow {
@@ -88,6 +88,18 @@ export interface AiAuditReportData {
    *  Decided by showFounderOffer() in founderOffer.ts; render-audit-report (the route a prospect
    *  actually opens) is what passes it. */
   showFounderOffer?: boolean;
+  /**
+   * Where the offer button goes: this reader's own onboarding link, carrying their lead.
+   *
+   * ⛔ PASSED IN, NEVER BUILT HERE. It needs the lead id and the configured site origin (Deno env),
+   * and this module is imported by the SPA as well as by edge functions, so it must stay pure —
+   * the same reason `shareUrl` arrives this way.
+   * ⛔ ABSENT MEANS NO BUTTON, AND THAT IS A PRICE GUARD, NOT A COSMETIC ONE. offerPriceForLead
+   * returns the FULL £99 when there is no lead, so a button rendered without one would advertise
+   * £19.99 and charge £99. Undefined/null/blank all render the offer text with no button — the
+   * Email us / WhatsApp us buttons above are still a route.
+   */
+  founderOfferUrl?: string | null;
   /* NO PER-TERM WINNABILITY HERE, DELIBERATELY.
      This is the CUSTOMER report's data contract, and a "winnable" verdict is not something we can
      evidence. Measured over all 402 stored answered questions: 77.6% came back "open" (winnable)
@@ -310,13 +322,16 @@ function noWebsiteSection(): string {
      comparison, never that it will be favourable — the same work-based framing as the guarantee.
    · THE GUARANTEE IS FINDABLE_GUARANTEE, VERBATIM. Not paraphrased, not shortened. The price above it
      is temporary and the guarantee must not drift when the price changes.
-   · NO BUTTON WITHOUT A REAL LINK. An empty FOUNDER_OFFER_STRIPE_URL renders no button at all rather
-     than a dead or placeholder one; the Email us / WhatsApp us buttons in the CTA above are still a
-     route, which is why omitting it leaves the report perfectly usable.
+   · NO BUTTON WITHOUT A REAL LINK. An absent founderOfferUrl renders no button at all rather than a
+     dead or placeholder one; the Email us / WhatsApp us buttons in the CTA above are still a route,
+     which is why omitting it leaves the report perfectly usable.
+     ⛔ AND HERE THAT RULE IS ALSO THE PRICE GUARD. The link carries the lead, and offerPriceForLead
+     charges the FULL £99 when there is no lead — so a button built without one would say £19.99 and
+     charge £99. No lead, no link, no button.
    Visual language is the existing .cta band — navy ground, yellow accent, the .cta-btn shape. No new
    colours and no new components. */
-function founderOfferSection(): string {
-  const url = FOUNDER_OFFER_STRIPE_URL.trim();
+function founderOfferSection(offerUrl?: string | null): string {
+  const url = (offerUrl ?? "").trim();
   /* Only http(s). A relative or javascript: value in that constant would be a link nobody intended;
      with no button the offer still reads and the CTA above still works. */
   const button = /^https:\/\//i.test(url)
@@ -846,7 +861,7 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
       </div>
     </section>
 
-${d.showFounderOffer === true ? founderOfferSection() : ""}
+${d.showFounderOffer === true ? founderOfferSection(d.founderOfferUrl) : ""}
     <footer class="site-foot">
       <div class="row">
         <span>Prepared for <b>${esc(d.businessName)}</b></span>
