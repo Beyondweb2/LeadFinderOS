@@ -58,6 +58,15 @@ const Index = () => {
      is stripped below. Left in the URL it would re-open the dialog on a refresh or a back button,
      which is the "modal springs open on return" §6c forbids. */
   const openSearchConfirm = useRef(searchParams.get('confirm') === 'search').current;
+  /* ⛔ THE OTHER ARRIVAL INTENT, AND IT IS A DIFFERENT BUTTON. Coverage now has two: "Market view"
+     sends mode=market (+ the confirm above), "Find leads" sends mode=leads with the trade and town
+     and `run=search`, and expects the NORMAL lead search to run. Captured on first render and
+     stripped below for the same reason as confirm=search: left in the URL it re-runs a PAID search
+     on every refresh and every back button, which is worse than a modal springing open. */
+  const urlWantsLeads = searchParams.get('mode') === 'leads';
+  const runLeadSearchOnArrival = useRef(urlWantsLeads && searchParams.get('run') === 'search').current;
+  const urlKeyword = (searchParams.get('keyword') ?? '').trim();
+  const urlLocation = (searchParams.get('location') ?? '').trim();
   /* Seeded from the URL on FIRST RENDER, not in an effect, so the panel never paints an empty
      market for a frame before correcting itself. */
   const [activeMode, setActiveMode] = useState<SearchMode>(
@@ -155,10 +164,14 @@ const Index = () => {
   /* Consume the one-shot intent. `replace` so it does not become a history entry you can go BACK
      to and re-trigger, and the trade/town params are deliberately left alone — those ARE page
      state (what am I looking at) and belong in the URL. */
+  /* ⛔ `run` IS STRIPPED WHETHER OR NOT THE SEARCH ACTUALLY FIRES. If the seeds were empty nothing
+     runs — and leaving the param behind would make the next refresh try again. Both intents were
+     already captured into refs on first render, so removing them here cannot cancel either. */
   useEffect(() => {
-    if (searchParams.get('confirm') !== 'search') return;
+    if (searchParams.get('confirm') !== 'search' && searchParams.get('run') !== 'search') return;
     const next = new URLSearchParams(searchParams);
     next.delete('confirm');
+    next.delete('run');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -454,9 +467,15 @@ const Index = () => {
           onSearch={handleSearch}
           isLoading={isLoading}
           isPaidSubscriber={true}
-          initialMode={urlMode === 'market' && urlTrade && urlTown ? 'market' : undefined}
-          initialKeyword={urlMode === 'market' ? urlTrade || undefined : undefined}
-          initialLocation={urlMode === 'market' ? urlTown || undefined : undefined}
+          /* ⛔ `mode=leads` IN THE URL MUST FORCE THE FORM TO LEADS. The mode is persisted per user,
+             so an operator whose last visit was a market view arrives with 'market' already set —
+             and Find leads would then run a market view. Only an EXPLICIT mode param overrides the
+             persisted value; a plain visit to /find-leads still restores whatever was last used. */
+          initialMode={urlMode === 'market' && urlTrade && urlTown ? 'market' : urlWantsLeads ? 'leads' : undefined}
+          initialKeyword={urlMode === 'market' ? urlTrade || undefined : urlKeyword || undefined}
+          initialLocation={urlMode === 'market' ? urlTown || undefined : urlLocation || undefined}
+          /* Runs the normal search once, on arrival, in leads mode only. */
+          autoSubmit={runLeadSearchOnArrival ? 'leads' : null}
         />
       </section>
 

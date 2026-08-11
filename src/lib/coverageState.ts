@@ -105,8 +105,50 @@ export interface CoverageRow extends CoverageTown {
   state: CoverageState;
 }
 
+/* ══ THE TWO ACTIONS ON A COVERAGE ROW, AND WHY THEY ARE TWO ═══════════════════════════════════
+   ⛔ "FIND LEADS" USED TO OPEN THE MARKET VIEW. One button did the wrong one of two jobs: it carried
+   `mode=market`, so clicking the thing labelled Find leads never ran a lead search — it opened the
+   market read, and on an untouched town it opened a spend confirm on top of that. Two jobs, one
+   control, and the label described neither reliably.
+
+   They are now separate, and the hrefs are built HERE rather than inline in the page, so the one
+   property that matters can be asserted in a test: **the Find-leads href carries no `mode=market`
+   and no `confirm=search`, ever.** Inline template strings in the JSX are how the two would drift
+   back together.
+
+   ⚠️ FIND LEADS SPENDS ON ARRIVAL, DELIBERATELY, AND THAT IS PAUL'S CALL 2026-08-11. A normal search
+   is ~$0.11 of Google Places quota — and NOTHING within 72 hours of the last search of the same
+   trade and town, because search-leads short-circuits on its own cache. The dialog that used to
+   guard it is gone from this path on purpose: it was guarding the wrong flow, and a confirm on every
+   navigation is what made the button feel like it did nothing. */
+
+/** Where "Find leads" goes: the NORMAL lead search, pre-filled and run once on arrival.
+ *  `run=search` is a ONE-SHOT INTENT, consumed and stripped by Find Leads exactly as `confirm=search`
+ *  is — left in the URL it would re-run a paid search on every refresh and back button. */
+export function findLeadsHref(trade: string, town: string): string {
+  const q = new URLSearchParams({
+    mode: 'leads',
+    keyword: trade,
+    location: town,
+    run: 'search',
+  });
+  return `/find-leads?${q.toString()}`;
+}
+
+/** Where "Market view" goes: the market read for this trade and town — unchanged behaviour,
+ *  including the arrival confirm on the rungs that have nothing measured. */
+export function marketViewHref(trade: string, town: string, state: CoverageState): string {
+  const q = new URLSearchParams({ mode: 'market', trade, town });
+  if (wantsSearchConfirm(state)) q.set('confirm', 'search');
+  return `/find-leads?${q.toString()}`;
+}
+
 /**
- * Should a "Find leads" click on this row arrive with the lead-search confirm already open?
+ * Should a "Market view" click on this row arrive with the lead-search confirm already open?
+ *
+ * ⚠️ IT USED TO BE ASKED OF THE FIND-LEADS BUTTON, because that button opened the market view. The
+ * rule has not changed; the control it belongs to has. Find leads never carries this param at all —
+ * see findLeadsHref.
  *
  * ⛔ WHAT WENT WRONG. The link carried `confirm=search` unconditionally, so clicking Find leads on a
  * town Paul had already measured opened a "Run the lead search? ~$0.14" modal ON TOP of the market
