@@ -66,14 +66,17 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
   // Follow-up to a warm lead who said a call works and then went quiet. ONE variable:
   // {{1}} = business name. No url, so nothing to resolve and nothing to gate on a site.
   book_call: { lang: "en", vars: ["name"] },
-  /* Re-engage a lead who went quiet. ONE variable: {{1}} = business name. No url and no audit, so
-     there is nothing to resolve per-lead and nothing to gate it on.
-     ⚠️ THE VAR SHAPE HERE MUST MATCH THE TEMPLATE AS REGISTERED IN META, and it was declared as
-     one variable because that is what every other name-only follow-up uses (book_call,
-     initial_contact) — NOT because the Meta registration was read. If re_engage is registered with
-     a different number of body variables, Meta rejects the send on a parameter-count mismatch and
-     `vars` below is the ONE line to correct. Nothing else in the wiring depends on the count. */
-  re_engage: { lang: "en", vars: ["name"] },
+  /* Re-engage a lead who went quiet, pointing at the founder offer. TWO variables:
+     {{1}} = business name, {{2}} = that lead's onboarding URL.
+     ⛔ CORRECTED FROM ONE VARIABLE 2026-08-11, against a real Meta rejection: #132000
+     "number of localizable_params (1) does not match the expected number of params (2)". The
+     one-variable guess was flagged as a guess when it shipped and this is the flag being cashed —
+     the registration is the authority, not the shape of a similar template.
+     ⚠️ `onboarding_url`, NOT `url`. They are distinct on purpose: `url` means the claim/site link and
+     gates the send on the lead having a generated site, which re_engage must not require. The
+     onboarding link is built from the lead id alone, resolved per-lead by
+     resolveOnboardingFollowupVars, which REFUSES rather than returning a partial. */
+  re_engage: { lang: "en", vars: ["name", "onboarding_url"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -83,7 +86,7 @@ export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
    "Hi your business, Paul here from findable" is worse than sending nothing, because it is
    visibly automated in a message whose whole purpose is to sound like a person. For these,
    an empty name refuses rather than degrades. */
-export const TEMPLATES_NEEDING_REAL_NAME = new Set(["book_call"]);
+export const TEMPLATES_NEEDING_REAL_NAME = new Set(["book_call", "re_engage"]);
 
 // Human-readable copies of the Meta-registered template BODIES, purely so the Inbox
 // can show what the barber actually receives (the real wording lives in Meta and is
@@ -163,19 +166,21 @@ You mentioned a call would work - what time suits you best?
 
 Happy to fit around you.`;
 
-/* re_engage — DISPLAY ONLY, like every body here: Meta renders the real message from its own copy,
-   so nothing in this string can change what is sent.
-   ⚠️ THIS IS A PLACEHOLDER FOR THE PREVIEW, NOT THE APPROVED COPY. The Meta wording was not
-   available when this was wired, and the API never returns it. Until it is pasted in here the Inbox
-   preview is approximate — which is a cosmetic wrong, but it is still a wrong: every other body in
-   this map is the exact approved text, and an operator reads them as authoritative. */
-const reEngageBody = (b: string, _u: string) =>
-  `Hi ${b},
-Paul here from Findable.
-
-Following up on this — still happy to take a look at where you're showing up in AI answers?
-
-No rush, just let me know either way.`;
+/* re_engage — the wording Meta approved, supplied by Paul 2026-08-11 and reproduced exactly.
+   b = {{1}} business name, u = {{2}} that lead's onboarding URL (passed in the claimUrl slot by
+   every caller, same convention as onboarding_followup). Display-only: Meta renders the real message
+   from its own copy, so nothing in this string can change a send — but it IS what the operator reads
+   in the Inbox as a record of what went out, so it is kept character-for-character.
+   ⛔ AND IT IS THE THIRD PLACE THE PRICE NOW LIVES. This body hardcodes "£19.99 instead of £99";
+   FINDABLE_SETUP_PRICE_GBP is the constant, and scripts/check-cross-repo-sync.mjs enforces it
+   against findable-site — but it cannot reach a string inside a Meta-registered template, exactly
+   like the Stripe payment-link description in §6. Change the price and this template has to be
+   re-registered at Meta BY HAND, and this copy updated with it. */
+const reEngageBody = (b: string, u: string) =>
+  `Hi ${b}, following up on the AI visibility report we sent over.
+We're doing the next ten businesses at £19.99 instead of £99 - we want honest feedback on the work, so that's the trade.
+Five quick questions and we're started: ${u}
+Happy to answer anything first if you'd rather.`;
 
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string) => string> = {
   book_call: bookCallBody,
