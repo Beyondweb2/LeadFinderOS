@@ -36,26 +36,44 @@ export const FOUNDER_OFFER_NORMAL_LABEL = "£99";
  *  hand; sell fifteen and the report still says ten until this line changes. */
 export const FOUNDER_OFFER_COUNT = 10;
 
-/** The Stripe Payment Link.
- *  ⚠️ EMPTY MEANS NO BUTTON, BY DESIGN. The renderer omits the button entirely when this is blank,
- *  so an unset link can never ship as a dead or placeholder button — the offer still reads, and
- *  Email us / WhatsApp us above it are still a route. Never put a guessed URL here. */
-export const FOUNDER_OFFER_STRIPE_URL = "https://buy.stripe.com/5kQcN492k1Uqdal01G0kE06";
+/* ⛔ THE RAW STRIPE PAYMENT LINK IS GONE — 2026-08-11. It was
+   "https://buy.stripe.com/5kQcN492k1Uqdal01G0kE06", and it went STRAIGHT to Stripe. Three things
+   were wrong with it, and only the first was obvious:
 
-/** What they are told will happen after they pay, BEFORE they pay.
- *  It still does the original job — a payment from the report bypasses the questionnaire's serve
- *  gate, so somebody we may not be able to serve must be expecting a conversation rather than
- *  silence, and a refund then reads as a check we always do rather than as a failure.
- *  ⚠️ BUT IT NOW READS AS PROCESS, NOT A PERSONAL PROMISE. "I'll be in touch" was a note scribbled
- *  at the bottom of a report; "before we start we'll confirm" is how a business describes a step.
- *  It also hints at the platform question without making it sound like a problem — "some setups we
- *  can publish to directly, others we host for you" is the serveGate distinction in plain words,
- *  with no hint that one of the answers is a refusal.
- *  ⚠️ THIS ALSO HAS TO BE SET IN STRIPE. The payment link's own confirmation page is configured in
- *  the Stripe dashboard, not in this repo, so this constant covers the report side only. */
+   1. IT SKIPPED THE QUESTIONNAIRE, so it skipped the serve gate. Somebody on a platform we cannot
+      publish to could pay, and the only thing standing in the way was a sentence of copy.
+   2. THE PAYMENT WAS INVISIBLE. stripe-webhook's entire Findable branch is gated on
+      `metadata.onboarding_id`, which only findable-checkout sets — a STATIC payment link cannot
+      carry a per-payer row id. So no onboarding row was marked paid, no lead got `amount_paid` or
+      `payment_received`, no operator email went out, and startPaidBaseline never ran. The money
+      would have arrived with no trace in the system that it had.
+   3. THE REPORT WOULD HAVE KEPT SELLING TO THEM. showFounderOffer() below hides the offer once
+      `amount_paid > 0` — a value that route never wrote.
+
+   The button now points at findable-site's onboarding flow, carrying the lead, so the payment goes
+   through questionnaire -> findable-checkout -> stripe-webhook: gated, recorded, and baselined.
+
+   ⚠️ THE URL IS BUILT PER-READER AND PASSED IN, not stored here. It needs the lead id and the
+   configured site origin, neither of which is a constant — see AiAuditReportData.founderOfferUrl and
+   render-audit-report, which resolves it with the SAME onboardingUrl() the live onboarding_followup
+   template uses. This file stays pure so the SPA can import it.
+   ⛔ AND NO LEAD MEANS NO BUTTON. The price is derived server-side by offerPriceForLead, which
+   returns the FULL £99 for `no_lead` — so a button built without one would say £19.99 and charge £99.
+   Two audits have no lead row and both are already in FOUNDER_OFFER_HIDE_AUDIT_IDS below, so this
+   costs nothing today; it is the rule that keeps it costing nothing. */
+
+/** What happens when they press the button — now stated as the ORDER it actually happens in.
+ *  ⛔ REWORDED WITH THE REPOINT. The old line said "Before we start we'll confirm a couple of things
+ *  about your website", which was written for a button that went straight to Stripe: the website
+ *  questions came after the money, if at all. They now come BEFORE it, so the sentence describing
+ *  them had to move with them or it would be describing the previous flow.
+ *  ⚠️ IT STILL DOES THE ORIGINAL JOB. Naming the platform question up front is what stops a serve
+ *  gate refusal arriving as a surprise — "some setups we can publish to directly, others we host for
+ *  you" is the serveGate distinction in plain words, with no hint that one of the answers is a no.
+ *  ⚠️ NOT the guarantee, which is FINDABLE_GUARANTEE and is rendered verbatim above this. */
 export const FOUNDER_OFFER_AFTER_PAYMENT =
-  "Before we start we'll confirm a couple of things about your website. Some setups we can publish "
-  + "to directly; others we host for you.";
+  "Two quick questions about your website first — some setups we can publish to directly, others we "
+  + "host for you. Then payment, then the rest of your details.";
 
 /* ── WHO MUST NEVER SEE IT ───────────────────────────────────────────────────────────────────────
    A client reopening their own report to a cheaper founder offer is a bad moment.
