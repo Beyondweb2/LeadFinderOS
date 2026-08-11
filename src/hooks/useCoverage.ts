@@ -7,6 +7,7 @@ import {
   type CoverageFacts, type CoverageRow, type CoverageTown, type CoverageSummary,
   type SuppressionPatch,
 } from '@/lib/coverageState';
+import { coverageQueryKey } from '@/lib/coverageFreshness';
 
 /* ⚠️ The grading lives in src/lib/coverageState.ts and is unit-tested there. This hook fetches the
    facts and applies it — it deliberately decides nothing about what "worked" means, so the page and
@@ -33,9 +34,11 @@ interface CoverageData {
   pairs: { measured: Pair[]; leads: Pair[]; worked: Pair[] };
 }
 
-/* ⛔ SCOPED TO THE USER. Every fact behind this view is owner-filtered server-side, so a cache
-   shared across sign-ins would show one operator another's coverage until it went stale. */
-const coverageQueryKey = (userId: string | undefined) => ['coverage', userId] as const;
+/* ⛔ THE KEY IS DEFINED IN src/lib/coverageFreshness.ts, not here, because the WRITER needs it too.
+   useOutreach marks this query stale when the lead list changes — and it has to be the writer's job,
+   not a listener in this hook: Coverage is UNMOUNTED when a lead is added (there is no add button on
+   that page), so no listener here could ever hear it. invalidateQueries works with no subscriber,
+   which is exactly why the fix lives at the write. */
 
 export function useCoverage() {
   const { user } = useAuth();

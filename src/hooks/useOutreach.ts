@@ -1,5 +1,7 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows } from '@/lib/fetchAllRows';
+import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -146,6 +148,37 @@ export function useOutreach() {
   const { user } = useAuth();
   // Stable user ID ref to prevent refetches on auth token refreshes
   const userIdRef = useRef<string | null>(null);
+
+  /* ══ KEEP THE COVERAGE COUNTS HONEST ══════════════════════════════════════════════════════════
+     ⛔ THE BUG: Coverage's "12 leads" badge and its summary come from the `coverage` edge function,
+     cached by React Query at staleTime 5 minutes with refetchOnWindowFocus OFF. NOTHING invalidated
+     it on a write — so adding a lead on Find Leads and going back to Coverage inside five minutes
+     served the PRE-ADD payload, and only a hard refresh (which discards the in-memory cache) showed
+     the truth. It was never a re-render problem: the component re-rendered correctly, over stale data.
+
+     ⛔ IT HAS TO BE INVALIDATED BY THE WRITER, NOT BY A LISTENER IN useCoverage. Coverage is
+     UNMOUNTED when a lead is added — that page has no add button — so nothing there is listening.
+     invalidateQueries works with no subscriber: it marks the cache stale so the NEXT mount refetches.
+
+     ⛔ AND THE TRIGGER IS DERIVED, NOT SPRINKLED. Nine functions in this hook change what that
+     endpoint counts (add, delete, removeFresh, archiveInternal, archiveAll, archiveMultiple,
+     unarchive, unarchiveMultiple, the inline auto-archive). Nine remembered calls is a rule the
+     tenth writer breaks — the shape this codebase keeps getting caught by. Watching the lead state
+     the SCREEN renders makes "the list changed" and "coverage is stale" one event, and a future
+     write cannot forget to announce itself.
+
+     ⚠️ NO OPTIMISTIC NUMBER, EVER. This invalidates and lets the server answer; it never adds 1 to a
+     count locally. An invented figure would drift from the CRM the moment a dedupe silently skipped
+     an add — and the whole value of that badge is that it is real. */
+  const queryClient = useQueryClient();
+  const coverageSig = useMemo(() => coverageSignature(leads, archivedLeads), [leads, archivedLeads]);
+  /* Skips the FIRST value, which is the initial load (0 leads → N) rather than an operator action.
+     Invalidating there would refetch coverage once per Outreach visit for no change. */
+  const seenFirstSig = useRef(false);
+  useEffect(() => {
+    if (!seenFirstSig.current) { seenFirstSig.current = true; return; }
+    void queryClient.invalidateQueries({ queryKey: coverageQueryKey(user?.id) });
+  }, [coverageSig, queryClient, user?.id]);
 
   // Parallel phone fetch queue — processes up to 3 leads concurrently for speed.
   // `email` (if the lead already has one) rides along so a no-phone lead is only
