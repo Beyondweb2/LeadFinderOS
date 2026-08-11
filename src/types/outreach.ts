@@ -419,3 +419,22 @@ export const CRAWL_STATUS_OPTIONS: LeadStatus[] = [
   'no_whatsapp_needs_sms', 'no_whatsapp', 'initial_contact', 'report_sent',
   'not_contacted', 'queued', 'replied', 'interested',
 ];
+
+/**
+ * The label the rest of the CRM shows for a status.
+ *
+ * ⛔ ONE MAP, NOT A SECOND COPY. OUTREACH_STATUS_OPTIONS above is what the status filter and the row
+ * dropdowns render, so anything that shows a status to a human reads it from there. The email-crawl
+ * picker was printing the RAW VALUE instead — so `not_contacted` appeared as "not_contacted" in one
+ * control and "New" in every other, and the two read as different statuses. They are not: the value
+ * is `not_contacted` and its label has always been "New".
+ *
+ * ⚠️ THE FALLBACK IS THE RAW VALUE, DELIBERATELY, AND IT IS ALSO A TELL. Every current member of
+ * CRAWL_STATUS_OPTIONS is mapped, so it should never fire — if a snake_case label ever appears in
+ * that picker again, the status is missing from OUTREACH_STATUS_OPTIONS and belongs there rather than
+ * being special-cased here. Returning the value beats returning "Unknown", which would hide which
+ * status it was.
+ */
+export function leadStatusLabel(status: LeadStatus): string {
+  return OUTREACH_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
+}

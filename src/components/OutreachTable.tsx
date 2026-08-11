@@ -114,6 +114,7 @@ import { isTestBarberLead, TEST_BARBER_LEAD_ID } from '@/config/testBarber';
 import { clearPendingBarberEdit } from '@/lib/barberEdits';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
+import { leadStatusLabel } from '@/types/outreach';
 import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES } from '@/types/outreach';
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { CampaignPicker } from '@/components/CampaignPicker';
@@ -1953,7 +1954,14 @@ export function OutreachTable({
                             onChange={(e) => setCrawlStatuses((prev) =>
                               e.target.checked ? [...prev, st] : prev.filter((x) => x !== st))}
                           />
-                          <span className={CRAWLABLE_STATUSES_DEFAULT.includes(st) ? 'font-medium' : ''}>{st}</span>
+                          {/* ⛔ THE SAME LABEL THE REST OF THE CRM SHOWS. This printed the raw value,
+                              so `not_contacted` read as "not_contacted" here and "New" in the status
+                              filter and every row dropdown — which reads as two different statuses
+                              and cost a round trip working out that New leads were crawlable all
+                              along. leadStatusLabel reads OUTREACH_STATUS_OPTIONS, the one map, so
+                              this control cannot drift from the others again. Value and behaviour
+                              unchanged: `st` is still what is ticked and still what is filtered on. */}
+                          <span className={CRAWLABLE_STATUSES_DEFAULT.includes(st) ? 'font-medium' : ''}>{leadStatusLabel(st)}</span>
                         </label>
                       ))}
                       <button
