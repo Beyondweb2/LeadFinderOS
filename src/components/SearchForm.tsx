@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Search, MapPin, Radius, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
@@ -30,6 +30,18 @@ interface SearchFormProps {
   initialMode?: SearchMode;
   initialKeyword?: string;
   initialLocation?: string;
+  /**
+   * Run the search ONCE on arrival, in this mode — set by Coverage's "Find leads" button, which
+   * exists to run a lead search rather than to prefill a box and wait.
+   *
+   * ⛔ IT IS A MODE, NOT A BOOLEAN, AND THAT IS THE GUARD. `mode` is PERSISTED per user, so an
+   * operator whose last visit used the market view arrives here with mode already 'market' — and a
+   * boolean autoSubmit would then fire a MARKET VIEW from a button labelled Find leads, which is
+   * the exact fault being fixed. The effect refuses to fire unless the form's own mode equals the
+   * mode asked for, so a seed that failed to apply spends nothing and leaves the operator to press
+   * Search. Asserting on the state we WANT, never on the one we want to exclude (§6).
+   */
+  autoSubmit?: SearchMode | null;
   onUpgrade?: () => void;
   isUpgradeLoading?: boolean;
   freeSearchesExhausted?: boolean;
@@ -47,6 +59,7 @@ export function SearchForm({
   initialMode,
   initialKeyword,
   initialLocation,
+  autoSubmit = null,
   onUpgrade,
   isUpgradeLoading = false,
   freeSearchesExhausted = false,
@@ -96,10 +109,12 @@ export function SearchForm({
     if (initialLocation) setLocation(initialLocation);
   }, [initialMode, initialKeyword, initialLocation, setMode, setKeyword, setLocation]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!keyword.trim() || !location.trim()) return;
-
+  /* ⛔ ONE PLACE BUILDS THE FILTERS, so the auto-run and the button cannot send different searches.
+     Every value comes from the form's own state — the radius, country and town-only the operator can
+     SEE — rather than from defaults invented by whoever triggered it. A search that ran on 50km while
+     the box read 25km is the "measurement right, document lying" fault in its cheapest form. */
+  const runSearch = useCallback(() => {
+    if (!keyword.trim() || !location.trim()) return false;
     onSearch({
       keyword: keyword.trim(),
       location: location.trim(),
@@ -110,7 +125,34 @@ export function SearchForm({
       townOnly: effectiveTownOnly,
       mode,
     });
+    return true;
+  }, [keyword, location, radius, selectedCountry, effectiveTownOnly, mode, onSearch]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    runSearch();
   };
+
+  /* THE ARRIVAL RUN, AND EVERY CONDITION ON IT IS A POSITIVE TEST OF WHAT WE WANT.
+     ⛔ THE BUG THIS SHAPE EXISTS TO PREVENT, caught before shipping: keyword and location are
+     PERSISTED, and the seeding effect above sets state — which is not visible until the next render.
+     On the first commit this effect still sees the PREVIOUS search's values. Firing then would run
+     "plumber / Bourne" from a button that said locksmiths in Wisbech, spend the money, and then paint
+     the right town in the boxes above the wrong results. Exactly the measurement-right /
+     document-lying fault, in its cheapest form.
+     So it fires only when the form HOLDS WHAT THE URL ASKED FOR — same mode, same keyword, same
+     location. A seed that has not landed yet, or failed to land at all, spends nothing and leaves the
+     operator to press Search. */
+  const autoSubmitted = useRef(false);
+  useEffect(() => {
+    if (!autoSubmit || autoSubmitted.current || !seeded.current) return;
+    if (mode !== autoSubmit) return;                                      // the mode we were asked for
+    if (initialKeyword && keyword.trim() !== initialKeyword.trim()) return;   // the trade we were asked for
+    if (initialLocation && location.trim() !== initialLocation.trim()) return; // the town we were asked for
+    if (!keyword.trim() || !location.trim()) return;                       // nothing to search for
+    autoSubmitted.current = true;
+    runSearch();
+  }, [autoSubmit, mode, keyword, location, initialKeyword, initialLocation, runSearch]);
 
   return (
     <Card className="border-border/50 bg-card shadow-sm">

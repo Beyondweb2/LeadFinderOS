@@ -13,7 +13,7 @@ import { usePersistedState } from '@/hooks/usePersistedState';
 import { useCoverage } from '@/hooks/useCoverage';
 import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX } from '@/lib/trades';
 import {
-  COVERAGE_STATES, COVERAGE_LABEL, wantsSearchConfirm, type CoverageState,
+  COVERAGE_STATES, COVERAGE_LABEL, findLeadsHref, marketViewHref, type CoverageState,
 } from '@/lib/coverageState';
 
 /* ══ WHERE HAVE I BEEN? ═══════════════════════════════════════════════════════════════════════
@@ -218,21 +218,21 @@ export default function Coverage() {
                     </Badge>
                   </td>
                   <td className="px-3 py-1.5 text-right">
-                    {/* ⛔ THE WHOLE POINT OF THE PAGE, FINISHED. Reading a town off Coverage and
-                        retyping it into Find Leads was the retyping this page exists to remove —
-                        Coverage already knows both values and the market view already reads them
-                        from the URL, so this is a link, not new machinery.
-                        ⚠️ confirm=search OPENS the confirm; it never runs the search. A town on this
-                        list is untouched almost by definition, so its pool is stale almost every
-                        time and the search would cost ~$0.11 on a click that reads as navigation.
-                        ⛔ AND IT IS NOW CONDITIONAL. Sent on every row, it opened that modal over
-                        the numbers of every town already measured — a dialog nobody asked for,
-                        covering the thing that was clicked. wantsSearchConfirm owns the rule so the
-                        page cannot drift from the test; the market panel refuses it a second time
-                        off the market's own audit count, which is the decision that matters. */}
+                    {/* ⛔ TWO ACTIONS, BECAUSE THERE WERE ALWAYS TWO JOBS. One button labelled "Find
+                        leads" carried mode=market, so it never ran a lead search — it opened the
+                        market read, and on an untouched town it opened a spend confirm over that.
+                        Both hrefs are built by coverageState so the page cannot drift from the test
+                        that asserts Find leads carries neither mode=market nor confirm=search.
+                        ⚠️ Find leads RUNS the search on arrival (~$0.11, free inside the 72h cache);
+                        Market view keeps its own confirm, on the rungs with nothing measured. */}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={`/find-leads?mode=market&trade=${encodeURIComponent(trade)}&town=${encodeURIComponent(t.name)}${wantsSearchConfirm(t.state) ? '&confirm=search' : ''}`}>
+                      <Link to={findLeadsHref(trade, t.name)} title={`Search Google for ${trade} in ${t.name} and list them`}>
                         Find leads
+                      </Link>
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                      <Link to={marketViewHref(trade, t.name, t.state)} title={`What we already know about ${trade} in ${t.name}`}>
+                        Market view
                       </Link>
                     </Button>
                     <Button
