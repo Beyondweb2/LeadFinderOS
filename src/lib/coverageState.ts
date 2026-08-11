@@ -60,6 +60,32 @@ export interface CoverageFacts {
   workedPairs: Set<string>;
 }
 
+/**
+ * How many leads are in the CRM for each trade+town.
+ *
+ * ⛔ COUNTED FROM THE SAME `pairs.leads` THE RUNG IS DERIVED FROM, so the badge and the state can
+ * never disagree. The endpoint sends ONE ENTRY PER LEAD ROW (not per pair), which is why the
+ * multiplicity is there to count at all — `new Set(...)` was throwing it away.
+ *
+ * ⛔ IT IS NOT A SEPARATE READ, AND THAT IS THE POINT. A second query for counts could return a
+ * different answer than the one that graded the row — and the two would disagree silently, on the
+ * page whose entire job is deciding where to spend next. Same facts, one fetch, one truth.
+ *
+ * ⚠️ WHAT A ROW COUNTS AS ONE LEAD: the endpoint filters `is_archived = false` and skips any lead
+ * missing a trade OR a town, so an unattributable lead is counted in NO town rather than guessed
+ * into one. Dedupe is already handled at write time — addLead refuses a duplicate on
+ * google_maps_url, business_name or place_id — so a row IS a distinct business, and this is a count
+ * of businesses rather than of add attempts.
+ */
+export function countLeadsByPair(pairs: readonly { trade: string; town: string }[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const p of pairs) {
+    const key = coverageKey(p.trade, p.town);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
 /** Normalise a town name the way the audit book stores it: ONS parentheticals and case removed. */
 export function coverageTownKey(name: string | null | undefined): string {
   return String(name ?? '')

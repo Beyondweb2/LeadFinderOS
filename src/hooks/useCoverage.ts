@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  coverageKey, coverageStateFor, summarise, applyFilters, applySuppressionPatch,
+  coverageKey, coverageStateFor, summarise, applyFilters, applySuppressionPatch, countLeadsByPair,
   type CoverageFacts, type CoverageRow, type CoverageTown, type CoverageSummary,
   type SuppressionPatch,
 } from '@/lib/coverageState';
@@ -19,8 +19,12 @@ export interface CoverageTownRow extends CoverageTown {
 }
 
 /* The row the page actually renders: a town, its suppression state, and its grade. Named so the
-   suppression fields cannot be lost by a signature that only promises CoverageRow. */
-export type GradedTown = CoverageTownRow & { state: CoverageRow['state'] };
+   suppression fields cannot be lost by a signature that only promises CoverageRow.
+   `leadCount` is HOW MANY leads are in the CRM for this trade+town — separate from `state` on
+   purpose. The ladder is exclusive (a town shows at its furthest rung only), so a `measured` or
+   `worked` town said nothing about whether leads had been pulled there. That was the gap: the rung
+   answers "how far has this gone", the count answers "have I pulled leads from here". */
+export type GradedTown = CoverageTownRow & { state: CoverageRow['state']; leadCount: number };
 
 interface Pair { trade: string; town: string }
 
@@ -70,11 +74,24 @@ export function useCoverage() {
     workedPairs: new Set((pairs?.worked ?? []).map((p) => coverageKey(p.trade, p.town))),
   }), [pairs]);
 
+  /* ⛔ COUNTED FROM THE SAME `pairs.leads` THE `leads` RUNG IS DERIVED FROM — one fetch, one truth.
+     Built once per fetch rather than per row: coverageKey canonicalises the trade, and doing that
+     inside a 733-row render loop would be the same work 733 times (the reason `facts` is memoised
+     above for exactly the same shape of work). */
+  const leadCounts = useMemo(
+    () => countLeadsByPair(pairs?.leads ?? []),
+    [pairs],
+  );
+
   const gradeFor = useCallback((trade: string, includeSuppressed: boolean): GradedTown[] => {
     return towns
       .filter((t) => includeSuppressed || !t.suppressed_at)
-      .map((t) => ({ ...t, state: coverageStateFor(trade, t, facts) }));
-  }, [towns, facts]);
+      .map((t) => ({
+        ...t,
+        state: coverageStateFor(trade, t, facts),
+        leadCount: leadCounts.get(coverageKey(trade, t.name)) ?? 0,
+      }));
+  }, [towns, facts, leadCounts]);
 
   const setSuppressed = useCallback(async (townId: string, suppress: boolean, reason?: string) => {
     const { data: res, error: e } = await supabase.functions.invoke('coverage', {
