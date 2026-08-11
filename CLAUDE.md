@@ -1206,8 +1206,59 @@ useMarketView.ts   1 persisted vs  6 plain
     own words, and he is ready for that answer.
 
   </details>
-- 🔴 **THE QUESTIONNAIRE SPLIT — AGREED WITH PAUL 2026-08-10, NOT YET BUILT. Take a fresh session:
-  it is the flow that takes the money and deserves one clean pass.** Money sooner, detail later.
+- 🟡 **THE QUESTIONNAIRE SPLIT — HALF LANDED 2026-08-11. The REPOINT is live; the two findable-site
+  screens are not.** Read this before touching either repo.
+  - ✅ **DONE AND DEPLOYED: the report's offer button goes through the questionnaire** (`render-audit-report`
+    v37). The raw Stripe Payment Link is gone from `founderOffer.ts`; the button is now
+    `<origin>/onboarding/<slug>/?lead=<leadId>`, built with the same `onboardingUrl()` the live
+    `onboarding_followup` template uses. Verified on RG Locksmiths' live report: `buy.stripe.com`
+    absent, the lead-carrying onboarding URL present, `class="src"` asserted so it is not the
+    home-page fallback.
+    - 🔴 **THE REAL PRIZE WAS NOT THE QUESTION ORDER — IT WAS THAT THE PAYMENT WAS INVISIBLE.**
+      `stripe-webhook`'s whole Findable branch is gated on `metadata.onboarding_id`, and a STATIC
+      payment link cannot carry a per-payer row id. Every founder payment would have landed with no
+      onboarding row marked paid, no `amount_paid`, no operator email and no baseline. It also meant
+      `showFounderOffer` (which hides on `amount_paid > 0`) would have kept selling to a customer.
+    - ⛔ **NO LEAD, NO LINK, NO BUTTON — and it is a PRICE guard.** `offerPriceForLead` returns the
+      full **£99** for `no_lead`, so a button without one advertises £19.99 and charges £99. Same for
+      an unconfigured `FINDABLE_SITE_ORIGIN`. Either missing → offer copy + guarantee render with no
+      button, and a `console.warn` says which reason. 2 of 216 non-market audits have no `lead_id`
+      and both are already in `FOUNDER_OFFER_HIDE_AUDIT_IDS`.
+    - 🔴 **THE PRICE HAS A SECOND SWITCH NOBODY WOULD FIND: `FINDABLE_SETUP_PRICE_ID`.** If that env
+      var is SET, `findable-checkout` uses a fixed Stripe Price and **ignores `offer.gbp` entirely** —
+      report says £19.99, Stripe charges the Price object — **and the guarantee goes with it**, because
+      `product_data[description] = FINDABLE_GUARANTEE` only exists on the `price_data` branch.
+      Confirmed UNSET by Paul 2026-08-11 (only `FINDABLE_SITE_ORIGIN` is set), so the £19.99 path is
+      live. **Re-confirm before ever quoting the founder price as safe.**
+  - 🔴 **STILL TO BUILD, both in `findable-site` + one edge action:**
+    1. **Pre-pay = eligibility only.** ✅ Verified byte-for-byte: `ServeGateRow` reads EXACTLY
+       `website_platform`, `website_platform_other`, `website_manager`, `willing_to_migrate` — the
+       screen-4 set — so reducing the pre-pay form to screen 4 + `contact_email` leaves the gate
+       untouched. Screen 3 currently holds `contact_email` AND `competitor_name` (:2063-2075), so
+       lift the email and move the competitor.
+    2. **Post-pay form replacing the dead-end `paid` screen** (`OnboardingFlow.tsx:2777-2798`, which
+       today is confirmation copy and NO capture).
+    3. **`findable-onboarding` has NO action for a post-pay update** — actions are `prefill`,
+       `revise`, `submit`, `status`. A new `complete_q2` is needed (update by `onboarding_id`, only
+       when `status = 'paid'`, Q2 fields only, migration-tolerant like `submit`'s three-list pattern).
+    4. ⚠️ **THE POST-PAY SCREEN HAS NO onboarding_id IN THE URL, DELIBERATELY.** `findable-checkout`
+       keeps it off `success_url` ("so a paid receipt does not carry a live retry token", :218-229).
+       The id IS in browser storage at that moment — but `paid=1` currently calls `forgetOnboarding()`
+       and `clearDraft()` at :1348-1354, i.e. throws it away. **Capture it BEFORE forgetting**; do not
+       put it back in the URL. No storage → show the confirmation without the form and let the
+       existing `q2_chased_at` / `q2_chase_count` chase cover it.
+  - ⚠️ **THE INTERMEDIATE STATE IS SAFE BUT HAS MORE FRICTION THAN THE TARGET**: a report click now
+    walks all 5 screens before Stripe. `confirmed_location` + `services` are therefore still captured
+    pre-pay, so `startPaidBaseline` fires immediately and nothing is deferred yet. Paul's instant
+    lever if the friction hurts: `FOUNDER_OFFER_LIVE = false` hides the whole offer block.
+  - ⚠️ **NO SQL. All 14 columns Q2 needs already exist**, validated against the live schema 2026-08-11
+    (`services`, `services_list`, `areas_list`, `confirmed_location`, `competitor_name`,
+    `business_address`, `accreditations`, `must_not_say`, `photos_status`, `contact_email`,
+    `q2_chased_at`, `q2_chase_count` + `id`, `status`). `needsQ2` is derived, never stored.
+
+  <details><summary>The original agreed plan (still the target)</summary>
+
+  🔴 **THE QUESTIONNAIRE SPLIT — AGREED WITH PAUL 2026-08-10.** Money sooner, detail later.
   - **Before payment, ONE screen** (down from 5): the website questions + contact email.
     `website_platform`, `website_platform_other`, `website_manager`, `willing_to_migrate` — which is
     **exactly** what `findable-checkout` reads, so **the serve gate survives untouched** (verified).
@@ -1235,6 +1286,8 @@ useMarketView.ts   1 persisted vs  6 plain
     `q2_chase_count` are **live** — the count exists because a stamp cannot answer *which* chase is
     next); the **day-7 dashboard task**, which must go **through the `submissions` endpoint**, not
     the direct read, for the RLS reason above.
+
+  </details>
 - **No Baseline Test button.** Baselines are gated to internal callers (cron secret or service role +
   `x-internal-job`) and currently only start from `stripe-webhook` after payment. A button needs an
   authenticated path. Cost ≈ **30p** (measured — see above).
