@@ -123,11 +123,11 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
   // Follow-up to a warm lead after the 24h window: {{1}} business name, {{2}} onboarding URL.
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
-  /* Re-engage a lead who went quiet: {{1}} = business name. Mirrors WA_TEMPLATES in
-     _shared/whatsapp-send.ts — this list is a deliberate copy, and a template missing from it
-     REFUSES the send with "unknown_template" rather than falling back to another pitch. If the var
-     count is corrected there it must be corrected here in the same commit. */
-  re_engage: { lang: "en", vars: ["name"] },
+  /* Re-engage a lead who went quiet: {{1}} = business name, {{2}} = that lead's onboarding URL.
+     ⛔ CORRECTED FROM ONE VARIABLE 2026-08-11 against Meta #132000 (1 param sent, 2 expected). The
+     comment that shipped with the guess said this list must be corrected in the same commit as
+     WA_TEMPLATES if the count changed — this is that commit. */
+  re_engage: { lang: "en", vars: ["name", "onboarding_url"] },
   // "You said a call works" nudge. ONE variable: {{1}} = business name. No url.
   book_call: { lang: "en", vars: ["name"] },
 };
@@ -459,6 +459,28 @@ Deno.serve(async (req) => {
             renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors);
             businessName = vars.business;
             claimUrl = vars.link;
+          } else if (tmpl.vars.includes("onboarding_url")) {
+            /* ⛔ THIS BRANCH WAS MISSING, AND WITHOUT IT AN onboarding_url TEMPLATE COULD NEVER SEND
+               FROM THIS PATH — for any lead, however good its data. The else below resolves `url`
+               and nothing resolved `onboarding_url`, so templateBodyParams reached its own guard and
+               THREW ("refusing to send a follow-up with no link"). The per-row catch turned that into
+               flagged_error, so it refused rather than sending a broken link — right outcome, wrong
+               reason, and unfixable by anything on the lead.
+               Live for `onboarding_followup` since the day it was registered; re_engage now shares
+               the variable, and set_first_reply_template validates against WA_TEMPLATES, so the
+               reply rule can be pointed at either one — which is what makes this reachable.
+               ⚠️ SAME RESOLVER AS THE INBOX PATH, so both refuse on the same facts: no lead, no
+               business name ({{1}}), no trade, already paid, or no configured site origin. */
+            const f = await resolveOnboardingFollowupVars(service, row.lead_id);
+            if (!f.ok) { await finish("flagged_no_link", f.reason); results[row.lead_id] = "flagged_no_link"; continue; }
+            /* No `templateName` in `extra`: claimTemplatePayload stamps it in itself before calling
+               templateBodyParams, so the TEMPLATES_NEEDING_REAL_NAME guard still fires here — and
+               passing it explicitly is a type error deno check catches but tsc never sees, because
+               tsc does not cover supabase/functions at all. */
+            payload = claimTemplatePayload(templateName, tmpl.lang, f.business, "", { onboardingUrl: f.url });
+            renderedBody = renderTemplateBody(templateName, f.business, f.url);
+            businessName = f.business;
+            claimUrl = f.url;   // the outbound URL for this send, recorded like any other
           } else {
             if (tmpl.vars.includes("url")) {
               const { data: site } = await service.from("generated_sites")
