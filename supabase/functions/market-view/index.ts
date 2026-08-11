@@ -7,7 +7,7 @@ import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE, expectedPrimaryType, offTradeMark,
-  hasShapeEvidence,
+  hasShapeEvidence, uncleanedNames, UNCLEANED_EXAMPLES_SHOWN,
   type MarketConcentration, type MarketNamedRow, type MarketPoolExcluded,
   type MarketPoolRow, type MarketPoolState, type MarketTier, type MarketCitationHost,
   type MarketViewResult,
@@ -217,6 +217,8 @@ Deno.serve(async (req) => {
        measurement of the market and still counts — which is why `audits` is the robust signal. */
     const seenPerRun = new Set<string>();
     let dupRows = 0;
+    /** Deduped questions at least one engine answered — the per-question denominator. */
+    let questionsAnswered = 0;
     for (const row of queue) {
       const result = row.result;
       if (!result || typeof result !== "object") continue;
@@ -225,10 +227,16 @@ Deno.serve(async (req) => {
       const qk = `${row.run_id}|${questionKey(String((row as { question?: unknown }).question ?? ""))}`;
       if (seenPerRun.has(qk)) { dupRows += 1; continue; }
       seenPerRun.add(qk);
+      let answeredHere = false;
       for (const payload of Object.values(result)) {
         const block = payload as { competitors?: unknown; named?: unknown } | null;
         // Only real engine blocks carry `named`; this skips _apify and _cost_usd.
         if (!block || typeof block !== "object" || block.named === undefined) continue;
+        /* ⛔ COUNTED HERE, NOT OFF seenPerRun.size. A question is only a question this fold measured
+           if at least one ENGINE answered it — a row with a result object but no engine block
+           contributed no names, and counting it would inflate the denominator of every per-question
+           ratio and make a dirty market look cleaner than it is. */
+        answeredHere = true;
         const list = block.competitors;
         if (!Array.isArray(list)) continue;
         engineBlocks += 1;
@@ -258,6 +266,7 @@ Deno.serve(async (req) => {
           }
         }
       }
+      if (answeredHere) questionsAnswered += 1;
     }
 
     if (dupRows > 0) {
@@ -434,12 +443,20 @@ Deno.serve(async (req) => {
     const share = (n: number) => (totalMentions > 0 ? Math.round((n / totalMentions) * 1000) / 10 : 0);
     /* JUNK DETECTION, not a quality score. extract-competitors cleans these with an LLM but never
        ran on the older audits, so those carry raw regex output - Wisbech accountants folds to
-       thousands of "names" topped by "hmrc". Measured: clean markets sit at 4-9 distinct names per
-       audit, junk ones at 30-970. Reported as a suspicion with the ratio attached, never as a
-       verdict, and never auto-corrected: re-extraction costs an LLM call per run. */
+       thousands of "names" topped by "hmrc".
+       ⛔ THE RATIO IS NO LONGER THE TEST, ONLY THE CONTEXT. Re-measured across all 20 markets
+       2026-08-10: a threshold on distinct-names-per-question would have missed chorley (9.6) and
+       accountant/chichester (5.8), both provably raw, while the marker-word test separates all 20
+       with 39/39/33/24/18 on the dirty ones and ZERO on the other fifteen. See
+       UNCLEANED_MARKER_WORDS in src/lib/marketView.ts for the whole distribution.
+       ⚠️ THE MARKERS ARE COUNTED ON THE RAW MENTIONS, BEFORE THE MERGE. groupNames folds spellings
+       together, so a junk fragment can end up inside a group labelled with a real firm's name and
+       vanish from `named` entirely — counting there would let a dirty fold read clean. */
     const distinctPerAudit = auditIds.length > 0
       ? Math.round((named.length / auditIds.length) * 10) / 10
       : 0;
+    const distinctRawNames = new Set(mentions.map((m) => m.name.trim().toLowerCase())).size;
+    const markers = uncleanedNames(mentions.map((m) => m.name));
     const concentration: MarketConcentration = {
       audits: auditIds.length,
       completeRuns: completeRuns.length,
@@ -451,6 +468,12 @@ Deno.serve(async (req) => {
       thin: auditIds.length < EVIDENCE_MIN_AUDITS,
       distinctPerAudit,
       likelyJunk: distinctPerAudit >= JUNK_RATIO_PER_AUDIT,
+      questions: questionsAnswered,
+      distinctPerQuestion: questionsAnswered > 0
+        ? Math.round((distinctRawNames / questionsAnswered) * 10) / 10
+        : 0,
+      uncleanedCount: markers.length,
+      uncleanedExamples: markers.slice(0, UNCLEANED_EXAMPLES_SHOWN),
       truncatedBlocks,
       engineBlocks,
       runIds,

@@ -13,7 +13,7 @@ import { usePersistedState } from '@/hooks/usePersistedState';
 import { useCoverage } from '@/hooks/useCoverage';
 import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX } from '@/lib/trades';
 import {
-  COVERAGE_STATES, COVERAGE_LABEL, type CoverageState,
+  COVERAGE_STATES, COVERAGE_LABEL, wantsSearchConfirm, type CoverageState,
 } from '@/lib/coverageState';
 
 /* ══ WHERE HAVE I BEEN? ═══════════════════════════════════════════════════════════════════════
@@ -224,9 +224,14 @@ export default function Coverage() {
                         from the URL, so this is a link, not new machinery.
                         ⚠️ confirm=search OPENS the confirm; it never runs the search. A town on this
                         list is untouched almost by definition, so its pool is stale almost every
-                        time and the search would cost ~$0.11 on a click that reads as navigation. */}
+                        time and the search would cost ~$0.11 on a click that reads as navigation.
+                        ⛔ AND IT IS NOW CONDITIONAL. Sent on every row, it opened that modal over
+                        the numbers of every town already measured — a dialog nobody asked for,
+                        covering the thing that was clicked. wantsSearchConfirm owns the rule so the
+                        page cannot drift from the test; the market panel refuses it a second time
+                        off the market's own audit count, which is the decision that matters. */}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={`/find-leads?mode=market&trade=${encodeURIComponent(trade)}&town=${encodeURIComponent(t.name)}&confirm=search`}>
+                      <Link to={`/find-leads?mode=market&trade=${encodeURIComponent(trade)}&town=${encodeURIComponent(t.name)}${wantsSearchConfirm(t.state) ? '&confirm=search' : ''}`}>
                         Find leads
                       </Link>
                     </Button>

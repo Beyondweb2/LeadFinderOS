@@ -34,6 +34,81 @@ export { EVIDENCE_MIN_AUDITS };
  *  re-extraction costs an LLM call per run and nothing meters that. */
 export const JUNK_RATIO_PER_AUDIT = 15;
 
+/* ══ IS THIS LIST CLEAN? MEASURED 2026-08-10, AND THE RATIO IS NOT THE ANSWER ══════════════════
+   The queued plan was to re-measure distinct names per QUESTION and put the threshold in the empty
+   band. It was re-measured, against every market, and the band had closed:
+
+     perQ   junk words   market                       verdict by eye
+     27.8       39       locksmiths / rowley regis    DIRTY  ("they", "ask", "always", "check")
+     25.1       39       locksmiths / wakefield       DIRTY  ("here", "why", "i'd", "good")
+     17.9       33       locksmiths / eastbourne      DIRTY  ("give", "particularly", "another")
+      9.6       24       locksmiths / chorley         DIRTY  ("fully", "call", "always", "ask")
+      5.8       18       accountant / chichester      DIRTY  ("their", "you", "many")
+      4.8        0       mobile mechanics / wisbech   clean
+      4.4        0       electricians / portsmouth    clean
+      3.9 … 2.1  0       the other 13 markets         clean
+
+   ⛔ A THRESHOLD OF 10 WOULD HAVE MISSED TWO PROVABLY DIRTY MARKETS, one of them the accountant /
+   Chichester fold the derivation test and the winnability question both rest on. The recorded
+   "nothing at all between 5.4 and 17.9" gap is gone: chorley (9.6) arrived inside it, and the real
+   dirty/clean boundary on the ratio is now 5.8 vs 4.8 — a 1.2× band, which is not a gap, it is a
+   coincidence. Any number placed in it would be the fifth constant in §4 that looked plausible.
+
+   ⛔ SO THE GATE IS A FACT, NOT A RATIO. A SINGLE-TOKEN English function word cannot be the name of
+   a firm, and the LLM cleaner would never return one — so one of these in the fold PROVES the list
+   is raw regex output. It partitions all 20 markets with nothing in between: 39/39/33/24/18 on the
+   five dirty ones, and EXACTLY ZERO across 793 distinct names in the other fifteen.
+
+   ⚠️ SINGLE TOKEN ONLY, so "One Call Locksmiths", "Always Secure Ltd" and "First Pick Locksmiths"
+   are untouched — every real multi-word firm passes by construction. The 793-name clean sweep is the
+   evidence that there are no single-token false positives to worry about either.
+   ⚠️ AND THE RATIO IS STILL REPORTED, per QUESTION, as context beside the flag. It is a real signal
+   about fragmentation; it just cannot carry a yes/no about cleanliness. Per QUESTION rather than per
+   AUDIT because an audit is 3 questions or 8 depending on how it was started, so the per-audit
+   figure moves with the question count and JUNK_RATIO_PER_AUDIT has never separated anything. */
+export const UNCLEANED_MARKER_WORDS: ReadonlySet<string> = new Set([
+  "a", "about", "above", "after", "again", "all", "already", "also", "although", "always", "am", "an",
+  "and", "another", "any", "anyone", "are", "as", "ask", "asked", "at", "available", "back", "based",
+  "be", "because", "been", "before", "being", "below", "best", "better", "between", "both", "but",
+  "by", "call", "called", "can", "cannot", "check", "come", "could", "did", "do", "does", "doing",
+  "done", "down", "during", "each", "either", "else", "enough", "even", "ever", "every", "few",
+  "find", "first", "for", "found", "from", "fully", "further", "get", "getting", "give", "given",
+  "go", "going", "good", "got", "had", "has", "have", "having", "he", "help", "her", "here", "hers",
+  "him", "his", "how", "however", "i", "i'd", "i'll", "i'm", "i've", "if", "in", "into", "is", "it",
+  "it's", "its", "just", "keep", "know", "known", "last", "less", "let", "like", "likely", "look",
+  "looking", "made", "make", "many", "may", "maybe", "me", "might", "mine", "more", "most", "much",
+  "must", "my", "need", "needed", "needs", "never", "new", "next", "no", "none", "nor", "not",
+  "note", "now", "of", "off", "often", "on", "once", "one", "only", "or", "other", "others", "our",
+  "ours", "out", "over", "own", "particularly", "per", "perhaps", "please", "prices", "provide",
+  "quite", "rather", "really", "right", "said", "same", "say", "see", "seen", "several", "shall",
+  "she", "should", "since", "so", "some", "someone", "something", "still", "such", "sure", "take",
+  "than", "that", "the", "their", "theirs", "them", "then", "there", "these", "they", "this",
+  "those", "though", "through", "thus", "to", "too", "typically", "under", "until", "up", "upon",
+  "us", "use", "used", "usually", "very", "via", "want", "was", "we", "well", "were", "what",
+  "when", "where", "whether", "which", "while", "who", "whom", "why", "will", "with", "within",
+  "without", "work", "worth", "would", "yes", "yet", "you", "your", "yours",
+]);
+
+/** One extracted "competitor" that proves the fold was never cleaned. */
+export function isUncleanedName(name: string): boolean {
+  const t = String(name ?? "").trim().toLowerCase().replace(/[.,;:!?]+$/, "");
+  if (!t || t.includes(" ")) return false;
+  return UNCLEANED_MARKER_WORDS.has(t);
+}
+
+/** Every distinct marker in a fold, sorted — so the flag can show its working rather than assert. */
+export function uncleanedNames(names: Iterable<string>): string[] {
+  const found = new Set<string>();
+  for (const n of names) {
+    const t = String(n ?? "").trim().toLowerCase().replace(/[.,;:!?]+$/, "");
+    if (isUncleanedName(t)) found.add(t);
+  }
+  return [...found].sort();
+}
+
+/** How many markers are shown on screen. Enough to be convincing, short enough to read. */
+export const UNCLEANED_EXAMPLES_SHOWN = 6;
+
 /** extract-competitors' MAX_PER_ENGINE. An engine block holding exactly this many competitors was
  *  probably cut short, so a fragmented market reads as less fragmented than it is. Mirrored here to
  *  caption the concentration figures; the cap itself is owned by that function. */
@@ -53,8 +128,19 @@ export interface MarketConcentration {
   /** Fewer audits than EVIDENCE_MIN_AUDITS — the same bar the playbook uses to call evidence thin. */
   thin: boolean;
   distinctPerAudit: number;
-  /** distinctPerAudit >= JUNK_RATIO_PER_AUDIT. Flag, not fact. */
+  /** distinctPerAudit >= JUNK_RATIO_PER_AUDIT. Flag, not fact, and it has never separated anything —
+   *  see UNCLEANED_MARKER_WORDS. Kept so an older cached view still renders. */
   likelyJunk: boolean;
+  /** Deduped questions behind the fold — the denominator that does not move with how an audit was
+   *  started. Optional: a view cached before this shipped does not carry it. */
+  questions?: number;
+  /** Distinct extracted names per QUESTION. Reported, never a gate. */
+  distinctPerQuestion?: number;
+  /** ⛔ THE GATE. How many single-token function words are in the fold; one is proof it was never
+   *  cleaned. Optional, and absent means UNKNOWN — see marketNamesUncleaned. */
+  uncleanedCount?: number;
+  /** The first few markers found, so the refusal shows its working instead of asserting. */
+  uncleanedExamples?: string[];
   /** Engine blocks that came back sitting exactly on MAX_PER_ENGINE_CAP. */
   truncatedBlocks: number;
   engineBlocks: number;
@@ -67,6 +153,26 @@ export interface MarketConcentration {
    *  counts: two audits with one completed run must not pass a two-audit bar. */
   marketAuditsComplete?: number;
   businessAuditsComplete?: number;
+}
+
+/**
+ * Is this market's competitor list KNOWN to be uncleaned?
+ *
+ * ⛔ THE ABSENT CASE IS "NO", AND THAT IS A DECISION, NOT AN OVERSIGHT. `uncleanedCount` arrives from
+ * market-view; a view cached in sessionStorage before this shipped, or an older deploy of the
+ * function, carries neither field. Refusing to grade a shape on absence would blank the verdict on
+ * every market at once — including the fifteen measured to be clean — so absence keeps the previous
+ * behaviour and only a count we have actually read refuses. Deploy market-view BEFORE the SPA and
+ * the window is a 10-minute stale cache, nothing more.
+ *
+ * ⚠️ NOT `?? 0 > 0`, WHICH READS THE SAME AND MEANS SOMETHING ELSE: that would let a missing field
+ * assert cleanliness rather than admit ignorance. Here the two both return false, but they say
+ * different things, and the next person to add a third state needs the difference to be visible.
+ */
+export function marketNamesUncleaned(conc: Pick<MarketConcentration, "uncleanedCount"> | null | undefined): boolean {
+  const n = conc?.uncleanedCount;
+  if (typeof n !== "number" || !Number.isFinite(n)) return false;   // not known — see above
+  return n > 0;
 }
 
 /* ── GRADED, NOT BINARY ────────────────────────────────────────────────────────────────────────
@@ -257,6 +363,40 @@ export interface MarketViewResult {
 
 export interface MarketOption { trade: string; town: string; audits: number }
 
+/* ── ARRIVING FROM COVERAGE WITH `confirm=search` ──────────────────────────────────────────────
+   Coverage's "Find leads" button can ask the market panel to open the lead-search confirm on
+   arrival, so a town read off that page does not have to be retyped into Find Leads. That intent
+   used to be obeyed unconditionally, which put a "Run the lead search? ~$0.14" modal over the
+   numbers of every market that had already been measured.
+
+   ⛔ THE SUPPRESSION NEEDS A KNOWN POSITIVE. serveGate's rule, and the one this codebase has now
+   broken six times in the other direction: `audits` is null when the view has not loaded or failed
+   to load, and an unknown market is NOT a measured one. Null therefore OPENS the confirm — the
+   pre-existing behaviour, cancellable, costing nothing until the operator presses Run. Only a
+   count we have actually read, and read as above zero, closes it.
+
+   ⚠️ `audits`, NOT `completeRuns`. A market with two failed audits has been worked at, and the
+   operator arriving there is looking rather than searching. That is deliberately a wider net than
+   Coverage's own `measured` rung, which needs a completed run — see wantsSearchConfirm. */
+
+/** True only when we KNOW this market already has audits. Null = not loaded = not known. */
+export function suppressArrivalSearchConfirm(auditsInMarket: number | null): boolean {
+  return typeof auditsInMarket === "number" && Number.isFinite(auditsInMarket) && auditsInMarket > 0;
+}
+
+/** The whole decision: obey the URL's one-shot intent unless the market is known to have audits. */
+export function openArrivalSearchConfirm(intent: boolean, auditsInMarket: number | null): boolean {
+  return intent && !suppressArrivalSearchConfirm(auditsInMarket);
+}
+
+/** How many audits the freshly loaded view reports, or null when that cannot be read.
+ *  ⛔ A MISSING FIELD READS AS null, NEVER 0. `?? 0` here would turn a payload from an older
+ *  market-view deploy into "this market has no audits" and re-open the modal it exists to stop. */
+export function auditsInView(view: { concentration?: { audits?: number } } | null | undefined): number | null {
+  const n = view?.concentration?.audits;
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
 /* Per-question audit cost. Measured, never guessed — see CLAUDE.md §8.
    ⛔ RE-MEASURED 2026-08-06 against 60 completed runs / 206 questions of real
    ai_audit_runs.actor_cost_usd: mean $0.01095, median $0.01038, range $0.0052–$0.0135.
@@ -379,7 +519,19 @@ export function marketBatchCost(
    resolving it: "a local firm leads the naming, but a marketplace leads the sources" is the read
    that stops someone walking into Loughborough on fragmentation alone. */
 
-export type MarketShapeKind = "unmeasured" | "marketplace_led" | "local_leader" | "thin_market";
+export type MarketShapeKind =
+  | "unmeasured"
+  /** ⛔ A REFUSAL, NOT A SHAPE. The names this verdict would be computed from are raw regex output,
+   *  so every figure downstream — who leads, the top share, the concentration — is about fragments
+   *  rather than firms. Grading it anyway is how a market gets skipped or worked on arithmetic
+   *  performed over the word "always". */
+  | "names_uncleaned"
+  /** ⛔ WAS `marketplace_led`, AND THE RENAME IS THE FINDING. It used to fire when an aggregator was
+   *  the most-CITED host, which is measured to predict nothing about who gets NAMED (see
+   *  NATIONAL_TOP_N). It now means one thing only: every firm at the top of the naming is a national
+   *  brand. */
+  | "national_led"
+  | "local_leader" | "thin_market";
 
 export interface MarketShape {
   kind: MarketShapeKind;
@@ -482,15 +634,24 @@ export const MARKET_COOLDOWN_MS = 10 * 60 * 1000;
    MEASURED on the real Norwich run, not estimated: 8 queue rows, ~79,600 characters of answers,
    ~19,900 input tokens at $2.50/M plus ~2k output at $10.00/M = $0.070 per run.
    ⚠️ 6p AGAINST AN 8.3p AUDIT IS A 72% SURCHARGE, so it does NOT run on every measurement. It runs
-   when distinctPerAudit is over JUNK_RATIO_PER_AUDIT — which is exactly when the figures cannot be
-   trusted, and a market whose figures cannot be trusted is worth 6p to fix. Clean markets run 4-9
-   distinct names per audit and junk ones 30-970; the threshold sits in the empty gap between. */
+   when the fold is PROVEN uncleaned — which is exactly when the figures cannot be trusted, and a
+   market whose figures cannot be trusted is worth 6p to fix.
+   ⛔ IT USED TO RUN ON distinctPerAudit > 15 AND THAT WAS BOTH TOO LOOSE AND TOO TIGHT. Too loose
+   because a genuinely fragmented clean market can exceed it (an 8-question audit naming 20 real
+   firms scores 20); too tight because chorley's fold of "always"/"i'd"/"vat" scores 9.6 per question
+   and would never have fired. Now keyed on the marker words, which is a fact about the list. */
 export const CLEANER_USD_PER_RUN = 0.070;
 
-/** Should a finished measurement be cleaned automatically? True only when the extraction looks
- *  dirty enough for the figures to be untrustworthy. */
-export function shouldAutoClean(distinctPerAudit: number, runs: number): boolean {
-  return runs > 0 && distinctPerAudit > JUNK_RATIO_PER_AUDIT;
+/**
+ * Should a finished measurement be cleaned automatically?
+ *
+ * ⛔ THE RUN COUNT IS LOAD-BEARING and stays: with no completed run there is nothing to re-read, and
+ * cleaning would pay for zero LLM calls that change nothing. That half of the old guard was always
+ * right — see scripts/auto-clean.test.ts, where it was the guard's correctness that hid the fact
+ * that it was being handed the PRE-measurement view and so could never fire.
+ */
+export function shouldAutoClean(namesUncleaned: boolean, runs: number): boolean {
+  return runs > 0 && namesUncleaned;
 }
 
 /** What one press costs, stated on the button rather than in a dialog nobody reads twice. */
@@ -742,6 +903,11 @@ export interface MarketShapeInput {
   leader: MarketLeader | null;
   /** The leader's row, for its national flag and audit share. */
   leaderRow: MarketNamedRow | null;
+  /** ⛔ THE TOP OF THE NAMING, most-mentioned first — the list the national test reads. The leader
+   *  alone was not enough: a market whose leader is a franchise but whose #2 and #3 are local firms
+   *  is a market with local firms in it, and it was being skipped.
+   *  Absent (an older caller) falls back to the leader alone, i.e. the previous behaviour. */
+  topNamed?: MarketNamedRow[];
   citationHosts: MarketCitationHost[];
   citationTotal: number;
   /** Distinct businesses AI names here - the only size signal the shape uses. */
@@ -752,6 +918,13 @@ export interface MarketShapeInput {
   marketAuditsComplete: number;
   /** Per-business audits of this trade and town with a COMPLETED run. */
   businessAuditsComplete: number;
+  /** ⛔ THE COMPETITOR LIST IS PROVEN RAW. Read from the fold via marketNamesUncleaned, so an older
+   *  view that cannot answer the question passes `false` and the verdict behaves as it always did. */
+  namesUncleaned?: boolean;
+  /** The markers found, for the refusal's own reasoning lines. */
+  uncleanedExamples?: string[];
+  /** Completed runs the cleaner would re-read, so the refusal can price its own fix. */
+  runsToClean?: number;
   /* NO POOL FIELDS, DELIBERATELY. The shape is decided by citations and naming alone, so an
      incomplete Places pool cannot overrule them. The contactable count lives in marketPlainRead. */
 }
@@ -777,8 +950,54 @@ export function marketShape(input: MarketShapeInput): MarketShape {
     };
   }
 
+  /* ⛔ SECOND, AND BEFORE ANYTHING THAT READS A NAME. The evidence gate above comes first because
+     "not measured enough" is the more basic statement and needs no names at all. Everything BELOW
+     this point — who leads, which host dominates, how many firms are named — is arithmetic over the
+     extracted list, so if that list is raw regex output the verdict is about fragments.
+     Eastbourne is the case that proves it matters: 287 names over 16 questions, 33 of them function
+     words, Checkatrade top-cited at 14% — and it was SKIPPED on a marketplace-led verdict computed
+     over that fold. A refusal Paul can act on beats a verdict he cannot audit. */
+  if (input.namesUncleaned) {
+    const examples = (input.uncleanedExamples ?? []).slice(0, UNCLEANED_EXAMPLES_SHOWN);
+    const runs = input.runsToClean ?? 0;
+    return {
+      kind: "names_uncleaned",
+      headline: "Names not cleaned · no verdict until they are",
+      reasoning: [
+        examples.length > 0
+          ? `The extracted competitor list contains ${examples.map((e) => `"${e}"`).join(", ")} — words, not firms, so it is raw scraper output rather than businesses.`
+          : "The extracted competitor list contains single words rather than business names, so it is raw scraper output.",
+        `Every figure a verdict would rest on — who leads, the top share, how many firms are named — would be counted over that list, so it is not being graded.`,
+        runs > 0
+          ? `Re-read the ${runs} completed run${runs === 1 ? "" : "s"} with the AI cleaner (about ${asPence(runs * CLEANER_USD_PER_RUN)}, no re-auditing) and this market will grade itself.`
+          : "There is no completed run to re-read, so the names cannot be cleaned yet.",
+      ],
+    };
+  }
+
   const topHost = citationHosts[0] ?? null;
-  const aggregatorLeads = !!topHost?.isAggregator;
+  /* ⛔ CITED IS NOT NAMED, AND THIS IS NOW A FACT ON SCREEN RATHER THAN HALF A VERDICT.
+     MEASURED 2026-08-10 across every market with a completed run. 17 have an aggregator as the
+     most-cited host, and in ALL SEVENTEEN AI names local firms anyway:
+       * in 15 of 17 the aggregator's own brand is not in the named list at all;
+       * in the other 2 it is named far behind the local leader — Stamford 9 mentions against 68,
+         Eastbourne 13 against 32;
+       * local firms hold all three top spots in 10 of the 17, two of three in another 4.
+     The clearest case is plumber/Wisbech: Checkatrade takes 27% of citations, the highest share in
+     the book, and the three most-named firms are Fen Property Services (52), DC Plumbing (49) and
+     Mr Gas and Heating (37) — every one of them local. That is the town Paul has actually worked.
+     Five markets — Eastbourne, Chichester, Portsmouth, Loughborough, Kettering — were skipped on
+     this signal. It is not a signal. It is now stated as intelligence, in the reasoning of whatever
+     shape the naming actually supports. */
+  const aggregatorTopCited = !!topHost?.isAggregator;
+  /* ⛔ THE SURVIVING HALF, WIDENED FROM THE LEADER TO THE TOP THREE. Paul's own proposal, and the
+     data supports it: locksmiths/Colchester is led by LockRite, Lockforce and LockFit — three
+     national franchises and no local firm anywhere near the top — which the leader-only test called
+     the same thing as a market whose leader is a franchise and whose #2 is a local firm. Those are
+     different markets, and only one of them is unworkable. */
+  const topNamed = (input.topNamed ?? (leaderRow ? [leaderRow] : [])).slice(0, NATIONAL_TOP_N);
+  const localAtTheTop = topNamed.filter((n) => (n.otherTowns ?? 0) < NATIONAL_MIN_OTHER_TOWNS);
+  const nationalDominated = topNamed.length > 0 && localAtTheTop.length === 0;
   const leaderIsNational = (leaderRow?.otherTowns ?? 0) >= NATIONAL_MIN_OTHER_TOWNS;
   const hostShare = topHost && citationTotal > 0 ? Math.round((topHost.citations / citationTotal) * 100) : 0;
   /* ⛔ THE DENOMINATOR IS PRINTED, NOT JUST DIVIDED BY, AND THAT IS WHERE IT WENT WRONG.
@@ -789,30 +1008,25 @@ export function marketShape(input: MarketShapeInput): MarketShape {
      guard on the sentence. */
   const ofTotal = (n: number) => (citationTotal > 0 ? `${n} of ${citationTotal}` : `${n}`);
 
-  // -- SHAPE 1: a marketplace or a national platform owns the market.
-  if (aggregatorLeads || leaderIsNational) {
+  /* THE CITATION FACT, AS INTELLIGENCE. Said in every shape, never deciding one \u2014 the same rule \u00a76
+     already applies to unknown hosts: they route to who's-winning, never to a task. */
+  const citationLine = topHost
+    ? aggregatorTopCited
+      ? `${topHost.host} is the most-cited source here: ${ofTotal(topHost.citations)} citations${citationTotal > 0 ? ` (${hostShare}%)` : ""}. Worth knowing, but measured across 17 markets it does not predict who gets named.`
+      : `The most-cited source is ${topHost.host} (${ofTotal(topHost.citations)}), a business's own site rather than a directory.`
+    : null;
+
+  // -- SHAPE 1: every firm at the top of the naming is a national brand.
+  if (nationalDominated) {
     const reasoning: string[] = [];
-    if (aggregatorLeads && topHost) {
-      reasoning.push(
-        `${topHost.host} is the most-cited source here: ${ofTotal(topHost.citations)} citations${citationTotal > 0 ? ` (${hostShare}%)` : ""}, ahead of every business's own site.`,
-      );
-    }
-    if (leaderIsNational && leaderRow) {
-      reasoning.push(
-        `The most-named business, ${leader.name}, is cited in ${leaderRow.otherTowns} other town${leaderRow.otherTowns === 1 ? "" : "s"} for this trade, so it is a national brand rather than a local firm.`,
-      );
-    }
-    /* THE DISAGREEMENT, SPELLED OUT. Resolving it in favour of one signal would hide the read that
-       matters: Loughborough looks fragmented and healthy on the naming alone. */
-    if (aggregatorLeads && !leaderIsNational) {
-      reasoning.push(
-        `A local firm leads the naming (${leader.name}, ${leader.mentions} mentions) but a marketplace leads the sources - so getting a local business named competes with the platform, not with that firm.`,
-      );
-    }
-    if (!aggregatorLeads && leaderIsNational && topHost) {
-      reasoning.push(`The top cited host is ${topHost.host} (${ofTotal(topHost.citations)}).`);
-    }
-    return { kind: "marketplace_led", headline: "Marketplace-led \u00b7 probably skip this market", reasoning };
+    reasoning.push(
+      topNamed.length === 1
+        ? `The only business AI names here, ${topNamed[0].name}, is cited in ${topNamed[0].otherTowns} other towns for this trade, so it is a national brand rather than a local firm.`
+        : `All ${topNamed.length} of the most-named businesses here \u2014 ${topNamed.map((n) => n.name).join(", ")} \u2014 are cited in ${NATIONAL_MIN_OTHER_TOWNS}+ other towns for this trade, so they are national brands rather than local firms.`,
+    );
+    reasoning.push("A local business would be competing with a franchise's national footprint, not with another local firm.");
+    if (citationLine) reasoning.push(citationLine);
+    return { kind: "national_led", headline: "National brands hold the naming \u00b7 probably skip this market", reasoning };
   }
 
   /* -- SHAPE 3: the MARKET is thin, not the pool. See THIN_MARKET_MAX_NAMED - this has never fired
@@ -829,14 +1043,18 @@ export function marketShape(input: MarketShapeInput): MarketShape {
     };
   }
 
-  // -- SHAPE 2: a beatable local firm leads. The one worth working.
+  // -- SHAPE 2: a beatable local firm is named at the top. The one worth working.
+  /* \u26d4 AND IT NO LONGER MATTERS WHETHER A DIRECTORY OWNS THE SOURCES. A market can reach here with
+     Checkatrade top-cited \u2014 plumber/Wisbech does, at 27% \u2014 because what a client competes for is
+     being NAMED, and the naming in these markets is local. */
+  const localLeader = localAtTheTop[0] ?? null;
   const reasoning = [
-    `${leader.name} takes ${leader.mentions} mentions across ${leaderRow?.audits ?? 0} of ${audits} audits and is a local firm, not a national brand or a platform.`,
-    "A local leader is beatable, and this is the comparison to sell with.",
+    leaderIsNational && localLeader
+      ? `${leader.name} is named most but is a national brand; the best-named LOCAL firm is ${localLeader.name} (${localLeader.mentions} mentions across ${localLeader.audits} of ${audits} audits), which is what a client would be compared against.`
+      : `${leader.name} takes ${leader.mentions} mentions across ${leaderRow?.audits ?? 0} of ${audits} audits and is a local firm, not a national brand.`,
+    "A local firm at the top is beatable, and this is the comparison to sell with.",
   ];
-  if (topHost) {
-    reasoning.push(`The most-cited source is ${topHost.host} (${ofTotal(topHost.citations)}), a business's own site rather than a directory.`);
-  }
+  if (citationLine) reasoning.push(citationLine);
   return { kind: "local_leader", headline: "Local leader \u00b7 the best shape to work", reasoning };
 }
 
@@ -900,10 +1118,20 @@ export function marketPlainRead(
         businessAudits: conc.businessAuditsComplete ?? 0,
       })}`;
       break;
-    case "marketplace_led":
-      market = topHost?.isAggregator
-        ? `Skip this one. ${topHost.host} is the source AI trusts most for ${plural} in ${town}, so a local business is competing with a platform rather than with other ${plural}.`
-        : `Skip this one. The business AI names most here, ${leader?.name ?? "the leader"}, is a national brand rather than a local firm, so a local business is competing with a chain.`;
+    case "names_uncleaned":
+      /* ⛔ SAYS WHAT IS WRONG AND WHAT FIXES IT, and never a number off the dirty fold. Quoting
+         "AI names 239 firms in Eastbourne" here would be repeating the very count the refusal
+         exists to distrust. */
+      market = `No verdict yet — the competitor names for ${plural} in ${town} were never cleaned, so `
+        + 'every figure would be counted over scraped words rather than firms. Re-read them with the '
+        + 'AI cleaner and this market grades itself. Nothing needs re-auditing.';
+      break;
+    case "national_led":
+      /* ⛔ NO LONGER MENTIONS THE CITED HOST AT ALL. It used to say "Checkatrade is the source AI
+         trusts most, so skip" — a sentence measured to be wrong about 17 markets, including the one
+         Paul has worked. The skip is now about the naming, which is the thing a client competes for. */
+      market = `Skip this one. Every ${plural.replace(/s$/, "")} AI names at the top in ${town} is a national brand`
+        + ` rather than a local firm, so a local business is competing with a franchise's footprint.`;
       break;
     case "thin_market":
       market = `Barely a market. AI names only ${conc.distinctBusinesses} ${plural} in ${town} across ${conc.audits} audits, so there is no competitive picture to show anybody.`;
@@ -1007,6 +1235,12 @@ export function marketPlainRead(
    ⚠️ A FIXED number is right and does not need to scale with how many towns get measured: a local
    firm does not gain towns as more markets are added, only a chain does. */
 export const NATIONAL_MIN_OTHER_TOWNS = 3;
+
+/** How many of the most-named firms the national test looks at. THREE, because that is the width of
+ *  the list Paul reads off the panel and quotes to a prospect — and because the leader alone called
+ *  Colchester (LockRite, Lockforce, LockFit: no local firm anywhere) the same thing as a market whose
+ *  #2 is local. A market with a local firm in the top three has somebody to be compared against. */
+export const NATIONAL_TOP_N = 3;
 
 export const OFF_TRADE_MIN_SHARE = 0.5;
 /** Fewer typed rows than this and the mode is noise — 2 of 3 is not a consensus. */
