@@ -36,6 +36,12 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   // No link and no audit — the only real requirement is a linked lead with a business name,
   // which the edge refuses without (no_business_name).
   book_call:              { needsUrl: false, needsAudit: false, group: 'opener' },
+  /* Re-engage a lead who went quiet. No link and no audit: it asks a question rather than
+     delivering anything, so gating it on a report or a generated site would make it unsendable to
+     exactly the leads it is for — the same mistake onboarding_followup's comment records above.
+     ⚠️ needsAudit stays FALSE deliberately. If it is ever changed to true, a quiet lead with no
+     completed audit becomes unreachable by the one template written for them. */
+  re_engage:              { needsUrl: false, needsAudit: false, group: 'opener' },
 };
 
 export interface SendabilityLead {

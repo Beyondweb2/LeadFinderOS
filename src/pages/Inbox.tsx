@@ -61,6 +61,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   audit_reply: 'Audit reply (report)', // was falling through to a bare "Template" in the thread
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
+  re_engage: 'Re-engage (gone quiet)',
 };
 function friendlyTemplate(name: string | null | undefined): string {
   return (name && TEMPLATE_DISPLAY[name]) || 'Template';

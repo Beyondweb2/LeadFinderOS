@@ -20,6 +20,7 @@ export const WA_REPLY_TEMPLATES = [
   { name: 'audit_reply', label: 'Audit reply (report + competitors)' },
   { name: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
   { name: 'book_call', label: 'Arrange a call' },
+  { name: 're_engage', label: 'Re-engage (gone quiet)' },
 ];
 
 export interface WaMessage {

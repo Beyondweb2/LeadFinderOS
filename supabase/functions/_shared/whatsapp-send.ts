@@ -66,6 +66,14 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
   // Follow-up to a warm lead who said a call works and then went quiet. ONE variable:
   // {{1}} = business name. No url, so nothing to resolve and nothing to gate on a site.
   book_call: { lang: "en", vars: ["name"] },
+  /* Re-engage a lead who went quiet. ONE variable: {{1}} = business name. No url and no audit, so
+     there is nothing to resolve per-lead and nothing to gate it on.
+     ⚠️ THE VAR SHAPE HERE MUST MATCH THE TEMPLATE AS REGISTERED IN META, and it was declared as
+     one variable because that is what every other name-only follow-up uses (book_call,
+     initial_contact) — NOT because the Meta registration was read. If re_engage is registered with
+     a different number of body variables, Meta rejects the send on a parameter-count mismatch and
+     `vars` below is the ONE line to correct. Nothing else in the wiring depends on the count. */
+  re_engage: { lang: "en", vars: ["name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -155,8 +163,23 @@ You mentioned a call would work - what time suits you best?
 
 Happy to fit around you.`;
 
+/* re_engage — DISPLAY ONLY, like every body here: Meta renders the real message from its own copy,
+   so nothing in this string can change what is sent.
+   ⚠️ THIS IS A PLACEHOLDER FOR THE PREVIEW, NOT THE APPROVED COPY. The Meta wording was not
+   available when this was wired, and the API never returns it. Until it is pasted in here the Inbox
+   preview is approximate — which is a cosmetic wrong, but it is still a wrong: every other body in
+   this map is the exact approved text, and an operator reads them as authoritative. */
+const reEngageBody = (b: string, _u: string) =>
+  `Hi ${b},
+Paul here from Findable.
+
+Following up on this — still happy to take a look at where you're showing up in AI answers?
+
+No rush, just let me know either way.`;
+
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string) => string> = {
   book_call: bookCallBody,
+  re_engage: reEngageBody,
   onboarding_followup: onboardingFollowupBody,
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).
