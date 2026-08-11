@@ -727,15 +727,43 @@ useMarketView.ts   1 persisted vs  6 plain
   everything). A filter, a sort, a toggle → persisted state. `Index.tsx` already says this for the
   market view; it is now the app-wide line. **Report every move to the URL.**
 - ✅ **AND A MODAL MUST NOT ARRIVE OVER THE THING THAT WAS CLICKED, EITHER — fixed 2026-08-10.**
-  Coverage's "Find leads" carried `confirm=search` on every row, so clicking through to a town already
+  Coverage's market link carried `confirm=search` on every row, so clicking through to a town already
   measured opened "Run the lead search? ~$0.14" on top of the market numbers that were the reason for
   the click. Two guards, and the second decides: `wantsSearchConfirm(state)` (`coverageState.ts`) keeps
   the param off the measured/worked rungs, and `openArrivalSearchConfirm` + `auditsInView`
   (`marketView.ts`) refuse it in the panel off the market's own audit count — which is what covers a
   bookmarked URL and a stale Coverage cache. The panel decision now happens **in the same effect as the
   load, on the view `load` RETURNED**; it used to fire before any market data existed, so it could not
-  consult the fact that decides it. A refusal states itself with the override beside it — Find leads
+  consult the fact that decides it. A refusal states itself with the override beside it — the button
   must not become a link that visibly does nothing.
+- ⛔ **COVERAGE HAS TWO ACTIONS PER ROW, AND IT USED TO HAVE ONE DOING THE WRONG JOB — split
+  2026-08-11.** The button labelled **Find leads** carried `mode=market`, so it never ran a lead
+  search: it opened the market read (and, on an untouched town, a spend confirm over that). Now
+  **Find leads** → `mode=leads&keyword=&location=&run=search`, the normal search, prefilled and run
+  once; **Market view** → `mode=market&trade=&town=[&confirm=search]`, unchanged. `wantsSearchConfirm`
+  therefore belongs to **Market view** now, not to Find leads — the rule did not change, the control
+  it hangs off did.
+  - Both hrefs are built by **`findLeadsHref` / `marketViewHref` in `coverageState.ts`**, not inline in
+    the JSX, so `scripts/coverage-actions.test.ts` can assert the one property that matters: the
+    Find-leads href carries **no `mode=market` and no `confirm=search` on any rung**, including an
+    unknown one. An inline template string is how the two drift back together.
+  - 🔴 **THE SEVENTH INSTANCE OF THE ABSENT/STALE-VALUE SHAPE, CAUGHT BEFORE SHIPPING.** `keyword`,
+    `location` **and `mode` are all `usePersistedState`**, and the URL seeds are applied in an effect —
+    so on the first commit the form still holds the PREVIOUS search. A plain boolean `autoSubmit` would
+    have run **"plumber / Bourne" from a button that said locksmiths in Wisbech**, spent the money, and
+    then painted the right town above the wrong results. Worse, because the MODE is persisted too, an
+    operator whose last visit was a market view would have fired **a market view from the Find leads
+    button** — the exact fault being fixed.
+    **So `autoSubmit` is a MODE, not a boolean**, and the effect fires only when the form HOLDS WHAT
+    THE URL ASKED FOR (same mode, same keyword, same town). A seed that has not landed spends nothing.
+  - ⚠️ **`run=search` is a one-shot intent** — ref'd on first render, stripped from the URL whether or
+    not the search fires. Left there it re-runs a **paid** search on every refresh and back button.
+  - ⚠️ **Find leads SPENDS ON ARRIVAL, and that is Paul's call 2026-08-11**: ~$0.11 of Places quota,
+    and **nothing** within 72h of the last search of the same trade and town (search-leads
+    short-circuits on its own cache). The confirm was guarding the wrong flow.
+  - ⚠️ One place builds the filters (`runSearch` in `SearchForm`), so the arrival run and the Search
+    button cannot send different searches — the radius, country and town-only that run are the ones on
+    screen.
 - ⛔ **NEVER PERSIST AN OPEN DIALOG.** A modal springing open on return is worse than losing it —
   you did not ask for it and it blocks the page you came back for. `AiAudit.tsx` already refuses to
   persist `formOpen` for this reason. Persist what you were LOOKING AT, never what was INTERRUPTING.
