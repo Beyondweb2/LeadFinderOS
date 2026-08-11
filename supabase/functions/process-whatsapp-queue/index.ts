@@ -123,6 +123,11 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
   // Follow-up to a warm lead after the 24h window: {{1}} business name, {{2}} onboarding URL.
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
+  /* Re-engage a lead who went quiet: {{1}} = business name. Mirrors WA_TEMPLATES in
+     _shared/whatsapp-send.ts — this list is a deliberate copy, and a template missing from it
+     REFUSES the send with "unknown_template" rather than falling back to another pitch. If the var
+     count is corrected there it must be corrected here in the same commit. */
+  re_engage: { lang: "en", vars: ["name"] },
   // "You said a call works" nudge. ONE variable: {{1}} = business name. No url.
   book_call: { lang: "en", vars: ["name"] },
 };

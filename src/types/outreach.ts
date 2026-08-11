@@ -293,6 +293,10 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
   { value: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
   { value: 'book_call', label: 'Arrange a call' },
+  /* Re-engage a lead who went quiet. ⚠️ THE DOC COMMENT ABOVE THIS LIST IS ALREADY WRONG for four
+     of the entries — book_call, initial_contact and re_engage carry ONE variable (business name)
+     and audit_reply carries four. Left as-is rather than rewritten mid-task, but do not trust it. */
+  { value: 're_engage', label: 'Re-engage (gone quiet)' },
 ];
 
 // Contact method options (how the business was contacted)
