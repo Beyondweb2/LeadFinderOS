@@ -1015,12 +1015,15 @@ useMarketView.ts   1 persisted vs  6 plain
   yet, and the verdict faults are corrupting decisions I am making today.*
   1. ✅ **The dirty-list signal — BUILT 2026-08-10**, and the measurement replaced the plan (below).
      The refusal, the cleaner button in that state and the auto-clean are done. ⚠️ **Wakefield is NOT
-     cleaned** — `extract-competitors` 401s on a service-role call because the DEPLOYED copy predates
-     its own internal branch. Redeploy it first.
+     cleaned**, and the reason is NOT what was first recorded — see the corrected note below. The
+     panel's cleaner button works; only a service-role script is refused.
   2. ✅ **Winnability — MEASURED AND FIXED 2026-08-10** (below). The citation half of the verdict is
      gone; 11 markets flip from skip to workable.
-  3. 🔴 **NEXT: deploy, then clean, then re-read the eight refused markets.** Deploy order is
-     `market-view` → `extract-competitors` → SPA. Nothing in items 1 or 2 is live until that happens.
+  3. ✅ **DEPLOYED 2026-08-11.** `market-view` v23, `extract-competitors` v8, SPA verified live by
+     marker (`Names not cleaned` + `National brands hold the naming` in the marketView chunk,
+     `Clean the names` in the Index chunk, and the conditional `${…?"&confirm=search":""}` in the
+     Coverage chunk). 🔴 **NEXT: clean the eight refused markets from the PANEL BUTTON** — 61 runs,
+     $4.27, or $1.40 for the five market-audited ones as a first pass — then re-read their verdicts.
   4. The questionnaire split.
   5. `usePlaybook`, `contact_suppressions`, the two dashboard reads.
   ⚠️ **DO 1 AND 2 IN ONE SESSION.** Both decide market verdicts Paul picks towns from, so the two
@@ -1098,14 +1101,30 @@ useMarketView.ts   1 persisted vs  6 plain
 
   </details>
 
-  🔴 **CLEANING IS BLOCKED AND IT IS AN AUTH PROBLEM, NOT A MONEY ONE.** `extract-competitors`
-  refuses a service-role call with **HTTP 401 `unauthorized`** even with `x-internal-job` set, so
-  Wakefield could not be cleaned from a harness. Its SOURCE accepts `service key + x-internal-job`
-  (`index.ts:136-138`), which means **the DEPLOYED function predates that branch** — §4's shared-file
-  deploy trap, on the function this whole item depends on. The new secret key (`sb_secret_…`) is
-  masked in `supabase projects api-keys`, so that is not a workaround either.
-  **To unblock: redeploy `extract-competitors`, then the cleaner works from a harness or from the
-  panel button.** Counted, not estimated, at $0.070/run and with no re-auditing:
+  🟢 **CLEANING FROM THE APP WAS NEVER BLOCKED. THE 401 IS A HARNESS-ONLY PROBLEM, AND THE FIRST
+  DIAGNOSIS OF IT WAS WRONG — CORRECTED 2026-08-11 BY THE REDEPLOY THAT WAS SUPPOSED TO FIX IT.**
+  `extract-competitors` refuses a **service-role** call with `{"ok":false,"error":"unauthorized"}`
+  even with `x-internal-job` set.
+  - ⛔ **RULED OUT: "the deployed copy predates the internal branch."** That was the recorded
+    diagnosis and it was wrong. The function was redeployed from source carrying that branch
+    (`index.ts:136-138`), **v7 → v8, entrypoint build 5 → 8**, and the 401 is byte-for-byte
+    unchanged. A stale deploy was not the cause. §4's trap in reverse: the deploy-age signal was
+    real (build 5 behind version 7) and had **nothing to do with the symptom**.
+  - ⚠️ **THE REMAINING EXPLANATION, UNTESTED FROM HERE:** the branch requires
+    `token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")`. This project has **new-format keys**
+    (`sb_publishable_…`, `sb_secret_…`) alongside the legacy JWT pair. If the platform injects the
+    new secret into that env var, the string compare fails, the call falls through to the user
+    branch, `auth.getUser()` finds no user for a service JWT, and you get exactly that message.
+    **The `sb_secret_…` value is MASKED in `supabase projects api-keys`**, so this cannot be
+    confirmed without reading it from the dashboard. Do not "fix" the auth code until it is.
+  - ✅ **AND THE PANEL BUTTON WORKS, AND ALWAYS DID.** `MarketPanel` invokes the function with the
+    OPERATOR'S OWN JWT, which takes the user branch and the ownership check — untouched by any of
+    this. So the cleaner is available in the app right now. Only a script is locked out.
+  - ⚠️ **The lesson: "blocked" needs to name WHICH CALLER is blocked.** Recording it as
+    "cleaning is blocked" turned a harness-auth quirk into a product-level blocker in the notes, and
+    the next session would have believed it.
+
+  Counted, not estimated, at $0.070/run and with no re-auditing:
   | Scope | Runs | Cost |
   |---|---|---|
   | The **8 markets that carry a verdict today** — rowley regis 2, loughborough 20, stamford 9, wrexham 12, accountant/chichester 11, wakefield 2, eastbourne 2, chorley 3 | **61** | **$4.27** |
