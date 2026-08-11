@@ -105,20 +105,49 @@ export function useInbox() {
       // is_archived = false: an archived lead is one the operator has stopped working, so its thread
       // leaves the Inbox and it also leaves the "start a conversation" picker below. Un-archiving
       // brings the whole thread back — nothing is deleted, and the messages are untouched.
-      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid').eq('is_archived', false).not('phone', 'is', null),
+      /* ⛔ PAGINATED, AND THIS ONE LOST A PAYING CUSTOMER. It asked for 1,031 rows (not archived +
+         has a phone) and PostgREST silently returned 1,000 — so 31 leads were absent from
+         `ownLeadIds`, and the conversation build below drops any thread whose lead is not in it
+         (`if (!leadId || !ownLeadIds.has(leadId)) continue`). RG Locksmiths, a paid client with 17
+         messages, therefore never became a conversation AT ALL: no filter, no reload and no search
+         could bring him back, because he was gone before the list existed.
+         ⚠️ AND IT WAS INTERMITTENT, WHICH IS WHY IT LOOKED LIKE A DISPLAY BUG. There was no
+         `.order()` either, so WHICH 1,000 came back was arbitrary and shifted as rows were written —
+         he was visible one day and gone the next, with nothing having changed about him.
+         `.order('id')` is the unique tiebreaker fetchAllRows needs: on a non-unique sort a tied row
+         can be fetched twice and another missed at a page boundary — the same reasoning already
+         written above the messages read. */
+      fetchAllRows<LeadLite>('Inbox (leads)', (from, to) =>
+        sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid')
+          .eq('is_archived', false).not('phone', 'is', null)
+          .order('id', { ascending: true }).range(from, to)),
       // share_token / booking_only aren't in the generated types yet — untyped sb. RLS
       // scopes rows to the operator's own sites (admins see all). Ordered newest-first
       // so the per-lead pick below takes the most recent site.
-      sb.from('generated_sites').select('id, site_name, lead_id, share_token, booking_only, first_opened_at, claimed_at, addon_interest_at').order('created_at', { ascending: false }),
+      /* ⛔ PAGINATED FOR THE SAME REASON, BEFORE IT BITES. Smaller than the leads table today, so
+         nothing is visibly wrong — which is exactly the state the leads read was in until it crossed
+         1,000 and started dropping threads silently. `created_at` is NOT unique here, so `id` is
+         added as the tiebreaker rather than trusted; the newest-first order the per-lead pick relies
+         on is preserved as the primary sort. */
+      fetchAllRows<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>('Inbox (sites)', (from, to) =>
+        sb.from('generated_sites').select('id, site_name, lead_id, share_token, booking_only, first_opened_at, claimed_at, addon_interest_at')
+          .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
       // Per-lead audits + their run statuses → the report-ready pill's /a/<auditId> (served LIVE by
       // render-audit-report from the audit; no stored report row) + the audit_reply guard. Newest-first;
       // RLS scopes to the operator's own audits.
-      sb.from('ai_audits').select('id, lead_id, created_at, ai_audit_runs(status)').order('created_at', { ascending: false }),
+      /* ⛔ PAGINATED — and this is the one closest to biting: 216+ non-market audits and one more on
+         every outreach batch. Truncation here would silently drop the report-ready pill and the
+         audit_reply guard for whichever leads fell outside the window, i.e. it would stop the pitch
+         being sendable to a lead whose report exists. Same id tiebreaker on a non-unique created_at. */
+      fetchAllRows<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>('Inbox (audits)', (from, to) =>
+        sb.from('ai_audits').select('id, lead_id, created_at, ai_audit_runs(status)')
+          .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
     ]);
+    /* All four now come back as fetchAllRows results (`.rows`), not PostgREST responses (`.data`). */
     setMessages(msgRes.rows);
-    setLeads(((leadRes.data ?? []) as LeadLite[]).filter((l) => (l.phone ?? '').trim()));
-    setSites((siteRes.data ?? []) as Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>);
-    setAudits((reportRes.data ?? []) as Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>);
+    setLeads(leadRes.rows.filter((l) => (l.phone ?? '').trim()));
+    setSites(siteRes.rows);
+    setAudits(reportRes.rows);
     setIsLoading(false);
   }, []);
 
