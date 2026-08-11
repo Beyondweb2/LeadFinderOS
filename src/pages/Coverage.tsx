@@ -213,9 +213,28 @@ export default function Coverage() {
                     {t.population?.toLocaleString() ?? '—'}
                   </td>
                   <td className="px-3 py-1.5">
-                    <Badge variant="outline" className={`text-xs ${STATE_STYLE[t.state]}`}>
-                      {COVERAGE_LABEL[t.state]}
-                    </Badge>
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className={`text-xs ${STATE_STYLE[t.state]}`}>
+                        {COVERAGE_LABEL[t.state]}
+                      </Badge>
+                      {/* ⛔ THE COUNT IS A SECOND MARKER, NOT A FIFTH RUNG. The ladder is exclusive —
+                          a town shows at its furthest rung only — so "Measured" or "Worked" said
+                          nothing about whether leads had ever been pulled there, which is exactly
+                          the question ("which towns have I pulled leads from, without clicking in").
+                          Same Badge, same outline variant, same colour vocabulary as the `leads`
+                          rung, so it reads as the existing language rather than a new control.
+                          Rendered ONLY when there are leads: a "0 leads" badge on 700 untouched
+                          towns is noise, and the Untouched rung already says it. */}
+                      {t.leadCount > 0 && (
+                        <Badge
+                          variant="outline"
+                          className={`text-xs ${STATE_STYLE.leads}`}
+                          title={`${t.leadCount} lead${t.leadCount === 1 ? '' : 's'} in your CRM for ${trade} in ${t.name}`}
+                        >
+                          {t.leadCount} lead{t.leadCount === 1 ? '' : 's'}
+                        </Badge>
+                      )}
+                    </span>
                   </td>
                   <td className="px-3 py-1.5 text-right">
                     {/* ⛔ TWO ACTIONS, BECAUSE THERE WERE ALWAYS TWO JOBS. One button labelled "Find

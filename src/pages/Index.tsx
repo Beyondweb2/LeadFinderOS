@@ -14,6 +14,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { isFreshLead } from '@/lib/leadStatus';
+import { summariseSearchResults } from '@/lib/searchOutcome';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
@@ -294,6 +295,21 @@ const Index = () => {
     if (!match) return { inCrm: false, isFresh: false, crmLeadId: null };
     return { inCrm: true, isFresh: isFreshLead(match), crmLeadId: match.id };
   }, [crmLeads]);
+
+  /* ⛔ DID THAT SEARCH DO ANYTHING? Counted with getCrmState — the SAME dedupe the row buttons use
+     (google_maps_url OR business_name OR place_id, mirroring addLead) — so the summary and the rows
+     cannot disagree about what is already held. Derived, never stored: it recomputes when the CRM
+     list changes, so adding a lead moves the count without a refetch.
+     ⚠️ It says FOUND, not ADDED. A search writes nothing to the CRM; claiming otherwise on a click
+     that added nothing is the kind of over-confident sentence this app keeps getting caught by. */
+  const searchOutcome = useMemo(
+    () => summariseSearchResults(
+      leads.length,
+      leads.reduce((n, l) => n + (getCrmState(l).inCrm ? 1 : 0), 0),
+      { trade: lastSearchKeyword, town: lastSearchLocation },
+    ),
+    [leads, getCrmState, lastSearchKeyword, lastSearchLocation],
+  );
 
   // Remove confirm dialog (fresh leads). Holds the pending lead id + name.
   const [pendingRemove, setPendingRemove] = useState<{ id: string; name: string } | null>(null);
@@ -590,6 +606,34 @@ const Index = () => {
               </Button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ⛔ THE RESULT OF THE CLICK, STATED. Arriving from Coverage's "Find leads" ran a search and
+          then just… showed a table, with no way to tell a fresh pull from a town already worked.
+          This is the answer to "did that do something": how many came back, how many are new, how
+          many you already hold. Sits ABOVE the table so it is read before the rows.
+          ⚠️ Shown for the empty case too — "nothing found" is a result, and silence there is the
+          state that reads as a broken button. */}
+      {showLeadResults && !isLoading && !searchError && !searchNotice && lastSearchKeyword && (
+        <div className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 ${
+          searchOutcome.tone === 'new'
+            ? 'border-primary/30 bg-primary/5'
+            : searchOutcome.tone === 'all_known'
+              ? 'border-border/50 bg-muted/40'
+              : 'border-amber-500/40 bg-amber-500/10'
+        }`}>
+          {searchOutcome.tone === 'new'
+            ? <Search className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            : searchOutcome.tone === 'all_known'
+              ? <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />}
+          <p className={`text-xs leading-snug sm:text-sm ${
+            searchOutcome.tone === 'empty' ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'
+          }`}>
+            <span className="font-semibold text-foreground">{searchOutcome.headline}</span>
+            {searchOutcome.tone === 'new' && ' Use Add to add the ones you want — nothing is added by searching.'}
+          </p>
         </div>
       )}
 
