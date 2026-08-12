@@ -463,11 +463,30 @@ export function renderReportHtml(d: AiAuditReportData): string {
         summary += ` In that answer AI pointed to <span class="rv">${esc(uniq[0])}</span> instead.`;
       }
     }
+    /* ⛔ THIS LINE USED TO SAY "was never named" UNCONDITIONALLY, AND ON A NAMED CLIENT IT
+       CONTRADICTED THE HEADLINE TWO INCHES ABOVE IT. RG Locksmiths' report read "AI names you 8
+       times in 24 answers" and then, in the same eyeful, "RG Locksmiths cambs was never named."
+       Both came from the same run; only the second was a fixed string with no branch on the data.
+
+       ⛔ THE SCOPE OF THE QUOTE IS ONE ANSWER — one question, one engine. pickGutPunch only ever
+       selects a cell where `named` is false (`if (!er || er.named) continue`), so "not named in
+       this answer" is TRUE BY CONSTRUCTION whatever else the audit found. That is the sentence to
+       write when the business was named anywhere, because it is the only one guaranteed true at
+       the scope the reader is looking at.
+
+       ⚠️ "never" IS RESERVED FOR named === 0 ACROSS THE WHOLE AUDIT. Not "never by this engine":
+       a reader takes "never named" as a verdict on the audit, not a footnote about Gemini, and a
+       client who WAS named seven times by ChatGPT must never read the word. The strong sentence
+       survives for the clients it is actually true for — an absent business still gets told so. */
+    const neverNamedAnywhere = d.named === 0;
+    const attribution = neverNamedAnywhere
+      ? `${esc(d.businessName)} was never named.`
+      : `${esc(d.businessName)} wasn&rsquo;t named in this answer.`;
     gutbox = `
     <section class="gutbox">
       <div class="gb-eyebrow">What AI actually said</div>
       <p class="gb-sum">${summary}</p>
-      <div class="gb-attr">&mdash; ${esc(g.engineLabel)}. ${esc(d.businessName)} was never named.</div>
+      <div class="gb-attr">&mdash; ${esc(g.engineLabel)}. ${attribution}</div>
     </section>`;
   }
 
