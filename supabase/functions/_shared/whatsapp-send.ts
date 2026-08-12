@@ -77,6 +77,17 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
      onboarding link is built from the lead id alone, resolved per-lead by
      resolveOnboardingFollowupVars, which REFUSES rather than returning a partial. */
   re_engage: { lang: "en", vars: ["name", "onboarding_url"] },
+  /* ⛔ THE NAME IS MISSPELLED AT META AND THAT SPELLING IS LOAD-BEARING: "recieved", i before e.
+     Meta matches the registered name exactly, so "payment_received" would fail template-not-found.
+     Do NOT "fix" it here — it can only be corrected by re-registering at Meta and changing both
+     copies of this map in the same commit.
+     Payment confirmation, sent by stripe-webhook the moment a Findable payment lands. ONE variable:
+     {{1}} = business name. No url, so nothing to resolve and nothing to gate on a site.
+     ⚠️ NOT IN THE SPA's WHATSAPP_TEMPLATES PICKER, deliberately. It is triggered by a payment, not
+     chosen by an operator, and offering it in the bulk/lead picker would let a confirmation be sent
+     to somebody who has not paid. It lives here (and in the queue's mirror) only because the two
+     registries are asserted identical by scripts/re-engage-vars.test.ts. */
+  payment_recieved: { lang: "en", vars: ["name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 

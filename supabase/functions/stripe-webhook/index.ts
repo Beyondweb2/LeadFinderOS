@@ -2,6 +2,15 @@ import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { FINDABLE_SETUP_PRICE_GBP } from "../../../src/lib/findableOffer.ts";
+/* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
+   to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
+   service branch, so a webhook cannot call it; and giving the function that sends WhatsApp a new
+   auth branch to suit a webhook is the blast-radius decision instantly-push already refused
+   (CLAUDE.md §6). This is the same mechanism process-ai-audit-queue's automated audit_reply send
+   uses: resolve env, build the payload from the template registry, POST to Graph. */
+import {
+  claimTemplatePayload, renderTemplateBody, resolveWhatsAppEnv, sendViaGraph, toWhatsAppNumber,
+} from "../_shared/whatsapp-send.ts";
 
 // stripe-webhook — flips generated_sites.is_paid from Stripe subscription events.
 //
@@ -77,6 +86,13 @@ async function resolveBarberEmail(service: any, site: PaidSite): Promise<string 
  *  money-verified path and changing where its mail lands is not worth the risk today. */
 const ADMIN_EMAIL = "paul@move37.fun";
 
+/* ⛔ "recieved", i BEFORE e — THE TYPO IS THE REGISTERED NAME AT META AND IS THEREFORE CORRECT.
+   Meta matches the template name exactly; the correctly-spelled "payment_received" would fail
+   template-not-found. Named as a constant so the misspelling appears ONCE and cannot be silently
+   auto-corrected by a later reader or an editor. Registered in WA_TEMPLATES (and the queue's mirror)
+   as one variable: {{1}} = business name. */
+const TEMPLATE_PAYMENT_CONFIRM = "payment_recieved";
+
 /**
  * Best-effort: tell the operator a FINDABLE payment landed.
  *
@@ -131,6 +147,130 @@ async function notifyOfFindablePayment(opts: {
   } catch (e) {
     // NEVER affects the webhook's 200. The money is already written by the time this runs.
     console.error("[stripe-webhook] notifyOfFindablePayment failed (non-blocking):", (e as Error).message);
+  }
+}
+
+/* ══ THE CUSTOMER'S PAYMENT CONFIRMATION (WhatsApp) ═══════════════════════════════════════════
+   Until now a Findable payer received NOTHING: the webhook emailed the operator and started the
+   baseline, and the only confirmation was an on-screen panel they lose by closing the tab.
+
+   ⛔ PAYMENT RECORDING IS SACRED AND THIS IS BEST-EFFORT ON TOP. Every path returns rather than
+   throws, the whole body is wrapped, and it deliberately does NOT use mustWrite — mustWrite exists
+   to fail the webhook so Stripe retries, which is right for money and wrong for a greeting. A
+   failure here must never re-run the money writes. Same contract as notifyOfFindablePayment.
+
+   ⛔ A TEMPLATE BYPASSES THE 24-HOUR WINDOW, AND THAT IS WHY IT MUST BE ONE. The payer just used a
+   web checkout, which is not a WhatsApp inbound, so the customer-service window is almost always
+   CLOSED at this moment. The window check lives only in send-whatsapp-message's FREE-TEXT branch
+   (`if (env.live && !windowOpen) return "window_closed"`); a template payload posted to Graph has no
+   such gate anywhere in this codebase. Sending free text here would fail for nearly every customer.
+
+   ⚠️ TEST-MODE GATED like every other send path: nothing reaches Meta unless WHATSAPP_TEST_MODE is
+   "off" AND both secrets exist. Until then it logs WOULD SEND with the resolved variable.
+
+   ⚠️ SUPPRESSION IS NOT CHECKED, deliberately. This is transactional and customer-initiated — they
+   have just paid us — not outreach. `is_archived` IS checked, because it is a field on the row we
+   already read and it is the operator's explicit "stop contacting this business"; a paid+archived
+   lead is a contradiction worth surfacing rather than messaging through. */
+async function sendFindablePaymentConfirmation(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  service: any,
+  opts: { leadId: string; onboardingId: string; fallbackBusinessName: string },
+): Promise<void> {
+  const tag = `[findable-confirm] onboarding=${opts.onboardingId} lead=${opts.leadId}`;
+  try {
+    const { data: lead } = await service
+      .from("outreach_leads")
+      .select("id, business_name, phone, country, user_id, is_archived")
+      .eq("id", opts.leadId)
+      .maybeSingle();
+    if (!lead) { console.warn(`${tag}: lead row not found — confirmation skipped`); return; }
+
+    if (lead.is_archived === true) {
+      console.warn(`${tag}: lead is ARCHIVED yet has just paid — confirmation skipped, message them by hand`);
+      return;
+    }
+
+    /* GUARD 2 — no phone is a clean skip, not an error. The questionnaire never asks for one, so
+       the lead row is the only source and a lead without one is a normal state. */
+    const to = toWhatsAppNumber((lead.phone as string) ?? "", (lead.country as string) ?? null);
+    if (!to) {
+      console.warn(`${tag}: no usable WhatsApp number on the lead — confirmation skipped`);
+      return;
+    }
+
+    /* {{1}} — the same business name the report and the onboarding flow use, with the onboarding
+       row's own name as the fallback. Blank SKIPS rather than sending the "your business" default
+       templateBodyParams would otherwise substitute: a greeting-shaped template addressed to a
+       placeholder, sent to somebody who has just paid, is worse than no message. The operator email
+       fires either way, so a skip is never silent. */
+    const businessName = ((lead.business_name as string) ?? "").trim() || opts.fallbackBusinessName.trim();
+    if (!businessName) {
+      console.warn(`${tag}: no business name for {{1}} — confirmation skipped rather than sent to a placeholder`);
+      return;
+    }
+
+    /* Built from the template REGISTRY, never hand-rolled: claimTemplatePayload throws on a name
+       that is not in WA_TEMPLATES rather than guessing a variable shape, which is what turned a
+       one-variable guess into Meta rejection #132000 on re_engage. The claimUrl argument is unused
+       because this template's vars are ["name"] only. */
+    const payload = claimTemplatePayload(TEMPLATE_PAYMENT_CONFIRM, "en", businessName, "");
+
+    const env = resolveWhatsAppEnv();
+    if (!env.live) {
+      console.log(`${tag}: WOULD SEND ${TEMPLATE_PAYMENT_CONFIRM} → ${to} | {{1}}="${businessName}" (test mode / secrets missing — not sent)`);
+      return;
+    }
+
+    const res = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);
+    const status = res.ok ? "sent" : "failed";
+    if (res.ok) console.log(`${tag}: sent ${TEMPLATE_PAYMENT_CONFIRM} to ${to} (msg ${res.messageId})`);
+    else console.error(`${tag}: send FAILED: ${res.error}`);
+
+    /* Both logs, and both non-blocking — the message is already gone by this point.
+       whatsapp_messages.user_id is the LEAD'S OWNER, not null: the Inbox groups a conversation by
+       (user_id, phone), so a null here would strand the confirmation in a separate "unassigned"
+       thread instead of appearing in the customer's own. whatsapp_sends.user_id IS null, which is
+       the convention for an automated send and matches both queue writes.
+       ⚠️ whatsapp_sends is what the daily cap counts, so this confirmation spends one send of
+       DAILY_CAP — correct, because it is a real message to Meta. */
+    try {
+      await service.from("whatsapp_messages").insert({
+        direction: "outbound",
+        user_id: (lead.user_id as string | null) ?? null,
+        lead_id: lead.id,
+        phone: to,
+        body: renderTemplateBody(TEMPLATE_PAYMENT_CONFIRM, businessName, ""),
+        message_type: "template",
+        template_name: TEMPLATE_PAYMENT_CONFIRM,
+        wa_message_id: res.messageId,
+        status,
+        test_mode: env.testMode,
+        error: res.error,
+      });
+    } catch (e) {
+      console.error(`${tag}: message-log insert threw (non-blocking):`, (e as Error).message);
+    }
+    try {
+      await service.from("whatsapp_sends").insert({
+        lead_id: lead.id,
+        user_id: null,
+        template: TEMPLATE_PAYMENT_CONFIRM,
+        phone: to,
+        business_name: businessName,
+        claim_url: null,
+        test_mode: env.testMode,
+        message_id: res.messageId,
+        delivery_status: status,
+        error: res.error,
+      });
+    } catch (e) {
+      console.error(`${tag}: send-audit insert threw (non-blocking):`, (e as Error).message);
+    }
+  } catch (e) {
+    /* GUARD 1 — the outermost net. Nothing in here may reach the caller: the money is already
+       written and a thrown error would 500 the webhook and make Stripe replay the whole event. */
+    console.error(`${tag}: confirmation threw (non-blocking, payment is unaffected):`, (e as Error).message);
   }
 }
 
@@ -469,6 +609,27 @@ Deno.serve(async (req) => {
               });
             } else {
               console.log(`[stripe-webhook] findable payment email skipped: lead ${findableLeadId} already had a payment (retry?)`);
+            }
+
+            /* THE CUSTOMER'S CONFIRMATION — WhatsApp template, best-effort, after the paid write.
+               ⛔ GUARD 4, IDEMPOTENCY: gated on the SAME `alreadyPaid` flag as the operator email
+               above, and for the same reason. Stripe retries webhooks; `alreadyPaid` is read from
+               the lead's amount_paid BEFORE the write, so on a replay it is true and the customer
+               is not messaged twice. The two notifications are kept as separate `if` blocks rather
+               than merged so that a change to one can never silently re-gate the other.
+               ⚠️ Requires findableLeadId: the phone lives on the lead and nowhere else (the
+               questionnaire never asks for one). A payment with no lead is already reported to the
+               operator by the note above, which is the route to fixing it by hand.
+               ⚠️ Ordered BEFORE the baseline deliberately — the baseline starts audits and can take
+               a while, and the customer's confirmation should not queue behind it. Neither can throw. */
+            if (!alreadyPaid && findableLeadId) {
+              await sendFindablePaymentConfirmation(service, {
+                leadId: findableLeadId,
+                onboardingId,
+                fallbackBusinessName: ((leadForEmail?.business_name as string) ?? "").trim(),
+              });
+            } else if (alreadyPaid) {
+              console.log(`[stripe-webhook] findable confirmation skipped: lead ${findableLeadId} already had a payment (retry?)`);
             }
 
             // START THE PAID BASELINE. This is the moment the customer becomes a client, and the
