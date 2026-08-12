@@ -48,6 +48,10 @@ export interface WaConversation {
   /** Current outreach status of the matched lead (null = no lead). Drives the
    *  editable status pill + the hide-not_interested behaviour. */
   leadStatus: string | null;
+  /** ⛔ A PAYING CUSTOMER, FROM `amount_paid > 0` — NEVER FROM `leadStatus`. The two diverge
+   *  (CLAUDE.md §6): a customer moved on to `in_delivery` is still paid. The status filter exempts
+   *  a paid conversation so a customer can never be filtered out of the Inbox. */
+  isPaid: boolean;
   label: string;
   unassigned: boolean;
   lastMessage: WaMessage;
@@ -202,6 +206,18 @@ export function useInbox() {
   // through the same path it drops another rep's.
   const ownLeadIds = useMemo(() => new Set(leads.map((l) => l.id)), [leads]);
 
+  /* ⛔ WHO HAS ACTUALLY PAID — built alongside ownLeadIds, off the SAME paginated leads read, which
+     already selects amount_paid. Keyed on `amount_paid > 0` and never on the status: `paid` means
+     that everywhere (CLAUDE.md §6), and reading `payment_received` instead would drop a customer the
+     moment they moved on to `in_delivery` — i.e. the moment work started.
+     ⚠️ A lead absent from this set is NOT "not paid" by inference — it is simply not in the read.
+     That is fine here because the set is derived from the same rows the conversations are, so a lead
+     that is missing has no conversation either. */
+  const paidLeadIds = useMemo(
+    () => new Set(leads.filter((l) => (l.amount_paid ?? 0) > 0).map((l) => l.id)),
+    [leads],
+  );
+
   // Most-recent generated site per lead (sites are ordered newest-first, so the
   // first row seen for a lead_id wins). Drives the thread's "View site" preview link.
   const sitesByLeadId = useMemo(() => {
@@ -237,6 +253,7 @@ export function useInbox() {
         leadId,
         campaignId: leadId ? (campaignByLeadId[leadId] ?? null) : null,
         leadStatus: leadId ? (statusByLeadId[leadId] ?? null) : null,
+        isPaid: leadId ? paidLeadIds.has(leadId) : false,
         label: (leadId && leadNameById[leadId]) || `+${last.phone}`,
         unassigned: last.user_id == null,
         lastMessage: last,
@@ -245,7 +262,7 @@ export function useInbox() {
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [messages, leadNameById, campaignByLeadId, statusByLeadId, ownLeadIds]);
+  }, [messages, leadNameById, campaignByLeadId, statusByLeadId, paidLeadIds, ownLeadIds]);
 
   const messagesForKey = useCallback(
     (key: string) => messages.filter((m) => convKey(m.user_id, m.phone) === key),
