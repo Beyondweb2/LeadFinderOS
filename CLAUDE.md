@@ -897,6 +897,12 @@ record, and a separate page meant leaving the two screens he actually works in t
   - ⚠️ **Never write the cap as a number in prose.** Two comments have already gone stale this way:
     the queue header once said 40 while the constant was 100 (Paul believed his cap was 40), and
     `send-whatsapp-message` said "the 10/day outreach cap" until 2026-08-12. Name the constant.
+  - ⛔ **YOU CANNOT READ THE LIVE CAP FROM HERE, AND THAT IS NOT A DEPLOY FAILURE.**
+    `mode:"status"` returns the whole payload (`cap`, `sentToday`, `windowOpen`, …) and sends
+    nothing — but every credential available to a script is refused (see the service-role-bearer
+    finding in §8 above). It needs CRON_SECRET or Paul's admin JWT. **The queue panel reads `cap`
+    straight from that payload**, so the one-glance check is Paul opening it: "x / 120". Do not
+    re-derive this, and do not read the 401 as the deploy having failed.
 - **TWO LIVE CRON JOBS EXIST ONLY IN THE DATABASE, NOT IN MIGRATIONS.** Confirmed from `cron.job`
   2026-08-04: **`notify-onboarding-submit-run`** (every minute — the "submitted but not paid" email
   to Paul WORKS) has no migration file, and the `bulk_jobs` `job_type` constraint has the same gap.
@@ -1236,13 +1242,26 @@ record, and a separate page meant leaving the two screens he actually works in t
     (`index.ts:136-138`), **v7 → v8, entrypoint build 5 → 8**, and the 401 is byte-for-byte
     unchanged. A stale deploy was not the cause. §4's trap in reverse: the deploy-age signal was
     real (build 5 behind version 7) and had **nothing to do with the symptom**.
-  - ⚠️ **THE REMAINING EXPLANATION, UNTESTED FROM HERE:** the branch requires
-    `token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")`. This project has **new-format keys**
-    (`sb_publishable_…`, `sb_secret_…`) alongside the legacy JWT pair. If the platform injects the
-    new secret into that env var, the string compare fails, the call falls through to the user
-    branch, `auth.getUser()` finds no user for a service JWT, and you get exactly that message.
-    **The `sb_secret_…` value is MASKED in `supabase projects api-keys`**, so this cannot be
-    confirmed without reading it from the dashboard. Do not "fix" the auth code until it is.
+  - ✅ **RESOLVED 2026-08-12 ON A DIFFERENT FUNCTION, AND THE ANSWER GENERALISES: EVERY
+    SERVICE-ROLE-BEARER BRANCH IN THIS PROJECT IS DEAD, AND IT CANNOT BE REACHED BY SENDING A
+    DIFFERENT KEY.** Reproduced on `process-whatsapp-queue` (same `authHeader === "Bearer " +
+    SUPABASE_SERVICE_ROLE_KEY` shape) while verifying the daily cap. **The response BODY is the
+    discriminator**, and nobody had read it:
+    | Bearer sent | HTTP | body | what it proves |
+    |---|---|---|---|
+    | legacy `service_role` JWT | 401 | `{"ok":false,"error":"unauthorized"}` | **the handler's own reply** — the gateway passed it, so the env var is **NOT** the legacy JWT |
+    | new `sb_secret_…` | 401 | **empty** | the **gateway** rejected it; the handler never ran |
+    | no header at all | 401 | `{"ok":false,"error":"unauthorized"}` | handler again (confirms `verify_jwt = false`) |
+    The two requirements are **mutually exclusive**: the gateway only forwards a JWT-shaped bearer,
+    and the handler compares against a value that is no longer the legacy JWT (so, the `sb_secret_…`
+    one). No key you can send satisfies both. ⛔ **So do NOT "fix" this by hunting for the right
+    key** — the only working callers are **CRON_SECRET via `x-cron-secret`** and **an operator's own
+    admin JWT**. The service-role branch is dead code on every function that has one.
+  - ⚠️ **AND THE OLD NOTE HERE WAS WRONG ON A CHECKABLE FACT: `sb_secret_…` IS NOT MASKED.**
+    `npx supabase projects api-keys --output json` returns **four** entries — `anon` and
+    `service_role` (legacy JWTs) plus two named `default` (`sb_publishable_…`, `sb_secret_…`), all in
+    full. The claim that it was masked is what stopped the previous session testing this. Check the
+    output before recording that something cannot be read.
   - ✅ **AND THE PANEL BUTTON WORKS, AND ALWAYS DID.** `MarketPanel` invokes the function with the
     OPERATOR'S OWN JWT, which takes the user branch and the ownership check — untouched by any of
     this. So the cleaner is available in the app right now. Only a script is locked out.
