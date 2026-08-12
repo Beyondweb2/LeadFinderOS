@@ -85,7 +85,7 @@ interface DashboardMetrics {
 /* ⚠️ MIRRORS FOUNDER_PRICE_GBP in supabase/functions/_shared/offer-price.ts (what is CHARGED) and
    FOUNDER_OFFER_PRICE_LABEL / FOUNDER_OFFER_COUNT in src/lib/founderOffer.ts (what the report SAYS).
    Three places, one offer. This one only counts; it decides nothing. */
-const FOUNDER_PRICE_GBP = 19.99;
+const FOUNDER_PRICE_GBP = 49.99;
 const FOUNDER_PLACES = 10;
 
 const getDateRanges = () => {
@@ -355,8 +355,19 @@ export function useDashboardMetrics(isAdmin = false) {
       if ((l.amount_paid ?? 0) > 0) funnelPaid += 1;
       /* THE FOUNDER PRICE EXACTLY, within a penny. amount_paid is the real charged amount
          (stripe-webhook writes amount_total / 100), so this counts places actually taken at the
-         founder price — not every paid lead, and not everything below full price, which would sweep
-         in the £49.99 quote that predates this offer. */
+         founder price — not every paid lead, and not everything below full price.
+         ⛔ THE PRICE MOVED TO £49.99 ON 2026-08-12, AND THIS COUNTER IS NOT RETROSPECTIVE. It matches
+         the CURRENT constant, so the one sale taken at the old £19.99 (RG Locksmiths) stopped being
+         counted as a founder place the moment the constant changed — the tile went 1 → 0 with no
+         data touched and nothing thrown. That is the honest behaviour for "places taken at the
+         founder price" only if you read it as "at the price we charge today"; if the tile should
+         count every founder-era sale it needs a list of historical prices, not one constant.
+         Flagged to Paul rather than decided here.
+         ⚠️ AND THE OLD REASON FOR THE EXACT MATCH HAS INVERTED. This comment used to say the penny
+         tolerance stopped it sweeping in "the £49.99 quote that predates this offer" — £49.99 is now
+         the founder price itself. Checked before the change: exactly one lead has ever had a
+         non-null amount_paid (RG, £19.99) and NO lead has ever been charged £49.99, so nothing
+         historical is swept in by the new value. */
       if (Math.abs((l.amount_paid ?? 0) - FOUNDER_PRICE_GBP) < 0.01) founderSales += 1;
     }
     const auditFunnel: AuditFunnel = {

@@ -171,14 +171,21 @@ Happy to fit around you.`;
    every caller, same convention as onboarding_followup). Display-only: Meta renders the real message
    from its own copy, so nothing in this string can change a send — but it IS what the operator reads
    in the Inbox as a record of what went out, so it is kept character-for-character.
-   ⛔ AND IT IS THE THIRD PLACE THE PRICE NOW LIVES. This body hardcodes "£19.99 instead of £99";
+   ⛔ AND IT IS THE THIRD PLACE THE PRICE NOW LIVES. This body hardcodes "£49.99 instead of £99";
    FINDABLE_SETUP_PRICE_GBP is the constant, and scripts/check-cross-repo-sync.mjs enforces it
    against findable-site — but it cannot reach a string inside a Meta-registered template, exactly
    like the Stripe payment-link description in §6. Change the price and this template has to be
-   re-registered at Meta BY HAND, and this copy updated with it. */
+   re-registered at Meta BY HAND, and this copy updated with it.
+   ⛔ £19.99 → £49.99 ON 2026-08-12, AND UNTIL PAUL RE-REGISTERS IT AT META THIS STRING IS THE ONLY
+   HALF THAT HAS CHANGED. Meta renders the real message from its own copy, so a send made before the
+   re-registration lands still says £19.99 to the prospect while the Inbox transcript and the
+   checkout both say £49.99 — advertised low, charged high, which is the one direction that produces
+   a complaint. The number changed here and NOWHERE ELSE in this body, deliberately: a minimal diff
+   is the version most likely to clear Meta review unchanged, and re-approval is the gate on the two
+   halves agreeing again. */
 const reEngageBody = (b: string, u: string) =>
   `Hi ${b}, following up on the AI visibility report we sent over.
-We're doing the next ten businesses at £19.99 instead of £99 - we want honest feedback on the work, so that's the trade.
+We're doing the next ten businesses at £49.99 instead of £99 - we want honest feedback on the work, so that's the trade.
 Five quick questions and we're started: ${u}
 Happy to answer anything first if you'd rather.`;
 

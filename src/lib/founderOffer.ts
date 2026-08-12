@@ -26,7 +26,7 @@ export const FOUNDER_OFFER_LIVE = true;
 
 /** What they pay. A LABEL, not a number: it is only ever displayed, never arithmetic, and the
  *  actual charge is whatever the Stripe link is configured for. */
-export const FOUNDER_OFFER_PRICE_LABEL = "£19.99";
+export const FOUNDER_OFFER_PRICE_LABEL = "£49.99";
 
 /** The normal price, so the offer has something to be an offer against. Matches
  *  FINDABLE_SETUP_PRICE_GBP (99) in findableOffer.ts — if that changes, change this. */
