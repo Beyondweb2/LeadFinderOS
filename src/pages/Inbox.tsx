@@ -285,7 +285,13 @@ const Inbox = () => {
           ? byCampaign.filter((c) => (c.leadId && sitesByLeadId[c.leadId]?.claimedAt != null) || c.unassigned)
           : statusFilter === '__upsell__'
             ? byCampaign.filter((c) => (c.leadId && sitesByLeadId[c.leadId]?.addonInterestAt != null) || c.unassigned)
-            : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned);
+            /* ⛔ AND A PAYING CUSTOMER IS NEVER FILTERED OUT. `isPaid` comes from `amount_paid > 0`
+               (CLAUDE.md §6), not from the status — which is the whole point: the moment a customer
+               moves to `in_delivery` their status stops matching every other filter, and the person
+               paying is precisely the one who must not vanish while Paul is filtering the list.
+               Same convention as `unassigned` directly beside it: a bucket that must always be
+               visible is exempted, not relied on to happen to match. */
+            : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned || c.isPaid);
     // Hide dead-state convos (not_interested / closed) unless "Show hidden" is on OR
     // the user has explicitly filtered TO that status. `removedKeys` gives an instant
     // optimistic drop right after "Remove from inbox" (before the refetch lands).
@@ -565,6 +571,8 @@ const Inbox = () => {
         key, phone: norm, userId: user.id, leadId: lead.id,
         campaignId: lead.campaign_id ?? null,
         leadStatus: lead.status ?? null,
+        /* Same rule as the fetched conversations: money, not status. LeadLite carries amount_paid. */
+        isPaid: (lead.amount_paid ?? 0) > 0,
         label: lead.business_name || `+${norm}`, unassigned: false,
         lastMessage: undefined as never, lastMessageAt: new Date(0).toISOString(), lastInboundAt: null,
       };
