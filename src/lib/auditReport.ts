@@ -95,6 +95,20 @@ const DOMAIN_GENERIC = new Set([
   'consultant', 'consultants', 'consultancy', 'finance', 'financial', 'services', 'service', 'solutions',
   'firm', 'firms', 'ltd', 'limited', 'llp', 'plc', 'inc', 'associates', 'partners', 'partnership', 'group',
   'company', 'co', 'agency', 'agencies', 'specialists', 'experts', 'professional', 'professionals',
+  /* ⛔ THE TRADES VOCABULARY WAS MISSING ENTIRELY, and that is why junk reached a CLIENT report.
+     These sets were built for accountancy and hospitality; nothing here described a trade, so
+     "Locksmith" (9×) and "Safe" (14×) passed isRealCompetitor and "Safe" printed as RG Locksmiths'
+     third-biggest competitor. Same rule as every entry above: a word that says what a firm DOES,
+     never what it is CALLED.
+     ⚠️ THIS DOES NOT DROP REAL FIRMS, because `words.every(generic)` needs EVERY word to be
+     generic — "Abbey Locksmiths" keeps "abbey", "Cambs Lock & Safe" keeps "cambs", "Safe And
+     Secure Locksmiths" keeps "secure". Only a bare category token is lost, and a bare category
+     token out of an extractor is a fragment, not a name. */
+  'locksmith', 'locksmiths', 'plumber', 'plumbers', 'plumbing', 'electrician', 'electricians',
+  'builder', 'builders', 'roofer', 'roofers', 'roofing', 'glazier', 'glaziers', 'glazing',
+  'joiner', 'joiners', 'joinery', 'carpenter', 'carpenters', 'carpentry', 'engineer', 'engineers',
+  'trades', 'tradesman', 'tradesmen', 'contractor', 'contractors', 'repairs', 'repair',
+  'installation', 'installations', 'maintenance', 'callout', 'callouts',
 ]);
 // Ordinary English words (verbs, helpers, guide-speak) that leak in as capitalised SENTENCE
 // FRAGMENTS — "Choosing an accountant…", "Company Help", "Finding the right…". Never a firm's
@@ -114,6 +128,18 @@ const NOISE_WORDS = new Set([
   'cost', 'costs', 'price', 'prices', 'pricing', 'fee', 'fees', 'value', 'budget', 'cheap', 'affordable',
   'software', 'tool', 'tools', 'platform', 'platforms', 'app', 'apps', 'system', 'systems', 'online', 'digital',
   'support', 'quality', 'feature', 'features', 'options', 'choice', 'choices', 'range', 'expertise', 'experience',
+  /* Trade-answer nouns and adjectives that leak in capitalised from the prose — "Emergency
+     lockouts…", "Based in Huntingdon…", "Safe and secure…". Measured on RG Locksmiths' own report:
+     Safe 14×, Emergency 7×, Based 7×, all printed or counted as competing firms. */
+  'safe', 'safes', 'lock', 'locks', 'key', 'keys', 'door', 'doors', 'window', 'windows',
+  'emergency', 'based',
+  /* ⛔ DELIBERATELY NOT ADDED, AND THE TEST IS WHY: 'secure', 'local', 'mobile', 'trusted',
+     'approved', 'certified', 'residential', 'commercial', 'domestic'. Each looks like noise on its
+     own, but `words.every(generic)` drops a name only when EVERY word is generic — so adding
+     'secure' made "Safe And Secure Locksmiths" a fully generic phrase and rejected a REAL FIRM in
+     RG's own results. scripts/report-attribution.test.ts caught it before it shipped and now pins
+     that name. Anything added here must be a word no firm would trade under WITH ONLY OTHER
+     GENERIC WORDS beside it — which is a much higher bar than "sounds generic". */
 ]);
 // NEVER a competing business: government / tax authorities + statutory terms, and accounting
 // SOFTWARE (tools, not rival firms). These leak from answer_text ("Corporation Tax", "HM Revenue",
@@ -738,16 +764,35 @@ export function buildReportData(
   const ctxMatch = buildMatchContext(ctx.businessType ?? '', ctx.locationText ?? '');
   const groups = groupNames([...counts.values()].map((c) => c.name), ctxMatch);
   const byGroup = new Map<string, { name: string; count: number; spellings: string[] }>();
+  /* ⛔ THE LABEL IS THE PART A CLIENT READS, AND THE MOST-MENTIONED SPELLING CAN BE A FRAGMENT.
+     "Safe" won its own group 14× on RG Locksmiths' report and printed as his third-biggest
+     competitor, while the same group held "Safe And Secure Locksmiths" — the actual firm. The count
+     was right; the name on it was not, and a reader who does not recognise "Safe" as a business
+     stops trusting the numbers beside it.
+     So the label is the most-mentioned spelling THAT READS AS A FIRM ON ITS OWN — more than one
+     word — falling back to the most-mentioned when the group has nothing longer. The COUNT is
+     unchanged either way: every spelling in the group still contributes, so relabelling moves no
+     numbers, it only stops a fragment wearing them. */
   for (const grp of groups.values()) {
     let total = 0;
     let best = { name: grp.names[0] ?? '', count: -1 };
+    let bestFull = { name: '', count: -1 };
     for (const n of grp.names) {
       const c = counts.get(n.trim().toLowerCase());
       const got = c?.count ?? 0;
       total += got;
       if (got > best.count) best = { name: n, count: got };
+      if (n.trim().split(/\s+/).length > 1 && got > bestFull.count) bestFull = { name: n, count: got };
     }
-    if (total > 0) byGroup.set(grp.key, { name: best.name, count: total, spellings: grp.names });
+    const label = bestFull.count > 0 ? bestFull.name : best.name;
+    /* ⛔ AND THE LABEL IS RE-CHECKED, because it is what gets printed. isRealCompetitor already
+       filtered every spelling on the way IN (line ~721), but grouping can still surface a name that
+       does not stand up alone; re-testing the one string that reaches the page is cheap and closes
+       the gap by construction rather than by argument. A dropped group takes its mentions with it,
+       so competitorMentions below stays the total of what is actually shown. */
+    if (total > 0 && isRealCompetitor(label, ctx.locationText)) {
+      byGroup.set(grp.key, { name: label, count: total, spellings: grp.names });
+    }
   }
   /* Ranked by grouped count, ties broken by name so the order is stable between renders of the
      same audit — a report that reshuffles its competitors on refresh reads as made up. */
