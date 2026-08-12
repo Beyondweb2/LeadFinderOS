@@ -2487,10 +2487,17 @@ export function OutreachTable({
                                       lead (normalizeWaNumber) and creates a synthetic thread when
                                       there are no messages yet, then lands on /inbox?c=<key>.
                                       Hand-building that URL here would need a second copy of the key
-                                      rule and would open an EMPTY inbox for a lead with no thread. */}
+                                      rule and would open an EMPTY inbox for a lead with no thread.
+                                      ⛔ AND handleCallClick IS DELIBERATELY NOT CALLED. It was on the
+                                      old link and keeping it "to preserve behaviour" would now RECORD
+                                      A CALL THAT NEVER HAPPENS: it writes contact_method='call' and
+                                      runs executeContact(lead,'call'), so this item would log a call
+                                      attempt and then race handleWhatsAppClick's 'whatsapp' write for
+                                      the same field. The item is not a call any more, so it does
+                                      exactly what the green WhatsApp button does and nothing else. */}
                                   <DropdownMenuItem
                                     className="flex items-center gap-2 cursor-pointer"
-                                    onClick={() => { handleCallClick(lead); handleWhatsAppClick(lead); }}
+                                    onClick={() => handleWhatsAppClick(lead)}
                                   >
                                     <Phone className="h-4 w-4 text-green-500" />
                                     WhatsApp thread
