@@ -35,7 +35,7 @@ import { FINDABLE_SETUP_PRICE_GBP } from "../../../src/lib/findableOffer.ts";
  *  here rather than imported so this file stays inside the edge bundle's dependency budget, exactly
  *  as create-ai-audit states MARKET_MAX_QUESTION_COUNT. Change one, change the other — and the
  *  report's label is only what it SAYS, this is what it CHARGES. */
-export const FOUNDER_PRICE_GBP = 19.99;
+export const FOUNDER_PRICE_GBP = 49.99;
 export const FOUNDER_OFFER_LIVE = true;
 
 export interface OfferPrice {

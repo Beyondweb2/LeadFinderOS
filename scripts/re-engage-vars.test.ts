@@ -88,7 +88,15 @@ console.log("\n── THE PREVIEW MATCHES WHAT META SENDS ──");
   const body = renderTemplateBody("re_engage", "NeiL Hughes driving tuition", "https://findable.live/onboarding/x/?lead=1");
   ok(body.startsWith("Hi NeiL Hughes driving tuition, following up on the AI visibility report we sent over."),
     "opens with the approved first line, {{1}} filled");
-  ok(body.includes("£19.99 instead of £99"), "carries the approved offer line");
+  /* ⛔ £49.99 SINCE 2026-08-12, AND THE ASSERTION NAMES BOTH NUMBERS ON PURPOSE. The founder price
+     moved; the £99 anchor did not. Asserting the whole phrase rather than just the new number is
+     what would catch a future edit that "tidies" the anchor down to match the offer — the anchor is
+     FINDABLE_SETUP_PRICE_GBP and changing it is a different decision entirely.
+     ⚠️ THIS ASSERTS THE CODE'S PREVIEW STRING, NOT WHAT META SENDS. Meta renders the real message
+     from its own registered copy, so this passing means the Inbox transcript is right — it says
+     nothing about the prospect's phone until the template is re-registered by hand. */
+  ok(body.includes("£49.99 instead of £99"), "carries the approved offer line, at the new price");
+  ok(!body.includes("£19.99"), "and the old founder price is gone from the preview");
   ok(body.includes("Five quick questions and we're started: https://findable.live/onboarding/x/?lead=1"),
     "{{2}} is rendered inline where the approved copy puts it");
   ok(body.trimEnd().endsWith("Happy to answer anything first if you'd rather."), "and the approved closing line");

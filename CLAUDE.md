@@ -1337,16 +1337,18 @@ record, and a separate page meant leaving the two screens he actually works in t
       onboarding row marked paid, no `amount_paid`, no operator email and no baseline. It also meant
       `showFounderOffer` (which hides on `amount_paid > 0`) would have kept selling to a customer.
     - ⛔ **NO LEAD, NO LINK, NO BUTTON — and it is a PRICE guard.** `offerPriceForLead` returns the
-      full **£99** for `no_lead`, so a button without one advertises £19.99 and charges £99. Same for
-      an unconfigured `FINDABLE_SITE_ORIGIN`. Either missing → offer copy + guarantee render with no
-      button, and a `console.warn` says which reason. 2 of 216 non-market audits have no `lead_id`
-      and both are already in `FOUNDER_OFFER_HIDE_AUDIT_IDS`.
+      full **£99** for `no_lead`, so a button without one advertises the founder price and charges
+      £99. Same for an unconfigured `FINDABLE_SITE_ORIGIN`. Either missing → offer copy + guarantee
+      render with no button, and a `console.warn` says which reason. 2 of 216 non-market audits have
+      no `lead_id` and both are already in `FOUNDER_OFFER_HIDE_AUDIT_IDS`.
     - 🔴 **THE PRICE HAS A SECOND SWITCH NOBODY WOULD FIND: `FINDABLE_SETUP_PRICE_ID`.** If that env
       var is SET, `findable-checkout` uses a fixed Stripe Price and **ignores `offer.gbp` entirely** —
-      report says £19.99, Stripe charges the Price object — **and the guarantee goes with it**, because
-      `product_data[description] = FINDABLE_GUARANTEE` only exists on the `price_data` branch.
-      Confirmed UNSET by Paul 2026-08-11 (only `FINDABLE_SITE_ORIGIN` is set), so the £19.99 path is
-      live. **Re-confirm before ever quoting the founder price as safe.**
+      the report says one number, Stripe charges the Price object — **and the guarantee goes with
+      it**, because `product_data[description] = FINDABLE_GUARANTEE` only exists on the `price_data`
+      branch. Confirmed UNSET by Paul 2026-08-11 (only `FINDABLE_SITE_ORIGIN` is set), so the
+      derived-price path is live. **Re-confirm before ever quoting the founder price as safe.**
+      ⚠️ Deliberately no number in either bullet now — the founder price has already moved once
+      (£19.99 → £49.99, 2026-08-12) and prose that names it goes stale. See §11.
   - 🔴 **STILL TO BUILD, both in `findable-site` + one edge action:**
     1. **Pre-pay = eligibility only.** ✅ Verified byte-for-byte: `ServeGateRow` reads EXACTLY
        `website_platform`, `website_platform_other`, `website_manager`, `willing_to_migrate` — the
@@ -1618,3 +1620,57 @@ record, and a separate page meant leaving the two screens he actually works in t
   there in a collapsed block so the reasoning that went wrong stays visible. §5 of this file is the truth.
 - Both name `Claude Opus 4.8` in the co-author trailer. **Use Opus 5** (§3).
 - There is **no `DEPLOY.md`** in this repo. Deploy rules are §3 and §4 here.
+
+---
+
+## 11. 🔴 THE FOUNDER PRICE — £49.99 since 2026-08-12, and the two halves that lag
+
+**£19.99 → £49.99. UPFRONT ONE-OFF ONLY.** No subscription was added: `findable-checkout` is still
+`mode: "payment"`, and that line is load-bearing — see the recon below before anyone "adds monthly".
+The £99 anchor (`FINDABLE_SETUP_PRICE_GBP`), the guarantee and `FINDABLE_SETUP_PRICE_ID` (unset) were
+all deliberately untouched.
+
+- ✅ **THREE CODE CONSTANTS, AND ONE COMMAND PROVES THEY AGREE.** `FOUNDER_PRICE_GBP`
+  (`_shared/offer-price.ts`, **CHARGED**), `FOUNDER_OFFER_PRICE_LABEL` (`founderOffer.ts`, what the
+  report SAYS), `FOUNDER_PRICE_GBP` (`useDashboardMetrics.ts`, what is COUNTED). Run
+  **`node scripts/check-cross-repo-sync.mjs`** — it fails on any drift and passed 8/8 at 49.99.
+- ⛔ **TWO COPIES NO SCRIPT CAN REACH, AND BOTH ARE PAUL'S BY HAND:**
+  1. **The Stripe Payment Link** (kept for sending manually on WhatsApp) — its amount AND its
+     description. A stale amount here means a hand-sent link charges the old price.
+  2. **The Meta-registered `re_engage` template.** The string in `_shared/whatsapp-send.ts` is
+     DISPLAY-ONLY — Meta renders the real message from its own copy. Until re-registration lands,
+     a send says £19.99 to the prospect while the Inbox transcript and the checkout say £49.99:
+     **advertised low, charged high, the one direction that produces a complaint.**
+- ⚠️ **THE DASHBOARD FOUNDER TILE WENT 1 → 0 AND NOTHING IS WRONG.** It counts leads whose
+  `amount_paid` matches the CURRENT constant within a penny, so RG Locksmiths (£19.99, the only
+  payment ever taken) stopped counting the moment the constant moved. No data changed. If that tile
+  should count every founder-era sale it needs a list of historical prices, not one constant —
+  Paul's call, deliberately not made here.
+- ✅ **Checked before changing it: no lead has EVER been charged £49.99** (exactly one lead has a
+  non-null `amount_paid` at all). So the new value sweeps nothing historical into that counter —
+  which mattered, because the comment there used to justify the exact match by saying it kept out
+  "the £49.99 quote that predates this offer". That reasoning inverted; the comment was rewritten
+  rather than left to mislead.
+- ⛔ **DEPLOY ORDER IS A PRICE GUARD, NOT A PREFERENCE: DISPLAY BEFORE CHARGE.** `render-audit-report`
+  and `findable-onboarding` show the price; `findable-checkout` takes it. Deploy the display pair
+  FIRST and the gap reads "shown £49.99, charged £19.99" — a pleasant surprise. Reverse it and the
+  gap is "shown £19.99, charged £49.99". Same rule the `serverPriceLabel` comment in findable-site
+  states for the fallback.
+- ⚠️ **NINE FUNCTIONS CARRY THESE VALUES, NOT THREE** — the shared-file trap (§4) in its most
+  ordinary form. Walked from each `index.ts` following relative imports:
+  `create-ai-audit`, `findable-checkout`, `findable-onboarding`, `process-ai-audit-queue`,
+  `process-sms-queue`, `process-whatsapp-queue`, `render-audit-report`, `send-whatsapp-message`,
+  `whatsapp-status`. Two more — `instantly-push`, `run-seo-scan` — reach `founderOffer.ts` **only
+  through `import type`, which is erased at build**, so they carry no values; they were redeployed
+  anyway because over-deploying is free and the recorded failure is always the other direction.
+- 🔴 **AND THE MONTHLY IDEA IS SCOPED BUT NOT BUILT.** Recon 2026-08-12: `findable-checkout` creates
+  a ONE-OFF session (`mode: "payment"`). Subscription code exists but belongs to the BARBER product —
+  `customer.subscription.*` reads `metadata.generated_site_id` and flips `generated_sites.is_paid`.
+  For Findable there is **no `invoice.paid` handler** (so renewals would be invisible) and **no
+  Stripe identifier persisted anywhere** (no customer id, subscription id or status on any table).
+  ⛔ The real blocker is not Stripe: **`paid = amount_paid > 0` is a single scalar** (§6, §6d) and
+  cannot express "upfront + monthly, still active" — a churned customer keeps `amount_paid > 0` and
+  reads as paying forever. Decide that before any subscription work.
+  ⚠️ Also unresolved: `paid_for` is written as **"Findable - Setup + first 2 months"**, so today's
+  one-off already claims two months; and the guarantee's "or a full refund" is byte-locked across
+  both repos and becomes ambiguous the moment billing recurs.
