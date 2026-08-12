@@ -872,6 +872,31 @@ record, and a separate page meant leaving the two screens he actually works in t
 
 ## 8. Known open problems — don't rediscover these
 
+- 🔴 **THE WHATSAPP DAILY CAP IS ALMOST OUT OF ROAD, AND REPLIES SPEND IT WITHOUT BEING LIMITED BY
+  IT.** `DAILY_CAP` in `process-whatsapp-queue` — **120** since 2026-08-12 (40 → 60 → 100 → 120, each
+  raise on a Green quality rating). Two facts neither file reveals on its own:
+  - ⛔ **RAISING IT PAST ~140 DOES NOTHING.** Simulated 5,000 days on the measured cron grid (ticks
+    every 10 min, one send per tick — 441 of 619 real sends land on a +0 minute-of-10 mark):
+    **100 → 77.4/day, 120 → 84.4, 140 → 87.0, 200 → 87.0.** Above cap 60 the target gap
+    (`minutesUntilWindowEnd()/(DAILY_CAP - sentToday)`, 870/119 ≈ 7.3 min at 120) is already **below
+    `SEND_GAP_FLOOR_MIN` (10)**, so the FLOOR sets the rate and the cap only decides how far into the
+    evening the floor keeps being hit. **~87/day is the ceiling.** Next levers in order:
+    `SEND_GAP_FLOOR_MIN`, then the cron schedule (DB-only, above). The model reproduces both figures
+    previously recorded in the file (60 → 54.4, 100 → 77.4), which is what makes it trustworthy.
+  - ⛔ **`send-whatsapp-message` IS EXEMPT FROM THE CAP BUT STILL COUNTS AGAINST IT.** It deliberately
+    does not enforce `DAILY_CAP` (in-window replies must always go), yet it writes `whatsapp_sends`
+    rows and `sentToday` counts **every** row. So Inbox replies and auto `audit_reply` sends **spend
+    the outreach queue's budget while being immune to it** — a busy reply day throttles the *queue*.
+    Busiest real day, **2026-08-11: 85 of 100** = 48 `initial_contact` (queue) + **37 unpaced
+    reply-path sends**. Queue-at-pace plus that reply volume is 77 + 37 = **114**, which at 100 would
+    have stopped the queue mid-afternoon. **At 120 that day is still 114 of 120.**
+  - ⚠️ **The queue's 07:00–21:30 London window binds the QUEUE ONLY.** The reply path answers Meta's
+    24-hour window instead, so `whatsapp_sends` legitimately contains out-of-hours rows (24 of 619,
+    all `audit_reply`/free-text). **Do not read those as the queue sending overnight** — the queue's
+    own simulated sends are 0 outside the window at every cap.
+  - ⚠️ **Never write the cap as a number in prose.** Two comments have already gone stale this way:
+    the queue header once said 40 while the constant was 100 (Paul believed his cap was 40), and
+    `send-whatsapp-message` said "the 10/day outreach cap" until 2026-08-12. Name the constant.
 - **TWO LIVE CRON JOBS EXIST ONLY IN THE DATABASE, NOT IN MIGRATIONS.** Confirmed from `cron.job`
   2026-08-04: **`notify-onboarding-submit-run`** (every minute — the "submitted but not paid" email
   to Paul WORKS) has no migration file, and the `bulk_jobs` `job_type` constraint has the same gap.
