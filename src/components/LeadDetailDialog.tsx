@@ -30,6 +30,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, formatDistanceToNow, startOfDay } from 'date-fns';
+import { parseAmountPaid } from '@/lib/leadPayment';
 import { SALE_TYPES, SALE_TYPE_LABELS, resolveSaleType, type SaleType } from '@/lib/saleType';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, isSentStatus, isRepliedStatus, isSiteSentStatus } from '@/types/outreach';
@@ -324,6 +325,15 @@ function LeadDetailBody({
   const [potentialRevenue, setPotentialRevenue] = useState<string>(lead.potential_revenue?.toString() || '');
   const [projectOverview, setProjectOverview] = useState(lead.project_overview || '');
   const [projectStatus, setProjectStatus] = useState(lead.project_status || 'not_started');
+  const [deliveryNotes, setDeliveryNotes] = useState(lead.delivery_notes || '');
+  /* ── PAYMENT. Lives here because the Paid Clients page (its previous and only home) is gone, and
+        without an editor there would be no way to correct an amount that arrived wrong. ── */
+  const [amountPaid, setAmountPaid] = useState<string>(lead.amount_paid?.toString() ?? '');
+  const [paidFor, setPaidFor] = useState(lead.paid_for || '');
+  const [paymentDate, setPaymentDate] = useState<Date | undefined>(
+    lead.payment_date ? new Date(lead.payment_date) : undefined
+  );
+  const [paymentDatePopoverOpen, setPaymentDatePopoverOpen] = useState(false);
   const [showPaidPopup, setShowPaidPopup] = useState(false);
   const [activities, setActivities] = useState<OutreachActivity[]>([]);
   const [activitiesLoaded, setActivitiesLoaded] = useState(false);
@@ -746,7 +756,7 @@ function LeadDetailBody({
           {/* Left: Project / delivery */}
           <div className="space-y-4">
             <section className={CARD}>
-              <SectionLabel icon={Briefcase} color="text-sky-400">Project</SectionLabel>
+              <SectionLabel icon={Briefcase} color="text-sky-400">Delivery</SectionLabel>
               <Textarea
                 value={projectOverview}
                 onChange={(e) => setProjectOverview(e.target.value)}
@@ -795,6 +805,92 @@ function LeadDetailBody({
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              {/* Deliverables — what was actually done for this customer. Previously only
+                  reachable through the Paid Clients page's general notes; it is a column of its
+                  own (delivery_notes) and belongs beside the project status it describes. */}
+              <div className="mt-2.5">
+                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Deliverables</label>
+                <Textarea
+                  value={deliveryNotes}
+                  onChange={(e) => setDeliveryNotes(e.target.value)}
+                  onBlur={async () => {
+                    if (deliveryNotes !== (lead.delivery_notes || '')) {
+                      await onUpdateLead(lead.id, { delivery_notes: deliveryNotes || null } as Partial<OutreachLead>);
+                    }
+                  }}
+                  rows={2}
+                  className="resize-none text-xs border-border/50 min-h-[52px]"
+                  placeholder="What has been delivered so far — pages published, listings claimed, re-measure booked..."
+                />
+              </div>
+            </section>
+
+            {/* ── PAYMENT ─────────────────────────────────────────────────────────────────────
+                ⛔ THE ONLY PLACE A PAYMENT AMOUNT CAN BE CORRECTED. It used to be the Paid
+                Clients page; that page is gone, so this editor is the whole of it.
+                ⛔ AND A CLEARED AMOUNT WRITES null, NOT 0 — `paid` means `amount_paid > 0`
+                everywhere (CLAUDE.md §6), so a 0 written for an empty box would un-pay a real
+                customer: out of the Paid filter, out of the Inbox's paid exemption, out of every
+                revenue figure, silently. parseAmountPaid owns that rule and is tested. */}
+            <section className={CARD}>
+              <SectionLabel icon={PoundSterling} color="text-emerald-500">Payment</SectionLabel>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">Amount paid (£)</label>
+                  <Input
+                    type="number" min="0" step="0.01"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    onBlur={async () => {
+                      const val = parseAmountPaid(amountPaid);
+                      if (val !== (lead.amount_paid ?? null)) {
+                        await onUpdateLead(lead.id, { amount_paid: val } as Partial<OutreachLead>);
+                      }
+                    }}
+                    className="h-8 text-xs border-border/50"
+                    placeholder="Not paid"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">Payment date</label>
+                  <Popover open={paymentDatePopoverOpen} onOpenChange={setPaymentDatePopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-8 w-full justify-start px-2 text-xs font-normal border-border/50">
+                        <CalendarIconLucide className="mr-1.5 h-3 w-3 shrink-0" />
+                        {paymentDate ? format(paymentDate, 'd MMM yyyy') : <span className="text-muted-foreground/50">Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={paymentDate}
+                        onSelect={async (d) => {
+                          setPaymentDate(d);
+                          setPaymentDatePopoverOpen(false);
+                          await onUpdateLead(lead.id, { payment_date: d ? format(d, 'yyyy-MM-dd') : null } as Partial<OutreachLead>);
+                        }}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+              <div className="mt-2.5">
+                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Paid for</label>
+                <Input
+                  value={paidFor}
+                  onChange={(e) => setPaidFor(e.target.value)}
+                  onBlur={async () => {
+                    const val = paidFor.trim() || null;
+                    if (val !== (lead.paid_for ?? null)) {
+                      await onUpdateLead(lead.id, { paid_for: val } as Partial<OutreachLead>);
+                    }
+                  }}
+                  className="h-8 text-xs border-border/50"
+                  placeholder="e.g. Findable setup"
+                />
               </div>
             </section>
 
