@@ -115,7 +115,8 @@ import { clearPendingBarberEdit } from '@/lib/barberEdits';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { leadStatusLabel } from '@/types/outreach';
-import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES } from '@/types/outreach';
+import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type StatusFilterValue } from '@/types/outreach';
+import { isPaidLead } from '@/lib/leadPayment';
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { SingleSMSDialog } from '@/components/SingleSMSDialog';
@@ -403,7 +404,9 @@ export function OutreachTable({
   }, [isAdmin]);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
+  /* StatusFilterValue, not LeadStatus: the list also carries the Paid sentinel, which is not a
+     status (see OUTREACH_STATUS_FILTER_OPTIONS — paid means amount_paid > 0, not payment_received). */
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue | 'all'>('all');
   const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
   const [trackedOnly, setTrackedOnly] = useState(false);
   // Contactability filters (AND-combined, stack with the others). Each matches the
@@ -588,7 +591,7 @@ export function OutreachTable({
        'no_whatsapp_needs_sms', which is no longer an option's own value. Without this the Select
        would render blank while still filtering — the control disagreeing with the table. */
     if (parsed.statusFilter) {
-      setStatusFilter(parsed.statusFilter === 'all' ? 'all' : canonicalFilterValue(parsed.statusFilter as LeadStatus));
+      setStatusFilter(parsed.statusFilter === 'all' ? 'all' : canonicalFilterValue(parsed.statusFilter as StatusFilterValue));
     }
     if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
     if (typeof parsed.trackedOnly === 'boolean') setTrackedOnly(parsed.trackedOnly);
@@ -1494,12 +1497,22 @@ export function OutreachTable({
 
     // Filter by status
     if (statusFilter !== 'all') {
-      /* ⚠️ A FILTER OPTION CAN COVER MORE THAN ONE STATUS. "No WhatsApp" means both the mobile with
-         no account and the landline — everyone unreachable that way. statusesForFilter returns the
-         group, and returns [value] for anything it does not recognise, so an unknown filter narrows
-         rather than widening to everything. */
-      const wanted = statusesForFilter(statusFilter);
-      result = result.filter((lead) => wanted.includes(lead.status as LeadStatus));
+      /* ⛔ THE PAID SENTINEL IS TESTED FIRST, AND IT READS THE MONEY, NOT THE STATUS. `paid` means
+         `amount_paid > 0` everywhere (CLAUDE.md §6): a customer moved on to `in_delivery` is still
+         paid, so filtering on `payment_received` would hide exactly the people Paul is mid-delivery
+         with, and a £0 lead dragged to `payment_received` would be counted as one of them.
+         It must come BEFORE statusesForFilter, which returns [] for this value on purpose — falling
+         through would show an empty table and read as "no paying customers". */
+      if (isPaidFilterValue(statusFilter)) {
+        result = result.filter((lead) => isPaidLead(lead));
+      } else {
+        /* ⚠️ A FILTER OPTION CAN COVER MORE THAN ONE STATUS. "No WhatsApp" means both the mobile with
+           no account and the landline — everyone unreachable that way. statusesForFilter returns the
+           group, and returns [value] for anything it does not recognise, so an unknown filter narrows
+           rather than widening to everything. */
+        const wanted = statusesForFilter(statusFilter);
+        result = result.filter((lead) => wanted.includes(lead.status as LeadStatus));
+      }
     }
 
     // Filter by country
@@ -2023,7 +2036,7 @@ export function OutreachTable({
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(v as LeadStatus | 'all');
+                setStatusFilter(v as StatusFilterValue | 'all');
                 setCurrentPage(1);
               }}
             >
@@ -2032,7 +2045,9 @@ export function OutreachTable({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                {/* The FILTER list, not the status list — statuses sharing a label are one option. */}
+                {/* The FILTER list, not the status list — statuses sharing a label are one option.
+                    It leads with "Paid (money in)", which is NOT a status: it matches amount_paid > 0,
+                    so an in_delivery customer is included and a £0 payment_received lead is not. */}
                 {OUTREACH_STATUS_FILTER_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
