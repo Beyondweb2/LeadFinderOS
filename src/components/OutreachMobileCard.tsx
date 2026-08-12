@@ -19,7 +19,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ExternalLink, MessageSquare, MessageCircle, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench, ClipboardList, ClipboardCheck } from 'lucide-react';
-import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
@@ -270,17 +269,17 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                           Normal Call
                         </a>
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <a
-                          href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone!)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 cursor-pointer"
-                          onClick={() => onCallClick?.()}
-                        >
-                          <Phone className="h-4 w-4 text-green-500" />
-                          WhatsApp Call
-                        </a>
+                      {/* ⛔ WAS A wa.me LINK LABELLED "WhatsApp Call" — the desktop row's twin, and
+                          wrong the same way. wa.me opens a CHAT, so this was a second way to message
+                          someone OUTSIDE the app: no whatsapp_messages row, no thread, no reply
+                          window, invisible to every CRM count. Now the in-app thread, through the
+                          SAME onWhatsAppClick the green button below uses, so the two cannot drift. */}
+                      <DropdownMenuItem
+                        className="flex items-center gap-2 cursor-pointer"
+                        onClick={() => { onCallClick?.(); onWhatsAppClick?.(); }}
+                      >
+                        <Phone className="h-4 w-4 text-green-500" />
+                        WhatsApp thread
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

@@ -787,6 +787,79 @@ useMarketView.ts   1 persisted vs  6 plain
 
 ---
 
+## 6d. ✅ THE PAID CLIENTS PAGE IS GONE — paying customers live in Outreach + Inbox (2026-08-12)
+
+`/paid-clients` deleted. Paul's reason: a customer is a lead who paid, not a different kind of
+record, and a separate page meant leaving the two screens he actually works in to see them.
+**No SQL — every column already existed.** Nothing was migrated; only the editors moved.
+
+- ⛔ **`paid` MEANS `amount_paid > 0`. THE FILTER IS A SENTINEL, NOT A STATUS, AND THAT IS THE WHOLE
+  DESIGN.** `OUTREACH_STATUS_FILTER_OPTIONS` leads with `PAID_FILTER_VALUE` (`'__paid__'`), labelled
+  **"Paid (money in)"**, which the row filter special-cases against `amount_paid` — the same shape the
+  Inbox already uses for `__opened__` / `__claimed__` / `__upsell__`. Filtering on the STATUS
+  `payment_received` is wrong in **both** directions and each costs something real: a customer moved on
+  to `in_delivery` is **still paid** (a status filter hides exactly the people mid-delivery), and a £0
+  lead dragged to `payment_received` by hand is **not** paid (a status filter counts it as revenue).
+  The deleted page had made precisely this mistake once already.
+  - ⚠️ **`statusesForFilter(PAID_FILTER_VALUE)` returns `[]` ON PURPOSE**, and the row filter tests
+    `isPaidFilterValue` **first**. Falling through would render an **empty table**, which reads as
+    "no paying customers" rather than as an error — the `'contacted'` failure in a new place.
+  - ⚠️ **Its label is deliberately NOT the bare word "Paid".** `payment_received` already carries that,
+    and two options reading the same word with different row counts is the 53-vs-509 "No WhatsApp"
+    failure. `scripts/status-constants.test.ts` asserts no two FILTER options share a label.
+- ⛔ **A CLEARED AMOUNT WRITES `null`, NEVER `0`** — eighth instance of the absent-value shape, and
+  aimed at the one column that decides whether someone is a customer at all. `0` would silently drop
+  them from the filter, from the Inbox exemption and from every revenue figure, with nothing thrown.
+  `src/lib/leadPayment.ts` (`parseAmountPaid` / `isPaidLead`) owns it; `scripts/lead-payment.test.ts`
+  drives empty / whitespace / null / undefined / unreadable **and the clear-after-save round trip**,
+  which is the case a build writing 0 would fail alone. A **deliberately typed 0 is kept as 0**.
+- ⛔ **THE INBOX EXEMPTS A PAID CONVERSATION FROM THE STATUS FILTER** — `useInbox` builds
+  `paidLeadIds` off the same paginated leads read (it already selected `amount_paid`), `WaConversation`
+  carries `isPaid`, and the filter reads `leadStatus === statusFilter || unassigned || isPaid`. Same
+  convention as `unassigned`: a bucket that must always be visible is **exempted**, never relied on to
+  happen to match.
+  - ⚠️ **SCOPE, STATED: the status filter ONLY.** The campaign filter and the default hide of
+    `not_interested`/`closed` are unchanged — the latter deliberately, because *Remove from inbox*
+    works by setting `status = 'closed'`, and exempting paid leads there would make a paid thread
+    **unremovable**. If a paid customer ever vanishes from the Inbox, check those two before the code.
+- ⚠️ **THREE COLUMNS LOST THEIR ONLY EDITOR AND NOBODY HAS NOTICED YET:** `project_duration`,
+  `next_checkin_date`, `checkin_notes` were editable **only** on that page. **The data is untouched**
+  and still on `outreach_leads`; there is simply nowhere to set them now. The whole check-in feature
+  (overdue counts, "due today") went with the page. Not an oversight — the brief named the four fields
+  to move and these were not among them. `useOutreach.updateClientDetails` is now **dead code**, left
+  in place rather than removed mid-task.
+- ⛔ **THE `wa.me` ROW BUTTONS WERE NEVER CALL BUTTONS.** `OutreachTable` and `OutreachMobileCard` each
+  had a **"WhatsApp Call"** item in the phone dropdown whose href was `https://wa.me/<number>` — which
+  **opens a CHAT, not a call**. So they were a second way to message someone *outside* the app: no
+  `whatsapp_messages` row, no thread, no reply window, invisible to every count (§6: counts come from
+  `whatsapp_messages`). Both now open the **in-app thread** via the same handler as the green WhatsApp
+  button, relabelled **"WhatsApp thread"**.
+  - ⚠️ **Routed through `handleWhatsAppClick` / `onWhatsAppClick`, NOT a hand-built `/inbox?c=<key>`.**
+    The key is `${user.id}::${normalizeWaNumber(phone, country)}`; building it at the call site would
+    be a second copy of that rule and would open an **empty** Inbox for a lead with no thread yet.
+    `startFromLead` resolves it, creates a synthetic conversation when there are no messages, and
+    **then writes `?c=` into the URL itself** — so the destination the brief asked for is reached by
+    the path that cannot miss.
+  - ⚠️ **AND IT DOES COST SOMETHING: there is no longer any route from the app to a WhatsApp VOICE
+    call.** Flagged to Paul; a one-line revert if he wants it back.
+  - ✅ **`generateWhatsAppUrl` (`leadUtils.ts:87`) HAS NO REACHABLE CALLERS.** Its two callers are
+    `SingleWhatsAppDialog` — mounted in `OutreachTable`, but `setWhatsappDialogLead` is **never called
+    with a lead**, only with `null`, so the dialog can never open — and `openBulkWhatsApp`, which has
+    no callers at all. Left alone; changing it would achieve nothing. Don't re-derive this.
+- **Untouched on purpose:** the Inbox thread header's `wa.me` fallback (`Inbox.tsx`), `Landing.tsx`,
+  `Start.tsx`, and the report's WhatsApp CTA (`aiAuditReportHtml.ts`).
+- ⚠️ **VERIFIED AGAINST REAL DATA, AND THE HARNESS REPRODUCED THE 1,000-ROW TRAP WHILE DOING IT.** A
+  read-only service-key script drove the real exported predicates over the real lead table: **exactly
+  one lead has `amount_paid > 0`** (RG Locksmiths, £19.99, `payment_received`, not archived, thread
+  `user_id` matching the lead's) and `isPaidLead` returns true for him. The first draft asked for
+  `limit=2000`, **got exactly 1000 rows back, and RG was one of the ones that fell off the end** — the
+  same truncation that hid him from the Inbox for real. Paginate, always.
+  ⚠️ **The divergence the sentinel exists for is currently ZERO** — with one customer whose status is
+  `payment_received`, a status filter would coincidentally agree today. The design is right for the
+  second customer, not provable on the first. **Nobody has SEEN any of this** (§2: screenshots need Paul).
+
+---
+
 ## 7. Parked and unmerged — do not merge these
 
 | Branch | Hash |
@@ -1331,11 +1404,14 @@ useMarketView.ts   1 persisted vs  6 plain
 | Back link, shared by both views | `src/components/BackLink.tsx` |
 | Audit UI (large) | `src/pages/AiAudit.tsx` |
 
-- **Entry points to `/playbook/:id` — exactly three, re-verified by grep 2026-07-30:**
-  `LeadDetailDialog.tsx:636` (`Playbook` pill), `PaidClients.tsx:230` (`Playbook` pill), and the AI Audit row's
-  **`checklist`** pill. Each passes `state={{ from, fromLabel }}` so `BackLink` can name where it returns to.
-  **The first two are keyed on a LEAD id.** So for a business with an audit and no `outreach_leads` row — ABLM,
-  the only delivery client — the AI Audit row's `checklist` pill is the **ONLY** route. Don't remove it.
+- 🔴 **Entry points to `/playbook/:id` — now exactly TWO, not three (re-grepped 2026-08-12):**
+  `LeadDetailDialog.tsx`'s `Playbook` pill, and the AI Audit row's **`checklist`** pill. Each passes
+  `state={{ from, fromLabel }}` so `BackLink` can name where it returns to.
+  ⚠️ **The third — `PaidClients.tsx:230` — WENT WITH THE PAGE** when `/paid-clients` was deleted
+  2026-08-12 (§6d). It was a LEAD-keyed route and so is the dialog's, which means the AI Audit row's
+  `checklist` pill is still the **ONLY** route for a business with an audit and no `outreach_leads`
+  row — ABLM, the only delivery client. **Losing one of three made that pill MORE load-bearing, not
+  less. Don't remove it.**
 
 - ✅ **THE LLM PLAYBOOK IS NOW UNREACHABLE FROM THE APP** (`1715a294`, 2026-07-30). The audit results
   screen has **ONE** button, `Playbook`, linking to `/playbook/:auditId`. Gone: both old buttons, the
