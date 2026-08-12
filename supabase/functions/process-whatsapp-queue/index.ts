@@ -160,6 +160,13 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   re_engage: { lang: "en", vars: ["name", "onboarding_url"] },
   // "You said a call works" nudge. ONE variable: {{1}} = business name. No url.
   book_call: { lang: "en", vars: ["name"] },
+  /* Payment confirmation — sent by stripe-webhook when a Findable payment lands, NOT by this queue.
+     ⛔ MISSPELLED AT META ON PURPOSE ("recieved"): the registered name is what Meta matches, so the
+     typo is the correct string. Present here only to keep this map byte-identical to WA_TEMPLATES in
+     _shared/whatsapp-send.ts, which scripts/re-engage-vars.test.ts asserts in BOTH directions.
+     ⚠️ Nothing queues it: it is absent from the SPA's WHATSAPP_TEMPLATES picker, so no operator can
+     select it for a lead. ONE variable: {{1}} = business name. */
+  payment_recieved: { lang: "en", vars: ["name"] },
 };
 /* NO DEFAULT_TEMPLATE.
    It used to be booking_page_intro, applied whenever a lead's whatsapp_template was unset or
