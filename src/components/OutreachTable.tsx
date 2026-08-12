@@ -2475,17 +2475,25 @@ export function OutreachTable({
                                       Normal Call
                                     </a>
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem asChild>
-                                    <a
-                                      href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-2 cursor-pointer"
-                                      onClick={() => handleCallClick(lead)}
-                                    >
-                                      <Phone className="h-4 w-4 text-green-500" />
-                                      WhatsApp Call
-                                    </a>
+                                  {/* ⛔ WAS A wa.me LINK LABELLED "WhatsApp Call", AND BOTH HALVES OF
+                                      THAT WERE WRONG. wa.me opens a CHAT, not a call — so this was
+                                      never a calling affordance, it was a second way to message
+                                      someone OUTSIDE the app. Anything sent that way writes no
+                                      whatsapp_messages row, so it has no thread, no reply window and
+                                      is invisible to every count in the CRM (CLAUDE.md §6: counts
+                                      come from whatsapp_messages, never from lead status).
+                                      Now the in-app thread, via the same handler as the green
+                                      WhatsApp button — which resolves the conversation key from the
+                                      lead (normalizeWaNumber) and creates a synthetic thread when
+                                      there are no messages yet, then lands on /inbox?c=<key>.
+                                      Hand-building that URL here would need a second copy of the key
+                                      rule and would open an EMPTY inbox for a lead with no thread. */}
+                                  <DropdownMenuItem
+                                    className="flex items-center gap-2 cursor-pointer"
+                                    onClick={() => { handleCallClick(lead); handleWhatsAppClick(lead); }}
+                                  >
+                                    <Phone className="h-4 w-4 text-green-500" />
+                                    WhatsApp thread
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>

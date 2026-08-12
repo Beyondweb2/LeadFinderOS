@@ -300,9 +300,12 @@ export function useOutreach() {
       setIsLoading(true);
     }
     
-    /* Paginated. Neither of these was, and they feed the whole /outreach table plus every number on
-       /paid-clients — at ~592 active leads a silent truncation at the 1000-row cap would quietly
-       shrink both. fetchAllRows throws on error, so the two error variables below stay for the
+    /* Paginated. Neither of these was, and they feed the whole /outreach table — including the
+       "Paid (money in)" filter, which is now the only place paying customers are listed at all
+       (/paid-clients was deleted 2026-08-12). At ~592 active leads a silent truncation at the
+       1000-row cap would quietly shrink it, and the row it drops could be a customer — the Inbox's
+       identical read did exactly that to RG Locksmiths.
+       fetchAllRows throws on error, so the two error variables below stay for the
        existing handling and are only ever set by the catch. .order('id') is the unique tiebreaker. */
     let activeData: OutreachLead[] = [];
     let archivedData: OutreachLead[] = [];
