@@ -22,8 +22,17 @@ import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts
 // WHATSAPP_TEST_MODE === "off" and both secrets exist. Every attempt is logged to
 // whatsapp_messages as an outbound row owned by the sending operator.
 //
-// It does NOT enforce the 10/day outreach cap (in-window replies are exempt by
-// design; the cap lives in process-whatsapp-queue for the outreach campaign).
+// ⛔ IT DOES NOT ENFORCE THE DAILY OUTREACH CAP — in-window replies are exempt by design; the cap
+// (DAILY_CAP) lives in process-whatsapp-queue for the outreach campaign.
+//    ⚠️ THIS LINE SAID "the 10/day outreach cap". The cap has been 40, then 60, then 100, and is 120
+//    as of 2026-08-12 — the number here was stale by more than 10x. It is the SECOND time this exact
+//    fault has been recorded in this codebase (process-whatsapp-queue's own header once said 40 while
+//    the constant was 100, and Paul believed his cap was 40 because of it). Never write the number in
+//    prose: name the constant, which cannot go stale.
+// ⚠️ AND EXEMPT IS NOT THE SAME AS FREE. Every send here writes a whatsapp_sends row, and
+// process-whatsapp-queue's `sentToday` counts EVERY row in that table — so replies SPEND the queue's
+// daily allowance while being immune to it. On 2026-08-11, 37 of 85 sends came from this path.
+// A busy reply day therefore throttles the outreach queue, not this function.
 
 const CLAIM_ORIGIN = "https://yoursites.uk";
 const WINDOW_MS = 24 * 60 * 60 * 1000;

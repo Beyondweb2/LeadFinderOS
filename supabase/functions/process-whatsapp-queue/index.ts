@@ -44,11 +44,12 @@ const GRAPH_VERSION = "v21.0";
    auto-replies, not just this campaign. On 2026-07-27 that mattered: 40 sends hit the cap exactly,
    13 of them automated audit_reply pitches rather than campaign sends.
 
-   ⛔ 100 — AND IT PACES RATHER THAN STOPS, WHICH IS THE THING TO UNDERSTAND. While the
+   ⛔ 120 — AND IT PACES RATHER THAN STOPS, WHICH IS THE THING TO UNDERSTAND. While the
    floor sat at 20 minutes this number could be anything above ~43 and change nothing: the floor
    bound everything. Halving the floor to 10 (2026-08-08) makes it matter, and Paul's advisor's
    guidance was 60 while ramping; raised to 100 on 2026-08-09 on Paul's call, reply rates good and
-   the rating Green. ⚠️ RAISED FROM 60 AFTER ONE DAY AT 60, WHICH IS FASTER THAN THE ADVICE THE
+   the rating Green. Raised to 120 on 2026-08-12, same reason: rating still Green, ramping on.
+   ⚠️ RAISED FROM 60 AFTER ONE DAY AT 60, WHICH IS FASTER THAN THE ADVICE THE
    NUMBER ENCODES. Recorded here rather than argued away: the trigger to drop it back is the quality
    rating leaving Green, and there is nothing automatic that will do that — it is a thing Paul
    watches.
@@ -59,12 +60,41 @@ const GRAPH_VERSION = "v21.0";
        DAILY_CAP 60  -> ~54 sends/day (p10 53, p90 56), median gap 20 min, 3.0/hour
        DAILY_CAP 100 -> ~77 sends/day,                  median gap 10 min
    So raising it is how you go faster, and it should only be raised while the rating is Green.
+
+   🔴 120 BUYS ABOUT +9%, NOT +20%, AND THERE IS A HARD CEILING JUST ABOVE IT. Re-simulated
+   2026-08-12 over 5,000 days on the REAL grid (ticks every 10 min — measured, see below — one send
+   per tick, jitter and floor exactly as coded). The model reproduces BOTH figures already recorded
+   above (60 → 54.4, 100 → 77.4), which is why its new rows are trustworthy:
+       DAILY_CAP 100 -> 77.4 sends/day (p10 76, p90 79), median gap 10 min, cap reached 0% of days
+       DAILY_CAP 120 -> 84.4 sends/day (p10 83, p90 86), median gap 10 min, cap reached 0% of days
+       DAILY_CAP 140 -> 87.0 sends/day — AND 200 GIVES 87.0 TOO. That is the grid, not the cap.
+   ⛔ SO ~87/DAY IS THE CEILING AT THE CURRENT FLOOR AND SCHEDULE, AND 120 REACHES 84 OF IT. Raising
+   this constant past ~140 changes literally nothing. Above 60 the target gap early in the day is
+   already below SEND_GAP_FLOOR_MIN (870/119 ≈ 7.3 min at 120), so the FLOOR sets the rate and the
+   cap only decides how long into the evening the floor keeps being hit.
+   ⚠️ SO THIS IS NEARLY THE END OF THIS LEVER. To go faster afterwards the order is
+   SEND_GAP_FLOOR_MIN first, then the cron schedule (DB-only — CLAUDE.md §8). Do not reach for the
+   cap again and wonder why nothing happened.
+   🔴 AND THE REAL ARGUMENT FOR 120 IS NOT SPEED AT ALL — IT IS THAT REPLIES EAT THIS ALLOWANCE
+   WITHOUT BEING LIMITED BY IT. `send-whatsapp-message` deliberately does NOT enforce the cap
+   (in-window replies are exempt), but it DOES write a whatsapp_sends row, and `sentToday` counts
+   every row. So the reply path spends the queue's budget and cannot be throttled by it.
+   Measured 2026-08-12 on the busiest real day, **2026-08-11: 85 sends against a cap of 100** —
+       48  initial_contact   (the queue: 52 of the 85 landed on the +0 cron grid)
+       30  audit_reply       ┐
+        5  free text         ├ 37 reply-path sends, unpaced, any hour of day
+        2  re_engage         ┘
+   The queue itself only managed 48 that day — well under its simulated 77 — so the cap was not
+   reached. But a day where the queue runs at pace AND replies run hot is 77 + 37 = 114, which at 100
+   would have stopped the QUEUE mid-afternoon while the replies (correctly) carried on. 120 buys back
+   that headroom. ⚠️ It does not remove the risk: at 120 the same day is still 114 of 120.
    ⚠️ LOWERING THE CAP ALSO SLOWS THE PACING, WHICH IS THE POINT AND IS EASY TO MISREAD AS A BUG.
    baseGap is minutesUntilWindowEnd() / (DAILY_CAP - sentToday), so 60 gives 870/60 ≈ 14.5 min at
-   07:00 where 100 gave 8.7. The gap is derived from the cap by construction: the queue spreads
-   whatever the cap is across the window rather than racing to it and stopping.
+   07:00 where 100 gave 8.7 and 120 gives 7.3 (floored to 10). The gap is derived from the cap by
+   construction: the queue spreads whatever the cap is across the window rather than racing to it and
+   stopping.
    process-sms-queue has its OWN separate DAILY_CAP; this constant does not affect it. */
-const DAILY_CAP = 100;
+const DAILY_CAP = 120;
 /* ══ THE SEND GAP ═══════════════════════════════════════════════════════════════════════
    ⚠️ THESE WERE BARE LITERALS INSIDE THE PACING EXPRESSION. The floor in particular — the single
    number that decided real throughput for months — had no name, so nothing could reference it, no
