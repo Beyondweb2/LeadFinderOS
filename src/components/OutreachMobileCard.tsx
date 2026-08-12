@@ -273,10 +273,14 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                           wrong the same way. wa.me opens a CHAT, so this was a second way to message
                           someone OUTSIDE the app: no whatsapp_messages row, no thread, no reply
                           window, invisible to every CRM count. Now the in-app thread, through the
-                          SAME onWhatsAppClick the green button below uses, so the two cannot drift. */}
+                          SAME onWhatsAppClick the green button below uses, so the two cannot drift.
+                          ⛔ onCallClick IS DELIBERATELY NOT CALLED. It was on the old link, and
+                          keeping it "to preserve behaviour" would RECORD A CALL THAT NEVER HAPPENS
+                          (contact_method='call' + a logged call attempt) and race the 'whatsapp'
+                          write for the same field. This item is not a call any more. */}
                       <DropdownMenuItem
                         className="flex items-center gap-2 cursor-pointer"
-                        onClick={() => { onCallClick?.(); onWhatsAppClick?.(); }}
+                        onClick={() => onWhatsAppClick?.()}
                       >
                         <Phone className="h-4 w-4 text-green-500" />
                         WhatsApp thread
