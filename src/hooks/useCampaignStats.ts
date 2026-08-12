@@ -29,7 +29,11 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 const PITCH_TEMPLATES = new Set(['audit_reply']);
 /** The sign-up link. */
 const SIGNUP_TEMPLATES = new Set(['onboarding_followup']);
-/** Paid = payment_received-or-beyond in the forward-only pipeline ordering. */
+/* ⛔ THIS LINE USED TO READ "Paid = payment_received-or-beyond in the forward-only pipeline
+   ordering." IT DESCRIBED A CONSTANT THAT NO LONGER EXISTS AND A RULE THAT IS WRONG. `paid` means
+   `amount_paid > 0`, everywhere (CLAUDE.md §6) — which is what this file already does, ~170 lines
+   below. Left uncorrected it invites exactly the "fix" that would reintroduce the £0-lead bug the
+   comment beside that code was written to record. */
 
 /** A receipt on the message itself: 'read' implies delivered, so both count as delivered. */
 const isDeliveredStatus = (s: string | null | undefined) => s === 'delivered' || s === 'read';
