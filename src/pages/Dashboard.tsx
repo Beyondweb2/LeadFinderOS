@@ -208,7 +208,7 @@ const Dashboard = () => {
             <AlertDialogHeader>
               <AlertDialogTitle>Full account reset?</AlertDialogTitle>
               <AlertDialogDescription>
-                This wipes <strong>all your data</strong> — every lead (Outreach, Track Leads &amp; Paid Clients), outreach history &amp; activity, contact logs, search history, and every generated site along with its bookings, staff, claim links and visit tracking. It also clears your claims &amp; business notes and resets your metrics to zero.
+                This wipes <strong>all your data</strong> — every lead (including Track Leads and paying customers), outreach history &amp; activity, contact logs, search history, and every generated site along with its bookings, staff, claim links and visit tracking. It also clears your claims &amp; business notes and resets your metrics to zero.
                 <br /><br />
                 Your <strong>login, admin access and saved message/voice templates are kept</strong>. This only affects your own account and <strong>cannot be undone</strong>.
               </AlertDialogDescription>

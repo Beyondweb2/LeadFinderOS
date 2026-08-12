@@ -1114,11 +1114,20 @@ function LeadDetailBody({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-500">
               <Check className="h-5 w-5" />
-              Client Moved to Paid Clients
+              Marked as Paid
             </DialogTitle>
           </DialogHeader>
+          {/* ⚠️ THIS USED TO SEND THE OPERATOR TO A PAGE THAT NO LONGER EXISTS. Paying customers
+              stay in Outreach and the Inbox now; the amount is recorded in the Payment section of
+              this dialog, and Outreach's "Paid (money in)" filter is how you find them again.
+              ⛔ AND THE STATUS ALONE DOES NOT MAKE THEM PAID — `amount_paid > 0` does. Saying so
+              here is the difference between the operator recording the money and assuming the
+              status did it for them. */}
           <p className="text-sm text-muted-foreground leading-relaxed">
-            This lead has been moved to your <strong>Paid Clients</strong> page where you can track payments, project details, and schedule check-ins.
+            They stay in <strong>Outreach</strong> and the <strong>Inbox</strong> — nothing moves.
+            Enter what they paid in the <strong>Payment</strong> section of this dialog: the
+            <strong> Paid (money in)</strong> filter on Outreach matches the amount, not the status,
+            so a customer with no amount recorded will not show up there.
           </p>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setShowPaidPopup(false)}>

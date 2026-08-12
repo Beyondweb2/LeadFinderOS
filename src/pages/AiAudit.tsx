@@ -3165,8 +3165,10 @@ function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | null }) {
           LLM playbook existed for the run — and sitting one pill away from `checklist` it read as a
           duplicate of it when the two are different documents entirely. `checklist` above is the one
           that opens /playbook/:id and is KEPT: for a business with an audit but no outreach_leads row
-          (ABLM, the only delivery client) it is the ONLY route to that document, because the other two
-          entry points — the lead detail dialog and the Paid Clients row — are keyed on a LEAD id. */}
+          (ABLM, the only delivery client) it is the ONLY route to that document, because the other
+          entry point — the lead detail dialog's Playbook pill — is keyed on a LEAD id.
+          ⚠️ THERE WERE THREE ROUTES UNTIL 2026-08-12; the Paid Clients page carried the third and was
+          deleted with it. That makes this pill MORE load-bearing, not less. Do not remove it. */}
       {/* DATA */}
       {run?.seo_grade && <GradePill grade={run.seo_grade} />}
     </>

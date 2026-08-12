@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText,
-  DollarSign, MoreHorizontal, Palette, LogOut, HelpCircle,
+  MoreHorizontal, Palette, LogOut, HelpCircle,
   MessageSquare, Users, ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -67,7 +67,6 @@ export function MobileBottomNav() {
     { title: 'Inbox', url: '/inbox', icon: MessageSquare },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },
     { title: t('nav.templates'), url: '/templates', icon: FileText },
-    { title: t('nav.paidClients'), url: '/paid-clients', icon: DollarSign },
     { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle },
     { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare },
   ];

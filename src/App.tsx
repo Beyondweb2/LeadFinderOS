@@ -29,7 +29,6 @@ const Index = lazy(() => import("./pages/Index"));
 const Outreach = lazy(() => import("./pages/Outreach"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Templates = lazy(() => import("./pages/Templates"));
-const PaidClientsPage = lazy(() => import("./pages/PaidClients"));
 const BaselinePage = lazy(() => import("./pages/Baseline"));
 const PlaybookPage = lazy(() => import("./pages/Playbook"));
 const HowToUse = lazy(() => import("./pages/HowToUse"));
@@ -346,18 +345,12 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/paid-clients"
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <PaidClientsPage />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              } 
-            />
+            {/* /paid-clients is GONE (2026-08-12). Paying customers live in Outreach (the
+                "Paid (money in)" filter, keyed on amount_paid > 0) and in the Inbox (paid
+                conversations are exempt from the status filter). The payment and delivery
+                editors moved into LeadDetailDialog, which is now the only place an amount can
+                be corrected. No redirect: the page was operator-only and never linked from
+                anywhere a prospect could reach. */}
             <Route 
               path="/templates" 
               element={
