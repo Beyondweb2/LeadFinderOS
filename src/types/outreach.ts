@@ -242,11 +242,45 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
 
    ⚠️ value IS THE FIRST STATUS IN THE GROUP, so for the sixteen single-status options it is
    byte-identical to what it always was — persisted table state keeps working untouched. */
+/* ══ THE ONE FILTER THAT IS NOT A STATUS AT ALL ═══════════════════════════════════════════════
+   ⛔ `paid` MEANS `amount_paid > 0`, EVERYWHERE (CLAUDE.md §6) — NOT `status = 'payment_received'`.
+   The two diverge, in both directions, and that is exactly why this cannot be a status option:
+     * a customer moved on to `in_delivery` is STILL PAID, and a status filter would hide the very
+       people the operator is mid-delivery with;
+     * a £0 lead dragged to `payment_received` by hand is NOT paid, and a status filter would count
+       it as revenue.
+   So "Paid" is a SENTINEL — a value the row filter special-cases against `amount_paid`, the same
+   shape the Inbox already uses for its site-milestone filters (__opened__ / __claimed__ /
+   __upsell__), which are likewise not lead statuses.
+
+   ⚠️ AND ITS LABEL IS DELIBERATELY NOT THE BARE WORD "Paid". The status `payment_received` already
+   carries that label, and two options reading the same word showing different row counts is the
+   53-vs-509 "No WhatsApp" failure this file's own comments were written about. The parenthetical is
+   what the option actually tests, so the two are told apart by their words rather than by luck.
+   scripts/status-constants.test.ts asserts they never collide. */
+export const PAID_FILTER_VALUE = '__paid__';
+
+/** What the Outreach status filter can hold: a real status, or the Paid sentinel. */
+export type StatusFilterValue = LeadStatus | typeof PAID_FILTER_VALUE;
+
+/** True when a filter value is the money sentinel rather than a status. */
+export function isPaidFilterValue(value: string | null | undefined): boolean {
+  return value === PAID_FILTER_VALUE;
+}
+
 export interface StatusFilterOption {
-  /** The filter's key. A real LeadStatus (the group's first), so saved filter state stays valid. */
-  value: LeadStatus;
+  /** The filter's key. A real LeadStatus (the group's first), or the Paid sentinel. */
+  value: StatusFilterValue;
   label: string;
-  /** Every status this option matches. One member for all but the no-WhatsApp pair. */
+  /**
+   * Every status this option matches. One member for all but the no-WhatsApp pair — and EMPTY for
+   * the Paid sentinel, which matches on `amount_paid` instead.
+   *
+   * ⚠️ AN EMPTY LIST IS NOT "MATCHES NOTHING" HERE, AND CALLERS MUST NOT TREAT IT THAT WAY. A
+   * filter constant that matches nothing renders as a smaller number rather than an error (see the
+   * `'contacted'` incident above `CRAWLABLE_STATUSES_DEFAULT`), so the row filter must test
+   * `isPaidFilterValue` FIRST and never reach the status path for this option.
+   */
   statuses: LeadStatus[];
 }
 
@@ -257,7 +291,10 @@ export const OUTREACH_STATUS_FILTER_OPTIONS: StatusFilterOption[] = (() => {
     byLabel.get(o.label)!.push(o.value);
   }
   /* Map preserves insertion order, so the filter reads in the same order as the status list. */
-  return [...byLabel.entries()].map(([label, statuses]) => ({ value: statuses[0], label, statuses }));
+  const fromStatuses: StatusFilterOption[] =
+    [...byLabel.entries()].map(([label, statuses]) => ({ value: statuses[0], label, statuses }));
+  /* First in the list, because it is the one filter that answers "who is actually a customer". */
+  return [{ value: PAID_FILTER_VALUE, label: 'Paid (money in)', statuses: [] }, ...fromStatuses];
 })();
 
 /**
@@ -270,14 +307,23 @@ export const OUTREACH_STATUS_FILTER_OPTIONS: StatusFilterOption[] = (() => {
  * mode a filter constant matching nothing already caused once.
  * An unrecognised value matches only itself, never everything: a filter that cannot be understood
  * must narrow, not widen.
+ *
+ * ⛔ AND IT IS NOT THE MECHANISM FOR THE PAID SENTINEL. `statusesForFilter(PAID_FILTER_VALUE)`
+ * returns `[]` because there is no status that means paid — the caller must branch on
+ * `isPaidFilterValue` before it gets here. Returning `[PAID_FILTER_VALUE]` instead would look
+ * harmless and quietly show an empty table, which is precisely the failure mode this file's
+ * comments already record twice.
  */
-export function statusesForFilter(value: LeadStatus): LeadStatus[] {
-  return OUTREACH_STATUS_FILTER_OPTIONS.find((o) => o.statuses.includes(value))?.statuses ?? [value];
+export function statusesForFilter(value: StatusFilterValue): LeadStatus[] {
+  if (isPaidFilterValue(value)) return [];
+  return OUTREACH_STATUS_FILTER_OPTIONS.find((o) => o.statuses.includes(value as LeadStatus))?.statuses
+    ?? [value as LeadStatus];
 }
 
 /** The option value that owns a status — used to normalise restored filter state onto the list. */
-export function canonicalFilterValue(value: LeadStatus): LeadStatus {
-  return OUTREACH_STATUS_FILTER_OPTIONS.find((o) => o.statuses.includes(value))?.value ?? value;
+export function canonicalFilterValue(value: StatusFilterValue): StatusFilterValue {
+  return OUTREACH_STATUS_FILTER_OPTIONS
+    .find((o) => o.value === value || o.statuses.includes(value as LeadStatus))?.value ?? value;
 }
 
 /** Approved WhatsApp outreach templates (Meta). value = template name; both carry

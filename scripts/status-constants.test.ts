@@ -22,6 +22,7 @@
    ============================================================ */
 import {
   OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue,
+  PAID_FILTER_VALUE, isPaidFilterValue,
 } from "../src/types/outreach.ts";
 import { CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from "../src/types/outreach.ts";
 
@@ -160,8 +161,8 @@ console.log("\n── ⛔ THE COMBINED FILTER COVERS EVERY STATUS, EXACTLY ONCE 
   }
   ok(missing === 0, "every status is reachable through some filter option — none is invisible");
   ok(doubled === 0, "and none appears in two options, so a count cannot be double-reported");
-  ok(OUTREACH_STATUS_FILTER_OPTIONS.length === 16 && OUTREACH_STATUS_OPTIONS.length === 17,
-    `16 filter options for 17 statuses (got ${OUTREACH_STATUS_FILTER_OPTIONS.length} for ${OUTREACH_STATUS_OPTIONS.length})`);
+  ok(OUTREACH_STATUS_FILTER_OPTIONS.length === 17 && OUTREACH_STATUS_OPTIONS.length === 17,
+    `16 status groups + the Paid sentinel = 17 filter options for 17 statuses (got ${OUTREACH_STATUS_FILTER_OPTIONS.length} for ${OUTREACH_STATUS_OPTIONS.length})`);
 
   const noWa = OUTREACH_STATUS_FILTER_OPTIONS.filter((o) => o.label === "No WhatsApp");
   ok(noWa.length === 1, `"No WhatsApp" appears ONCE in the filter (got ${noWa.length})`);
@@ -188,8 +189,60 @@ console.log("\n── ⛔ THE COMBINED FILTER COVERS EVERY STATUS, EXACTLY ONCE 
      fall through to "show everything" — which would read as a working filter over the whole table. */
   const unknown = statusesForFilter("some_status_that_does_not_exist" as never);
   ok(unknown.length === 1, "an unrecognised filter value matches ONE thing, not all of them");
-  ok(OUTREACH_STATUS_FILTER_OPTIONS.every((o) => o.statuses.includes(o.value)),
-    "every option's own value is one of the statuses it matches");
+  ok(OUTREACH_STATUS_FILTER_OPTIONS
+      .filter((o) => !isPaidFilterValue(o.value))
+      .every((o) => o.statuses.includes(o.value as never)),
+    "every STATUS option's own value is one of the statuses it matches");
+}
+
+/* ── ⛔ THE PAID FILTER IS NOT A STATUS, AND MUST NEVER BECOME ONE ──────────────────────────────
+   `paid` means `amount_paid > 0`, everywhere (CLAUDE.md §6). Filtering Outreach on the STATUS
+   `payment_received` is wrong in both directions and each direction costs something real:
+     * a customer moved on to `in_delivery` is still paid — a status filter hides exactly the people
+       Paul is mid-delivery with, which is the population the filter exists to show him;
+     * a £0 lead dragged to `payment_received` by hand is not paid — a status filter counts it.
+   The Paid Clients page made this mistake once already (it filtered on a status list and then summed
+   amount_paid over the gated set, so it was wrong both ways on the one page whose job was revenue).
+   This suite is what stops the sentinel quietly being "simplified" back into a status. */
+console.log("\n── ⛔ THE PAID FILTER READS MONEY, NOT STATUS ──");
+{
+  const paid = OUTREACH_STATUS_FILTER_OPTIONS.filter((o) => isPaidFilterValue(o.value));
+  ok(paid.length === 1, `exactly one Paid sentinel option (got ${paid.length})`);
+  ok(paid[0]?.value === PAID_FILTER_VALUE, `  its value is ${JSON.stringify(PAID_FILTER_VALUE)}`);
+  ok(!KNOWN.has(PAID_FILTER_VALUE as never),
+    "  and that value is NOT a LeadStatus — a sentinel, like the Inbox's __opened__/__claimed__");
+
+  /* ⛔ THE EMPTY LIST IS LOAD-BEARING AND THE CALLER MUST BRANCH BEFORE IT. If the row filter ever
+     falls through to statusesForFilter for this value it shows an EMPTY TABLE, which reads as "no
+     paying customers" rather than as an error — the same shape as the 'contacted' constant that
+     matched nothing. Asserted here so a later "tidy-up" that gives it a status has to delete a line
+     that says why it must not. */
+  ok(paid[0]?.statuses.length === 0, "  it matches NO status — the row filter tests amount_paid");
+  ok(statusesForFilter(PAID_FILTER_VALUE).length === 0,
+    "  statusesForFilter returns [] for it, so it is provably not the mechanism");
+  ok(!(paid[0]?.statuses as string[] ?? []).includes("payment_received"),
+    "  and it is NOT payment_received — in_delivery is still paid, a £0 payment_received is not");
+
+  console.log("\n── ⛔ AND IT DOES NOT WEAR THE SAME WORD AS THE STATUS ──");
+  /* Two options reading "Paid" showing different row counts is the 53-vs-509 "No WhatsApp" failure
+     in a new place. The label-uniqueness rule above polices the STATUS list; this extends it to the
+     filter list, which is what the operator actually reads before choosing. */
+  const filterLabels = OUTREACH_STATUS_FILTER_OPTIONS.map((o) => o.label);
+  const dupes = filterLabels.filter((l, i) => filterLabels.indexOf(l) !== i);
+  ok(dupes.length === 0, `no two FILTER options share a label (dupes: ${JSON.stringify(dupes)})`);
+  ok(paid[0]?.label !== "Paid",
+    `  the sentinel is not the bare word "Paid" (it is ${JSON.stringify(paid[0]?.label)}) — that belongs to payment_received`);
+  ok((paid[0]?.label ?? "").includes("Paid"),
+    "  but it still contains \"Paid\", so it is findable by the word Paul looks for");
+
+  console.log("\n── A SAVED PAID FILTER SURVIVES A RELOAD ──");
+  /* Table state is persisted; the sentinel must normalise onto itself or the Select renders blank
+     while the table stays filtered — a control disagreeing with the table it drives. */
+  ok(canonicalFilterValue(PAID_FILTER_VALUE) === PAID_FILTER_VALUE,
+    "the sentinel normalises to itself, so the restored dropdown is not blank");
+  ok(isPaidFilterValue(PAID_FILTER_VALUE) && !isPaidFilterValue("payment_received")
+    && !isPaidFilterValue("all") && !isPaidFilterValue(null) && !isPaidFilterValue(undefined),
+    "isPaidFilterValue is true for the sentinel ONLY — not for payment_received, 'all', null or undefined");
 }
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
