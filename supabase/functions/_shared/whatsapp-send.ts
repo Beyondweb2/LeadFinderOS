@@ -257,9 +257,23 @@ export function templateBodyParams(
       default: return businessName || "your business"; // "name"
     }
   };
+  /* ⛔ THE LAST GATE BEFORE META SEES A PARAMETER, AND IT COVERS EVERY TEMPLATE.
+     Meta rejects the WHOLE send with #132018 if any parameter contains a newline, a tab, or 4+
+     consecutive spaces — "Param text cannot have new-line/tab characters or more than 4 consecutive
+     spaces". Four audit_reply sends died that way on 2026-08-12 on a competitor name carrying two
+     newlines ("Checkatrade\n    \n    If"), and a lead who had just replied got nothing.
+     formatCompetitors now collapses the competitor list at source, but that guard only covers ONE
+     variable of ONE template. This covers all of them — business names, trades, links, anything a
+     future template adds — because every variable a template sends is resolved right here.
+     ⚠️ COLLAPSE, NOT REJECT: a value with a stray newline is still the right value, and refusing to
+     send would lose a real message over a formatting artefact. The only thing that changes is
+     whitespace Meta was never going to accept.
+     ⚠️ NOT A SUBSTITUTE FOR THE EXTRACTOR FIX. Names should not arrive multi-line; this makes sure
+     that when they do, it costs nothing. */
+  const forMeta = (s: string) => (s ?? "").replace(/\s+/g, " ").trim();
   return [{
     type: "body",
-    parameters: vars.map((v) => ({ type: "text", text: resolve(v) })),
+    parameters: vars.map((v) => ({ type: "text", text: forMeta(resolve(v)) })),
   }];
 }
 

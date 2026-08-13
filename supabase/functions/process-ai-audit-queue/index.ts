@@ -1129,7 +1129,13 @@ async function maybeSendAuditReply(service: any, runId: string, auditId: string)
     template: {
       name: AUDIT_REPLY_TEMPLATE,
       language: { code: AUDIT_REPLY_LANG },
-      components: [{ type: "body", parameters: [trade, competitors, business, link].map((t) => ({ type: "text", text: t })) }],
+      /* ⛔ THE ONE SEND PATH THAT BUILDS ITS OWN PAYLOAD, so it does NOT inherit the whitespace
+         collapse templateBodyParams applies to every other template send. Meta rejects the whole
+         message (#132018) if any parameter carries a newline, a tab, or 4+ consecutive spaces, and
+         {{2}} is a list of extracted competitor names — the exact value that killed four sends on
+         2026-08-12. formatCompetitors already collapses that one; this covers the other three so
+         the guarantee is the same on every path rather than on most of them. */
+      components: [{ type: "body", parameters: [trade, competitors, business, link].map((t) => ({ type: "text", text: (t ?? "").replace(/\s+/g, " ").trim() })) }],
     },
   };
   const env = resolveWhatsAppEnv();
