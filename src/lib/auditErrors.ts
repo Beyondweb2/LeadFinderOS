@@ -108,6 +108,21 @@ export function explainAuditFailure(
     };
   }
 
+  /* ⚠️ NOT A FAILURE AT ALL, AND IT MUST NOT READ AS ONE. A targeting/area audit finishes once all
+     but one of its questions have returned, so the last laggard is abandoned on purpose and stored
+     as 'failed' — the only settled status the progress bar and the queue both already understand.
+     Written verbatim as TARGETING_STRAGGLER_ERROR in supabase/functions/_shared/targeting-straggler.ts;
+     keep the two strings identical. Never reachable on a paid baseline, which waits for every
+     question. */
+  if (r === 'straggler_dropped') {
+    return {
+      kind: 'our_cap',
+      headline: 'Abandoned on purpose so the market could be read sooner.',
+      detail: 'Every other question in this audit had already come back, so this last one was dropped rather than held onto. The market was read off the answers that landed. Nothing failed, and no paid baseline ever does this.',
+      raw: r,
+    };
+  }
+
   // ── APIFY. The vendor that actually runs the searches. ──
   // 402 Payment Required is unambiguous: the account's monthly spend cap is exhausted.
   if (/\b402\b/.test(r)) {

@@ -1034,6 +1034,58 @@ record, and a separate page meant leaving the two screens he actually works in t
     shape on ONE audit's data — the degenerate-`auditShare` case the bar exists to prevent. The
     `MarketShapeInput` fields are named `marketAuditsComplete` / `businessAuditsComplete` so the
     audit counts cannot be passed in again by accident.
+- ⛔ **THE AREA/MARKET AUDIT ALREADY SKIPS SEO AND ALREADY RUNS ITS QUESTIONS IN PARALLEL. MEASURED
+  2026-08-13 — do not "optimise" either again.** Paul asked for the SEO scan to be stripped out of
+  the targeting audit to make it faster. There was nothing to strip: **44 of 44 market runs carry
+  `results.seo = { skipped: "seo_scan_not_requested" }`, and 0 carry a real grade.** The skip is
+  STRUCTURAL, not a flag — `create-ai-audit:815` seeds the marker on `skipSeo || marketOnly`, and
+  `MeasureMarket` always sends `market_only: true`. Removing SEO from this flow saves **zero
+  seconds and zero pence**.
+  - ⚠️ **AND THE AI CALLS ARE NOT SEQUENTIAL.** `START_BATCH = 12` rows claimed per 30-second tick,
+    `AUDIT_IN_FLIGHT_CEILING = 24`. Proof from the data, not the code: in **19 of 24** clean measure
+    runs all 16 questions finished **within ~2 seconds of each other**. Parallelising saves nothing.
+  - ⛔ **THE COROLLARY THAT MATTERS FOR EVERY FUTURE "make it faster" ASK: cutting the question
+    count saves MONEY, NOT TIME.** 8 questions and 16 questions take the same wall clock, because
+    they run concurrently. The wall clock is **one Apify scrape**, ~2.5–6 min, and that is the floor.
+  - **The measured shape** (25 measure runs, Soham incident excluded): wall clock min 3.3, **median
+    6.5**, worst 17.8 min. Per-question median has FALLEN to ~2.8 min since 10 Aug — but a **tail
+    appeared at the same time**: 12/13 Aug ran **17.7 and 13.9 min**, both with a retried row, while
+    11 of 16 questions were done inside 2.4 min.
+  - ⚠️ **The tail is NOT queue congestion** — Royal Sutton Coldfield took 13.9 min with **zero**
+    other queue rows moving in the window. It is one Apify run hanging, and `MAX_RUN_AGE_MS = 12 min`
+    means a hung run burns 12 minutes before the retry even starts (17.63 min = 12 + a normal 5.6).
+    ⛔ Lowering that constant is the trap already recorded above: at 5 min it culled healthy-but-slow
+    runs into a retry storm. It also governs the paid baseline, not just targeting.
+  - ✅ **BUILT 2026-08-13: A TARGETING AUDIT NOW FINALISES ON 7 OF ITS 8 QUESTIONS.**
+    `_shared/targeting-straggler.ts` (`mayFinishWithoutStragglers`) + the drop branch in
+    `finaliseSettledRuns`. Only `process-ai-audit-queue` imports it, so that is the whole deploy
+    list. **No SQL** — `is_market` and `baseline_target_runs` already existed.
+    - ⛔ **THE UNIT IS THE AUDIT (8 questions), NOT THE 16-QUESTION PAIR.** A measure run is two
+      audits and each folds independently, so "15 of 16" is really "7 of 8, twice". Quoting the
+      pair figure would overstate what the code does.
+    - ⛔ **IT IS NOT A TIME CAP AND MUST NOT BECOME ONE.** Nothing reads how long a question has
+      run; the test is only whether it is the LAST ONE LEFT in its own batch. That is why the
+      uniformly-slow runs are untouched — **Leyland 12.13→12.13 and Ipswich 17.77→17.77, saving
+      nothing, correctly**. `MAX_RUN_AGE_MS` above is the record of what happens when you do cap it.
+    - **A 60s grace (`TARGETING_STRAGGLER_GRACE_MS`) is measured from the SETTLED rows**, so a
+      question thirty seconds from returning is not thrown away for thirty seconds of saving, and a
+      batch that is slow all over can never qualify. It costs ~1 min on the runs that benefit.
+    - **Expected**: Royal Sutton Coldfield **13.9 → ~6.9 min**, Accountants/Wakefield
+      **17.7 → ~12.2 min**. Median barely moves (6.45 → ~6.0) because most runs have no straggler —
+      **this fixes the bad days, not the typical one.**
+    - ⚠️ **The dropped row is stored `status: 'failed'` with error `straggler_dropped`**, because
+      that is the only settled status `MeasureMarket`'s poll and `QUESTION_STATE_SCORE` already
+      understand — a bespoke status would leave the progress bar running forever.
+      `explainAuditFailure` renders it as a deliberate choice, not a failure, and
+      `summary.dropped_questions` records the count separately from real failures.
+    - ⚠️ **STATED LIMIT: a row still `pending` counts as the straggler too.** If the queue is
+      congested enough to defer a row for a full minute while its seven siblings finish, it is
+      dropped without ever running. Cheapest possible drop (nothing spent) and it still saves the
+      time, but it is a breadth loss caused by congestion rather than by a hung question.
+    - ⚠️ **THE BASELINE IS EXCLUDED TWICE** (`is_market !== true` → refuse, `baseline_target_runs > 1`
+      → refuse) and `scripts/targeting-straggler.test.ts` drives **720 baseline shapes, including
+      `is_market: true`, and asserts none reaches the drop.** Proven separate in live data: 333
+      audits, 44 market, 5 baseline, **zero overlap either way**, no market audit with a `lead_id`.
 - ⛔ **REVIEW REPLIES — RESEARCHED 2026-08-10, DECIDED: BUILD NOTHING. Do not re-run this recon.**
   Nothing in either repo touches the Google Business Profile API today (only Places and Geocoding),
   and nothing should.
