@@ -764,35 +764,30 @@ export function buildReportData(
   const ctxMatch = buildMatchContext(ctx.businessType ?? '', ctx.locationText ?? '');
   const groups = groupNames([...counts.values()].map((c) => c.name), ctxMatch);
   const byGroup = new Map<string, { name: string; count: number; spellings: string[] }>();
-  /* ⛔ THE LABEL IS THE PART A CLIENT READS, AND THE MOST-MENTIONED SPELLING CAN BE A FRAGMENT.
-     "Safe" won its own group 14× on RG Locksmiths' report and printed as his third-biggest
-     competitor, while the same group held "Safe And Secure Locksmiths" — the actual firm. The count
-     was right; the name on it was not, and a reader who does not recognise "Safe" as a business
-     stops trusting the numbers beside it.
-     So the label is the most-mentioned spelling THAT READS AS A FIRM ON ITS OWN — more than one
-     word — falling back to the most-mentioned when the group has nothing longer. The COUNT is
-     unchanged either way: every spelling in the group still contributes, so relabelling moves no
-     numbers, it only stops a fragment wearing them. */
+  /* ⛔ REVERTED 2026-08-13: THE LABEL IS THE MOST-MENTIONED SPELLING, FULL STOP.
+     For one day this preferred the most-mentioned MULTI-WORD spelling, on the reasoning that a bare
+     fragment ("Safe") should never wear a group's count. The reasoning was fine and the effect was
+     not: a multi-token label is exactly what an extraction fragment looks like, so
+     "Checkatrade\n    \n    If" started BEATING clean "Checkatrade" for the label — and that label
+     is not only printed, it becomes audit_reply's {{2}} WhatsApp parameter.
+     Measured on 60 recent audits, same rows both ways: the parameter went from 0 rejected by Meta
+     to 8 (13%), error #132018 "Param text cannot have new-line/tab characters or more than 4
+     consecutive spaces". A report cosmetic broke a live send path, because topCompetitors is read
+     by _shared/audit-reply.ts as well as by the report.
+     ⚠️ THE LESSON, NOT THE PATCH: check who else consumes a list before changing what it contains.
+     The fragment problem is real but belongs upstream in the extractor, not in the label chooser.
+     ⚠️ The trades stopwords added at the same time are KEPT — they drop "Safe"/"Locksmith" at the
+     counting stage, which is where a fragment should die, and they moved no parameter. */
   for (const grp of groups.values()) {
     let total = 0;
     let best = { name: grp.names[0] ?? '', count: -1 };
-    let bestFull = { name: '', count: -1 };
     for (const n of grp.names) {
       const c = counts.get(n.trim().toLowerCase());
       const got = c?.count ?? 0;
       total += got;
       if (got > best.count) best = { name: n, count: got };
-      if (n.trim().split(/\s+/).length > 1 && got > bestFull.count) bestFull = { name: n, count: got };
     }
-    const label = bestFull.count > 0 ? bestFull.name : best.name;
-    /* ⛔ AND THE LABEL IS RE-CHECKED, because it is what gets printed. isRealCompetitor already
-       filtered every spelling on the way IN (line ~721), but grouping can still surface a name that
-       does not stand up alone; re-testing the one string that reaches the page is cheap and closes
-       the gap by construction rather than by argument. A dropped group takes its mentions with it,
-       so competitorMentions below stays the total of what is actually shown. */
-    if (total > 0 && isRealCompetitor(label, ctx.locationText)) {
-      byGroup.set(grp.key, { name: label, count: total, spellings: grp.names });
-    }
+    if (total > 0) byGroup.set(grp.key, { name: best.name, count: total, spellings: grp.names });
   }
   /* Ranked by grouped count, ties broken by name so the order is stable between renders of the
      same audit — a report that reshuffles its competitors on refresh reads as made up. */

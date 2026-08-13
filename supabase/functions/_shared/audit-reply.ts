@@ -18,10 +18,26 @@ import { isAggregatorUrl } from "./aggregators.ts";
    The 64 links already sent point at yoursites.uk/a/<uuid>; that proxy stays live and untouched. */
 const REPORT_SITE_ORIGIN = "https://findable.live";
 
+/* ⛔ META REJECTS A PARAMETER CONTAINING A NEWLINE, A TAB, OR 4+ CONSECUTIVE SPACES — #132018,
+   "Param text cannot have new-line/tab characters or more than 4 consecutive spaces". The whole
+   send fails; nothing is delivered and the lead who just replied hears nothing back.
+   It happened four times on 2026-08-12, every one of them the SAME extraction fragment reaching
+   {{2}}: "Checkatrade\n    \n    If" — a competitor name carrying two newlines and eight spaces.
+   `.trim()` alone could never catch it, because the whitespace is INTERNAL.
+
+   ⚠️ COLLAPSE, NOT REJECT. Dropping the name would lose a real competitor ("Checkatrade" IS who AI
+   named); collapsing keeps the fact and makes it sendable. A name is a name whether the extractor
+   wrapped it across lines or not.
+   ⚠️ AND IT IS A GUARD, NOT THE FIX. The extractor should not be emitting multi-line fragments as
+   business names in the first place — that is a separate, larger repair upstream. This sits at the
+   last point before the value becomes a template parameter, so it holds whatever the extractor
+   does. Same collapse is applied in templateBodyParams for every OTHER variable. */
+const collapseWhitespace = (s: string): string => (s ?? "").replace(/\s+/g, " ").trim();
+
 /** Top competitor names → a readable list ("Whitings, TC Group and Charlotte Watson"). Caps at 3
  *  so the WhatsApp line stays tight. Empty string when there are none. (Mirrors the auto-flow.) */
 export function formatCompetitors(list: string[]): string {
-  const top = (list ?? []).map((s) => (s ?? "").trim()).filter(Boolean).slice(0, 3);
+  const top = (list ?? []).map((s) => collapseWhitespace(s)).filter(Boolean).slice(0, 3);
   if (top.length === 0) return "";
   if (top.length === 1) return top[0];
   return `${top.slice(0, -1).join(", ")} and ${top[top.length - 1]}`;
