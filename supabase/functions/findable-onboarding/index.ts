@@ -171,7 +171,11 @@ Deno.serve(async (req) => {
       if (!leadId) return json({ ok: false, error: "unknown_lead" }, 404);
       const { data: lead } = await service
         .from("outreach_leads")
-        .select("id, business_name, category, search_keyword, search_location, address, status, amount_paid")
+        /* ⚠️ derived_town ADDED WITH THE PRE-FILL THAT READS IT. Selecting it is not optional
+           bookkeeping: `lead.derived_town` on a row that never fetched the column is undefined, so
+           the precedence below would have fallen straight through to search_location and the change
+           would have looked applied while doing nothing. Verified present on outreach_leads. */
+        .select("id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid")
         .eq("id", leadId).maybeSingle();
       if (!lead) return json({ ok: false, error: "unknown_lead" }, 404);
       if (PAID_OR_BEYOND.has(lead.status as string) || ((lead.amount_paid as number) ?? 0) > 0) {
@@ -193,7 +197,19 @@ Deno.serve(async (req) => {
         is_founder: offer.isFounder,
         business_name: lead.business_name ?? "",
         business_type: ((lead.category as string) || (lead.search_keyword as string) || "").trim(),
-        location_guess: ((lead.search_location as string) || (lead.address as string) || "").trim(),
+        /* ⛔ derived_town FIRST, AND THAT ORDER IS THE WHOLE POINT NOW. This used to be
+           search_location || address — the town that was SEARCHED, not the town the business is in.
+           Lead search has a radius, so the two often differ: 31 of 44 measurable audits were more
+           than 10km from the town they were measured against, one of them a locksmith with
+           Northampton in its own name asked about Spalding (CLAUDE.md §6b).
+           That was tolerable while this value was only a placeholder somebody retyped. Since the
+           split it is the PRE-FILL ON THE FIELD THAT BECOMES confirmed_location — the town the
+           guarantee is measured on — so a wrong guess is a wrong measurement that a customer
+           confirms by pressing Continue. derived_town is Google's structured address for the
+           business itself, which is the answer this field is asking for.
+           Matches the audit chain's own precedence: confirmed_location || derived_town ||
+           search_location. */
+        location_guess: ((lead.derived_town as string) || (lead.search_location as string) || (lead.address as string) || "").trim(),
       });
     }
 
