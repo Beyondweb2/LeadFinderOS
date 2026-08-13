@@ -602,10 +602,36 @@ Deno.serve(async (req) => {
                 email: ((leadForEmail?.email as string) ?? "").trim() || null,
                 /* A payment with no lead_id is the one you most need to see: the money landed but
                    nothing in the CRM points at it, so it will not appear in Paid Clients and no
-                   baseline starts. recordPaymentFailure already logs it; this makes it arrive. */
-                note: findableLeadId
-                  ? null
-                  : `No CRM lead is linked to this payment (onboarding ${onboardingId}). It will not show in Paid Clients and no baseline has started — link it by hand.`,
+                   baseline starts. recordPaymentFailure already logs it; this makes it arrive.
+                   ⛔ AND SINCE THE QUESTIONNAIRE SPLIT (2026-08-13) A NORMAL PAYMENT ARRIVES WITH NO
+                   DELIVERY DETAILS AT ALL. Pre-payment asks two things; services, town and address
+                   come in the post-payment form. Until that lands there is nothing to deliver from
+                   AND NO BASELINE — startPaidBaseline defers with awaiting_questionnaire_2 until
+                   confirmed_location and services exist. That is expected, not a fault, but it is
+                   the state Paul needs to see the moment money lands rather than discover later, so
+                   the email says it out loud. The dashboard's "N awaiting details" card is the
+                   ongoing view; this is the alert.
+                   ⚠️ Read from the row that was just paid, with the SAME three fields needsQ2()
+                   uses, so the email and the dashboard cannot disagree about who is outstanding. */
+                note: !findableLeadId
+                  ? `No CRM lead is linked to this payment (onboarding ${onboardingId}). It will not show in Paid Clients and no baseline has started — link it by hand.`
+                  : (await (async () => {
+                      try {
+                        const { data: ob } = await service
+                          .from("onboarding_responses")
+                          .select("confirmed_location, services, business_address")
+                          .eq("id", onboardingId).maybeSingle();
+                        const has = (v: unknown) => !!String(v ?? "").trim();
+                        const outstanding = !(has(ob?.confirmed_location) && has(ob?.services) && has(ob?.business_address));
+                        return outstanding
+                          ? "Details not yet collected — they still have the post-payment form to fill in (services, town, address). No baseline starts until it lands."
+                          : null;
+                      } catch {
+                        /* Never block the email over this: a failed read means we simply do not add
+                           the line, not that the payment notification is withheld. */
+                        return null;
+                      }
+                    })()),
               });
             } else {
               console.log(`[stripe-webhook] findable payment email skipped: lead ${findableLeadId} already had a payment (retry?)`);
