@@ -247,6 +247,127 @@ Deno.serve(async (req) => {
       return json({ ok: true, onboarding_id: onboardingId, willing_to_migrate: migrate });
     }
 
+    /* ── complete_q2 ────────────────────────────────────────────────────────────────────────────
+       THE SECOND HALF OF THE SPLIT QUESTIONNAIRE. Pre-payment now asks two things (consent and a
+       contact email); everything delivery needs is collected HERE, after the money has landed.
+
+       ⛔ PAID ROWS ONLY, AND THAT IS THE AUTHORISATION. There is no session on this endpoint — the
+       onboarding id is the capability. An id alone must therefore not be able to write to a row
+       that has not paid, or an unpaid submission could be filled in by anyone holding the link.
+       `revise` guards the mirror case (it refuses PAID rows); this refuses everything else.
+
+       ⛔ THE THREE CRITICAL FIELDS ARE ENFORCED, NOT REQUESTED. confirmed_location, services and
+       business_address are what needsQ2() reads to decide "they finished" — and the first two are
+       exactly what startPaidBaseline waits for before it will measure anything. Accepting a Q2
+       without them would mark a customer complete while leaving the guarantee's day-0 unmeasurable
+       and delivery unable to start. Everything else is genuinely optional.
+
+       ⚠️ NO STATUS CHANGE. `status` stays "paid": completion is DERIVED by needsQ2() from the three
+       fields, never stored. A stored verdict freezes old rows against a stale rule and lets the
+       readers drift — the same reason serveGate's verdict is derived (CLAUDE.md §1).
+
+       ⚠️ IDEMPOTENT BY CONSTRUCTION. It is an UPDATE of the same columns, so a resubmit — a double
+       tap, a bfcache replay, a customer correcting an answer — writes the same values again and
+       changes nothing else. Nothing here decrements or appends. */
+    if (action === "complete_q2") {
+      const onboardingId = typeof body.onboarding_id === "string" ? body.onboarding_id : "";
+      if (!UUID_RE.test(onboardingId)) return json({ ok: false, error: "bad_onboarding_id" }, 400);
+
+      const { data: existing } = await service
+        .from("onboarding_responses")
+        .select("id, status")
+        .eq("id", onboardingId).maybeSingle();
+      if (!existing) return json({ ok: false, error: "unknown_onboarding" }, 404);
+      if (!PAID_OR_BEYOND.has((existing.status as string) ?? "") && (existing.status as string) !== "paid") {
+        return json({ ok: false, error: "not_paid" }, 403);
+      }
+
+      const a = (body.answers ?? {}) as Record<string, unknown>;
+      const Q2_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const q2WebsiteEmail = clip(a.website_manager_email, 200);
+
+      /* The audit-facing town: the bare town only, never the postal address — create-ai-audit builds
+         "[service] in [town]" from it, so an address here would generate questions nobody searches. */
+      const q2Town = clip(a.confirmed_location, 120);
+      const q2Services = clip(a.services, 2000);
+      const q2Address = clip(a.business_address, 300);
+      if (!q2Town || !q2Services || !q2Address) {
+        return json({
+          ok: false,
+          error: "missing_required",
+          missing: [!q2Town && "confirmed_location", !q2Services && "services", !q2Address && "business_address"].filter(Boolean),
+        }, 400);
+      }
+
+      /* ⛔ THREE PLACES OR THE FIELD VANISHES — the same rule the submit path below carries, and for
+         the same reason: this object, the NEWER_COLS deletion, and the `optional` shedding list.
+         willing_to_migrate had its column, the flow sent it, the row saved with HTTP 200 and the
+         value was null, because a key absent from one of the three simply disappears. */
+      const q2: Record<string, unknown> = {
+        confirmed_location: q2Town,
+        services: q2Services,
+        business_address: q2Address,
+        services_list: clipList(a.services_list, 40, 120),
+        areas_list: clipList(a.areas_list, 30, 120),
+        accreditations: clip(a.accreditations, 2000),
+        must_not_say: clip(a.must_not_say, 2000),
+        photos_status: typeof a.photos_status === "string" && PHOTOS_STATUS.has(a.photos_status) ? a.photos_status : null,
+        competitor_name: clip(a.competitor_name, 200),
+        website_manager: typeof a.website_manager === "string" && WEBSITE_MANAGER.has(a.website_manager) ? a.website_manager : null,
+        website_manager_email: q2WebsiteEmail && Q2_EMAIL_RE.test(q2WebsiteEmail) ? q2WebsiteEmail : null,
+        website_platform: typeof a.website_platform === "string" && WEBSITE_PLATFORM.has(a.website_platform) ? a.website_platform : null,
+        website_platform_other: clip(a.website_platform_other, 120),
+        /* ⚠️ STILL ACCEPTED, BUT IT NO LONGER GATES ANYTHING. serveGate reads this to decide
+           serve/flag/block; with the platform question moved past the payment there is nothing left
+           to block, which is Paul's call 2026-08-13: any platform can be served, by rebuilding and
+           hosting when access cannot be had. Kept because it is real delivery information. */
+        willing_to_migrate: typeof a.willing_to_migrate === "string" && WILLING_TO_MIGRATE.has(a.willing_to_migrate) ? a.willing_to_migrate : null,
+        gbp_consent: typeof a.gbp_consent === "string" && GBP_CONSENT.has(a.gbp_consent) ? a.gbp_consent : null,
+        gbp_exists: typeof a.gbp_exists === "string" && GBP_EXISTS.has(a.gbp_exists) ? a.gbp_exists : null,
+        gbp_status: typeof a.gbp_status === "string" && GBP_STATUS.has(a.gbp_status) ? a.gbp_status : null,
+        gbp_verified: typeof a.gbp_verified === "string" && GBP_VERIFIED.has(a.gbp_verified) ? a.gbp_verified : null,
+        updated_at: new Date().toISOString(),
+      };
+
+      /* NEVER WRITE A NULL OVER AN ANSWER. An optional question left blank must not erase what an
+         earlier pass (or the pre-payment form) already stored, and it must not send a column that
+         may not exist yet. Same reasoning as NEWER_COLS on the insert path — absence is not an
+         answer (CLAUDE.md §6). The three required fields are never null by the guard above. */
+      for (const k of Object.keys(q2)) if (q2[k] == null) delete q2[k];
+
+      /* MULTI-PASS SHEDDING, the v18 lesson: each retry can surface the NEXT missing column, so keep
+         dropping until the update lands. Longer names before their substrings, or one miss sheds
+         two columns. The three required fields are NOT sheddable — losing them silently is the
+         failure this whole action exists to prevent, so a persistent error is returned instead. */
+      const shedOrder = [
+        "services_list", "areas_list", "website_manager_email", "website_manager",
+        "website_platform_other", "website_platform", "willing_to_migrate",
+        "gbp_verified", "gbp_consent", "gbp_exists", "gbp_status",
+        "must_not_say", "photos_status", "competitor_name", "accreditations",
+      ];
+      let payload = { ...q2 };
+      let res = await service.from("onboarding_responses").update(payload).eq("id", onboardingId);
+      let guard = 0;
+      while (res.error && guard++ < shedOrder.length) {
+        const missing = shedOrder.find((c) => c in payload && (res.error?.message ?? "").includes(c));
+        if (!missing) break;
+        console.warn(`[findable-onboarding] complete_q2: column ${missing} rejected, retrying without it`);
+        delete payload[missing];
+        res = await service.from("onboarding_responses").update(payload).eq("id", onboardingId);
+      }
+      if (res.error) {
+        console.error("[findable-onboarding] complete_q2 failed:", res.error.message);
+        return json({ ok: false, error: "q2_save_failed" }, 500);
+      }
+      console.log(`[findable-onboarding] complete_q2 saved for ${onboardingId} (${Object.keys(payload).length} columns)`);
+      /* The baseline is NOT started here. process-ai-audit-queue's ensureBaselinesForPaidOnboardings
+         sweeps every tick for any paid row whose lead has no baseline, and startPaidBaseline defers
+         with awaiting_questionnaire_2 until exactly the two fields this action just wrote. So the
+         measurement starts on its own within a minute of this returning, through the path that is
+         already proven, rather than through a second caller that could disagree with it. */
+      return json({ ok: true, onboarding_id: onboardingId, saved: Object.keys(payload).filter((k) => k !== "updated_at") });
+    }
+
     // ── submit ──────────────────────────────────────────────────────────────────
     if (action === "submit") {
       const a = (body.answers ?? {}) as Record<string, unknown>;
