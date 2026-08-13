@@ -3,6 +3,10 @@ import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/runner.ts";
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
+import {
+  mayFinishWithoutStragglers,
+  TARGETING_STRAGGLER_ERROR,
+} from "../_shared/targeting-straggler.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
 import { refreshApifyUsage } from "../_shared/enrichment/apify-usage.ts";
 import { advanceBaseline, sweepStalledBaselines, ensureBaselinesForPaidOnboardings } from "../_shared/audit-baseline.ts";
@@ -488,7 +492,7 @@ Deno.serve(async (req) => {
 
     // Finalise runs whose rows are now ALL settled (done/failed) or capped. A still-'running'
     // (polling) row keeps its run open — so a run never finalises while a question is in flight.
-    const finalised = await finaliseSettledRuns(service, [...touchedRuns], estCost, cappedRuns);
+    const finalised = await finaliseSettledRuns(service, [...touchedRuns], estCost, cappedRuns, apifyToken);
 
     /* SEO STEP LAST. One scan per tick, after every question has been started, polled and
        finalised, so a website audit never delays its own questions. Skipped when this invocation
@@ -642,7 +646,7 @@ async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolea
  * that have no unsettled rows left (self-healing after a prior tick).
  */
 // deno-lint-ignore no-explicit-any
-async function finaliseSettledRuns(service: any, runIds: string[], estCost: number, cappedRuns?: Set<string>): Promise<number> {
+async function finaliseSettledRuns(service: any, runIds: string[], estCost: number, cappedRuns?: Set<string>, apifyToken = ""): Promise<number> {
   let ids = runIds;
   if (ids.length === 0) {
     // Discover runs that are still open but may now be fully settled.
@@ -688,14 +692,62 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
 
     const { data: rows } = await service
       .from("ai_audit_queue")
-      .select("question, engines, status, result, attempts")
+      .select("id, question, engines, status, result, attempts, updated_at")
       .eq("run_id", runId)
       .order("created_at", { ascending: true });
     if (!rows || rows.length === 0) continue;
 
     const isCapped = cappedRuns?.has(runId) ?? false;
     const allSettled = rows.every((r: Row) => r.status === "done" || r.status === "failed");
-    if (!allSettled && !isCapped) continue; // still in progress
+
+    /* ── TARGETING AUDITS DO NOT WAIT FOR THEIR LAST QUESTION ──────────────────────────────────
+       A market/area audit is the pass that decides which businesses to pitch, and its wall clock
+       was being set by a single laggard while 7 of 8 answers sat ready. See
+       _shared/targeting-straggler.ts for the measurements and, more importantly, for why this is
+       NOT the time cap that caused the retry-storm — nothing here reads how long a question has
+       run, only whether it is the last one left in its own batch.
+       ⛔ The PAID BASELINE is excluded inside that predicate and must stay excluded. */
+    let droppedQuestions = 0;
+    if (!allSettled && !isCapped) {
+      const outstanding = rows.filter((r: Row) => r.status === "pending" || r.status === "running");
+      const settledRows = rows.filter((r: Row) => r.status === "done" || r.status === "failed");
+      /* Measured from the SETTLED rows, never from the straggler: that is what keeps a batch which
+         is slow ALL OVER from qualifying. 0 when no row carries a timestamp, which never passes. */
+      const lastSettledMs = settledRows.reduce((t: number, r: Row) => {
+        const ms = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+        return Number.isFinite(ms) && ms > t ? ms : t;
+      }, 0);
+      const auditForRun = runRow?.audit_id
+        ? (await service.from("ai_audits")
+            .select("is_market, baseline_target_runs").eq("id", runRow.audit_id).maybeSingle()).data
+        : null;
+      const mayDrop = mayFinishWithoutStragglers({
+        isMarket: auditForRun?.is_market,
+        baselineTargetRuns: auditForRun?.baseline_target_runs,
+        totalQuestions: rows.length,
+        settledQuestions: settledRows.length,
+        outstandingQuestions: outstanding.length,
+        msSinceRestSettled: lastSettledMs > 0 ? Date.now() - lastSettledMs : 0,
+      });
+      if (!mayDrop) continue; // still in progress — wait, exactly as before
+
+      /* Stop billing on the abandoned scrape, then mark the row TERMINALLY. Deliberately not
+         failAttempt(): that puts a row back to 'pending', which would re-open the run the instant
+         we finalised it. Same shape as the cost_cap write. 'failed' (not a new status) is also
+         what MeasureMarket's settle test and QUESTION_STATE_SCORE already understand — a bespoke
+         status would leave the operator's progress bar running forever. */
+      for (const r of outstanding) {
+        const apifyRunId = (r.result as Row | null)?._apify?.runId;
+        if (apifyRunId && apifyToken) await abortApifyRun(String(apifyRunId), apifyToken);
+      }
+      await service.from("ai_audit_queue")
+        .update({ status: "failed", result: { error: TARGETING_STRAGGLER_ERROR } })
+        .in("id", outstanding.map((r: Row) => r.id))
+        .in("status", ["pending", "running"]);
+      for (const r of outstanding) r.status = "failed";
+      droppedQuestions = outstanding.length;
+      console.log(`[process-ai-audit-queue] run ${runId}: targeting audit finalised on ${settledRows.length} of ${rows.length} questions — ${droppedQuestions} straggler(s) dropped`);
+    }
 
     // If capped, drop any rows that never ran so they aren't reprocessed next tick.
     if (isCapped) {
@@ -757,6 +809,10 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         done_questions: doneQuestions,
         failed_questions: failedQuestions,
         total_questions: rows.length,
+        /* How many of failed_questions were ABANDONED rather than broken — a targeting audit that
+           finished on 7 of 8. Recorded so a thin run is legible as a deliberate choice instead of
+           looking like a partial failure. 0 on every other path, and on every baseline. */
+        dropped_questions: droppedQuestions,
         actor_cost_usd: actorCostUsd,
       },
       questions,
