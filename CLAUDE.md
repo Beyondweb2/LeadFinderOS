@@ -896,11 +896,30 @@ worst-first, >40% is excluded as already winning, and both exclusions are itemis
   instance of the absent-value shape, caught at design time). `scripts/market-targets.test.ts`
   drives it, the boundary inclusivity, the group off-trade absence rules, and the
   junk-cannot-score integration cases.
-- ✅ **THE VERDICT NOW GRADES ITSELF — no manual button** (Paul's rule): the finalisation
-  auto-clean is fixed (see §8's dead-bearer entry), and `MarketPanel` auto-cleans a PROVEN-dirty
-  fold on open (once per market per session — the ref is the brake against a re-fire loop if
-  markers survive a clean; toast states the ~7p/run cost; the manual button remains as the
-  fallback). Targeting itself never needs the cleaner.
+- ⛔ **OPENING A MARKET NEVER SPENDS — the auto-clean-ON-OPEN was built 2026-08-14 and REMOVED THE
+  NEXT DAY. Do not rebuild it.** It fired a "Cleaning up the names… ~14p" toast plus a minute of
+  spinner on every arrival at a dirty market (its once-per-session ref lived in MarketPanel, which
+  remounts on every navigation — §6c), and with every recent market dirty from the cleaner outage
+  it read as "Market view starts a new scan" — reported by Paul as exactly that. His rule, stated
+  twice now: **Market view shows what exists, free; only Find leads and the measure/audit buttons
+  may spend, and each says its price on its face.** New measurements still self-clean at
+  finalisation (the process-ai-audit-queue hook — automatic, part of the run already paid for);
+  the backlog keeps the manual "Clean the names" button under the refusal.
+  - 🔴 **CONSEQUENCE, STATED, NOT HIDDEN: a market with a dirty fold shows its targets and named
+    counts but keeps the "Names not cleaned · no verdict" refusal until SOMETHING cleans it** —
+    the manual button (~7p/run) or a re-measure. The deterministic scoring grades TARGETS only;
+    the verdict grades who's-WINNING, which needs the extracted names (firms with no Places
+    listing, the cross-town national test), so it cannot be derived from the pool — that trade-off
+    was examined and kept 2026-08-14.
+  - 🔴 **AND THE CLEANER ITSELF WAS STILL FAILING SILENTLY AS OF 2026-08-14** — folds stayed dirty
+    after auto-clean attempts, queue rows unrewritten, cause unknown from the harness (the panel
+    invoke swallows per-run failures; supabase.functions.invoke resolves with `error`, it does not
+    throw). Diagnose via one press of the manual button (its toast counts failures) or the
+    extract-competitors dashboard log. Nothing has provably cleaned since ~2026-08-10, so suspect
+    OPENAI_API_KEY before suspecting the auth plumbing fixed in §8.
+  - ✅ Coverage's row buttons carry their prices: "Find leads · ~{asPence(MARKET_SEARCH_USD)}"
+    (derived — never hand-type a pence figure, §4's constants rule) and "Market view · free". The
+    measure button already priced itself ("Refresh this market · free" included).
 - ⚠️ **THE TARGET LIST'S FLOOR IS STILL GOOGLE PLACES.** A firm AI names that has no Places listing
   in the town stays in the named-intel list only — there is nothing to contact. Aylesbury is the
   honest example: in-town Places holds 3 real entities (2 already winning at 50%/84%, Timpson a

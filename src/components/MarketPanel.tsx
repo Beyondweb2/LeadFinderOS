@@ -614,24 +614,17 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
       chainEntries, completedRuns, pendingAudits, noWebsiteProspects.length,
     )
     : null;
-  /* ── AUTO-CLEAN ON OPEN — Paul's rule, 2026-08-14: the market verdict must not depend on any
-     manual button. Opening a market whose fold is PROVEN raw (marker words in the extracted list)
-     re-reads its stored answers with the LLM cleaner automatically, toast stating the cost, then
-     reloads. TARGETING never needs this — pool scores come from nameMatches over answer text and
-     ignore extracted names entirely — this exists so the "who's winning" intel and the shape
-     verdict grade themselves instead of sitting refused for a month.
-     ⚠️ ONCE PER MARKET PER SESSION, whatever the outcome. If the cleaner runs and markers remain,
-     re-firing on the reloaded view would spend ~7p per run in a loop; the ref is the brake. The
-     manual button stays for that residual case, with the refusal explaining itself. */
-  const autoCleanTried = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!view || reExtractBusy) return;
-    const key = `${view.trade}|||${view.town.toLowerCase()}`;
-    if (autoCleanTried.current.has(key)) return;
-    if (!shouldAutoClean(marketNamesUncleaned(view.concentration), view.concentration.runIds.length)) return;
-    autoCleanTried.current.add(key);
-    void autoCleanIfDirty(view);
-  }, [view, reExtractBusy, autoCleanIfDirty]);
+  /* ⛔ NO AUTO-CLEAN ON OPEN — REMOVED 2026-08-14, THE DAY AFTER IT SHIPPED, Paul's call.
+     Opening a market must NEVER spend and must never look like it is scanning: the on-open clean
+     fired a "Cleaning up the names… ~14p" toast plus a minute of spinner on every visit to a
+     dirty market — which after the cleaner outage was EVERY recent market — and read exactly like
+     "Market view starts a new scan". Worse, its once-per-session ref lived in this component,
+     which remounts on every navigation (§6c), so it re-fired on every arrival.
+     The two cleaning paths that remain are both tied to things already paid for or explicitly
+     pressed: run-finalisation (process-ai-audit-queue, automatic, part of the measurement) and
+     the manual "Clean the names" button under the refusal. autoCleanIfDirty below is the
+     MEASURE-COMPLETION hook only — it fires when a measurement the operator just started
+     finishes while they watch, never on load. */
 
   /* WHILE AN AUDIT IS UNFINISHED, THE PANEL WATCHES IT. Ticks the clock every 15s so the age is
      honest, and refetches the view every 45s so a finished audit appears and a stalled one is
