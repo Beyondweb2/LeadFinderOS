@@ -251,16 +251,47 @@ export const MARKET_AUDIT_STALE_MS = 20 * 60 * 1000;
  *  Position 1 in this list is the whole basis of the marketplace-led read — see marketShape. */
 export interface MarketCitationHost { host: string; citations: number; isAggregator: boolean }
 
-/** A pool business REMOVED from the prospect list because AI already names it, and the entry it
- *  matched. Itemised rather than merely counted: a silent exclusion is how a real prospect
- *  disappears, and this is the row that makes a wrong merge visible instead of invisible. */
+/* ── THE TARGET RULE — Paul's, 2026-08-14, replacing the tier subtraction ─────────────────────
+   A pool business is scored DIRECTLY: nameMatches (the same function that decides the report
+   verdict and the week-8 guarantee comparison, reused byte-for-byte) against every stored
+   chatgpt/gemini answer_text in the market's completed runs. named-share = answers naming it /
+   scored answers. At or below this share it is a TARGET; above it, it is already winning and is
+   excluded (itemised, never silent).
+
+   ⛔ WHY THIS REPLACED THE ESTABLISHED-TIER SUBTRACTION. The tier was computed over EXTRACTED
+   competitor names, which meant three compounding faults: raw-regex junk polluted the counts
+   ("Here" 17/37 answers in Aylesbury); junk fragments BRIDGED real firms in the union-find (the
+   single mention "Lock" welded Lockforce, LockFit, Lock Around The Clock and Aylesbury Lock and
+   Key Centre into one 23-name blob scored as one firm); and the thresholds were LEADER-relative,
+   so Chester subtracted Saltney Locksmiths as "established" while AI named it in 16% of answers.
+   Scoring the scraped list against the answer text needs no extraction, no cleaning and no
+   manual step — junk cannot enter, because no extracted name is ever an input.
+
+   ⚠️ THE BOUNDARY IS INCLUSIVE (<= counts as a target) and the number is Paul's to tune once he
+   has seen real lists. It is a named export so nothing can drift from it. */
+export const TARGET_MAX_NAMED_SHARE = 0.4;
+
+/** What one pool business's score means.
+ *  ⛔ THE ABSENT CASE IS EXPLICIT: with zero scored answers nothing has been measured, so nobody
+ *  is a target — every share would be 0/0 and "everyone is invisible" would be a prospect list
+ *  built on no data (the Soham failure, CLAUDE.md §6). */
+export function poolTargetVerdict(answersNamed: number, answersTotal: number): 'unmeasured' | 'target' | 'winning' {
+  if (!Number.isFinite(answersTotal) || answersTotal <= 0) return 'unmeasured';
+  return answersNamed / answersTotal <= TARGET_MAX_NAMED_SHARE ? 'target' : 'winning';
+}
+
+/** A pool business EXCLUDED from the target list because AI already names it in more than
+ *  TARGET_MAX_NAMED_SHARE of answers. Itemised rather than merely counted: a silent exclusion is
+ *  how a real prospect disappears, and the score beside the name is what lets the operator
+ *  disagree with the cut. */
 export interface MarketPoolExcluded {
   name: string;
   /** Places rows that folded into this entry (chain branches). 1 when nothing collapsed. */
   branches: number;
-  matchedNamed: string;
-  matchedMentions: number;
-  matchedAudits: number;
+  /** Scored answers (chatgpt + gemini) in which nameMatches finds this business. */
+  answersNamed: number;
+  /** Scored answers in the market fold — the denominator, same for every row. */
+  answersTotal: number;
 }
 
 export interface MarketPoolRow {
@@ -283,26 +314,31 @@ export interface MarketPoolRow {
    *  that cuts keys, and Google mis-files real traders often enough that filtering on this would
    *  silently drop prospects. The operator skips it or does not. */
   offTrade?: { label: string };
-  /** Present when this business IS named but NOT established — so it stays a PROSPECT instead of
-   *  being subtracted. Carries the counts so the row can show how thin: "1 mention in 1 of 6
-   *  audits". Absent = never named at all.
-   *  ⚠️ THE NAME IS NARROWER THAN THE MEANING, kept because the field is rendered in three places.
-   *  It covers tier `thin` AND tier `unknown` — everything except `established`. Below the evidence
-   *  bar nothing is established, so on a one-audit market every named business lands here, which is
-   *  the correct answer and was the bug: the subtraction used to keep only `thin` and drop the rest,
-   *  so `unknown` was silently subtracted and Norwich lost 15 of 20 prospects. The counts shown are
-   *  facts either way — how many mentions, in how many audits — never a claim about standing. */
-  thin?: { mentions: number; audits: number; matchedNamed: string };
+  /** Scored answers (chatgpt + gemini answer_text, deduped questions) in which nameMatches finds
+   *  this business — the SAME verdict the report and the week-8 guarantee use, applied to a pool
+   *  row. 0 = never named, the strongest pitch there is. */
+  answersNamed: number;
+  /** Scored answers in the market fold. The denominator every row shares; 0 means nothing has
+   *  been measured yet, and poolTargetVerdict refuses to call anybody a target off that. */
+  answersTotal: number;
 }
 
-/** The three states, which MUST read differently on screen. An empty prospect list and a search
+/** The pool states, which MUST read differently on screen. An empty prospect list and a search
  *  that was never run are completely different facts about a market, and conflating them is how an
- *  operator concludes "AI names everyone here" about a town nobody has searched. */
+ *  operator concludes "AI names everyone here" about a town nobody has searched.
+ *
+ *  ⛔ `stale` IS A FOURTH STATE, NOT A FLAG ON `ready`, and the distinction is a spend guard: every
+ *  gate that treats a pool as "fresh enough to skip the paid search" keys on state === 'ready'
+ *  (MeasureMarket's poolCount, the measure flow's search skip). A stale pool DISPLAYS its
+ *  businesses — Places listings do not churn in days, and hiding them was how 113 of 123 measured
+ *  markets showed no prospect at all — but it never satisfies a freshness gate, so re-searching
+ *  still charges and still refreshes. `expired` survives for the searched-but-cache-row-gone case
+ *  (pools deleted before 2026-08-14, when cron-run stopped destroying them). */
 export type MarketPoolState =
   | { state: 'never_searched' }
   | { state: 'expired'; keyword: string; searchedAt: string; ttlHours: number }
   | {
-    state: 'ready';
+    state: 'ready' | 'stale';
     /** 'town' = the pool came from a townOnly search (a hard boundary). 'radius' = it came from a
      *  radius search, so it may include neighbouring towns the audits never covered. */
     scope: 'town' | 'radius';
@@ -1179,8 +1215,8 @@ export function marketPlainRead(
       : poolFound === 0
         ? `Places found no ${trade} inside the ${town} boundary at all, so there is nothing here to contact and nothing for the audits to have been measured against. That is a fact about the SEARCH, not about the market: a town this size may genuinely have none of this trade, or Places may not list them. The AI answers above name firms from other towns, which is the real finding.`
       : prospects === 0
-        ? `Nobody left to contact: of ${poolLine}, every one is already named by AI. The list can't be complete though - it is only what Places returned inside the town boundary.`
-        : `${prospects} worth contacting: of ${poolLine}${chainLine}, ${prospects} ${prospects === 1 ? "either never shows up" : "either never show up"} in AI answers or barely ${prospects === 1 ? "does" : "do"}.${
+        ? `Nobody left to contact: of ${poolLine}, every one is already named by AI in more than ${Math.round(TARGET_MAX_NAMED_SHARE * 100)}% of answers. The list can't be complete though - it is only what Places returned inside the town boundary.`
+        : `${prospects} worth contacting: of ${poolLine}${chainLine}, ${prospects} ${prospects === 1 ? "is" : "are"} named in ${Math.round(TARGET_MAX_NAMED_SHARE * 100)}% of AI answers or fewer, most of them never.${
         noWebsiteProspects > 0
           ? ` ${noWebsiteProspects} of them ${noWebsiteProspects === 1 ? "has" : "have"} no website, so ${noWebsiteProspects === 1 ? "it needs" : "they need"} a different opening - listed separately below.`
           : ""
@@ -1281,11 +1317,30 @@ export function offTradeMark(
   return { label: row.primaryTypeLabel || row.primaryType.replace(/_/g, " ") };
 }
 
-export function invisibilityPhrase(row: MarketPoolRow, audits: number): string {
-  if (!row.thin) return `never mentioned in ${audits} audit${audits === 1 ? "" : "s"}`;
-  const { mentions, audits: inAudits } = row.thin;
-  if (mentions === 1) return `mentioned once, in 1 of ${audits} audits`;
-  return `mentioned ${mentions} times, in ${inAudits} of ${audits} audits`;
+/** The mark for a GROUP of pool rows (a chain's branches folded into one entry). Marked only when
+ *  a consensus exists, at least one branch is typed, and NO typed branch matches the consensus —
+ *  so one on-trade branch keeps the whole entry on-trade (Chester's Timpson has branches Google
+ *  files as both "Services" and "Locksmith"; a firm Google half-agrees about is not excluded).
+ *  ⚠️ Untyped branches never vote, in either direction — the same absence rule as offTradeMark. */
+export function offTradeMarkForGroup(
+  rows: TypedPoolEntry[],
+  expected: string | null,
+): { label: string } | undefined {
+  if (!expected) return undefined;
+  const typed = rows.filter((r) => !!r.primaryType);
+  if (typed.length === 0) return undefined;
+  if (typed.some((r) => r.primaryType === expected)) return undefined;
+  return offTradeMark(typed[0], expected);
+}
+
+/** The row's score in words, built from the same two counts the verdict uses so the sentence and
+ *  the grading cannot disagree. Never renders a percentage of zero answers. */
+export function invisibilityPhrase(row: Pick<MarketPoolRow, 'answersNamed' | 'answersTotal'>): string {
+  const { answersNamed: named, answersTotal: total } = row;
+  if (total <= 0) return 'not measured yet — no completed answers to score against';
+  if (named === 0) return `never named in ${total} AI answer${total === 1 ? '' : 's'}`;
+  const pct = Math.round((named / total) * 100);
+  return `named in ${named} of ${total} answers (${pct}%)`;
 }
 
 /** One unfinished market audit, in words, with the RAW error when there is one.

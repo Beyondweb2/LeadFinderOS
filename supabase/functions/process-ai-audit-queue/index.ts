@@ -877,11 +877,20 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     if (!allFailed && (prevStatus === "pending" || prevStatus === "running")) {
       extractionInvokes.push((async () => {
         try {
+          /* ⛔ NO Authorization HEADER, ON PURPOSE — and the load-bearing half of the 2026-08-14 fix
+             is in config.toml, not here. extract-competitors was MISSING from config.toml, so it was
+             deployed with the platform default verify_jwt = TRUE: the platform demanded a JWT-shaped
+             bearer before the handler ran. That worked for weeks only because
+             SUPABASE_SERVICE_ROLE_KEY used to BE a JWT; the ~2026-08-11 key rotation made it
+             sb_secret-shaped, the platform check started failing, and every fold finalised from then
+             until 2026-08-14 went uncleaned (measured: 16–51 junk-word markers on every one, zero on
+             the weeks before). config.toml now lists the function verify_jwt = false, and this call
+             carries no bearer at all: the x-cron-secret + x-internal-job branch is the intended door,
+             and a credential that never rotates cannot die the same way twice. */
           const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extract-competitors`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
               "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
               "x-internal-job": "1",
             },
@@ -972,11 +981,14 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         console.log(`[process-ai-audit-queue] auto-report skipped for audit ${job.auditId}: a profile report already exists.`);
         continue;
       }
+      /* No Authorization header — same fix as the extract-competitors invoke above: generate-report
+         was also missing from config.toml (verify_jwt defaulted TRUE), so the rotated non-JWT
+         service key stopped passing the platform check and auto-reports silently stopped after
+         2026-08-10. config.toml now lists it, and the cron-secret branch needs no bearer at all. */
       const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-report`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
           "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
           "x-internal-job": "1",
         },
