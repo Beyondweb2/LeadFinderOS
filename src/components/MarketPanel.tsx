@@ -23,7 +23,7 @@ import {
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
   MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase, shouldAutoClean, CLEANER_USD_PER_RUN, asPence,
-  auditsInView, openArrivalSearchConfirm, marketNamesUncleaned,
+  auditsInView, openArrivalSearchConfirm, marketNamesUncleaned, TARGET_MAX_NAMED_SHARE,
   type MarketPoolRow,
   type MarketViewResult,
 } from '@/lib/marketView';
@@ -280,10 +280,16 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
       description: `The extracted names include ${(c.uncleanedExamples ?? []).slice(0, 3).map((e) => `"${e}"`).join(', ')}`
         + `, so the answers are being re-read. About ${asPence(c.runIds.length * CLEANER_USD_PER_RUN)}.`,
     });
-    for (const runId of c.runIds) {
-      try { await supabase.functions.invoke('extract-competitors', { body: { runId } }); } catch { /* one bad run must not stop the rest */ }
+    /* Shares the manual button's busy flag so the two paths cannot run over each other. */
+    setReExtractBusy(true);
+    try {
+      for (const runId of c.runIds) {
+        try { await supabase.functions.invoke('extract-competitors', { body: { runId } }); } catch { /* one bad run must not stop the rest */ }
+      }
+      await reload();
+    } finally {
+      setReExtractBusy(false);
     }
-    await reload();
   }, [reload, toast]);
 
   /** A pool row as the Lead shape addLead expects. The pool rows came out of search-leads in the
@@ -413,7 +419,9 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
     if (!view || !chosen) return;
     setAuditBusy(true);
     try {
-      const targets = view.pool.filter((p) => !p.isChain).slice(0, auditCount);
+      /* Right-trade, non-chain rows only — the same list the panel calls targets. Worst-first
+         ordering comes from the server, so a batch of 5 audits the five most invisible. */
+      const targets = view.pool.filter((p) => !p.isChain && !p.offTrade).slice(0, auditCount);
       const leadIds: string[] = [];
       for (const row of targets) {
         // addLead returns the CREATED ROW, or null when it was a duplicate or failed. A duplicate
@@ -483,12 +491,13 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
   const openAuditDialog = useCallback(() => {
     const pool = view?.pool ?? [];
     const chains = pool.filter((p) => p.isChain);
-    const audit = pool.filter((p) => !p.isChain);
+    const offTrade = pool.filter((p) => !p.isChain && !!p.offTrade);
+    const audit = pool.filter((p) => !p.isChain && !p.offTrade);
     // Deliberately console.info, not debug: this is the proof the click landed, and it must
     // survive a default-filtered console.
     console.info('[market] audit confirm opened', {
       trade: chosen?.trade ?? null, town: chosen?.town ?? null,
-      poolEntries: pool.length, auditable: audit.length, chains: chains.length,
+      poolEntries: pool.length, auditable: audit.length, chains: chains.length, offTrade: offTrade.length,
       completedRuns: view?.concentration.completeRuns ?? 0,
     });
     if (audit.length === 0) {
@@ -496,7 +505,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
         title: 'Nothing here can be audited',
         description: pool.length === 0
           ? 'The prospect pool is empty, so there is nothing to audit. Run the lead search first.'
-          : `All ${pool.length} ${pool.length === 1 ? 'entry' : 'entries'} in this pool are chain branches. Chains are not prospects, so there is nothing to audit here.`,
+          : `All ${pool.length} ${pool.length === 1 ? 'entry' : 'entries'} in this pool are chain branches or filed under another trade by Google. Neither is a target, so there is nothing to audit here.`,
         variant: 'destructive',
       });
     }
@@ -520,13 +529,23 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
   }, [view, chosen, toast]);
 
   const conc = view?.concentration;
+  /* A POOL THE OPERATOR CAN SEE. `ready` is fresh; `stale` is the same businesses with an old
+     search date — shown, badged, and NEVER satisfying a freshness gate (those all key on 'ready').
+     Hiding stale pools was how 113 of 123 measured markets displayed no prospect at all. */
+  const poolVisible = view?.poolState.state === 'ready' || view?.poolState.state === 'stale';
+  const poolStale = view?.poolState.state === 'stale';
   /* POOL ARITHMETIC, derived here so the panel can show its working.
      poolFound counts Places ROWS; poolEntries counts them after chain collapsing. The difference is
      the branches that folded away, which is what made "5 found, 4 named, 0 left" look wrong. */
-  const poolFound = view?.poolState.state === 'ready' ? view.poolState.total : 0;
+  const poolFound = view && (view.poolState.state === 'ready' || view.poolState.state === 'stale') ? view.poolState.total : 0;
   const poolEntries = (view?.pool.length ?? 0) + (view?.poolExcluded.length ?? 0);
   const collapsedRows = Math.max(0, poolFound - poolEntries);
-  const auditable = view ? view.pool.filter((p) => !p.isChain) : [];
+  /* ⛔ TARGETS ARE RIGHT-TRADE, NON-CHAIN ROWS — Paul's rule, 2026-08-14. Wrong-trade entries are
+     NOT hidden: they get their own itemised group below, because Google's categories are imperfect
+     and a silently-cut real locksmith is the failure this panel exists to catch. They are simply
+     never counted as targets and never fed to the audit batch. */
+  const auditable = view ? view.pool.filter((p) => !p.isChain && !p.offTrade) : [];
+  const wrongTrade = view ? view.pool.filter((p) => !p.isChain && !!p.offTrade) : [];
   const chainEntries = view ? view.pool.filter((p) => p.isChain).length : 0;
   /* THE SPLIT. Both halves come out of `auditable`, so the two lists together are exactly the
      prospect count the summary sentence quotes - the sentence and the rows cannot disagree, which is
@@ -586,12 +605,34 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
   const plain = view && shape
     ? marketPlainRead(
       shape, view.concentration, view.trade, view.town, view.leader ?? null,
-      view.citationHosts ?? [], auditable.length, view.poolState.state === 'ready',
-      view.poolState.state === 'ready' ? view.poolState.total : 0,
+      /* A stale pool counts as SEARCHED for the sentences — the businesses are real and on
+         screen; the staleness is badged beside the list, not hidden inside a "never searched"
+         claim that would be false. Freshness gates elsewhere still key on 'ready' alone. */
+      view.citationHosts ?? [], auditable.length, poolVisible,
+      poolFound,
       view.pool.length + view.poolExcluded.length,
       chainEntries, completedRuns, pendingAudits, noWebsiteProspects.length,
     )
     : null;
+  /* ── AUTO-CLEAN ON OPEN — Paul's rule, 2026-08-14: the market verdict must not depend on any
+     manual button. Opening a market whose fold is PROVEN raw (marker words in the extracted list)
+     re-reads its stored answers with the LLM cleaner automatically, toast stating the cost, then
+     reloads. TARGETING never needs this — pool scores come from nameMatches over answer text and
+     ignore extracted names entirely — this exists so the "who's winning" intel and the shape
+     verdict grade themselves instead of sitting refused for a month.
+     ⚠️ ONCE PER MARKET PER SESSION, whatever the outcome. If the cleaner runs and markers remain,
+     re-firing on the reloaded view would spend ~7p per run in a loop; the ref is the brake. The
+     manual button stays for that residual case, with the refusal explaining itself. */
+  const autoCleanTried = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!view || reExtractBusy) return;
+    const key = `${view.trade}|||${view.town.toLowerCase()}`;
+    if (autoCleanTried.current.has(key)) return;
+    if (!shouldAutoClean(marketNamesUncleaned(view.concentration), view.concentration.runIds.length)) return;
+    autoCleanTried.current.add(key);
+    void autoCleanIfDirty(view);
+  }, [view, reExtractBusy, autoCleanIfDirty]);
+
   /* WHILE AN AUDIT IS UNFINISHED, THE PANEL WATCHES IT. Ticks the clock every 15s so the age is
      honest, and refetches the view every 45s so a finished audit appears and a stalled one is
      caught. Stops dead the moment marketProgress is empty — nothing polls a settled market. */
@@ -795,10 +836,20 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
               hosting, nothing to migrate (serveGate.ts serves `no_website` outright).
               So they stay visible and stay addable. They are simply not in the same list, and the
               heading says which pitch each list wants. */}
-          {measured && view.poolState.state === 'ready' && auditable.length > 0 && (
+          {measured && poolVisible && (auditable.length > 0 || wrongTrade.length > 0 || view.poolExcluded.length > 0) && (
             <div className="space-y-3 border-t border-border/50 pt-2">
+              {/* A STALE POOL IS SHOWN, AND SAYS SO. Places listings do not churn in days; hiding
+                  a 5-day-old business list was how never-named prospects vanished from the app. The
+                  freshness gates are untouched — this is display, with the age on it. */}
+              {poolStale && (
+                <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+                  <span className="font-semibold">This business list is from an older search
+                  {view.poolState.state === 'stale' ? ` (${shortDate(view.poolState.searchedAt) ?? 'earlier'})` : ''}.</span>{' '}
+                  Businesses rarely vanish in days, so it is still shown — re-run the lead search below for a current list.
+                </p>
+              )}
               {([
-                { rows: withWebsiteProspects, title: 'Worth contacting', note: 'The AI-visibility pitch' },
+                { rows: withWebsiteProspects, title: 'Worth contacting', note: `The AI-visibility pitch. Named in ${Math.round(TARGET_MAX_NAMED_SHARE * 100)}% of AI answers or fewer, worst first.` },
                 { rows: noWebsiteProspects, title: 'No website - different pitch', note: 'Site first, visibility second. Our best delivery case, the wrong opening line.' },
               ] as const).filter((g) => g.rows.length > 0).map((g) => (
                 <div key={g.title}>
@@ -811,21 +862,10 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                     {g.rows.map((pr) => (
                       <li key={pr.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/40 py-2 last:border-b-0">
                         <span className="text-[15px] font-medium">{pr.name}</span>
-                        <span className="text-[13px] text-muted-foreground">{invisibilityPhrase(pr, conc?.audits ?? 0)}</span>
+                        <span className="text-[13px] text-muted-foreground">{invisibilityPhrase(pr)}</span>
                         {/* The badge stays on the row as well as in the heading: the lists can be
                             scrolled apart on a phone, and a row must say what it is on its own. */}
                         {pr.noWebsite && <Badge variant="outline" className="text-[10px]">no website</Badge>}
-                        {/* QUIET, AND NOT A WARNING. Google files this business as something else,
-                            which is worth knowing before spending 8p auditing it — but a hardware
-                            shop that cuts keys is a real prospect, so this must not read as an
-                            error. Same weight as "no website": a fact on the row, operator's call.
-                            Naming the type Google DID give is the actionable half; "not a
-                            locksmith" alone would not tell anyone whether it is a near miss. */}
-                        {pr.offTrade && (
-                          <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
-                            Google lists this as {pr.offTrade.label.toLowerCase()}
-                          </Badge>
-                        )}
                         <Button
                           size="sm" variant="outline" className="ml-auto h-8"
                           disabled={addingKey === pr.key || addedKeys.has(pr.key)}
@@ -841,6 +881,62 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                   </ul>
                 </div>
               ))}
+
+              {/* ── THE TWO EXCLUSION GROUPS — VISIBLE, ITEMISED, NEVER SILENT (Paul, 2026-08-14) ──
+                  Google's categories are imperfect and the 40% line is a first guess, so both cuts
+                  show their working: every excluded business, its score, and (for wrong-trade) the
+                  category Google actually gave it. A real locksmith wrongly filed under "Services"
+                  is caught by reading this list, and it keeps its Add button for exactly that. */}
+              {wrongTrade.length > 0 && (
+                <details className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                  <summary className="cursor-pointer text-[12px] font-medium text-muted-foreground hover:text-foreground">
+                    Excluded: {wrongTrade.length} (wrong trade — Google files {wrongTrade.length === 1 ? 'it' : 'them'} as something else)
+                  </summary>
+                  <ul className="mt-1.5 space-y-1">
+                    {wrongTrade.map((pr) => (
+                      <li key={pr.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/40 py-1.5 text-[13px] last:border-b-0">
+                        <span className="font-medium">{pr.name}</span>
+                        <span className="text-muted-foreground">{invisibilityPhrase(pr)}</span>
+                        {pr.offTrade && (
+                          <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+                            Google: {pr.offTrade.label.toLowerCase()}
+                          </Badge>
+                        )}
+                        {pr.noWebsite && <Badge variant="outline" className="text-[10px]">no website</Badge>}
+                        <Button
+                          size="sm" variant="outline" className="ml-auto h-7"
+                          disabled={addingKey === pr.key || addedKeys.has(pr.key)}
+                          onClick={() => void addOne(pr)}
+                        >
+                          {addingKey === pr.key
+                            ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                            : addedKeys.has(pr.key) ? <Check className="mr-1 h-3 w-3" /> : <Plus className="mr-1 h-3 w-3" />}
+                          {addedKeys.has(pr.key) ? 'Added' : 'Add anyway'}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {view.poolExcluded.length > 0 && (
+                <details className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                  <summary className="cursor-pointer text-[12px] font-medium text-muted-foreground hover:text-foreground">
+                    Excluded: {view.poolExcluded.length} already winning — named in more than {Math.round(TARGET_MAX_NAMED_SHARE * 100)}% of AI answers
+                  </summary>
+                  <ul className="mt-1.5 space-y-1">
+                    {view.poolExcluded.map((x, i) => (
+                      <li key={`${x.name || 'unnamed'}-${i}`} className="text-[13px] leading-snug">
+                        <span className="font-medium">{x.name || '(name missing)'}</span>
+                        {x.branches > 1 && <span className="text-muted-foreground"> +{x.branches - 1} branch{x.branches - 1 === 1 ? '' : 'es'}</span>}
+                        <span className="text-muted-foreground">
+                          {' — named in '}{x.answersNamed} of {x.answersTotal} answers
+                          {x.answersTotal > 0 ? ` (${Math.round((x.answersNamed / x.answersTotal) * 100)}%)` : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
           )}
 
@@ -1078,7 +1174,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
               <CardTitle className="flex flex-wrap items-center gap-2 text-base">
                 <MapPin className="h-4 w-4" />
                 {measured ? 'Who AI has never named' : 'Local businesses in this pool'}
-                {view.poolState.state === 'ready' && <Badge variant="secondary">{view.pool.length}</Badge>}
+                {poolVisible && <Badge variant="secondary">{view.pool.length}</Badge>}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-3 pt-0 sm:p-4 sm:pt-0">
@@ -1100,7 +1196,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                   busy={searching}
                 />
               )}
-              {view.poolState.state === 'ready' && (
+              {(view.poolState.state === 'ready' || view.poolState.state === 'stale') && (
                 <>
                   {/* NOTHING MEASURED = NOTHING TO SUBTRACT. With no completed run, every business
                       is "never named" by default, which would dress an unmeasured pool up as a
@@ -1134,20 +1230,15 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                     {' '}{view.poolState.scope === 'town' ? 'inside the town boundary' : `within a ${Math.round(view.poolState.radiusM / 1000)}km radius`}:
                     {' '}{view.poolState.total} business{view.poolState.total === 1 ? '' : 'es'},
                     searched {shortDate(view.poolState.searchedAt) ?? 'recently'}.
-                    {/* ⛔ THIS ALREADY READ FROM THE SUBTRACTION — poolMatchedNamed IS poolExcluded's
-                        length — but it DESCRIBED it wrongly, and that is what made it look like a
-                        contradiction. Only ESTABLISHED firms are subtracted; a firm AI names thinly
-                        stays a prospect on purpose AND appears in the named list. So "N of them AI
-                        already names" was understating by exactly the thin ones, and read as a flat
-                        lie next to a named list full of pool businesses.
-                        Now it reconciles the whole pool out loud: subtracted + kept-but-named +
-                        never-named must equal the total, so any future disagreement is visible on
-                        screen rather than inferable only by counting rows. */}
+                    {/* THE WHOLE POOL, RECONCILED OUT LOUD: excluded-as-winning + barely-named +
+                        never-named must cover every entry, so any future disagreement is visible on
+                        screen rather than inferable only by counting rows. All three figures come
+                        from the same nameMatches scores the rows display. */}
                     {measured ? (() => {
-                      const thinKept = view.pool.filter((r) => r.thin).length;
-                      const never = Math.max(0, view.poolState.total - view.poolMatchedNamed - thinKept);
-                      return ` AI names ${view.poolMatchedNamed} of them consistently enough to subtract`
-                        + `, names ${thinKept} only thinly (kept as prospects)`
+                      const barely = view.pool.filter((r) => r.answersNamed > 0).length;
+                      const never = view.pool.filter((r) => r.answersNamed === 0).length;
+                      return ` AI names ${view.poolMatchedNamed} of them in more than ${Math.round(TARGET_MAX_NAMED_SHARE * 100)}% of answers (excluded as already winning)`
+                        + `, names ${barely} rarely (kept as targets)`
                         + `, and has never named the other ${never}.`;
                     })() : ' Nothing measured, so none have been subtracted.'}
                   </p>
@@ -1174,9 +1265,9 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                       the list AFTER subtraction and reads the same in both cases. */}
                   {view.pool.length === 0 && (
                     <p className="text-sm text-muted-foreground">
-                      {view.poolState.state === 'ready' && view.poolState.total === 0
+                      {view.poolState.total === 0
                         ? `Places found no ${view.trade} inside the ${view.town} boundary, so there is no pool here — nothing to contact, and nothing the audits were measured against. The firms named above are from other towns.`
-                        : 'Every business in the pool is already named by AI. Nothing to contact here.'}
+                        : `Every business in the pool is already named by AI in more than ${Math.round(TARGET_MAX_NAMED_SHARE * 100)}% of answers. Nothing to contact here.`}
                     </p>
                   )}
                   {/* The prospect rows themselves live in the summary block at the top of this
@@ -1211,10 +1302,8 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                             <li key={`${x.name || 'unnamed'}-${i}`} className="text-[11px] leading-snug text-muted-foreground">
                               <span className="font-medium text-foreground/80">{x.name || '(name missing)'}</span>
                               {x.branches > 1 && <span className="text-muted-foreground"> +{x.branches - 1} branch{x.branches - 1 === 1 ? '' : 'es'}</span>}
-                              {' → already named as '}
-                              <span className="font-medium text-foreground/80">{x.matchedNamed || '(match missing)'}</span>
-                              {typeof x.matchedMentions === 'number' && typeof x.matchedAudits === 'number'
-                                ? ` (${x.matchedMentions} mention${x.matchedMentions === 1 ? '' : 's'} across ${x.matchedAudits} audit${x.matchedAudits === 1 ? '' : 's'})`
+                              {typeof x.answersNamed === 'number' && typeof x.answersTotal === 'number' && x.answersTotal > 0
+                                ? ` → named in ${x.answersNamed} of ${x.answersTotal} answers (${Math.round((x.answersNamed / x.answersTotal) * 100)}%), above the ${Math.round(TARGET_MAX_NAMED_SHARE * 100)}% line`
                                 : ' (counts unavailable)'}
                             </li>
                           ))}
@@ -1246,11 +1335,12 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                               </Badge>
                             )}
                             {n.noWebsite && <Badge variant="outline" className="text-[10px]">no website</Badge>}
-                            {n.thin && (
-                              <span className="text-muted-foreground">
-                                AI names it: {n.thin.mentions} mention{n.thin.mentions === 1 ? '' : 's'} in {n.thin.audits} of {conc.audits} audits
-                              </span>
+                            {n.offTrade && (
+                              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+                                Google: {n.offTrade.label.toLowerCase()}
+                              </Badge>
                             )}
+                            <span className="text-muted-foreground">{invisibilityPhrase(n)}</span>
                           </li>
                         ))}
                       </ul>
@@ -1411,7 +1501,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                 <p className="mt-1 leading-snug">
                   {(view?.pool.length ?? 0) === 0
                     ? 'The pool is empty for this trade and town. Run the lead search first, then come back.'
-                    : `All ${view?.pool.length} ${view?.pool.length === 1 ? 'entry' : 'entries'} in this pool are chain branches (${chainEntries} chain ${chainEntries === 1 ? 'entry' : 'entries'}). Chains are not prospects, so there is nothing here worth auditing.`}
+                    : `All ${view?.pool.length} ${view?.pool.length === 1 ? 'entry' : 'entries'} in this pool are chain branches (${chainEntries}) or filed under another trade by Google (${wrongTrade.length}). Neither is a target, so there is nothing here worth auditing.`}
                 </p>
               </div>
             )}
@@ -1441,7 +1531,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
-                {auditable.length} never-named business{auditable.length === 1 ? '' : 'es'} available (chains excluded — they are not prospects).
+                {auditable.length} target{auditable.length === 1 ? '' : 's'} available, worst first (chains and wrong-trade entries excluded — they are not targets).
               </p>
             </div>
 

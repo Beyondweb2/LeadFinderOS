@@ -860,6 +860,57 @@ record, and a separate page meant leaving the two screens he actually works in t
 
 ---
 
+## 6e. ✅ DETERMINISTIC MARKET TARGETING — built 2026-08-14, Paul's spec. Read before touching the market view.
+
+**A pool business is scored by `nameMatches` over the stored chatgpt/gemini `answer_text`, exactly
+as the report and the week-8 guarantee score an audited business.** `TARGET_MAX_NAMED_SHARE = 0.4`
+(`src/lib/marketView.ts`, INCLUSIVE — ≤40% of answers = target, Paul will tune it): targets sort
+worst-first, >40% is excluded as already winning, and both exclusions are itemised expandables in
+`MarketPanel` — never silent, Paul's explicit rule.
+
+- ⛔ **EXTRACTED COMPETITOR NAMES ARE NO LONGER AN INPUT TO TARGETING, AND MUST NOT BECOME ONE
+  AGAIN.** The old path joined the pool to the extracted fold via one shared `groupNames` pass and
+  subtracted `established` (leader-relative) entries. Three measured faults, each sufficient alone:
+  junk polluted the counts ("Here" in 17/37 Aylesbury answers); the LEADER-RELATIVE threshold
+  subtracted Chester's Saltney Locksmiths while AI named it in **16%** of answers; and — the worst —
+  **junk BRIDGED real firms in the union-find**: the single raw mention "Lock" welded Lockforce,
+  LockFit, Lock Around The Clock and Aylesbury Lock and Key Centre into one 23-name group scored as
+  one firm. The named-intel fold still groups mentions for display and the shape verdict; the pool
+  now has its own `groupNames` pass over Places names alone (chain folding), which junk cannot
+  enter.
+- ⛔ **`search_cache` IS NO LONGER DELETED** (`cron-run`, 2026-08-14). The nightly 72h delete
+  physically destroyed the scraped list — measured that day: **113 of 123 measured markets had no
+  pool to show**, which was the "never-named businesses don't appear" bug in practice. `market-view`
+  now serves an old pool as poolState **`stale`** (same fields as `ready`): businesses visible with
+  the search date on them, and **every freshness/spend gate still keys on `ready` alone**
+  (MeasureMarket's `poolCount`, the measure flow's search skip). `expired` survives only for pools
+  the old cleanup already destroyed — a re-search rebuilds them (~11¢). Do not "tidy" a TTL delete
+  back in.
+- ⛔ **WRONG-TRADE IS A DISPLAY FILTER WITH AN ITEMISED ESCAPE HATCH, NEVER A SILENT CUT.**
+  `offTradeMarkForGroup` (group-level: untyped branches never vote; ONE on-trade branch clears a
+  chain — Timpson has branches typed both "Services" and "Locksmith"). Off-trade rows sit in an
+  expandable "Excluded: N (wrong trade)" with their scores, Google's own label, and an **Add
+  anyway** button, because Google's categories are imperfect and Paul wants to catch a real
+  locksmith filed under "Services" by reading the list.
+- ⛔ **ZERO SCORED ANSWERS = `unmeasured`, NEVER `target`** — `poolTargetVerdict` owns this (ninth
+  instance of the absent-value shape, caught at design time). `scripts/market-targets.test.ts`
+  drives it, the boundary inclusivity, the group off-trade absence rules, and the
+  junk-cannot-score integration cases.
+- ✅ **THE VERDICT NOW GRADES ITSELF — no manual button** (Paul's rule): the finalisation
+  auto-clean is fixed (see §8's dead-bearer entry), and `MarketPanel` auto-cleans a PROVEN-dirty
+  fold on open (once per market per session — the ref is the brake against a re-fire loop if
+  markers survive a clean; toast states the ~7p/run cost; the manual button remains as the
+  fallback). Targeting itself never needs the cleaner.
+- ⚠️ **THE TARGET LIST'S FLOOR IS STILL GOOGLE PLACES.** A firm AI names that has no Places listing
+  in the town stays in the named-intel list only — there is nothing to contact. Aylesbury is the
+  honest example: in-town Places holds 3 real entities (2 already winning at 50%/84%, Timpson a
+  chain), so the winnable businesses are the **11 nearby** locksmiths, all real, all typed
+  `locksmith`, listed under "Nearby, outside the town boundary".
+- ⚠️ Old-SPA/new-payload overlap is a 10-minute sessionStorage cache (`useMarketView`), same as
+  every market-view deploy. Deploy `market-view` BEFORE pushing the SPA.
+
+---
+
 ## 7. Parked and unmerged — do not merge these
 
 | Branch | Hash |
@@ -1320,6 +1371,32 @@ record, and a separate page meant leaving the two screens he actually works in t
   - ⚠️ **The lesson: "blocked" needs to name WHICH CALLER is blocked.** Recording it as
     "cleaning is blocked" turned a harness-auth quirk into a product-level blocker in the notes, and
     the next session would have believed it.
+  - 🔴 **THE ROTATION ALSO KILLED THREE INTERNAL CALL PATHS — found and fixed 2026-08-14, and the
+    REAL MECHANISM IS verify_jwt-BY-OMISSION, not the bearer per se.** A function ABSENT from
+    `supabase/config.toml` deploys with the platform default **verify_jwt = TRUE**, which demands a
+    JWT-shaped bearer before the handler runs. Every internal fetch in this repo sends
+    `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`; that passed the check while the env key WAS a JWT and
+    started failing ("Invalid API key", handler never runs) when the ~2026-08-11 rotation made it
+    sb_secret-shaped. Three functions were missing from config.toml, so three paths died at once:
+    | Dead since ~08-11 | Caller | Observed damage |
+    |---|---|---|
+    | `extract-competitors` | queue finalisation | **every fold finalised 08-11→08-14 dirty** (16–51 markers; zero before) |
+    | `generate-report` | queue auto-report | **business_reports: 84 rows 08-04→08-10, ZERO after 08-10** |
+    | `derive-audit` | whatsapp-inbound reply chain | degraded gracefully: `servedFromMarket` false → fell back to a PAID per-business audit every time |
+    ⛔ **AND THE PROOF THAT THE BEARER SHAPE ALONE IS NOT THE FAULT: the paid baselines flowed.**
+    `audit-baseline.ts` and `whatsapp-inbound.ts` send the IDENTICAL bearer to `create-ai-audit` —
+    which IS in config.toml (`verify_jwt = false`) — and RG (08-11) and Fortify (08-13) both got
+    their full 3-run baselines minutes after paying. The five "dead bearer" call sites in those two
+    shared files are ALIVE and need no change. Do not "fix" them.
+    **The fix:** config.toml now lists all three (their handlers already enforce their own auth —
+    user-JWT ownership or CRON_SECRET + x-internal-job), redeployed to apply it; and the two queue
+    invokes now send NO bearer at all (cron-secret is the internal door and never rotates).
+    ⚠️ **The auth-free deploy marker:** an unauthenticated POST returns the platform's
+    `UNAUTHORIZED_NO_AUTH_HEADER` while verify_jwt is stuck true, and the handler's own JSON
+    (`{"ok":false,...}`) once false is live. That is how the flip was verified without CRON_SECRET.
+    ⚠️ **When adding a NEW edge function: add its config.toml entry in the same commit.** The
+    default is the trap; nothing local can catch it (deno check passes, deploy succeeds, user-JWT
+    callers work — only internal callers die, silently, WEEKS later when a key rotates).
 
   Counted, not estimated, at $0.070/run and with no re-auditing:
   | Scope | Runs | Cost |

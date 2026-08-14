@@ -1,12 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { norm } from "../../../src/lib/buildPlaybook.ts";
 import { buildMatchContext, groupNames, keyIndex } from "../_shared/market-match.ts";
+import { nameMatches } from "../_shared/enrichment/ai-search.ts";
 import { generateCacheKey } from "../_shared/search-cache-key.ts";
 import { questionKey } from "../../../src/lib/seedGuard.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
-  ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE, expectedPrimaryType, offTradeMark,
+  ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE, expectedPrimaryType,
+  offTradeMarkForGroup, poolTargetVerdict,
   hasShapeEvidence, uncleanedNames, UNCLEANED_EXAMPLES_SHOWN,
   type MarketConcentration, type MarketNamedRow, type MarketPoolExcluded,
   type MarketPoolRow, type MarketPoolState, type MarketTier, type MarketCitationHost,
@@ -40,9 +42,10 @@ const corsHeaders = {
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-/** Cache TTL of search_cache, mirrored from search-leads. Used ONLY to explain an expiry to the
- *  operator ("searched 5 days ago, the pool has since expired") — the read itself filters on
- *  created_at, so a stale row can never be served as fresh. */
+/** Cache TTL of search_cache, mirrored from search-leads. This no longer hides anything: a pool
+ *  older than this is served as state `stale` (businesses visible, freshness gates unsatisfied)
+ *  rather than refused. search-leads still re-charges Google past its own copy of this window, so
+ *  the paid-search semantics are untouched — only the DISPLAY stopped throwing the data away. */
 const POOL_TTL_MS = 72 * 60 * 60 * 1000;
 
 /** Town strings are hand-typed and inconsistent ("Wisbech", "wisbech ", "Wisbech, UK"). Compare on
@@ -207,6 +210,18 @@ Deno.serve(async (req) => {
     let engineBlocks = 0;
     let truncatedBlocks = 0;
 
+    /* ── THE SCORED ANSWERS — what the pool is measured AGAINST ──────────────────────────────────
+       Every chatgpt/gemini answer_text on the market's completed runs, one entry per deduped
+       question per engine. The prospect list is scored by running nameMatches — the SAME function
+       that decides the report verdict and the week-8 guarantee comparison — over these texts, per
+       pool business. That replaces the extracted-competitor join entirely for TARGETING: no
+       extraction means no junk in the scores, no fragment can bridge two firms, and no cleaning
+       step (manual or LLM) is ever needed before the target list is right.
+       ⚠️ chatgpt + gemini ONLY, mirroring SCORED_ENGINES in src/lib/auditReport.ts and derive-audit
+       — the same engines every other named-share in the product is counted over. */
+    const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
+    const scoredAnswers: { text: string }[] = [];
+
     /* ONE QUESTION, COUNTED ONCE PER RUN. Measured 2026-08-04: 18 Hastings questions held only 12
        distinct ones, because the queue treated "locksmith services in hastings uk" and "... in
        Hastings UK" as different. Two rows asking the same thing in different capitals answered the
@@ -228,10 +243,16 @@ Deno.serve(async (req) => {
       if (seenPerRun.has(qk)) { dupRows += 1; continue; }
       seenPerRun.add(qk);
       let answeredHere = false;
-      for (const payload of Object.values(result)) {
-        const block = payload as { competitors?: unknown; named?: unknown } | null;
+      for (const [engineKey, payload] of Object.entries(result)) {
+        const block = payload as { competitors?: unknown; named?: unknown; answer_text?: unknown } | null;
         // Only real engine blocks carry `named`; this skips _apify and _cost_usd.
         if (!block || typeof block !== "object" || block.named === undefined) continue;
+        /* The answer text this question produced, collected for the pool scoring above. Empty or
+           missing text is simply not a scored answer — it can neither name nor fail to name. */
+        if ((SCORED_ENGINES as readonly string[]).includes(engineKey)) {
+          const text = typeof block.answer_text === "string" ? block.answer_text.trim() : "";
+          if (text) scoredAnswers.push({ text });
+        }
         /* ⛔ COUNTED HERE, NOT OFF seenPerRun.size. A question is only a question this fold measured
            if at least one ENGINE answered it — a row with a result object but no engine block
            contributed no names, and counting it would inflate the denominator of every per-question
@@ -291,26 +312,34 @@ Deno.serve(async (req) => {
 
     if (matching.length > 0) {
       const last = matching[0];
-      const cutoff = new Date(Date.now() - POOL_TTL_MS).toISOString();
       /* townOnly FIRST. The market view's own search button runs townOnly, and that is the pool
          this view wants - a radius pool includes neighbouring towns the audits never covered,
          which would put businesses in the prospect list that were never in the market being
          measured. The plain key is only a fallback, and it is reported as such. */
       for (const [tOnly, kind] of [[true, "town"], [false, "radius"]] as const) {
         const key = await generateCacheKey(last.keyword, last.location, last.radius, tOnly);
+        /* ⛔ NO created_at CUTOFF ON THE READ — 2026-08-14. Filtering here is what made 113 of 123
+           measured markets show no prospect at all: the businesses exist, only the cache row aged.
+           Age now decides the STATE (ready vs stale), never whether the businesses are shown. A
+           stale pool satisfies no freshness gate — MeasureMarket and the search-skip both key on
+           state === 'ready' — so nothing spends differently because of this. */
         const { data: hit } = await service.from("search_cache")
-          .select("results, created_at").eq("cache_key", key).gte("created_at", cutoff).maybeSingle();
+          .select("results, created_at").eq("cache_key", key).maybeSingle();
         if (!hit?.results) continue;
         const rawRes = hit.results as unknown;
         const isRegionBlob = !!rawRes && !Array.isArray(rawRes) && Array.isArray((rawRes as { leads?: unknown }).leads);
         pool = (isRegionBlob ? (rawRes as { leads: CachedLead[] }).leads : rawRes) as CachedLead[];
+        const fresh = Date.now() - new Date(String(hit.created_at)).getTime() <= POOL_TTL_MS;
         poolState = {
-          state: "ready", scope: kind, keyword: last.keyword, radiusM: last.radius,
+          state: fresh ? "ready" : "stale", scope: kind, keyword: last.keyword, radiusM: last.radius,
           searchedAt: String(hit.created_at), total: pool.length,
         };
         break;
       }
       if (poolState.state === "never_searched") {
+        /* Searched, but the cache row itself is gone — pools deleted by the old nightly cleanup
+           (removed 2026-08-14) or overwritten under a different key. Re-running the search is the
+           only way back; the state says so. */
         poolState = { state: "expired", keyword: last.keyword, searchedAt: last.searched_at, ttlHours: POOL_TTL_MS / 3_600_000 };
       }
     }
@@ -320,19 +349,23 @@ Deno.serve(async (req) => {
        silently deciding who exists, without ever inflating the town's own count. */
     const poolOutside = pool.filter((p) => p?.outsideTown === true);
     pool = pool.filter((p) => p?.outsideTown !== true);
-    if (poolState.state === "ready") poolState = { ...poolState, total: pool.length };
+    if (poolState.state === "ready" || poolState.state === "stale") poolState = { ...poolState, total: pool.length };
 
-    /* -- 4. ONE GROUPING PASS OVER BOTH SIDES ----------------------------------------------- */
-    /* THE FIX. Previously the named list merged on businessCore and the pool subtracted using the
-       same key computed separately - so "Anglia Locksmiths" led the named list on 86 mentions
-       while "Anglia Locksmiths (MLA Approved Company)" sat in the prospect list, telling the
-       operator to cold-contact the market leader. Grouping both sides in ONE pass makes that
-       disagreement structurally impossible: the pool asks the same index the named list was
-       built from. */
+    /* -- 4. TWO GROUPING PASSES, ONE PER SIDE — AND THAT IS THE 2026-08-14 FIX ---------------- */
+    /* The named-intel fold groups EXTRACTED MENTION names; the pool groups PLACES names (so a
+       chain's branches fold to one entry). They used to share one pass so the subtraction could
+       join them — and that shared pass is exactly where junk corrupted targeting: raw fragments
+       sat in the same union-find as the pool, and the single mention "Lock" bridged Lockforce,
+       LockFit, Lock Around The Clock AND Aylesbury Lock and Key Centre into one 23-name group
+       scored as one firm. The pool no longer joins the named list AT ALL: each pool business is
+       scored directly against the stored answer text with nameMatches (section 6), so the two
+       sides have nothing left to disagree about and nothing extracted can touch a target score.
+       Junk cannot enter the pool pass, because its only input is Places names. */
     const ctx = buildMatchContext(trade, town);
-    const poolNames = [...pool, ...poolOutside].map((p) => (p?.name ?? "").trim()).filter(Boolean);
-    const groups = groupNames([...mentions.map((m) => m.name), ...poolNames], ctx);
+    const groups = groupNames(mentions.map((m) => m.name), ctx);
     const idx = keyIndex(groups);
+    const poolNames = [...pool, ...poolOutside].map((p) => (p?.name ?? "").trim()).filter(Boolean);
+    const poolIdx = keyIndex(groupNames(poolNames, ctx));
 
     // key -> the fold. AUDITS is the honest signal: 32 mentions from one audit is one opinion, not
     // a market position (the same trap playbook-evidence guards).
@@ -543,19 +576,25 @@ Deno.serve(async (req) => {
       .slice(0, 8)
       .map(([host, citations]) => ({ host, citations, isAggregator: isAggregatorUrl(`https://${host}/`) }));
 
-    /* -- 6. PROSPECTS = pool minus named, chains collapsed, exclusions ITEMISED --------------- */
-    const namedByKey = new Map(named.map((n) => [n.key, n]));
+    /* -- 6. TARGETS = the scraped list, scored by nameMatches against the stored answers ------ */
+    /* ⛔ NO EXTRACTED NAME IS AN INPUT HERE — 2026-08-14, Paul's targeting fix. Each pool business
+       is scored the way an audited business is: nameMatches over every stored chatgpt/gemini
+       answer_text. That is the same verdict the report and the week-8 guarantee comparison use, so
+       targeting and the report can never disagree about whether AI names somebody. The old path
+       joined the pool to the EXTRACTED competitor fold and subtracted "established" entries —
+       leader-relative thresholds over junk-polluted, junk-bridged groups; see section 4. */
     // Chains: pool rows sharing a group key are one company. Ten Timpson branches are one entry
     // with a branch count, not ten prospects. Derived from repetition - no chain list anywhere.
-    const poolGroups = new Map<string, { variants: string[]; ids: string[]; websiteless: number; sample: CachedLead }>();
+    const poolGroups = new Map<string, { variants: string[]; ids: string[]; websiteless: number; rows: CachedLead[]; sample: CachedLead }>();
     for (const p of pool) {
       const nm = (p?.name ?? "").trim();
       if (!nm) continue;
-      const k = idx.get(nm);
+      const k = poolIdx.get(nm);
       if (!k) continue;
-      const g = poolGroups.get(k) ?? { variants: [], ids: [], websiteless: 0, sample: p };
+      const g = poolGroups.get(k) ?? { variants: [], ids: [], websiteless: 0, rows: [], sample: p };
       g.variants.push(nm);
       g.ids.push(p.id);
+      g.rows.push(p);
       if (p.websiteStatus === "NO_WEBSITE") g.websiteless += 1;
       poolGroups.set(k, g);
     }
@@ -567,87 +606,71 @@ Deno.serve(async (req) => {
        would freeze one search's consensus onto the next. */
     const expectedType = expectedPrimaryType(pool);
 
+    /* THE SCORE. One count per pool entry: in how many of the market's scored answers does
+       nameMatches find it (any branch spelling counts, an answer counts once). The denominator is
+       shared by every row, so ordering by the count IS ordering by the share. */
+    const nameCtx = { trade, town };
+    const answersTotal = scoredAnswers.length;
+    const namedAnswersFor = (variants: string[]): number => {
+      const distinct = [...new Set(variants)];
+      let n = 0;
+      for (const a of scoredAnswers) {
+        if (distinct.some((v) => nameMatches(a.text, v, nameCtx))) n++;
+      }
+      return n;
+    };
+
     const notNamed: MarketPoolRow[] = [];
     /* EVERY EXCLUSION IS ITEMISED. A silent exclusion is as dangerous as a silent inclusion - it is
-       how a real prospect disappears. Each one names the entry it matched and that entry's weight,
-       so a wrong merge is visible on screen instead of quietly removing a business. */
+       how a real prospect disappears. Each excluded entry carries its score, so the operator can
+       disagree with the cut by reading the number beside the name. */
     const poolExcluded: MarketPoolExcluded[] = [];
     for (const [key, g] of poolGroups) {
-      const hit = namedByKey.get(key);
-      /* ⛔ GRADED SUBTRACTION, AND ONLY `established` IS SUBTRACTED. This read `hit.tier === "thin"`
-         and kept those, dropping everything else — which silently included `unknown`.
-         BELOW THE EVIDENCE BAR EVERY ENTRY IS `unknown`, so the guard inverted in exactly the case
-         it was written for: with one completed audit, Norwich subtracted 15 of 20 businesses as
-         "already named", six of them on a single mention each. One audit makes every firm 100% of
-         audits, so auditShare carries no information and the mention half decides alone — the
-         collapse the graded model exists to prevent, reached through the subtraction instead of
-         through the tier.
-         The test is now what it always should have been: a business is removed from the prospect
-         list ONLY when AI names it consistently. Thin and unknown both stay, and both carry what is
-         known about them. */
-      if (hit && hit.tier !== "established") {
-        notNamed.push({
-          key,
-          name: pickDisplayNameFromList(g.variants),
-          branches: g.variants.length,
-          isChain: g.variants.length > 1,
-          placeIds: g.ids,
-          /* EVERY branch, not any branch. `> 0` flagged a whole chain entry as websiteless
-             because ONE of its branches had no site on its Places listing, which is a wrong badge on
-             an entry that plainly has a website. An entry has no website only if none of its
-             branches does. Single-business entries are unaffected: 1 of 1 either way. */
-          noWebsite: g.websiteless === g.variants.length,
-          googleMapsUrl: g.sample.googleMapsUrl,
-          websiteUrl: g.sample.websiteUrl,
-          offTrade: offTradeMark(g.sample, expectedType),
-          thin: { mentions: hit.mentions, audits: hit.audits, matchedNamed: hit.name },
-        });
-        continue;
-      }
-      if (hit) {
-        poolExcluded.push({
-          name: pickDisplayNameFromList(g.variants),
-          // How many Places rows folded into this one entry. Display only: without it the panel
-          // says "5 found, 4 already named, 0 left" and the operator has to guess where the 5th
-          // went. No effect on grouping, matching or the pool states.
-          branches: g.variants.length,
-          matchedNamed: hit.name,
-          matchedMentions: hit.mentions,
-          matchedAudits: hit.audits,
-        });
-        continue;
-      }
-      notNamed.push({
+      const answersNamed = namedAnswersFor(g.variants);
+      const row: MarketPoolRow = {
         key,
         name: pickDisplayNameFromList(g.variants),
         branches: g.variants.length,
         isChain: g.variants.length > 1,
         placeIds: g.ids,
-        noWebsite: g.websiteless === g.variants.length,   // see the note above: every branch, not any
+        /* EVERY branch, not any branch. `> 0` flagged a whole chain entry as websiteless
+           because ONE of its branches had no site on its Places listing, which is a wrong badge on
+           an entry that plainly has a website. An entry has no website only if none of its
+           branches does. Single-business entries are unaffected: 1 of 1 either way. */
+        noWebsite: g.websiteless === g.variants.length,
         googleMapsUrl: g.sample.googleMapsUrl,
         websiteUrl: g.sample.websiteUrl,
-        offTrade: offTradeMark(g.sample, expectedType),
-      });
+        offTrade: offTradeMarkForGroup(g.rows, expectedType),
+        answersNamed,
+        answersTotal,
+      };
+      /* ⛔ ONLY `winning` IS EXCLUDED. `target` stays, and so does `unmeasured` (zero scored
+         answers) — with nothing measured, nothing is subtracted AND nothing is claimed, which the
+         panel's completed-runs gate already states out loud. poolTargetVerdict owns the boundary
+         (TARGET_MAX_NAMED_SHARE, inclusive), so this file cannot drift from the tests. */
+      if (poolTargetVerdict(answersNamed, answersTotal) === "winning") {
+        poolExcluded.push({ name: row.name, branches: row.branches, answersNamed, answersTotal });
+        continue;
+      }
+      notNamed.push(row);
     }
-    /* Never-named first, then the thinly-named: the completely invisible are the strongest pitch,
-       and a thin row needs its context read rather than being skimmed past. */
-    /* NEARBY, OUTSIDE THE BOUNDARY. Same grouping (so a chain reads as a chain and a firm AI
-       already names is marked), but its own list. Established-named ones are flagged via `thin`
-       being absent + the named lookup, so a nearby market leader is never pitched as a prospect. */
-    const nearbyGroups = new Map<string, { variants: string[]; ids: string[]; websiteless: number; sample: CachedLead }>();
+    /* NEARBY, OUTSIDE THE BOUNDARY. Same grouping and the same score, its own list — so a nearby
+       firm AI already names reads as such and is never pitched blind, without ever inflating the
+       town's own counts. */
+    const nearbyGroups = new Map<string, { variants: string[]; ids: string[]; websiteless: number; rows: CachedLead[]; sample: CachedLead }>();
     for (const p of poolOutside) {
       const nm = (p?.name ?? "").trim();
       if (!nm) continue;
-      const k = idx.get(nm);
+      const k = poolIdx.get(nm);
       if (!k) continue;
-      const g = nearbyGroups.get(k) ?? { variants: [], ids: [], websiteless: 0, sample: p };
+      const g = nearbyGroups.get(k) ?? { variants: [], ids: [], websiteless: 0, rows: [], sample: p };
       g.variants.push(nm);
       g.ids.push(p.id);
+      g.rows.push(p);
       if (p.websiteStatus === "NO_WEBSITE") g.websiteless += 1;
       nearbyGroups.set(k, g);
     }
     const poolNearby: MarketPoolRow[] = [...nearbyGroups.entries()].map(([key, g]) => {
-      const hit = namedByKey.get(key);
       return {
         key,
         name: pickDisplayNameFromList(g.variants),
@@ -657,17 +680,21 @@ Deno.serve(async (req) => {
         noWebsite: g.websiteless === g.variants.length,   // see the note above: every branch, not any
         googleMapsUrl: g.sample.googleMapsUrl,
         websiteUrl: g.sample.websiteUrl,
-        offTrade: offTradeMark(g.sample, expectedType),
+        offTrade: offTradeMarkForGroup(g.rows, expectedType),
         outsideTown: true,
-        ...(hit ? { thin: { mentions: hit.mentions, audits: hit.audits, matchedNamed: hit.name } } : {}),
+        answersNamed: namedAnswersFor(g.variants),
+        answersTotal,
       };
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    }).sort((a, b) => a.answersNamed - b.answersNamed || a.name.localeCompare(b.name));
 
+    /* Worst first: never-named at the top, then by how rarely they are named. The completely
+       invisible are the strongest pitch. noWebsite breaks ties because it is a different opening,
+       and the panel lists those separately anyway. */
     notNamed.sort((a, b) =>
-      Number(!!a.thin) - Number(!!b.thin) ||
+      a.answersNamed - b.answersNamed ||
       Number(b.noWebsite) - Number(a.noWebsite) ||
       a.name.localeCompare(b.name));
-    poolExcluded.sort((a, b) => b.matchedMentions - a.matchedMentions);
+    poolExcluded.sort((a, b) => b.answersNamed - a.answersNamed);
     const alreadyNamed = poolExcluded.length;
 
     /* ⛔ TYPED, AND THAT IS THE WHOLE POINT. This object used to be an untyped literal, and three

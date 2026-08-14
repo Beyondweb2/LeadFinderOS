@@ -34,13 +34,15 @@ async function cleanupExpiredCaches(supabase: ReturnType<typeof createClient>) {
 
     if (geoErr) logStep("geocode_cache cleanup error", { error: geoErr.message });
 
-    // Clean expired search cache (72h TTL)
-    const { error: searchErr } = await supabase
-      .from("search_cache")
-      .delete()
-      .lt("created_at", new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString());
-
-    if (searchErr) logStep("search_cache cleanup error", { error: searchErr.message });
+    /* ⛔ search_cache IS NO LONGER DELETED — 2026-08-14, Paul's targeting fix.
+       This delete ran nightly and physically destroyed the scraped business list for every town
+       72 hours after its search. The market view's prospect list is that cached pool, so 113 of
+       123 measured markets could not show a single never-named business — the operator saw only
+       "who AI names" and concluded there was nobody to contact. The rows are one upsert per
+       distinct search (18 rows at the time of the change), so there is nothing here worth
+       reclaiming. Freshness is still governed by the readers: search-leads re-charges Google
+       past its own 72h cutoff, and market-view now reports an old pool as `stale`, never as
+       fresh. Deleting the data was the only part of the TTL that cost anything. */
 
     logStep("Task:cleanupExpiredCaches — done", { ms: Date.now() - start });
   } catch (err) {

@@ -110,3 +110,20 @@ verify_jwt = false
 
 [functions.findable-checkout]
 verify_jwt = false
+
+# ⛔ THESE THREE WERE MISSING, AND THE OMISSION IS WHAT KILLED THEIR INTERNAL CALLERS — 2026-08-14.
+# A function absent from this file deploys with the platform default, verify_jwt = TRUE, so the
+# platform demands a JWT-shaped bearer before the handler runs. All three worked for weeks because
+# SUPABASE_SERVICE_ROLE_KEY used to BE a JWT; the ~2026-08-11 key rotation made it sb_secret-shaped
+# and every internal fetch started dying with "Invalid API key" — while functions listed here
+# (create-ai-audit) kept accepting the identical bearer, which is why paid baselines flowed while
+# the cleaner, auto-reports and derive-on-reply all silently stopped. Each handler enforces its own
+# auth (user JWT ownership or CRON_SECRET + x-internal-job), same as every other entry above.
+[functions.extract-competitors]
+verify_jwt = false
+
+[functions.generate-report]
+verify_jwt = false
+
+[functions.derive-audit]
+verify_jwt = false
