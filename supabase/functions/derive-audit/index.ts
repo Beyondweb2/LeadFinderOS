@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
 import { nameMatches } from "../_shared/enrichment/ai-search.ts";
 import { canDeriveReport, explainRefusal } from "../_shared/derivable.ts";
 import { normaliseTownName } from "../_shared/town-distance.ts";
@@ -94,9 +95,17 @@ Deno.serve(async (req) => {
 
     /* ── THE PROSPECT ─────────────────────────────────────────────────────────────────────── */
     const { data: lead } = await service.from("outreach_leads")
-      .select("id, user_id, business_name, search_keyword, category, search_location, derived_town, address, website, country")
+      .select("id, user_id, business_name, search_keyword, category, search_location, derived_town, town_fetch_note, address, website, country")
       .eq("id", leadId).eq("user_id", userId).maybeSingle();
     if (!lead) return json({ ok: false, error: "lead_not_found" }, 404);
+
+    /* ⛔ THE TOWN GATE — Paul's rule, 2026-08-14. This function's own town line below falls back to
+       search_location, and for a settled-unverifiable lead that is the searched town: a derived
+       report would claim a market the business may not be in (the Wilson's fault, verbatim).
+       Unchecked passes — absence is never an answer; only Google-confirmed-unverifiable holds. */
+    if (townGated(lead)) {
+      return json({ ok: false, error: "town_unverified", message: TOWN_GATE_REASON }, 409);
+    }
 
     const businessName = String(lead.business_name ?? "").trim();
     const trade = String(lead.search_keyword || lead.category || "").trim();

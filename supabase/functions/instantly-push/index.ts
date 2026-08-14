@@ -17,6 +17,7 @@
 // If these differ, only the marked spots below change — the flow is unaffected.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { townGated } from "../../../src/lib/townVerdict.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { checkSuppressed } from "../_shared/suppression.ts";
 
@@ -194,7 +195,7 @@ Deno.serve(async (req) => {
     // their own rows; admins get no owner filter so they can push any lead by id.
     let leadQuery = service
       .from("outreach_leads")
-      .select("id, business_name, email, phone, is_archived, category, instantly_pushed_at, search_location, derived_town")
+      .select("id, business_name, email, phone, is_archived, category, instantly_pushed_at, search_location, derived_town, town_fetch_note")
       .in("id", leadIds);
     if (!isAdmin) leadQuery = leadQuery.eq("user_id", userId);
     const { data: rows, error: lErr } = await leadQuery;
@@ -208,15 +209,24 @@ Deno.serve(async (req) => {
        went". bulk-jobs treats a missing list as a failure and says so, because a stale deployment of
        this function is a real state and guessing in it would either double-push or lose the lot. */
     const alreadyPushedIds = all.filter((r) => r.instantly_pushed_at).map((r) => r.id);
-    const noEmailIds = all.filter((r) => !r.instantly_pushed_at && !String(r.email ?? "").trim()).map((r) => r.id);
+    /* ⛔ THE TOWN GATE — Paul's rule, 2026-08-14: money and messages never move on an unverified
+       town. Fires ONLY on the settled-unverifiable verdict (townGated); an unchecked lead passes,
+       because absence is never an answer. Its own id list, because bulk-jobs maps outcomes from
+       these lists and a lead in none of them reads as "gave no reason". */
+    const townUnverifiedIds = all
+      .filter((r) => !r.instantly_pushed_at && townGated(r))
+      .map((r) => r.id);
+    const townUnverifiedSet = new Set(townUnverifiedIds);
+    const noEmailIds = all.filter((r) => !r.instantly_pushed_at && !townUnverifiedSet.has(r.id) && !String(r.email ?? "").trim()).map((r) => r.id);
     const skippedAlreadyPushed = alreadyPushedIds.length;
     const skippedNoEmail = noEmailIds.length;
+    const skippedTownUnverified = townUnverifiedIds.length;
     const toPush = all
-      .filter((r) => !r.instantly_pushed_at && String(r.email ?? "").trim())
+      .filter((r) => !r.instantly_pushed_at && !townUnverifiedSet.has(r.id) && String(r.email ?? "").trim())
       .slice(0, MAX_BATCH);
 
     if (toPush.length === 0) {
-      return json({ success: true, pushed: 0, pushedIds: [], skippedAlreadyPushed, skippedNoEmail, alreadyPushedIds, noEmailIds });
+      return json({ success: true, pushed: 0, pushedIds: [], skippedAlreadyPushed, skippedNoEmail, skippedTownUnverified, alreadyPushedIds, noEmailIds, townUnverifiedIds });
     }
 
     /* ══ THE FIVE VARIABLES, FROM THE RESOLVER THE WHATSAPP PITCH ALREADY USES ══════════════════
@@ -317,7 +327,7 @@ Deno.serve(async (req) => {
 
     return json({
       success: true, pushed: pushedIds.length, pushedIds,
-      skippedAlreadyPushed, skippedNoEmail,
+      skippedAlreadyPushed, skippedNoEmail, skippedTownUnverified, townUnverifiedIds,
       alreadyPushedIds, noEmailIds,
       skippedNoAudit: skippedNoAudit.length, skippedNoAuditDetail: skippedNoAudit,
       skippedSuppressed: skippedSuppressed.length, skippedSuppressedDetail: skippedSuppressed,

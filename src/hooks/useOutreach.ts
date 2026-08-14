@@ -1374,6 +1374,7 @@ export function useOutreach() {
 
     let imported = 0;
     let skipped = 0;
+    const importedIds: string[] = [];
 
     for (const lead of leadsToImport) {
       if (!lead.business_name) {
@@ -1394,7 +1395,7 @@ export function useOutreach() {
         continue;
       }
 
-      const { error } = await supabase
+      const { data: created, error } = await supabase
         .from('outreach_leads')
         .insert({
           user_id: user.id,
@@ -1410,11 +1411,14 @@ export function useOutreach() {
           next_action_date: null,
           country: lead.country || country,
           list_type: 'imported',
-        });
+        })
+        .select('id')
+        .single();
 
       if (!error) {
         imported++;
-        
+        if (created?.id) importedIds.push(created.id);
+
         // Also add to history
         await supabase.from('outreach_history').insert({
           user_id: user.id,
@@ -1428,12 +1432,44 @@ export function useOutreach() {
       }
     }
 
-    await fetchLeads();
-    
-    // Import complete — no toast
+    /* ── VERIFY AS IT LANDS — Paul's Layer 1, 2026-08-14 ─────────────────────────────────────────
+       Every imported row goes straight through backfill-lead-towns: the SAME resolveDerivedTown the
+       add-lead path uses, plus the three-guard place-id resolution for rows a CSV cannot carry an
+       id for. Rows Google confirms get derived_town (verified); rows it cannot confidently match
+       are stamped settled-unverifiable, and every outreach/audit gate holds them from that moment.
+       ⛔ CHUNKED at the function's own MAX_PER_CALL so a big CSV is verified in full rather than
+       first-150-only — an unchecked tail would pass the gates by absence, which is the exact hole
+       this closes. Failures here do NOT undo the import: the rows stay, unchecked, retryable from
+       the backfill button, and the toast says so rather than pretending. */
+    let verified = 0, unverifiable = 0, unresolvedNote = '';
+    if (importedIds.length) {
+      toast({ title: 'Verifying towns…', description: `Checking ${importedIds.length} imported lead${importedIds.length === 1 ? '' : 's'} against Google Places.` });
+      const CHUNK = 150; // backfill-lead-towns' MAX_PER_CALL
+      for (let i = 0; i < importedIds.length; i += CHUNK) {
+        const { data, error: vErr } = await supabase.functions.invoke<{
+          ok?: boolean; filled?: number; no_town?: number; failed?: number; capped?: number; error?: string;
+        }>('backfill-lead-towns', { body: { lead_ids: importedIds.slice(i, i + CHUNK) } });
+        if (vErr || data?.ok === false) {
+          unresolvedNote = ` Verification stopped early (${vErr?.message ?? data?.error ?? 'unknown error'}) — the rest stay unchecked and can be verified from the backfill button.`;
+          break;
+        }
+        verified += data?.filled ?? 0;
+        unverifiable += data?.no_town ?? 0;
+        if ((data?.capped ?? 0) > 0) {
+          unresolvedNote = ' The daily verification budget ran out part-way — the rest stay unchecked; re-run the backfill button tomorrow.';
+          break;
+        }
+      }
+      toast({
+        title: 'Import verified',
+        description: `${verified} town${verified === 1 ? '' : 's'} confirmed by Google; ${unverifiable} unverifiable (flagged and excluded from outreach and audits).${unresolvedNote}`,
+      });
+    }
 
-    return { imported, skipped };
-  }, [user, fetchLeads]);
+    await fetchLeads();
+
+    return { imported, skipped, verified, unverifiable };
+  }, [user, fetchLeads, toast]);
  
   const updateClientDetails = useCallback(async (
     leadId: string,
