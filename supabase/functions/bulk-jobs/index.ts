@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
 import { checkSuppressed } from "../_shared/suppression.ts";
 import { selectInChunks } from "../_shared/chunked-in.ts";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
@@ -94,7 +95,9 @@ interface JobItem {
      A job is not finished while any item is awaiting_audit; the chunk releases back to 'queued' and
      the next sweep re-checks. Non-terminal by construction, so nothing downstream can read it as
      success. */
-  status: "pending" | "running" | "awaiting_audit" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing" | "skipped_suppressed" | "pushed" | "skipped_ineligible";
+  /* skipped_town_unverified: its own member for the same reason skipped_suppressed is — a lead
+     held because Google cannot confirm its town must never be misread as a dedupe or a cap. */
+  status: "pending" | "running" | "awaiting_audit" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing" | "skipped_suppressed" | "pushed" | "skipped_ineligible" | "skipped_town_unverified";
   error?: string;
   /* ── audit_and_push ONLY ─────────────────────────────────────────────────────────────
      Which half of the job this item is in. Set at CREATION from the triage, so the split between
@@ -171,7 +174,7 @@ async function triageForPush(service: any, userId: string, leadIds: string[], ca
      (~14,800) is measured to fail outright. That was luck. See _shared/chunked-in.ts. */
   const rowsAll = await selectInChunks<Record<string, string | null>>(leadIds, (chunk) => service
     .from("outreach_leads")
-    .select("id, business_name, email, phone, instantly_pushed_at, search_keyword, category, search_location, address")
+    .select("id, business_name, email, phone, instantly_pushed_at, search_keyword, category, search_location, address, derived_town, town_fetch_note")
     .eq("user_id", userId)
     .in("id", chunk)
     .order("id", { ascending: true }));
@@ -224,6 +227,11 @@ async function triageForPush(service: any, userId: string, leadIds: string[], ca
     const supp = suppressed.get(id);
     if (supp) return cannot(`suppressed — they have said no (matched on ${supp})`);
     if (l.instantly_pushed_at) return cannot("already in Instantly — no audit, no push");
+    /* ⛔ THE TOWN GATE — before the email rung, because "we cannot truthfully say where this
+       business is" outranks "we cannot reach them yet". Fires ONLY on the settled-unverifiable
+       verdict; an unchecked town passes (absence is never an answer). Paul's rule, 2026-08-14:
+       money and messages never move on an unverified town. */
+    if (townGated(l)) return cannot(TOWN_GATE_REASON);
     if (!String(l.email ?? "").trim()) return cannot("no email address — run Find emails first");
 
     if (leadHasAnsweredAudit.has(id)) return { lead_id: id, business_name: name, bucket: "push_now", reason: "" };
@@ -369,7 +377,7 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     // own concurrency/cost caps. So this branch only enqueues — it never fires Apify directly.
     const { data: lead } = await service
       .from("outreach_leads")
-      .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website, phone, email, is_archived")
+      .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website, phone, email, is_archived, derived_town, town_fetch_note")
       .eq("id", item.lead_id)
       .eq("user_id", job.user_id)
       .maybeSingle();
@@ -385,6 +393,15 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     if (supp.suppressed) {
       console.log(`[bulk-jobs] audit skipped for suppressed lead ${lead.id} (matched on ${supp.matchedOn})`);
       return { status: "skipped_suppressed", error: `suppressed (${supp.matchedOn})` };
+    }
+
+    /* ⛔ THE TOWN GATE, same rung as triage so the preview and the run cannot disagree. An audit of
+       an unverifiable-town lead would fall back to search_location — the searched town, the exact
+       wrong-town fault (Wilson's, RG). "skipped", not "failed": nothing is wrong with the item, the
+       lead is held until its town verifies, and a failed status would invite a retry. */
+    if (townGated(lead)) {
+      console.log(`[bulk-jobs] audit skipped for town-unverified lead ${lead.id}`);
+      return { status: "skipped_town_unverified", error: TOWN_GATE_REASON };
     }
 
     // Idempotency: create-ai-audit is NOT idempotent (every call inserts a fresh audit+run). If a
@@ -861,7 +878,7 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
         if (r.status === "awaiting_audit") { /* pending resolution */ }
         else if (r.status === "done" || r.status === "cached") done++;
         else if (r.status === "failed") failed++;
-        else skipped++; // skipped_cap / skipped_existing / skipped_suppressed
+        else skipped++; // skipped_cap / skipped_existing / skipped_suppressed / skipped_town_unverified
         if (r.capHit) capHit = true; // per-operator 20/24h 403 → cap the rest
       } else {
         it.status = "failed";

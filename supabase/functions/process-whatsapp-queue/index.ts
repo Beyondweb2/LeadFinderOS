@@ -6,6 +6,7 @@ import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts
 import { classifyLineType } from "../_shared/line-type.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
+import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -296,6 +297,15 @@ Deno.serve(async (req) => {
     const { count: archivedQueuedCount } = await service
       .from("outreach_leads").select("id", { count: "exact", head: true })
       .eq("status", "queued").eq("is_archived", true);
+    /* ⛔ THE TOWN GATE'S SKIP COUNT — reported, never a silent shrink (Paul's rule, 2026-08-14:
+       money and messages never move on an unverified town, and this gate is BLANKET by his call —
+       it holds the plain opener too). Counted the same way archived-but-queued is, so "nothing to
+       send" and "N held back as unverifiable" are distinguishable from the outside. The predicate
+       is townVerdict's: settled note + no town; unchecked leads are NOT counted and NOT gated. */
+    const { count: unverifiedQueuedCount } = await service
+      .from("outreach_leads").select("id", { count: "exact", head: true })
+      .eq("status", "queued").eq("is_archived", false)
+      .is("derived_town", null).in("town_fetch_note", [...SETTLED_TOWN_NOTES]);
     const { data: stateRow } = await service
       .from("whatsapp_outreach_state").select("next_send_at, paused").eq("id", 1).maybeSingle();
     const nextSendAt: string | null = stateRow?.next_send_at ?? null;
@@ -307,7 +317,9 @@ Deno.serve(async (req) => {
 
     const statusPayload = {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
-      queuedCount: queuedCount ?? 0, archivedQueuedCount: archivedQueuedCount ?? 0, nextSendAt, windowOpen, paused,
+      queuedCount: queuedCount ?? 0, archivedQueuedCount: archivedQueuedCount ?? 0,
+      // Queued leads held back because their town is settled-unverifiable (the town gate).
+      unverifiedQueuedCount: unverifiedQueuedCount ?? 0, nextSendAt, windowOpen, paused,
       ukTime: `${String(uk.hour).padStart(2, "0")}:${String(uk.minute).padStart(2, "0")}`,
       // Auto audit_reply rule state: BOTH must be on for the rule to run. Toggle read is
       // defensive (missing column → false), so status works before the SQL has been run.
@@ -602,22 +614,33 @@ Deno.serve(async (req) => {
        this query happily sent to it. Note the archived rows keep status='queued' — archiving
        deliberately writes is_archived and nothing else — so the status filter alone never excluded
        them. Un-archiving restores the lead to the queue exactly where its queued_at puts it. */
+    /* ⛔ TOWN-UNVERIFIABLE LEADS ARE EXCLUDED IN THE QUERY, exactly as archived leads are — a gated
+       lead at the head of the queue must never stall the one-send-per-tick drip. The pass
+       condition is townVerdict's, inverted for SQL: a lead may send when it HAS a derived town, OR
+       has never been checked (null note), OR its note is transient. Only settled-unverifiable is
+       held. It stays status='queued' (like archived), visible via the count above and the row
+       badge, and re-enters the drip the moment its town verifies. */
     const { data: lead } = await service
       .from("outreach_leads")
       .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id")
       .eq("status", "queued")
       .eq("is_archived", false)
       .not("phone", "is", null)
+      .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
       .order("queued_at", { ascending: true })
       .limit(1)
       .maybeSingle();
-    /* "empty_queue" and "nothing left but archived leads" are different facts, so they get different
-       skip codes. Without this, pulling 17 leads out of the queue by archiving them would look
-       identical to having genuinely finished the list. */
+    /* "empty_queue", "nothing left but archived leads" and "nothing left but unverifiable towns"
+       are different facts, so they get different skip codes. Without this, pulling 17 leads out of
+       the queue by archiving them would look identical to having genuinely finished the list. */
     if (!lead) {
       return json({
         ok: true,
-        skipped: (archivedQueuedCount ?? 0) > 0 ? "empty_queue_archived_skipped" : "empty_queue",
+        skipped: (archivedQueuedCount ?? 0) > 0
+          ? "empty_queue_archived_skipped"
+          : (unverifiedQueuedCount ?? 0) > 0
+            ? "empty_queue_unverified_town_skipped"
+            : "empty_queue",
         ...statusPayload,
       });
     }

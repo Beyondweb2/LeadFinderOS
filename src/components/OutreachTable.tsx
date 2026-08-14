@@ -106,6 +106,8 @@ import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { PipelineStatusSelect } from './PipelineStatusSelect';
 import { NextActionEditor } from './NextActionEditor';
 import { CSVImportDialog } from './CSVImportDialog';
+import { townGated } from '@/lib/townVerdict';
+import { Badge } from '@/components/ui/badge';
 import { OutreachMobileCard } from './OutreachMobileCard';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { LeadDetailDialog } from './LeadDetailDialog';
@@ -2300,6 +2302,19 @@ export function OutreachTable({
                           {/* Wrap a long name within a bounded width so the row grows
                               but the columns to its right stay aligned (matches LeadsTable). */}
                           <span className="min-w-0 break-words max-w-[200px]">{lead.business_name}</span>
+                          {/* ⛔ THE TOWN GATE'S VISIBLE HALF — same predicate every server gate
+                              reads (townVerdict.ts), so the badge and the gates cannot disagree.
+                              A gated lead is EXCLUDED from outreach and audits automatically; this
+                              is how the operator sees why a queued lead never sends. */}
+                          {townGated(lead) && (
+                            <Badge
+                              variant="outline"
+                              className="flex-shrink-0 border-destructive/40 text-[10px] font-normal text-destructive"
+                              title="Google was asked and cannot confirm where this business is. Excluded from outreach and audits until the town is fixed (edit the lead, or re-run town verification)."
+                            >
+                              town unverified
+                            </Badge>
+                          )}
                           {lead.status === 'interested' && (
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                           )}

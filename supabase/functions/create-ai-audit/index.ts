@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
@@ -601,9 +602,25 @@ Deno.serve(async (req) => {
     // If a lead_id is provided, it MUST belong to the caller (don't let an audit attach
     // to someone else's lead). Skipped for trusted internal calls — the automation already acts
     // as the lead's owner via the passed user_id (mirrors extract-competitors's isInternal skip).
-    if (leadId && !isInternal) {
-      const { data: lead } = await service.from("outreach_leads").select("user_id").eq("id", leadId).maybeSingle();
-      if (!lead || lead.user_id !== userId) return json({ ok: false, error: "lead_not_found" }, 403);
+    // The town columns ride along for the gate below — one read, both questions.
+    if (leadId) {
+      const { data: lead } = await service.from("outreach_leads")
+        .select("user_id, derived_town, town_fetch_note").eq("id", leadId).maybeSingle();
+      if (!isInternal && (!lead || lead.user_id !== userId)) return json({ ok: false, error: "lead_not_found" }, 403);
+      /* ⛔ THE TOWN GATE — Paul's rule, 2026-08-14: an audit of a lead whose town is settled-
+         unverifiable would fall back to search_location, the searched town — the exact wrong-town
+         fault that cost two prospects (Wilson's, RG). Fires on BOTH auth paths, because the
+         internal callers (bulk-jobs, the whatsapp-inbound auto-audit chain) are outreach.
+         ⚠️ BASELINES ARE EXEMPT, DELIBERATELY: the paid path runs on a town the CUSTOMER confirmed
+         at onboarding (confirmed_location outranks everything in pickAuditTown), and blocking a
+         paid deliverable on a prospect-era flag would break the guarantee chain. Market audits
+         never reach here — they carry no lead_id.
+         ⚠️ UNCHECKED PASSES. Only the settled-unverifiable verdict gates; absence is never an
+         answer (CLAUDE.md §6). The error string is raw and self-explaining — explainAuditFailure
+         renders it verbatim. */
+      if (lead && !isBaseline && townGated(lead)) {
+        return json({ ok: false, error: `town_unverified: ${TOWN_GATE_REASON}` }, 409);
+      }
     }
 
     // ── Resolve the audit row + the question set ──────────────────────────────

@@ -71,6 +71,13 @@ Facts and warnings, not prose. Keep it that way. If it grows too long to read, i
 Recon:
 - [ ] Read the actual files before editing. Do not re-recon what a brief tells you is already verified.
 - [ ] Grep to verify a list you were handed. Previous sessions got the reader list wrong three times.
+- [ ] 🔴 **ANY PLAN APPROVED FOR BUILD MUST HAVE ITS NUMBERS RE-DERIVED FROM THE LIVE DATABASE BY
+      THE SESSION THAT BUILDS IT.** Paul's rule, 2026-08-14, after the SECOND crossed-session
+      approval: one referenced functions this repo does not contain (`deriveMarketState`), the
+      other quoted populations that do not exist in production ("the 302", "Locksmith In"). An
+      approval names intent; the building session re-establishes every fact. Both incidents were
+      caught by grepping for the named symbols and counting the named rows FIRST — do that before
+      accepting any scoped plan, including your own from an earlier session.
 
 Git:
 - [ ] `git fetch origin`, then prove `origin/main == HEAD` **before** branching. Print both.
@@ -927,6 +934,46 @@ worst-first, >40% is excluded as already winning, and both exclusions are itemis
   `locksmith`, listed under "Nearby, outside the town boundary".
 - ⚠️ Old-SPA/new-payload overlap is a 10-minute sessionStorage cache (`useMarketView`), same as
   every market-view deploy. Deploy `market-view` BEFORE pushing the SPA.
+
+---
+
+## 6f. ✅ THE TOWN GATE — verify-on-import + five server gates, built 2026-08-14, Paul's spec
+
+**The Wilson's Valeting rule: money and messages never move on an unverified town.** One predicate,
+`src/lib/townVerdict.ts`, read by every gate and the Outreach badge: `verified` (derived_town
+present), `unverifiable` (no town AND a settled note), `unchecked` (everything else).
+
+- ⛔ **DERIVED, NEVER STORED — there is NO town_status column and there must not be one** (§6's
+  serveGate rule). The state already lives on the lead: `derived_town` + `town_fetched_at` +
+  `town_fetch_note`, written only by `resolveDerivedTown`. `SETTLED_TOWN_NOTES`
+  (`_shared/place-details.ts`) holds the ONLY two notes that gate: `no_town_in_address` (Google
+  answered; no town) and `no_place_id` (nothing to ask about). Every transient failure — 429,
+  outage, cost cap, missing key — stamps a retryable note or nothing, and `scripts/town-verdict.test.ts`
+  pins that a transient or unknown note NEVER gates. **Gates fire only on `unverifiable`;
+  `unchecked` always passes** (absence is never an answer — instance ten).
+- **The five server gates, each reporting its skip, never a silent shrink:**
+  | Where | Behaviour |
+  |---|---|
+  | `process-whatsapp-queue` | excluded in the claim query (like archived); `unverifiedQueuedCount` in the status payload; own empty-queue skip code. ⛔ **BLANKET by Paul's call** — holds the plain opener too |
+  | `instantly-push` | own id list `townUnverifiedIds` + count (bulk-jobs maps outcomes from id lists — a lead in none reads "gave no reason") |
+  | `bulk-jobs` | triage rung → `cannot` with the shared reason; item branch → `skipped_town_unverified` (own status member, like `skipped_suppressed`) |
+  | `create-ai-audit` | 409 `town_unverified` on BOTH auth paths (covers wizard, Inbox, whatsapp-inbound chain). ⚠️ **Baselines exempt, deliberately** — the paid path runs on the customer's own confirmed_location, and a prospect-era flag must not break the guarantee chain. Market audits have no lead_id and never reach it |
+  | `derive-audit` | 409 before deriving — its town line falls back to search_location, the exact wrong-town fault |
+- ⛔ **CSV IMPORT VERIFIES AS IT LANDS** (`bulkImportLeads` → `backfill-lead-towns` with the new
+  ids, chunked at MAX_PER_CALL so a big file is verified in full). Id-less rows get the
+  **three-guard place resolution** in `backfill-lead-towns`: Text Search **Pro** ($0.032, mask
+  places.id/displayName/formattedAddress — the IDs-only mask is free but returns no name, and a
+  resolver that cannot check the name is a blind top-result), then (1) `nameMatches` both ways,
+  (2) exactly ONE distinct survivor, (3) whole-token town-hint agreement; **no location text on the
+  row refuses outright**. A refusal runs `resolveDerivedTown` with no place_id → settled
+  `no_place_id` → gated, with the specific reason itemised in the response. Transient search
+  failures stamp NOTHING (stamping a settled note on our own outage would permanently gate a good
+  lead) and are never cached.
+- ⚠️ The residual false match that survives all three guards is a same-name business in the same
+  hinted town — whose derived_town is still the right town, the quantity being verified.
+- **Backlog** (measured 2026-08-14): 498 leads lack derived_town, **384 unarchived** — all with
+  place_ids, ≈ $1.92 via the existing backfill button, 3 presses at MAX_PER_CALL 150. The archived
+  114 are skipped by design.
 
 ---
 
