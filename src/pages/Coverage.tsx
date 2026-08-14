@@ -15,6 +15,7 @@ import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX } from '@/lib/trad
 import {
   COVERAGE_STATES, COVERAGE_LABEL, findLeadsHref, marketViewHref, type CoverageState,
 } from '@/lib/coverageState';
+import { asPence, MARKET_SEARCH_USD } from '@/lib/marketView';
 
 /* ══ WHERE HAVE I BEEN? ═══════════════════════════════════════════════════════════════════════
    ⛔ WHAT THIS REPLACES: asking someone for town names. Every candidate town for a trade, with the
@@ -244,14 +245,20 @@ export default function Coverage() {
                         that asserts Find leads carries neither mode=market nor confirm=search.
                         ⚠️ Find leads RUNS the search on arrival (~$0.11, free inside the 72h cache);
                         Market view keeps its own confirm, on the rungs with nothing measured. */}
+                    {/* ⛔ THE COST IS ON THE FACE, DERIVED, NEVER HAND-TYPED — Paul, 2026-08-14:
+                        an unlabelled button is a scared-to-click button. Find leads runs a paid
+                        Places search on arrival, so its face carries the same derived figure the
+                        measure button uses (asPence(MARKET_SEARCH_USD)); the 72h free-cache case
+                        lives in the tooltip. Market view reads stored audits and the cached pool —
+                        it spends nothing, starts nothing, and its face says so. */}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={findLeadsHref(trade, t.name)} title={`Search Google for ${trade} in ${t.name} and list them`}>
-                        Find leads
+                      <Link to={findLeadsHref(trade, t.name)} title={`Search Google for ${trade} in ${t.name} and list them. Free instead if this trade and town were searched in the last 72 hours.`}>
+                        Find leads · ~{asPence(MARKET_SEARCH_USD)}
                       </Link>
                     </Button>
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={marketViewHref(trade, t.name, t.state)} title={`What we already know about ${trade} in ${t.name}`}>
-                        Market view
+                      <Link to={marketViewHref(trade, t.name, t.state)} title={`What we already know about ${trade} in ${t.name} — stored results only, nothing runs and nothing is spent`}>
+                        Market view · free
                       </Link>
                     </Button>
                     <Button
