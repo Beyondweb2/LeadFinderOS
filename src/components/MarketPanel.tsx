@@ -24,6 +24,7 @@ import {
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
   MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase, shouldAutoClean, CLEANER_USD_PER_RUN, asPence,
   auditsInView, openArrivalSearchConfirm, marketNamesUncleaned, TARGET_MAX_NAMED_SHARE,
+  MARKET_ONE_AUDIT_USD,
   type MarketPoolRow,
   type MarketViewResult,
 } from '@/lib/marketView';
@@ -753,6 +754,50 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                 ? 'border-amber-500/50 bg-amber-500/10'
                 : 'border-border bg-muted/30'
         }`}>
+          {/* ══ THE FRAGMENTATION VERDICT — the one-line mass-outreach signal (Paul, 2026-08-15) ══
+              Junk-immune: computed from the deterministic pool scores alone, so it renders whether
+              or not the extracted names were ever cleaned. Guarded on a VISIBLE pool — a market
+              whose cached pool was deleted must not print "POOL TOO SMALL" about data that is
+              merely absent. Every number the word rests on is printed beside it. */}
+          {view.fragmentation && poolVisible && (() => {
+            const f = view.fragmentation;
+            const pct = Math.round(f.targetShare * 100);
+            const top3 = Math.round(f.top3Share * 100);
+            const chip = f.kind === 'fragmented'
+              ? { cls: 'border-flag-green/60 bg-green-500/10 text-green-700 dark:text-green-400', word: 'FRAGMENTED · worth mass outreach' }
+              : f.kind === 'concentrated'
+                ? { cls: 'border-destructive/50 bg-destructive/10 text-destructive', word: 'CONCENTRATED · a few winners dominate' }
+                : f.kind === 'pool_too_small'
+                  ? { cls: 'border-border bg-muted/40 text-muted-foreground', word: 'POOL TOO SMALL to grade' }
+                  : { cls: 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400', word: 'NOT MEASURED yet' };
+            return (
+              <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-2 ${chip.cls}`}>
+                <span className="text-[15px] font-bold tracking-wide">{chip.word}</span>
+                <span className="text-[12px] opacity-90">
+                  {f.kind === 'pool_too_small'
+                    ? `only ${f.gradeable} real ${view.trade} in the Places pool — too few to call a market shape`
+                    : f.kind === 'unmeasured'
+                      ? 'no completed answers to score against — measure the market first'
+                      : `${f.targets} of ${f.gradeable} real businesses rarely or never named (${pct}%) · top-3 named in ${top3}% of answers`}
+                </span>
+                {/* Confidence on the face: how many scored answers the shares rest on. */}
+                {f.answersTotal > 0 && (
+                  <span className="text-[11px] opacity-70">from {f.answersTotal} scored answers</span>
+                )}
+                {/* Deepen: one MORE market audit through the EXISTING confirm (cost stated there
+                    too). Never automatic — a third audit is the operator's call, not the flow's. */}
+                {f.kind !== 'unmeasured' && (
+                  <Button
+                    size="sm" variant="outline" className="ml-auto h-7 text-[11px]"
+                    onClick={() => setMarketAuditOpen(true)}
+                    title={`One more 8-question market audit sharpens these shares. ~${asPence(MARKET_ONE_AUDIT_USD)}, no CRM rows.`}
+                  >
+                    Deepen · +1 audit · ~{asPence(MARKET_ONE_AUDIT_USD)}
+                  </Button>
+                )}
+              </div>
+            );
+          })()}
           <p className="text-[17px] font-semibold leading-snug sm:text-xl">{plain.market}</p>
           <p className="text-[15px] leading-snug text-foreground/85 sm:text-lg">{plain.contact}</p>
 
