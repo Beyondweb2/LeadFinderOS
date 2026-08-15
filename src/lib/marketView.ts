@@ -280,6 +280,80 @@ export function poolTargetVerdict(answersNamed: number, answersTotal: number): '
   return answersNamed / answersTotal <= TARGET_MAX_NAMED_SHARE ? 'target' : 'winning';
 }
 
+/* ── THE FRAGMENTATION VERDICT — Paul's spec, 2026-08-15: one pass/fail signal per market ────────
+   FRAGMENTED = lots of real businesses absent from AI answers = worth mass-outreaching.
+   CONCENTRATED = a few winners dominate = probably skip.
+
+   ⛔ JUNK-IMMUNE BY CONSTRUCTION. Computed ONLY from the deterministic pool scores (nameMatches
+   over stored answer text — the same verdict the report and the guarantee use) and Google's own
+   Places categories. No extracted competitor name is an input, so this verdict never waits for
+   the LLM cleaner and cannot be corrupted by raw scraper output.
+
+   THE METRIC: targets ÷ gradeable entries.
+     gradeable = right-trade pool entries, CHAINS INCLUDED (a dominant chain is real
+                 concentration), off-trade excluded (a shoe-repair counter is not this market).
+     targets   = non-chain gradeable entries named in ≤ TARGET_MAX_NAMED_SHARE of scored answers —
+                 exactly the panel's target list, so the verdict and the rows cannot disagree.
+
+   ⛔ THRESHOLDS MEASURED, NOT PICKED (§4's constants rule). The shipped formula was run over all
+   20 pool-bearing measured markets on 2026-08-15. Target-share distribution:
+     80, 80, 77, 71, 70, 63, 61, 58, 57, 55, 54, 50, 50, 45, 44, 43, 38 │ 29, 14, 0
+   The break sits between 38% (locksmiths/Darlington, workable) and 29% (locksmiths/Southport),
+   with the known-skip markets — Nuneaton 14% (1 target, 5 winners), Aylesbury 0% — below it.
+   0.35 is mid-gap. The known-work markets (accountants/Wakefield 77%, Halifax 80%) sit far above.
+   ⚠️ Both constants are Paul's to tune; the verdict prints its numbers beside the word so a
+   marginal call is visible rather than trusted. */
+
+/** Below this many gradeable entries no confident verdict is printed — Aylesbury's THREE real
+ *  locksmiths must never grade as "concentrated": that is a fact about the Places pool's size,
+ *  not about the market. Measured floor: the three smallest pools (2, 3, 4 entries) are exactly
+ *  the ones whose verdicts would be noise. */
+export const FRAG_MIN_GRADEABLE_ENTRIES = 5;
+/** Target share at or above which a market is FRAGMENTED. Mid the measured 29% → 38% break. */
+export const FRAG_MIN_TARGET_SHARE = 0.35;
+
+export type FragmentationKind = 'fragmented' | 'concentrated' | 'pool_too_small' | 'unmeasured';
+
+/** One gradeable-or-not pool entry, as the fold computed it. `share` = answersNamed/answersTotal. */
+export interface FragmentationEntry {
+  share: number;
+  isChain: boolean;
+  offTrade: boolean;
+}
+
+export interface FragmentationVerdict {
+  kind: FragmentationKind;
+  /** Non-chain right-trade entries at or under TARGET_MAX_NAMED_SHARE — the mass-outreach supply. */
+  targets: number;
+  /** Right-trade entries, chains included. The denominator. */
+  gradeable: number;
+  /** targets / gradeable, 0 when gradeable is 0. */
+  targetShare: number;
+  /** Mean of the three highest named-shares among gradeable entries — "how loud are the winners". */
+  top3Share: number;
+  /** Scored answers behind the shares — the confidence figure, printed on the verdict's face. */
+  answersTotal: number;
+}
+
+export function fragmentationVerdict(entries: FragmentationEntry[], answersTotal: number): FragmentationVerdict {
+  const gradeableEntries = entries.filter((e) => !e.offTrade);
+  const gradeable = gradeableEntries.length;
+  /* ⛔ ZERO SCORED ANSWERS = UNMEASURED, before anything else. Every share would be 0/0, every
+     entry would read "never named", and the market would grade FRAGMENTED on no data — the
+     Soham failure wearing a verdict. Eleventh instance of the absent-value shape. */
+  if (!Number.isFinite(answersTotal) || answersTotal <= 0) {
+    return { kind: 'unmeasured', targets: 0, gradeable, targetShare: 0, top3Share: 0, answersTotal: 0 };
+  }
+  const targets = gradeableEntries.filter((e) => !e.isChain && e.share <= TARGET_MAX_NAMED_SHARE).length;
+  const targetShare = gradeable > 0 ? targets / gradeable : 0;
+  const topShares = gradeableEntries.map((e) => e.share).sort((a, b) => b - a).slice(0, 3);
+  const top3Share = topShares.length ? topShares.reduce((s, x) => s + x, 0) / topShares.length : 0;
+  const kind: FragmentationKind = gradeable < FRAG_MIN_GRADEABLE_ENTRIES
+    ? 'pool_too_small'
+    : targetShare >= FRAG_MIN_TARGET_SHARE ? 'fragmented' : 'concentrated';
+  return { kind, targets, gradeable, targetShare, top3Share, answersTotal };
+}
+
 /** A pool business EXCLUDED from the target list because AI already names it in more than
  *  TARGET_MAX_NAMED_SHARE of answers. Itemised rather than merely counted: a silent exclusion is
  *  how a real prospect disappears, and the score beside the name is what lets the operator
@@ -395,6 +469,10 @@ export interface MarketViewResult {
   /** Which ones, and what each matched. Rendered, not just counted. */
   poolExcluded: MarketPoolExcluded[];
   auditedBusinesses: string[];
+  /** The one-line mass-outreach verdict, computed from the deterministic pool scores — see
+   *  fragmentationVerdict. REQUIRED so the typed payload cannot silently drop it (the
+   *  marketProgress lesson); the SPA still guards for an older cached payload. */
+  fragmentation: FragmentationVerdict;
 }
 
 export interface MarketOption { trade: string; town: string; audits: number }

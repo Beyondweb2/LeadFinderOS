@@ -8,7 +8,7 @@ import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE, expectedPrimaryType,
-  offTradeMarkForGroup, poolTargetVerdict,
+  offTradeMarkForGroup, poolTargetVerdict, fragmentationVerdict,
   hasShapeEvidence, uncleanedNames, UNCLEANED_EXAMPLES_SHOWN,
   type MarketConcentration, type MarketNamedRow, type MarketPoolExcluded,
   type MarketPoolRow, type MarketPoolState, type MarketTier, type MarketCitationHost,
@@ -625,8 +625,17 @@ Deno.serve(async (req) => {
        how a real prospect disappears. Each excluded entry carries its score, so the operator can
        disagree with the cut by reading the number beside the name. */
     const poolExcluded: MarketPoolExcluded[] = [];
+    /* Every in-town entry's facts, for the fragmentation verdict — collected HERE, before the
+       target/winning split, so the verdict's denominator sees the whole pool and cannot drift
+       from the lists the panel renders. */
+    const fragEntries: { share: number; isChain: boolean; offTrade: boolean }[] = [];
     for (const [key, g] of poolGroups) {
       const answersNamed = namedAnswersFor(g.variants);
+      fragEntries.push({
+        share: answersTotal > 0 ? answersNamed / answersTotal : 0,
+        isChain: g.variants.length > 1,
+        offTrade: !!offTradeMarkForGroup(g.rows, expectedType),
+      });
       const row: MarketPoolRow = {
         key,
         name: pickDisplayNameFromList(g.variants),
@@ -730,6 +739,9 @@ Deno.serve(async (req) => {
         .filter((a) => a.is_market !== true)
         .map((a) => a.business_name)
         .filter((n): n is string => typeof n === "string" && n.length > 0),
+      /* The one-line mass-outreach verdict, from the deterministic pool scores alone —
+         junk-immune, cleaner-independent. See fragmentationVerdict in src/lib/marketView.ts. */
+      fragmentation: fragmentationVerdict(fragEntries, answersTotal),
     };
     return json(payload);
   } catch (e) {
