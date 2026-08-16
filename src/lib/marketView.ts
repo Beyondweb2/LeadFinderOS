@@ -735,6 +735,12 @@ export const MARKET_POOL_FRESH_MS = 72 * 60 * 60 * 1000;
  *  real market audits actually cost. */
 export const MARKET_ONE_AUDIT_USD = MARKET_AUDIT_QUESTION_COUNT * AUDIT_EST_USD_PER_QUESTION;
 
+/** Markets per press of Coverage's batch-measure button — Paul's cap, 2026-08-15. Five markets is
+ *  ~80 queue rows ≈ 66p worst case, small enough that a paid customer's baseline landing behind the
+ *  batch waits minutes, not hours, and the $12/day audit ceiling keeps ample headroom. The button is
+ *  EXPLICIT and priced; nothing on Coverage ever measures on navigation (the free-on-click rule). */
+export const MEASURE_BATCH_CAP = 5;
+
 /** ⛔ THE SERVER OWNS THIS TOO. create-ai-audit refuses a second market audit for the same trade and
  *  town inside this window and returns `market_cooldown`. Client state resets on reload, and
  *  "pressed it repeatedly" almost always means reload-and-press, so a client-side guard is the one
