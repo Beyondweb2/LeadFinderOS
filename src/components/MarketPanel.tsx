@@ -24,7 +24,7 @@ import {
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
   MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase, shouldAutoClean, CLEANER_USD_PER_RUN, asPence,
   auditsInView, openArrivalSearchConfirm, marketNamesUncleaned, TARGET_MAX_NAMED_SHARE,
-  MARKET_ONE_AUDIT_USD, PLACE_DETAILS_USD,
+  MARKET_ONE_AUDIT_USD, PLACE_DETAILS_USD, auditableTargets, poolRowToLead,
   type MarketPoolRow,
   type MarketViewResult,
 } from '@/lib/marketView';
@@ -302,15 +302,9 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
 
   /** A pool row as the Lead shape addLead expects. The pool rows came out of search-leads in the
    *  first place, so this is a re-hydration, not an invention. */
-  const asLead = useCallback((row: MarketPoolRow): Lead => ({
-    id: row.placeIds[0],
-    name: row.name,
-    googleMapsUrl: row.googleMapsUrl,
-    websiteUrl: row.websiteUrl ?? undefined,
-    websiteStatus: row.noWebsite ? 'NO_WEBSITE' : 'HAS_OWN_WEBSITE',
-    confidence: row.noWebsite ? 0.6 : 0.9,
-    reason: row.noWebsite ? 'No website on Google listing' : 'Has own website',
-  }), []);
+  /* Delegates to the SHARED mapping (marketView.ts) so Coverage's row add and this panel cannot
+     drift — Paul's rule, 2026-08-16. */
+  const asLead = useCallback((row: MarketPoolRow): Lead => poolRowToLead(row), []);
 
   const addOne = useCallback(async (row: MarketPoolRow) => {
     if (!chosen) return;
@@ -458,9 +452,9 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
     if (!view || !chosen) return;
     setAuditBusy(true);
     try {
-      /* Right-trade, non-chain rows only — the same list the panel calls targets. Worst-first
-         ordering comes from the server, so a batch of 5 audits the five most invisible. */
-      const targets = view.pool.filter((p) => !p.isChain && !p.offTrade).slice(0, auditCount);
+      /* The SHARED target filter — worst-first ordering comes from the server, so a batch of 5
+         audits the five most invisible. */
+      const targets = auditableTargets(view.pool).slice(0, auditCount);
       const leadIds: string[] = [];
       for (const row of targets) {
         // addLead returns the CREATED ROW, or null when it was a duplicate or failed. A duplicate
@@ -531,7 +525,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
     const pool = view?.pool ?? [];
     const chains = pool.filter((p) => p.isChain);
     const offTrade = pool.filter((p) => !p.isChain && !!p.offTrade);
-    const audit = pool.filter((p) => !p.isChain && !p.offTrade);
+    const audit = auditableTargets(pool);
     // Deliberately console.info, not debug: this is the proof the click landed, and it must
     // survive a default-filtered console.
     console.info('[market] audit confirm opened', {
@@ -583,7 +577,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
      NOT hidden: they get their own itemised group below, because Google's categories are imperfect
      and a silently-cut real locksmith is the failure this panel exists to catch. They are simply
      never counted as targets and never fed to the audit batch. */
-  const auditable = view ? view.pool.filter((p) => !p.isChain && !p.offTrade) : [];
+  const auditable = view ? auditableTargets(view.pool) : [];
   const wrongTrade = view ? view.pool.filter((p) => !p.isChain && !!p.offTrade) : [];
   const chainEntries = view ? view.pool.filter((p) => p.isChain).length : 0;
   /* THE SPLIT. Both halves come out of `auditable`, so the two lists together are exactly the

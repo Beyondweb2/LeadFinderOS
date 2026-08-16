@@ -17,6 +17,7 @@
    ============================================================ */
 import {
   poolTargetVerdict, TARGET_MAX_NAMED_SHARE, offTradeMarkForGroup, invisibilityPhrase,
+  auditableTargets, poolRowToLead, type MarketPoolRow,
 } from "../src/lib/marketView.ts";
 import { nameMatches } from "../supabase/functions/_shared/enrichment/ai-search.ts";
 
@@ -74,6 +75,27 @@ ok(!nameMatches(ANSWER, "A-Z Emergency Car key Services Chester", CTX),
    is called "Always". A real multi-word firm that HAPPENS to start with one is still matchable: */
 ok(nameMatches("We'd suggest Always Secure Ltd for urgent jobs.", "Always Secure Ltd", CTX),
   "a real firm whose name contains a function word still scores by its full name");
+
+console.log("── The surface-shared helpers: one list, one mapping, no drift ──");
+const row = (over: Partial<MarketPoolRow>): MarketPoolRow => ({
+  key: "k", name: "A Locksmith", branches: 1, isChain: false, placeIds: ["pid1"],
+  noWebsite: false, googleMapsUrl: "https://maps.example/x", websiteUrl: "https://a.example",
+  answersNamed: 0, answersTotal: 32, ...over,
+});
+{
+  const pool = [row({ key: "t" }), row({ key: "chain", isChain: true }), row({ key: "off", offTrade: { label: "Services" } })];
+  const targets = auditableTargets(pool);
+  ok(targets.length === 1 && targets[0].key === "t", "auditableTargets keeps targets, drops chains and wrong-trade");
+  ok(auditableTargets([]).length === 0, "empty pool → empty targets, no throw");
+}
+{
+  const l = poolRowToLead(row({ placeIds: ["place-9"], noWebsite: true, websiteUrl: null }));
+  ok(l.id === "place-9" && l.websiteStatus === "NO_WEBSITE" && l.websiteUrl === undefined,
+    "poolRowToLead: place id carried, no-website row maps to NO_WEBSITE with no URL");
+  const l2 = poolRowToLead(row({}));
+  ok(l2.websiteStatus === "HAS_OWN_WEBSITE" && l2.websiteUrl === "https://a.example",
+    "…and a with-website row keeps its URL and status");
+}
 
 if (f > 0) { console.log(`\n${f} FAILURE${f === 1 ? "" : "S"}`); process.exit(1); }
 console.log("\nALL PASS");

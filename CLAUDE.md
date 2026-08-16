@@ -962,6 +962,16 @@ worst-first, >40% is excluded as already winning, and both exclusions are itemis
     Duplicates return null and are counted, never re-added. **Adds ONLY**: leads land
     `not_contacted`; nothing is queued or sent, and the toast says so. ~$0.02/lead (the Places
     lookup, which also verifies the town for free).
+  - **Coverage ROW actions — built 2026-08-16, Paul's spec.** Per row: **"Market view"** (smart:
+    one FREE market-view read; measured → reveals **"Add all N · ~Xp"** instantly; unmeasured →
+    priced confirm → in-place spinner, NO navigation, polls every 30s until `measureAction`
+    resolves to 0-audits; in-flight audits re-attach) and **"View"** (the old nav link, renamed —
+    plain navigation to the panel, always free). The row's add-all and the panel's share ONE
+    target filter (`auditableTargets`) and ONE lead mapping (`poolRowToLead`), both in
+    `marketView.ts` — the no-drift rule. Row gates (ambiguity, zero businesses) SKIP with the
+    reason and point to the panel; a row action never overrides a gate. Row state is
+    session-only and re-derived from the DB on every press — nothing persisted, mid-measure
+    navigation is safe (audits continue server-side; re-press re-attaches).
   - **"Measure next N unmeasured · up to ~Xp"** (Coverage, `MEASURE_BATCH_CAP = 5`/press): strictly
     sequential towns; per town it re-checks via a FREE market-view read and routes through
     `measureAction` (already-measured → refresh → **0 audits, skipped**), skips fresh-pool searches,
