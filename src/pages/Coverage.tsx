@@ -15,7 +15,15 @@ import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX } from '@/lib/trad
 import {
   COVERAGE_STATES, COVERAGE_LABEL, findLeadsHref, marketViewHref, type CoverageState,
 } from '@/lib/coverageState';
-import { asPence, MARKET_SEARCH_USD, MEASURE_BATCH_CAP, MARKET_AUDIT_QUESTION_COUNT, MARKET_AUDIT_MIN_AUDITS, measureAction, auditsToRun, measureRunCost } from '@/lib/marketView';
+import {
+  asPence, MARKET_SEARCH_USD, MEASURE_BATCH_CAP, MARKET_AUDIT_QUESTION_COUNT, MARKET_AUDIT_MIN_AUDITS,
+  measureAction, auditsToRun, measureRunCost, auditableTargets, poolRowToLead, PLACE_DETAILS_USD,
+  MARKET_AUDIT_STALE_MS,
+  type MarketPoolRow,
+} from '@/lib/marketView';
+import { useOutreach } from '@/hooks/useOutreach';
+import { useCampaigns } from '@/hooks/useCampaigns';
+import { pickCampaignForTrade, describeCampaignPick } from '@/lib/campaignForTrade';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -114,6 +122,18 @@ export default function Coverage() {
     [sorted],
   );
 
+  /* ── THE MARKET-VIEW FETCH, one place. Free: market-view reads stored data only. ── */
+  const fetchMarketView = async (townName: string) => {
+    const { data } = await supabase.functions.invoke<{
+      concentration?: { marketAuditsComplete?: number; completeRuns?: number };
+      marketProgress?: unknown[];
+      poolState?: { state?: string; total?: number };
+      pool?: MarketPoolRow[];
+      fragmentation?: { answersTotal?: number };
+    }>('market-view', { body: { action: 'view', trade, town: townName } });
+    return data ?? null;
+  };
+
   /* The server's own error string, dug out of supabase-js's wrapper -- the same shape every other
      caller uses; "non-2xx status code" is what makes a cooldown look like a crash. */
   const realFnError = async (fnErr: unknown, data: { error?: string } | null): Promise<string> => {
@@ -129,6 +149,68 @@ export default function Coverage() {
     return (fnErr as Error | null)?.message ?? 'unknown error';
   };
 
+  /* ── ONE measure-start flow, TWO callers (the batch button and the per-row button) — Paul's
+     no-second-implementation rule. Same gates in the same order as the panel's one-button measure:
+     measureAction first (already-measured = 0 audits, free), fresh-pool search skip, the ambiguity
+     gate, the zero-businesses gate (the Soham rule). Gates SKIP with a reason; a row or batch
+     action never overrides a gate — overrides live on the market panel. This STARTS audits; it
+     never waits for them (the batch reports "queued", the row flow polls). */
+  type MeasureStart =
+    | { kind: 'already_measured' }
+    | { kind: 'blocked'; reason: string }
+    | { kind: 'started'; started: number; wanted: number; stop?: string };
+
+  const startMarketMeasure = async (townName: string): Promise<MeasureStart> => {
+    /* 1. The free re-check. Coverage's rung can be stale; market-view is the live answer, and
+       measureAction is the SAME gate the panel button uses. */
+    const view = await fetchMarketView(townName);
+    const completed = view?.concentration?.marketAuditsComplete ?? 0;
+    const inFlight = (view?.marketProgress ?? []).length;
+    const audits = auditsToRun(measureAction(completed, inFlight));
+    if (audits === 0) return { kind: 'already_measured' };
+
+    /* 2. The pool. Fresh (state 'ready') = the count is known and the search is free. Anything
+       else runs the paid town-only search -- the same call, the same cache, the same history row
+       as Find Leads, so the market panel reads exactly what this wrote. */
+    let businesses: number | null = null;
+    if (view?.poolState?.state === 'ready') {
+      businesses = view.poolState.total ?? null;
+    } else {
+      const { data: sr, error: se } = await supabase.functions.invoke<{
+        leads?: unknown[]; locationCandidates?: string[]; resolvedLocation?: string | null;
+      }>('search-leads', { body: { keyword: trade, location: townName, radius: 50000, townOnly: true } });
+      if (se || !sr) return { kind: 'blocked', reason: `search failed (${await realFnError(se, null)}) -- nothing audited` };
+      if ((sr.locationCandidates?.length ?? 0) > 1) {
+        return {
+          kind: 'blocked',
+          reason: `ambiguous -- Google returns ${sr.locationCandidates!.length} places named ${townName} (it picked ${sr.resolvedLocation ?? 'one'}). Nothing audited; open View and measure from the panel, where the override lives.`,
+        };
+      }
+      businesses = Array.isArray(sr.leads) ? sr.leads.length : null;
+    }
+    if (businesses === 0) return { kind: 'blocked', reason: `Places found no ${trade} here -- nothing audited (probably a misspelling). Open View to override from the panel.` };
+
+    /* 3. The audits, strictly sequential (the coverage directive is load-bearing). */
+    let started = 0;
+    let stop = '';
+    for (let a = 0; a < audits; a++) {
+      const { data: ca, error: ce } = await supabase.functions.invoke<{ ok?: boolean; error?: string; audit_id?: string }>(
+        'create-ai-audit',
+        {
+          body: {
+            market_only: true, purpose: 'market',
+            business_type: trade, location_text: townName,
+            question_count: MARKET_AUDIT_QUESTION_COUNT,
+            business_scope: 'local', has_website: false,
+          },
+        },
+      );
+      if (ce || ca?.ok === false || !ca?.audit_id) { stop = await realFnError(ce, ca ?? null); break; }
+      started++;
+    }
+    return { kind: 'started', started, wanted: audits, ...(started < audits ? { stop } : {}) };
+  };
+
   const runBatchMeasure = async () => {
     setMeasureConfirmOpen(false);
     setMeasureBusy(true);
@@ -137,62 +219,15 @@ export default function Coverage() {
       for (let i = 0; i < unmeasuredBatch.length; i++) {
         const townRow = unmeasuredBatch[i];
         setMeasureNote(`Measuring ${i + 1} of ${unmeasuredBatch.length}: ${trade} in ${townRow.name}...`);
-
-        /* 1. The free re-check. Coverage's rung can be stale; market-view is the live answer, and
-           measureAction is the SAME gate the panel button uses, so an already-measured market
-           resolves to refresh (0 audits) and is skipped without spending. */
-        const { data: view } = await supabase.functions.invoke<{
-          concentration?: { marketAuditsComplete?: number };
-          marketProgress?: unknown[];
-          poolState?: { state?: string; total?: number };
-        }>('market-view', { body: { action: 'view', trade, town: townRow.name } });
-        const completed = view?.concentration?.marketAuditsComplete ?? 0;
-        const inFlight = (view?.marketProgress ?? []).length;
-        const audits = auditsToRun(measureAction(completed, inFlight));
-        if (audits === 0) { results.push(`${townRow.name}: already measured -- skipped, free`); continue; }
-
-        /* 2. The pool. Fresh (state 'ready') = the count is known and the search is free. Anything
-           else runs the paid town-only search -- the same call, the same cache, the same history row
-           as Find Leads, so the market panel reads exactly what this wrote. */
-        let businesses: number | null = null;
-        if (view?.poolState?.state === 'ready') {
-          businesses = view.poolState.total ?? null;
-        } else {
-          const { data: sr, error: se } = await supabase.functions.invoke<{
-            leads?: unknown[]; locationCandidates?: string[]; resolvedLocation?: string | null;
-          }>('search-leads', { body: { keyword: trade, location: townRow.name, radius: 50000, townOnly: true } });
-          if (se || !sr) { results.push(`${townRow.name}: search failed (${await realFnError(se, null)}) -- skipped, no audits`); continue; }
-          if ((sr.locationCandidates?.length ?? 0) > 1) {
-            results.push(`${townRow.name}: ambiguous -- Google returns ${sr.locationCandidates!.length} places with that name (it picked ${sr.resolvedLocation ?? 'one'}) -- skipped, no audits. Measure it from the market panel with the county in the name.`);
-            continue;
-          }
-          businesses = Array.isArray(sr.leads) ? sr.leads.length : null;
-        }
-        if (businesses === 0) { results.push(`${townRow.name}: Places found no ${trade} -- skipped, no audits (probably a misspelling)`); continue; }
-
-        /* 3. The audits, strictly sequential (the coverage directive is load-bearing). */
-        let started = 0;
-        let stop = '';
-        for (let a = 0; a < audits; a++) {
-          const { data: ca, error: ce } = await supabase.functions.invoke<{ ok?: boolean; error?: string; audit_id?: string }>(
-            'create-ai-audit',
-            {
-              body: {
-                market_only: true, purpose: 'market',
-                business_type: trade, location_text: townRow.name,
-                question_count: MARKET_AUDIT_QUESTION_COUNT,
-                business_scope: 'local', has_website: false,
-              },
-            },
-          );
-          if (ce || ca?.ok === false || !ca?.audit_id) { stop = await realFnError(ce, ca ?? null); break; }
-          started++;
-        }
-        results.push(started === audits
-          ? `${townRow.name}: ${started} audit${started === 1 ? '' : 's'} queued`
-          : started > 0
-            ? `${townRow.name}: started ${started} of ${audits} (${stop}) -- finish it from the market panel`
-            : `${townRow.name}: refused (${stop})`);
+        const r = await startMarketMeasure(townRow.name);
+        results.push(
+          r.kind === 'already_measured' ? `${townRow.name}: already measured -- skipped, free`
+            : r.kind === 'blocked' ? `${townRow.name}: ${r.reason}`
+              : r.started === r.wanted ? `${townRow.name}: ${r.started} audit${r.started === 1 ? '' : 's'} queued`
+                : r.started > 0
+                  ? `${townRow.name}: started ${r.started} of ${r.wanted} (${r.stop ?? ''}) -- finish it from the market panel`
+                  : `${townRow.name}: refused (${r.stop ?? ''})`,
+        );
       }
     } finally {
       setMeasureBusy(false);
@@ -200,6 +235,117 @@ export default function Coverage() {
       toast({ title: 'Batch measure finished', description: results.join(' | ') });
       void refetch();
     }
+  };
+
+  /* ══ THE PER-ROW STATE MACHINE — Paul's spec, 2026-08-16 ═══════════════════════════════════════
+     idle -> press "Market view" -> FREE fetch -> already measured ? loaded (free, instantly)
+                                              -> in flight        ? measuring (re-attach, poll)
+                                              -> unmeasured       ? priced confirm -> measuring -> loaded
+     Everything spend-bearing sits behind its own confirm; a stray click fetches (free) at most.
+     State is per-session and derived from the DB on every press, so navigation loses nothing:
+     re-pressing re-derives, and audits started here continue server-side regardless. */
+  type RowFlow =
+    | { phase: 'loading' }
+    | { phase: 'confirm'; audits: number; estUsd: number }
+    | { phase: 'measuring'; label: string; startedMs: number }
+    | { phase: 'blocked'; reason: string }
+    | { phase: 'loaded'; targets: MarketPoolRow[]; poolState: string }
+    | { phase: 'adding' }
+    | { phase: 'added'; added: number; already: number };
+  const [rowFlow, setRowFlow] = useState<Record<string, RowFlow>>({});
+  const setFlow = (id: string, f: RowFlow | null) =>
+    setRowFlow((m) => { const n = { ...m }; if (f) n[id] = f; else delete n[id]; return n; });
+  /* One row measures at a time. Not a spend guard (each measure has its own confirm) — it keeps
+     the sequential-audit rule intact and the page readable. Free reveals are never blocked. */
+  const anyRowMeasuring = Object.values(rowFlow).some((f) => f.phase === 'measuring');
+
+  const { addLead } = useOutreach();
+  const { campaigns } = useCampaigns();
+  const campaignPick = useMemo(() => pickCampaignForTrade(trade, campaigns, null), [trade, campaigns]);
+  /* Which row's add-all confirm is open, if any. */
+  const [addConfirmId, setAddConfirmId] = useState<string | null>(null);
+
+  const revealLoaded = (id: string, view: Awaited<ReturnType<typeof fetchMarketView>>) => {
+    const pool = (view?.pool ?? []) as MarketPoolRow[];
+    setFlow(id, {
+      phase: 'loaded',
+      targets: auditableTargets(pool),
+      poolState: view?.poolState?.state ?? 'never_searched',
+    });
+  };
+
+  const onMarketView = async (id: string, townName: string) => {
+    setFlow(id, { phase: 'loading' });
+    const view = await fetchMarketView(townName);
+    if (!view) { setFlow(id, { phase: 'blocked', reason: 'could not read this market -- try again or open View' }); return; }
+    const completed = view.concentration?.marketAuditsComplete ?? 0;
+    const inFlight = (view.marketProgress ?? []).length;
+    const audits = auditsToRun(measureAction(completed, inFlight));
+    if (audits === 0 && inFlight > 0 && completed < MARKET_AUDIT_MIN_AUDITS) {
+      /* Audits already running (started elsewhere or on a previous visit): re-attach and poll. */
+      setFlow(id, { phase: 'measuring', label: 'measuring (already in flight)...', startedMs: Date.now() });
+      void pollRowUntilMeasured(id, townName, Date.now());
+      return;
+    }
+    if (audits === 0) { revealLoaded(id, view); return; }   // measured: free, instantly
+    const poolFresh = view.poolState?.state === 'ready';
+    setFlow(id, { phase: 'confirm', audits, estUsd: measureRunCost(poolFresh, audits) });
+  };
+
+  const pollRowUntilMeasured = async (id: string, townName: string, startedMs: number) => {
+    /* The queue drains on ~30-60s ticks and a market audit's measured median is ~6.5 min, so a
+       30s poll is as fast as the truth changes. Free reads only. */
+    while (true) {
+      await new Promise((r) => setTimeout(r, 30_000));
+      if (Date.now() - startedMs > MARKET_AUDIT_STALE_MS + 10 * 60_000) {
+        setFlow(id, { phase: 'blocked', reason: 'still not finished after 30 minutes -- open View for the raw state' });
+        return;
+      }
+      const view = await fetchMarketView(townName);
+      if (!view) continue;
+      const completed = view.concentration?.marketAuditsComplete ?? 0;
+      const inFlight = (view.marketProgress ?? []).length;
+      if (auditsToRun(measureAction(completed, inFlight)) === 0 && inFlight === 0) {
+        revealLoaded(id, view);
+        void refetch();   // the row's rung badge catches up
+        return;
+      }
+      const mins = Math.round((Date.now() - startedMs) / 60000);
+      setFlow(id, { phase: 'measuring', label: `measuring... ${mins}m (usually ~6)`, startedMs });
+    }
+  };
+
+  const onConfirmRowMeasure = async (id: string, townName: string) => {
+    const started = Date.now();
+    setFlow(id, { phase: 'measuring', label: 'starting...', startedMs: started });
+    const r = await startMarketMeasure(townName);
+    if (r.kind === 'already_measured') {
+      const view = await fetchMarketView(townName);
+      if (view) revealLoaded(id, view); else setFlow(id, null);
+      return;
+    }
+    if (r.kind === 'blocked') { setFlow(id, { phase: 'blocked', reason: r.reason }); return; }
+    if (r.started === 0) { setFlow(id, { phase: 'blocked', reason: `refused (${r.stop ?? 'unknown'})` }); return; }
+    setFlow(id, { phase: 'measuring', label: `${r.started} audit${r.started === 1 ? '' : 's'} running...`, startedMs: started });
+    void pollRowUntilMeasured(id, townName, started);
+  };
+
+  /* The SAME add loop as the panel's Add-all: same addLead, same campaign resolution, same shared
+     poolRowToLead mapping. Adds ONLY -- leads land not_contacted; nothing queued, nothing sent. */
+  const onRowAddAll = async (id: string, targets: MarketPoolRow[], townName: string) => {
+    setAddConfirmId(null);
+    setFlow(id, { phase: 'adding' });
+    let added = 0, already = 0;
+    for (const row of targets) {
+      const created = await addLead(poolRowToLead(row), 'UK', 'no_website', campaignPick.campaignId, null, true, trade, townName);
+      if (created?.id) added++; else already++;
+    }
+    setFlow(id, { phase: 'added', added, already });
+    toast({
+      title: `${added} target${added === 1 ? '' : 's'} added to Outreach`,
+      description: `${already > 0 ? `${already} already in the CRM (skipped). ` : ''}${describeCampaignPick(campaignPick, added)} `
+        + 'They are in Outreach as not contacted -- nothing queued or sent; queue them for WhatsApp from the Outreach page.',
+    });
   };
 
   const toggle = async (id: string, name: string, currentlySuppressed: boolean) => {
@@ -327,6 +473,82 @@ export default function Coverage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── ROW MEASURE CONFIRM: the one spend gate for the per-row Market view press. ── */}
+      {(() => {
+        const entry = Object.entries(rowFlow).find(([, f]) => f.phase === 'confirm');
+        if (!entry) return null;
+        const [rid, f] = entry as [string, Extract<RowFlow, { phase: 'confirm' }>];
+        const townRow = sorted.find((t) => t.id === rid);
+        if (!townRow) return null;
+        return (
+          <Dialog open onOpenChange={(open) => { if (!open) setFlow(rid, null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader><DialogTitle>Measure {trade} in {townRow.name}?</DialogTitle></DialogHeader>
+              <div className="space-y-2 text-sm">
+                <p>
+                  This market has no stored verdict yet. Measuring runs{' '}
+                  {f.audits === 1 ? 'one market audit' : `${f.audits} market audits`} of {MARKET_AUDIT_QUESTION_COUNT} questions
+                  {f.audits > 1 ? ' (plus a town-only lead search if the pool is not fresh)' : ''} — the button stays
+                  here on Coverage with a progress spinner; usually about 6 minutes.
+                </p>
+                <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-[13px]">
+                  <p className="font-semibold">~{asPence(f.estUsd)}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    A town whose search finds nothing, or whose name is ambiguous, is skipped before any audit is
+                    bought. Already-measured markets never reach this dialog — they open free.
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setFlow(rid, null)}>Cancel</Button>
+                <Button onClick={() => void onConfirmRowMeasure(rid, townRow.name)} disabled={anyRowMeasuring || measureBusy}>
+                  Measure · ~{asPence(f.estUsd)}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      {/* ── ROW ADD-ALL CONFIRM: same wording contract as the panel's. Adds only, never sends. ── */}
+      {(() => {
+        if (!addConfirmId) return null;
+        const f = rowFlow[addConfirmId];
+        const townRow = sorted.find((t) => t.id === addConfirmId);
+        if (!f || f.phase !== 'loaded' || !townRow) return null;
+        return (
+          <Dialog open onOpenChange={(open) => { if (!open) setAddConfirmId(null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader><DialogTitle>Add all {f.targets.length} targets in {townRow.name}?</DialogTitle></DialogHeader>
+              <div className="space-y-2 text-sm">
+                <p>
+                  Every business in this market named in 40% of AI answers or fewer, worst-named first —
+                  winners, wrong-trade entries and chains are never included. Same list as the market panel.
+                </p>
+                <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-[13px]">
+                  <p className="font-semibold">~{asPence(f.targets.length * PLACE_DETAILS_USD)} total</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Each add runs the same Google lookup a single add does (phone, address, verified town).
+                    Businesses already in your CRM are skipped, never duplicated.
+                  </p>
+                </div>
+                <p className="text-[11px] font-medium text-foreground/90">{describeCampaignPick(campaignPick, f.targets.length)}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  They land as <span className="font-medium">not contacted</span>. Nothing is queued for WhatsApp and
+                  nothing is sent — that stays your separate action on the Outreach page.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setAddConfirmId(null)}>Cancel</Button>
+                <Button onClick={() => void onRowAddAll(addConfirmId, f.targets, townRow.name)}>
+                  Add {f.targets.length}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Reading your audits, leads and messages&hellip;
@@ -414,9 +636,57 @@ export default function Coverage() {
                         Find leads · ~{asPence(MARKET_SEARCH_USD)}
                       </Link>
                     </Button>
+                    {/* ── THE SMART ROW BUTTON — Paul's spec, 2026-08-16. Press = one FREE read;
+                        measured markets reveal Add-all instantly; unmeasured ones get a priced
+                        confirm; the spinner stays in place, no navigation. A stray click never
+                        spends. */}
+                    {(() => {
+                      const f = rowFlow[t.id];
+                      if (!f) {
+                        return (
+                          <Button
+                            variant="ghost" size="sm" className="h-7 text-xs"
+                            disabled={measureBusy}
+                            title={`Check ${trade} in ${t.name}: free read; measured markets show their targets instantly, unmeasured ones ask before spending`}
+                            onClick={() => void onMarketView(t.id, t.name)}
+                          >
+                            Market view
+                          </Button>
+                        );
+                      }
+                      if (f.phase === 'loading') return <Button variant="ghost" size="sm" className="h-7 text-xs" disabled><Loader2 className="h-3 w-3 animate-spin mr-1" /> reading…</Button>;
+                      if (f.phase === 'measuring') return <Button variant="ghost" size="sm" className="h-7 text-xs" disabled><Loader2 className="h-3 w-3 animate-spin mr-1" /> {f.label}</Button>;
+                      if (f.phase === 'adding') return <Button variant="ghost" size="sm" className="h-7 text-xs" disabled><Loader2 className="h-3 w-3 animate-spin mr-1" /> adding…</Button>;
+                      if (f.phase === 'added') return <span className="text-xs text-emerald-600 px-2">✓ {f.added} added{f.already ? `, ${f.already} existing` : ''}</span>;
+                      if (f.phase === 'blocked') {
+                        return (
+                          <span className="inline-flex items-center gap-1">
+                            <span className="max-w-[260px] truncate text-[11px] text-amber-600" title={f.reason}>{f.reason}</span>
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setFlow(t.id, null)}>reset</Button>
+                          </span>
+                        );
+                      }
+                      if (f.phase === 'confirm') return null; /* the dialog below is open for this row */
+                      /* loaded */
+                      return f.targets.length > 0
+                        ? (
+                          <Button
+                            variant="ghost" size="sm" className="h-7 text-xs text-emerald-700"
+                            title={`Add all ${f.targets.length} ≤40%-named targets to Outreach as not contacted — winners, wrong-trade and chains excluded. Nothing is queued or sent.`}
+                            onClick={() => setAddConfirmId(t.id)}
+                          >
+                            Add all {f.targets.length} · ~{asPence(f.targets.length * PLACE_DETAILS_USD)}
+                          </Button>
+                        )
+                        : (
+                          <span className="px-2 text-[11px] text-muted-foreground" title={f.poolState === 'ready' || f.poolState === 'stale' ? 'Every pool business is already winning, wrong-trade or a chain' : 'No lead pool for this town — run Find leads first'}>
+                            {f.poolState === 'ready' || f.poolState === 'stale' ? '0 targets' : 'no pool — Find leads first'}
+                          </span>
+                        );
+                    })()}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={marketViewHref(trade, t.name, t.state)} title={`What we already know about ${trade} in ${t.name} — stored results only, nothing runs and nothing is spent`}>
-                        Market view · free
+                      <Link to={marketViewHref(trade, t.name, t.state)} title={`Open the full market panel for ${trade} in ${t.name} — stored results, free`}>
+                        View
                       </Link>
                     </Button>
                     <Button

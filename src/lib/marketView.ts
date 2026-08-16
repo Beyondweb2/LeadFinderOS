@@ -1419,6 +1419,36 @@ export function offTradeMarkForGroup(
 
 /** The row's score in words, built from the same two counts the verdict uses so the sentence and
  *  the grading cannot disagree. Never renders a percentage of zero answers. */
+/* ── THE TWO SURFACE-SHARED DERIVATIONS — Paul's rule, 2026-08-16: Coverage's row actions and the
+   market panel must draw the SAME target list and the SAME lead mapping, so they are one function
+   each, here, where both can import them. An inline copy on either surface is how the two would
+   drift the first time one changed. */
+
+/** The batch-add / audit target list: non-chain, right-trade pool entries. Winners never enter
+ *  `pool` at all (market-view splits them into poolExcluded server-side), so this filter is the
+ *  WHOLE selection rule — nothing here re-derives the 40% line. */
+export function auditableTargets(pool: MarketPoolRow[]): MarketPoolRow[] {
+  return pool.filter((p) => !p.isChain && !p.offTrade);
+}
+
+/** A pool row as the Lead shape addLead expects. The rows came out of search-leads in the first
+ *  place, so this is a re-hydration, not an invention. Import type only — erased at build, so the
+ *  edge bundle that shares this file carries nothing extra. */
+export function poolRowToLead(row: MarketPoolRow): {
+  id: string; name: string; googleMapsUrl: string; websiteUrl?: string;
+  websiteStatus: 'NO_WEBSITE' | 'HAS_OWN_WEBSITE'; confidence: number; reason: string;
+} {
+  return {
+    id: row.placeIds[0],
+    name: row.name,
+    googleMapsUrl: row.googleMapsUrl,
+    websiteUrl: row.websiteUrl ?? undefined,
+    websiteStatus: row.noWebsite ? 'NO_WEBSITE' : 'HAS_OWN_WEBSITE',
+    confidence: row.noWebsite ? 0.6 : 0.9,
+    reason: row.noWebsite ? 'No website on Google listing' : 'Has own website',
+  };
+}
+
 export function invisibilityPhrase(row: Pick<MarketPoolRow, 'answersNamed' | 'answersTotal'>): string {
   const { answersNamed: named, answersTotal: total } = row;
   if (total <= 0) return 'not measured yet — no completed answers to score against';
