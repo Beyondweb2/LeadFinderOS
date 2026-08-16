@@ -24,7 +24,7 @@ import {
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
   MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase, shouldAutoClean, CLEANER_USD_PER_RUN, asPence,
   auditsInView, openArrivalSearchConfirm, marketNamesUncleaned, TARGET_MAX_NAMED_SHARE,
-  MARKET_ONE_AUDIT_USD,
+  MARKET_ONE_AUDIT_USD, PLACE_DETAILS_USD,
   type MarketPoolRow,
   type MarketViewResult,
 } from '@/lib/marketView';
@@ -127,6 +127,13 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
   const [reExtractBusy, setReExtractBusy] = useState(false);
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
+  /* ── ADD ALL TARGETS — Paul's batch-add, 2026-08-15. One click adds every ≤40% target to
+     Outreach, worst-named first. The list is `auditable`, which is structurally pure: winners
+     (>40%) never enter view.pool at all, wrong-trade rows carry offTrade and are filtered, chains
+     are filtered — the same deterministic set the fragmentation verdict counts. Adds ONLY: leads
+     land as not_contacted; queueing for WhatsApp stays the operator's separate action. */
+  const [addAllOpen, setAddAllOpen] = useState(false);
+  const [addAllBusy, setAddAllBusy] = useState(false);
   /* THE NUMBERS ARE COLLAPSED BY DEFAULT. The screen has to be readable on a video call in about
      ten seconds; the concentration percentages, the named lists, the exclusions and the nearby
      group are all kept, one click away. Remembered for the session so it does not re-collapse on
@@ -318,6 +325,37 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
       }
     } finally {
       setAddingKey(null);
+    }
+  }, [chosen, addLead, asLead, campaignPick, toast]);
+
+  /* The batch version of addOne, over the whole target list. Same addLead, same campaign
+     resolution, same dedupe (a duplicate returns null and is counted, never double-added). Server
+     order is worst-named first, so the most invisible businesses land at the top of Outreach.
+     ⛔ ADDS ONLY. No WhatsApp queueing, no sends — leads arrive as not_contacted and queueing
+     stays the operator's explicit next action, stated in the toast so nobody assumes otherwise. */
+  const addAllTargets = useCallback(async (targets: MarketPoolRow[]) => {
+    if (!chosen || targets.length === 0) return;
+    setAddAllOpen(false);
+    setAddAllBusy(true);
+    let added = 0, already = 0;
+    try {
+      for (const row of targets) {
+        const created = await addLead(asLead(row), 'UK', 'no_website', campaignPick.campaignId, null, true, chosen.trade, chosen.town);
+        if (created?.id) {
+          added++;
+          setAddedKeys((s) => new Set(s).add(row.key));
+        } else {
+          already++;
+        }
+      }
+      toast({
+        title: `${added} target${added === 1 ? '' : 's'} added to Outreach`,
+        description: `${already > 0 ? `${already} already in the CRM (skipped, not duplicated). ` : ''}`
+          + `${describeCampaignPick(campaignPick, added)} They are in Outreach as not contacted — `
+          + 'nothing has been queued or sent; queue them for WhatsApp from the Outreach page when ready.',
+      });
+    } finally {
+      setAddAllBusy(false);
     }
   }, [chosen, addLead, asLead, campaignPick, toast]);
 
@@ -920,6 +958,26 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                 </div>
               ))}
 
+              {/* ── ADD ALL TARGETS — the batch of the per-row Add buttons above, nothing more.
+                  Only renders on a MEASURED market (this whole block is gated on `measured`), so a
+                  whole unmeasured town can never be let in on no data. Face carries the derived
+                  cost: each add runs the same Places phone/address lookup the single add does. */}
+              {auditable.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-2">
+                  <Button
+                    size="sm"
+                    disabled={addAllBusy || auditable.every((r) => addedKeys.has(r.key))}
+                    onClick={() => setAddAllOpen(true)}
+                  >
+                    {addAllBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+                    Add all {auditable.length} target{auditable.length === 1 ? '' : 's'} · ~{asPence(auditable.length * PLACE_DETAILS_USD)}
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    Into Outreach as not contacted, worst-named first. Nothing is queued or sent.
+                  </span>
+                </div>
+              )}
+
               {/* ── THE TWO EXCLUSION GROUPS — VISIBLE, ITEMISED, NEVER SILENT (Paul, 2026-08-14) ──
                   Google's categories are imperfect and the 40% line is a first guess, so both cuts
                   show their working: every excluded business, its score, and (for wrong-trade) the
@@ -1422,6 +1480,41 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
           </Card>
         </>
       )}
+
+      {/* ── ADD-ALL CONFIRM. Count and cost first; says out loud what it does NOT do. */}
+      <Dialog open={addAllOpen} onOpenChange={setAddAllOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Add all {auditable.length} targets to Outreach?</DialogTitle></DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p>
+              Every business in this market named in {Math.round(TARGET_MAX_NAMED_SHARE * 100)}% of AI answers
+              or fewer — the same list shown above, worst-named first. Winners, wrong-trade entries and
+              chains are never included.
+            </p>
+            <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-[13px]">
+              <p className="font-semibold">~{asPence(auditable.length * PLACE_DETAILS_USD)} total</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Each add runs the same Google lookup a single add does (~${PLACE_DETAILS_USD} — phone, address,
+                verified town). Businesses already in your CRM are skipped, never duplicated.
+              </p>
+            </div>
+            <p className="text-[11px] font-medium text-foreground/90">
+              {describeCampaignPick(campaignPick, auditable.length)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              They land as <span className="font-medium">not contacted</span>. Nothing is queued for WhatsApp
+              and nothing is sent — that stays your separate action on the Outreach page.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddAllOpen(false)}>Cancel</Button>
+            <Button onClick={() => void addAllTargets(auditable)} disabled={addAllBusy}>
+              {addAllBusy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Add {auditable.length}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── MARKET AUDIT CONFIRM. Cost first, and the thing that makes it the default: no CRM rows. */}
       <Dialog open={marketAuditOpen} onOpenChange={setMarketAuditOpen}>

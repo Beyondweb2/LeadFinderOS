@@ -955,6 +955,20 @@ worst-first, >40% is excluded as already winning, and both exclusions are itemis
     inclusive boundaries, the chain/off-trade sides, and the Nuneaton/Halifax/Aylesbury shapes.
   - The panel line carries a **confidence tag** (scored-answers count) and a **"Deepen · +1 audit ·
     ~7p"** button that opens the EXISTING market-audit confirm — a third audit is never automatic.
+- ✅ **BATCH ADD + BATCH MEASURE — built 2026-08-15, Paul's spec, both explicit and priced:**
+  - **"Add all N targets · ~Xp"** (MarketPanel, renders ONLY on a measured market): loops the
+    SAME `addLead` the per-row button uses over `auditable` — a list that is structurally pure
+    (winners never enter `view.pool`, wrong-trade and chains filtered), worst-named first.
+    Duplicates return null and are counted, never re-added. **Adds ONLY**: leads land
+    `not_contacted`; nothing is queued or sent, and the toast says so. ~$0.02/lead (the Places
+    lookup, which also verifies the town for free).
+  - **"Measure next N unmeasured · up to ~Xp"** (Coverage, `MEASURE_BATCH_CAP = 5`/press): strictly
+    sequential towns; per town it re-checks via a FREE market-view read and routes through
+    `measureAction` (already-measured → refresh → **0 audits, skipped**), skips fresh-pool searches,
+    and applies the ambiguity + zero-businesses gates as SKIPS (batch never overrides a gate —
+    overrides live on the panel). Worst case ~22p/market (search + 2 audits). ⛔ **The free-on-click
+    rule stays absolute: nothing on Coverage measures on navigation.** Verdict words on Coverage
+    rows and a baseline-priority queue lane were DECLINED 2026-08-15 — do not build them unasked.
 - ⚠️ Old-SPA/new-payload overlap is a 10-minute sessionStorage cache (`useMarketView`), same as
   every market-view deploy. Deploy `market-view` BEFORE pushing the SPA.
 

@@ -15,7 +15,9 @@ import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX } from '@/lib/trad
 import {
   COVERAGE_STATES, COVERAGE_LABEL, findLeadsHref, marketViewHref, type CoverageState,
 } from '@/lib/coverageState';
-import { asPence, MARKET_SEARCH_USD } from '@/lib/marketView';
+import { asPence, MARKET_SEARCH_USD, MEASURE_BATCH_CAP, MARKET_AUDIT_QUESTION_COUNT, MARKET_AUDIT_MIN_AUDITS, measureAction, auditsToRun, measureRunCost } from '@/lib/marketView';
+import { supabase } from '@/integrations/supabase/client';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 /* ══ WHERE HAVE I BEEN? ═══════════════════════════════════════════════════════════════════════
    ⛔ WHAT THIS REPLACES: asking someone for town names. Every candidate town for a trade, with the
@@ -93,6 +95,113 @@ export default function Coverage() {
     [rows],
   );
 
+  /* == BATCH MEASURE -- Paul's spec, 2026-08-15: explicit, priced, capped, NEVER automatic ======
+     The free-on-click rule stays absolute: this runs ONLY from its own button behind its own
+     confirm. Each town goes through the SAME gates as the panel's one-button measure --
+     measureAction first (already-measured resolves to refresh = 0 audits and is SKIPPED, free),
+     then the fresh-pool check (a fresh pool skips the paid search), the ambiguity gate and the
+     zero-businesses gate (the Soham rule: an empty town is never audited; in a batch a gate SKIPS
+     rather than offering an override -- overrides live on the market panel where one town has the
+     operator's attention). Towns are processed strictly one after another because the two audits
+     per market must be created sequentially (the coverage directive reads the first audit's rows --
+     see marketView.ts) -- and a mid-batch navigation simply stops the remaining towns, spending
+     nothing on them. */
+  const [measureConfirmOpen, setMeasureConfirmOpen] = useState(false);
+  const [measureBusy, setMeasureBusy] = useState(false);
+  const [measureNote, setMeasureNote] = useState<string | null>(null);
+  const unmeasuredBatch = useMemo(
+    () => sorted.filter((t) => !t.suppressed_at && (t.state === 'untouched' || t.state === 'leads')).slice(0, MEASURE_BATCH_CAP),
+    [sorted],
+  );
+
+  /* The server's own error string, dug out of supabase-js's wrapper -- the same shape every other
+     caller uses; "non-2xx status code" is what makes a cooldown look like a crash. */
+  const realFnError = async (fnErr: unknown, data: { error?: string } | null): Promise<string> => {
+    if (data?.error) return data.error;
+    try {
+      const ctx = (fnErr as { context?: Response } | null)?.context;
+      if (ctx?.text) {
+        const body = await ctx.text();
+        const parsed = body ? JSON.parse(body) as { error?: string } : null;
+        if (parsed?.error) return parsed.error;
+      }
+    } catch { /* keep the fallback */ }
+    return (fnErr as Error | null)?.message ?? 'unknown error';
+  };
+
+  const runBatchMeasure = async () => {
+    setMeasureConfirmOpen(false);
+    setMeasureBusy(true);
+    const results: string[] = [];
+    try {
+      for (let i = 0; i < unmeasuredBatch.length; i++) {
+        const townRow = unmeasuredBatch[i];
+        setMeasureNote(`Measuring ${i + 1} of ${unmeasuredBatch.length}: ${trade} in ${townRow.name}...`);
+
+        /* 1. The free re-check. Coverage's rung can be stale; market-view is the live answer, and
+           measureAction is the SAME gate the panel button uses, so an already-measured market
+           resolves to refresh (0 audits) and is skipped without spending. */
+        const { data: view } = await supabase.functions.invoke<{
+          concentration?: { marketAuditsComplete?: number };
+          marketProgress?: unknown[];
+          poolState?: { state?: string; total?: number };
+        }>('market-view', { body: { action: 'view', trade, town: townRow.name } });
+        const completed = view?.concentration?.marketAuditsComplete ?? 0;
+        const inFlight = (view?.marketProgress ?? []).length;
+        const audits = auditsToRun(measureAction(completed, inFlight));
+        if (audits === 0) { results.push(`${townRow.name}: already measured -- skipped, free`); continue; }
+
+        /* 2. The pool. Fresh (state 'ready') = the count is known and the search is free. Anything
+           else runs the paid town-only search -- the same call, the same cache, the same history row
+           as Find Leads, so the market panel reads exactly what this wrote. */
+        let businesses: number | null = null;
+        if (view?.poolState?.state === 'ready') {
+          businesses = view.poolState.total ?? null;
+        } else {
+          const { data: sr, error: se } = await supabase.functions.invoke<{
+            leads?: unknown[]; locationCandidates?: string[]; resolvedLocation?: string | null;
+          }>('search-leads', { body: { keyword: trade, location: townRow.name, radius: 50000, townOnly: true } });
+          if (se || !sr) { results.push(`${townRow.name}: search failed (${await realFnError(se, null)}) -- skipped, no audits`); continue; }
+          if ((sr.locationCandidates?.length ?? 0) > 1) {
+            results.push(`${townRow.name}: ambiguous -- Google returns ${sr.locationCandidates!.length} places with that name (it picked ${sr.resolvedLocation ?? 'one'}) -- skipped, no audits. Measure it from the market panel with the county in the name.`);
+            continue;
+          }
+          businesses = Array.isArray(sr.leads) ? sr.leads.length : null;
+        }
+        if (businesses === 0) { results.push(`${townRow.name}: Places found no ${trade} -- skipped, no audits (probably a misspelling)`); continue; }
+
+        /* 3. The audits, strictly sequential (the coverage directive is load-bearing). */
+        let started = 0;
+        let stop = '';
+        for (let a = 0; a < audits; a++) {
+          const { data: ca, error: ce } = await supabase.functions.invoke<{ ok?: boolean; error?: string; audit_id?: string }>(
+            'create-ai-audit',
+            {
+              body: {
+                market_only: true, purpose: 'market',
+                business_type: trade, location_text: townRow.name,
+                question_count: MARKET_AUDIT_QUESTION_COUNT,
+                business_scope: 'local', has_website: false,
+              },
+            },
+          );
+          if (ce || ca?.ok === false || !ca?.audit_id) { stop = await realFnError(ce, ca ?? null); break; }
+          started++;
+        }
+        results.push(started === audits
+          ? `${townRow.name}: ${started} audit${started === 1 ? '' : 's'} queued`
+          : started > 0
+            ? `${townRow.name}: started ${started} of ${audits} (${stop}) -- finish it from the market panel`
+            : `${townRow.name}: refused (${stop})`);
+      }
+    } finally {
+      setMeasureBusy(false);
+      setMeasureNote(null);
+      toast({ title: 'Batch measure finished', description: results.join(' | ') });
+      void refetch();
+    }
+  };
+
   const toggle = async (id: string, name: string, currentlySuppressed: boolean) => {
     setBusyId(id);
     try {
@@ -168,6 +277,55 @@ export default function Coverage() {
           </span>
         </div>
       )}
+
+      {/* == BATCH MEASURE: explicit and priced, never automatic. The free-on-click rule holds:
+          Market view stays free, Find leads carries its own price, and this button is the ONLY
+          thing on the page that can start measurements -- behind its own confirm. */}
+      {!isLoading && !error && unmeasuredBatch.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm" variant="outline" className="h-8 text-xs"
+            disabled={measureBusy}
+            onClick={() => setMeasureConfirmOpen(true)}
+          >
+            {measureBusy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <MapPin className="h-3.5 w-3.5 mr-1.5" />}
+            Measure next {unmeasuredBatch.length} unmeasured &middot; up to ~{asPence(unmeasuredBatch.length * measureRunCost(false, MARKET_AUDIT_MIN_AUDITS))}
+          </Button>
+          {measureNote && <span className="text-xs text-muted-foreground">{measureNote}</span>}
+        </div>
+      )}
+
+      <Dialog open={measureConfirmOpen} onOpenChange={setMeasureConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Measure {unmeasuredBatch.length} market{unmeasuredBatch.length === 1 ? '' : 's'}?</DialogTitle></DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p>
+              The next {unmeasuredBatch.length} unmeasured town{unmeasuredBatch.length === 1 ? '' : 's'} for{' '}
+              <span className="font-medium">{trade}</span>, biggest first:{' '}
+              <span className="font-medium">{unmeasuredBatch.map((t) => t.name).join(', ')}</span>.
+            </p>
+            <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-[13px]">
+              <p className="font-semibold">Up to ~{asPence(unmeasuredBatch.length * measureRunCost(false, MARKET_AUDIT_MIN_AUDITS))} total</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                ~{asPence(measureRunCost(false, MARKET_AUDIT_MIN_AUDITS))} per market: one town-only lead search plus{' '}
+                {MARKET_AUDIT_MIN_AUDITS} market audits of {MARKET_AUDIT_QUESTION_COUNT} questions each. Less when a market
+                turns out to be already measured (skipped, free) or its pool is fresh (search free). A town whose
+                search finds nothing, or whose name is ambiguous, is skipped before any audit is bought.
+              </p>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Towns run one after another; results land on this page and each market panel as they finish.
+              Capped at {MEASURE_BATCH_CAP} per press.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setMeasureConfirmOpen(false)}>Cancel</Button>
+            <Button onClick={() => void runBatchMeasure()} disabled={measureBusy}>
+              {measureBusy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />} Measure {unmeasuredBatch.length}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
