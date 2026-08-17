@@ -54,13 +54,54 @@ export default function Coverage() {
   const { isLoading, error, gradeFor, setSuppressed, regions, applyFilters, summarise, refetch } = useCoverage();
 
   const [params, setParams] = useSearchParams();
-  const trade = params.get('trade') || TRADES[0].label;
+  /* ⛔ THE URL STILL WINS; THE MEMORY ONLY FILLS A BARE ONE — fixed 2026-08-17 after Paul's report.
+     The sidebar links to plain /coverage, so "URL is for what I am looking at" (§6c) was resetting
+     the trade to the default on every return — and with it hid the row spinner of a mid-measure
+     market, because the row match is keyed on the trade. A link carrying ?trade= behaves exactly as
+     before; a bare arrival restores the last trade actually looked at. tier 'local' so it survives
+     a tab close too. `validate` pins the value to a real trade label: a renamed trade in storage
+     falls back to the default rather than rendering an empty page (absence is never an answer). */
+  const [savedTrade, setSavedTrade] = usePersistedState<string>(
+    'coverage-trade', TRADES[0].label,
+    {
+      tier: 'local', scope: user?.id,
+      validate: (d) => (typeof d === 'string' && TRADES.some((t) => t.label === d) ? d : null),
+    },
+  );
+  const trade = params.get('trade') || savedTrade;
+  /* The REGION gets the same memory (Paul's call, 2026-08-17), with one twist the trade does not
+     have: "All regions" is a real choice that the URL expresses as NO param — so a bare URL cannot
+     distinguish "chose All" from "arrived with no opinion". The memory therefore stores '' for
+     "All", and is written at the point of CHOICE (the select's onChange), never inferred from the
+     URL's silence. A remembered '' restores nothing, which IS restoring "All". */
+  const [savedRegion, setSavedRegion] = usePersistedState<string>(
+    'coverage-region', '',
+    { tier: 'local', scope: user?.id, validate: (d) => (typeof d === 'string' ? d : null) },
+  );
   const region = params.get('region');
   const setParam = (k: string, v: string | null) => {
     const next = new URLSearchParams(params);
     if (v) next.set(k, v); else next.delete(k);
     setParams(next, { replace: true });
   };
+  /* Remember every trade actually looked at — a link with ?trade= counts — and write the restored
+     trade and region back into a bare URL (replace, no history entry) so the address bar stays
+     linkable. Region restores ONCE per mount: after that the select's own writes decide, so picking
+     "All regions" is not fought by a re-restore. Re-runs after the URL write land on every
+     condition false; there is no loop. */
+  const regionRestored = useRef(false);
+  useEffect(() => {
+    if (trade !== savedTrade) setSavedTrade(trade);
+    const next = new URLSearchParams(params);
+    let dirty = false;
+    if (!params.get('trade')) { next.set('trade', trade); dirty = true; }
+    if (!regionRestored.current && !params.get('region') && savedRegion) {
+      next.set('region', savedRegion); dirty = true;
+    }
+    regionRestored.current = true;
+    if (dirty) setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trade, params]);
 
   /* ⛔ THE BAND IS ONE SETTING, SO IT PERSISTS AS ONE VALUE. Two keys could restore a half-band
      (a new min against a stale max) and silently show the wrong rows. `validate` rejects any stored
@@ -442,7 +483,7 @@ export default function Coverage() {
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Region</label>
-          <Select value={region ?? '__all'} onValueChange={(v) => setParam('region', v === '__all' ? null : v)}>
+          <Select value={region ?? '__all'} onValueChange={(v) => { setParam('region', v === '__all' ? null : v); setSavedRegion(v === '__all' ? '' : v); }}>
             <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all">All regions</SelectItem>
