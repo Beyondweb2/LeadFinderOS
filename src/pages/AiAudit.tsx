@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { fetchAllRows } from '@/lib/fetchAllRows';
+import { asPence, SEO_SCAN_USD } from '@/lib/marketView';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
@@ -2345,7 +2346,9 @@ const AiAudit = () => {
                   {!isDraining && resultsHasWebsite && (
                     <Button variant="outline" size="sm" onClick={runSeoScan} disabled={seoScanning}>
                       {seoScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
-                      {seoScanning ? 'Scanning…' : hasSeo ? 'Re-run SEO scan' : 'Run SEO scan'}
+                      {/* Price on the face — the house rule: every spend says what it costs.
+                          Derived from the sync-guarded constant, never hand-typed (§4). */}
+                      {seoScanning ? 'Scanning…' : `${hasSeo ? 'Re-run SEO scan' : 'Run SEO scan'} · ~${asPence(SEO_SCAN_USD)}`}
                     </Button>
                   )}
                   {!isDraining && liveTally.done > 0 && (

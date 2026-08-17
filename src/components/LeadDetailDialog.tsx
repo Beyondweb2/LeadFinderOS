@@ -4,6 +4,7 @@ import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar 
 import { Link } from 'react-router-dom';
 import { TeamNotes } from '@/components/TeamNotes';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
+import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
 import { Button } from '@/components/ui/button';
@@ -653,6 +654,10 @@ function LeadDetailBody({
             <ClipboardList className="h-3 w-3" />
             Playbook
           </Link>
+
+          {/* Site check on engagement — renders only for a replied-or-beyond lead with a real
+              website whose completed audit skipped the SEO scan (the email lane's up-front skip). */}
+          {!isDemoLead(lead.id) && <LeadSiteCheckButton lead={lead} />}
 
           <div className="relative ml-auto">
             <PoundSterling className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
