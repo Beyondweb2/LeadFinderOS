@@ -972,6 +972,17 @@ worst-first, >40% is excluded as already winning, and both exclusions are itemis
     reason and point to the panel; a row action never overrides a gate. Row state is
     session-only and re-derived from the DB on every press — nothing persisted, mid-measure
     navigation is safe (audits continue server-side; re-press re-attaches).
+  - **"MEASURING NOW" — built 2026-08-17, after Paul lost his place mid-measure.** The spinner no
+    longer lives in session state: `useInFlightMeasures` (pure fold in
+    `src/lib/inFlightMeasures.ts`, tested) derives what is measuring from
+    runs(pending/running) → audits(`is_market === true` STRICTLY — a paid baseline in flight must
+    NEVER render here; absence excludes, instance twelve) → queue counts, all owner-RLS client
+    reads (MeasureMarket set the precedent). Polls every 30s ONLY while non-empty. Rows
+    self-restore their spinner on return with no press; a market leaving the list auto-reveals
+    "Add all N" via one free read; the strip above the table names every in-flight market with
+    progress and age (stalled graded by `MARKET_AUDIT_STALE_MS`); and the one-at-a-time guard +
+    disabled confirm now read this list and NAME the running market instead of greying out
+    silently. The per-row market-view polling loop was DELETED — one watcher, not two.
   - **"Measure next N unmeasured · up to ~Xp"** (Coverage, `MEASURE_BATCH_CAP = 5`/press): strictly
     sequential towns; per town it re-checks via a FREE market-view read and routes through
     `measureAction` (already-measured → refresh → **0 audits, skipped**), skips fresh-pool searches,
