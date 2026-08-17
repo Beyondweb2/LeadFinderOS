@@ -155,10 +155,17 @@ export function serveDecision(input: ServeInput): ServeDecision {
      a two-minute check by hand. Refusing money over an unanswered optional question would be the
      worst kind of false negative. */
   if (platform === null || platform === "not_sure") {
+    /* Reaching here, migrate is "no" OR null — and since the questionnaire split (2026-08-13) the
+       website questions are asked AFTER payment, so every pre-pay row arrives all-null and lands
+       exactly on this branch. The old single sentence said "Won't move the site" for an answer
+       that was never given; Paul read it as the flow having declined a warm prospect (Ronnie's,
+       2026-08-17). An absent answer must never be worded as a refusal. */
     return {
       verdict: "flag",
       code: "platform_unknown",
-      reason: "Won't move the site and we don't know what it's built on. Check the site by hand before ruling it out.",
+      reason: migrate === "no"
+        ? "Won't move the site and we don't know what it's built on. Check the site by hand before ruling it out."
+        : "Website questions not asked yet — they come after payment. Nothing known about the platform, which is normal for a new submission.",
     };
   }
 
