@@ -3,6 +3,7 @@ import { isDemoLead } from '@/lib/demoLeads';
 import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, ClipboardList } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TeamNotes } from '@/components/TeamNotes';
+import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
 import { Button } from '@/components/ui/button';
@@ -755,6 +756,13 @@ function LeadDetailBody({
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Left: Project / delivery */}
           <div className="space-y-4">
+            {/* The questionnaire's answers + the manual payment nudge. Fetches through the
+                `submissions` endpoint (onboarding_responses has RLS with no policies — a direct
+                read silently returns nothing, CLAUDE.md §8). Demo leads have no submissions and
+                no edge access, so the section is simply absent for them. */}
+            {!isDemoLead(lead.id) && (
+              <LeadQuestionnaireSection lead={lead} onUpdateLead={onUpdateLead} />
+            )}
             <section className={CARD}>
               <SectionLabel icon={Briefcase} color="text-sky-400">Delivery</SectionLabel>
               <Textarea

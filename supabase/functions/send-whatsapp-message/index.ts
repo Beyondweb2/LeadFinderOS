@@ -8,6 +8,7 @@ import {
   renderTemplateBody,
   WA_TEMPLATES,
   TEMPLATES_NEEDING_REAL_NAME,
+  firstNameFrom,
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
@@ -162,7 +163,26 @@ Deno.serve(async (req) => {
       }
       const needsAudit = tvars.includes("trade") || tvars.includes("competitors");
       const needsOnboardingUrl = tvars.includes("onboarding_url");
-      if (needsOnboardingUrl) {
+      const needsContactName = tvars.includes("contact_first_name");
+      if (needsContactName) {
+        /* questionnaire_followup: {{1}} = the OWNER'S first name (first word of the lead's
+           contact_name), {{2}} = business name. The one template that greets a person, so a blank
+           name refuses with a code the UI turns into "type their first name" — never "Hi there".
+           ⛔ ONE SEND PER LEAD, NO OVERRIDE. audit_reply's guard is overridable because a re-pitch
+           is sometimes service; a second "just the payment step left" nudge to the same person is
+           pressure, never service — Paul's rule 2026-08-17. No allow_resend read here on purpose. */
+        if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
+        if (await pitchEverSent(service, resolvedLeadId, templateName)) {
+          return json({ ok: false, error: "pitch_already_sent" }, 200);
+        }
+        const { data: cn } = await service
+          .from("outreach_leads").select("contact_name").eq("id", resolvedLeadId).maybeSingle();
+        const first = firstNameFrom((cn as { contact_name: string | null } | null)?.contact_name);
+        if (!first) return json({ ok: false, error: "no_contact_name" }, 200);
+        payload = claimTemplatePayload(templateName, lang, businessName, "", { contactName: first });
+        storedBody = renderTemplateBody(templateName, businessName, "", undefined, undefined, first);
+        auditClaimUrl = "";
+      } else if (needsOnboardingUrl) {
         /* onboarding_followup: {{1}} business name, {{2}} that lead's onboarding URL, both resolved
            server-side from the lead's own row. Refuses rather than sending a partial — the entire
            message is a pointer to that link, so a follow-up without a correct one is spam that also

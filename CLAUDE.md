@@ -1069,6 +1069,54 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
 
 ---
 
+## 6g. ✅ THE OWNER'S NAME + THE PAYMENT NUDGE — built 2026-08-17, Paul's spec. Read before touching the questionnaire or templates.
+
+**The pre-pay screen asks THREE things now** (consent, name, email — "Three things and you're in").
+`contact_name` feeds directory registrations at delivery and the `questionnaire_followup` greeting.
+
+- ⛔ **`outreach_leads.contact_name` is FILL-EMPTY-ONLY from the questionnaire** — the same
+  convention as the email write-through beside it: an operator's hand-entered note ("Ronnie — ask
+  for Sharon") beats a form field, and the onboarding row keeps the submitted value regardless.
+  Verified before shipping: contact_name was NULL on all leads (0 non-null, 0 blanks), so
+  `.is(null)` is the correct narrow form.
+- ⛔ **THE FIRST NAME IS DERIVED AT SEND TIME, NEVER STORED** — `firstNameFrom` in
+  **`src/lib/questionnaireFollowup.ts`**, a deliberately Deno-free module BOTH sides import: the
+  edge sender builds the transcript body from it and the SPA renders the confirm-preview from it,
+  so the two cannot drift. ⚠️ whatsapp-send.ts has Deno reads, which is why the SPA must never
+  import it directly — put anything the SPA needs in the src/lib module.
+- **Q2 gained `confirmed_phone`** (client-REQUIRED, loose shape) + the "directories will text you"
+  helper line. ⛔ **Deliberately NOT in complete_q2's 400 gate**: nothing automated depends on it,
+  and a hard server gate would brick every Q2 submit from a site bundle published before the field
+  existed. **The Q2 owner-name fields were SHRUNK AWAY** (Paul, 2026-08-17) — the pre-pay name
+  covers them; do not re-add.
+- **`q2_prefill`** (findable-onboarding): the lead's phone for the post-payment form. PAID rows
+  only — same id-as-capability model as complete_q2, and deliberately not part of `prefill`, whose
+  contract is "never phone/email to the public page". Seeds only an EMPTY box (functional set).
+- **`submissions` has a per-lead mode** (`lead_id` in the body): latest onboarding row via
+  `select("*")` (columns absent pre-migration come through as absent, never a hard error) +
+  `followup_sent`, whose filter MUST stay identical to `pitchEverSent` **including
+  `.neq(status,'failed')`** — a failed attempt must not read "already sent" while the server would
+  allow the retry.
+- **The lead card's Questionnaire section** (`LeadQuestionnaireSection.tsx`): read-only answers
+  through the endpoint (RLS-no-policies table — §8), absence worded by whose turn it is: unpaid →
+  "Not asked yet (comes after payment)", paid → "Not answered yet", pre-field rows → "Not
+  captured". **Never a refusal** (the serveGate wording lesson).
+- 🔴 **`questionnaire_followup` — MANUAL ONLY, ONE SEND PER LEAD, NO OVERRIDE.** Registered at
+  Meta BY PAUL 2026-08-17 ({{1}} first name, {{2}} business name, Marketing). Unlike audit_reply
+  there is deliberately no `allow_resend` — a second "just the payment step left" nudge is
+  pressure, never service. The server refuses a blank contact name (`no_contact_name`); the UI's
+  confirm prompts for the first name and saves it to the lead BEFORE sending, so {{1}} always
+  resolves from the lead row.
+  - ⚠️ **`lang: "en_GB"` IS UNCONFIRMED** — Paul's registration said English (UK) but the Manager
+    check came back with the bracket unfilled. Confirm in WhatsApp Manager before deploying the
+    send path; if it shows plain English, flip the constant in BOTH registries (whatsapp-send.ts +
+    process-whatsapp-queue's mirror) in the same commit.
+  - 🔴 **DEPLOYS HELD: `send-whatsapp-message` + `process-whatsapp-queue` carry the entry in git
+    but are NOT deployed with it** until Paul confirms Meta approval. Until then a button press
+    fails safe with the deployed version's `unknown_template`. Everything else shipped.
+
+---
+
 ## 7. Parked and unmerged — do not merge these
 
 | Branch | Hash |
@@ -1612,6 +1660,10 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   </details>
 - 🟡 **THE QUESTIONNAIRE SPLIT — HALF LANDED 2026-08-11. The REPOINT is live; the two findable-site
   screens are not.** Read this before touching either repo.
+  ✅ **SUPERSEDED 2026-08-13: the split is FULLY BUILT** — findable-site's step 0 is the one
+  pre-pay screen, Q2 runs post-payment, and `complete_q2` exists and is live (D Aston and Fortify
+  both paid through it). The "STILL TO BUILD" list below is history, kept for the reasoning. For
+  the current questionnaire shape (name field, phone confirm, q2_prefill) see §6g.
   - ✅ **DONE AND DEPLOYED: the report's offer button goes through the questionnaire** (`render-audit-report`
     v37). The raw Stripe Payment Link is gone from `founderOffer.ts`; the button is now
     `<origin>/onboarding/<slug>/?lead=<leadId>`, built with the same `onboardingUrl()` the live
