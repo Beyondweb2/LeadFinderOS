@@ -1343,6 +1343,36 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
       → refuse) and `scripts/targeting-straggler.test.ts` drives **720 baseline shapes, including
       `is_market: true`, and asserts none reaches the drop.** Proven separate in live data: 333
       audits, 44 market, 5 baseline, **zero overlap either way**, no market audit with a `lead_id`.
+- 🔴 **THE DUPLICATE-OPENERS INCIDENT (15–17 Aug, fixed 2026-08-18) — 25 duplicate
+  `initial_contact` sends, 11 to phones that had already REPLIED. Read this before touching
+  addLead's dedupe or the queue's guards.**
+  - **Root cause, proven live: the add path, never the send path.** Zero same-lead resends across
+    the whole window — every send guard held. `addLead`'s duplicate check was CLIENT-MEMORY ONLY
+    (name / maps-URL against the hook instance's arrays), and the Coverage add-all pressed it while
+    the instance's async lead fetch was still loading: an EMPTY list read as "no duplicates exist"
+    (absent-value instance thirteen). The proof: the same Birkenhead wave pressed at 04:33 and
+    06:48 re-added all fourteen businesses the first press had inserted, same names, same
+    place_ids. 20 of the 25 dup rows shared the original's place_id; 5 shared only the PHONE
+    (same operator, differently-named listings) — **no name-based check can catch those**.
+  - **Layer 1 (`useOutreach.addLead`): the DATABASE is the dedupe**, in-memory scan demoted to a
+    fast pre-filter. Three keyed reads, first hit wins: place_id → exact phone → exact name;
+    archived rows count. ⛔ **FAILS CLOSED** — a check that errors refuses the add; the open
+    direction is this incident. ⚠️ Pool adds carry NO phone (Places Text Search has no phone
+    field), so add-time phone matching only covers CSV/search adds — which is why layer 2 exists.
+  - **Layer 2 (`process-whatsapp-queue`): the phone-history seatbelt.** `initial_contact` is
+    refused for any normalized number with ANY non-failed `whatsapp_messages` row, whatever lead
+    row it arrives on. Same drop-out-of-the-queue shape as the other guards (the drip never
+    stalls), delivery status `phone_already_contacted`, counted in the status payload
+    (`phoneHistorySkippedCount`) — never silent. `.neq(status,'failed')` mirrors pitchEverSent so
+    a retry of THIS lead's own failed opener passes. **Verified 2026-08-18 by running the deployed
+    predicate (real `toWhatsAppNumber` + the exact query) read-only against live data**: NWL
+    CONSTRUCTION and A-Z Chester (known duplicates) → skip; a clean queued number → pass.
+  - **Cleanup:** the 25 sent-duplicate rows + their 10 unsent queued twins were archived by SQL
+    (guarded `amount_paid is null`), reasons appended to notes. Three duplicates had progressed
+    (NWL replied + report_sent, Taurus Locks report_sent) — the conversation history lives in
+    whatsapp_messages either way; the earlier lead row is the record.
+  - ⚠️ **The lasting rule: a correctness decision must never read a client-side cache that races
+    its own fetch.** The in-memory arrays exist for UX speed only.
 - ✅ **THE EMAIL LANE'S SEO SCAN — "CUT" 2026-08-17, EXCEPT IT WAS ALREADY CUT. Do not re-cut it.**
   Paul asked for the SEO scrape removed from the email outreach flow; recon proved `audit_and_push`
   (the ONLY mechanism that has ever pushed to Instantly — all 25 pushed leads, one job, 2026-08-08)
