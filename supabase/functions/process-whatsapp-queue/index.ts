@@ -311,6 +311,11 @@ Deno.serve(async (req) => {
       .from("outreach_leads").select("id", { count: "exact", head: true })
       .eq("status", "queued").eq("is_archived", false)
       .is("derived_town", null).in("town_fetch_note", [...SETTLED_TOWN_NOTES]);
+    /* The phone-history seatbelt's tally — how many rows it has bounced, ever. Its own count so a
+       skip is never silent (Paul's rule from the duplicate-openers incident, 2026-08-18). */
+    const { count: phoneHistorySkippedCount } = await service
+      .from("outreach_leads").select("id", { count: "exact", head: true })
+      .eq("whatsapp_delivery_status", "phone_already_contacted");
     const { data: stateRow } = await service
       .from("whatsapp_outreach_state").select("next_send_at, paused").eq("id", 1).maybeSingle();
     const nextSendAt: string | null = stateRow?.next_send_at ?? null;
@@ -324,7 +329,10 @@ Deno.serve(async (req) => {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
       queuedCount: queuedCount ?? 0, archivedQueuedCount: archivedQueuedCount ?? 0,
       // Queued leads held back because their town is settled-unverifiable (the town gate).
-      unverifiedQueuedCount: unverifiedQueuedCount ?? 0, nextSendAt, windowOpen, paused,
+      unverifiedQueuedCount: unverifiedQueuedCount ?? 0,
+      // Rows the phone-history seatbelt has bounced (opener refused: number already has a thread).
+      phoneHistorySkippedCount: phoneHistorySkippedCount ?? 0,
+      nextSendAt, windowOpen, paused,
       ukTime: `${String(uk.hour).padStart(2, "0")}:${String(uk.minute).padStart(2, "0")}`,
       // Auto audit_reply rule state: BOTH must be on for the rule to run. Toggle read is
       // defensive (missing column → false), so status works before the SQL has been run.
@@ -791,6 +799,35 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: "suppressed", lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }
 
+    /* ⛔ THE PHONE-HISTORY SEATBELT — built 2026-08-18 after 25 duplicate openers went out
+       (15–17 Aug). The add path created second lead rows for phones already in the CRM (its dedupe
+       raced an in-memory cache), and every per-LEAD guard here correctly saw a fresh lead. This
+       gate is per-PHONE, at the last exit: a cold opener NEVER goes to a number that already has a
+       WhatsApp conversation — whatever lead row it arrives on. 11 of the 25 had already REPLIED.
+       - initial_contact only: every other template is a follow-up whose own guards key on history.
+       - .neq(status,'failed') mirrors pitchEverSent: a failed attempt is not a conversation, so a
+         legitimate retry of THIS lead's own failed opener still passes.
+       - Same drop-out-of-the-queue shape as every guard above (the drip must never stall), with
+         its own delivery status so the row says WHY — counted in the status payload, never silent. */
+    if (templateName === "initial_contact") {
+      const { data: prior } = await service
+        .from("whatsapp_messages")
+        .select("id, lead_id")
+        .eq("phone", toNumber)
+        .neq("status", "failed")
+        .limit(1);
+      if (Array.isArray(prior) && prior.length > 0) {
+        await service.from("outreach_leads").update({
+          status: "not_contacted", whatsapp_delivery_status: "phone_already_contacted", contact_method: null,
+        }).eq("id", lead.id);
+        return json({
+          ok: true,
+          skipped: "phone_already_contacted",
+          reason: `${lead.business_name ?? "That lead"}'s number (+${toNumber}) already has a WhatsApp conversation${(prior[0] as { lead_id?: string | null }).lead_id && (prior[0] as { lead_id?: string | null }).lead_id !== lead.id ? " on another lead row" : ""}. A cold opener never goes to a number we have already messaged — this row is probably a duplicate of the lead that owns the thread.`,
+          lead_id: lead.id, business: lead.business_name, ...statusPayload,
+        }, 200);
+      }
+    }
     // Already-contacted guard: NEVER re-send to a lead that already got a SUCCESSFUL WhatsApp. A UI
     // re-queue (status forced back to 'queued') must not double-send — this is the AUTHORITATIVE server
     // chokepoint (no queue-insert path exists; enqueue is a client UPDATE). Blocks on a REAL prior send
