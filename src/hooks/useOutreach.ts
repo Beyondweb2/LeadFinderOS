@@ -486,6 +486,54 @@ export function useOutreach() {
       return null;
     }
 
+    /* ⛔ THE DATABASE IS THE DEDUPE; THE ARRAYS ABOVE ARE ONLY A FAST PRE-FILTER — fixed
+       2026-08-18 after 25 duplicate cold openers. The in-memory scan races this hook's own async
+       fetch: pressed before the list loads, an EMPTY list read as "no duplicates exist", and the
+       Coverage add-all re-added fourteen Birkenhead businesses inserted two hours earlier (same
+       names, same place_ids). Absence is never an answer — the live table decides.
+       Three cheap keyed reads, first hit wins: place_id (pool adds always carry one; caught 20 of
+       the 25), exact phone (CSV/search adds carry one; the pool's rows do not, which is why the
+       queue's phone-history seatbelt exists as the second layer), then exact name (preserves the
+       pre-filter's semantics). Archived rows count — an archived duplicate is still a duplicate.
+       ⚠️ FAILS CLOSED: if the checks themselves error, the lead is NOT added — a refusal costs one
+       retry; the open direction is this incident. */
+    try {
+      let existing: { id: string; business_name: string; is_archived: boolean | null } | null = null;
+      if (lead.id) {
+        const { data, error: e } = await supabase.from('outreach_leads')
+          .select('id, business_name, is_archived').eq('place_id', lead.id).limit(1).maybeSingle();
+        if (e) throw e;
+        existing = data ?? null;
+      }
+      if (!existing && lead.phone) {
+        const { data, error: e } = await supabase.from('outreach_leads')
+          .select('id, business_name, is_archived').eq('phone', lead.phone).limit(1).maybeSingle();
+        if (e) throw e;
+        existing = data ?? null;
+      }
+      if (!existing) {
+        const { data, error: e } = await supabase.from('outreach_leads')
+          .select('id, business_name, is_archived').eq('business_name', lead.name).limit(1).maybeSingle();
+        if (e) throw e;
+        existing = data ?? null;
+      }
+      if (existing) {
+        if (!silent) toast({
+          title: 'Previously added',
+          description: `${lead.name} is already in your ${existing.is_archived ? 'archive' : 'outreach list'} (as "${existing.business_name}").`,
+          variant: 'destructive',
+        });
+        return null;
+      }
+    } catch {
+      if (!silent) toast({
+        title: 'Could not check for duplicates',
+        description: `${lead.name} was NOT added — the duplicate check itself failed. Try again.`,
+        variant: 'destructive',
+      });
+      return null;
+    }
+
     // Carry over any contact enrichment already found at search time. The
     // enrich-lead cache is keyed by place_id, so these values are free here — no
     // new paid call is made on add. Only copy fields the engine actually set.
