@@ -189,20 +189,29 @@ Happy to fit around you.`;
    re-registered at Meta BY HAND, and this copy updated with it.
    ✅ £19.99 → £49.99 ON 2026-08-12; RE-REGISTRATION AT META CONFIRMED BY PAUL 2026-08-17 — the
    registered body is the £49.99 version and re_engage is cleared for sends.
-   ⚠️ One display-only drift remains: Meta's registered wording says "A few quick questions and
-   we're up and running" where this copy says "Five quick questions and we're started". That
-   affects only what the operator reads in the Inbox, never what the prospect receives. Correct it
-   by pasting the FULL registered body from WhatsApp Manager — do not guess the surrounding
-   wording from the one confirmed sentence. */
+   ✅ SYNCED 2026-08-17 to the registered body Paul pasted character-for-character from WhatsApp
+   Manager — including its single-paragraph shape (no line breaks). If Meta's editor actually
+   shows line breaks that the paste flattened, correct THIS string from the editor, never from
+   memory. */
 const reEngageBody = (b: string, u: string) =>
-  `Hi ${b}, following up on the AI visibility report we sent over.
-We're doing the next ten businesses at £49.99 instead of £99 - we want honest feedback on the work, so that's the trade.
-Five quick questions and we're started: ${u}
-Happy to answer anything first if you'd rather.`;
+  `Hi ${b}, following up on the AI visibility report we sent over. We're doing the next ten businesses at £49.99 instead of £99, in exchange for honest feedback on the work. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
+
+/* payment_recieved — the registered body, pasted character-for-character by Paul from WhatsApp
+   Manager 2026-08-17 (the first time this wording has existed anywhere in the repo). The template
+   KEY keeps Meta's load-bearing misspelling; see the WA_TEMPLATES note. {{1}} = business name;
+   no url, so the claimUrl arg is unused. Sent only by stripe-webhook on payment — deliberately
+   absent from every operator picker. */
+const paymentRecievedBody = (b: string, _u: string) =>
+  `Hi ${b}, payment received, thanks. You're in.
+
+We'll get started and be back to you within a few days to get your Google profile sorted and share your page plan.
+
+Anything in the meantime, just reply here.`;
 
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string) => string> = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
+  payment_recieved: paymentRecievedBody,
   onboarding_followup: onboardingFollowupBody,
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).
