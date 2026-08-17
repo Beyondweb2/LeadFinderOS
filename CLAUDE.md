@@ -1925,9 +1925,15 @@ all deliberately untouched.
   1. **The Stripe Payment Link** (kept for sending manually on WhatsApp) — its amount AND its
      description. A stale amount here means a hand-sent link charges the old price.
   2. **The Meta-registered `re_engage` template.** The string in `_shared/whatsapp-send.ts` is
-     DISPLAY-ONLY — Meta renders the real message from its own copy. Until re-registration lands,
-     a send says £19.99 to the prospect while the Inbox transcript and the checkout say £49.99:
-     **advertised low, charged high, the one direction that produces a complaint.**
+     DISPLAY-ONLY — Meta renders the real message from its own copy.
+     ✅ **THE £19.99 DRIFT IS CLOSED — re-registration CONFIRMED by Paul in WhatsApp Manager,
+     2026-08-17.** The registered body is the £49.99 version; re_engage is cleared for sends.
+     ⚠️ **A smaller display drift replaced it:** Meta's registered wording says "A few quick
+     questions and we're up and running" where the code's Inbox display copy says "Five quick
+     questions and we're started". Affects only what the OPERATOR reads in the transcript, never
+     what the prospect receives. Fix by pasting the full registered body from WhatsApp Manager
+     into `reEngageBody` — do not guess the rest of the wording from the one confirmed sentence.
+     The lasting rule stands: this copy changes at Meta BY HAND whenever the price moves.
 - ⚠️ **THE DASHBOARD FOUNDER TILE WENT 1 → 0 AND NOTHING IS WRONG.** It counts leads whose
   `amount_paid` matches the CURRENT constant within a penny, so RG Locksmiths (£19.99, the only
   payment ever taken) stopped counting the moment the constant moved. No data changed. If that tile
