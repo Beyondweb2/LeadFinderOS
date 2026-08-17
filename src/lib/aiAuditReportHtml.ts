@@ -298,6 +298,26 @@ const SEV_COLOUR: Record<SeoFinding["severity"], string> = { high: "var(--red)",
 
 /** No website at all: say what we will build, in the SEO slot's place. Distinct from a FAILED
  *  scan (has a website, grade unavailable) which still renders nothing rather than pretending. */
+/* HAS A WEBSITE, NOT SCANNED YET — the email lane's audits skip the SEO scan up-front (Paul,
+   2026-08-17: audit_and_push forces skip_seo; the scan runs on engagement instead). This section
+   used to be an EMPTY STRING, which read as the report simply lacking a website opinion. One
+   honest line instead: absence stated as sequencing, never as a gap. Reports render live from
+   stored results, so the moment a scan runs this branch is replaced by the graded panel on the
+   link the prospect already has. */
+function siteCheckPendingSection(): string {
+  return `
+    <!-- WEBSITE NOT SCANNED YET &mdash; the check comes when we start work -->
+    <section class="why" style="border-top:1px solid var(--line)">
+      <div class="sec-eyebrow">Your website</div>
+      <div class="sec-title">Your site&rsquo;s full check comes when we start work.</div>
+      <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.55;color:var(--muted)">
+        This report measures whether AI names you today. When we start work we also run a full
+        technical check of your site &mdash; how well its pages are built for search engines and AI
+        to read &mdash; and fix what it finds as part of the setup.
+      </p>
+    </section>`;
+}
+
 function noWebsiteSection(): string {
   return `
     <!-- NO WEBSITE &mdash; what we will build, where the SEO grade would be -->
@@ -789,7 +809,7 @@ ${gutbox}
          category grades + a radar of the three scores + the lead findings). Renders
          nothing when d.seo is absent, so AI-only audits (e.g. the bar) don't break.
          ============================================================================ -->
-${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : ""}
+${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : siteCheckPendingSection()}
 
     <!-- WHY THIS MATTERS (stakes) -->
     <section class="why">
