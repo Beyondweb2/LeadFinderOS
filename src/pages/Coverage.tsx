@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Loader2, EyeOff, Eye, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,10 +18,10 @@ import {
 import {
   asPence, MARKET_SEARCH_USD, MEASURE_BATCH_CAP, MARKET_AUDIT_QUESTION_COUNT, MARKET_AUDIT_MIN_AUDITS,
   measureAction, auditsToRun, measureRunCost, auditableTargets, poolRowToLead, PLACE_DETAILS_USD,
-  MARKET_AUDIT_STALE_MS,
   type MarketPoolRow,
 } from '@/lib/marketView';
 import { useOutreach } from '@/hooks/useOutreach';
+import { useInFlightMeasures, inFlightKey } from '@/hooks/useInFlightMeasures';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { pickCampaignForTrade, describeCampaignPick } from '@/lib/campaignForTrade';
 import { supabase } from '@/integrations/supabase/client';
@@ -247,7 +247,6 @@ export default function Coverage() {
   type RowFlow =
     | { phase: 'loading' }
     | { phase: 'confirm'; audits: number; estUsd: number }
-    | { phase: 'measuring'; label: string; startedMs: number }
     | { phase: 'blocked'; reason: string }
     | { phase: 'loaded'; targets: MarketPoolRow[]; poolState: string }
     | { phase: 'adding' }
@@ -255,9 +254,37 @@ export default function Coverage() {
   const [rowFlow, setRowFlow] = useState<Record<string, RowFlow>>({});
   const setFlow = (id: string, f: RowFlow | null) =>
     setRowFlow((m) => { const n = { ...m }; if (f) n[id] = f; else delete n[id]; return n; });
-  /* One row measures at a time. Not a spend guard (each measure has its own confirm) — it keeps
-     the sequential-audit rule intact and the page readable. Free reveals are never blocked. */
-  const anyRowMeasuring = Object.values(rowFlow).some((f) => f.phase === 'measuring');
+  /* ── WHAT IS MEASURING RIGHT NOW — derived from live audit state, never stored (Paul's rule,
+     2026-08-17). The hook re-derives on mount and polls every 30s ONLY while non-empty, so the
+     spinner survives navigation, reloads, and measures started from the market panel. The
+     one-at-a-time guard reads THIS list, which makes it truthful across reloads — and lets the
+     disabled button NAME the running market instead of greying out silently. */
+  const { inFlight, refresh: refreshInFlight } = useInFlightMeasures();
+  const inFlightForRow = (townName: string) => inFlight.find((m) => m.key === inFlightKey(trade, townName));
+  /* One measure at a time. Not a spend guard (each measure has its own confirm) -- it keeps the
+     sequential-audit rule intact and the page readable. Free reveals are never blocked. */
+  const anyRowMeasuring = inFlight.length > 0;
+
+  /* ── COMPLETION: when a market LEAVES the in-flight list, its row reveals "Add all" on its own
+     (one free market-view read), and the rung badges catch up. Diffed against the previous list so
+     each finish fires exactly once. */
+  const prevInFlightKeys = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const current = new Set(inFlight.map((m) => m.key));
+    const finished = [...prevInFlightKeys.current].filter((k) => !current.has(k));
+    prevInFlightKeys.current = current;
+    if (!finished.length) return;
+    void refetch();
+    for (const key of finished) {
+      const row = sorted.find((t) => inFlightKey(trade, t.name) === key);
+      if (!row) continue;
+      void (async () => {
+        const view = await fetchMarketView(row.name);
+        if (view) revealLoaded(row.id, view);
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inFlight]);
 
   const { addLead } = useOutreach();
   const { campaigns } = useCampaigns();
@@ -279,12 +306,13 @@ export default function Coverage() {
     const view = await fetchMarketView(townName);
     if (!view) { setFlow(id, { phase: 'blocked', reason: 'could not read this market -- try again or open View' }); return; }
     const completed = view.concentration?.marketAuditsComplete ?? 0;
-    const inFlight = (view.marketProgress ?? []).length;
-    const audits = auditsToRun(measureAction(completed, inFlight));
-    if (audits === 0 && inFlight > 0 && completed < MARKET_AUDIT_MIN_AUDITS) {
-      /* Audits already running (started elsewhere or on a previous visit): re-attach and poll. */
-      setFlow(id, { phase: 'measuring', label: 'measuring (already in flight)...', startedMs: Date.now() });
-      void pollRowUntilMeasured(id, townName, Date.now());
+    const inFlightHere = (view.marketProgress ?? []).length;
+    const audits = auditsToRun(measureAction(completed, inFlightHere));
+    if (audits === 0 && inFlightHere > 0 && completed < MARKET_AUDIT_MIN_AUDITS) {
+      /* Audits already running (started elsewhere or on a previous visit): the in-flight hook owns
+         the spinner from here -- refresh it and clear the transient loading state. */
+      setFlow(id, null);
+      void refreshInFlight();
       return;
     }
     if (audits === 0) { revealLoaded(id, view); return; }   // measured: free, instantly
@@ -292,32 +320,8 @@ export default function Coverage() {
     setFlow(id, { phase: 'confirm', audits, estUsd: measureRunCost(poolFresh, audits) });
   };
 
-  const pollRowUntilMeasured = async (id: string, townName: string, startedMs: number) => {
-    /* The queue drains on ~30-60s ticks and a market audit's measured median is ~6.5 min, so a
-       30s poll is as fast as the truth changes. Free reads only. */
-    while (true) {
-      await new Promise((r) => setTimeout(r, 30_000));
-      if (Date.now() - startedMs > MARKET_AUDIT_STALE_MS + 10 * 60_000) {
-        setFlow(id, { phase: 'blocked', reason: 'still not finished after 30 minutes -- open View for the raw state' });
-        return;
-      }
-      const view = await fetchMarketView(townName);
-      if (!view) continue;
-      const completed = view.concentration?.marketAuditsComplete ?? 0;
-      const inFlight = (view.marketProgress ?? []).length;
-      if (auditsToRun(measureAction(completed, inFlight)) === 0 && inFlight === 0) {
-        revealLoaded(id, view);
-        void refetch();   // the row's rung badge catches up
-        return;
-      }
-      const mins = Math.round((Date.now() - startedMs) / 60000);
-      setFlow(id, { phase: 'measuring', label: `measuring... ${mins}m (usually ~6)`, startedMs });
-    }
-  };
-
   const onConfirmRowMeasure = async (id: string, townName: string) => {
-    const started = Date.now();
-    setFlow(id, { phase: 'measuring', label: 'starting...', startedMs: started });
+    setFlow(id, { phase: 'loading' });
     const r = await startMarketMeasure(townName);
     if (r.kind === 'already_measured') {
       const view = await fetchMarketView(townName);
@@ -326,8 +330,11 @@ export default function Coverage() {
     }
     if (r.kind === 'blocked') { setFlow(id, { phase: 'blocked', reason: r.reason }); return; }
     if (r.started === 0) { setFlow(id, { phase: 'blocked', reason: `refused (${r.stop ?? 'unknown'})` }); return; }
-    setFlow(id, { phase: 'measuring', label: `${r.started} audit${r.started === 1 ? '' : 's'} running...`, startedMs: started });
-    void pollRowUntilMeasured(id, townName, started);
+    /* Audits are away. The in-flight hook owns the spinner and the completion reveal from here --
+       one watcher for every measure, whether it was started on this row, the batch button, the
+       market panel, or a previous visit. */
+    setFlow(id, null);
+    await refreshInFlight();
   };
 
   /* The SAME add loop as the panel's Add-all: same addLead, same campaign resolution, same shared
@@ -441,6 +448,25 @@ export default function Coverage() {
         </div>
       )}
 
+      {/* ── MEASURING NOW — derived from live audit state, shown even when the measuring row is
+          filtered out of view (another region, another trade, or started from the market panel).
+          Nothing here is stored; leaving and returning re-derives it, which is the whole point. */}
+      {inFlight.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-sky-500/40 bg-sky-500/5 px-3 py-2">
+          <span className="text-xs font-semibold text-sky-700 dark:text-sky-400">Measuring now:</span>
+          {inFlight.map((m) => {
+            const mins = Math.max(0, Math.round((Date.now() - m.startedMs) / 60000));
+            return (
+              <span key={m.key} className={`text-xs ${m.stalled ? 'text-amber-600' : 'text-foreground/80'}`}>
+                {m.trade} in {m.town} — {m.questionsDone}/{m.questionsTotal} questions, started {mins}m ago
+                {m.stalled ? ' · stalled — open View for the raw state' : ''}
+              </span>
+            );
+          })}
+          <span className="text-[10px] text-muted-foreground">carries on server-side even if you leave this page</span>
+        </div>
+      )}
+
       <Dialog open={measureConfirmOpen} onOpenChange={setMeasureConfirmOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Measure {unmeasuredBatch.length} market{unmeasuredBatch.length === 1 ? '' : 's'}?</DialogTitle></DialogHeader>
@@ -502,7 +528,9 @@ export default function Coverage() {
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setFlow(rid, null)}>Cancel</Button>
                 <Button onClick={() => void onConfirmRowMeasure(rid, townRow.name)} disabled={anyRowMeasuring || measureBusy}>
-                  Measure · ~{asPence(f.estUsd)}
+                  {anyRowMeasuring
+                    ? `Waiting for ${inFlight[0]?.town ?? 'the running measure'} to finish — one at a time`
+                    : `Measure · ~${asPence(f.estUsd)}`}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -641,6 +669,19 @@ export default function Coverage() {
                         confirm; the spinner stays in place, no navigation. A stray click never
                         spends. */}
                     {(() => {
+                      /* ── THE DERIVED SPINNER FIRST. If this market is in the live in-flight list,
+                          that is the truth whatever session state says -- it survives navigation
+                          and reloads because it is read from the audits themselves. */
+                      const live = inFlightForRow(t.name);
+                      if (live) {
+                        const mins = Math.max(0, Math.round((Date.now() - live.startedMs) / 60000));
+                        return (
+                          <Button variant="ghost" size="sm" className={`h-7 text-xs ${live.stalled ? 'text-amber-600' : ''}`} disabled title={live.stalled ? 'This measure has stopped moving -- open View for the raw state' : 'Measuring -- carries on server-side even if you leave this page'}>
+                            <Loader2 className={`h-3 w-3 mr-1 ${live.stalled ? '' : 'animate-spin'}`} />
+                            {live.stalled ? `stalled at ${live.questionsDone}/${live.questionsTotal}` : `measuring ${live.questionsDone}/${live.questionsTotal} · ${mins}m`}
+                          </Button>
+                        );
+                      }
                       const f = rowFlow[t.id];
                       if (!f) {
                         return (
@@ -655,7 +696,6 @@ export default function Coverage() {
                         );
                       }
                       if (f.phase === 'loading') return <Button variant="ghost" size="sm" className="h-7 text-xs" disabled><Loader2 className="h-3 w-3 animate-spin mr-1" /> reading…</Button>;
-                      if (f.phase === 'measuring') return <Button variant="ghost" size="sm" className="h-7 text-xs" disabled><Loader2 className="h-3 w-3 animate-spin mr-1" /> {f.label}</Button>;
                       if (f.phase === 'adding') return <Button variant="ghost" size="sm" className="h-7 text-xs" disabled><Loader2 className="h-3 w-3 animate-spin mr-1" /> adding…</Button>;
                       if (f.phase === 'added') return <span className="text-xs text-emerald-600 px-2">✓ {f.added} added{f.already ? `, ${f.already} existing` : ''}</span>;
                       if (f.phase === 'blocked') {
