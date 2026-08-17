@@ -8,7 +8,7 @@
    (the eleven-times-recorded absent-value rule).
    ============================================================ */
 import { groupInFlight, inFlightKey } from "../src/lib/inFlightMeasures.ts";
-import { MARKET_AUDIT_STALE_MS } from "../src/lib/marketView.ts";
+import { MARKET_AUDIT_STALE_MS, MEASURE_CONCURRENCY_CAP, measureSlotsLeft } from "../src/lib/marketView.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -68,6 +68,15 @@ ok(groupInFlight([run("r1", "a1", 1000, "complete")], [market("a1", "L", "T")], 
   ok(out.length === 2, "same town, different trades = two separate measures");
   ok(out[0].startedMs <= out[1].startedMs, "sorted oldest first");
 }
+
+console.log("── The concurrency cap — Paul's spec, 2026-08-17 ──");
+ok(MEASURE_CONCURRENCY_CAP >= 2, "the cap permits concurrent measures — 1 would silently reinstate the one-at-a-time lock this shipped to remove");
+ok(measureSlotsLeft(0) === MEASURE_CONCURRENCY_CAP, "idle page offers every slot");
+ok(measureSlotsLeft(MEASURE_CONCURRENCY_CAP - 1) === 1, "one below the cap leaves exactly one slot");
+ok(measureSlotsLeft(MEASURE_CONCURRENCY_CAP) === 0, "at the cap there are zero slots — the button disables and NAMES the running markets");
+ok(measureSlotsLeft(MEASURE_CONCURRENCY_CAP + 3) === 0, "over the cap (panel-started measures can exceed it) still reads zero, never negative");
+ok(measureSlotsLeft(-1) === MEASURE_CONCURRENCY_CAP, "a nonsense negative count is clamped, not amplified");
+ok(measureSlotsLeft(2.9) === measureSlotsLeft(2), "a fractional count floors — a slot is whole or it is not there");
 
 if (f > 0) { console.log(`\n${f} FAILURE${f === 1 ? "" : "S"}`); process.exit(1); }
 console.log("\nALL PASS");

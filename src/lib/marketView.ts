@@ -741,6 +741,20 @@ export const MARKET_ONE_AUDIT_USD = MARKET_AUDIT_QUESTION_COUNT * AUDIT_EST_USD_
  *  EXPLICIT and priced; nothing on Coverage ever measures on navigation (the free-on-click rule). */
 export const MEASURE_BATCH_CAP = 5;
 
+/** How many MARKETS may be mid-measure at once — Paul's spec, 2026-08-17, replacing the
+ *  one-at-a-time guard ("too restrictive for my workflow"). Five is the wave his own morning
+ *  proved: 09:04–09:07 he started five markets a minute apart via the batch button and all twelve
+ *  runs completed cleanly. Eighty queue rows drain in ~5–7 ticks under START_BATCH 12 and the
+ *  24-question Apify ceiling, and the baseline-priority claim in process-ai-audit-queue keeps a
+ *  paying customer's guarantee measurement from ever waiting behind the wave. Tunable; the row and
+ *  batch paths BOTH draw from this one number, so they cannot disagree again. */
+export const MEASURE_CONCURRENCY_CAP = 5;
+
+/** Free measure slots, never negative. The one arithmetic both Coverage paths use. */
+export function measureSlotsLeft(inFlightCount: number): number {
+  return Math.max(0, MEASURE_CONCURRENCY_CAP - Math.max(0, Math.floor(inFlightCount)));
+}
+
 /** ⛔ THE SERVER OWNS THIS TOO. create-ai-audit refuses a second market audit for the same trade and
  *  town inside this window and returns `market_cooldown`. Client state resets on reload, and
  *  "pressed it repeatedly" almost always means reload-and-press, so a client-side guard is the one

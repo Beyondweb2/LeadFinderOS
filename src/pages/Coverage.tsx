@@ -18,6 +18,7 @@ import {
 import {
   asPence, MARKET_SEARCH_USD, MEASURE_BATCH_CAP, MARKET_AUDIT_QUESTION_COUNT, MARKET_AUDIT_MIN_AUDITS,
   measureAction, auditsToRun, measureRunCost, auditableTargets, poolRowToLead, PLACE_DETAILS_USD,
+  MEASURE_CONCURRENCY_CAP, measureSlotsLeft,
   type MarketPoolRow,
 } from '@/lib/marketView';
 import { useOutreach } from '@/hooks/useOutreach';
@@ -117,9 +118,26 @@ export default function Coverage() {
   const [measureConfirmOpen, setMeasureConfirmOpen] = useState(false);
   const [measureBusy, setMeasureBusy] = useState(false);
   const [measureNote, setMeasureNote] = useState<string | null>(null);
+  /* ── WHAT IS MEASURING RIGHT NOW — derived from live audit state, never stored (Paul's rule,
+     2026-08-17). The hook re-derives on mount and polls every 30s ONLY while non-empty, so the
+     spinner survives navigation, reloads, and measures started from the market panel. The
+     concurrency guard reads THIS list, which makes it truthful across reloads — and lets the
+     disabled button NAME the running markets instead of greying out silently. Declared up here
+     because the batch list below draws from the same slot pool. */
+  const { inFlight, refresh: refreshInFlight } = useInFlightMeasures();
+  /* ⛔ A CAP, NOT A ONE-LOCK — Paul's spec, 2026-08-17: up to MEASURE_CONCURRENCY_CAP markets may
+     measure at once (his own morning wave of five proved the queue absorbs it; the
+     baseline-priority claim in process-ai-audit-queue is the seatbelt for paying customers). Not a
+     spend guard — each measure still has its own confirm. Free reveals are never blocked. */
+  const slotsLeft = measureSlotsLeft(inFlight.length);
+  const atMeasureCap = slotsLeft === 0;
+  /* The batch draws from the SAME slot pool as the row buttons (one rule, no drift): a press takes
+     min(MEASURE_BATCH_CAP, free slots) towns. With the cap full it offers nothing. */
   const unmeasuredBatch = useMemo(
-    () => sorted.filter((t) => !t.suppressed_at && (t.state === 'untouched' || t.state === 'leads')).slice(0, MEASURE_BATCH_CAP),
-    [sorted],
+    () => sorted
+      .filter((t) => !t.suppressed_at && (t.state === 'untouched' || t.state === 'leads'))
+      .slice(0, Math.min(MEASURE_BATCH_CAP, measureSlotsLeft(inFlight.length))),
+    [sorted, inFlight.length],
   );
 
   /* ── THE MARKET-VIEW FETCH, one place. Free: market-view reads stored data only. ── */
@@ -254,16 +272,7 @@ export default function Coverage() {
   const [rowFlow, setRowFlow] = useState<Record<string, RowFlow>>({});
   const setFlow = (id: string, f: RowFlow | null) =>
     setRowFlow((m) => { const n = { ...m }; if (f) n[id] = f; else delete n[id]; return n; });
-  /* ── WHAT IS MEASURING RIGHT NOW — derived from live audit state, never stored (Paul's rule,
-     2026-08-17). The hook re-derives on mount and polls every 30s ONLY while non-empty, so the
-     spinner survives navigation, reloads, and measures started from the market panel. The
-     one-at-a-time guard reads THIS list, which makes it truthful across reloads — and lets the
-     disabled button NAME the running market instead of greying out silently. */
-  const { inFlight, refresh: refreshInFlight } = useInFlightMeasures();
   const inFlightForRow = (townName: string) => inFlight.find((m) => m.key === inFlightKey(trade, townName));
-  /* One measure at a time. Not a spend guard (each measure has its own confirm) -- it keeps the
-     sequential-audit rule intact and the page readable. Free reveals are never blocked. */
-  const anyRowMeasuring = inFlight.length > 0;
 
   /* ── COMPLETION: when a market LEAVES the in-flight list, its row reveals "Add all" on its own
      (one free market-view read), and the rung badges catch up. Diffed against the previous list so
@@ -336,6 +345,49 @@ export default function Coverage() {
     setFlow(id, null);
     await refreshInFlight();
   };
+
+  /* ── FINISHED-WHILE-AWAY REVEAL — Paul's spec item 3, 2026-08-17. Measures that completed in
+     the last two hours greet you with "Add all N targets" on return instead of an idle button.
+     Derived (complete market runs minus in-flight), bounded to a handful of FREE market-view
+     reads, and it reveals only rows that are otherwise idle — it never overwrites a press. Reset
+     per trade so switching trades re-reveals that trade's recent finishes. NOT auto-measuring:
+     reads only, and only for markets that are already measured. */
+  const RECENT_COMPLETED_MS = 2 * 60 * 60 * 1000;
+  const RECENT_REVEAL_MAX = 6;
+  const revealedRecentFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (isLoading || sorted.length === 0) return;
+    if (revealedRecentFor.current === trade) return;
+    revealedRecentFor.current = trade;
+    void (async () => {
+      const since = new Date(Date.now() - RECENT_COMPLETED_MS).toISOString();
+      const { data: runs } = await supabase
+        .from('ai_audit_runs').select('audit_id, status, created_at')
+        .eq('status', 'complete').gte('created_at', since);
+      if (!runs?.length) return;
+      const ids = [...new Set(runs.map((r) => r.audit_id))];
+      const { data: audits } = await supabase
+        .from('ai_audits').select('id, business_type, location_text, is_market').in('id', ids);
+      /* Through unknown: is_market is a hand-migrated column the generated types do not know. */
+      const markets = ((audits ?? []) as unknown as Array<{ id: string; business_type: string | null; location_text: string | null; is_market: boolean | null }>)
+        .filter((a) => a.is_market === true);
+      if (!markets.length) return;
+      const completedKeys = new Set(markets.map((a) => inFlightKey(a.business_type ?? '', a.location_text ?? '')));
+      const inFlightKeys = new Set(inFlight.map((m) => m.key));
+      let budget = RECENT_REVEAL_MAX;
+      for (const t of sorted) {
+        if (budget <= 0) break;
+        const k = inFlightKey(trade, t.name);
+        if (!completedKeys.has(k) || inFlightKeys.has(k) || rowFlow[t.id]) continue;
+        budget--;
+        void (async () => {
+          const view = await fetchMarketView(t.name);
+          if (view) revealLoaded(t.id, view);
+        })();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, sorted.length, trade]);
 
   /* The SAME add loop as the panel's Add-all: same addLead, same campaign resolution, same shared
      poolRowToLead mapping. Adds ONLY -- leads land not_contacted; nothing queued, nothing sent. */
@@ -487,7 +539,8 @@ export default function Coverage() {
             </div>
             <p className="text-[11px] text-muted-foreground">
               Towns run one after another; results land on this page and each market panel as they finish.
-              Capped at {MEASURE_BATCH_CAP} per press.
+              Capped at {MEASURE_BATCH_CAP} per press, minus anything already measuring
+              ({MEASURE_CONCURRENCY_CAP} markets can measure at once).
             </p>
           </div>
           <DialogFooter>
@@ -527,9 +580,9 @@ export default function Coverage() {
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setFlow(rid, null)}>Cancel</Button>
-                <Button onClick={() => void onConfirmRowMeasure(rid, townRow.name)} disabled={anyRowMeasuring || measureBusy}>
-                  {anyRowMeasuring
-                    ? `Waiting for ${inFlight[0]?.town ?? 'the running measure'} to finish — one at a time`
+                <Button onClick={() => void onConfirmRowMeasure(rid, townRow.name)} disabled={atMeasureCap || measureBusy}>
+                  {atMeasureCap
+                    ? `${MEASURE_CONCURRENCY_CAP} already measuring (${inFlight.map((m) => m.town).join(', ')}) — wait for one to finish`
                     : `Measure · ~${asPence(f.estUsd)}`}
                 </Button>
               </DialogFooter>
