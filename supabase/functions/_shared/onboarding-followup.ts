@@ -9,10 +9,16 @@ import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 // that URL, so a broken one spends the warm lead for nothing.
 
 /* THE ORIGIN IS CONFIGURATION, NOT CODE.
-   findable-site currently lives on a pages.dev subdomain and moves to the real domain shortly, so
-   the base is read from the environment. Deliberately NO hardcoded default: a wrong-but-plausible
-   fallback would send working-looking links to the wrong host, which is precisely the silent
-   misfire this task exists to remove. Unset = refuse, with a reason that names the variable.
+   findable-site lives at https://findable.live (its raw pages.dev domain still serves, for links
+   sent before the move), and the base is read from the environment. Deliberately NO hardcoded
+   default: a wrong-but-plausible fallback would send working-looking links to the wrong host,
+   which is precisely the silent misfire this task exists to remove. Unset = refuse, with a reason
+   that names the variable.
+   ⚠️ THE SPA CARRIES ITS OWN COPY (src/config/findableSite.ts — Vite cannot read Supabase
+   secrets). The two drifted once — secret moved 2026-08-03, constant left on pages.dev — and every
+   Inbox-copied link went out unbranded for a fortnight. check-cross-repo-sync.mjs now locks the
+   constant to findable-site's SITE_URL; when the domain ever moves again, change the secret AND
+   run that script.
 
    FINDABLE_SITE_ORIGIN is preferred; FINDABLE_ALLOWED_ORIGINS (already read by findable-checkout for
    its Stripe return URLs, first entry canonical) is accepted as a second source so the two cannot
@@ -71,7 +77,7 @@ export async function resolveOnboardingFollowupVars(service: any, leadId: string
   if (!origin) {
     return {
       ok: false,
-      reason: `The onboarding link base is not configured. Set ${ORIGIN_ENV} (e.g. https://findable-site.pages.dev, no trailing slash).`,
+      reason: `The onboarding link base is not configured. Set ${ORIGIN_ENV} (https://findable.live, no trailing slash).`,
     };
   }
 
