@@ -1343,6 +1343,30 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
       → refuse) and `scripts/targeting-straggler.test.ts` drives **720 baseline shapes, including
       `is_market: true`, and asserts none reaches the drop.** Proven separate in live data: 333
       audits, 44 market, 5 baseline, **zero overlap either way**, no market audit with a `lead_id`.
+- ✅ **THE EMAIL LANE'S SEO SCAN — "CUT" 2026-08-17, EXCEPT IT WAS ALREADY CUT. Do not re-cut it.**
+  Paul asked for the SEO scrape removed from the email outreach flow; recon proved `audit_and_push`
+  (the ONLY mechanism that has ever pushed to Instantly — all 25 pushed leads, one job, 2026-08-08)
+  has forced `skip_seo` since it was built. Verified live: its 9 audits all carry
+  `skipped: seo_scan_not_requested`; the 16 graded scans on emailed leads are OLDER audits from
+  other paths. **There was no code to delete.** What shipped instead (2026-08-17):
+  - **`siteCheckPendingSection`** (`aiAuditReportHtml.ts`): a report for a business WITH a website
+    but no scan used to render NOTHING in the website slot; it now states the sequencing ("full
+    check comes when we start work"). `scripts/report-seo-absent.test.ts` pins all three branches.
+    Reports render live, so a later scan replaces the line with the graded panel on the SAME link.
+    Only edge importer of that file: `render-audit-report` (re-walked 2026-08-17 — the §4 list
+    naming send-whatsapp-message/run-seo-scan was stale).
+  - **Scan on engagement, manual, priced on its face** from the sync-guarded `SEO_SCAN_USD`
+    (real billed band $0.02–0.08; the $0.12 usage rows are the fallback echo, not billing):
+    AiAudit's existing button now shows "· ~4p", and `LeadSiteCheckButton` on the lead card renders
+    ONLY for a replied-or-beyond lead with a real website (isAggregatorUrl) whose completed audit
+    lacks a scan — so it can never re-invite up-front spend across the book.
+  - ⛔ **Auto-scan-on-reply in `poll-instantly-replies` is DEFERRED, Paul's call** — build when
+    replies are routine (zero replies at decision time). The poller today only flips
+    status → replied/bounced; it has no audit or scan logic.
+  - ⚠️ SEO still fires elsewhere ON PURPOSE: wizard singles (no skip control exists in that form),
+    plain bulk `audit` jobs, the WhatsApp auto-audit chain, paid baselines. ~498 scans in the 30
+    days to 2026-08-17. The plain bulk job is the same up-front shape in the WhatsApp lane —
+    flagged to Paul, deliberately not changed.
 - ⛔ **REVIEW REPLIES — RESEARCHED 2026-08-10, DECIDED: BUILD NOTHING. Do not re-run this recon.**
   Nothing in either repo touches the Google Business Profile API today (only Places and Geocoding),
   and nothing should.
