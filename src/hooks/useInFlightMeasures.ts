@@ -68,6 +68,20 @@ export function useInFlightMeasures(): { inFlight: InFlightMeasure[]; refresh: (
 
   /* Load once on mount; keep a 30s interval ONLY while something is measuring. */
   useEffect(() => { void refresh(); }, [refresh]);
+  /* Re-derive when the window comes back into focus (Paul's spec item 4, 2026-08-17): a measure
+     started from the market panel in another tab, or one that finished while this tab was hidden,
+     appears without waiting for a poll that may not even be running (the interval stops at empty).
+     Free — two or three owner reads per focus, only when the user actually returns. */
+  useEffect(() => {
+    const onFocus = () => { void refresh(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') void refresh(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [refresh]);
   useEffect(() => {
     if (inFlight.length === 0) return;
     const t = setInterval(() => { void refresh(); }, POLL_MS);

@@ -348,13 +348,47 @@ Deno.serve(async (req) => {
     // at once makes all questions scrape simultaneously on Apify (ceiling 32) → total drain ≈ the
     // slowest question, not the sum. The per-RUN CAP_USD gate still bounds starts per run.
     let started = 0;
-    const { data: candidates } = await service
-      .from("ai_audit_queue")
+    /* ══ THE BASELINE-PRIORITY CLAIM — Paul's call, 2026-08-17 ═══════════════════════════════════
+       Two-phase CANDIDATE SELECTION, same atomic claim. With 5-market Coverage waves now routine
+       (~80 rows per wave) and the claim previously strict oldest-first, a paying customer's
+       guarantee measurement (RG's ~6 Oct re-measure included) could wait minutes behind
+       prospecting. Baseline rows are therefore selected FIRST each tick, then the remainder fills
+       oldest-first — when no baseline is pending, the fill query IS the previous behaviour,
+       byte-for-byte in effect.
+       ⛔ THE CLAIM ITSELF IS UNCHANGED: one update .in(ids).eq(status,'pending').select(), so two
+       overlapping ticks still cannot double-claim a row. Only which ids are OFFERED changed.
+       ⚠️ Baselines are identified by ai_audits.baseline_target_runs NOT NULL — the same column the
+       straggler rule and the finaliser key on. Two reads rather than an embedded join, per the
+       house rule (bulk-jobs): a wrong relationship name returns rows with the field silently
+       absent, which would read as "no baselines" forever. */
+    const { data: baselineAuditRows } = await service
+      .from("ai_audits")
       .select("id")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(START_BATCH);
-    const candidateIds = (candidates ?? []).map((r: Row) => r.id);
+      .not("baseline_target_runs", "is", null);
+    const baselineAuditIds = ((baselineAuditRows ?? []) as Row[]).map((r) => r.id);
+    const candidateIds: string[] = [];
+    if (baselineAuditIds.length > 0) {
+      const { data: prio } = await service
+        .from("ai_audit_queue")
+        .select("id")
+        .eq("status", "pending")
+        .in("audit_id", baselineAuditIds)
+        .order("created_at", { ascending: true })
+        .limit(START_BATCH);
+      for (const r of (prio ?? []) as Row[]) candidateIds.push(r.id);
+    }
+    if (candidateIds.length < START_BATCH) {
+      const { data: rest } = await service
+        .from("ai_audit_queue")
+        .select("id")
+        .eq("status", "pending")
+        .order("created_at", { ascending: true })
+        .limit(START_BATCH);
+      for (const r of (rest ?? []) as Row[]) {
+        if (candidateIds.length >= START_BATCH) break;
+        if (!candidateIds.includes(r.id)) candidateIds.push(r.id);
+      }
+    }
     if (candidateIds.length > 0) {
       const { data: claimedRows } = await service
         .from("ai_audit_queue")
@@ -363,6 +397,12 @@ Deno.serve(async (req) => {
         .eq("status", "pending") // atomic: only rows STILL pending are claimed + returned
         .select("id, audit_id, run_id, user_id, question, engines, attempts");
       const claimed = (claimedRows ?? []) as Row[];
+      /* ⛔ PRIORITY HOLDS THROUGH THE SLOT HANDOUT TOO. The update returns rows in arbitrary order,
+         and the in-flight headroom below is handed out in iteration order — without this sort, a
+         baseline row could be DEFERRED while a market row two places later took the last Apify
+         slot, which is the exact inversion the two-phase selection exists to prevent. */
+      const baselineIdSet = new Set(baselineAuditIds);
+      claimed.sort((a, b) => Number(baselineIdSet.has(b.audit_id)) - Number(baselineIdSet.has(a.audit_id)));
       for (const r of claimed) touchedRuns.add(r.run_id);
 
       /* ══ TWO GATES, AND THEY MEAN OPPOSITE THINGS ═════════════════════════════════════════

@@ -980,16 +980,49 @@ worst-first, >40% is excluded as already winning, and both exclusions are itemis
     reads (MeasureMarket set the precedent). Polls every 30s ONLY while non-empty. Rows
     self-restore their spinner on return with no press; a market leaving the list auto-reveals
     "Add all N" via one free read; the strip above the table names every in-flight market with
-    progress and age (stalled graded by `MARKET_AUDIT_STALE_MS`); and the one-at-a-time guard +
-    disabled confirm now read this list and NAME the running market instead of greying out
+    progress and age (stalled graded by `MARKET_AUDIT_STALE_MS`); and the concurrency guard +
+    disabled confirm read this list and NAME the running markets instead of greying out
     silently. The per-row market-view polling loop was DELETED — one watcher, not two.
+    (Was a one-at-a-time lock until 2026-08-17 — superseded by the concurrency cap below.)
+  - **CONCURRENT MEASURES + THE BASELINE-PRIORITY CLAIM — built 2026-08-17, Paul's spec, four
+    parts shipped together ("item 2 is the seatbelt for 1/3/4").** He runs 5-market waves
+    routinely now; his own morning wave (5 markets, 12 runs, all complete) proved the queue
+    absorbs it.
+    1. **`MEASURE_CONCURRENCY_CAP = 5`** + `measureSlotsLeft()` (`marketView.ts`, named exports,
+       Paul tunes) — ONE slot pool for the row buttons and the batch. At the cap the row confirm
+       disables and **names every running market**; the batch offers
+       `min(MEASURE_BATCH_CAP, free slots)` towns and its dialog says so. ⛔ Still not a spend
+       guard — every measure keeps its own priced confirm, and free reveals are never blocked.
+    2. **`process-ai-audit-queue` claims baseline rows FIRST each tick** (two-phase CANDIDATE
+       selection: pending rows whose `audit_id` is in `ai_audits.baseline_target_runs NOT NULL`,
+       oldest-first, then fill oldest-first; the atomic
+       `.update().in(ids).eq(status,'pending').select()` claim is UNCHANGED, only which ids are
+       offered changed). The returned `claimed` array is also **sorted baseline-first before the
+       in-flight-headroom handout** — the update returns rows in arbitrary order, and without the
+       sort a baseline could be deferred while a market row took the last Apify slot. ⛔ A paying
+       customer's guarantee measurement (RG's ~6 Oct re-measure) must never queue behind
+       prospecting — that is the whole point. `audit-baseline.ts` untouched. With no baseline
+       pending, the fill query IS the old oldest-first behaviour.
+    3. **Finished-while-away reveal** (Coverage mount, per trade): complete market runs from the
+       last 2h minus in-flight, up to 6 FREE market-view reads → idle rows open on "Add all N
+       targets". Never overwrites a pressed row (`rowFlow` guard), and the live spinner takes
+       render precedence, so a premature reveal self-corrects. Reads only — nothing measured,
+       nothing spent.
+    4. **`useInFlightMeasures` refreshes on window focus/visibility** — a measure started from
+       the market panel in another tab appears without waiting for a poll that may not be
+       running (the interval stops at empty).
+    `scripts/in-flight-measures.test.ts` pins the slot arithmetic, including cap ≥ 2 (the
+    multi-measure contract — 1 would silently reinstate the one-lock) and over-cap clamping to
+    zero (panel-started measures can exceed the cap; the count must never go negative).
   - **"Measure next N unmeasured · up to ~Xp"** (Coverage, `MEASURE_BATCH_CAP = 5`/press): strictly
     sequential towns; per town it re-checks via a FREE market-view read and routes through
     `measureAction` (already-measured → refresh → **0 audits, skipped**), skips fresh-pool searches,
     and applies the ambiguity + zero-businesses gates as SKIPS (batch never overrides a gate —
     overrides live on the panel). Worst case ~22p/market (search + 2 audits). ⛔ **The free-on-click
     rule stays absolute: nothing on Coverage measures on navigation.** Verdict words on Coverage
-    rows and a baseline-priority queue lane were DECLINED 2026-08-15 — do not build them unasked.
+    rows were DECLINED 2026-08-15 — do not build them unasked. (The baseline-priority queue lane
+    was also declined that day, then **explicitly APPROVED and built 2026-08-17** as the seatbelt
+    for concurrent measures — see the concurrency bullet below.)
 - ⚠️ Old-SPA/new-payload overlap is a 10-minute sessionStorage cache (`useMarketView`), same as
   every market-view deploy. Deploy `market-view` BEFORE pushing the SPA.
 
