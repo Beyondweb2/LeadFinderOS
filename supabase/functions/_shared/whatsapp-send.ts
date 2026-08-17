@@ -39,7 +39,7 @@ export function resolveWhatsAppEnv() {
 // campaign path gates those templates on the lead having a share_token; the onboarding link is built
 // from the lead id alone and must NOT be blocked by a missing site. Reusing 'url' would have made
 // onboarding_followup unsendable to exactly the leads it is for.
-export type TemplateVar = "name" | "url" | "trade" | "competitors" | "onboarding_url";
+export type TemplateVar = "name" | "url" | "trade" | "competitors" | "onboarding_url" | "contact_first_name";
 
 /** Approved template allowlist — mirrors process-whatsapp-queue. `vars` is the BODY
  *  variable order for THIS template ({{1}} = vars[0], {{2}} = vars[1], …). The four
@@ -88,6 +88,15 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
      to somebody who has not paid. It lives here (and in the queue's mirror) only because the two
      registries are asserted identical by scripts/re-engage-vars.test.ts. */
   payment_recieved: { lang: "en", vars: ["name"] },
+  /* Nudge to a lead who submitted the pre-pay questionnaire and stalled at payment. TWO variables:
+     {{1}} = the OWNER's first name (first word of outreach_leads.contact_name — a PERSON, the only
+     template that greets one), {{2}} = business name. Registered at Meta by Paul 2026-08-17 as
+     Marketing / English (UK); `lang` must match what Manager actually stored — flip to "en" before
+     the send-path deploy if Manager shows plain English.
+     ⛔ MANUAL SENDS ONLY, ONE PER LEAD, NO OVERRIDE. send-whatsapp-message enforces pitchEverSent
+     with no allow_resend escape — unlike audit_reply, a second "just the payment step left" nudge
+     to the same person is pressure, never service. Paul's rule 2026-08-17. */
+  questionnaire_followup: { lang: "en_GB", vars: ["contact_first_name", "name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -98,6 +107,12 @@ export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
    visibly automated in a message whose whole purpose is to sound like a person. For these,
    an empty name refuses rather than degrades. */
 export const TEMPLATES_NEEDING_REAL_NAME = new Set(["book_call", "re_engage"]);
+
+/* firstNameFrom + the questionnaire_followup body live in src/lib/questionnaireFollowup.ts — a
+   Deno-free module the SPA's preview imports too, so what the operator confirms and what this file
+   sends cannot drift. Re-exported so existing edge imports keep one door. */
+import { firstNameFrom, questionnaireFollowupBody } from "../../../src/lib/questionnaireFollowup.ts";
+export { firstNameFrom, questionnaireFollowupBody };
 
 // Human-readable copies of the Meta-registered template BODIES, purely so the Inbox
 // can show what the barber actually receives (the real wording lives in Meta and is
@@ -208,10 +223,13 @@ We'll get started and be back to you within a few days to get your Google profil
 
 Anything in the meantime, just reply here.`;
 
-export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string) => string> = {
+export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string) => string> = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
   payment_recieved: paymentRecievedBody,
+  /* Body lives in src/lib/questionnaireFollowup.ts (the SPA preview imports the same function);
+     this adapter maps the bodies-map calling convention onto it. */
+  questionnaire_followup: (b, _u, _t, _c, first) => questionnaireFollowupBody(first ?? "", b),
   onboarding_followup: onboardingFollowupBody,
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).
@@ -228,9 +246,9 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
 
 /** Render the display copy of a template body with its variables filled. `trade`/`competitors`
  *  are used only by audit_reply; the other (2-var) bodies ignore them. */
-export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string): string {
+export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string): string {
   const fn = WA_TEMPLATE_BODIES[templateName];
-  return fn ? fn(businessName, claimUrl, trade, competitors) : `[${templateName}]`;
+  return fn ? fn(businessName, claimUrl, trade, competitors, contactFirstName) : `[${templateName}]`;
 }
 
 /** Body params for a template, filled STRICTLY in the template's declared `vars`
@@ -242,7 +260,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; onboardingUrl?: string; templateName?: string },
+  extra?: { trade?: string; competitors?: string; onboardingUrl?: string; templateName?: string; contactName?: string },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -255,6 +273,14 @@ export function templateBodyParams(
       case "url": return claimUrl;
       case "trade": return extra?.trade ?? "";
       case "competitors": return extra?.competitors ?? "";
+      /* The one variable that names a PERSON. "Hi there" or "Hi your business" as a first-name
+         greeting is worse than not sending — throw, same contract as onboarding_url below. Callers
+         check first and return a readable refusal; this stops a forgetful new caller. */
+      case "contact_first_name": {
+        const first = firstNameFrom(extra?.contactName);
+        if (!first) throw new Error("contact_first_name is empty — refusing to send a personal greeting with a placeholder");
+        return first;
+      }
       // Resolved per-lead by resolveOnboardingFollowupVars, which refuses rather than returning a
       // partial — so an empty value here should be unreachable. Throwing rather than sending an
       // empty {{2}} because the entire message is that link: a follow-up without it is spam.
@@ -299,7 +325,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; onboardingUrl?: string },
+  extra?: { trade?: string; competitors?: string; onboardingUrl?: string; contactName?: string },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got

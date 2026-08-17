@@ -44,12 +44,52 @@ Deno.serve(async (req) => {
     if (uErr || !u?.user) return json({ ok: false, error: "Auth required" }, 401);
 
     const body = await req.json().catch(() => ({}));
+    const service = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+
+    /* ── PER-LEAD ANSWERS, for the lead card's Questionnaire section (2026-08-17). ──────────────
+       The LATEST onboarding row for one lead, with EVERY answer — this is the "record page" read
+       the COLS comment below reserves the full questionnaire for. select("*"), the house pattern
+       from findable-onboarding's status action: columns added by later migrations come through
+       when present and are simply absent before the SQL has run — never a hard error.
+       `followup_sent` rides along (has questionnaire_followup ever gone OUT to this lead) so the
+       send button's guard and this fetch are one round trip; derived from whatsapp_messages, the
+       only place counts may come from (CLAUDE.md §6). */
+    const leadId = typeof body.lead_id === "string" ? body.lead_id.trim() : "";
+    if (leadId) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(leadId)) {
+        return json({ ok: false, error: "bad_lead_id" }, 400);
+      }
+      const { data: row, error: rowErr } = await service
+        .from("onboarding_responses")
+        .select("*")
+        .eq("lead_id", leadId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (rowErr) return json({ ok: false, error: rowErr.message }, 500);
+      const { count } = await service
+        .from("onboarding_responses")
+        .select("id", { count: "exact", head: true })
+        .eq("lead_id", leadId);
+      /* Same filter as pitchEverSent (auto-reply-rules.ts) INCLUDING the failed-send exclusion —
+         a failed attempt must not read as "already sent" here while the server guard would allow
+         the retry. The two must agree or the button lies. */
+      const { data: sent } = await service
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("lead_id", leadId)
+        .eq("direction", "outbound")
+        .eq("template_name", "questionnaire_followup")
+        .neq("status", "failed")
+        .limit(1);
+      return json({ ok: true, row: row ?? null, row_count: count ?? (row ? 1 : 0), followup_sent: (sent ?? []).length > 0 });
+    }
+
     /* Clamped. A dashboard card wants the recent ones; an unbounded limit from the client is how a
        card quietly becomes a full table scan. */
     const raw = Number(body.limit);
     const limit = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 100) : 25;
 
-    const service = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
     const { data, error } = await service
       .from("onboarding_responses")
       .select(COLS)

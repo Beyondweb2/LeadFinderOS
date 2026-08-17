@@ -3,12 +3,16 @@ import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/au
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
-// (verify_jwt = false; the static site calls it with the anon apikey only). Three actions:
+// (verify_jwt = false; the static site calls it with the anon apikey only). Actions:
 //
-//   prefill  { lead_id }                 → safe prefill fields for a known lead
-//   submit   { lead_id?, answers{...} }  → save answers; for a KNOWN lead also fire the audit
-//   status   { lead_id, audit_id }       → the audit's report payload when complete
-//                                          (never winnability: not defensible, see auditReport.ts)
+//   prefill     { lead_id }                    → safe prefill fields for a known lead
+//                                                (NEVER phone/email — anyone with a report link can call this)
+//   submit      { lead_id?, answers{...} }     → save answers; for a KNOWN lead also fire the audit
+//   revise      { onboarding_id, ... }         → pre-payment answer changes (refuses paid rows)
+//   q2_prefill  { onboarding_id }              → the lead's phone for the post-payment form (PAID rows only)
+//   complete_q2 { onboarding_id, answers{...} }→ the post-payment save (paid rows only)
+//   status      { lead_id, audit_id }          → the audit's report payload when complete
+//                                                (never winnability: not defensible, see auditReport.ts)
 //
 // COST-TAP LOCKDOWN (this function can trigger Apify/OpenAI spend, so it is deliberately
 // strict — a stranger with a random UUID must get nothing):
@@ -263,6 +267,35 @@ Deno.serve(async (req) => {
       return json({ ok: true, onboarding_id: onboardingId, willing_to_migrate: migrate });
     }
 
+    /* ── q2_prefill ─────────────────────────────────────────────────────────────────────────────
+       One read for the post-payment form: the lead's phone, so the "confirm your number" field
+       arrives filled instead of empty. PAID ROWS ONLY, same authorisation model as complete_q2
+       below: the onboarding id is the capability, and holding the id of a PAID row already grants
+       WRITES there — this read is strictly weaker. Deliberately NOT part of `prefill`, whose
+       comment promises it never exposes phone/email to the public page (that action is callable by
+       anyone holding a report link; this one only by a payer).
+       Returns { ok, phone } — phone null when the row has no lead or the lead has no number, and
+       the form simply asks. Absence is an empty box, never a guess. */
+    if (action === "q2_prefill") {
+      const onboardingId = typeof body.onboarding_id === "string" ? body.onboarding_id : "";
+      if (!UUID_RE.test(onboardingId)) return json({ ok: false, error: "bad_onboarding_id" }, 400);
+      const { data: row } = await service
+        .from("onboarding_responses")
+        .select("id, status, lead_id")
+        .eq("id", onboardingId).maybeSingle();
+      if (!row) return json({ ok: false, error: "unknown_onboarding" }, 404);
+      if (!PAID_OR_BEYOND.has((row.status as string) ?? "") && (row.status as string) !== "paid") {
+        return json({ ok: false, error: "not_paid" }, 403);
+      }
+      let phone: string | null = null;
+      if (row.lead_id) {
+        const { data: lead } = await service
+          .from("outreach_leads").select("phone").eq("id", row.lead_id as string).maybeSingle();
+        phone = (lead as { phone: string | null } | null)?.phone ?? null;
+      }
+      return json({ ok: true, phone });
+    }
+
     /* ── complete_q2 ────────────────────────────────────────────────────────────────────────────
        THE SECOND HALF OF THE SPLIT QUESTIONNAIRE. Pre-payment now asks two things (consent and a
        contact email); everything delivery needs is collected HERE, after the money has landed.
@@ -342,6 +375,16 @@ Deno.serve(async (req) => {
         gbp_exists: typeof a.gbp_exists === "string" && GBP_EXISTS.has(a.gbp_exists) ? a.gbp_exists : null,
         gbp_status: typeof a.gbp_status === "string" && GBP_STATUS.has(a.gbp_status) ? a.gbp_status : null,
         gbp_verified: typeof a.gbp_verified === "string" && GBP_VERIFIED.has(a.gbp_verified) ? a.gbp_verified : null,
+        /* The one number they want customers calling — used verbatim on directory registrations at
+           delivery. Loosely validated (7+ digits among phone punctuation): a wrongly-formatted
+           number the owner typed is still delivery information, and the form is the courtesy gate.
+           CLIENT-required, deliberately NOT in the missing_required 400 above: nothing automated
+           depends on it (the baseline waits on town+services only), and a hard server gate would
+           brick every Q2 submit from a site bundle published before the field existed. */
+        confirmed_phone: (() => {
+          const p = clip(a.confirmed_phone, 40);
+          return p && (p.match(/\d/g) ?? []).length >= 7 && /^[+0-9][0-9 ()./-]*$/.test(p) ? p : null;
+        })(),
         updated_at: new Date().toISOString(),
       };
 
@@ -360,6 +403,7 @@ Deno.serve(async (req) => {
         "website_platform_other", "website_platform", "willing_to_migrate",
         "gbp_verified", "gbp_consent", "gbp_exists", "gbp_status",
         "must_not_say", "photos_status", "competitor_name", "accreditations",
+        "confirmed_phone",
       ];
       let payload = { ...q2 };
       let res = await service.from("onboarding_responses").update(payload).eq("id", onboardingId);
@@ -473,6 +517,10 @@ Deno.serve(async (req) => {
         // The only question here that can embarrass us publicly. Far cheaper to know before we write
         // the pages than to correct after they are published.
         must_not_say: clip(a.must_not_say, 2000),
+        /* The owner's name, asked on the pre-pay screen since 2026-08-17. Feeds directory
+           registrations at delivery and the questionnaire_followup greeting ({{1}} = first word,
+           derived at send time, never stored separately). */
+        contact_name: clip(a.contact_name, 120),
         photos_status: photosStatus,
         contact_email: contactEmail,
         business_name: clip(a.business_name, 200),
@@ -489,7 +537,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -505,7 +553,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "business_address"];
+        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "business_address"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
@@ -576,6 +624,21 @@ Deno.serve(async (req) => {
             // and the column was checked for empty strings before this shipped (none).
             .is("email", null);
         } catch { /* non-fatal — onboarding_responses.contact_email is the source of truth */ }
+      }
+
+      /* THE OWNER'S NAME, same convention as the email above: a name the owner typed themselves
+         fills an EMPTY column but never overwrites one — an operator's hand-entered note
+         ("Ronnie — ask for Sharon") beats a form field. The onboarding row keeps the submitted
+         value regardless, so both survive. Checked before shipping: contact_name was NULL on every
+         lead (0 non-null, 0 blank strings), so .is(null) is the correct narrow form here too. */
+      const submittedName = clip(a.contact_name, 120);
+      if (submittedName) {
+        try {
+          await service.from("outreach_leads")
+            .update({ contact_name: submittedName })
+            .eq("id", leadId)
+            .is("contact_name", null);
+        } catch { /* non-fatal — onboarding_responses.contact_name is the source of truth */ }
       }
 
       // An incomplete submission stops here: there is no confirmed area to audit against, and
