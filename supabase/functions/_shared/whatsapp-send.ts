@@ -187,13 +187,13 @@ Happy to fit around you.`;
    against findable-site — but it cannot reach a string inside a Meta-registered template, exactly
    like the Stripe payment-link description in §6. Change the price and this template has to be
    re-registered at Meta BY HAND, and this copy updated with it.
-   ⛔ £19.99 → £49.99 ON 2026-08-12, AND UNTIL PAUL RE-REGISTERS IT AT META THIS STRING IS THE ONLY
-   HALF THAT HAS CHANGED. Meta renders the real message from its own copy, so a send made before the
-   re-registration lands still says £19.99 to the prospect while the Inbox transcript and the
-   checkout both say £49.99 — advertised low, charged high, which is the one direction that produces
-   a complaint. The number changed here and NOWHERE ELSE in this body, deliberately: a minimal diff
-   is the version most likely to clear Meta review unchanged, and re-approval is the gate on the two
-   halves agreeing again. */
+   ✅ £19.99 → £49.99 ON 2026-08-12; RE-REGISTRATION AT META CONFIRMED BY PAUL 2026-08-17 — the
+   registered body is the £49.99 version and re_engage is cleared for sends.
+   ⚠️ One display-only drift remains: Meta's registered wording says "A few quick questions and
+   we're up and running" where this copy says "Five quick questions and we're started". That
+   affects only what the operator reads in the Inbox, never what the prospect receives. Correct it
+   by pasting the FULL registered body from WhatsApp Manager — do not guess the surrounding
+   wording from the one confirmed sentence. */
 const reEngageBody = (b: string, u: string) =>
   `Hi ${b}, following up on the AI visibility report we sent over.
 We're doing the next ten businesses at £49.99 instead of £99 - we want honest feedback on the work, so that's the trade.
