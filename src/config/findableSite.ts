@@ -17,7 +17,13 @@ import { slugifyBusinessName } from "@/lib/reportSlug";
  *
  * No trailing slash — the helpers below add the path.
  */
-export const FINDABLE_SITE_ORIGIN = "https://findable-site.pages.dev";
+/* ⛔ https://findable.live SINCE 2026-08-17. The server half (the Supabase secret) moved to the
+   real domain around 2026-08-03 and this constant was left behind — so every Inbox-copied link
+   went out on the raw pages.dev domain, reading like a scam link to prospects, while template
+   sends went out branded. The two halves are now LOCKED by scripts/check-cross-repo-sync.mjs,
+   which asserts this constant equals findable-site's own SITE_URL — run it before changing
+   either. */
+export const FINDABLE_SITE_ORIGIN = "https://findable.live";
 
 /**
  * The sign-up link for ONE lead. `?lead=<uuid>` is what makes the flow recognise them: it drives

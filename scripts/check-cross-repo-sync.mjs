@@ -58,6 +58,20 @@ const PAIRS = [
     theirs: { file: path.join(SITE, 'site.ts'), name: 'SETUP_PRICE_GBP' },
     why: 'The site DISPLAYS this and findable-checkout CHARGES it. A mismatch means the screen says one number and the card is charged another.',
   },
+  {
+    /* ⛔ THIS PAIR DRIFTED IN PRODUCTION FOR A FORTNIGHT (2026-08-03 → 2026-08-17). The server half
+       (the FINDABLE_SITE_ORIGIN Supabase secret) moved to https://findable.live while the SPA's
+       constant stayed on the raw pages.dev domain — so template-sent onboarding links went out
+       branded and Inbox-copied ones went out looking like scam links, interleaved, to real
+       prospects. The secret itself cannot be read from a script; findable-site's own SITE_URL is
+       the same fact in checkable form, so the SPA constant is anchored to THAT. When the domain
+       ever moves: change the secret, change site.ts, and this check forces the SPA constant along. */
+    what: 'the onboarding link origin',
+    kind: 'string',
+    mine: { file: path.join(HERE, '..', 'src', 'config', 'findableSite.ts'), name: 'FINDABLE_SITE_ORIGIN' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'SITE_URL' },
+    why: 'The Inbox copy button and the link card build onboarding URLs from the SPA constant; the site knows its own canonical origin. A mismatch sends prospects unbranded pages.dev links that read as scams.',
+  },
 ];
 
 function read(file, name, kind) {
