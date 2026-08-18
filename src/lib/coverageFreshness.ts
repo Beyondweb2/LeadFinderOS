@@ -38,6 +38,16 @@
  */
 export const coverageQueryKey = (userId: string | undefined) => ['coverage', userId] as const;
 
+/**
+ * The key for the STATIC town list, split from the dynamic pairs above (2026-08-19).
+ *
+ * ⛔ A SEPARATE KEY SO A LEAD-ADD DOES NOT REFETCH 733 TOWNS. useOutreach invalidates
+ * `coverageQueryKey` (the pairs) when the lead list changes; the towns are ONS data that only move on
+ * a reseed or a suppression, so they hard-cache (staleTime Infinity) and returning to Coverage after
+ * adding a lead re-reads only the small pairs. Suppression writes patch THIS cache directly.
+ */
+export const coverageTownsQueryKey = (userId: string | undefined) => ['coverage-towns', userId] as const;
+
 /** Only the fields that can move a town between coverage rungs. */
 export interface CoverageRelevantLead {
   is_archived?: boolean | null;

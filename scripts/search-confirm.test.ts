@@ -39,7 +39,7 @@ const panelOpens = (intent: boolean, view: { concentration?: { audits?: number }
   openArrivalSearchConfirm(intent, auditsInView(view));
 
 const facts = (o: Partial<CoverageFacts> = {}): CoverageFacts => ({
-  measuredPairs: o.measuredPairs ?? new Set(),
+  measuredCounts: o.measuredCounts ?? new Map(),
   leadPairs: o.leadPairs ?? new Set(),
   workedPairs: o.workedPairs ?? new Set(),
 });
@@ -107,7 +107,7 @@ console.log("\n── END TO END, THE FOUR RUNGS, CLICK TO DIALOG ──");
   const cases: { label: string; facts: CoverageFacts; audits: number; expectDialog: boolean }[] = [
     { label: "untouched town, empty market", facts: facts(), audits: 0, expectDialog: true },
     { label: "leads in the CRM, nothing measured", facts: facts({ leadPairs: new Set([k]) }), audits: 0, expectDialog: true },
-    { label: "measured town (16 audits)", facts: facts({ measuredPairs: new Set([k]) }), audits: 16, expectDialog: false },
+    { label: "measured town (16 audits)", facts: facts({ measuredCounts: new Map([[k, 2]]) }), audits: 16, expectDialog: false },
     { label: "worked town (16 audits)", facts: facts({ workedPairs: new Set([k]) }), audits: 16, expectDialog: false },
   ];
   for (const c of cases) {

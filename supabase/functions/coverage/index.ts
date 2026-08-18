@@ -94,70 +94,95 @@ Deno.serve(async (req) => {
       return json({ ok: true, town: updated });
     }
 
-    if (action !== "view") return json({ ok: false, error: `unknown action "${action}"` }, 400);
+    /* ── THREE READ ACTIONS ───────────────────────────────────────────────────────────────────
+       `view` returns everything (kept for back-compat during a deploy — an older SPA still calls it).
+       `towns` and `pairs` are the split the SPA now uses: the static 733-town list hard-caches on the
+       client, the dynamic pairs sit on the key a lead-add invalidates, and the two fire in parallel.
+       Splitting a 3-second sequential read that a lead-add refetched in full — CLAUDE.md §6c. */
+    if (action !== "view" && action !== "towns" && action !== "pairs") {
+      return json({ ok: false, error: `unknown action "${action}"` }, 400);
+    }
 
     /* ── THE CANDIDATE LIST ───────────────────────────────────────────────────────────────────
        Suppressed rows are RETURNED, flagged, not filtered out. The page hides them by default and
        can show them — a list you cannot see the exclusions from is a list you cannot correct. */
-    const towns = await all((from, to) => service
+    const loadTowns = () => all((from, to) => service
       .from("uk_towns").select("id, name, region, county, population, suppressed_at, suppressed_reason")
       .order("population", { ascending: false }).range(from, to));
 
     /* ── THE FACTS, ONE QUERY PER SOURCE ─────────────────────────────────────────────────────── */
+    const computePairs = async () => {
+      /* MEASURED: market audits with a COMPLETED run, sent ONE ENTRY PER AUDIT. The client counts
+         them per canonical trade+town and calls a town measured only at >= MARKET_AUDIT_MIN_AUDITS —
+         so the row and the market panel agree, and case-drift (Locksmiths vs locksmiths) folds on the
+         client where coverageKey lives. Counting audits rather than runs is deliberate: 2 audits with
+         1 completed run between them is ONE completed audit, half a measurement (CLAUDE.md §8). */
+      const marketAudits = await all((from, to) => service
+        .from("ai_audits").select("id, business_type, location_text")
+        .eq("user_id", userId).eq("is_market", true).range(from, to));
+      const marketIds = marketAudits.map((a) => String(a.id));
+      const completed = new Set<string>();
+      for (let i = 0; i < marketIds.length; i += 150) {
+        const chunk = marketIds.slice(i, i + 150);
+        if (!chunk.length) continue;
+        const { data } = await service.from("ai_audit_runs")
+          .select("audit_id").in("audit_id", chunk).in("status", ["complete", "capped"]);
+        for (const r of (data ?? []) as Array<{ audit_id: string }>) completed.add(String(r.audit_id));
+      }
+      const measured: Pair[] = marketAudits
+        .filter((a) => completed.has(String(a.id)))
+        .map((a) => ({ trade: String(a.business_type ?? ""), town: String(a.location_text ?? "") }));
 
-    /* MEASURED: a market audit with at least one COMPLETED run. Counting audits rather than
-       completed runs is the degenerate case CLAUDE.md records — 2 market audits with 1 completed
-       run between them is ONE measurement, and calling that town measured twice over would put it
-       on the done pile having asked half the questions. */
-    const marketAudits = await all((from, to) => service
-      .from("ai_audits").select("id, business_type, location_text")
-      .eq("user_id", userId).eq("is_market", true).range(from, to));
-    const marketIds = marketAudits.map((a) => String(a.id));
-    const completed = new Set<string>();
-    for (let i = 0; i < marketIds.length; i += 150) {
-      const chunk = marketIds.slice(i, i + 150);
-      if (!chunk.length) continue;
-      const { data } = await service.from("ai_audit_runs")
-        .select("audit_id").in("audit_id", chunk).in("status", ["complete", "capped"]);
-      for (const r of (data ?? []) as Array<{ audit_id: string }>) completed.add(String(r.audit_id));
+      /* LEADS and WORKED, from one read of outreach_leads.
+         ⛔ THE TOWN IS derived_town FIRST. search_location is the town SEARCHED, and a radius search
+         pulls in businesses from another county — 31 of 44 measurable audits were >10km from the town
+         they asked about. Keying coverage off the searched town would credit work in a town where no
+         business actually is. */
+      const leads = await all((from, to) => service
+        .from("outreach_leads")
+        .select("id, search_keyword, category, search_location, derived_town, status, whatsapp_sent_at, instantly_pushed_at, last_outreach_attempt_at")
+        .eq("user_id", userId).eq("is_archived", false).range(from, to));
+
+      const leadPairs: Pair[] = [];
+      const workedPairs: Pair[] = [];
+      for (const l of leads) {
+        const trade = String(l.search_keyword || l.category || "").trim();
+        const town = String(l.derived_town || l.search_location || "").trim();
+        if (!trade || !town) continue;
+        const pair = { trade, town };
+        leadPairs.push(pair);
+        /* ⛔ CONTACTED IS A POSITIVE TEST ON EVIDENCE OF A SEND, not "status is not new". Statuses are
+           operator-editable and a list of the ones that mean untouched would go stale the moment one
+           was added — the absent-value shape CLAUDE.md records six times. A timestamp is a fact.
+           `report_sent` is included because a report going out IS the outreach on the email path. */
+        const contacted = !!l.whatsapp_sent_at || !!l.instantly_pushed_at || !!l.last_outreach_attempt_at
+          || String(l.status ?? "") === "report_sent";
+        if (contacted) workedPairs.push(pair);
+      }
+      return { measured, leads: leadPairs, worked: workedPairs };
+    };
+
+    if (action === "towns") {
+      const towns = await loadTowns();
+      return json({ ok: true, towns, counts: { towns: towns.length } });
     }
-    const measured: Pair[] = marketAudits
-      .filter((a) => completed.has(String(a.id)))
-      .map((a) => ({ trade: String(a.business_type ?? ""), town: String(a.location_text ?? "") }));
-
-    /* LEADS and WORKED, from one read of outreach_leads.
-       ⛔ THE TOWN IS derived_town FIRST. search_location is the town SEARCHED, and a radius search
-       pulls in businesses from another county — 31 of 44 measurable audits were >10km from the town
-       they asked about. Keying coverage off the searched town would credit work in a town where no
-       business actually is. */
-    const leads = await all((from, to) => service
-      .from("outreach_leads")
-      .select("id, search_keyword, category, search_location, derived_town, status, whatsapp_sent_at, instantly_pushed_at, last_outreach_attempt_at")
-      .eq("user_id", userId).eq("is_archived", false).range(from, to));
-
-    const leadPairs: Pair[] = [];
-    const workedPairs: Pair[] = [];
-    for (const l of leads) {
-      const trade = String(l.search_keyword || l.category || "").trim();
-      const town = String(l.derived_town || l.search_location || "").trim();
-      if (!trade || !town) continue;
-      const pair = { trade, town };
-      leadPairs.push(pair);
-      /* ⛔ CONTACTED IS A POSITIVE TEST ON EVIDENCE OF A SEND, not "status is not new". Statuses are
-         operator-editable and a list of the ones that mean untouched would go stale the moment one
-         was added — the absent-value shape CLAUDE.md records six times. A timestamp is a fact.
-         `report_sent` is included because a report going out IS the outreach on the email path. */
-      const contacted = !!l.whatsapp_sent_at || !!l.instantly_pushed_at || !!l.last_outreach_attempt_at
-        || String(l.status ?? "") === "report_sent";
-      if (contacted) workedPairs.push(pair);
+    if (action === "pairs") {
+      const pairs = await computePairs();
+      return json({
+        ok: true,
+        pairs,
+        counts: { measured: pairs.measured.length, leads: pairs.leads.length, worked: pairs.worked.length },
+      });
     }
 
+    /* action === "view" — everything, for an older SPA mid-deploy. */
+    const [towns, pairs] = await Promise.all([loadTowns(), computePairs()]);
     return json({
       ok: true,
       towns,
-      pairs: { measured, leads: leadPairs, worked: workedPairs },
+      pairs,
       /* So the page can say what it is looking at without a second call. */
-      counts: { towns: towns.length, measured: measured.length, leads: leadPairs.length, worked: workedPairs.length },
+      counts: { towns: towns.length, measured: pairs.measured.length, leads: pairs.leads.length, worked: pairs.worked.length },
     });
   } catch (e) {
     console.error("[coverage] error:", (e as Error).message);

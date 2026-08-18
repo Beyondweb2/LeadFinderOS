@@ -7,11 +7,12 @@
        driving instructors, and a per-town status would have to be wrong about one of them
    ============================================================ */
 import {
-  coverageStateFor, coverageKey, coverageTownKey, summarise, applyFilters,
+  coverageStateFor, coverageKey, coverageTownKey, summarise, applyFilters, countMeasuredByPair,
   COVERAGE_STATES, applySuppressionPatch, type CoverageRow, type CoverageFacts, type CoverageTown,
   type SuppressibleTown,
 } from "../src/lib/coverageState.ts";
 import { TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX, TOWN_SEED_MIN, TOWN_SEED_MAX } from "../src/lib/trades.ts";
+import { MARKET_AUDIT_MIN_AUDITS } from "../src/lib/marketAuditThreshold.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -19,10 +20,12 @@ const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" :
 const town = (name: string, region: string | null = "East of England", population: number | null = 30000): CoverageTown =>
   ({ id: name, name, region, population });
 const facts = (o: Partial<CoverageFacts> = {}): CoverageFacts => ({
-  measuredPairs: o.measuredPairs ?? new Set(),
+  measuredCounts: o.measuredCounts ?? new Map(),
   leadPairs: o.leadPairs ?? new Set(),
   workedPairs: o.workedPairs ?? new Set(),
 });
+/** A pair measured to the full bar (>= MARKET_AUDIT_MIN_AUDITS completed audits). */
+const measuredAt = (key: string): Map<string, number> => new Map([[key, MARKET_AUDIT_MIN_AUDITS]]);
 
 console.log("── THE LADDER, RUNG BY RUNG ──");
 {
@@ -30,10 +33,50 @@ console.log("── THE LADDER, RUNG BY RUNG ──");
   ok(coverageStateFor("locksmiths", wisbech, facts()) === "untouched", "nothing known -> untouched");
   ok(coverageStateFor("locksmiths", wisbech, facts({ leadPairs: new Set([coverageKey("locksmiths", "Wisbech")]) })) === "leads",
     "leads in the CRM -> leads found");
-  ok(coverageStateFor("locksmiths", wisbech, facts({ measuredPairs: new Set([coverageKey("locksmiths", "Wisbech")]) })) === "measured",
-    "a completed market audit -> measured");
+  ok(coverageStateFor("locksmiths", wisbech, facts({ measuredCounts: measuredAt(coverageKey("locksmiths", "Wisbech")) })) === "measured",
+    "two completed market audits -> measured");
   ok(coverageStateFor("locksmiths", wisbech, facts({ workedPairs: new Set([coverageKey("locksmiths", "Wisbech")]) })) === "worked",
     "somebody contacted -> worked");
+}
+
+console.log("\n── ⛔ MEASURED NEEDS THE PANEL'S BAR (BUG-2, 2026-08-19) ──");
+/* Coverage's row used to say "Measured" at ONE completed audit while the panel needs two, so View
+   on a 1-audit town looked like it re-ran the audit. The row and the panel now share one constant. */
+{
+  const wisbech = town("Wisbech");
+  const k = coverageKey("locksmiths", "Wisbech");
+  /* One completed audit is NOT measured — it falls to whatever lower rung applies. */
+  ok(coverageStateFor("locksmiths", wisbech, facts({ measuredCounts: new Map([[k, 1]]) })) === "untouched",
+    "one completed market audit is NOT measured (half a measurement)");
+  ok(coverageStateFor("locksmiths", wisbech,
+      facts({ measuredCounts: new Map([[k, 1]]), leadPairs: new Set([k]) })) === "leads",
+    "  and a 1-audit town with leads shows as leads, never Measured");
+  /* The full bar is measured. */
+  ok(coverageStateFor("locksmiths", wisbech, facts({ measuredCounts: new Map([[k, MARKET_AUDIT_MIN_AUDITS]]) })) === "measured",
+    `${MARKET_AUDIT_MIN_AUDITS} completed audits -> measured`);
+  ok(coverageStateFor("locksmiths", wisbech, facts({ measuredCounts: new Map([[k, MARKET_AUDIT_MIN_AUDITS + 5]]) })) === "measured",
+    "  and re-measuring (more audits) stays measured");
+}
+
+console.log("\n── ⛔ THE COUNT FOLDS CASE-DRIFT ON THIS SIDE (real Eastbourne case) ──");
+/* The endpoint sends one entry per completed audit, raw. Two sibling audits typed 'Locksmiths' and
+   'locksmiths' are ONE 2-audit market, and counting through coverageKey is what folds them — a raw
+   server count would split them into two 1-audit halves and call the market unmeasured. */
+{
+  const counts = countMeasuredByPair([
+    { trade: "Locksmiths", town: "Eastbourne" },
+    { trade: "locksmiths", town: "Eastbourne" },
+  ]);
+  ok(counts.get(coverageKey("locksmiths", "Eastbourne")) === 2, "Locksmiths + locksmiths fold to one 2-audit market");
+  ok(coverageStateFor("locksmiths", town("Eastbourne"), facts({ measuredCounts: counts })) === "measured",
+    "  so the drifted market reads Measured, not two unmeasured halves");
+  /* One audit of each of two different towns must NOT combine into a measurement. */
+  const split = countMeasuredByPair([
+    { trade: "locksmiths", town: "Eastbourne" },
+    { trade: "locksmiths", town: "Hastings" },
+  ]);
+  ok(split.get(coverageKey("locksmiths", "Eastbourne")) === 1 && split.get(coverageKey("locksmiths", "Hastings")) === 1,
+    "one audit each of two towns stays 1 and 1, never merged");
 }
 
 console.log("\n── ⛔ PER TRADE AND TOWN, NOT PER TOWN ──");
@@ -52,7 +95,7 @@ console.log("\n── ⛔ THE FURTHEST RUNG WINS, AND THE COUNTS STILL SUM ─�
    "6 of 87" meaningless because the columns would double-count. */
 {
   const k = coverageKey("locksmiths", "Wisbech");
-  const all = facts({ workedPairs: new Set([k]), measuredPairs: new Set([k]), leadPairs: new Set([k]) });
+  const all = facts({ workedPairs: new Set([k]), measuredCounts: measuredAt(k), leadPairs: new Set([k]) });
   ok(coverageStateFor("locksmiths", town("Wisbech"), all) === "worked", "a town at every rung shows as worked");
   const rows: CoverageRow[] = [
     { ...town("Wisbech"), state: "worked" },
