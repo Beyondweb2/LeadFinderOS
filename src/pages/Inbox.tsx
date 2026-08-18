@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { PUBLIC_SITE_ORIGIN } from '@/config/publicSite';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
 import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
+import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
 import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
@@ -167,6 +168,10 @@ const Inbox = () => {
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
   const navigate = useNavigate();
   const [sendingNow, setSendingNow] = useState(false);
+  // Which lead's full-detail overlay is open (null = none). The rich dialog is the SAME component
+  // Outreach uses — see LeadDetailFromInbox. Inbox-only tools (auto-reply toggle, send-window,
+  // template state) are untouched and sit alongside it.
+  const [detailLeadId, setDetailLeadId] = useState<string | null>(null);
 
   // Admin "Send now": force the next queued WhatsApp message to send immediately,
   // SKIPPING ONLY the pacing wait (send_now). It still respects pause, the daily cap
@@ -821,9 +826,11 @@ const Inbox = () => {
                       <ExternalLink className="h-4 w-4" />
                     </a>
                   )}
-                  {/* Jump to this lead's row on the Outreach page (reuses the launch pattern). */}
+                  {/* FULL LEAD DETAILS — opens the SAME rich dialog Outreach uses, as an overlay
+                      over Inbox (audit, questionnaire, business info, mark-paid). No navigation:
+                      the whole point is to see everything without leaving the thread. */}
                   {active.leadId && (
-                    <button type="button" onClick={() => navigate('/outreach', { state: { launch: { leadId: active.leadId, channel: 'open' } } })} title="Open this lead on the Outreach page" aria-label="Jump to Outreach" className={HEADER_ICON_BTN}>
+                    <button type="button" onClick={() => setDetailLeadId(active.leadId)} title="Open full lead details" aria-label="Open full lead details" className={HEADER_ICON_BTN}>
                       <ListChecks className="h-4 w-4" />
                     </button>
                   )}
@@ -1051,6 +1058,16 @@ const Inbox = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* THE RICH LEAD DIALOG, over Inbox. Same LeadDetailDialog as Outreach (one component, no
+          fork); the wrapper mounts useOutreach only while open and reflects a status change back
+          onto Inbox's own pill via patchLeadStatus, so the two pages never disagree. */}
+      <LeadDetailFromInbox
+        leadId={detailLeadId}
+        open={!!detailLeadId}
+        onOpenChange={(o) => { if (!o) setDetailLeadId(null); }}
+        onStatusPatched={patchLeadStatus}
+      />
     </div>
   );
 };
