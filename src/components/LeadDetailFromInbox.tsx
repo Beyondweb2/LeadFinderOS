@@ -101,6 +101,8 @@ function LeadDetailFromInboxInner({ leadId, onOpenChange, onStatusPatched }: {
       // Matches OutreachTable's own mount when no campaign sale-type map is to hand — the dialog
       // treats null as "use the plain default" on mark-paid.
       campaignDefaultSaleType={null}
+      // Mounted over Inbox → the cockpit hides its own "Go to Inbox conversation" (you're here).
+      context="inbox"
     />
   );
 }
