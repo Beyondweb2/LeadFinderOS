@@ -414,6 +414,31 @@ Facts with numbers. These are measured, and several contradict the older docs.
   question filters. **The operator path hard-caps at WIZARD_MAX_QUESTIONS (5)** — a longer set
   must be split across runs (23+24 was 5+4) or go through the internal baseline branch, which is
   unreachable from outside since the key rotation. `question_count` cannot raise the cap.
+- 🔬 **RG LOCKSMITHS IS THE MIRROR-IMAGE EXPERIMENT — de-stuffing test, baseline locked 2026-08-18.**
+  Paying customer, locksmith, Huntingdon. **He was NEVER invisible** (the premise that started this
+  was wrong): his paid baseline (audit `f64920ce`, 11 Aug, 3 runs, 12 questions ×2 engines) is
+  **8/24 named per run ≈ 33%, stable** — but the split is the EXACT INVERSE of ABLM:
+  | | Baseline (11 Aug 2026) |
+  |---|---|
+  | **ChatGPT** (directories) | 20 of 36 — 6–7/12 per run, his home-town directory strength |
+  | **GEMINI** (own site) | **3 of 36 — 1/12 every run, and ALWAYS the same one question, "best locksmiths in Huntingdon UK"** (a generic "best" query, arguably directory-fed) |
+  - ⛔ **THE LINE TO BEAT IS 3/36 GEMINI, AND SUCCESS NEEDS A NEW DISTINCT QUESTION.** Gemini names
+    him on ZERO service+town queries (lock changes Cambridge, emergency lockouts St Neots, upvc
+    Huntingdon, …) — exactly what his town pages target. A post-rewrite Gemini rise that is still
+    only "best locksmiths Huntingdon" does NOT count; a service+town query naming him does.
+  - **The experiment:** RG's site (WordPress/Elementor, 20i-hosted) ALREADY has ~30 town pages
+    (5 per town: locksmith / locksmith-services / lock-repairs / lock-replacements /
+    emergency-locksmith), published 2025-10 — so they PREDATE the baseline. They are **keyword-
+    stuffed doorway duplicates**: Huntingdon and Cambridge pages are byte-identical 333-word
+    templates with the town swapped, "locksmith(s)" at 5.7% density, and there was a **Camborne
+    (Cornwall) page** proving template-spinning. Paul is REWRITING them in place (keep Elementor
+    layout, ABLM-natural honest copy), leaving 5 pages/town for now — de-stuffing is the cheap
+    change tested first; **consolidating each town's 5 pages into 1 is the NEXT experiment if
+    Gemini doesn't move.** Contrast with ABLM, whose natural pages moved Gemini 0→3.
+  - ⏱️ **RE-MEASURE ON PAUL'S WORD, ~2–3 weeks out (early Sep 2026), IDENTICAL 12-question set**
+    (run 1's questions, split 5+5+2 across runs — operator cap is 5). He purges his site cache and
+    diarises it. This is the first controlled single-variable test the product has: same pages,
+    same layout, only the copy quality changes.
 
 ---
 
