@@ -431,6 +431,16 @@ export function OutreachTable({
   const [pushInstantlyOpen, setPushInstantlyOpen] = useState(false);
   // Lead-detail modal (Track Leads fold-in) — opened on row click.
   const [detailLead, setDetailLead] = useState<OutreachLead | null>(null);
+  /* ⛔ KEEP THE OPEN DETAIL DIALOG POINTED AT THE LIVE LEAD ROW, NOT A FROZEN SNAPSHOT (fixed
+     2026-08-18). `detailLead` was set once on row click and never tracked `leads`, so an edit made
+     inside the dialog — a delivery-checklist tick especially — neither showed nor ACCUMULATED:
+     each toggle spread the stale open-time copy, so every tick silently overwrote the last (RG's
+     row ended up with only {remeasure:true}). updateLead replaces the row object in `leads`, so
+     re-selecting it by id here picks up every change and the cockpit re-renders fresh. (The Inbox
+     mount never had this — it derives the lead from a live leads.find.) */
+  useEffect(() => {
+    setDetailLead((prev) => (prev ? (leads.find((l) => l.id === prev.id) ?? prev) : prev));
+  }, [leads]);
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);

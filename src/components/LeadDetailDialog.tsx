@@ -663,63 +663,12 @@ function LeadDetailBody({
           <LeadDeliveryCockpit lead={lead} onUpdateLead={onUpdateLead} context={context} onClose={onClose} />
         )}
 
-        {/* ── Journey: the real flow you work — contact → reply → site → open → add-on → call ── */}
-        <section className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <SectionLabel icon={Route} color="text-primary">Journey</SectionLabel>
-            {siteUrl && (
-              <a
-                href={siteUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
-                title="Open the live site link"
-              >
-                <ExternalLink className="h-3 w-3" /> Their site
-              </a>
-            )}
-          </div>
-
-          {/* Milestone stepper, all derived from data: Contacted/Replied/Site sent from
-              the lead status (source of truth, set via the status dropdown); Opened/Add-on
-              from the site funnel signals. No manual toggles. */}
-          <div className="overflow-x-auto thin-scrollbar">
-            <div className="flex items-start min-w-[420px]">
-              {(
-                [
-                  { label: 'Contacted', done: isSentStatus(lead.status), at: lead.last_outreach_attempt_at ?? null },
-                  { label: 'Replied', done: isRepliedStatus(lead.status) || !!funnel?.replied_at, at: funnel?.replied_at ?? null },
-                  // "Site sent" is cumulative — site_sent OR any later stage means a
-                  // site was sent; legacy site_sent_at + the site funnel's sent_at still count.
-                  { label: 'Site sent', done: isSiteSentStatus(lead.status) || !!lead.site_sent_at || !!funnel?.sent_at, at: lead.site_sent_at ?? funnel?.sent_at ?? null },
-                  { label: 'Opened', done: !!funnel?.first_opened_at, at: funnel?.first_opened_at ?? null },
-                  { label: 'Add-on', done: !!funnel?.addon_interest_at, at: funnel?.addon_interest_at ?? null },
-                ] as { label: string; done: boolean; at: string | null }[]
-              ).map((s, i, arr) => {
-                const nextDone = i < arr.length - 1 && arr[i + 1].done;
-                return (
-                  <Fragment key={s.label}>
-                    <div className="flex w-16 shrink-0 flex-col items-center px-1 text-center">
-                      <div className={cn('flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold transition-colors', s.done ? 'bg-primary text-primary-foreground' : 'border border-border bg-muted text-muted-foreground/40')}>
-                        {s.done ? <Check className="h-3.5 w-3.5" /> : i + 1}
-                      </div>
-                      <span className={cn('mt-1 text-[10px] font-medium leading-tight', s.done ? 'text-foreground' : 'text-muted-foreground/40')}>{s.label}</span>
-                      {s.at && <span className="text-[9px] text-muted-foreground/60">{format(new Date(s.at), 'd MMM')}</span>}
-                    </div>
-                    {i < arr.length - 1 && (
-                      <div className={cn('mt-3.5 h-0.5 flex-1 rounded-full transition-colors', nextDone ? 'bg-primary' : 'bg-border')} />
-                    )}
-                  </Fragment>
-                );
-              })}
-            </div>
-          </div>
-
-        </section>
+        {/* REMOVED 2026-08-18: the Journey stepper (Contacted → Replied → Site sent → Opened →
+            Add-on) — vague prospecting funnel, not real delivery. Binned per Paul's spec. */}
 
         {/* ── Two-column body ── */}
         <div className="grid gap-4 lg:grid-cols-2">
-          {/* Left: Project / delivery */}
+          {/* Left: client info — questionnaire, socials/contact, onboarding link */}
           <div className="space-y-4">
             {/* The questionnaire's answers + the manual payment nudge. Fetches through the
                 `submissions` endpoint (onboarding_responses has RLS with no policies — a direct
@@ -732,75 +681,7 @@ function LeadDetailBody({
                 deliverables) is replaced by the cockpit's tickable checklist at the top. The
                 columns still exist and their data is untouched; they simply have no editor here. */}
 
-            {/* ── PAYMENT ─────────────────────────────────────────────────────────────────────
-                ⛔ THE ONLY PLACE A PAYMENT AMOUNT CAN BE CORRECTED. It used to be the Paid
-                Clients page; that page is gone, so this editor is the whole of it.
-                ⛔ AND A CLEARED AMOUNT WRITES null, NOT 0 — `paid` means `amount_paid > 0`
-                everywhere (CLAUDE.md §6), so a 0 written for an empty box would un-pay a real
-                customer: out of the Paid filter, out of the Inbox's paid exemption, out of every
-                revenue figure, silently. parseAmountPaid owns that rule and is tested. */}
-            <section className={CARD}>
-              <SectionLabel icon={PoundSterling} color="text-emerald-500">Payment</SectionLabel>
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">Amount paid (£)</label>
-                  <Input
-                    type="number" min="0" step="0.01"
-                    value={amountPaid}
-                    onChange={(e) => setAmountPaid(e.target.value)}
-                    onBlur={async () => {
-                      const val = parseAmountPaid(amountPaid);
-                      if (val !== (lead.amount_paid ?? null)) {
-                        await onUpdateLead(lead.id, { amount_paid: val } as Partial<OutreachLead>);
-                      }
-                    }}
-                    className="h-8 text-xs border-border/50"
-                    placeholder="Not paid"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">Payment date</label>
-                  <Popover open={paymentDatePopoverOpen} onOpenChange={setPaymentDatePopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="h-8 w-full justify-start px-2 text-xs font-normal border-border/50">
-                        <CalendarIconLucide className="mr-1.5 h-3 w-3 shrink-0" />
-                        {paymentDate ? format(paymentDate, 'd MMM yyyy') : <span className="text-muted-foreground/50">Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={paymentDate}
-                        onSelect={async (d) => {
-                          setPaymentDate(d);
-                          setPaymentDatePopoverOpen(false);
-                          await onUpdateLead(lead.id, { payment_date: d ? format(d, 'yyyy-MM-dd') : null } as Partial<OutreachLead>);
-                        }}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-              <div className="mt-2.5">
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Paid for</label>
-                <Input
-                  value={paidFor}
-                  onChange={(e) => setPaidFor(e.target.value)}
-                  onBlur={async () => {
-                    const val = paidFor.trim() || null;
-                    if (val !== (lead.paid_for ?? null)) {
-                      await onUpdateLead(lead.id, { paid_for: val } as Partial<OutreachLead>);
-                    }
-                  }}
-                  className="h-8 text-xs border-border/50"
-                  placeholder="e.g. Findable setup"
-                />
-              </div>
-            </section>
-
-            {/* Socials & contact — found socials (FB/IG) are read-only links; the
+                        {/* Socials & contact — found socials (FB/IG) are read-only links; the
                 contact fields (email / website / phone / address) are inline-editable
                 (Pencil → input + Check/X), mirroring the name-edit UX. */}
             {(() => {
@@ -906,8 +787,76 @@ function LeadDetailBody({
             {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
           </div>
 
-          {/* Right: Notes + Activity */}
+          {/* Right: money + operator — payment, notes, activity */}
           <div className="space-y-4">
+            {/* ── PAYMENT ─────────────────────────────────────────────────────────────────────
+                ⛔ THE ONLY PLACE A PAYMENT AMOUNT CAN BE CORRECTED. It used to be the Paid
+                Clients page; that page is gone, so this editor is the whole of it.
+                ⛔ AND A CLEARED AMOUNT WRITES null, NOT 0 — `paid` means `amount_paid > 0`
+                everywhere (CLAUDE.md §6), so a 0 written for an empty box would un-pay a real
+                customer: out of the Paid filter, out of the Inbox's paid exemption, out of every
+                revenue figure, silently. parseAmountPaid owns that rule and is tested. */}
+            <section className={CARD}>
+              <SectionLabel icon={PoundSterling} color="text-emerald-500">Payment</SectionLabel>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">Amount paid (£)</label>
+                  <Input
+                    type="number" min="0" step="0.01"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    onBlur={async () => {
+                      const val = parseAmountPaid(amountPaid);
+                      if (val !== (lead.amount_paid ?? null)) {
+                        await onUpdateLead(lead.id, { amount_paid: val } as Partial<OutreachLead>);
+                      }
+                    }}
+                    className="h-8 text-xs border-border/50"
+                    placeholder="Not paid"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">Payment date</label>
+                  <Popover open={paymentDatePopoverOpen} onOpenChange={setPaymentDatePopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-8 w-full justify-start px-2 text-xs font-normal border-border/50">
+                        <CalendarIconLucide className="mr-1.5 h-3 w-3 shrink-0" />
+                        {paymentDate ? format(paymentDate, 'd MMM yyyy') : <span className="text-muted-foreground/50">Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={paymentDate}
+                        onSelect={async (d) => {
+                          setPaymentDate(d);
+                          setPaymentDatePopoverOpen(false);
+                          await onUpdateLead(lead.id, { payment_date: d ? format(d, 'yyyy-MM-dd') : null } as Partial<OutreachLead>);
+                        }}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+              <div className="mt-2.5">
+                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Paid for</label>
+                <Input
+                  value={paidFor}
+                  onChange={(e) => setPaidFor(e.target.value)}
+                  onBlur={async () => {
+                    const val = paidFor.trim() || null;
+                    if (val !== (lead.paid_for ?? null)) {
+                      await onUpdateLead(lead.id, { paid_for: val } as Partial<OutreachLead>);
+                    }
+                  }}
+                  className="h-8 text-xs border-border/50"
+                  placeholder="e.g. Findable setup"
+                />
+              </div>
+            </section>
+
             <section className={CARD}>
               <SectionLabel icon={StickyNote} color="text-amber-400">Notes</SectionLabel>
               {/* Private note */}
