@@ -401,8 +401,19 @@ Facts with numbers. These are measured, and several contradict the older docs.
 
 - **The only supported lever:** presence in the sources AI reads **for that trade**, plus **a website where
   there isn't one**.
-- **No before-and-after has ever been measured.** ABLM and Paul's pool bar are the first two. Any claim about
-  outcomes is unevidenced.
+- ✅ **THE FIRST BEFORE-AND-AFTER WAS MEASURED 2026-08-18, AND IT MOVED: ABLM 0 → 3 of 18.**
+  Runs 12–15 (21 Jul, before Paul hand-built town pages on their Wix site) asked 9 questions ×2
+  engines four times: **0 named in every answer**. Runs 23+24 (18 Aug, the identical 9 questions
+  verbatim) named ABLM **3 of 18** — and all three are **GEMINI**, on the town questions
+  (Whittlesey ×1, Chatteris ×2). ChatGPT: still 0 of 9. **This is §5's model confirmed in a
+  before/after for the first time: pages on their own site moved the engine that reads their own
+  site, and not the one that reads directories.** One measurement of one client — evidence, not
+  proof; the wording rules (never promise the outcome) stand unchanged.
+  ⚠️ Re-run mechanics for next time: `create-ai-audit { audit_id }` re-runs the LATEST run's
+  questions verbatim; `{ audit_id, questions }` honours a pasted set verbatim; neither passes the
+  question filters. **The operator path hard-caps at WIZARD_MAX_QUESTIONS (5)** — a longer set
+  must be split across runs (23+24 was 5+4) or go through the internal baseline branch, which is
+  unreachable from outside since the key rotation. `question_count` cannot raise the cap.
 
 ---
 
