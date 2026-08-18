@@ -834,6 +834,40 @@ useMarketView.ts   1 persisted vs  6 plain
 4. **The remaining 11 hooks, one at a time.** ⚠️ **`useOutreach` LAST** — its optimistic updates
    (`leadsWithOptimistic`) are the hardest thing to keep correct under a cache.
 
+### ✅ COVERAGE READ-PATH — two bugs fixed 2026-08-19 (`e33d190e`), verified live
+
+- ⛔ **"MEASURED" NOW NEEDS `MARKET_AUDIT_MIN_AUDITS` (2), MATCHING THE PANEL.** Coverage used to
+  call a town measured at ONE completed market audit while the panel needs two before it calls a
+  shape — so a 1-audit town read "Measured" on the row and "needs measuring" in the panel, and View
+  looked like it re-ran the audit. The fix lives in **`coverageStateFor` (`coverageState.ts`)**, NOT
+  the edge fn: the endpoint returns FACTS (one entry per completed audit, raw), the client COUNTS
+  them per `coverageKey` (`countMeasuredByPair`) and grades `measured` at `>= MARKET_AUDIT_MIN_AUDITS`.
+  Counting client-side is load-bearing: a real Eastbourne market typed both `Locksmiths` and
+  `locksmiths` folds to one 2-audit market through coverageKey; a raw server count split it into two
+  1-audit halves. `CoverageFacts.measuredPairs` (a Set) became **`measuredCounts` (a Map)**.
+  - ⚠️ **THE CONSTANT MOVED to a zero-dep leaf `src/lib/marketAuditThreshold.ts`**; marketView.ts
+    imports AND re-exports it (a bare `export … from` broke marketView's own internal uses — import
+    at the top so the name is in local scope). coverageState.ts imports the leaf.
+  - ⚠️ **CONSEQUENCE ON REAL DATA:** two of Paul's markets have only 1 completed audit (incomplete
+    measures — §8's Colchester and Norwich). **locksmiths/Colchester drops Measured → Untouched**
+    (no leads); **Norwich is unaffected** (it is Worked, which outranks Measured). Both correct.
+- ⛔ **THE COVERAGE MOUNT IS TWO EDGE READS NOW, NOT ONE.** It was one ~3s sequential read (733
+  static towns THEN the ~1,500-lead scan) that a lead-add refetched in full. Split into edge actions
+  **`towns`** (static ONS list, React Query `staleTime: Infinity` / `gcTime: Infinity`, key
+  `coverage-towns`; suppression patches this cache) and **`pairs`** (measured/leads/worked, on the
+  existing `coverage` key that `useOutreach` invalidates). They fire in parallel. The edge fn keeps a
+  combined **`view`** action for deploy back-compat. ⚠️ **Deploy the edge fn BEFORE the SPA** — the
+  new hook calls `towns`/`pairs`, which an old deploy 400s as unknown actions.
+  - ⚠️ **First COLD load is still ~1.8s — that floor is the LEAD SCAN (pairs), not the towns.** The
+    split's real win is repeat loads (towns cached, instant) and lead-add-returns (only pairs
+    refetch, never 733 towns). Getting the town table on screen in ~1s would mean rendering it before
+    grades land — declined, because a measured market flashing "Untouched" for ~1s is the "act on
+    wrong data" harm §6c warns of. A real sub-1s fix needs a grouping RPC (a migration → Paul's SQL).
+- ⚠️ **Bath was a TEST ARTIFACT (mine), deleted 2026-08-19** — a single direct create-ai-audit with
+  no pool, showing a phantom "Measured Bath". Deleted its 8 queue rows + 1 run + the audit (no
+  orphans). Norwich/Colchester single-audit markets are NOT mine (real pre-session incomplete
+  measures) — left alone.
+
 ---
 
 ## 6d. ✅ THE PAID CLIENTS PAGE IS GONE — paying customers live in Outreach + Inbox (2026-08-12)
