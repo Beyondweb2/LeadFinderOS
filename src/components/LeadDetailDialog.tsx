@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, Fragment } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
 import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, ClipboardList } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { TeamNotes } from '@/components/TeamNotes';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
+import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, formatDistanceToNow, startOfDay } from 'date-fns';
-import { parseAmountPaid } from '@/lib/leadPayment';
+import { parseAmountPaid, isPaidLead } from '@/lib/leadPayment';
 import { SALE_TYPES, SALE_TYPE_LABELS, resolveSaleType, type SaleType } from '@/lib/saleType';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, isSentStatus, isRepliedStatus, isSiteSentStatus } from '@/types/outreach';
@@ -236,6 +236,9 @@ interface LeadDetailDialogProps {
   campaignDefaultSaleType?: string | null;
   customStatuses?: { value: string; label: string }[];
   onAddCustomStatus?: () => void;
+  /** Which page mounted the dialog — drives the cockpit's "Go to Inbox conversation" (Outreach
+   *  only) and back-link labels. Defaults to 'outreach'. */
+  context?: 'outreach' | 'inbox';
 }
 
 export function LeadDetailDialog({
@@ -253,6 +256,7 @@ export function LeadDetailDialog({
   campaignDefaultSaleType,
   customStatuses = [],
   onAddCustomStatus,
+  context = 'outreach',
 }: LeadDetailDialogProps) {
   if (!lead) return null;
   return (
@@ -272,6 +276,7 @@ export function LeadDetailDialog({
           campaignDefaultSaleType={campaignDefaultSaleType}
           customStatuses={customStatuses}
           onAddCustomStatus={onAddCustomStatus}
+          context={context}
           onClose={() => onOpenChange(false)}
         />
       </DialogContent>
@@ -297,6 +302,7 @@ function LeadDetailBody({
   campaignDefaultSaleType,
   customStatuses = [],
   onAddCustomStatus,
+  context = 'outreach',
   onClose,
 }: LeadDetailBodyProps) {
   const effectiveSaleType: SaleType = resolveSaleType(lead.sale_type, campaignDefaultSaleType);
@@ -589,47 +595,9 @@ function LeadDetailBody({
             </SelectContent>
           </Select>
 
-          <Select value={nextAction} onValueChange={handleNextActionChange}>
-            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
-              {(() => {
-                const cl = getLeadCustomAction(lead.id);
-                const trackKey = getValidTrackActionForLead(lead.id) || mapLegacyAction(lead.next_action || 'none');
-                const opt = TRACK_NEXT_ACTION_OPTIONS.find((o) => o.value === trackKey);
-                const label = cl || (opt && opt.value !== 'none' ? opt.label : null);
-                const colorCls = cl ? 'bg-teal-500 text-white border-transparent' : NEXT_ACTION_COLORS[trackKey] || NEXT_ACTION_COLORS.none;
-                return label
-                  ? <Badge variant="outline" className={cn('cursor-pointer font-semibold whitespace-nowrap', colorCls)}>{label}</Badge>
-                  : <Badge variant="outline" className="cursor-pointer font-medium text-muted-foreground bg-muted/40 border-border/50">+ Set action</Badge>;
-              })()}
-            </SelectTrigger>
-            <SelectContent className="pointer-events-auto">
-              {TRACK_NEXT_ACTION_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
-              {customActions.length > 0 && (
-                <>
-                  <div className="h-px bg-border my-1" />
-                  {customActions.map((ca) => (
-                    <SelectItem key={ca.id} value={`custom::${ca.label}`}>
-                      <div className="flex items-center gap-2"><Tag className="h-3 w-3 text-teal-400" />{ca.label}</div>
-                    </SelectItem>
-                  ))}
-                </>
-              )}
-              <div className="h-px bg-border my-1" />
-              <SelectItem value="__add_custom_action__" className="text-primary">+ Custom Action</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
-            <PopoverTrigger asChild>
-              <button className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold', dueLabel ? dueLabel.cls : 'text-muted-foreground bg-muted/40 border-border/50')}>
-                <CalendarIconLucide className="h-3 w-3" />
-                {nextActionDate ? format(nextActionDate, 'MMM d') : 'Due date'}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar mode="single" selected={nextActionDate} onSelect={handleDateChange} initialFocus className="p-3 pointer-events-auto" />
-            </PopoverContent>
-          </Popover>
+          {/* REMOVED 2026-08-18 (delivery-cockpit redesign): the next-action Select and its due-date
+              pill were prospecting machinery — a client cockpit keeps only status. The re-measure
+              date (the date that actually matters) now lives in the cockpit's Key Dates. */}
 
           {/* Contact method — same component + dropdown as the Outreach table */}
           <Select value={lead.contact_method || ''} onValueChange={(v) => onUpdateLead(lead.id, { contact_method: v } as Partial<OutreachLead>)}>
@@ -658,21 +626,7 @@ function LeadDetailBody({
           {/* Site check on engagement — renders only for a replied-or-beyond lead with a real
               website whose completed audit skipped the SEO scan (the email lane's up-front skip). */}
           {!isDemoLead(lead.id) && <LeadSiteCheckButton lead={lead} />}
-
-          <div className="relative ml-auto">
-            <PoundSterling className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-            <Input
-              type="number" min="0" step="0.01"
-              value={potentialRevenue}
-              onChange={(e) => setPotentialRevenue(e.target.value)}
-              onBlur={async () => {
-                const val = potentialRevenue ? parseFloat(potentialRevenue) : null;
-                if (val !== (lead.potential_revenue ?? null)) await onUpdateLead(lead.id, { potential_revenue: val } as Partial<OutreachLead>);
-              }}
-              className="h-7 w-24 text-xs pl-6"
-              placeholder="Revenue"
-            />
-          </div>
+          {/* REMOVED 2026-08-18: the Revenue field (top-right) — confirmed waste for the cockpit. */}
         </div>
 
         {/* Contact + site — email (from scraping or when they claim) and the live site link */}
@@ -702,6 +656,12 @@ function LeadDetailBody({
 
       {/* ── Scrollable body ── */}
       <div className="flex-1 overflow-y-auto thin-scrollbar px-5 py-4 space-y-4">
+
+        {/* ══ THE DELIVERY COCKPIT — key dates, quick launch, checklist, reference (2026-08-18).
+            The at-a-glance client control panel; shared by Outreach + Inbox via this one dialog. ══ */}
+        {!isDemoLead(lead.id) && (
+          <LeadDeliveryCockpit lead={lead} onUpdateLead={onUpdateLead} context={context} onClose={onClose} />
+        )}
 
         {/* ── Journey: the real flow you work — contact → reply → site → open → add-on → call ── */}
         <section className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-4 shadow-sm">
@@ -768,76 +728,9 @@ function LeadDetailBody({
             {!isDemoLead(lead.id) && (
               <LeadQuestionnaireSection lead={lead} onUpdateLead={onUpdateLead} />
             )}
-            <section className={CARD}>
-              <SectionLabel icon={Briefcase} color="text-sky-400">Delivery</SectionLabel>
-              <Textarea
-                value={projectOverview}
-                onChange={(e) => setProjectOverview(e.target.value)}
-                onBlur={async () => {
-                  if (projectOverview !== (lead.project_overview || '')) {
-                    await onUpdateLead(lead.id, { project_overview: projectOverview || null } as Partial<OutreachLead>);
-                  }
-                }}
-                rows={3}
-                className="resize-none text-xs border-border/50 min-h-[72px]"
-                placeholder="What are you building / delivering for this lead?"
-              />
-              <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">Project status</label>
-                  <Select
-                    value={projectStatus}
-                    onValueChange={async (v) => {
-                      setProjectStatus(v);
-                      await onUpdateLead(lead.id, { project_status: v } as Partial<OutreachLead>);
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-xs border-border/50 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="pointer-events-auto">
-                      {PROJECT_STATUS_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">Selling</label>
-                  <Select value={lead.sale_type ?? '__default__'} onValueChange={(v) => onUpdateLead(lead.id, { sale_type: v === '__default__' ? null : v } as Partial<OutreachLead>)}>
-                    <SelectTrigger className="h-8 text-xs border-border/50 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="pointer-events-auto">
-                      <SelectItem value="__default__">
-                        Default{campaignDefaultSaleType ? ` (${SALE_TYPE_LABELS[resolveSaleType(null, campaignDefaultSaleType)]})` : ' (Website)'}
-                      </SelectItem>
-                      {SALE_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* Deliverables — what was actually done for this customer. Previously only
-                  reachable through the Paid Clients page's general notes; it is a column of its
-                  own (delivery_notes) and belongs beside the project status it describes. */}
-              <div className="mt-2.5">
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Deliverables</label>
-                <Textarea
-                  value={deliveryNotes}
-                  onChange={(e) => setDeliveryNotes(e.target.value)}
-                  onBlur={async () => {
-                    if (deliveryNotes !== (lead.delivery_notes || '')) {
-                      await onUpdateLead(lead.id, { delivery_notes: deliveryNotes || null } as Partial<OutreachLead>);
-                    }
-                  }}
-                  rows={2}
-                  className="resize-none text-xs border-border/50 min-h-[52px]"
-                  placeholder="What has been delivered so far — pages published, listings claimed, re-measure booked..."
-                />
-              </div>
-            </section>
+            {/* REMOVED 2026-08-18: the free-text Delivery section (overview / status / selling /
+                deliverables) is replaced by the cockpit's tickable checklist at the top. The
+                columns still exist and their data is untouched; they simply have no editor here. */}
 
             {/* ── PAYMENT ─────────────────────────────────────────────────────────────────────
                 ⛔ THE ONLY PLACE A PAYMENT AMOUNT CAN BE CORRECTED. It used to be the Paid
@@ -1056,12 +949,7 @@ function LeadDetailBody({
                   </div>
                 )}
               </div>
-              {/* Team notes */}
-              {!isDemoLead(lead.id) && (
-                <div className="mt-3 border-t border-border/40 pt-3">
-                  <TeamNotes placeId={(lead as any).place_id ?? null} googleMapsUrl={lead.google_maps_url ?? null} businessName={lead.business_name} />
-                </div>
-              )}
+              {/* REMOVED 2026-08-18: Team notes — confirmed waste. Private note stays. */}
             </section>
 
             {!isDemoLead(lead.id) && (
@@ -1088,14 +976,17 @@ function LeadDetailBody({
         </div>
       </div>
 
-      <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border/60 bg-card/30 px-5 py-3">
-        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-red-400" onClick={handleMarkLost}>
-          <X className="h-3.5 w-3.5 mr-1.5" /> Mark Lost
-        </Button>
-        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleMarkPaid}>
-          <Check className="h-3.5 w-3.5 mr-1.5" /> Mark Paid
-        </Button>
-      </div>
+      {/* Footer: Mark Paid is my revenue/convert action and shows ONLY while UNPAID — once
+          amount_paid > 0 it hides (the Payment block is then the editor). Mark Lost removed from
+          the detail view (2026-08-18); a lost lead is set via the status control. When paid there
+          is nothing to show, so the footer bar is absent rather than empty. */}
+      {!isPaidLead(lead) && (
+        <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border/60 bg-card/30 px-5 py-3">
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleMarkPaid}>
+            <Check className="h-3.5 w-3.5 mr-1.5" /> Mark Paid
+          </Button>
+        </div>
+      )}
 
       {/* Custom Action Dialog */}
       <Dialog open={showAddCustomAction} onOpenChange={setShowAddCustomAction}>
