@@ -187,15 +187,19 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted/60">
                 <ExternalLink className="h-3.5 w-3.5" /> Client report
               </a>
+              {/* ⛔ PLAYBOOK BY AUDIT ID, NOT LEAD ID (fixed 2026-08-18). usePlaybook resolves the
+                  :id AUDIT-first; a lead id fails that lookup and loads a degraded, audit-less
+                  playbook — the "weird load". audit.id resolves cleanly, exactly like the Baseline
+                  report and the AiAudit page's own Playbook button. Lives inside the audit block for
+                  the same reason: no audit, no playbook to build. */}
+              <Link to={`/playbook/${audit.id}`} state={{ from: context === 'inbox' ? '/inbox' : '/outreach', fromLabel: context === 'inbox' ? 'Inbox' : 'Outreach' }} onClick={onClose}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted/60">
+                <ClipboardList className="h-3.5 w-3.5" /> Playbook
+              </Link>
             </>
           ) : !auditLoading ? (
             <span className="text-xs italic text-muted-foreground/70">No audit yet — baseline links appear once one has run.</span>
           ) : null}
-          {/* Playbook — the per-lead playbook doc (the only playbook there is; global doc TBD). */}
-          <Link to={`/playbook/${lead.id}`} state={{ from: context === 'inbox' ? '/inbox' : '/outreach', fromLabel: context === 'inbox' ? 'Inbox' : 'Outreach' }} onClick={onClose}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted/60">
-            <ClipboardList className="h-3.5 w-3.5" /> Playbook
-          </Link>
           {/* Go to Inbox conversation — only meaningful from Outreach (from Inbox you're already here). */}
           {context === 'outreach' && lead.phone && (
             <button onClick={goToInbox}
