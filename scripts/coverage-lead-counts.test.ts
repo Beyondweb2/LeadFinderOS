@@ -43,7 +43,7 @@ console.log("\n── ⛔ THE CASE THE RUNG COULD NOT SHOW ──");
 {
   const k = coverageKey("locksmiths", "Norwich");
   const facts: CoverageFacts = {
-    measuredPairs: new Set([k]), leadPairs: new Set(), workedPairs: new Set(),
+    measuredCounts: new Map([[k, 2]]), leadPairs: new Set(), workedPairs: new Set(),
   };
   const state = coverageStateFor("locksmiths", town("Norwich"), facts);
   const withLeads = countLeadsByPair([{ trade: "locksmiths", town: "Norwich" }, { trade: "locksmiths", town: "Norwich" }]);
@@ -63,7 +63,7 @@ for (const state of COVERAGE_STATES) {
   const k = coverageKey("locksmiths", "Wisbech");
   const counts = countLeadsByPair([{ trade: "locksmiths", town: "Wisbech" }]);
   const untouched = coverageStateFor("locksmiths", town("Ely"), {
-    measuredPairs: new Set(), leadPairs: new Set([k]), workedPairs: new Set(),
+    measuredCounts: new Map(), leadPairs: new Set([k]), workedPairs: new Set(),
   });
   ok(untouched === "untouched", "a town with no pairs of its own stays untouched");
   ok((counts.get(coverageKey("locksmiths", "Ely")) ?? 0) === 0, "  and shows no count");

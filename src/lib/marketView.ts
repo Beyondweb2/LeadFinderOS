@@ -3,6 +3,7 @@
    this repo. Same convention as directoryHosts.ts and auditReport.ts. Keep it dependency-light for
    the same reason: everything it imports lands in that edge bundle too. */
 import { EVIDENCE_MIN_AUDITS } from './buildPlaybook.ts';
+import { MARKET_AUDIT_MIN_AUDITS } from './marketAuditThreshold.ts';
 
 /* ============================================================
    MARKET VIEW — shared shapes and thresholds for "a trade in a town".
@@ -691,8 +692,12 @@ export interface MarketShape {
    Two market audits is 16 non-overlapping questions and ~300 citations, for ~16p. */
 
 /** Market audits needed before a shape is called. See above: two is where audit-share starts to
- *  mean anything, not a round number. */
-export const MARKET_AUDIT_MIN_AUDITS = 2;
+ *  mean anything, not a round number.
+ *  ⛔ IMPORTED FROM A LEAF MODULE and re-exported so Coverage's "Measured" rung imports the same
+ *  number — a 1-vs-2 mismatch is what let a single-audit town read "Measured" there and "needs
+ *  measuring" in the panel. See marketAuditThreshold.ts. (Imported at the top so the name is in local
+ *  scope for the uses below; a bare `export … from` would re-export without binding it here.) */
+export { MARKET_AUDIT_MIN_AUDITS };
 
 /* ══ THE ONE-BUTTON MEASURE RUN ═══════════════════════════════════════════════════════════════
    Trade, town, one press: lead search, then two market audits, then results. Five clicks and two
