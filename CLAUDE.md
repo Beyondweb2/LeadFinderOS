@@ -1561,6 +1561,16 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
     existing customers, not an enhancement. Paul's call 2026-08-10, with zero paying customers: build
     nothing, create a verified Findable GBP so the 60-day clock runs in the background, revisit when
     there are customers to serve.
+  - ✅ **REVISITED 2026-08-19 (two paying customers): the STATELESS middle path is built and live.**
+    `/review-replies` + the `review-reply` edge fn — paste a review in, gpt-4o-mini returns a
+    copy-paste reply OR a first-class **don't-reply verdict** (abusive / legal-safety / owner-only
+    disputes / canned-would-worsen). No Google API, no storage, nothing posts anywhere — the
+    operator IS the approval step by construction. OpenAI-quota errors return typed `no_credits`
+    (friendly banner; springs back when credited, no redeploy — verified live in that exact state).
+    The read-and-post version stays gated on the GBP API access application (v4-only, zero default
+    quota, OAuth `business.manage`, manual Google review); the drafting/verdict logic carries over.
+    ⚠️ RG's questionnaire says `gbp_status = no_access` (11 Aug) — the claimed Manager grant on his
+    profile is NOT yet evidenced in the DB; confirm at business.google.com before relying on it.
 - ✅ **`onboarding_responses.gbp_verified` — added 2026-08-10.** `gbp_exists` asks about **claim and
   access**; "Yes, and I can get into it" is equally true of a profile awaiting verification and of a
   suspended one. An unverified profile **does not show on Maps or Search**, so profile work publishes
