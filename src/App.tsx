@@ -46,6 +46,7 @@ const Inbox = lazy(() => import("./pages/Inbox"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Coverage = lazy(() => import("./pages/Coverage"));
 const ReviewReply = lazy(() => import("./pages/ReviewReply"));
+const PageGenerator = lazy(() => import("./pages/PageGenerator"));
 const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
@@ -488,6 +489,20 @@ const App = () => {
                   <SubscriptionGate>
                     <AppLayout>
                       <ReviewReply />
+                    </AppLayout>
+                  </SubscriptionGate>
+                </ProtectedRoute>
+              }
+            />
+            {/* Delivery page generator — service+town pages from the questionnaire × baseline
+                overlap, paste-ready per page. See src/pages/PageGenerator.tsx + src/lib/pagePlan.ts. */}
+            <Route
+              path="/page-generator"
+              element={
+                <ProtectedRoute>
+                  <SubscriptionGate>
+                    <AppLayout>
+                      <PageGenerator />
                     </AppLayout>
                   </SubscriptionGate>
                 </ProtectedRoute>

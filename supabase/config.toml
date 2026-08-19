@@ -133,3 +133,8 @@ verify_jwt = false
 # explicit rather than a platform default (the trap this file's header records).
 [functions.review-reply]
 verify_jwt = true
+
+# page-generator: same shape as review-reply — SPA-only caller with the operator's JWT, handler
+# does its own getUser + owner-scoping. Explicit entry, never a platform default.
+[functions.page-generator]
+verify_jwt = true
