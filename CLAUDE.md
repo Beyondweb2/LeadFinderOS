@@ -1253,6 +1253,36 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
 
 ---
 
+## 6i. ✅ THE PAGE GENERATOR — delivery pages from the questionnaire × baseline overlap (2026-08-19)
+
+- **`/page-generator` + the `page-generator` edge fn + `src/lib/pagePlan.ts` (pure, tested).** A
+  page exists ONLY when the (service, town) pair is BOTH wanted (services_list × areas_list +
+  confirmed_location, newest onboarding row) AND measured (a verbatim baseline question targets
+  it) — so every page aims at a query the week-8 re-measure will test. RG's real 12 questions →
+  exactly 10 pages; "uPVC door and window locks" answers the upvc-door AND window-locks queries as
+  ONE page with two queries. Output is paste-ready per page (slug/title/meta/H1/body, per-part
+  copy); NOTHING publishes — Paul pastes by hand.
+- ⛔ **BASELINE QUESTIONS ARE READ FROM THE LATEST `baseline_target_runs` RUNS ONLY** — Ronnie's
+  baseline audit still carries his replaced wrong-category locksmith runs; the latest-runs rule
+  drops them and the overlap is the second guard (no matching service → no page, itemised).
+  The questions themselves are pristine verbatim strings — the competitor mess lives only in the
+  ANSWER side of audit data.
+- ⛔ **EXCLUSIONS ARE ITEMISED, NEVER SILENT**: generic trade-level queries ("best locksmiths in
+  Huntingdon UK") → "homepage covers it"; measured-but-not-offered services (Ronnie's "cobbler",
+  "key cutting") → excluded with reason; wanted-but-never-measured areas (RG: St Ives, Brampton,
+  Godmanchester, Chatteris) listed as no-page.
+- ⛔ **ANTI-STUFFING IS CODE, NOT PROMPT**: `stuffingCheck` (town ≤ `MAX_TOWN_MENTIONS` 4, density
+  ≤ `MAX_KEYWORD_DENSITY_PCT` 3%) grades every generated page server-side — RG's old 5.7% doorway
+  pages grade `stuffed` — one auto-rewrite on failure, still-stuffed returned FLAGGED. gpt-4o,
+  `must_not_say` is a hard prompt rule (RG: never claim MLA), no outcome promises, invent nothing.
+- ⚠️ `page_key` is RE-DERIVED server-side on generate — a client can never request a pair the
+  overlap didn't produce. Hosting format is a dropdown (`website_platform` is NULL for both
+  current clients; it seeds the default when a future client fills it). Typed `no_credits` while
+  OpenAI is dry (plan half works regardless). `scripts/page-plan.test.ts` pins RG's and Ronnie's
+  real shapes.
+
+---
+
 ## 7. Parked and unmerged — do not merge these
 
 | Branch | Hash |
