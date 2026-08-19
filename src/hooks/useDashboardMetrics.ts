@@ -6,6 +6,7 @@ import type { AuditFunnel } from '@/components/dashboard/AuditFunnelCard';
 import { buildDashTasks, foldMessageTimes, type DashTask, type LeadMessageTimes, type LeadOnboarding } from '@/lib/dashboardTasks';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { looksAutomated } from '@/lib/inboundClassify';
+import { isRealSend } from '@/lib/realSend';
 
 /**
  * One channel's outreach performance.
@@ -49,9 +50,12 @@ const PRICE_GIVEN_OR_BEYOND = new Set(['price_given', 'payment_received', 'in_de
 /** The report pitch, matching useCampaignStats. */
 const PITCH_TEMPLATES = new Set(['audit_reply']);
 
-/** The message fields the audit funnel reads. Order is the query's: created_at, then id. */
+/** The message fields the audit funnel reads. Order is the query's: created_at, then id.
+ *  `status` is carried so isRealSend can exclude failed/simulated rows — it was fetched and then
+ *  dropped here, which is how a rejected send counted as "Reached" for months. */
 interface FunnelMsg {
   direction: string; created_at: string; body: string | null; template_name: string | null;
+  status: string | null;
 }
 
 // No hardcoded revenue constants — uses actual amount_paid from leads
@@ -84,8 +88,19 @@ interface DashboardMetrics {
 
 /* ⚠️ MIRRORS FOUNDER_PRICE_GBP in supabase/functions/_shared/offer-price.ts (what is CHARGED) and
    FOUNDER_OFFER_PRICE_LABEL / FOUNDER_OFFER_COUNT in src/lib/founderOffer.ts (what the report SAYS).
-   Three places, one offer. This one only counts; it decides nothing. */
+   Three places, one offer. This one only counts; it decides nothing.
+   ⛔ KEEP THE NAME AND SHAPE: scripts/check-cross-repo-sync.mjs parses this constant BY NAME in this
+   file, as a bare number — fold it into an array or rename it and the price guard silently stops
+   guarding. (And never write the declaration pattern out in a comment: the script's regex takes the
+   FIRST match in the file, comments included — that exact mistake broke the guard for ten minutes
+   on 2026-08-19.) */
 const FOUNDER_PRICE_GBP = 49.99;
+/* ⛔ EVERY PRICE THE FOUNDER OFFER HAS EVER CHARGED, besides the current one. The tile counts places
+   taken across ALL of them — Paul's call 2026-08-19, after the price move (£19.99 → £49.99 on
+   2026-08-12) made RG Locksmiths' sale vanish from the tile: it read "1 of 10 taken" with two paying
+   customers in the bank, the exact kind of false number this dashboard is being purged of.
+   Append here when the founder price moves again; never remove an entry a sale was taken at. */
+const FOUNDER_PRICES_HISTORICAL_GBP = [19.99];
 const FOUNDER_PLACES = 10;
 
 const getDateRanges = () => {
@@ -151,8 +166,11 @@ export function useDashboardMetrics(isAdmin = false) {
 
     /* The three extra reads for the derived task list ride along in this SAME Promise.all, so they
        cost one round-trip of wall-clock rather than three sequential ones. All are narrow column
-       selects, and all go through an untyped client because whatsapp_messages and
-       onboarding_responses are not in the generated types; RLS scopes them as it scopes allLeads. */
+       selects through an untyped client (whatsapp_messages is not in the generated types; RLS
+       scopes it as it scopes allLeads).
+       ⛔ EXCEPT onboarding_responses, which RLS answers with 200 [] for EVERY browser session (no
+       policies) — that one goes through the submissions endpoint below. The comment that used to
+       claim RLS scoped it was the §8 trap in the flesh: check pg_policies, not the prose. */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sbAny = supabase as unknown as { from: (t: string) => any };
     /* Every read is paginated. None of these was, and PostgREST truncates at db-max-rows (default
@@ -179,9 +197,22 @@ export function useDashboardMetrics(isAdmin = false) {
       fetchAllRows<{ lead_id: string; direction: string; created_at: string; body: string | null; template_name: string | null; status: string | null }>('Dashboard (messages)', (f, t) =>
         sbAny.from('whatsapp_messages').select('lead_id, direction, created_at, body, template_name, status')
           .not('lead_id', 'is', null).order('created_at', { ascending: true }).order('id', { ascending: true }).range(f, t)),
-      fetchAllRows<{ lead_id: string; status: string | null; created_at: string }>('Dashboard (onboarding)', (f, t) =>
-        sbAny.from('onboarding_responses').select('lead_id, status, created_at').not('lead_id', 'is', null)
-          .order('id', { ascending: true }).range(f, t)),
+      /* ⛔ THROUGH THE submissions ENDPOINT, NOT A DIRECT READ. onboarding_responses has RLS enabled
+         with NO policies, so the old direct read returned 200 [] forever — the Chase task ("filled
+         the questionnaire and hasn't paid") NEVER fired, exactly as CLAUDE.md §8 recorded. Proven
+         live 2026-08-19: an operator session sees 0 of the 7 rows that exist. Non-throwing on
+         purpose: this rides in the same Promise.all whose .catch blanks the whole dashboard, and an
+         endpoint hiccup must degrade ONE rule (chase hidden), not empty every card. */
+      (async (): Promise<{ rows: { lead_id: string; status: string | null; created_at: string }[] }> => {
+        try {
+          const { data: res, error } = await supabase.functions.invoke('submissions', { body: { action: 'lead_statuses' } });
+          if (error || !res?.ok) throw new Error(error?.message ?? res?.error ?? 'lead_statuses failed');
+          return { rows: (res.rows ?? []) as { lead_id: string; status: string | null; created_at: string }[] };
+        } catch (e) {
+          console.warn('Onboarding statuses unavailable (chase tasks hidden):', e instanceof Error ? e.message : e);
+          return { rows: [] };
+        }
+      })(),
       fetchAllRows<{ lead_id: string; baseline_target_runs: number | null }>('Dashboard (audits)', (f, t) =>
         sbAny.from('ai_audits').select('lead_id, baseline_target_runs').not('lead_id', 'is', null)
           .order('id', { ascending: true }).range(f, t)),
@@ -216,7 +247,7 @@ export function useDashboardMetrics(isAdmin = false) {
       setMsgTimes(foldMessageTimes(msgResult.rows));
       const idx = new Map<string, FunnelMsg[]>();
       for (const m of msgResult.rows) {
-        const row: FunnelMsg = { direction: m.direction, created_at: m.created_at, body: m.body, template_name: m.template_name };
+        const row: FunnelMsg = { direction: m.direction, created_at: m.created_at, body: m.body, template_name: m.template_name, status: m.status };
         const arr = idx.get(m.lead_id);
         if (arr) arr.push(row); else idx.set(m.lead_id, [row]);
       }
@@ -333,14 +364,17 @@ export function useDashboardMetrics(isAdmin = false) {
                      any report previewed before sending, the recorded "first open" is ours.
        Archived leads are excluded here now, matching the rest of the dashboard. */
     const funnelLeads = allLeads.filter(l => !l.is_archived);
-    let contacted = 0, replied = 0, pitched = 0, pitchReplied = 0, funnelPaid = 0, founderSales = 0;
+    let contacted = 0, replied = 0, pitched = 0, pitchReplied = 0, pitchRepliedPaid = 0, funnelPaid = 0, founderSales = 0;
     for (const l of funnelLeads) {
       const ms = msgsByLeadId.get(l.id);
       if (!ms) {
         if ((l.amount_paid ?? 0) > 0) funnelPaid += 1;
         continue;
       }
-      const outTemplated = ms.filter(m => m.direction === 'outbound' && m.template_name);
+      /* isRealSend: a rejected (failed) or test-mode (simulated) send is not a contact. 38 unarchived
+         leads — 37 of them status no_whatsapp — counted as Reached this way, deflating the reply rate
+         from 56% to 52% (measured 2026-08-19). */
+      const outTemplated = ms.filter(m => m.direction === 'outbound' && m.template_name && isRealSend(m.status));
       const humanInbound = ms.filter(m => m.direction === 'inbound' && !looksAutomated(m.body ?? ''));
       if (outTemplated.length > 0) contacted += 1;
       if (humanInbound.length > 0) replied += 1;
@@ -349,29 +383,26 @@ export function useDashboardMetrics(isAdmin = false) {
         pitched += 1;
         const lastPitchAt = pitches[pitches.length - 1].created_at;
         const newestInboundAt = humanInbound.length ? humanInbound[humanInbound.length - 1].created_at : null;
-        if (newestInboundAt && newestInboundAt > lastPitchAt) pitchReplied += 1;
+        if (newestInboundAt && newestInboundAt > lastPitchAt) {
+          pitchReplied += 1;
+          // Hook reply -> money: of the leads who answered the hook, how many actually paid.
+          if ((l.amount_paid ?? 0) > 0) pitchRepliedPaid += 1;
+        }
       }
       // Money in the bank, and nothing else. A status someone moved by hand is not a payment.
       if ((l.amount_paid ?? 0) > 0) funnelPaid += 1;
-      /* THE FOUNDER PRICE EXACTLY, within a penny. amount_paid is the real charged amount
-         (stripe-webhook writes amount_total / 100), so this counts places actually taken at the
-         founder price — not every paid lead, and not everything below full price.
-         ⛔ THE PRICE MOVED TO £49.99 ON 2026-08-12, AND THIS COUNTER IS NOT RETROSPECTIVE. It matches
-         the CURRENT constant, so the one sale taken at the old £19.99 (RG Locksmiths) stopped being
-         counted as a founder place the moment the constant changed — the tile went 1 → 0 with no
-         data touched and nothing thrown. That is the honest behaviour for "places taken at the
-         founder price" only if you read it as "at the price we charge today"; if the tile should
-         count every founder-era sale it needs a list of historical prices, not one constant.
-         Flagged to Paul rather than decided here.
-         ⚠️ AND THE OLD REASON FOR THE EXACT MATCH HAS INVERTED. This comment used to say the penny
-         tolerance stopped it sweeping in "the £49.99 quote that predates this offer" — £49.99 is now
-         the founder price itself. Checked before the change: exactly one lead has ever had a
-         non-null amount_paid (RG, £19.99) and NO lead has ever been charged £49.99, so nothing
-         historical is swept in by the new value. */
-      if (Math.abs((l.amount_paid ?? 0) - FOUNDER_PRICE_GBP) < 0.01) founderSales += 1;
+      /* A FOUNDER PRICE EXACTLY, within a penny — the current one or any historical one. amount_paid
+         is the real charged amount (stripe-webhook writes amount_total / 100), so this counts places
+         actually taken at a founder price — not every paid lead, and not everything below full price.
+         ⛔ HISTORICAL PRICES INCLUDED — Paul's decision 2026-08-19. The current-price-only version
+         made RG Locksmiths' £19.99 sale vanish when the price moved to £49.99 (the tile read 1 with
+         two paying customers). "Places taken at the founder offer" means across every price the
+         offer has charged, so the list, not the single constant, is what a sale is matched against. */
+      const paidAmt = l.amount_paid ?? 0;
+      if ([FOUNDER_PRICE_GBP, ...FOUNDER_PRICES_HISTORICAL_GBP].some((p) => Math.abs(paidAmt - p) < 0.01)) founderSales += 1;
     }
     const auditFunnel: AuditFunnel = {
-      contacted, replied, pitched, pitchReplied, paid: funnelPaid,
+      contacted, replied, pitched, pitchReplied, pitchRepliedPaid, paid: funnelPaid,
       founderSales, founderPlaces: FOUNDER_PLACES,
       replyRate: contacted > 0 ? Math.round((replied / contacted) * 100) : null,
       pitchReplyRate: pitched > 0 ? Math.round((pitchReplied / pitched) * 100) : null,
@@ -443,7 +474,8 @@ export function useDashboardMetrics(isAdmin = false) {
       if (ms) {
         // Templated outbound = we opened a conversation. Freeform is us answering them, which would
         // count a lead as "contacted" for a message they started — same basis as Reached elsewhere.
-        if (ms.some(m => m.direction === 'outbound' && m.template_name)) waSent += 1;
+        // isRealSend for the same reason as the funnel: a failed/simulated row is not a send.
+        if (ms.some(m => m.direction === 'outbound' && m.template_name && isRealSend(m.status))) waSent += 1;
         // Same bot filter as everywhere else. It is a filter, not proof of humanity: the patterns are
         // English-only, so non-English promotional spam still reads as a human reply.
         if (ms.some(m => m.direction === 'inbound' && !looksAutomated(m.body ?? ''))) waReplied += 1;

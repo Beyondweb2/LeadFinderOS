@@ -85,6 +85,24 @@ Deno.serve(async (req) => {
       return json({ ok: true, row: row ?? null, row_count: count ?? (row ? 1 : 0), followup_sent: (sent ?? []).length > 0 });
     }
 
+    /* ── LEAD-LINKED STATUS ROWS, for the dashboard's "started" count and Chase task (2026-08-19).
+       Both used to read onboarding_responses DIRECTLY from the browser, which RLS answers with
+       200 [] — so per-campaign "started" was structurally 0 and the Chase task ("filled the
+       questionnaire, hasn't paid") never fired once. Same trap this whole endpoint exists for,
+       reproduced by its own consumers. Returns EVERY lead-linked row (not just the newest per
+       lead): paid is sticky across rows and the client folds that rule — one implementation,
+       in the hooks that already had it. */
+    if (body.action === "lead_statuses") {
+      const { data: rows, error: lsErr } = await service
+        .from("onboarding_responses")
+        .select("lead_id, status, created_at")
+        .not("lead_id", "is", null)
+        .order("created_at", { ascending: true })
+        .limit(2000);
+      if (lsErr) return json({ ok: false, error: lsErr.message }, 500);
+      return json({ ok: true, rows: rows ?? [] });
+    }
+
     /* Clamped. A dashboard card wants the recent ones; an unbounded limit from the client is how a
        card quietly becomes a full table scan. */
     const raw = Number(body.limit);

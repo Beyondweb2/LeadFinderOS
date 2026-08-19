@@ -137,6 +137,18 @@ export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide }
             <span className="ml-auto font-bold tabular-nums text-green-600 dark:text-green-500">£{stat.moneyIn.toFixed(2)} in</span>
           )}
         </div>
+        {/* The niche verdict in two conversions: of those who ANSWERED, who bought; and end-to-end.
+            Only rendered once somebody replied — a wall of 0% rows says less than its absence. */}
+        {stat.replied > 0 && (
+          <div
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground"
+            title="Conversion, on honest denominators: replied→paid is of the leads who sent a real reply; reached→paid is of the leads actually sent a real message. Both count paid from amount_paid, never a status."
+          >
+            <span>replied→paid <span className="font-bold tabular-nums text-foreground/90">{stat.repliedToPaidPct}%</span></span>
+            <span className="text-muted-foreground/40">·</span>
+            <span>reached→paid <span className="font-bold tabular-nums text-foreground/90">{stat.reachedToPaidPct}%</span></span>
+          </div>
+        )}
 
         {/* Per-message detail, collapsed. Reached and read receipts only — see the note below. */}
         {templateRows.length > 0 && (

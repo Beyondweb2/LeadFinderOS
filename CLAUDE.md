@@ -1187,6 +1187,44 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
 
 ---
 
+## 6h. ✅ HONEST DASHBOARD METRICS — built 2026-08-19, Paul's spec. Read before touching any dashboard number.
+
+- ⛔ **A SEND IS `isRealSend` (src/lib/realSend.ts): status `sent`/`delivered`/`read`, POSITIVE test.**
+  whatsapp_messages carries `failed` (Meta refused — 82 rows) and `simulated` (old test mode — 3),
+  and every counting surface used to treat "an outbound templated row exists" as sent: 38 unarchived
+  leads (37 of them status `no_whatsapp`) counted as Reached, deflating the funnel reply rate 56%→52%
+  and Locksmiths 60%→56%. One predicate, imported by useDashboardMetrics (funnel + channel card) and
+  useCampaignStats (reached / per-template); `scripts/real-send.test.ts` pins failed/simulated/
+  pending/null out. **Lead statuses never polluted the rebuilt funnel** — the pollution was the
+  failed message row, not the status.
+- ⛔ **onboarding_responses IS READ THROUGH `submissions` (`action: "lead_statuses"`), NEVER
+  DIRECTLY.** The direct read hits RLS-with-no-policies → 200 [] → per-campaign `started` was
+  structurally 0 forever and the Chase task NEVER fired (§8's third instance, finally fixed).
+  Returns EVERY lead-linked row; the hooks fold sticky-paid client-side. Both callers are
+  deliberately non-throwing — an endpoint hiccup degrades one rule, never blanks the dashboard.
+- **The hook IS `audit_reply`, and the funnel names it now**: tiles read "Hook sent (msg 2)" / "Hook
+  reply"; Paid carries "N of M hook replies". Measured 2026-08-19: all 313 hook sends followed a
+  first reply (the auto chain), so funnel "Replied" ≈ replies to the opener.
+- **Per-campaign conversions**: `repliedToPaidPct` (of who ANSWERED, who bought) + `reachedToPaidPct`
+  in useCampaignStats, rendered under the money row once `replied > 0`.
+- ⛔ **FOUNDER TILE COUNTS ACROSS `[FOUNDER_PRICE_GBP, ...FOUNDER_PRICES_HISTORICAL_GBP]`** (Paul's
+  call 2026-08-19) — current-price-only made RG's £19.99 sale vanish (tile read 1 with 2 customers
+  paid). Append to the historical list when the price moves; never remove an entry a sale was taken
+  at. ⚠️ **check-cross-repo-sync parses `FOUNDER_PRICE_GBP` as a bare number in useDashboardMetrics
+  — keep the name, and NEVER write the declaration pattern in a comment: the regex takes the file's
+  FIRST match, comments included** (it broke the guard for ten minutes; so did moving
+  MARKET_AUDIT_MIN_AUDITS without repointing BOTH repos' scripts at marketAuditThreshold.ts).
+- ⚠️ **DATA DISCREPANCY FLAGGED, NOT ACTED ON: D Aston (b2441596) and Fortify (a3d173e9) have
+  onboarding rows `status = paid` (2026-08-13) but `amount_paid` NULL and lead status
+  `not_interested`.** Consistent with refunds/test payments — but if those were real charges,
+  stripe-webhook failed to write amount_paid and two sales are invisible to every money figure.
+  Paul to confirm which.
+- ✅ Audited clean, leave alone: Paid = amount_paid everywhere; PipelineCard (labelled status
+  counts); channel card's `not tracked` rows; SMS sent 0 (sms_sends is truly empty); SubmissionsCard;
+  receipts; hook-reply timestamp attribution. `ActivityCard.tsx` is dead code (no importer).
+
+---
+
 ## 7. Parked and unmerged — do not merge these
 
 | Branch | Hash |

@@ -156,7 +156,9 @@ const SAME_REPO_GROUPS = [
     what: 'the market audit count and the cooldown allowance',
     why: 'The measure button creates MARKET_AUDIT_MIN_AUDITS audits in a row; create-ai-audit refuses more than MARKET_COOLDOWN_ALLOWANCE per window. An allowance below the minimum makes the button unable to complete, silently, and strands the market on one audit.',
     places: [
-      { file: path.join(LFOS_ROOT, 'src', 'lib', 'marketView.ts'), name: 'MARKET_AUDIT_MIN_AUDITS', kind: 'number', role: 'how many the button CREATES' },
+      /* Moved to a zero-dep leaf 2026-08-19 so Coverage's "Measured" rung and the panel share one
+         number; marketView.ts re-exports it, but this parser needs the DECLARATION site. */
+      { file: path.join(LFOS_ROOT, 'src', 'lib', 'marketAuditThreshold.ts'), name: 'MARKET_AUDIT_MIN_AUDITS', kind: 'number', role: 'how many the button CREATES' },
       { file: path.join(LFOS_ROOT, 'supabase', 'functions', 'create-ai-audit', 'index.ts'), name: 'MARKET_COOLDOWN_ALLOWANCE', kind: 'number', role: 'how many the server ALLOWS' },
     ],
   },
