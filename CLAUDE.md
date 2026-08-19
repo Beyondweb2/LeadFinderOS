@@ -1314,7 +1314,8 @@ number and re-reads every file below before writing code.**
    CHECK — old deploys unaffected; unknown source flags, never blocks. ⚠️ Confirm it has RUN before
    deploying anything that writes it (§3 SQL-first).
 2. MVP FIRST (phase 1 only): submit → row saved with `source='free_check'` → server-side lead
-   creation (operator user_id resolved by ADMIN_EMAIL lookup; dedupe as above; trade →
+   creation (owner = **the account that owns the data, NOT ADMIN_EMAIL** — see the 🔴 note
+   directly below; dedupe as above; trade →
    `search_keyword`, town → `search_location`, email fill-empty, status `not_contacted`,
    provenance in enrichment_source/notes; three-guard place resolution + place-details → place_id/
    phone/address/derived_town, ≈5p; resolution refusal = lead still created, town-gated, flagged in
@@ -1322,6 +1323,27 @@ number and re-reads every file below before writing code.**
    free-check-aware (subject "FREE CHECK — {name}", trade line added, NO 20-min delay for these
    rows). findable-site FreeCheck adds `source:"free_check"`. Keep the honeypot.
    **Deploy order: SQL → findable-onboarding + notify-onboarding-submit → findable-site.**
+
+   🔴 **THE OWNER IS `pauljsales455@outlook.com`, NOT `paul@move37.fun`. RESOLVING IT BY
+   ADMIN_EMAIL WOULD HAVE MADE EVERY FREE-CHECK LEAD INVISIBLE.** Corrected 2026-08-19 — the
+   original plan said "operator user_id resolved by ADMIN_EMAIL lookup" and that was wrong.
+   Measured live that day: **user_id `9d5a7629-3171-4091-b3a4-43010a1d424d`
+   (`pauljsales455@outlook.com`) owns ALL of it** — 1000 outreach_leads, 457 ai_audits, 507
+   ai_audit_runs, with no second owner on any of the three. `paul@move37.fun`
+   (`a3ce543d-fc8a-46c3-8072-723351b7138e`) is **ADMIN_EMAIL, the notification recipient, and owns
+   NOTHING.**
+   - ⛔ Because RLS scopes the SPA's reads by `user_id`, a lead created under the ADMIN_EMAIL
+     account saves with HTTP 200 and then **cannot be seen in Outreach, the Inbox or any count** —
+     the RLS-returns-200-with-`[]` failure (§8) in a new place, on the funnel's front door.
+   - ⚠️ **DO NOT hardcode either UUID.** Resolve the owner from the DATA (e.g. the `user_id` on the
+     most recent `outreach_leads` row) or from an explicit new secret — never from ADMIN_EMAIL, and
+     never from a literal pasted out of this file, which goes stale the day the account changes.
+   - ⚠️ **The same trap applies to any future server-side writer of an owner-scoped table**
+     (leads, audits, runs, notes). ADMIN_EMAIL answers "who do we email", never "whose row is this".
+   - **How it surfaced:** a minted session for `paul@move37.fun` got `forbidden` from
+     extract-competitors' ownership check on all 51 runs of the cleaner catch-up. Nothing was spent
+     (the ownership check precedes the OpenAI call), and the catch-up succeeded once the session was
+     re-minted for the outlook account.
 3. Auto-spend cap: **10 free-check leads/day** — rows past the cap still save + notify, they just
    don't spend Places money automatically (generic mode has NO rate limit today and each submission
    starts costing real pence).
@@ -1856,6 +1878,61 @@ number and re-reads every file below before writing code.**
   - ⚠️ **The lesson: "blocked" needs to name WHICH CALLER is blocked.** Recording it as
     "cleaning is blocked" turned a harness-auth quirk into a product-level blocker in the notes, and
     the next session would have believed it.
+  - ✅ **THE FULL KEY × HEADER MATRIX, MEASURED 2026-08-19 (third session to hit this wall — stop
+    re-probing it).** Driven against `extract-competitors` with a nonexistent `runId`, which returns
+    before any OpenAI call, so the whole matrix cost nothing. **The discriminator is WHOSE error
+    shape comes back**: `{"ok":false,...}` is the handler; `{"message":...,"hint":...}` is the
+    gateway.
+    | Sent | Result | Whose reply |
+    |---|---|---|
+    | `Authorization: Bearer <legacy service_role JWT>` (+ apikey same) | 401 `{"ok":false,"error":"unauthorized"}` | **handler** — forwarded, but `token === SUPABASE_SERVICE_ROLE_KEY` fails: the env var is the `sb_secret` now |
+    | `Authorization` + `apikey` both `sb_secret_…` | 401 `{"message":"Invalid API key"}` | **gateway** |
+    | `apikey: sb_secret_…` alone, no Authorization | 401 `{"message":"Invalid API key"}` | **gateway** |
+    | `Authorization: Bearer sb_secret_…` alone, no apikey | 401 `{"message":"Invalid API key"}` | **gateway** |
+    | `apikey: <anon or sb_publishable>` + `Authorization: Bearer sb_secret_…` | 401 `{"message":"Conflicting API keys","hint":"Send the intended sb_ key only in the apikey header."}` | **gateway** |
+    - ⛔ **THE GATEWAY'S OWN HINT IS WHY IT IS UNSOLVABLE: `sb_` keys are accepted ONLY in `apikey`,
+      and the handlers only ever read `Authorization`.** So no combination can satisfy both. The
+      service-role branch on every function is unreachable from outside — it is dead code, not a
+      key-hunting problem, exactly as the 2026-08-12 note says. **Do not spend another session on
+      it.**
+    - ⚠️ **AND THE TWO KEYS ARE NOT INTERCHANGEABLE ACROSS SURFACES:** the **legacy `service_role`
+      JWT still works for `/rest/v1`** (every DB read in this file's recon uses it), while the
+      **`sb_secret` key is refused by `/rest/v1` with "Invalid API key"**. A script that picks "the
+      service key" without saying WHICH will work or fail depending on which surface it hits.
+  - ✅ **THE ONE ROUTE THAT DOES WORK FOR A SCRIPT: MINT AN OPERATOR SESSION.** Built and used
+    2026-08-19 for the cleaner catch-up, with Paul's explicit authorisation ("however's cleanest on
+    your end — I'm not pasting any keys"); the alternative was 26 manual panel presses.
+    1. `GET /auth/v1/admin/users` with the legacy service_role JWT → find the operator, get the id.
+    2. `POST /auth/v1/admin/generate_link` `{type:"magiclink", email}` → returns the token and does
+       **not** send mail.
+    3. ⛔ **`hashed_token` IS NOT FOR `POST /auth/v1/verify`** — that answers `403 otp_expired` and
+       cost a debugging cycle. It belongs to the **clicked-link GET**: fetch `action_link` (or
+       `/auth/v1/verify?token=<hashed_token>&type=magiclink&redirect_to=…`) with **redirect
+       following disabled**, and read `access_token` out of the **`#` fragment of the `Location`
+       header**.
+    4. Confirm the token resolves to the intended user (`GET /auth/v1/user`) BEFORE spending
+       anything — that check is what caught the ADMIN_EMAIL/owner mix-up in §6j.
+    - ⚠️ **Tell Paul, revoke it, and delete the file.** `POST /auth/v1/logout` with the token
+      returns 204 and kills the session; tokens last 3600s otherwise. Never leave one in a
+      scratchpad, and never put a key or token in the transcript.
+    - ⚠️ **It is a REAL sign-in on his account** (it stamps `last_sign_in_at`), so it needs his
+      say-so each time. It is not a substitute for the panel button, which is still the intended
+      path for one-off cleaning.
+  - ⚠️ **THE CLEANER'S COVERAGE IS PER-ROW AND CAN BE PARTIAL — `ok:true` DOES NOT MEAN CLEAN.**
+    Measured over the 2026-08-19 catch-up (51 dirty market runs, ~$3.92 all-in): the response's
+    `changed` is the count of QUEUE ROWS rewritten, and the model can omit an id, so `changed=7` of
+    8 rows leaves one row's junk in place. 48 of 51 came back fully clean on the first pass; two
+    more needed a second pass. **Always re-derive the marker count afterwards rather than trusting
+    the 200s** — `isUncleanedName` (`src/lib/knownEntities.ts`) over
+    `ai_audit_queue.result[engine].competitors` is the check.
+    - 🔴 **ONE RUN CANNOT BE CLEANED AND IS STILL DIRTY: `Plumbers · Wythenshawe`, run
+      `1cc86b92`.** Four attempts, every one `ok:true changed=0`, deterministic. NOT missing data
+      and NOT a cap: it has `answer_text` on all 14 engine slots (one of its 8 rows is `failed`) and
+      the caps are 60 items / 4,000 chars on gpt-4o. The model returns output whose row ids do not
+      match, so nothing is rewritten. Its market's OTHER run is clean, so that market stays under
+      the "Names not cleaned" refusal. Diagnosing further needs the raw model output, i.e.
+      instrumenting the function. **Cheapest real fix is re-measuring that one market (~22p, new
+      runs self-clean) — not done, Paul's call.**
   - 🔴 **THE ROTATION ALSO KILLED THREE INTERNAL CALL PATHS — found and fixed 2026-08-14, and the
     REAL MECHANISM IS verify_jwt-BY-OMISSION, not the bearer per se.** A function ABSENT from
     `supabase/config.toml` deploys with the platform default **verify_jwt = TRUE**, which demands a
