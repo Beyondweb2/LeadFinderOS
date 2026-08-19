@@ -45,6 +45,7 @@ const Feedback = lazy(() => import("./pages/Feedback"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Coverage = lazy(() => import("./pages/Coverage"));
+const ReviewReply = lazy(() => import("./pages/ReviewReply"));
 const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
@@ -473,6 +474,20 @@ const App = () => {
                   <SubscriptionGate>
                     <AppLayout>
                       <Coverage />
+                    </AppLayout>
+                  </SubscriptionGate>
+                </ProtectedRoute>
+              }
+            />
+            {/* Stateless review-reply generator — paste a Google review in, copy a reply out (or a
+                don't-reply verdict). No Google API, no storage; see src/pages/ReviewReply.tsx. */}
+            <Route
+              path="/review-replies"
+              element={
+                <ProtectedRoute>
+                  <SubscriptionGate>
+                    <AppLayout>
+                      <ReviewReply />
                     </AppLayout>
                   </SubscriptionGate>
                 </ProtectedRoute>

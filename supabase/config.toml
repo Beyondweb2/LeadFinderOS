@@ -127,3 +127,9 @@ verify_jwt = false
 
 [functions.derive-audit]
 verify_jwt = false
+
+# review-reply has NO internal callers — the SPA calls it with the operator's JWT, so the platform
+# gate stays ON and the handler still does its own getUser. Listed here so the verify_jwt state is
+# explicit rather than a platform default (the trap this file's header records).
+[functions.review-reply]
+verify_jwt = true
