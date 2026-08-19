@@ -1214,11 +1214,19 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   — keep the name, and NEVER write the declaration pattern in a comment: the regex takes the file's
   FIRST match, comments included** (it broke the guard for ten minutes; so did moving
   MARKET_AUDIT_MIN_AUDITS without repointing BOTH repos' scripts at marketAuditThreshold.ts).
-- ⚠️ **DATA DISCREPANCY FLAGGED, NOT ACTED ON: D Aston (b2441596) and Fortify (a3d173e9) have
-  onboarding rows `status = paid` (2026-08-13) but `amount_paid` NULL and lead status
-  `not_interested`.** Consistent with refunds/test payments — but if those were real charges,
-  stripe-webhook failed to write amount_paid and two sales are invisible to every money figure.
-  Paul to confirm which.
+- ✅ **RESOLVED 2026-08-19: D Aston and Fortify were Paul's TEST businesses (flow experiments,
+  never real charges) — DELETED in full on his instruction.** 83 rows across 9 tables (2 leads,
+  2 phantom-paid onboarding rows, 15 messages, 9 sends, 2 auto-replies, 3 activities, 3 audits
+  incl. Fortify's test baseline, 5 runs, 42 queue rows), FK-safe, zero orphans verified. So §8's
+  "Fortify got a full 3-run baseline minutes after paying" remains true as HISTORY (it proved the
+  bearer path) but the rows no longer exist — do not go looking for them.
+  ⚠️ **Two consequences, stated:** their numbers (+44 7833 617226, +44 7595 953838) are no longer
+  guarded by the phone-history seatbelt or any suppression row, so a future search can re-add and
+  re-message two businesses whose owners already engaged once; and the deleted onboarding rows
+  were exactly the ones that proved complete_q2 live on 2026-08-13 — RG + Ronnie are the remaining
+  proof. ⚠️ **The substring trap struck again during scoping:** a name search for "aston" matched
+  Thurm**aston** Key Solutions and **Aston's** Access Auto Locksmiths, both REAL leads — the
+  deletion keyed on the two exact lead ids, never on names.
 - ✅ Audited clean, leave alone: Paid = amount_paid everywhere; PipelineCard (labelled status
   counts); channel card's `not tracked` rows; SMS sent 0 (sms_sends is truly empty); SubmissionsCard;
   receipts; hook-reply timestamp attribution. `ActivityCard.tsx` is dead code (no importer).
