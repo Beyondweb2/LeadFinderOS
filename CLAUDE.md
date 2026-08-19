@@ -1283,6 +1283,55 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
 
 ---
 
+## 6j. 🔒 APPROVED, NOT BUILT: free check → funnel top (plan locked 2026-08-19, build next session)
+
+Paul approved all four decisions on 2026-08-19 and explicitly said **do not build the same night** —
+"this is money-spending lead-creation code and I want it built carefully". No real person has ever
+submitted the form (re-derived live 2026-08-19: `onboarding_responses` has 5 rows; the ONE generic
+row is Paul's own 06-08 test). 🔴 **§3's rule applies in full: the building session re-derives every
+number and re-reads every file below before writing code.**
+
+**What exists today (verified in deployed code + live DB, 2026-08-19):**
+- findable.live's FreeCheck posts `findable-onboarding` `action:"submit"`, no lead_id,
+  `incomplete:true`, answers = business_name / confirmed_location / services / contact_email →
+  GENERIC MODE: one `onboarding_responses` row (`lead_id` null, `status 'submitted'`), then stops.
+- Paul WOULD see it: the notify cron picks generic rows (its query has no lead_id filter) after the
+  20-min delay — but the email is MISLABELLED ("Questionnaire submitted, not paid" / "reached the
+  payment screen and stopped") and OMITS the trade (`services` isn't in its SELECT; its trade line
+  reads only off a linked lead). The dashboard SubmissionsCard lists generic rows fine.
+- **NO edge function inserts `outreach_leads` — lead creation is 100% client-side** (`useOutreach`).
+- `create-ai-audit`'s question generator falls back to DETERMINISTIC TEMPLATES on ANY non-OK OpenAI
+  response (`if (!res.ok) return fallback`, ~line 1091) — audits run end-to-end while OpenAI is dry.
+- `backfill-lead-towns` is operator-JWT only (no internal branch) and address-only (NO phone);
+  phone comes from the `_shared/place-details.ts` machinery (`fetchPlaceDetails`, ENTERPRISE_FIELDS,
+  `townFromComponents`) — a server flow should IMPORT the shared module, not call the fns over HTTP.
+- addLead's DB-keyed dedupe to replicate server-side (useOutreach.ts ~:489): place_id → exact phone
+  → exact name, archived rows count, FAILS CLOSED. The queue's phone-history seatbelt + suppression
+  live in `process-whatsapp-queue` and apply to ANY lead regardless of origin — nothing to build.
+
+**The approved decisions:**
+1. SQL (handed to Paul 2026-08-19): `onboarding_responses.source text`, nullable, no default, no
+   CHECK — old deploys unaffected; unknown source flags, never blocks. ⚠️ Confirm it has RUN before
+   deploying anything that writes it (§3 SQL-first).
+2. MVP FIRST (phase 1 only): submit → row saved with `source='free_check'` → server-side lead
+   creation (operator user_id resolved by ADMIN_EMAIL lookup; dedupe as above; trade →
+   `search_keyword`, town → `search_location`, email fill-empty, status `not_contacted`,
+   provenance in enrichment_source/notes; three-guard place resolution + place-details → place_id/
+   phone/address/derived_town, ≈5p; resolution refusal = lead still created, town-gated, flagged in
+   the email; onboarding row's lead_id linked to the created/matched lead) → notify email
+   free-check-aware (subject "FREE CHECK — {name}", trade line added, NO 20-min delay for these
+   rows). findable-site FreeCheck adds `source:"free_check"`. Keep the honeypot.
+   **Deploy order: SQL → findable-onboarding + notify-onboarding-submit → findable-site.**
+3. Auto-spend cap: **10 free-check leads/day** — rows past the cap still save + notify, they just
+   don't spend Places money automatically (generic mode has NO rate limit today and each submission
+   starts costing real pence).
+4. Phase 2 (ONLY after Paul has seen MVP work): auto-audit via internal create-ai-audit call
+   (service-bearer pattern whatsapp-inbound already uses), 5 questions, skip_seo, NO auto-pitch —
+   approved to run with template questions even while OpenAI is dry. Phase 3 is nothing: the lead's
+   phone puts it in the normal Outreach → queue flow with all guards.
+
+---
+
 ## 7. Parked and unmerged — do not merge these
 
 | Branch | Hash |
