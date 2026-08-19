@@ -5,6 +5,7 @@ import { nameMatches } from "../_shared/enrichment/ai-search.ts";
 import { generateCacheKey } from "../_shared/search-cache-key.ts";
 import { questionKey } from "../../../src/lib/seedGuard.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { classifyKnownEntity, isUncleanedName } from "../../../src/lib/knownEntities.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE, expectedPrimaryType,
@@ -362,7 +363,14 @@ Deno.serve(async (req) => {
        sides have nothing left to disagree about and nothing extracted can touch a target score.
        Junk cannot enter the pool pass, because its only input is Places names. */
     const ctx = buildMatchContext(trade, town);
-    const groups = groupNames(mentions.map((m) => m.name), ctx);
+    /* ⛔ SINGLE-WORD JUNK NEVER REACHES THE FOLD (2026-08-19). A marker word ("always", "ask") is
+       provably not a firm, so it is dropped from the GROUPING INPUT — it can no longer occupy a
+       fold entry, bridge two real firms in the union-find, or inflate mention counts. The
+       uncleaned-fold REFUSAL still reads the RAW mentions below (uncleanedNames), deliberately:
+       multi-word junk ("Services LTD", "AM Wed") still needs the LLM cleaner, and filtering the
+       display must not silence the flag that says so. */
+    const foldMentions = mentions.filter((m) => !isUncleanedName(m.name));
+    const groups = groupNames(foldMentions.map((m) => m.name), ctx);
     const idx = keyIndex(groups);
     const poolNames = [...pool, ...poolOutside].map((p) => (p?.name ?? "").trim()).filter(Boolean);
     const poolIdx = keyIndex(groupNames(poolNames, ctx));
@@ -370,7 +378,7 @@ Deno.serve(async (req) => {
     // key -> the fold. AUDITS is the honest signal: 32 mentions from one audit is one opinion, not
     // a market position (the same trap playbook-evidence guards).
     const fold = new Map<string, { counts: Map<string, number>; mentions: number; audits: Set<string> }>();
-    for (const m of mentions) {
+    for (const m of foldMentions) {
       const k = idx.get(m.name);
       if (!k) continue;
       const hit = fold.get(k) ?? { counts: new Map<string, number>(), mentions: 0, audits: new Set<string>() };
@@ -455,9 +463,15 @@ Deno.serve(async (req) => {
         const auditShare = auditIds.length > 0 ? v.audits.size / auditIds.length : 0;
         const mentionShare = leaderMentions > 0 ? v.mentions / leaderMentions : 0;
         const established = auditShare >= ESTABLISHED_MIN_AUDIT_SHARE && mentionShare >= ESTABLISHED_MIN_MENTION_SHARE;
+        const displayName = pickDisplayName(v.counts);
+        /* Curated classification (knownEntities.ts): checked on the DISPLAY name first, then any
+           variant — a group is a national/directory if any spelling in it is. Additive metadata;
+           an unmatched group carries no field and everything reads as before. */
+        const known = (classifyKnownEntity(displayName)
+          ?? [...v.counts.keys()].map(classifyKnownEntity).find(Boolean) ?? null)?.kind;
         return {
           key,
-          name: pickDisplayName(v.counts),
+          name: displayName,
           variants: [...v.counts.keys()].sort(),
           mentions: v.mentions,
           audits: v.audits.size,
@@ -465,6 +479,7 @@ Deno.serve(async (req) => {
           auditShare: Math.round(auditShare * 1000) / 1000,
           mentionShare: Math.round(mentionShare * 1000) / 1000,
           otherTowns: townsByName.get(key)?.size ?? 0,
+          ...(known ? { known } : {}),
         };
       })
       .sort((a, b) => b.audits - a.audits || b.mentions - a.mentions || a.name.localeCompare(b.name));

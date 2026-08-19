@@ -4,6 +4,7 @@
    the same reason: everything it imports lands in that edge bundle too. */
 import { EVIDENCE_MIN_AUDITS } from './buildPlaybook.ts';
 import { MARKET_AUDIT_MIN_AUDITS } from './marketAuditThreshold.ts';
+import { UNCLEANED_MARKER_WORDS, isUncleanedName, uncleanedNames, type KnownEntityKind } from './knownEntities.ts';
 
 /* ============================================================
    MARKET VIEW — shared shapes and thresholds for "a trade in a town".
@@ -67,45 +68,11 @@ export const JUNK_RATIO_PER_AUDIT = 15;
    about fragmentation; it just cannot carry a yes/no about cleanliness. Per QUESTION rather than per
    AUDIT because an audit is 3 questions or 8 depending on how it was started, so the per-audit
    figure moves with the question count and JUNK_RATIO_PER_AUDIT has never separated anything. */
-export const UNCLEANED_MARKER_WORDS: ReadonlySet<string> = new Set([
-  "a", "about", "above", "after", "again", "all", "already", "also", "although", "always", "am", "an",
-  "and", "another", "any", "anyone", "are", "as", "ask", "asked", "at", "available", "back", "based",
-  "be", "because", "been", "before", "being", "below", "best", "better", "between", "both", "but",
-  "by", "call", "called", "can", "cannot", "check", "come", "could", "did", "do", "does", "doing",
-  "done", "down", "during", "each", "either", "else", "enough", "even", "ever", "every", "few",
-  "find", "first", "for", "found", "from", "fully", "further", "get", "getting", "give", "given",
-  "go", "going", "good", "got", "had", "has", "have", "having", "he", "help", "her", "here", "hers",
-  "him", "his", "how", "however", "i", "i'd", "i'll", "i'm", "i've", "if", "in", "into", "is", "it",
-  "it's", "its", "just", "keep", "know", "known", "last", "less", "let", "like", "likely", "look",
-  "looking", "made", "make", "many", "may", "maybe", "me", "might", "mine", "more", "most", "much",
-  "must", "my", "need", "needed", "needs", "never", "new", "next", "no", "none", "nor", "not",
-  "note", "now", "of", "off", "often", "on", "once", "one", "only", "or", "other", "others", "our",
-  "ours", "out", "over", "own", "particularly", "per", "perhaps", "please", "prices", "provide",
-  "quite", "rather", "really", "right", "said", "same", "say", "see", "seen", "several", "shall",
-  "she", "should", "since", "so", "some", "someone", "something", "still", "such", "sure", "take",
-  "than", "that", "the", "their", "theirs", "them", "then", "there", "these", "they", "this",
-  "those", "though", "through", "thus", "to", "too", "typically", "under", "until", "up", "upon",
-  "us", "use", "used", "usually", "very", "via", "want", "was", "we", "well", "were", "what",
-  "when", "where", "whether", "which", "while", "who", "whom", "why", "will", "with", "within",
-  "without", "work", "worth", "would", "yes", "yet", "you", "your", "yours",
-]);
-
-/** One extracted "competitor" that proves the fold was never cleaned. */
-export function isUncleanedName(name: string): boolean {
-  const t = String(name ?? "").trim().toLowerCase().replace(/[.,;:!?]+$/, "");
-  if (!t || t.includes(" ")) return false;
-  return UNCLEANED_MARKER_WORDS.has(t);
-}
-
-/** Every distinct marker in a fold, sorted — so the flag can show its working rather than assert. */
-export function uncleanedNames(names: Iterable<string>): string[] {
-  const found = new Set<string>();
-  for (const n of names) {
-    const t = String(n ?? "").trim().toLowerCase().replace(/[.,;:!?]+$/, "");
-    if (isUncleanedName(t)) found.add(t);
-  }
-  return [...found].sort();
-}
+/* ⛔ THE MARKER SET AND ITS TWO FUNCTIONS MOVED TO src/lib/knownEntities.ts (2026-08-19) so the
+   report path can use them without bundling this whole module. Imported at the top and re-exported
+   here (a bare `export … from` would not bind the names for this file's own uses — the
+   marketAuditThreshold lesson) so every existing importer and test is unchanged. */
+export { UNCLEANED_MARKER_WORDS, isUncleanedName, uncleanedNames };
 
 /** How many markers are shown on screen. Enough to be convincing, short enough to read. */
 export const UNCLEANED_EXAMPLES_SHOWN = 6;
@@ -224,6 +191,12 @@ export interface MarketNamedRow {
    *  Rapid Secure UK and E-Locksmiths all show up in both Hastings and Wisbech. Derived from
    *  citations, never from a hardcoded brand list. */
   otherTowns: number;
+  /** Curated classification from knownEntities.ts: a known national operator or a directory/
+   *  platform. ADDITIVE to the cross-town evidence above, never a replacement — the evidence scan
+   *  is capped (otherTownsCapped) and blind in a trade's first measured town, which is exactly
+   *  where Able Group topped the Portsmouth naming while reading as local. Absent (older cached
+   *  payloads / an older deploy) means unclassified — everything behaves as before. */
+  known?: KnownEntityKind;
 }
 
 /** The market leader's mention count, needed to render "against N for the leader". */
@@ -1134,10 +1107,22 @@ export function marketShape(input: MarketShapeInput): MarketShape {
      national franchises and no local firm anywhere near the top — which the leader-only test called
      the same thing as a market whose leader is a franchise and whose #2 is a local firm. Those are
      different markets, and only one of them is unworkable. */
-  const topNamed = (input.topNamed ?? (leaderRow ? [leaderRow] : [])).slice(0, NATIONAL_TOP_N);
-  const localAtTheTop = topNamed.filter((n) => (n.otherTowns ?? 0) < NATIONAL_MIN_OTHER_TOWNS);
+  /* ⛔ DIRECTORIES ARE NOT FIRMS WINNING THE MARKET. A known directory (Checkatrade, Yell) in the
+     named fold is the engine recommending a middleman — it must not occupy a top-N slot the
+     national test reads, where it would either mask a real national pattern or manufacture one.
+     Filtered BEFORE the slice so the test still sees N real firms. */
+  const topNamed = (input.topNamed ?? (leaderRow ? [leaderRow] : []))
+    .filter((n) => n.known !== 'directory')
+    .slice(0, NATIONAL_TOP_N);
+  /* A firm is national on EITHER signal: the cross-town citation evidence, OR the curated list
+     (knownEntities.ts). Additive on purpose — the evidence scan is capped and blind in a trade's
+     first measured town, which is how Able Group topped a naming while reading as local. The
+     curated list can only mark a firm national (subtract it from "local"), never invent locals. */
+  const isNationalRow = (n: { otherTowns?: number; known?: KnownEntityKind }) =>
+    (n.otherTowns ?? 0) >= NATIONAL_MIN_OTHER_TOWNS || n.known === 'national';
+  const localAtTheTop = topNamed.filter((n) => !isNationalRow(n));
   const nationalDominated = topNamed.length > 0 && localAtTheTop.length === 0;
-  const leaderIsNational = (leaderRow?.otherTowns ?? 0) >= NATIONAL_MIN_OTHER_TOWNS;
+  const leaderIsNational = !!leaderRow && isNationalRow(leaderRow);
   const hostShare = topHost && citationTotal > 0 ? Math.round((topHost.citations / citationTotal) * 100) : 0;
   /* ⛔ THE DENOMINATOR IS PRINTED, NOT JUST DIVIDED BY, AND THAT IS WHERE IT WENT WRONG.
      Every ratio in this file is guarded (`citationTotal > 0`), so nothing ever divided by zero and

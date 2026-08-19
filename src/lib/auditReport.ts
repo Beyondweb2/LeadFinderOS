@@ -11,6 +11,7 @@
    the whole chain (market-match -> ai-search -> apify) uses no Deno globals, so the SPA can import
    it too and both sides group names identically. */
 import { buildMatchContext, groupNames } from "../../supabase/functions/_shared/market-match.ts";
+import { classifyKnownEntity, isUncleanedName } from './knownEntities.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
 
 // Engines shown in results (queue targets chatgpt+gemini; the actor also returns
@@ -298,6 +299,15 @@ export function isRealCompetitor(name: string, locationText: string): boolean {
   if (!words.length) return false;
   // Gov/tax authority, statutory term, or accounting software → never a competing firm.
   if (isNotACompetitor(nl, words)) return false;
+  /* A single English function word ("always", "ask") is provably not a firm — the same marker test
+     the market fold uses (knownEntities.ts), so a report and the panel can never disagree on what
+     raw-extractor junk is. Broader than the word sets above for bare function words; adds nothing
+     for multi-word names (the marker test is single-token only). */
+  if (isUncleanedName(n)) return false;
+  /* A known DIRECTORY (Checkatrade, Yell, Trustpilot…) is a source, not a rival firm a customer
+     hires instead — it passed every set above and could print as a client's "competitor". Known
+     NATIONALS stay: Able Group really is a rival. (knownEntities.ts, 2026-08-19.) */
+  if (classifyKnownEntity(n)?.kind === 'directory') return false;
   const generic = (w: string) =>
     COMPETITOR_STOPWORDS.has(w) || PLATFORM_UI.has(w) || GENERIC_TERMS.has(w) || PRONOUNS.has(w)
     || DOMAIN_GENERIC.has(w) || FRAGMENT_WORDS.has(w) || NOISE_WORDS.has(w);
