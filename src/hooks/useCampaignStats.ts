@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useCampaigns, type Campaign } from '@/hooks/useCampaigns';
 import { looksAutomated, isDecline } from '@/lib/inboundClassify';
+import { isRealSend } from '@/lib/realSend';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 
 /* ============================================================
@@ -75,6 +76,10 @@ export interface CampaignStats {
   moneyIn: number;
   replyRatePct: number | null;       // replied / reached — null when nothing reached
   pitchReplyRatePct: number | null;  // pitchReplied / pitched — null when nothing pitched
+  /** Of the leads who REPLIED, how many paid — the niche's conversion. null when nobody replied. */
+  repliedToPaidPct: number | null;
+  /** Of the leads actually REACHED, how many paid — end-to-end. null when nobody reached. */
+  reachedToPaidPct: number | null;
   byTemplate: Record<string, TemplateStats>;
 }
 
@@ -127,14 +132,15 @@ export function useCampaignStats() {
       console.error('Campaign stats fetch failed (non-blocking):', e);
     }
 
-    /* Questionnaire starts. Separate and defensive: onboarding_responses is not in the generated
-       types and is RLS-locked to the server on some paths, so a failure here degrades `started` to
-       0 rather than taking the whole card down. */
+    /* Questionnaire starts — THROUGH THE submissions ENDPOINT. The old direct read of
+       onboarding_responses hit RLS-with-no-policies and returned 200 [] for every browser session,
+       so `started` was structurally 0 on every campaign card since the day it shipped (proven live
+       2026-08-19: an operator session sees 0 of the 7 rows that exist). Still defensive: a failure
+       degrades `started` to 0 rather than taking the whole card down. */
     try {
-      const client = supabase as unknown as SupabaseClient;
-      const { rows } = await fetchAllRows<{ lead_id: string | null }>('Campaign stats (onboarding)', (from, to) =>
-        client.from('onboarding_responses').select('lead_id').not('lead_id', 'is', null)
-          .order('id', { ascending: true }).range(from, to));
+      const { data: res, error } = await supabase.functions.invoke('submissions', { body: { action: 'lead_statuses' } });
+      if (error || !res?.ok) throw new Error(error?.message ?? res?.error ?? 'lead_statuses failed');
+      const rows = (res.rows ?? []) as { lead_id: string | null }[];
       setStartedLeadIds(new Set(rows.map((r) => r.lead_id).filter((v): v is string => !!v)));
     } catch (e) {
       console.warn('Onboarding starts unavailable (started shows 0):', e instanceof Error ? e.message : e);
@@ -158,7 +164,8 @@ export function useCampaignStats() {
   const seed = (campaign: Campaign | null): CampaignStats => ({
     campaign, leadCount: 0, reached: 0, delivered: 0, read: 0, replied: 0, declined: 0,
     pitched: 0, pitchReplied: 0, signupSent: 0, started: 0, paid: 0, moneyIn: 0,
-    replyRatePct: null, pitchReplyRatePct: null, byTemplate: {},
+    replyRatePct: null, pitchReplyRatePct: null, repliedToPaidPct: null, reachedToPaidPct: null,
+    byTemplate: {},
   });
   for (const c of campaigns) buckets.set(c.id, seed(c));
   const bucketFor = (campaignId: string | null): CampaignStats => {
@@ -176,7 +183,11 @@ export function useCampaignStats() {
     b.leadCount += 1;
 
     const ms = msgsByLead.get(l.id) ?? [];
-    const outTemplated = ms.filter((m) => m.direction === 'outbound' && m.template_name);
+    /* isRealSend: a rejected (failed) or test-mode (simulated) row is not a send. Without it the
+       Reached denominators counted leads whose every send Meta refused — Locksmiths read 56% reply
+       when the truth was 60% (measured 2026-08-19). Applies to every downstream test on this list:
+       a failed pitch is not "pitched", a failed sign-up link was not sent. */
+    const outTemplated = ms.filter((m) => m.direction === 'outbound' && m.template_name && isRealSend(m.status));
     /* A reply is an inbound message that is not an auto-responder — the SAME looksAutomated() the
        auto-pitch rule uses, so the dashboard and the sender agree on what a human is. */
     const humanInbound = ms.filter((m) => m.direction === 'inbound' && !looksAutomated(m.body ?? ''));
@@ -228,10 +239,14 @@ export function useCampaignStats() {
     }
   }
 
-  // Derived rates — both over what was actually done, never over "Sent".
+  // Derived rates — all over what was actually done, never over "Sent".
+  // The two conversions compare niches: responsiveness is replyRatePct, conversion is
+  // repliedToPaidPct (of those who answered, who bought) with reachedToPaidPct as end-to-end.
   for (const b of buckets.values()) {
     b.replyRatePct = pct(b.replied, b.reached);
     b.pitchReplyRatePct = pct(b.pitchReplied, b.pitched);
+    b.repliedToPaidPct = pct(b.paid, b.replied);
+    b.reachedToPaidPct = pct(b.paid, b.reached);
   }
 
   // Campaigns first (creation order), Unassigned last and only if it has activity.
