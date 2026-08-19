@@ -994,12 +994,32 @@ worst-first, >40% is excluded as already winning, and both exclusions are itemis
     the verdict grades who's-WINNING, which needs the extracted names (firms with no Places
     listing, the cross-town national test), so it cannot be derived from the pool — that trade-off
     was examined and kept 2026-08-14.
-  - 🔴 **AND THE CLEANER ITSELF WAS STILL FAILING SILENTLY AS OF 2026-08-14** — folds stayed dirty
-    after auto-clean attempts, queue rows unrewritten, cause unknown from the harness (the panel
-    invoke swallows per-run failures; supabase.functions.invoke resolves with `error`, it does not
-    throw). Diagnose via one press of the manual button (its toast counts failures) or the
-    extract-competitors dashboard log. Nothing has provably cleaned since ~2026-08-10, so suspect
-    OPENAI_API_KEY before suspecting the auth plumbing fixed in §8.
+  - ✅ **THE CLEANER'S SILENT FAILURE — CAUSE CAPTURED 2026-08-19: THE OPENAI ACCOUNT IS OUT OF
+    CREDIT.** Fired live on a dirty Eastbourne run: `openai_http_429 · "You have no credits
+    remaining" · credit_balance_exhausted`. The key is VALID (it authenticated; a dead key 401s),
+    the auth plumbing and the queue's auto-clean hook are healthy — every fold since ~08-10 died at
+    OpenAI's paywall. **The fix is Paul topping up at platform.openai.com → Settings → Billing;
+    nothing in Supabase changes.** Once credited, new audits self-clean immediately (no deploy);
+    the backlog was 25 dirty markets / 49 runs ≈ **$3.43** to catch up. ⚠️ The first diagnostic
+    401 that session was the probe's own EXPIRED JWT — mint fresh before believing a 401.
+  - ⛔ **SINGLE-WORD JUNK CAN NO LONGER REACH ANY FOLD (2026-08-19): `src/lib/knownEntities.ts`.**
+    Marker words are dropped from the fold's GROUPING INPUT in `market-view` (they cannot occupy an
+    entry, bridge firms in the union-find, or inflate counts) while `uncleanedCount` still reads the
+    RAW mentions — multi-word junk ("Services LTD", "AM Wed") still needs the LLM cleaner, so the
+    "Names not cleaned" refusal deliberately still fires. The marker set + `isUncleanedName` MOVED
+    to that leaf; marketView.ts re-exports (import-at-top pattern).
+  - ⛔ **KNOWN NATIONALS/DIRECTORIES ARE A CURATED LIST THAT CLASSIFIES, NEVER ADDS** (same law as
+    directoryFacts §6). `classifyKnownEntity` — whole word-token matching (substring traps designed
+    out; a single-word entity only matches ≤2-token names, so "Bark & Birch Locksmiths" is never
+    the directory Bark). Consumers: named-fold rows carry `known: 'national'|'directory'` (panel
+    badges); the national-led verdict counts a known national as national even at otherTowns=0
+    (Able Group topped electrician/Portsmouth's naming with ZERO cross-town evidence — the scan is
+    blind in a trade's first town) and EXCLUDES directories from its top-N; the report's
+    `isRealCompetitor` drops directories (Checkatrade passed every filter and could print as a
+    client's rival) and marker words. **Paul appends names to the two arrays himself.**
+    `scripts/known-entities.test.ts` pins all of it. ⚠️ send-whatsapp-message +
+    process-whatsapp-queue import the changed auditReport.ts but stayed UNDEPLOYED (§6g hold) —
+    their WhatsApp {{2}} lists keep the old filtering until that hold lifts; redeploy them with it.
   - ✅ Coverage's row buttons carry their prices: "Find leads · ~{asPence(MARKET_SEARCH_USD)}"
     (derived — never hand-type a pence figure, §4's constants rule) and "Market view · free". The
     measure button already priced itself ("Refresh this market · free" included).

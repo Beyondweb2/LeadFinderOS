@@ -1202,6 +1202,15 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                       </span>
                       <span className="font-medium">{n.name}</span>
                       <span className="text-xs text-muted-foreground">{n.mentions} mention{n.mentions === 1 ? '' : 's'}</span>
+                      {/* Curated classification (knownEntities.ts) — a known national operator or a
+                          directory/platform is said out loud, so it can't read as a local rival.
+                          Absent on unclassified names and on older cached payloads. */}
+                      {n.known === 'national' && (
+                        <Badge variant="outline" className="border-blue-500/40 text-[10px] text-blue-500">national chain</Badge>
+                      )}
+                      {n.known === 'directory' && (
+                        <Badge variant="outline" className="border-amber-500/40 text-[10px] text-amber-600 dark:text-amber-500">directory, not a firm</Badge>
+                      )}
                       {/* Every spelling that folded into this firm, so a wrong merge is visible
                           rather than hidden behind a tidy single name. */}
                       {n.variants.length > 1 && (
@@ -1244,6 +1253,12 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                           <Badge variant="outline" className="border-blue-500/40 text-[10px] text-blue-500">
                             also in {n.otherTowns} other {n.otherTowns === 1 ? 'town' : 'towns'} · likely national
                           </Badge>
+                        )}
+                        {n.known === 'national' && n.otherTowns === 0 && (
+                          <Badge variant="outline" className="border-blue-500/40 text-[10px] text-blue-500">national chain</Badge>
+                        )}
+                        {n.known === 'directory' && (
+                          <Badge variant="outline" className="border-amber-500/40 text-[10px] text-amber-600 dark:text-amber-500">directory, not a firm</Badge>
                         )}
                       </li>
                     ))}
