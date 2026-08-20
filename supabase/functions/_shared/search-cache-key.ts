@@ -42,3 +42,35 @@ export async function generateCacheKey(
   const hash = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+
+/** The radius every market-scoped search uses. MarketPanel's MARKET_SEARCH_RADIUS_M and the
+ *  Coverage row's literal are both 50_000; this is the same number, named once on the read side. */
+export const MARKET_POOL_RADIUS_M = 50_000;
+
+/**
+ * The cache keys a market pool WOULD have, derived straight from the trade and town.
+ *
+ * ⛔ WHY THIS EXISTS. A pool is normally located through a `search_history` row, and until
+ * 2026-08-20 `search-leads` never wrote one — only the browser did. So every caller that invoked the
+ * function directly (the Coverage row's Find-leads, and anything future) filled `search_cache` and
+ * left nothing pointing at it: 7 pools, 15-23 businesses each, all paid for and all invisible.
+ * search-leads writes the history row itself now, but that does not retrieve the pools already
+ * orphaned — this does, for free, with no new search.
+ *
+ * ⚠️ IT IS A FALLBACK, NEVER THE PRIMARY. History stays first because the keyword actually SEARCHED
+ * can differ from the trade (normalizeKeyword singularises anything; the trade norm() does not), and
+ * the history row is the only record of what was really asked. This reconstructs the key for the
+ * common case where they agree, which is every market-scoped search the app issues today.
+ * townOnly first, then the radius key — the same order market-view already tried.
+ */
+export async function directPoolCacheKeys(
+  trade: string,
+  town: string,
+  radius: number = MARKET_POOL_RADIUS_M,
+): Promise<string[]> {
+  if (!trade.trim() || !town.trim()) return [];
+  return [
+    await generateCacheKey(trade, town, radius, true),
+    await generateCacheKey(trade, town, radius, false),
+  ];
+}

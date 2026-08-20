@@ -364,7 +364,12 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       try {
         // Race the invoke against a timeout
         const invokePromise = supabase.functions.invoke<SearchResponse>('search-leads', {
-          body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}) },
+          /* ⛔ skipHistory: THIS path writes its own search_history row (saveSearch below), with the
+             POST-EXCLUSION counts the dashboard reads. search-leads now writes one by default so
+             that direct callers cannot leave a pool unindexed — but both writing would double-count
+             results_count/no_website_count in useDashboardMetrics. One row, from whichever side has
+             the better numbers. */
+          body: { ...filters, skipTrialCount, skipHistory: true, ...(isDemo ? { demo: true } : {}) },
         });
 
         const timeoutPromise = new Promise<never>((_, reject) => {
