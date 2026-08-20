@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { generateCacheKey } from "../_shared/search-cache-key.ts";
+import { directPoolCacheKeys, generateCacheKey } from "../_shared/search-cache-key.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WHERE HAVE I BEEN? — the candidate town list, and the raw facts to grade it against.
@@ -197,6 +197,18 @@ Deno.serve(async (req) => {
         }
         /* Sent RAW like every other pair — coverageKey folds it on the client, once. */
         if (has) pooled.push({ trade: keyword, town: location });
+      }
+
+      /* ── THE DIRECT-KEY FALLBACK, same reasoning as market-view's (2026-08-20) ─────────────────
+         A pool whose `search_history` row was never written is invisible to the loop above, so the
+         row would offer a priced "Find leads" for businesses already sitting in the cache — paid for
+         and unreachable. The MEASURED pairs are exactly the rows at risk (a measured town with no
+         pool is the dead end), so their direct keys are checked here. No extra reads: `cacheKeys` is
+         already in memory, and this only hashes. */
+      for (const p of measured) {
+        for (const key of await directPoolCacheKeys(p.trade, p.town)) {
+          if (cacheKeys.has(key)) { pooled.push({ trade: p.trade, town: p.town }); break; }
+        }
       }
 
       return { measured, leads: leadPairs, worked: workedPairs, pooled };

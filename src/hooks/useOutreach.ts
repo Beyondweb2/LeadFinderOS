@@ -455,6 +455,40 @@ export function useOutreach() {
       return null;
     }
 
+    /* ══ NO TRADE, NO LEAD — Paul's call 2026-08-20: BLOCK, do not prompt ═══════════════════════
+       ⛔ WHAT THIS PREVENTS. `search_keyword` is the trade every audit entry point reads, and a lead
+       written without it CANNOT be audited at all — create-ai-audit needs a business type and there
+       is none. 154 rows in the CRM are in exactly that state (measured 2026-08-20), 140 of them from
+       the pre-2026-08-08 bug where the results outlived the search that produced them.
+       That bug is fixed structurally (results and their search are now one persisted object), but the
+       fix cannot cover results on screen with NO search behind them at all — a restored view, or a
+       list populated by something other than a search. Then `lastSearch` is legitimately null, and
+       until now addLead faithfully wrote the null through. 14 leads got that on 17 and 20 August.
+
+       ⛔ BLOCKING, NOT PROMPTING, and that is deliberate. A prompt is a new dialog on the hottest
+       path in the app, asking for something the page can almost always supply by itself — and the
+       remedy here is one keypress (press Search). Refusing with the reason costs a click; guessing
+       or nagging costs a lead that looks fine and cannot be audited. Same shape as addLead's
+       fail-closed dedupe directly below: refuse rather than write something wrong.
+
+       ⛔ THE GUARD IS HERE, NOT IN THE THREE Index CALL SITES. All four callers funnel through this
+       function — Index (row / bulk / campaign dialog), MarketPanel and Coverage — and the panel and
+       Coverage always pass a real trade. One guard at the choke point cannot be forgotten by a new
+       call site; three guards at the call sites is the same class of bug this is fixing.
+       ⚠️ Silent bulk adds must NOT toast 20 times. The message goes out once per call, and a bulk
+       caller passes silent=true, so the batch reports its own skipped count as it already does. */
+    if (!searchKeyword || !searchKeyword.trim()) {
+      if (!silent) {
+        toast({
+          title: 'Run a search first',
+          description:
+            `${lead.name} was NOT added. These results have no search behind them, so the trade would be saved blank and the lead could never be audited. Search for the trade and town, then add.`,
+          variant: 'destructive',
+        });
+      }
+      return null;
+    }
+
     // Fast local-only duplicate check (no DB round-trips)
     const inHistory = outreachHistory.some(
       (h) => h.business_name === lead.name || (lead.googleMapsUrl && h.google_maps_url === lead.googleMapsUrl)

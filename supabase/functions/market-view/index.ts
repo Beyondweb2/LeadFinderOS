@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { norm } from "../../../src/lib/buildPlaybook.ts";
 import { buildMatchContext, groupNames, keyIndex } from "../_shared/market-match.ts";
 import { nameMatches } from "../_shared/enrichment/ai-search.ts";
-import { generateCacheKey } from "../_shared/search-cache-key.ts";
+import { directPoolCacheKeys, generateCacheKey, MARKET_POOL_RADIUS_M } from "../_shared/search-cache-key.ts";
 import { questionKey } from "../../../src/lib/seedGuard.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { classifyKnownEntity, isUncleanedName } from "../../../src/lib/knownEntities.ts";
@@ -342,6 +342,34 @@ Deno.serve(async (req) => {
            (removed 2026-08-14) or overwritten under a different key. Re-running the search is the
            only way back; the state says so. */
         poolState = { state: "expired", keyword: last.keyword, searchedAt: last.searched_at, ttlHours: POOL_TTL_MS / 3_600_000 };
+      }
+    }
+
+    /* ── THE DIRECT-KEY FALLBACK (2026-08-20) ────────────────────────────────────────────────────
+       ⛔ THE POOL CAN EXIST WITH NOTHING POINTING AT IT. `search-leads` never wrote a
+       `search_history` row until today — only the browser did — so every caller that invoked the
+       function directly (the Coverage row's Find-leads) filled `search_cache` and left no index.
+       Measured 2026-08-20: 7 orphaned pools, 15-23 businesses each, every one already paid for.
+       History stays PRIMARY above (it is the only record of what keyword was really searched). This
+       runs only when history found nothing, and reconstructs the key from the trade and town — which
+       is exactly what those direct callers used. Free: two hash computations and one keyed read. */
+    if (poolState.state === "never_searched") {
+      for (const key of await directPoolCacheKeys(trade, town)) {
+        const { data: hit } = await service.from("search_cache")
+          .select("results, created_at").eq("cache_key", key).maybeSingle();
+        if (!hit?.results) continue;
+        const rawRes = hit.results as unknown;
+        const isRegionBlob = !!rawRes && !Array.isArray(rawRes) && Array.isArray((rawRes as { leads?: unknown }).leads);
+        pool = (isRegionBlob ? (rawRes as { leads: CachedLead[] }).leads : rawRes) as CachedLead[];
+        const fresh = Date.now() - new Date(String(hit.created_at)).getTime() <= POOL_TTL_MS;
+        /* scope "town": the direct key is tried townOnly-first, and every market-scoped search the
+           app issues is townOnly. Reported like any other pool so the panel reads identically. */
+        poolState = {
+          state: fresh ? "ready" : "stale", scope: "town", keyword: trade, radiusM: MARKET_POOL_RADIUS_M,
+          searchedAt: String(hit.created_at), total: pool.length,
+        };
+        console.log(`[market-view] pool recovered by DIRECT KEY for ${trade} / ${town} (no history row) — ${pool.length} businesses`);
+        break;
       }
     }
 

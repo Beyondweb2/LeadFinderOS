@@ -61,6 +61,14 @@ const SearchRequestSchema = z.object({
   // 1km narrows the hint; it does not exclude a neighbouring town.
   // Default false, so every existing call is byte-identical to before.
   townOnly: z.boolean().default(false),
+  /* ⛔ HISTORY IS WRITTEN BY DEFAULT, AND THE OPT-OUT IS THE EXCEPTION. Until 2026-08-20 this
+     function wrote `search_cache` but never `search_history`, while the browser wrote the history
+     row — so any caller that invoked the function DIRECTLY produced a pool nothing pointed at. Seven
+     pools, 15-23 businesses each, all paid for and all invisible to the market view.
+     Default false (write it) so a future direct caller cannot reintroduce that by omission. The SPA
+     search page passes true because it writes its own row afterwards with the POST-FILTER counts
+     (exclusions removed), which the dashboard reads — two rows would double-count it. */
+  skipHistory: z.boolean().default(false),
   // Legacy fields — accepted but ignored
   minRating: z.number().optional(),
   minReviews: z.number().optional(),
@@ -1353,7 +1361,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Invalid search parameters. Please check your input.', _debug: debug }, 400);
     }
 
-    const { keyword, location, radius, broad, region, density, country, townOnly } = validationResult.data;
+    const { keyword, location, radius, broad, region, density, country, townOnly, skipHistory } = validationResult.data;
 
     if (!GOOGLE_MAPS_API_KEY) {
       console.error('GOOGLE_MAPS_API_KEY not configured');
@@ -1472,6 +1480,32 @@ Deno.serve(async (req) => {
       }
     } catch (cacheErr) {
       console.error('Cache store failed (non-blocking):', cacheErr);
+    }
+
+    /* ── THE SEARCH_HISTORY ROW ────────────────────────────────────────────────────────────────
+       This is the ONLY index that makes a cached pool findable: market-view locates a pool by
+       matching a history row's keyword and location, so a cache row with no history row is a pool
+       that exists and cannot be reached. Writing it HERE means every caller gets one, including the
+       ones that never touch the browser code that used to do it.
+       ⚠️ NON-BLOCKING and never fatal: a failed history write must not fail a search the user has
+       already paid for. It degrades to the old behaviour (recoverable by the direct-key fallback),
+       which is strictly better than losing the results.
+       ⚠️ Counts are the RAW result counts this function returned. The SPA's own row uses its
+       post-exclusion counts, which is why it opts out rather than letting both write. */
+    if (!skipHistory && userId) {
+      try {
+        await serviceClient.from('search_history').insert({
+          user_id: userId,
+          keyword: String(keyword).toLowerCase().trim(),
+          location: String(location).toLowerCase().trim(),
+          radius,
+          results_count: leads.length,
+          no_website_count: leads.filter((l: { websiteStatus?: string }) =>
+            l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length,
+        });
+      } catch (histErr) {
+        console.error('[search-leads] search_history write failed (non-blocking):', histErr);
+      }
     }
 
     // ─── LOG USAGE ───────────────────────────────
