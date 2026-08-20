@@ -382,6 +382,20 @@ export interface MarketPoolRow {
  *  markets showed no prospect at all — but it never satisfies a freshness gate, so re-searching
  *  still charges and still refreshes. `expired` survives for the searched-but-cache-row-gone case
  *  (pools deleted before 2026-08-14, when cron-run stopped destroying them). */
+/**
+ * Does this pool state have BUSINESSES to show?
+ *
+ * ⛔ A POSITIVE TEST ON THE TWO STATES THAT DO, never `state !== 'never_searched'`. `ready` and
+ * `stale` both render the businesses (age decides the label, not whether they appear — the
+ * 2026-08-14 fix); `never_searched` and `expired` have nothing to show and must offer the
+ * find-leads action instead. Written this way so a FIFTH state added later lands on the
+ * offer-the-action side rather than silently claiming to have a pool it does not have — the
+ * absent-value shape CLAUDE.md records fourteen times.
+ */
+export function poolShowsBusinesses(state: MarketPoolState['state'] | null | undefined): boolean {
+  return state === 'ready' || state === 'stale';
+}
+
 export type MarketPoolState =
   | { state: 'never_searched' }
   | { state: 'expired'; keyword: string; searchedAt: string; ttlHours: number }
