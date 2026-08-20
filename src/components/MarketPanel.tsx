@@ -23,6 +23,7 @@ import {
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE,
   marketShape, marketPlainRead, invisibilityPhrase, MARKET_AUDIT_QUESTION_COUNT,
   MARKET_AUDIT_MIN_AUDITS, marketAuditProgressPhrase, shouldAutoClean, CLEANER_USD_PER_RUN, asPence,
+  MARKET_SEARCH_USD, poolShowsBusinesses,
   auditsInView, openArrivalSearchConfirm, marketNamesUncleaned, TARGET_MAX_NAMED_SHARE,
   MARKET_ONE_AUDIT_USD, PLACE_DETAILS_USD, auditableTargets, poolRowToLead,
   type MarketPoolRow,
@@ -565,7 +566,9 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
   /* A POOL THE OPERATOR CAN SEE. `ready` is fresh; `stale` is the same businesses with an old
      search date — shown, badged, and NEVER satisfying a freshness gate (those all key on 'ready').
      Hiding stale pools was how 113 of 123 measured markets displayed no prospect at all. */
-  const poolVisible = view?.poolState.state === 'ready' || view?.poolState.state === 'stale';
+  /* One predicate, in marketView.ts, so the panel and its test cannot disagree about which pool
+     states have businesses to show. */
+  const poolVisible = poolShowsBusinesses(view?.poolState.state);
   const poolStale = view?.poolState.state === 'stale';
   /* POOL ARITHMETIC, derived here so the panel can show its working.
      poolFound counts Places ROWS; poolEntries counts them after chain collapsing. The difference is
@@ -1055,6 +1058,37 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
               onReload={reload}
               onMeasureComplete={autoCleanIfDirty}
             />
+            {/* ⛔ THE FIND-LEADS ACTION SITS WITH THE OTHER PRIMARY BUTTONS, not only in the pool
+                card 700px further down. Paul, 2026-08-20, on a measured Burnley with no pool: "there
+                is NO button to add leads — just Refresh this market and Add another audit". The pool
+                card's button WAS on screen and he quoted its title, so being present was not enough:
+                the way out has to be where the eye already is, next to the actions that are.
+                ⛔ AND IT SAYS WHY REFRESH IS NOT IT. "Refresh this market" re-audits; it does not
+                fetch businesses. Two buttons whose names both sound like "get me the data" need the
+                difference stated, or the wrong one gets pressed and spends ~7p an audit to answer a
+                question it cannot answer.
+                Same handler as the pool card (runSearch) — one press, no second confirm, and reload()
+                brings the businesses into this same view when it returns. */}
+            {!poolVisible && (
+              <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground">
+                  No businesses have been fetched for this town yet, so there is nothing to add or
+                  target below. <span className="font-medium text-foreground">Refresh this market</span> re-audits
+                  what AI says; it does not fetch businesses.
+                </p>
+                <Button
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => void runSearch()}
+                  disabled={searching}
+                  title="Runs the town-only Places search and then shows the businesses in this view. Usually 15-40 seconds. Free again for 72 hours."
+                >
+                  {searching
+                    ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> finding leads…</>
+                    : <><Search className="mr-1.5 h-3.5 w-3.5" /> Find leads · ~{asPence(MARKET_SEARCH_USD)}</>}
+                </Button>
+              </div>
+            )}
             <div className="mt-2 flex flex-wrap gap-2">
               <Button size="sm" variant="ghost" className="ml-auto" onClick={toggleNumbers}>
                 {showNumbers ? <ChevronDown className="mr-1.5 h-3.5 w-3.5" /> : <ChevronRight className="mr-1.5 h-3.5 w-3.5" />}
@@ -1289,7 +1323,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                 <PoolNotice
                   title="No lead search has been run for this trade and town."
                   body="This is not an empty market — nobody has looked yet. Run the search to see which local businesses exist, then subtract the ones AI already names."
-                  onSearch={() => setSearchOpen(true)}
+                  onSearch={() => void runSearch()}
                   busy={searching}
                 />
               )}
@@ -1297,7 +1331,7 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
                 <PoolNotice
                   title={`Searched for "${view.poolState.keyword}" on ${shortDate(view.poolState.searchedAt) ?? 'an earlier date'}, but the lead pool has since expired.`}
                   body={`Pools are cached for ${view.poolState.ttlHours} hours. The businesses are still out there — the cached copy is just gone, so it needs running again.`}
-                  onSearch={() => setSearchOpen(true)}
+                  onSearch={() => void runSearch()}
                   busy={searching}
                 />
               )}
@@ -1753,14 +1787,30 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
   );
 }
 
+/* ⛔ THE BUTTON EXISTED AND STILL READ AS A DEAD END (Paul, 2026-08-20). Burnley and Rugby were
+   measured with no pool, and in the panel he saw "only Refresh this market and Add another audit" —
+   yet this notice, with a working search button, was on screen and he quoted its title. Three things
+   made it invisible as an action:
+     * it said "Run the lead search", not "Find leads" — the label he now knows from the Coverage row;
+     * it carried NO PRICE, while every other spending button on this site states one, so it did not
+       look like the same class of thing;
+     * it opened a SECOND confirm dialog, where the row does it in one press.
+   A button nobody reads as a button is not a way forward. So this now matches the row exactly: same
+   words, same price on the face, one press.
+   ⚠️ The price is derived from MARKET_SEARCH_USD, never hand-typed (§4's constants rule). */
 function PoolNotice({ title, body, onSearch, busy }: { title: string; body: string; onSearch: () => void; busy: boolean }) {
   return (
     <div className="space-y-2 rounded-lg border border-border bg-muted/40 px-3 py-3">
       <p className="text-sm font-semibold">{title}</p>
       <p className="text-xs text-muted-foreground">{body}</p>
-      <Button size="sm" onClick={onSearch} disabled={busy}>
+      <Button
+        size="sm"
+        onClick={onSearch}
+        disabled={busy}
+        title="Runs the town-only Places search and then shows the businesses here. Usually 15-40 seconds. Free again for 72 hours."
+      >
         {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Search className="mr-1.5 h-3.5 w-3.5" />}
-        Run the lead search
+        {busy ? 'finding leads…' : `Find leads · ~${asPence(MARKET_SEARCH_USD)}`}
       </Button>
     </div>
   );
