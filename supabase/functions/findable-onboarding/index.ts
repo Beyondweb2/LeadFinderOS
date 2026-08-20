@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { createFreeCheckLead } from "../_shared/free-check-lead.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Actions:
@@ -438,6 +439,18 @@ Deno.serve(async (req) => {
       // relaxed for them and the row is flagged instead. A COMPLETE submission still has to
       // carry the area and the consent answer.
       const incomplete = body.incomplete === true;
+      /* WHERE THE SUBMISSION CAME FROM. Validated against a known set, so an unrecognised value
+         stores NULL ("we do not know") rather than being passed through — a stale or hostile client
+         must not be able to invent a source that a reader downstream then branches on. NULL is the
+         normal value: every row written before 2026-08-19, and every submission from the onboarding
+         flow itself, has no source. Only the free check names itself.
+         ⛔ ABSENCE IS NEVER "free_check". The lead-creation branch below tests for the POSITIVE
+         value, never for `!== something`, so a new source added later joins the safe side. */
+      const SUBMISSION_SOURCES = new Set(["free_check"]);
+      const submissionSource =
+        typeof body.source === "string" && SUBMISSION_SOURCES.has(body.source.trim())
+          ? body.source.trim()
+          : null;
       if (!incomplete && (!confirmedLocation || !gbpConsent)) {
         return json({ ok: false, error: "missing_required" }, 400);
       }
@@ -524,6 +537,7 @@ Deno.serve(async (req) => {
         photos_status: photosStatus,
         contact_email: contactEmail,
         business_name: clip(a.business_name, 200),
+        source: submissionSource,
         incomplete,
       };
 
@@ -537,7 +551,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "source"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -553,7 +567,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "business_address"];
+        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "business_address", "source"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
@@ -568,10 +582,43 @@ Deno.serve(async (req) => {
         return res;
       };
 
-      // GENERIC MODE (no valid lead): save the answers, NEVER fire an audit (lockdown #1).
+      /* GENERIC MODE (no valid lead): save the answers, NEVER fire an audit (lockdown #1).
+         ⛔ LOCKDOWN #1 IS UNCHANGED AND STILL ABSOLUTE. A free-check submission now creates a LEAD,
+         which is not an audit: nothing here queues a question, spends Apify, or sends anything. The
+         auto-audit phase is deliberately NOT built yet — Paul wants to watch a real submission
+         become a lead first (§6j phase 2).
+         ⛔ THE ROW IS SAVED FIRST AND NEVER PUT AT RISK. Lead creation runs AFTER the insert and
+         cannot fail the request: createFreeCheckLead never throws, and a refusal is reported to the
+         operator rather than returned to the visitor, who has done nothing wrong and must always
+         see success. */
       if (!leadId) {
         const { data: row, error: insErr } = await saveAnswers({ status: "submitted" });
         if (insErr || !row) return json({ ok: false, error: "save_failed" }, 500);
+
+        if (submissionSource === "free_check") {
+          const outcome = await createFreeCheckLead(service, {
+            businessName: clip(a.business_name, 200) ?? "",
+            town: confirmedLocation ?? "",
+            // `services` is the trade field the rest of the system reads (the form sends one word).
+            trade: clip(a.services, 200) ?? "",
+            email: contactEmail,
+          });
+          /* LINK THE ROW TO THE LEAD, for `matched` as well as `created`. The lead card's
+             Questionnaire section, the dashboard and the notifier all key off lead_id, so a
+             submission that matched an EXISTING lead must attach to it — otherwise the answers are
+             orphaned exactly when they are most useful (someone already in the book asking again).
+             Non-fatal: the answers are saved either way. */
+          if (outcome.kind === "created" || outcome.kind === "matched") {
+            const { error: linkErr } = await service
+              .from("onboarding_responses").update({ lead_id: outcome.leadId }).eq("id", row.id);
+            if (linkErr) console.warn(`[findable-onboarding] free_check lead link failed for ${row.id}: ${linkErr.message}`);
+          }
+          console.log(`[findable-onboarding] free_check ${outcome.kind}: ${JSON.stringify(outcome)}`);
+          /* The visitor gets a plain success either way — they asked for a free check, not for a
+             report on our lead plumbing. The outcome rides along for the operator surfaces. */
+          return json({ ok: true, onboarding_id: row.id, audit_id: null, lead: outcome.kind });
+        }
+
         return json({ ok: true, onboarding_id: row.id, audit_id: null });
       }
 
