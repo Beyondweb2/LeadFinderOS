@@ -84,6 +84,13 @@ interface Row {
   photos_status: string | null;
   /** An escape-hatch bail-out. Its answers are partial, so it is never given a verdict. */
   incomplete: boolean | null;
+  /** Where the submission came from. NULL = the onboarding flow (every row before 2026-08-19).
+   *  'free_check' = the findable.live free-check form, which is a completely different email. */
+  source: string | null;
+  /** The trade, as the visitor typed it. ⛔ THE FREE-CHECK EMAIL WAS MISSING THE TRADE ENTIRELY
+   *  because this column was not in the SELECT and the trade line read only off a LINKED lead —
+   *  which a generic submission does not have at the moment the row is written. */
+  services: string | null;
   /** Attempts already made. Read so the claim below can be conditional on it. */
   notify_attempts: number | null;
 }
@@ -114,13 +121,19 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // ONE STRING LITERAL, not a concatenation. supabase-js types the select on the literal, so
       // splitting it across two lines makes `data` GenericStringError[] and the cast below a TS2352.
-      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete, notify_attempts")
+      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete, notify_attempts, source, services")
       /* ⛔ THE GATE IS notify_sent_at, NOT notified_at. notified_at is the CLAIM stamp, written
          before the attempt — gating on it is what made a failed send permanent and invisible.
          Gating on delivery, bounded by attempts, is what lets a failure come back. */
       .is("notify_sent_at", null)
       .lt("notify_attempts", MAX_SEND_ATTEMPTS)
-      .lte("created_at", cutoff)
+      /* ⛔ THE DELAY EXISTS FOR ONE REASON THAT DOES NOT APPLY TO A FREE CHECK. It stops us
+         reporting someone still typing their card number as having bailed — but a free-check
+         visitor is never shown a payment screen, so there is nothing to wait for and the 20 minutes
+         is pure lag on the warmest lead in the funnel. Free-check rows are therefore picked on the
+         NEXT cron tick (within a minute); everything else keeps the delay exactly as it was.
+         One .or() rather than two queries, so the batch/ordering semantics are untouched. */
+      .or(`source.eq.free_check,created_at.lte.${cutoff}`)
       .order("created_at", { ascending: true })
       .limit(BATCH);
 
@@ -158,9 +171,15 @@ Deno.serve(async (req) => {
       /* RE-CHECK PAYMENT AT SEND TIME — the point of the delay. Someone who paid inside the window
          must not be reported as having bailed. They stay claimed, so this never runs again for them,
          and the payment notification is what tells you about them. */
+      const isFreeCheck = row.source === "free_check";
       let paid = row.status === "paid";
       let phone: string | null = null;
-      let trade: string | null = null;
+      /* THE ROW'S OWN `services` IS THE FALLBACK, AND FOR A FREE CHECK IT IS THE ONLY SOURCE.
+         This used to read the trade exclusively off a linked lead, so a generic submission — which
+         has no lead at the moment the row is written — produced an email with no trade in it at
+         all. The lead still wins when there is one: its category/search_keyword is operator-curated
+         and beats a self-typed word. */
+      let trade: string | null = (row.services ?? "").trim() || null;
       if (row.lead_id) {
         const { data: lead } = await service
           .from("outreach_leads")
@@ -170,7 +189,7 @@ Deno.serve(async (req) => {
           const l = lead as Record<string, unknown>;
           paid = paid || Number(l.amount_paid ?? 0) > 0 || PAID_STATUSES.has(String(l.status ?? ""));
           phone = (l.phone as string | null) ?? null;
-          trade = ((l.category as string) || (l.search_keyword as string) || "").trim() || null;
+          trade = ((l.category as string) || (l.search_keyword as string) || "").trim() || trade;
         }
       }
       /* ⛔ RETIRED EXPLICITLY, NOT LEFT TO THE CLAIM. Under the old gate this row simply never came
@@ -252,12 +271,25 @@ Deno.serve(async (req) => {
       if (row.gbp_status === "no_access") needsYou.push("They cannot get into their Google Business Profile. They cannot add us, so nothing on the profile can start until this is sorted.");
       if (mustNotSay) needsYou.push(`They told us something we must not say: "${mustNotSay}"`);
 
-      const tail = gate?.verdict === "block"
+      /* ⛔ THE FREE-CHECK TAIL IS A DIFFERENT SENTENCE BECAUSE IT IS A DIFFERENT EVENT. They asked
+         for a check and are waiting on it; they have not gone cold, and there is no payment screen
+         they stopped at. That distinction is the difference between a queue of work and a list of
+         people who lost interest. */
+      const tail = isFreeCheck
+        ? "They asked for a free AI check on findable.live. They are waiting on a report from you, and nothing has been sent to them automatically. Their lead is in Outreach; add them to the WhatsApp queue when you are ready."
+        : gate?.verdict === "block"
         ? "They were blocked before Stripe, so no payment was possible. They saw the honest refusal screen with your email address on it. Some of these are worth a call anyway."
         : "They reached the payment screen and stopped. Nothing has been sent to them automatically.";
 
+      /* ⛔ A FREE CHECK IS NOT A BAILED CHECKOUT AND MUST NOT BE DESCRIBED AS ONE. The old line
+         reported every unpaid row as having "filled in the questionnaire N minutes ago and has
+         not paid" — false in both halves for a visitor who asked for a free check and was never
+         shown a price. The elapsed minutes go too: they measure a delay this row does not have. */
+      const opening = isFreeCheck
+        ? `${name} just asked for a free AI check.\n\n`
+        : `${name} filled in the questionnaire ${mins} minutes ago and has not paid.\n\n`;
       const text =
-        `${name} filled in the questionnaire ${mins} minutes ago and has not paid.\n\n` +
+        opening +
         (verdictLabel ? `  ${verdictLabel}\n  ${gate!.reason}\n\n` : "") +
         line("Trade:", trade) + line("Town:", town) + line("Phone:", phone) + line("Email:", row.contact_email) +
         (gate ? line("Site:", siteLine) : "") +
@@ -267,8 +299,16 @@ Deno.serve(async (req) => {
         `\n${tail}\n`;
       const html =
         `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1e293b">` +
-        `<h2 style="margin:0 0 12px">${gate?.verdict === "block" ? "Could not be served" : "Questionnaire submitted, not paid"}</h2>` +
-        `<p style="margin:0 0 10px"><strong>${escapeHtml(name)}</strong> filled in the questionnaire ${mins} minutes ago and has not paid.</p>` +
+        `<h2 style="margin:0 0 12px">${
+          isFreeCheck
+            ? "Free check requested"
+            : gate?.verdict === "block"
+            ? "Could not be served"
+            : "Questionnaire submitted, not paid"
+        }</h2>` +
+        (isFreeCheck
+          ? `<p style="margin:0 0 10px"><strong>${escapeHtml(name)}</strong> just asked for a free AI check.</p>`
+          : `<p style="margin:0 0 10px"><strong>${escapeHtml(name)}</strong> filled in the questionnaire ${mins} minutes ago and has not paid.</p>`) +
         (verdictLabel
           ? `<p style="margin:0 0 12px;padding:10px 12px;border-radius:8px;background:${
             gate!.verdict === "block" ? "#fef2f2" : "#fffbeb"
@@ -314,7 +354,9 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             from: "LeadFinder Pro <noreply@lead-finder-app.com>",
             to: [ADMIN_EMAIL],
-            subject: gate?.verdict === "block"
+            subject: isFreeCheck
+              ? `FREE CHECK — ${name}`
+              : gate?.verdict === "block"
             ? `Could not be served — ${name}`
             : `Questionnaire submitted, not paid — ${name}`,
             text, html,
