@@ -1283,13 +1283,43 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
 
 ---
 
-## 6j. 🔒 APPROVED, NOT BUILT: free check → funnel top (plan locked 2026-08-19, build next session)
+## 6j. ✅ BUILT + LIVE: free check → funnel top (MVP shipped 2026-08-20). Phase 2 (auto-audit) still HELD.
 
-Paul approved all four decisions on 2026-08-19 and explicitly said **do not build the same night** —
-"this is money-spending lead-creation code and I want it built carefully". No real person has ever
-submitted the form (re-derived live 2026-08-19: `onboarding_responses` has 5 rows; the ONE generic
-row is Paul's own 06-08 test). 🔴 **§3's rule applies in full: the building session re-derives every
-number and re-reads every file below before writing code.**
+**PHASE 1 IS LIVE.** Deployed 2026-08-20: `findable-onboarding` v39, `notify-onboarding-submit` v9,
+`backfill-lead-towns` v9, and findable-site. Confirmed live with a ZERO-SPEND probe — a submission
+carrying an EXISTING lead's exact name, which the dedupe catches at rung 1 before any paid call:
+response came back `{"ok":true,"lead":"matched"}` (the `lead` field exists only in the new version),
+the row was written with `source='free_check'` and linked to that lead, and the lead count stayed at
+1,646 so no duplicate was created. Probe row deleted afterwards.
+⚠️ **A REAL SUBMISSION HAS STILL NEVER HAPPENED, AND THE PAID PATH HAS NEVER RUN.** The probe
+matched at the free rung on purpose, so Text Search / Place Details / resolveDerivedTown are proven
+only by code and by `deno check` — not by a live call. Paul is watching for the first real one.
+⚠️ **THE NOTIFIER'S NEW EMAIL WAS NOT OBSERVED.** Its copy is proven by code + deploy only. The
+probe row existed for ~60s with the delay bypassed, so the cron may have sent one
+`FREE CHECK — MCR Heating and Plumbing ltd` email; if that arrived, it was the probe, not a prospect.
+
+**⛔ PHASE 2 (AUTO-AUDIT) IS DELIBERATELY NOT BUILT.** Paul: "I want to watch a real submission
+create a lead first." Generic mode's lockdown #1 (never fires an audit) is UNTOUCHED — nothing in
+this flow queues a question, spends Apify, or sends anything.
+
+**What shipped, and where the reasoning lives (read the file headers, they carry the detail):**
+- `_shared/place-resolve.ts` — the guarded place-id resolver, EXTRACTED VERBATIM from
+  backfill-lead-towns. Two consumers now, so **both redeploy together** (§4's shared-file trap).
+- `_shared/free-check-lead.ts` — `createFreeCheckLead`. Owner resolved FROM THE DATA (newest lead's
+  user_id). Dedupe = the database, FAILS CLOSED, ordered by COST (name free → place_id → phone) so a
+  repeat submission spends nothing. Cap `FREE_CHECK_DAILY_LEAD_CAP = 10` per rolling 24h, checked
+  BEFORE the first paid call. Town via `resolveDerivedTown` so a refusal leaves the lead town-GATED.
+  Never throws. Real cost when all three calls run: **$0.057 ≈ 4.5p**.
+- `findable-onboarding` — validated `source` in all THREE places; lead creation runs AFTER the row is
+  saved and can never fail the request; the row is linked for `matched` as well as `created`.
+- `notify-onboarding-submit` — free-check subject/heading/opening/tail, the TRADE finally included
+  (`services` was missing from the SELECT), and the 20-min delay bypassed for these rows only.
+- `scripts/free-check-lead.test.ts` — ladder order + spend, fail-closed on every dedupe read, cap
+  boundary, blank name/town, absent place/phone, and the source gate against 9 junk values.
+
+🔴 **THE NUMBER TO STOP QUOTING: "1000 leads" WAS PostgREST'S TRUNCATION, NOT A COUNT.** Re-derived
+2026-08-20 with paginated reads: **1,646 outreach_leads, 465 ai_audits, 515 ai_audit_runs, ALL owned
+by the single account below.** §6's paginate rule, caught in this file's own notes.
 
 **What exists today (verified in deployed code + live DB, 2026-08-19):**
 - findable.live's FreeCheck posts `findable-onboarding` `action:"submit"`, no lead_id,
@@ -1309,7 +1339,7 @@ number and re-reads every file below before writing code.**
   → exact name, archived rows count, FAILS CLOSED. The queue's phone-history seatbelt + suppression
   live in `process-whatsapp-queue` and apply to ANY lead regardless of origin — nothing to build.
 
-**The approved decisions:**
+**The approved decisions (all four SHIPPED except #4, which is held):**
 1. SQL (handed to Paul 2026-08-19): `onboarding_responses.source text`, nullable, no default, no
    CHECK — old deploys unaffected; unknown source flags, never blocks. ⚠️ Confirm it has RUN before
    deploying anything that writes it (§3 SQL-first).
