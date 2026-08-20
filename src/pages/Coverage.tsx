@@ -305,6 +305,10 @@ export default function Coverage() {
      re-pressing re-derives, and audits started here continue server-side regardless. */
   type RowFlow =
     | { phase: 'loading' }
+    /* ⛔ ITS OWN PHASE, NOT 'loading'. The free read is ~1s and the paid town-only search is 15-40s;
+       one spinner labelled the same for both would make the long one look stuck. This phase exists
+       so the row can say what is taking the time and roughly how long it will take. */
+    | { phase: 'searching' }
     | { phase: 'confirm'; audits: number; estUsd: number }
     | { phase: 'blocked'; reason: string }
     | { phase: 'loaded'; targets: MarketPoolRow[]; poolState: string }
@@ -349,6 +353,51 @@ export default function Coverage() {
       targets: auditableTargets(pool),
       poolState: view?.poolState?.state ?? 'never_searched',
     });
+  };
+
+  /* ══ FIND LEADS, THEN SHOW THEM — the dead-end fix (2026-08-20, Paul's spec) ═══════════════
+     A town can be Measured with NO pool (20 of 42 when measured), because two of the three ways to
+     start a market audit run a lead search and the panel's own audit button does not. The row used
+     to offer "Market view" for those and answer with the text "no pool — Find leads first": a label
+     that promised businesses and a click that delivered an instruction.
+     Now the row LABELS what will happen, and this runs the whole thing in one press: the paid
+     town-only search, then the free re-read, then straight into the revealed targets.
+
+     ⛔ THE SPEND IS ON THIS CLICK AND NOWHERE ELSE. Nothing here runs on navigation, on mount, or
+     from the batch — Paul's free-on-click rule, and the reason the 2026-08-14 auto-clean-on-open was
+     removed a day after it shipped. The price is on the button face before it is pressed.
+     ⛔ THE SAME CALL AS EVERY OTHER SEARCH: search-leads, townOnly, radius 50000 — identical to what
+     startMarketMeasure and Find leads issue, so it writes the same cache row and history row the
+     panel then reads. A second search of the same trade+town inside 72h is free (search-leads
+     short-circuits), which is why re-pressing costs nothing.
+     ⚠️ It reports the count it found. Zero businesses is a real answer about a town, not a failure,
+     and it must not read as one. */
+  const onFindLeadsThenView = async (id: string, townName: string) => {
+    setFlow(id, { phase: 'searching' });
+    const { data: sr, error: se } = await supabase.functions.invoke<{
+      leads?: unknown[]; locationCandidates?: string[]; resolvedLocation?: string | null;
+    }>('search-leads', { body: { keyword: trade, location: townName, radius: 50000, townOnly: true } });
+    if (se || !sr) {
+      setFlow(id, { phase: 'blocked', reason: `search failed (${await realFnError(se, null)}) -- nothing spent on audits` });
+      return;
+    }
+    if ((sr.locationCandidates?.length ?? 0) > 1) {
+      setFlow(id, {
+        phase: 'blocked',
+        reason: `"${townName}" is ambiguous -- Google returns ${sr.locationCandidates!.length} places with that name. Open View and search with the county.`,
+      });
+      return;
+    }
+    const found = (sr.leads ?? []).length;
+    if (found === 0) {
+      setFlow(id, { phase: 'blocked', reason: `Places found no ${trade} inside the ${townName} boundary -- nothing to show, and nothing was audited.` });
+      return;
+    }
+    /* The pool now exists, so the ordinary free read reveals the targets. Invalidating coverage is
+       what relabels this row (and any other town sharing the pair) back to "Market view". */
+    await onMarketView(id, townName);
+    /* Relabels this row (and any town sharing the pair) back to "Market view". */
+    void refetch();
   };
 
   const onMarketView = async (id: string, townName: string) => {
@@ -753,11 +802,18 @@ export default function Coverage() {
                         measure button uses (asPence(MARKET_SEARCH_USD)); the 72h free-cache case
                         lives in the tooltip. Market view reads stored audits and the cached pool —
                         it spends nothing, starts nothing, and its face says so. */}
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={findLeadsHref(trade, t.name)} title={`Search Google for ${trade} in ${t.name} and list them. Free instead if this trade and town were searched in the last 72 hours.`}>
-                        Find leads · ~{asPence(MARKET_SEARCH_USD)}
-                      </Link>
-                    </Button>
+                    {/* ⛔ HIDDEN ON A NO-POOL ROW (2026-08-20). The smart slot below shows its own
+                        "Find leads" there — same call, same price, and it ends in the market view
+                        rather than on the search page. Two buttons carrying the identical label and
+                        price, going to different places, is its own kind of dead end. On a pooled row
+                        this stays exactly as it was: the way to re-search and work the raw list. */}
+                    {t.hasPool && (
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                        <Link to={findLeadsHref(trade, t.name)} title={`Search Google for ${trade} in ${t.name} and list them. Free instead if this trade and town were searched in the last 72 hours.`}>
+                          Find leads · ~{asPence(MARKET_SEARCH_USD)}
+                        </Link>
+                      </Button>
+                    )}
                     {/* ── THE SMART ROW BUTTON — Paul's spec, 2026-08-16. Press = one FREE read;
                         measured markets reveal Add-all instantly; unmeasured ones get a priced
                         confirm; the spinner stays in place, no navigation. A stray click never
@@ -778,7 +834,15 @@ export default function Coverage() {
                       }
                       const f = rowFlow[t.id];
                       if (!f) {
-                        return (
+                        /* ⛔ THE LABEL IS THE PROMISE. A row with no lead pool used to offer
+                           "Market view" and then answer with "no pool — Find leads first": the
+                           button named a destination and delivered an instruction. It now says which
+                           of the two things this click does, and carries the price when there is one.
+                           `hasLeadPool` treats an older endpoint's missing `pooled` as "assume a
+                           pool", so a deploy window shows the old wording rather than inviting a
+                           spend on information we do not have. */
+                        const pooled = t.hasPool;
+                        return pooled ? (
                           <Button
                             variant="ghost" size="sm" className="h-7 text-xs"
                             disabled={measureBusy}
@@ -786,6 +850,24 @@ export default function Coverage() {
                             onClick={() => void onMarketView(t.id, t.name)}
                           >
                             Market view
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost" size="sm" className="h-7 text-xs"
+                            disabled={measureBusy}
+                            title={`No lead pool for ${trade} in ${t.name} yet. This runs the town-only Places search (~${asPence(MARKET_SEARCH_USD)}, free again for 72h) and then opens the market view on the businesses it finds. Takes 15-40 seconds.`}
+                            onClick={() => void onFindLeadsThenView(t.id, t.name)}
+                          >
+                            Find leads · ~{asPence(MARKET_SEARCH_USD)}
+                          </Button>
+                        );
+                      }
+                      /* The paid search: named, and with the expected duration on it, because 15-40
+                         seconds of unexplained spinner reads as broken. */
+                      if (f.phase === 'searching') {
+                        return (
+                          <Button variant="ghost" size="sm" className="h-7 text-xs" disabled title="Asking Google Places for businesses in this town — usually 15-40 seconds. It carries on if you leave the page.">
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" /> finding leads…
                           </Button>
                         );
                       }
@@ -812,10 +894,25 @@ export default function Coverage() {
                             Add all {f.targets.length} · ~{asPence(f.targets.length * PLACE_DETAILS_USD)}
                           </Button>
                         )
-                        : (
-                          <span className="px-2 text-[11px] text-muted-foreground" title={f.poolState === 'ready' || f.poolState === 'stale' ? 'Every pool business is already winning, wrong-trade or a chain' : 'No lead pool for this town — run Find leads first'}>
-                            {f.poolState === 'ready' || f.poolState === 'stale' ? '0 targets' : 'no pool — Find leads first'}
+                        : (f.poolState === 'ready' || f.poolState === 'stale')
+                        ? (
+                          <span className="px-2 text-[11px] text-muted-foreground" title="Every pool business is already winning, wrong-trade or a chain">
+                            0 targets
                           </span>
+                        )
+                        /* ⛔ NEVER A DEAD END, EVEN IF THE LABEL WAS WRONG. This is the belt to the
+                           label's braces: if the row said "Market view" because the coverage facts
+                           were stale (or an old deploy sent no `pooled`) and the read then finds no
+                           pool, the operator still gets the action rather than the old instruction to
+                           go and do it themselves. Same click, same price, same result. */
+                        : (
+                          <Button
+                            variant="ghost" size="sm" className="h-7 text-xs"
+                            title={`No lead pool for ${trade} in ${t.name}. This runs the town-only Places search (~${asPence(MARKET_SEARCH_USD)}) and then shows the businesses. 15-40 seconds.`}
+                            onClick={() => void onFindLeadsThenView(t.id, t.name)}
+                          >
+                            Find leads · ~{asPence(MARKET_SEARCH_USD)}
+                          </Button>
                         );
                     })()}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>

@@ -67,6 +67,18 @@ export interface CoverageFacts {
   measuredCounts: Map<string, number>;
   /** Pairs with at least one lead in outreach_leads. */
   leadPairs: Set<string>;
+  /**
+   * Pairs whose LEAD POOL still exists, so the market panel can show businesses.
+   *
+   * ⛔ SEPARATE FROM `measuredCounts` ON PURPOSE — being measured and having a pool are independent
+   * facts, and conflating them is the dead end this exists to remove: 20 of 42 measured markets had
+   * no pool (measured 2026-08-20), because two of the three ways to start a market audit run a lead
+   * search and the panel's own audit button does not.
+   * ⚠️ Optional, so an older `coverage` deploy that does not send `pooled` degrades to "assume a
+   * pool" — the previous behaviour — instead of relabelling every row "Find leads" and inviting a
+   * spend that may be unnecessary. Absence is not a fact about the pool.
+   */
+  pooledPairs?: Set<string>;
   /** Pairs where at least one lead has actually been contacted. */
   workedPairs: Set<string>;
 }
@@ -311,4 +323,17 @@ export function applySuppressionPatch<T extends SuppressibleTown>(
   return towns.map((t) => (t.id === townId
     ? { ...t, suppressed_at: updated.suppressed_at ?? null, suppressed_reason: updated.suppressed_reason ?? null }
     : t));
+}
+
+/**
+ * Does this town have a lead pool the market panel can show for this trade?
+ *
+ * ⛔ UNKNOWN COUNTS AS YES. `pooledPairs` is absent when the endpoint predates it, and treating that
+ * as "no pool" would put a priced "Find leads" label on every row in the table — inventing a spend
+ * out of missing information. The label may then be optimistic for one deploy window, which costs a
+ * free read and shows the in-panel Find-leads action instead. That is the safe direction.
+ */
+export function hasLeadPool(trade: string, town: CoverageTown, facts: CoverageFacts): boolean {
+  if (!facts.pooledPairs) return true;
+  return facts.pooledPairs.has(coverageKey(trade, town.name));
 }

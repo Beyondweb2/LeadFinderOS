@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateCacheKey } from "../_shared/search-cache-key.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WHERE HAVE I BEEN? — the candidate town list, and the raw facts to grade it against.
@@ -159,7 +160,46 @@ Deno.serve(async (req) => {
           || String(l.status ?? "") === "report_sent";
         if (contacted) workedPairs.push(pair);
       }
-      return { measured, leads: leadPairs, worked: workedPairs };
+
+      /* ── POOLED: which pairs have a lead pool the market panel can actually SHOW ───────────────
+         ⛔ WHY THIS BELONGS HERE. Coverage graded a town "Measured" off audits alone, so the row
+         offered "Market view" for 20 of 42 measured markets (48%, measured 2026-08-20) that had no
+         pool — and the panel answered with a dead end. The row cannot label the button honestly
+         without knowing this, and finding out per-row costs a market-view read each. One extra pair
+         of table reads here answers it for every row at once.
+
+         ⛔ IT IS THE SAME JOIN market-view DOES, and it must stay that way or the label lies: a
+         search_history row locates the pool, and generateCacheKey (the ONE shared definition, so the
+         hash matches search-leads byte for byte) says whether the cached copy still exists. townOnly
+         FIRST, then the radius key, exactly as market-view orders them.
+
+         ⚠️ AGE IS DELIBERATELY NOT A FILTER. market-view serves a stale pool as `stale` and SHOWS the
+         businesses — age decides the state, never whether they appear (the 2026-08-14 fix). A row
+         whose pool is 8 days old must therefore read "Market view", because that is what clicking it
+         gives you. Filtering by age here would recreate the dead end for exactly those towns.
+
+         COSTS NOTHING: two table reads, no Google, no Apify. */
+      const history = await all((from, to) => service
+        .from("search_history").select("keyword, location, radius")
+        .eq("user_id", userId).range(from, to));
+      const cacheRows = await all((from, to) => service
+        .from("search_cache").select("cache_key").range(from, to));
+      const cacheKeys = new Set(cacheRows.map((r) => String(r.cache_key)));
+      const pooled: Pair[] = [];
+      for (const h of history) {
+        const keyword = String(h.keyword ?? "").trim();
+        const location = String(h.location ?? "").trim();
+        if (!keyword || !location) continue;
+        const radius = Number(h.radius ?? 0);
+        let has = false;
+        for (const townOnly of [true, false]) {
+          if (cacheKeys.has(await generateCacheKey(keyword, location, radius, townOnly))) { has = true; break; }
+        }
+        /* Sent RAW like every other pair — coverageKey folds it on the client, once. */
+        if (has) pooled.push({ trade: keyword, town: location });
+      }
+
+      return { measured, leads: leadPairs, worked: workedPairs, pooled };
     };
 
     if (action === "towns") {
@@ -171,7 +211,7 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         pairs,
-        counts: { measured: pairs.measured.length, leads: pairs.leads.length, worked: pairs.worked.length },
+        counts: { measured: pairs.measured.length, leads: pairs.leads.length, worked: pairs.worked.length, pooled: pairs.pooled.length },
       });
     }
 
@@ -182,7 +222,7 @@ Deno.serve(async (req) => {
       towns,
       pairs,
       /* So the page can say what it is looking at without a second call. */
-      counts: { towns: towns.length, measured: pairs.measured.length, leads: pairs.leads.length, worked: pairs.worked.length },
+      counts: { towns: towns.length, measured: pairs.measured.length, leads: pairs.leads.length, worked: pairs.worked.length, pooled: pairs.pooled.length },
     });
   } catch (e) {
     console.error("[coverage] error:", (e as Error).message);

@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  coverageKey, coverageStateFor, summarise, applyFilters, applySuppressionPatch, countLeadsByPair,
+  coverageKey, coverageStateFor,
+  hasLeadPool, summarise, applyFilters, applySuppressionPatch, countLeadsByPair,
   countMeasuredByPair,
   type CoverageFacts, type CoverageRow, type CoverageTown, type CoverageSummary,
   type SuppressionPatch,
@@ -26,7 +27,7 @@ export interface CoverageTownRow extends CoverageTown {
    purpose. The ladder is exclusive (a town shows at its furthest rung only), so a `measured` or
    `worked` town said nothing about whether leads had been pulled there. That was the gap: the rung
    answers "how far has this gone", the count answers "have I pulled leads from here". */
-export type GradedTown = CoverageTownRow & { state: CoverageRow['state']; leadCount: number };
+export type GradedTown = CoverageTownRow & { state: CoverageRow['state']; leadCount: number; hasPool: boolean };
 
 interface Pair { trade: string; town: string }
 
@@ -36,7 +37,9 @@ interface Pair { trade: string; town: string }
    ~1,500-lead scan sequentially before anything rendered. Now they are two edge calls on two keys:
    towns hard-cached, pairs on the invalidated key, both firing in parallel. */
 interface TownsData { towns: CoverageTownRow[] }
-interface PairsData { pairs: { measured: Pair[]; leads: Pair[]; worked: Pair[] } }
+/* `pooled` is OPTIONAL: an older `coverage` deploy does not send it, and the client must be able
+   to tell "not sent" from "none" — see hasLeadPool. */
+interface PairsData { pairs: { measured: Pair[]; leads: Pair[]; worked: Pair[]; pooled?: Pair[] } }
 
 /* ⛔ THE KEY IS DEFINED IN src/lib/coverageFreshness.ts, not here, because the WRITER needs it too.
    useOutreach marks this query stale when the lead list changes — and it has to be the writer's job,
@@ -80,7 +83,7 @@ export function useCoverage() {
       const { data: res, error: e } = await supabase.functions.invoke('coverage', { body: { action: 'pairs' } });
       if (e) throw new Error(e.message);
       if (!res?.ok) throw new Error(res?.error ?? 'coverage pairs failed');
-      return { pairs: res.pairs ?? { measured: [], leads: [], worked: [] } };
+      return { pairs: res.pairs ?? { measured: [], leads: [], worked: [] } };  // pooled stays undefined
     },
     enabled: !!user?.id,
   });
@@ -99,6 +102,12 @@ export function useCoverage() {
     measuredCounts: countMeasuredByPair(pairs?.measured ?? []),
     leadPairs: new Set((pairs?.leads ?? []).map((p) => coverageKey(p.trade, p.town))),
     workedPairs: new Set((pairs?.worked ?? []).map((p) => coverageKey(p.trade, p.town))),
+    /* ⚠️ UNDEFINED WHEN THE ENDPOINT DOES NOT SEND IT, never an empty Set. hasLeadPool reads absence
+       as "assume a pool" — the old behaviour — whereas an empty Set means "no town has one" and
+       would relabel every row with a priced Find-leads button during a deploy window. */
+    pooledPairs: pairs?.pooled
+      ? new Set(pairs.pooled.map((p) => coverageKey(p.trade, p.town)))
+      : undefined,
   }), [pairs]);
 
   /* ⛔ COUNTED FROM THE SAME `pairs.leads` THE `leads` RUNG IS DERIVED FROM — one fetch, one truth.
@@ -117,6 +126,11 @@ export function useCoverage() {
         ...t,
         state: coverageStateFor(trade, t, facts),
         leadCount: leadCounts.get(coverageKey(trade, t.name)) ?? 0,
+        /* ⛔ A SEPARATE FACT FROM `state`. Measured and has-a-pool are independent — 20 of 42
+           measured markets had no pool — and the row needs both to label its button honestly.
+           Computed here with state and leadCount because facts lives in this hook and coverageKey
+           canonicalisation must not run 733 times in a render loop. */
+        hasPool: hasLeadPool(trade, t, facts),
       }));
   }, [towns, facts, leadCounts]);
 
