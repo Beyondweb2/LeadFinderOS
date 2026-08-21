@@ -164,10 +164,44 @@ interface LeadOption { id: string; business_name: string; category: string | nul
 
 const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
 
-/** How many audits the landing list loads. Was 50, which silently truncated both the list and
- *  the "Audits" count, so the count stopped telling the truth at 51 audits with no indication.
- *  Raised, and when the query comes back full the label says so rather than pretending. */
-const AUDIT_FETCH_LIMIT = 300;
+/** How many audits the landing list loads. Was 50, then 300; both silently truncated once the audit
+ *  count passed them (300 hid the oldest 185 of 485 — ABLM and SC Plumbing among them). Raised well
+ *  above the live count. The `auditsCapped` label still renders honestly if we ever approach it, and
+ *  the server-side name search below now finds audits BEYOND this window regardless. */
+const AUDIT_FETCH_LIMIT = 1000;
+
+/** How many name-matched audits the server search pulls in when a term is typed. Generous — a search
+ *  should surface every match, not the newest few — but bounded so a one-letter term can't drag the
+ *  whole table. */
+const AUDIT_SEARCH_LIMIT = 200;
+
+/** The columns the landing list needs off ai_audits — shared by the full-list load and the search
+ *  query so the two can't drift into hydrating different shapes. */
+const AUDIT_SELECT =
+  'id, business_name, business_type, location_text, country, has_website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted';
+
+/** Split ids into batches so a `.in(ids)` filter never builds a querystring long enough to hit the
+ *  gateway URL limit: 300 ids was already ~11KB and 485 ~18KB, near the edge. 150 keeps every read
+ *  well under it at any list size. */
+const IN_CHUNK = 150;
+function chunkIds<T>(arr: T[], n = IN_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
+/** One ai_audits row as it arrives from AUDIT_SELECT, before hydration: baseline_runs_counted is a
+ *  string here (the `baseline->>runs_counted` JSON extract) and runs/report_slug are not fetched yet.
+ *  hydrateAudits turns this into an AuditLite. */
+type RawAuditRow = AuditRow & {
+  lead_id: string | null;
+  first_opened_at: string | null;
+  open_count: number | null;
+  baseline_target_runs: number | null;
+  baseline_completed_at: string | null;
+  baseline_error: string | null;
+  baseline_runs_counted: string | null;
+};
 
 /** Above this many businesses the list is long enough to need searching. Below it the box would be
  *  furniture over a list you can already read in one glance. */
@@ -485,32 +519,20 @@ const AiAudit = () => {
   // Loads the whole audit book the list needs in four bounded queries: audits, their runs,
   // published-report slugs, and live queue counts for the runs still in flight. Also the
   // refresh the landing list polls while anything is draining.
-  const loadSaved = useCallback(async () => {
-    if (!user) return;
-    const { data: audits } = await (supabase as unknown as SupabaseClient)
-      .from('ai_audits')
-      .select('id, business_name, business_type, location_text, country, has_website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted')
-      .order('created_at', { ascending: false })
-      .limit(AUDIT_FETCH_LIMIT);
-    const auditRows = (audits ?? []) as Array<AuditRow & {
-      lead_id: string | null; first_opened_at: string | null; open_count: number | null;
-      baseline_target_runs: number | null; baseline_completed_at: string | null;
-      baseline_error: string | null; baseline_runs_counted: string | null;
-    }>;
-    setAuditsCapped(auditRows.length >= AUDIT_FETCH_LIMIT);
-
+  /* HYDRATE a set of audit rows into AuditLite (runs + report pill + live queue progress). Extracted
+     from loadSaved UNCHANGED so the server-side search can reuse the exact same shaping — the only
+     difference from before is the `.in()` reads are chunked (see chunkIds). */
+  const hydrateAudits = useCallback(async (auditRows: RawAuditRow[]): Promise<AuditLite[]> => {
     const ids = auditRows.map((a) => a.id);
-    // ALL runs per audit (newest first), not just the latest: the expanded view lists every
-    // run, and the collapsed row's cost is the sum across them.
+    // ALL runs per audit (newest first): the expanded view lists every run, and the collapsed row's
+    // cost is the sum across them. Chunked so a large id list never overflows the querystring.
     const runsByAudit = new Map<string, RunLite[]>();
     const inFlightRunIds: string[] = [];
-    if (ids.length) {
+    for (const idBatch of chunkIds(ids)) {
       const { data: runs } = await (supabase as unknown as SupabaseClient)
         .from('ai_audit_runs')
-        // pb_summary (results->playbook->>summary) dropped 2026-07-30: it only fed has_playbook, which
-        // only fed the LLM playbook pill and button, both now gone.
         .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results->seo->>overallGrade')
-        .in('audit_id', ids)
+        .in('audit_id', idBatch)
         .order('run_number', { ascending: false });
       for (const r of (runs ?? []) as Array<{
         id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null;
@@ -520,9 +542,7 @@ const AiAudit = () => {
         list.push({
           id: r.id, audit_id: r.audit_id, run_number: r.run_number, status: r.status,
           // COERCE. Postgres numeric can arrive as a STRING, and then `sum + rate` concatenates
-          // instead of adding (avg visibility came out NaN) and `rate === 0` is false for "0" (the
-          // invisible tally read 0 while rows plainly showed 0% named). Normalise once, here at
-          // the boundary, so nothing downstream has to care.
+          // instead of adding (avg visibility came out NaN) and `rate === 0` is false for "0".
           mention_rate: r.mention_rate === null || r.mention_rate === undefined ? null : Number(r.mention_rate),
           created_at: r.created_at,
           actor_cost_usd: r.actor_cost_usd === null || r.actor_cost_usd === undefined ? null : Number(r.actor_cost_usd),
@@ -533,13 +553,13 @@ const AiAudit = () => {
       }
     }
 
-    // Published report per audit → the "report" pill. One query, existence only.
+    // Published report per audit → the "report" pill. Existence only. Chunked like the runs read.
     const reportByAudit = new Map<string, string>();
-    if (ids.length) {
+    for (const idBatch of chunkIds(ids)) {
       const { data: reports } = await (supabase as unknown as SupabaseClient)
         .from('business_reports')
         .select('audit_id, slug')
-        .in('audit_id', ids);
+        .in('audit_id', idBatch);
       for (const r of (reports ?? []) as Array<{ audit_id: string | null; slug: string }>) {
         if (r.audit_id && !reportByAudit.has(r.audit_id)) reportByAudit.set(r.audit_id, r.slug);
       }
@@ -554,13 +574,54 @@ const AiAudit = () => {
       }
     }
 
-    setSavedAudits(auditRows.map((a) => ({
+    return auditRows.map((a) => ({
       ...a,
       baseline_runs_counted: a.baseline_runs_counted === null ? null : Number(a.baseline_runs_counted),
       report_slug: reportByAudit.get(a.id) ?? null,
       runs: runsByAudit.get(a.id) ?? [],
-    })));
-  }, [user, fetchQueueCounts]);
+    }));
+  }, [fetchQueueCounts]);
+
+  const loadSaved = useCallback(async () => {
+    if (!user) return;
+    const { data: audits } = await (supabase as unknown as SupabaseClient)
+      .from('ai_audits')
+      .select(AUDIT_SELECT)
+      .order('created_at', { ascending: false })
+      .limit(AUDIT_FETCH_LIMIT);
+    const auditRows = (audits ?? []) as RawAuditRow[];
+    setAuditsCapped(auditRows.length >= AUDIT_FETCH_LIMIT);
+    setSavedAudits(await hydrateAudits(auditRows));
+  }, [user, hydrateAudits]);
+
+  /* ── SERVER-SIDE NAME SEARCH ─────────────────────────────────────────────────────────────────
+     The real fix for old audits vanishing: the client filter only ever saw the fetched window, so a
+     name beyond it (ABLM, SC Plumbing — positions 459/484 of 485) could not be found however you
+     typed. When a term is present we ALSO ask the database for audits whose business_name matches,
+     hydrate them, and merge them into the list source below — so an old match surfaces regardless of
+     the fetch cap. Debounced; owner-scoped by RLS; matches already loaded are skipped. Empty/short
+     term clears the extras and the list is the normal (capped) load again. */
+  const [searchExtras, setSearchExtras] = useState<AuditLite[]>([]);
+  useEffect(() => {
+    const term = auditQuery.trim();
+    if (!user || term.length < 2) { setSearchExtras([]); return; }
+    let alive = true;
+    const t = setTimeout(async () => {
+      const { data } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audits')
+        .select(AUDIT_SELECT)
+        .ilike('business_name', `%${term}%`)
+        .order('created_at', { ascending: false })
+        .limit(AUDIT_SEARCH_LIMIT);
+      if (!alive) return;
+      const loaded = new Set(savedAudits.map((a) => a.id));
+      const fresh = ((data ?? []) as RawAuditRow[]).filter((r) => !loaded.has(r.id));
+      if (!fresh.length) { setSearchExtras([]); return; }
+      const hydrated = await hydrateAudits(fresh);
+      if (alive) setSearchExtras(hydrated);
+    }, 300);
+    return () => { alive = false; clearTimeout(t); };
+  }, [auditQuery, user, savedAudits, hydrateAudits]);
 
   useEffect(() => {
     if (!user) return;
@@ -1413,7 +1474,17 @@ const AiAudit = () => {
   const isDraining = !!runId && !(run && TERMINAL.has(run.status));
   /** The open audit's own list row, for its created_at. A business can hold several audits now, so
    *  the results view has to say which one it is showing. */
-  const openAuditRow = savedAudits.find((a) => a.id === auditId) ?? null;
+  /* The grouping/search source: the fetched window PLUS any server-search matches from beyond it
+     (deduped by id). When there is no active search, searchExtras is empty and this is just
+     savedAudits. This is what lets a name-matched old audit appear in the list, its search, and the
+     open-audit lookup below. Declared before its first use (openAuditRow). */
+  const listSource = useMemo<AuditLite[]>(() => {
+    if (!searchExtras.length) return savedAudits;
+    const loaded = new Set(savedAudits.map((a) => a.id));
+    return [...savedAudits, ...searchExtras.filter((a) => !loaded.has(a.id))];
+  }, [savedAudits, searchExtras]);
+
+  const openAuditRow = listSource.find((a) => a.id === auditId) ?? null;
 
   // The re-run editor is open only for the run it was opened for (persisted flag is run-scoped),
   // so a stale editor can't reopen over a different audit after a tab-away/reload.
@@ -1481,7 +1552,7 @@ const AiAudit = () => {
      Plumber are one trade stored three ways. */
   const businesses = useMemo<BusinessGroup[]>(() => {
     const byKey = new Map<string, AuditLite[]>();
-    for (const a of savedAudits) {
+    for (const a of listSource) {
       const key = a.lead_id ?? `name:${(a.business_name ?? '').trim().toLowerCase()}`;
       const list = byKey.get(key) ?? [];
       list.push(a);
@@ -1512,7 +1583,7 @@ const AiAudit = () => {
     }
     // Most recent activity first within a trade.
     return out.sort((a, b) => b.latestAudit.created_at.localeCompare(a.latestAudit.created_at));
-  }, [savedAudits]);
+  }, [listSource]);
 
   /* ── THE FILTER ───────────────────────────────────────────────────────────────────────────────
      Matches NAME, TRADE and TOWN, because the way you remember an audit is often "that Wisbech
