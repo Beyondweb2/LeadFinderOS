@@ -59,7 +59,7 @@ export interface WaConversation {
   lastInboundAt: string | null;
 }
 
-export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null }
+export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null; contact_name: string | null }
 
 /** Most-recent generated site for a lead — powers the thread's "View site" link and
  *  the engagement pill (opened/claimed/upsell milestones from generated_sites). */
@@ -122,7 +122,7 @@ export function useInbox() {
          can be fetched twice and another missed at a page boundary — the same reasoning already
          written above the messages read. */
       fetchAllRows<LeadLite>('Inbox (leads)', (from, to) =>
-        sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid')
+        sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name')
           .eq('is_archived', false).not('phone', 'is', null)
           .order('id', { ascending: true }).range(from, to)),
       // share_token / booking_only aren't in the generated types yet — untyped sb. RLS

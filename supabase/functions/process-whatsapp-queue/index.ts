@@ -173,6 +173,11 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      business name. Present here only to keep this map byte-identical to WA_TEMPLATES in
      _shared/whatsapp-send.ts, which scripts/re-engage-vars.test.ts asserts in BOTH directions. */
   questionnaire_followup: { lang: "en", vars: ["contact_first_name", "name"] },
+  /* Report follow-up — MANUAL sends via send-whatsapp-message ONLY, never queued (absent from the
+     SPA picker). {{1}} = owner FIRST NAME, {{2}} = business name. Present here only to keep this map
+     byte-identical to WA_TEMPLATES in _shared/whatsapp-send.ts, which scripts/re-engage-vars.test.ts
+     asserts in BOTH directions. */
+  hook_followup: { lang: "en", vars: ["contact_first_name", "name"] },
 };
 /* NO DEFAULT_TEMPLATE.
    It used to be booking_page_intro, applied whenever a lead's whatsapp_template was unset or

@@ -15,6 +15,7 @@ import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
 import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
+import { firstNameFrom, hookFollowupBody } from '@/lib/questionnaireFollowup';
 import { barberSitePreviewUrl } from '@/config/publicSite';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -34,6 +35,16 @@ import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, 
 
 // Shared style for the compact thread-header quick-action icon buttons/links.
 const HEADER_ICON_BTN = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
+
+/* hook_followup eligibility: a lead who got the audit_reply REPORT and went quiet for this long.
+   Paul's rule 2026-08-22 — it follows the REPORT (audit_reply), never the "is this the right
+   number" opener (initial_contact). The window is measured from the report's send time, and any
+   inbound AFTER the report means they did not go quiet. Paul tunes the days here. */
+const HOOK_FOLLOWUP_MIN_DAYS = 3;
+const HOOK_FOLLOWUP_MIN_MS = HOOK_FOLLOWUP_MIN_DAYS * 24 * 60 * 60 * 1000;
+const HOOK_DUE_FILTER = '__hook_due__';
+// Same conversation key the hook uses everywhere: `${user_id ?? 'unassigned'}::${phone}`.
+const convKeyFor = (userId: string | null, phone: string) => `${userId ?? 'unassigned'}::${phone}`;
 
 function relTime(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -162,7 +173,7 @@ function AutoReplyToggle() {
 }
 
 const Inbox = () => {
-  const { user, conversations, messagesForKey, leads, sitesByLeadId, auditByLeadId, auditRunningLeadIds, isLoading, send, refetch, patchLeadStatus } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, sitesByLeadId, auditByLeadId, auditRunningLeadIds, isLoading, send, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
@@ -273,6 +284,38 @@ const Inbox = () => {
   const [newOpen, setNewOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
+  /* ══ hook_followup ELIGIBILITY — ONE COMPUTATION, USED BY BOTH THE FILTER AND THE BUTTON ═══════
+     A conversation is "report follow-up due" when: it received an audit_reply (the report, outbound,
+     not failed); NO inbound arrived AFTER that report's send time (they went quiet — a reply after it
+     means they did not); it has been ≥ HOOK_FOLLOWUP_MIN_DAYS since the report; and no hook_followup
+     has already gone (the server also enforces one-per-lead via pitchEverSent — this just keeps the UI
+     honest). Derived from the already-loaded message log, so the filter and the button can never
+     disagree about who is eligible. */
+  const hookState = useMemo(() => {
+    const latestReportAt = new Map<string, number>();   // key → newest audit_reply send time (ms)
+    const latestInboundAt = new Map<string, number>();  // key → newest inbound time (ms)
+    const hookSent = new Set<string>();                  // key → a hook_followup already went out
+    for (const m of messages) {
+      const key = convKeyFor(m.user_id, m.phone);
+      const t = new Date(m.created_at).getTime();
+      if (m.direction === 'inbound') {
+        latestInboundAt.set(key, Math.max(latestInboundAt.get(key) ?? 0, t));
+      } else if (m.status !== 'failed') {
+        if (m.template_name === 'audit_reply') latestReportAt.set(key, Math.max(latestReportAt.get(key) ?? 0, t));
+        else if (m.template_name === 'hook_followup') hookSent.add(key);
+      }
+    }
+    const now = Date.now();
+    const eligible = new Set<string>();
+    for (const [key, reportAt] of latestReportAt) {
+      if (hookSent.has(key)) continue;                       // already nudged — never twice
+      if ((latestInboundAt.get(key) ?? 0) > reportAt) continue; // replied after the report → not quiet
+      if (now - reportAt < HOOK_FOLLOWUP_MIN_MS) continue;   // not long enough yet
+      eligible.add(key);
+    }
+    return { eligible, hookSent };
+  }, [messages]);
+
   // The list shows fetched conversations; a just-started (synthetic) one is merged in
   // until its first message lands (after which the real row shares its key).
   const list = useMemo(() => {
@@ -289,6 +332,11 @@ const Inbox = () => {
     // matches Opened, etc. Unassigned stays visible, matching the status-filter convention.
     const byStatus = !statusFilter
       ? byCampaign
+      /* The report-follow-up work queue. Deliberately NO unassigned/paid exemption (unlike the
+         status filters below): this is a targeted "who is due a hook follow-up" view, and an
+         unassigned convo has no lead to send a template to anyway. */
+      : statusFilter === HOOK_DUE_FILTER
+        ? byCampaign.filter((c) => hookState.eligible.has(c.key))
       : statusFilter === '__opened__'
         ? byCampaign.filter((c) => (c.leadId && sitesByLeadId[c.leadId]?.firstOpenedAt != null) || c.unassigned)
         : statusFilter === '__claimed__'
@@ -310,7 +358,7 @@ const Inbox = () => {
       ? byStatus
       : byStatus.filter((c) => c.leadStatus !== 'not_interested' && c.leadStatus !== 'closed');
     return visible.filter((c) => !removedKeys.has(c.key));
-  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, sitesByLeadId]);
+  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, sitesByLeadId, hookState]);
 
   /* Search narrows the already-filtered list. Case-insensitive partial match on the business name
      (c.label — for a lead that IS the business name; for an unassigned convo it is "+<phone>"),
@@ -411,6 +459,47 @@ const Inbox = () => {
     setReportCopied(true);
     setTimeout(() => setReportCopied(false), 1500);
     toast({ title: 'Report URL copied' });
+  };
+
+  /* ══ SEND THE hook_followup — manual, per-lead, mirrors the questionnaire nudge ═══════════════
+     Fires the approved hook_followup template via send-whatsapp-message, which resolves {{1}} from
+     the lead's contact_name server-side and enforces one-per-lead (pitchEverSent, no allow_resend).
+     If the lead has no name, prompt for it and save it FIRST — the server reads the lead row, so the
+     send and the record cannot disagree (same convention as the questionnaire nudge). */
+  const [hookOpen, setHookOpen] = useState(false);
+  const [hookName, setHookName] = useState('');
+  const [hookSending, setHookSending] = useState(false);
+  const hookExistingFirst = firstNameFrom(activeLead?.contact_name);
+  const hookEffectiveFirst = hookExistingFirst || firstNameFrom(hookName);
+  const sendHookFollowup = async () => {
+    if (!active?.leadId || !activeLead || !hookEffectiveFirst || hookSending) return;
+    setHookSending(true);
+    try {
+      if (!hookExistingFirst && hookName.trim()) {
+        await (supabase as unknown as SupabaseClient)
+          .from('outreach_leads').update({ contact_name: hookName.trim() }).eq('id', active.leadId);
+      }
+      const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
+        body: { lead_id: active.leadId, phone: active.phone, country: activeLead.country ?? undefined, template_name: 'hook_followup' },
+      });
+      if (error || !data?.ok) {
+        const code = error?.message ?? data?.error ?? 'send failed';
+        toast({
+          title: 'Not sent',
+          description: code === 'pitch_already_sent' ? 'A hook follow-up has already gone to this lead — one per lead, no repeats.'
+            : code === 'no_contact_name' ? 'The lead has no contact name saved — add their first name and try again.'
+            : code === 'unknown_template' ? 'The send path is not deployed yet (waiting on the deploy).'
+            : String(code),
+          variant: 'destructive',
+        });
+        return;
+      }
+      setHookOpen(false);
+      toast({ title: 'Hook follow-up sent', description: `hook_followup to ${activeLead.business_name}.` });
+      await refetch(); // picks up the outbound row → the button flips to "sent"
+    } finally {
+      setHookSending(false);
+    }
   };
 
   // Per-lead template validity (SHARED source of truth with SingleWhatsAppDialog). Resolved
@@ -718,6 +807,8 @@ const Inbox = () => {
               <SelectItem value="__opened__">Opened</SelectItem>
               <SelectItem value="__claimed__">Claimed</SelectItem>
               <SelectItem value="__upsell__">Upsell</SelectItem>
+              {/* Report sent (audit_reply), no reply since, 3+ days — the hook_followup work queue. */}
+              <SelectItem value={HOOK_DUE_FILTER}>Hook follow-up due</SelectItem>
             </SelectContent>
           </Select>
           {isAdmin && (
@@ -990,6 +1081,19 @@ const Inbox = () => {
                   ) : (
                     <span className="text-muted-foreground">No public report yet — run an audit for this lead.</span>
                   )}
+                  {/* hook_followup — report sent, went quiet 3+ days. Right-aligned so it reads as a
+                      follow-up action on the report, not part of the copy/open controls. */}
+                  {hookState.hookSent.has(active.key) ? (
+                    <span className="ml-auto italic text-muted-foreground">Hook follow-up sent</span>
+                  ) : hookState.eligible.has(active.key) ? (
+                    <button
+                      type="button"
+                      onClick={() => { setHookName(''); setHookOpen(true); }}
+                      className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 font-medium text-foreground transition-colors hover:bg-muted"
+                    >
+                      <MessageCircle className="h-3 w-3" /> Send hook follow-up
+                    </button>
+                  ) : null}
                 </div>
               )}
 
@@ -1099,6 +1203,37 @@ const Inbox = () => {
             </Button>
             <Button size="sm" onClick={runAuditFromPrompt} disabled={!promptType.trim() || !promptLoc.trim()}>
               <Sparkles className="mr-1.5 h-4 w-4" /> Run audit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hook follow-up confirm — preview the exact message, prompt for a first name if the lead
+          has none (saved to the lead before sending), then fire hook_followup. One per lead, both
+          here (the button hides once sent) and on the server (pitchEverSent). */}
+      <Dialog open={hookOpen} onOpenChange={setHookOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Send hook follow-up to {activeLead?.business_name}</DialogTitle>
+            <DialogDescription className="text-xs">
+              For a lead who got the report and went quiet ({HOOK_FOLLOWUP_MIN_DAYS}+ days, no reply). One per lead — it can’t be sent twice.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {!hookExistingFirst && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Their first name (no name saved on this lead — it will be saved as the contact name)</label>
+                <Input value={hookName} onChange={(e) => setHookName(e.target.value)} placeholder="e.g. Ronnie" />
+              </div>
+            )}
+            <div className="whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/30 px-2.5 py-2 text-[11px]">
+              {hookFollowupBody(hookEffectiveFirst, activeLead?.business_name ?? '')}
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button variant="ghost" size="sm" onClick={() => setHookOpen(false)}>Cancel</Button>
+            <Button size="sm" disabled={!hookEffectiveFirst || hookSending} onClick={() => void sendHookFollowup()}>
+              {hookSending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} Send it
             </Button>
           </DialogFooter>
         </DialogContent>
