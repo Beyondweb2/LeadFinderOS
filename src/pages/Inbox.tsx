@@ -20,6 +20,7 @@ import { barberSitePreviewUrl } from '@/config/publicSite';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Card } from '@/components/ui/card';
 import { CampaignPicker } from '@/components/CampaignPicker';
@@ -43,6 +44,11 @@ const HEADER_ICON_BTN = 'inline-flex h-7 w-7 items-center justify-center rounded
 const HOOK_FOLLOWUP_MIN_DAYS = 3;
 const HOOK_FOLLOWUP_MIN_MS = HOOK_FOLLOWUP_MIN_DAYS * 24 * 60 * 60 * 1000;
 const HOOK_DUE_FILTER = '__hook_due__';
+/* Rough effective daily throughput of the shared WhatsApp queue at the 120/day cap (measured ~84;
+   rounded DOWN because the hook lane shares the budget with openers + replies). Used only to
+   estimate "about N days to clear" at queue time — never a gate. */
+const HOOK_SENDS_PER_DAY_EST = 80;
+const estHookDays = (n: number): number => Math.max(1, Math.ceil(n / HOOK_SENDS_PER_DAY_EST));
 // Same conversation key the hook uses everywhere: `${user_id ?? 'unassigned'}::${phone}`.
 const convKeyFor = (userId: string | null, phone: string) => `${userId ?? 'unassigned'}::${phone}`;
 
@@ -298,6 +304,10 @@ const Inbox = () => {
        exactly the wrong thing to send someone who has already bought. isPaid is amount_paid > 0
        (CLAUDE.md §6), the same money-not-status rule the Inbox status filter uses. */
     const paidKeys = new Set(conversations.filter((c) => c.isPaid).map((c) => c.key));
+    /* Leads already marked for the hook lane leave the "due" view — they have been actioned and are
+       pacing out. Keyed via conversation → leadId → the lead's hook_followup_queued_at marker. */
+    const queuedLeadIds = new Set(leads.filter((l) => l.hook_followup_queued_at).map((l) => l.id));
+    const leadIdByKey = new Map(conversations.map((c) => [c.key, c.leadId]));
     const latestReportAt = new Map<string, number>();   // key → newest audit_reply send time (ms)
     const latestInboundAt = new Map<string, number>();  // key → newest inbound time (ms)
     const hookSent = new Set<string>();                  // key → a hook_followup already went out
@@ -316,12 +326,14 @@ const Inbox = () => {
     for (const [key, reportAt] of latestReportAt) {
       if (paidKeys.has(key)) continue;                       // never re-pitch a paying customer
       if (hookSent.has(key)) continue;                       // already nudged — never twice
+      const lid = leadIdByKey.get(key);
+      if (lid && queuedLeadIds.has(lid)) continue;           // already queued for the lane — pacing out
       if ((latestInboundAt.get(key) ?? 0) > reportAt) continue; // replied after the report → not quiet
       if (now - reportAt < HOOK_FOLLOWUP_MIN_MS) continue;   // not long enough yet
       eligible.add(key);
     }
     return { eligible, hookSent };
-  }, [messages, conversations]);
+  }, [messages, conversations, leads]);
 
   // The list shows fetched conversations; a just-started (synthetic) one is merged in
   // until its first message lands (after which the real row shares its key).
@@ -476,6 +488,10 @@ const Inbox = () => {
   const [hookOpen, setHookOpen] = useState(false);
   const [hookName, setHookName] = useState('');
   const [hookSending, setHookSending] = useState(false);
+  // ── Bulk hook-follow-up queueing (the "Hook follow-up due" view) ──
+  const [hookSelected, setHookSelected] = useState<Set<string>>(new Set()); // lead ids
+  const [hookQueueConfirm, setHookQueueConfirm] = useState(false);
+  const [hookQueuing, setHookQueuing] = useState(false);
   const hookExistingFirst = firstNameFrom(activeLead?.contact_name);
   const hookEffectiveFirst = hookExistingFirst || firstNameFrom(hookName);
   const sendHookFollowup = async () => {
@@ -508,6 +524,52 @@ const Inbox = () => {
       await refetch(); // picks up the outbound row → the button flips to "sent"
     } finally {
       setHookSending(false);
+    }
+  };
+
+  /* ══ BULK: QUEUE MANY hook_followup SENDS (never a blast) ═══════════════════════════════════
+     Only in the "Hook follow-up due" view. Selection is by lead id. "Queue" writes the marker
+     column hook_followup_queued_at — it does NOT send: process-whatsapp-queue's hook lane drains
+     them ONE per tick, within the same 120/day cap and 07:00–21:30 UK window as every other send,
+     and re-verifies each lead's eligibility at send time. A confirm step shows the count first. */
+  const hookDueMode = statusFilter === HOOK_DUE_FILTER;
+  const hookEligibleLeadIds = useMemo(
+    () => (hookDueMode ? filteredList.filter((c) => c.leadId && hookState.eligible.has(c.key)).map((c) => c.leadId as string) : []),
+    [hookDueMode, filteredList, hookState],
+  );
+  const toggleHookSelect = (leadId: string) => setHookSelected((s) => {
+    const n = new Set(s);
+    if (n.has(leadId)) n.delete(leadId); else n.add(leadId);
+    return n;
+  });
+  const selectAllHookEligible = () => setHookSelected(new Set(hookEligibleLeadIds));
+  const clearHookSelection = () => setHookSelected(new Set());
+
+  const queueHookFollowups = async () => {
+    const ids = [...hookSelected];
+    if (!ids.length) return;
+    setHookQueuing(true);
+    try {
+      /* Untyped client for the write: the generated Supabase types won't carry hook_followup_queued_at
+         until they're regenerated post-migration. Same cast the audit-prompt write uses. */
+      const { error } = await (supabase as unknown as SupabaseClient)
+        .from('outreach_leads')
+        .update({ hook_followup_queued_at: new Date().toISOString() })
+        .in('id', ids);
+      if (error) {
+        toast({ title: "Couldn't queue", description: error.message, variant: 'destructive' });
+        return;
+      }
+      const days = estHookDays(ids.length);
+      toast({
+        title: `Queued ${ids.length} for hook follow-up`,
+        description: `They’ll pace out through the WhatsApp queue within the daily cap and the 07:00–21:30 UK window — about ${days} day${days === 1 ? '' : 's'} to clear. Nothing was sent now.`,
+      });
+      setHookSelected(new Set());
+      setHookQueueConfirm(false);
+      await refetch(); // queued leads now carry the marker → they leave the "due" view
+    } finally {
+      setHookQueuing(false);
     }
   };
 
@@ -886,6 +948,26 @@ const Inbox = () => {
               </button>
             )}
           </div>
+          {/* Bulk hook-follow-up control bar — only in the "Hook follow-up due" view. Queue, don't send. */}
+          {hookDueMode && filteredList.length > 0 && (
+            <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[11px]">
+              <span className="text-muted-foreground">{hookSelected.size} selected</span>
+              <button type="button" onClick={selectAllHookEligible} className="font-medium text-primary hover:underline">
+                Select all eligible ({hookEligibleLeadIds.length})
+              </button>
+              {hookSelected.size > 0 && (
+                <button type="button" onClick={clearHookSelection} className="text-muted-foreground hover:underline">Clear</button>
+              )}
+              <span className="flex-1" />
+              <Button
+                size="sm" className="h-6 px-2 text-[11px]"
+                disabled={hookSelected.size === 0}
+                onClick={() => setHookQueueConfirm(true)}
+              >
+                Queue {hookSelected.size} for follow-up
+              </Button>
+            </div>
+          )}
           {isLoading ? (
             <div className="flex h-full items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
           ) : filteredList.length === 0 ? (
@@ -914,6 +996,15 @@ const Inbox = () => {
                 activeKey === c.key ? 'bg-muted' : 'hover:bg-muted/50')}>
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 truncate text-sm font-medium">
+                  {hookDueMode && c.leadId && (
+                    <Checkbox
+                      checked={hookSelected.has(c.leadId)}
+                      onCheckedChange={() => toggleHookSelect(c.leadId!)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select ${c.label} for hook follow-up`}
+                      className="mr-0.5 shrink-0"
+                    />
+                  )}
                   {c.unassigned && <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
                   <span className="truncate">{c.unassigned ? `Unassigned · +${c.phone}` : c.label}</span>
                 </span>
@@ -1243,6 +1334,29 @@ const Inbox = () => {
             <Button variant="ghost" size="sm" onClick={() => setHookOpen(false)}>Cancel</Button>
             <Button size="sm" disabled={hookSending} onClick={() => void sendHookFollowup()}>
               {hookSending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} Send it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk hook-follow-up QUEUE confirm — shows the count BEFORE anything is written, so a wave of
+          hundreds is never one accidental click. Queues (marker column); the queue paces the sends. */}
+      <Dialog open={hookQueueConfirm} onOpenChange={(o) => { if (!hookQueuing) setHookQueueConfirm(o); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Queue {hookSelected.size} lead{hookSelected.size === 1 ? '' : 's'} for hook follow-up?</DialogTitle>
+            <DialogDescription className="text-xs">
+              These are added to the WhatsApp send queue — <strong>nothing sends now</strong>. They pace out one at a
+              time within the 120/day cap and the 07:00–21:30 UK window — about {estHookDays(hookSelected.size)} day
+              {estHookDays(hookSelected.size) === 1 ? '' : 's'} to clear (shared with your other sends). Each lead is
+              re-checked at send time: one per lead, paid customers skipped, only genuine no-reply report leads;
+              a blank name sends “Hi there”.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button variant="ghost" size="sm" onClick={() => setHookQueueConfirm(false)} disabled={hookQueuing}>Cancel</Button>
+            <Button size="sm" onClick={() => void queueHookFollowups()} disabled={hookQueuing || hookSelected.size === 0}>
+              {hookQueuing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null} Queue {hookSelected.size}
             </Button>
           </DialogFooter>
         </DialogContent>
