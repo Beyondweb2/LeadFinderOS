@@ -146,6 +146,26 @@ console.log("\n── hook_followup: same TWO-VAR PERSONAL-GREETING SHAPE AS que
   ok(qThrew, "questionnaire_followup still refuses a blank first name (unchanged)");
 }
 
+console.log("\n── contact_followup: ONE VARIABLE ({{1}} = business name), opens \"Hi,\" (no name greeting) ──");
+{
+  const t = WA_TEMPLATES["contact_followup"];
+  ok(!!t, "contact_followup is registered");
+  ok(t.lang === "en", `lang is plain "en", NOT en_GB (${t.lang})`);
+  ok(t.vars.length === 1, `ONE variable (${t.vars.length})`);
+  ok(t.vars[0] === "name", "{{1}} = business name");
+  ok(!t.vars.includes("contact_first_name"), "no personal-greeting var — it opens \"Hi,\"");
+
+  const body = renderTemplateBody("contact_followup", "RG Locksmiths", "");
+  ok(body.startsWith("Hi, just following up on my message, is this the right number for RG Locksmiths?"),
+    "opens with the approved first line, {{1}} filled");
+  ok(body.trimEnd().endsWith("Paul, findable"), "signs off exactly as registered");
+  ok(!body.includes("{{"), "no unfilled placeholders left");
+  // A blank business name degrades to "your business" — reads fine, no refusal (unlike name-greeting templates).
+  const blank = renderTemplateBody("contact_followup", "", "");
+  ok(blank.includes("is this the right number for your business?"), "blank business name degrades to \"your business\", not a refusal");
+  ok(!TEMPLATES_NEEDING_REAL_NAME.has("contact_followup"), "contact_followup is NOT in TEMPLATES_NEEDING_REAL_NAME (it opens \"Hi,\")");
+}
+
 console.log("\n── THE TWO ALLOWLISTS AGREE ON EVERY TEMPLATE, NOT JUST THIS ONE ──");
 /* Read out of process-whatsapp-queue's source rather than imported: it is a deliberate copy, and the
    point is to catch the copies diverging. Parsed loosely on purpose — a format change here should

@@ -107,6 +107,14 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
      generic needsContactName branch gives it pitchEverSent (keyed by THIS template name) with no
      allow_resend escape — a second report nudge is pressure, never service. */
   hook_followup: { lang: "en", vars: ["contact_first_name", "name"] },
+  /* Earlier-stage nudge — MANUAL sends via send-whatsapp-message ONLY, never queued as an opener.
+     Sent to a lead who got the initial_contact opener and NEVER replied (before any report). ONE
+     variable: {{1}} = business name. Opens "Hi," (no personal greeting), so no blank-name guard is
+     needed — a missing name degrades to "your business". Registered at Meta 2026-08-22 as Marketing,
+     locale "en" (NOT en_GB). `lang` must match Meta exactly.
+     ⛔ ONE PER LEAD. send-whatsapp-message enforces pitchEverSent for it in the name-only branch (a
+     ["name"] template otherwise has no such guard — it is added specifically for this follow-up). */
+  contact_followup: { lang: "en", vars: ["name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -133,8 +141,8 @@ const NO_FIRST_NAME_FALLBACK = "there";
 /* firstNameFrom + the questionnaire_followup body live in src/lib/questionnaireFollowup.ts — a
    Deno-free module the SPA's preview imports too, so what the operator confirms and what this file
    sends cannot drift. Re-exported so existing edge imports keep one door. */
-import { firstNameFrom, questionnaireFollowupBody, hookFollowupBody } from "../../../src/lib/questionnaireFollowup.ts";
-export { firstNameFrom, questionnaireFollowupBody, hookFollowupBody };
+import { firstNameFrom, questionnaireFollowupBody, hookFollowupBody, contactFollowupBody } from "../../../src/lib/questionnaireFollowup.ts";
+export { firstNameFrom, questionnaireFollowupBody, hookFollowupBody, contactFollowupBody };
 
 // Human-readable copies of the Meta-registered template BODIES, purely so the Inbox
 // can show what the barber actually receives (the real wording lives in Meta and is
@@ -254,6 +262,8 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   questionnaire_followup: (b, _u, _t, _c, first) => questionnaireFollowupBody(first ?? "", b),
   /* Same adapter shape: {{1}} first name, {{2}} business name, from the shared Deno-free module. */
   hook_followup: (b, _u, _t, _c, first) => hookFollowupBody(first ?? "", b),
+  /* ONE variable: {{1}} = business name. */
+  contact_followup: (b) => contactFollowupBody(b),
   onboarding_followup: onboardingFollowupBody,
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).

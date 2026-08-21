@@ -33,3 +33,12 @@ Paul, findable`;
 export function hookFollowupBody(firstName: string, businessName: string): string {
   return `Hi ${firstName || "there"}, following up on the report I sent for ${businessName || "your business"}. The businesses AI is naming instead of you are picking up work you could be getting. Happy to walk you through how we fix that, no charge to take a look, just reply here. Paul, findable`;
 }
+
+/* contact_followup — the EARLIER-stage nudge: a lead who got the initial_contact opener and never
+   replied at all (before any report). ONE variable: {{1}} = business name. It opens "Hi," (no
+   first-name greeting), so a blank business name just degrades to "your business" and still reads
+   naturally — there is no blank-name problem here. Registered at Meta 2026-08-22 as Marketing,
+   locale "en". Reproduced character-for-character. Shared so the SPA preview and the edge send agree. */
+export function contactFollowupBody(businessName: string): string {
+  return `Hi, just following up on my message, is this the right number for ${businessName || "your business"}? Ran a quick check on how the business shows up when people ask AI like ChatGPT for local recommendations, worth a quick look if you're interested. No bother if not. Paul, findable`;
+}
