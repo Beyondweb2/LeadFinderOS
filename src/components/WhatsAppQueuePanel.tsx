@@ -14,6 +14,9 @@ interface QueueStatus {
   /** Queued leads the processor will NOT send to because they are archived. Reported so a stalled
    *  queue can be told apart from one holding withdrawn leads. */
   archivedQueuedCount?: number;
+  /** Leads queued in the SEPARATE hook_followup lane (marker column, not status='queued'). Optional
+   *  so the panel degrades cleanly against an older function deploy that predates this field. */
+  hookQueuedCount?: number;
   nextSendAt: string | null;
   /** The real next eligible send, computed server-side in Europe/London. Optional so the panel
    *  degrades cleanly against an older function deploy that has not shipped it yet. */
@@ -181,6 +184,14 @@ export function WhatsAppQueuePanel({
           <span>
             <span className="block text-[10px] uppercase tracking-wide text-muted-foreground/60">Queued</span>
             <span className="font-semibold text-foreground/90">{queued.length}</span>
+            {/* The hook_followup lane paces through the SAME cap/window but is a separate marker, so
+                the opener count above never includes it. Shown here so a bulk hook-queue is visible
+                and doesn't look like it failed. Only when there's a backlog. Display only. */}
+            {(status.hookQueuedCount ?? 0) > 0 && (
+              <span className="block text-[10px] font-medium text-muted-foreground/70">
+                + {status.hookQueuedCount} hook follow-up{status.hookQueuedCount === 1 ? '' : 's'}
+              </span>
+            )}
           </span>
           {queued.length > 0 && (expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />)}
         </button>
