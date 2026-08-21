@@ -15,7 +15,7 @@ import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
 import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
-import { firstNameFrom, hookFollowupBody } from '@/lib/questionnaireFollowup';
+import { firstNameFrom, hookFollowupBody, contactFollowupBody } from '@/lib/questionnaireFollowup';
 import { barberSitePreviewUrl } from '@/config/publicSite';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -44,6 +44,11 @@ const HEADER_ICON_BTN = 'inline-flex h-7 w-7 items-center justify-center rounded
 const HOOK_FOLLOWUP_MIN_DAYS = 3;
 const HOOK_FOLLOWUP_MIN_MS = HOOK_FOLLOWUP_MIN_DAYS * 24 * 60 * 60 * 1000;
 const HOOK_DUE_FILTER = '__hook_due__';
+/* contact_followup — the EARLIER-stage nudge: got initial_contact, NEVER replied, NO report yet.
+   Distinct from hook (post-report) by the presence of a report — the two can never overlap. */
+const CONTACT_FOLLOWUP_MIN_DAYS = 3;
+const CONTACT_FOLLOWUP_MIN_MS = CONTACT_FOLLOWUP_MIN_DAYS * 24 * 60 * 60 * 1000;
+const CONTACT_DUE_FILTER = '__contact_due__';
 /* Rough effective daily throughput of the shared WhatsApp queue at the 120/day cap (measured ~84;
    rounded DOWN because the hook lane shares the budget with openers + replies). Used only to
    estimate "about N days to clear" at queue time — never a gate. */
@@ -335,6 +340,42 @@ const Inbox = () => {
     return { eligible, hookSent };
   }, [messages, conversations, leads]);
 
+  /* ══ contact_followup ELIGIBILITY — EARLIER STAGE, NO OVERLAP WITH hook ═══════════════════════
+     "Contact follow-up due" when: got initial_contact (outbound, not failed); has NO report
+     (audit_reply) at all — this is the discriminator that keeps it mutually exclusive with hook,
+     which REQUIRES a report; NEVER replied at all (no inbound ever); ≥ CONTACT_FOLLOWUP_MIN_DAYS
+     since the opener; not paid; no contact_followup already sent (the server also enforces one per
+     lead). A lead who replied, or who got the report, is not here. */
+  const contactState = useMemo(() => {
+    const paidKeys = new Set(conversations.filter((c) => c.isPaid).map((c) => c.key));
+    const latestOpenerAt = new Map<string, number>();  // key → newest initial_contact send time (ms)
+    const everInbound = new Set<string>();             // key → any inbound ever (→ they replied)
+    const hasReport = new Set<string>();               // key → an audit_reply exists (→ hook's domain, not this)
+    const contactSent = new Set<string>();             // key → a contact_followup already went out
+    for (const m of messages) {
+      const key = convKeyFor(m.user_id, m.phone);
+      const t = new Date(m.created_at).getTime();
+      if (m.direction === 'inbound') {
+        everInbound.add(key);
+      } else if (m.status !== 'failed') {
+        if (m.template_name === 'initial_contact') latestOpenerAt.set(key, Math.max(latestOpenerAt.get(key) ?? 0, t));
+        else if (m.template_name === 'audit_reply') hasReport.add(key);
+        else if (m.template_name === 'contact_followup') contactSent.add(key);
+      }
+    }
+    const now = Date.now();
+    const eligible = new Set<string>();
+    for (const [key, openerAt] of latestOpenerAt) {
+      if (paidKeys.has(key)) continue;                     // never nudge a paying customer
+      if (hasReport.has(key)) continue;                    // ⛔ has a report → hook's domain, not this (no overlap)
+      if (everInbound.has(key)) continue;                  // replied at all → not a cold no-reply opener
+      if (contactSent.has(key)) continue;                  // already nudged — never twice
+      if (now - openerAt < CONTACT_FOLLOWUP_MIN_MS) continue; // not long enough yet
+      eligible.add(key);
+    }
+    return { eligible, contactSent };
+  }, [messages, conversations]);
+
   // The list shows fetched conversations; a just-started (synthetic) one is merged in
   // until its first message lands (after which the real row shares its key).
   const list = useMemo(() => {
@@ -356,6 +397,9 @@ const Inbox = () => {
          unassigned convo has no lead to send a template to anyway. */
       : statusFilter === HOOK_DUE_FILTER
         ? byCampaign.filter((c) => hookState.eligible.has(c.key))
+      /* The earlier-stage nudge queue — same targeted shape as HOOK_DUE_FILTER, no unassigned/paid exemption. */
+      : statusFilter === CONTACT_DUE_FILTER
+        ? byCampaign.filter((c) => contactState.eligible.has(c.key))
       : statusFilter === '__opened__'
         ? byCampaign.filter((c) => (c.leadId && sitesByLeadId[c.leadId]?.firstOpenedAt != null) || c.unassigned)
         : statusFilter === '__claimed__'
@@ -377,7 +421,7 @@ const Inbox = () => {
       ? byStatus
       : byStatus.filter((c) => c.leadStatus !== 'not_interested' && c.leadStatus !== 'closed');
     return visible.filter((c) => !removedKeys.has(c.key));
-  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, sitesByLeadId, hookState]);
+  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, sitesByLeadId, hookState, contactState]);
 
   /* Search narrows the already-filtered list. Case-insensitive partial match on the business name
      (c.label — for a lead that IS the business name; for an unassigned convo it is "+<phone>"),
@@ -524,6 +568,35 @@ const Inbox = () => {
       await refetch(); // picks up the outbound row → the button flips to "sent"
     } finally {
       setHookSending(false);
+    }
+  };
+
+  /* ══ contact_followup — the earlier-stage manual nudge (no first name; {{1}} = business name) ══ */
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactSending, setContactSending] = useState(false);
+  const sendContactFollowup = async () => {
+    if (!active?.leadId || !activeLead || contactSending) return;
+    setContactSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
+        body: { lead_id: active.leadId, phone: active.phone, country: activeLead.country ?? undefined, template_name: 'contact_followup' },
+      });
+      if (error || !data?.ok) {
+        const code = error?.message ?? data?.error ?? 'send failed';
+        toast({
+          title: 'Not sent',
+          description: code === 'pitch_already_sent' ? 'A contact follow-up has already gone to this lead — one per lead, no repeats.'
+            : code === 'unknown_template' ? 'The send path is not deployed yet (waiting on the deploy).'
+            : String(code),
+          variant: 'destructive',
+        });
+        return;
+      }
+      setContactOpen(false);
+      toast({ title: 'Contact follow-up sent', description: `contact_followup to ${activeLead.business_name}.` });
+      await refetch(); // picks up the outbound row → the button flips to "sent"
+    } finally {
+      setContactSending(false);
     }
   };
 
@@ -878,6 +951,8 @@ const Inbox = () => {
               <SelectItem value="__opened__">Opened</SelectItem>
               <SelectItem value="__claimed__">Claimed</SelectItem>
               <SelectItem value="__upsell__">Upsell</SelectItem>
+              {/* Opener sent (initial_contact), NEVER replied, no report yet, 3+ days — contact_followup. */}
+              <SelectItem value={CONTACT_DUE_FILTER}>Contact follow-up due</SelectItem>
               {/* Report sent (audit_reply), no reply since, 3+ days — the hook_followup work queue. */}
               <SelectItem value={HOOK_DUE_FILTER}>Hook follow-up due</SelectItem>
             </SelectContent>
@@ -1194,6 +1269,19 @@ const Inbox = () => {
                       <MessageCircle className="h-3 w-3" /> Send hook follow-up
                     </button>
                   ) : null}
+                  {/* contact_followup — opener got no reply, no report yet. Mutually exclusive with the
+                      hook button above (hook needs a report; this needs none), so only one shows. */}
+                  {contactState.contactSent.has(active.key) ? (
+                    <span className="ml-auto italic text-muted-foreground">Contact follow-up sent</span>
+                  ) : contactState.eligible.has(active.key) ? (
+                    <button
+                      type="button"
+                      onClick={() => setContactOpen(true)}
+                      className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 font-medium text-foreground transition-colors hover:bg-muted"
+                    >
+                      <MessageCircle className="h-3 w-3" /> Send contact follow-up
+                    </button>
+                  ) : null}
                 </div>
               )}
 
@@ -1334,6 +1422,28 @@ const Inbox = () => {
             <Button variant="ghost" size="sm" onClick={() => setHookOpen(false)}>Cancel</Button>
             <Button size="sm" disabled={hookSending} onClick={() => void sendHookFollowup()}>
               {hookSending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} Send it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Contact follow-up confirm — the earlier-stage nudge (opener got no reply, no report yet).
+          One variable ({{1}} = business name), no first-name prompt. One per lead (server + button). */}
+      <Dialog open={contactOpen} onOpenChange={setContactOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Send contact follow-up to {activeLead?.business_name}</DialogTitle>
+            <DialogDescription className="text-xs">
+              For a lead who got the opener and never replied ({CONTACT_FOLLOWUP_MIN_DAYS}+ days, no report sent yet). One per lead — it can’t be sent twice.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/30 px-2.5 py-2 text-[11px]">
+            {contactFollowupBody(activeLead?.business_name ?? '')}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button variant="ghost" size="sm" onClick={() => setContactOpen(false)}>Cancel</Button>
+            <Button size="sm" disabled={contactSending} onClick={() => void sendContactFollowup()}>
+              {contactSending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} Send it
             </Button>
           </DialogFooter>
         </DialogContent>

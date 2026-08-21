@@ -228,6 +228,16 @@ Deno.serve(async (req) => {
         auditClaimUrl = a.link;
         storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors);
       } else {
+        /* ⛔ contact_followup — a MANUAL follow-up, so ONE PER LEAD, NO OVERRIDE. It is a ["name"]
+           template and would otherwise fall through this opener branch with no history guard at all
+           (openers are guarded in the queue, not here). Same contract as hook_followup: a lead, then
+           pitchEverSent for THIS template — a second "is this the right number" nudge is pressure. */
+        if (templateName === "contact_followup") {
+          if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
+          if (await pitchEverSent(service, resolvedLeadId, templateName)) {
+            return json({ ok: false, error: "pitch_already_sent" }, 200);
+          }
+        }
         // Claim/opener template. The claim link is required ONLY for templates that use a url var;
         // a url-less opener (e.g. initial_contact, vars ["name"]) sends with no link (claimUrl "").
         const needsUrl = tvars.includes("url");
