@@ -233,6 +233,11 @@ const Inbox = () => {
   // reveals them. A new inbound reply flips the lead back to 'replied' server-side
   // (whatsapp-inbound), so re-engaging conversations reappear on their own.
   const [showHidden, setShowHidden] = useState(false);
+  // Free-text search over the conversation list, purely client-side (every conversation is
+  // already loaded — useInbox uses fetchAllRows, nothing paginated/virtualised). Narrows WITHIN
+  // the campaign/status/hidden filters, never replaces them. Persisted per-user like those
+  // filters sit right beside it, and the box shows the term, so it is not a hidden filter.
+  const [search, setSearch] = usePersistedState<string>('inbox-search', '', { tier: 'session', scope: user?.id });
   const [savingStatusKey, setSavingStatusKey] = useState<string | null>(null);
   // Remove-from-inbox (status → 'closed'): in-flight spinner + optimistic hide keys.
   const [removingKey, setRemovingKey] = useState<string | null>(null);
@@ -306,6 +311,16 @@ const Inbox = () => {
       : byStatus.filter((c) => c.leadStatus !== 'not_interested' && c.leadStatus !== 'closed');
     return visible.filter((c) => !removedKeys.has(c.key));
   }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, sitesByLeadId]);
+
+  /* Search narrows the already-filtered list. Case-insensitive partial match on the business name
+     (c.label — for a lead that IS the business name; for an unassigned convo it is "+<phone>"),
+     plus the raw phone so typing digits finds a number too. Empty term → the full filtered list
+     back, unchanged. Separate memo so the campaign/status/hidden logic above is untouched. */
+  const searchTerm = search.trim().toLowerCase();
+  const filteredList = useMemo(() => {
+    if (!searchTerm) return list;
+    return list.filter((c) => c.label.toLowerCase().includes(searchTerm) || c.phone.includes(searchTerm));
+  }, [list, searchTerm]);
 
   // How many not_interested conversations the current view is hiding (for the toggle).
   const hiddenCount = useMemo(() => {
@@ -750,15 +765,45 @@ const Inbox = () => {
               {showHidden ? '← Hide closed / not-interested' : `Show hidden (${hiddenCount})`}
             </button>
           )}
+          {/* Search the conversation list — narrows within the campaign/status/hidden filters.
+              Part of the list column, not the top toolbar. Clearing it restores the full list. */}
+          <div className="relative mb-1.5 px-0.5">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by business name…"
+              className="h-8 pr-7 text-xs"
+              aria-label="Search conversations by business name"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            )}
+          </div>
           {isLoading ? (
             <div className="flex h-full items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-          ) : list.length === 0 ? (
+          ) : filteredList.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center px-4 text-center text-muted-foreground">
               <MessageSquare className="mb-2 h-6 w-6 opacity-40" />
-              <p className="text-sm">No conversations yet.</p>
-              <p className="mt-1 text-xs opacity-70">Start one with “New”, or inbound replies will appear here as they arrive.</p>
+              {searchTerm ? (
+                <>
+                  <p className="text-sm">No conversations match “{search.trim()}”.</p>
+                  <p className="mt-1 text-xs opacity-70">Clear the search to see the full list.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm">No conversations yet.</p>
+                  <p className="mt-1 text-xs opacity-70">Start one with “New”, or inbound replies will appear here as they arrive.</p>
+                </>
+              )}
             </div>
-          ) : list.map((c) => (
+          ) : filteredList.map((c) => (
             <div
               key={c.key}
               role="button"
