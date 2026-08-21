@@ -479,7 +479,9 @@ const Inbox = () => {
   const hookExistingFirst = firstNameFrom(activeLead?.contact_name);
   const hookEffectiveFirst = hookExistingFirst || firstNameFrom(hookName);
   const sendHookFollowup = async () => {
-    if (!active?.leadId || !activeLead || !hookEffectiveFirst || hookSending) return;
+    /* First name is OPTIONAL for hook_followup — a blank sends "Hi there, …" (the server allows it
+       via TEMPLATES_ALLOWING_NO_FIRST_NAME). Do NOT block the send on an empty name. */
+    if (!active?.leadId || !activeLead || hookSending) return;
     setHookSending(true);
     try {
       if (!hookExistingFirst && hookName.trim()) {
@@ -1229,7 +1231,7 @@ const Inbox = () => {
           <div className="space-y-2">
             {!hookExistingFirst && (
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Their first name (no name saved on this lead — it will be saved as the contact name)</label>
+                <label className="text-xs font-medium text-muted-foreground">Their first name — optional (leave blank to send “Hi there”; if you enter one it’s saved to the lead)</label>
                 <Input value={hookName} onChange={(e) => setHookName(e.target.value)} placeholder="e.g. Ronnie" />
               </div>
             )}
@@ -1239,7 +1241,7 @@ const Inbox = () => {
           </div>
           <DialogFooter className="gap-2 sm:justify-end">
             <Button variant="ghost" size="sm" onClick={() => setHookOpen(false)}>Cancel</Button>
-            <Button size="sm" disabled={!hookEffectiveFirst || hookSending} onClick={() => void sendHookFollowup()}>
+            <Button size="sm" disabled={hookSending} onClick={() => void sendHookFollowup()}>
               {hookSending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} Send it
             </Button>
           </DialogFooter>

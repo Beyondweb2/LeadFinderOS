@@ -13,7 +13,8 @@
    from one path and the right number from the other, which is exactly what #132000 is.
    ============================================================ */
 import {
-  WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, WA_TEMPLATE_BODIES, renderTemplateBody, templateBodyParams,
+  WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, TEMPLATES_ALLOWING_NO_FIRST_NAME,
+  WA_TEMPLATE_BODIES, renderTemplateBody, templateBodyParams,
 } from "../supabase/functions/_shared/whatsapp-send.ts";
 
 let f = 0;
@@ -122,15 +123,27 @@ console.log("\n── hook_followup: same TWO-VAR PERSONAL-GREETING SHAPE AS que
   ok(body.trimEnd().endsWith("Paul, findable"), "signs off exactly as registered");
   ok(!body.includes("{{"), "no unfilled placeholders left");
 
-  // ⛔ A blank first name refuses (throws) — a personal greeting must never degrade to "Hi there".
-  let threw = false;
-  try { templateBodyParams(t.vars, "RG Locksmiths", "", { contactName: "", templateName: "hook_followup" }); }
-  catch { threw = true; }
-  ok(threw, "a blank first name refuses rather than sending \"Hi there, following up…\"");
-  let threwMissing = false;
-  try { templateBodyParams(t.vars, "RG Locksmiths", "", { templateName: "hook_followup" }); }
-  catch { threwMissing = true; }
-  ok(threwMissing, "⛔ the contactName ABSENT entirely also refuses (absent is not an empty string)");
+  /* ⛔ A BLANK FIRST NAME IS ALLOWED for hook_followup and degrades {{1}} to "there" (Paul 2026-08-22)
+     — cold report leads we often have no name for. The Meta param and the body renderer must agree. */
+  ok(TEMPLATES_ALLOWING_NO_FIRST_NAME.has("hook_followup"), "hook_followup is in the no-first-name allow-set");
+  const blankParams = templateBodyParams(t.vars, "RG Locksmiths", "", { contactName: "", templateName: "hook_followup" });
+  const bp = (blankParams[0] as { parameters: Array<{ text: string }> }).parameters;
+  ok(bp[0].text === "there", `blank first name → {{1}} = "there" (got "${bp[0].text}")`);
+  ok(bp[1].text === "RG Locksmiths", "{{2}} is still the business name");
+  const missingParams = templateBodyParams(t.vars, "RG Locksmiths", "", { templateName: "hook_followup" });
+  ok((missingParams[0] as { parameters: Array<{ text: string }> }).parameters[0].text === "there",
+    "an ABSENT contactName also degrades to \"there\", not a throw");
+  const blankBody = renderTemplateBody("hook_followup", "RG Locksmiths", "", undefined, undefined, "");
+  ok(blankBody.startsWith("Hi there, following up on the report I sent for RG Locksmiths."),
+    "the stored transcript agrees: blank name reads \"Hi there, …\"");
+
+  /* ⛔ SEPARATION: questionnaire_followup MUST still refuse a blank first name — changing hook_followup
+     did not change it. This is the whole point of the allow-set. */
+  ok(!TEMPLATES_ALLOWING_NO_FIRST_NAME.has("questionnaire_followup"), "questionnaire_followup is NOT in the allow-set");
+  let qThrew = false;
+  try { templateBodyParams(WA_TEMPLATES["questionnaire_followup"].vars, "RG Locksmiths", "", { contactName: "", templateName: "questionnaire_followup" }); }
+  catch { qThrew = true; }
+  ok(qThrew, "questionnaire_followup still refuses a blank first name (unchanged)");
 }
 
 console.log("\n── THE TWO ALLOWLISTS AGREE ON EVERY TEMPLATE, NOT JUST THIS ONE ──");

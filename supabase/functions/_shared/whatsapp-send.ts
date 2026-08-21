@@ -118,6 +118,18 @@ export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
    an empty name refuses rather than degrades. */
 export const TEMPLATES_NEEDING_REAL_NAME = new Set(["book_call", "re_engage"]);
 
+/* TEMPLATES WHOSE contact_first_name GREETING MAY DEGRADE TO "there".
+   The mirror of TEMPLATES_NEEDING_REAL_NAME, one level down: for most personal-greeting templates a
+   blank first name refuses (questionnaire_followup — the operator is expected to know who they are
+   nudging about a payment). But hook_followup goes to cold report leads we often have no name for,
+   and "Hi there, following up on the report I sent for <business>" reads perfectly — so a blank name
+   is ALLOWED and {{1}} falls back to "there" (matching hookFollowupBody's own `firstName || "there"`,
+   so the Meta param and the stored transcript agree). Paul's call 2026-08-22.
+   ⛔ questionnaire_followup is deliberately NOT in this set — its blank-name refusal is unchanged. */
+export const TEMPLATES_ALLOWING_NO_FIRST_NAME = new Set(["hook_followup"]);
+/** The value sent for {{1}} when a name is absent but allowed — same fallback the body renderer uses. */
+const NO_FIRST_NAME_FALLBACK = "there";
+
 /* firstNameFrom + the questionnaire_followup body live in src/lib/questionnaireFollowup.ts — a
    Deno-free module the SPA's preview imports too, so what the operator confirms and what this file
    sends cannot drift. Re-exported so existing edge imports keep one door. */
@@ -285,13 +297,15 @@ export function templateBodyParams(
       case "url": return claimUrl;
       case "trade": return extra?.trade ?? "";
       case "competitors": return extra?.competitors ?? "";
-      /* The one variable that names a PERSON. "Hi there" or "Hi your business" as a first-name
-         greeting is worse than not sending — throw, same contract as onboarding_url below. Callers
-         check first and return a readable refusal; this stops a forgetful new caller. */
+      /* The one variable that names a PERSON. For most templates a blank first name throws (same
+         contract as onboarding_url below — callers refuse readably first, this stops a forgetful new
+         caller). For a template in TEMPLATES_ALLOWING_NO_FIRST_NAME (hook_followup) a blank degrades
+         to "there" instead — the greeting still reads naturally to a lead we have no name for. */
       case "contact_first_name": {
         const first = firstNameFrom(extra?.contactName);
-        if (!first) throw new Error("contact_first_name is empty — refusing to send a personal greeting with a placeholder");
-        return first;
+        if (first) return first;
+        if (extra?.templateName && TEMPLATES_ALLOWING_NO_FIRST_NAME.has(extra.templateName)) return NO_FIRST_NAME_FALLBACK;
+        throw new Error("contact_first_name is empty — refusing to send a personal greeting with a placeholder");
       }
       // Resolved per-lead by resolveOnboardingFollowupVars, which refuses rather than returning a
       // partial — so an empty value here should be unreachable. Throwing rather than sending an
