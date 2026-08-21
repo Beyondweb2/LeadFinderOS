@@ -16,6 +16,7 @@ import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
 import { firstNameFrom, hookFollowupBody, contactFollowupBody } from '@/lib/questionnaireFollowup';
+import { readableTemplateBody } from '@/lib/templateBodies';
 import { barberSitePreviewUrl } from '@/config/publicSite';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -90,13 +91,14 @@ function friendlyTemplate(name: string | null | undefined): string {
   return (name && TEMPLATE_DISPLAY[name]) || 'Template';
 }
 
-/** Conversation-list preview only: never surface a raw template name. If the body is
- *  empty or itself looks like a raw snake_case template name, show a friendly label. */
-function listPreview(m: { body: string | null; template_name: string | null }): string {
-  const body = (m.body ?? '').trim();
-  const looksRaw = !body || /^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(body);
-  if (!looksRaw) return body;
-  return `📄 ${friendlyTemplate(m.template_name ?? (body || null))}`;
+/** Conversation-list preview only: never surface a raw template name. A row whose stored body is
+ *  a bracketed slug ("[initial_contact]") or bare snake_case — the campaign/opener rows written by
+ *  the whatsapp_sends DB trigger — is rendered as its approved readable copy, filled with the
+ *  conversation's business name. Only if there is no readable copy do we fall back to a label. */
+function listPreview(m: { body: string | null; template_name: string | null }, businessName?: string | null): string {
+  const readable = readableTemplateBody(m.body, m.template_name, { businessName });
+  if (readable) return readable;
+  return `📄 ${friendlyTemplate(m.template_name ?? ((m.body ?? '').trim() || null))}`;
 }
 
 /** The ONE inbox auto-reply rule's on/off switch (reply → delayed audit_reply). Reads/writes
@@ -521,6 +523,22 @@ const Inbox = () => {
      2026-08-05 because it resolved only for slugs carrying the 8-hex code — 69 of 123 rows — so it
      was a coin flip on whether a prospect got a dead link. Both surfaces use the id. */
   const reportUrl = activeReport?.auditId ? `${REPORT_PUBLIC_ORIGIN}/report/${activeReport.auditId}` : null;
+
+  /* Readable body for a thread bubble. Campaign/opener rows are stored as a bare slug
+   * ("[initial_contact]") by the whatsapp_sends DB trigger; this fills the approved copy from the
+   * template name + what THIS thread knows (business name, and — where the template uses them — the
+   * report/onboarding link, trade and owner first name). A row already holding real text is returned
+   * unchanged. Competitors aren't available in the inbox, so audit_reply degrades to "other firms". */
+  const bubbleReadable = (m: { body: string | null; template_name: string | null }): string => {
+    const businessName = activeBusinessName ?? active?.label ?? '';
+    const url = m.template_name === 'audit_reply'
+      ? (reportUrl ?? '')
+      : (activeLead ? onboardingUrl(activeLead.id, activeLead.business_name) : '');
+    const trade = activeLead?.search_keyword ?? activeLead?.category ?? undefined;
+    const firstName = firstNameFrom(activeLead?.contact_name);
+    return readableTemplateBody(m.body, m.template_name, { businessName, url, trade, firstName });
+  };
+
   const [reportCopied, setReportCopied] = useState(false);
   const copyReportUrl = () => {
     if (!reportUrl) return;
@@ -1094,7 +1112,7 @@ const Inbox = () => {
               {c.lastMessage && (
                 <span className="truncate text-xs text-muted-foreground">
                   {c.lastMessage.direction === 'outbound' ? 'You: ' : ''}
-                  {listPreview(c.lastMessage)}
+                  {listPreview(c.lastMessage, c.label)}
                 </span>
               )}
               {/* Editable status pill — only for conversations linked to a lead
@@ -1300,7 +1318,7 @@ const Inbox = () => {
                     <div className={cn('max-w-[78%] rounded-2xl px-3 py-2 text-sm',
                       m.direction === 'outbound' ? 'bg-primary/90 text-primary-foreground' : 'bg-muted')}>
                       <p className="whitespace-pre-wrap break-words">
-                        {m.body || templateLabel(m.template_name)}
+                        {bubbleReadable(m) || templateLabel(m.template_name)}
                       </p>
                       <div className={cn('mt-0.5 flex items-center gap-1 text-[10px]',
                         m.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
