@@ -60,6 +60,18 @@ export function WhatsAppQueuePanel({
     [leads],
   );
 
+  /* The contact_followup (no-reply opener follow-up) lane. SEPARATE from `queued` because it drains
+     off its own marker column (contact_followup_queued_at), not status='queued' — so these leads
+     never showed in the send-order list, which read "empty" once the openers drained even with 90
+     follow-ups waiting. Oldest marker first = the drain order (the lane's `order by
+     contact_followup_queued_at`). Drains only after the opener queue is empty each tick. */
+  const contactQueued = useMemo(
+    () => leads
+      .filter((l) => !!l.contact_followup_queued_at)
+      .sort((a, b) => (a.contact_followup_queued_at ?? '').localeCompare(b.contact_followup_queued_at ?? '')),
+    [leads],
+  );
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
@@ -124,6 +136,15 @@ export function WhatsAppQueuePanel({
     // Restore the pre-queue status (fallback not_contacted); clear the capture + queued_at.
     const prev = leads.find((l) => l.id === id)?.previous_status;
     onUpdateLead(id, { status: prev ?? 'not_contacted', previous_status: null, queued_at: null });
+  };
+
+  /* Cancel ONE no-reply follow-up: clear the lane marker so the drainer skips it, and restore the
+     pre-2nd-attempt status (→ Contacted) so the lead reads normally and is contactable/re-queueable
+     again. Sends nothing and suppresses nothing — it is a plain column update, and the lane simply
+     stops seeing a null marker. */
+  const removeContactFollowup = (id: string) => {
+    const prev = leads.find((l) => l.id === id)?.previous_status;
+    onUpdateLead(id, { contact_followup_queued_at: null, status: prev ?? 'initial_contact', previous_status: null });
   };
 
   if (!status) return null; // admin-only; hidden otherwise
@@ -203,7 +224,7 @@ export function WhatsAppQueuePanel({
               </span>
             )}
           </span>
-          {queued.length > 0 && (expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />)}
+          {(queued.length > 0 || contactQueued.length > 0) && (expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />)}
         </button>
         <Stat label="Sent today" value={`${status.sentToday} / ${status.cap}`} />
         <Stat label="UK time" value={`${status.ukTime} ${status.windowOpen ? '· open' : '· closed'}`} />
@@ -230,28 +251,66 @@ export function WhatsAppQueuePanel({
       {expanded && (
         <div className="mt-2 rounded-lg border border-border/40 bg-background/40 p-2">
           <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/50">In send order (next first)</div>
-          {queued.length === 0 ? (
+          {queued.length === 0 && contactQueued.length === 0 ? (
             <p className="px-1 py-1 text-xs text-muted-foreground/60">Queue is empty.</p>
           ) : (
-            <ol className="space-y-0.5">
-              {queued.map((l, i) => (
-                <li key={l.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-white/[0.03]">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="w-5 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground/50">{i + 1}</span>
-                    <span className="truncate text-foreground/90">{l.business_name}</span>
-                    {l.whatsapp_template && <span className="shrink-0 text-[10px] text-muted-foreground/50">{l.whatsapp_template}</span>}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeFromQueue(l.id)}
-                    title="Remove from queue"
-                    className="shrink-0 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ol>
+            /* FIX 4: fixed-height scroll box so a long list (90+ follow-ups) is a contained panel,
+               not a page-long run. Both lanes live inside the one scroller. */
+            <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+              {queued.length > 0 && (
+                <ol className="space-y-0.5">
+                  {queued.map((l, i) => (
+                    <li key={l.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-white/[0.03]">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="w-5 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground/50">{i + 1}</span>
+                        <span className="truncate text-foreground/90">{l.business_name}</span>
+                        {l.whatsapp_template && <span className="shrink-0 text-[10px] text-muted-foreground/50">{l.whatsapp_template}</span>}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeFromQueue(l.id)}
+                        title="Remove from queue"
+                        className="shrink-0 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              {/* FIX 3: the contact_followup lane, listed after the openers (it drains only once the
+                  opener queue is empty each tick). Each row's X clears just this lead's marker —
+                  cancels the follow-up, leaves the business Contacted and contactable, sends nothing. */}
+              {contactQueued.length > 0 && (
+                <div>
+                  {queued.length > 0 && (
+                    <div className="px-1 pb-0.5 pt-1 text-[10px] uppercase tracking-wide text-sky-600/70 dark:text-sky-400/70">
+                      No-reply follow-ups (after the openers)
+                    </div>
+                  )}
+                  <ol className="space-y-0.5">
+                    {contactQueued.map((l, i) => (
+                      <li key={l.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-white/[0.03]">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="w-5 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground/50">{i + 1}</span>
+                          <span className="truncate text-foreground/90">{l.business_name}</span>
+                          <span className="shrink-0 text-[10px] text-sky-600/70 dark:text-sky-400/70">contact_followup</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeContactFollowup(l.id)}
+                          title="Cancel this follow-up (leaves the business Contacted and contactable)"
+                          className="shrink-0 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

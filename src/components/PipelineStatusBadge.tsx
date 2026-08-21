@@ -60,6 +60,11 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Contacted',
     className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
   },
+  second_attempt: {
+    label: '2nd attempt',
+    shortLabel: '2nd',
+    className: 'bg-amber-500/20 text-amber-500 border-transparent font-semibold',
+  },
   // Legacy values kept as fallbacks so any un-migrated/stray row still renders as
   // "Initial Contact" (amber) rather than the generic New badge.
   waiting: {
