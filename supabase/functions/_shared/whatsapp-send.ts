@@ -91,12 +91,13 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
   /* Nudge to a lead who submitted the pre-pay questionnaire and stalled at payment. TWO variables:
      {{1}} = the OWNER's first name (first word of outreach_leads.contact_name — a PERSON, the only
      template that greets one), {{2}} = business name. Registered at Meta by Paul 2026-08-17 as
-     Marketing / English (UK); `lang` must match what Manager actually stored — flip to "en" before
-     the send-path deploy if Manager shows plain English.
+     Marketing, locale "en" (plain English — confirmed by Paul against Manager 2026-08-22; it was
+     briefly coded as en_GB, which would have silently failed to send). `lang` must match Meta
+     exactly — do not "correct" it to en_GB.
      ⛔ MANUAL SENDS ONLY, ONE PER LEAD, NO OVERRIDE. send-whatsapp-message enforces pitchEverSent
      with no allow_resend escape — unlike audit_reply, a second "just the payment step left" nudge
      to the same person is pressure, never service. Paul's rule 2026-08-17. */
-  questionnaire_followup: { lang: "en_GB", vars: ["contact_first_name", "name"] },
+  questionnaire_followup: { lang: "en", vars: ["contact_first_name", "name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
