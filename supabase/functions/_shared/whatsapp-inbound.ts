@@ -298,8 +298,16 @@ export async function handleInboundMessages(
                 .eq("lead_id", leadId).eq("direction", "outbound").neq("status", "failed")
                 .order("created_at", { ascending: false }).limit(1).maybeSingle();
               const lastOutboundTemplate = (lastOut as { template_name: string | null } | null)?.template_name ?? null;
+              /* ⛔ NEVER AUTO-PITCH A PAYING CUSTOMER — amount_paid > 0, the money-not-status rule
+                 (CLAUDE.md §6). A paid client must never receive the audit sales pitch, whatever they
+                 reply. Arm-time refusal (no row); the send path re-checks as the authoritative line. */
+              const { data: paidRow } = await service
+                .from("outreach_leads").select("amount_paid").eq("id", leadId).maybeSingle();
+              const leadPaid = ((paidRow as { amount_paid: number | null } | null)?.amount_paid ?? 0) > 0;
               if (lastOutboundTemplate !== "initial_contact") {
                 console.log(`[auto-reply] lead ${leadId}: reply arrived but the last outbound was '${lastOutboundTemplate ?? "none"}', not the initial_contact opener — NOT arming an audit pitch.`);
+              } else if (leadPaid) {
+                console.log(`[auto-reply] lead ${leadId}: paying customer (amount_paid > 0) — NEVER auto-pitch, not arming.`);
               } else if (looksAutomated(body)) {
                 // Booking-bot / out-of-office auto-ack — not a human yes. No row, no send; the
                 // thread is already surfaced to the operator (status='replied' + next_action).
