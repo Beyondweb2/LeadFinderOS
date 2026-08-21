@@ -98,6 +98,15 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
      with no allow_resend escape — unlike audit_reply, a second "just the payment step left" nudge
      to the same person is pressure, never service. Paul's rule 2026-08-17. */
   questionnaire_followup: { lang: "en", vars: ["contact_first_name", "name"] },
+  /* Report follow-up — MANUAL sends via send-whatsapp-message ONLY, never queued (absent from the
+     SPA picker). Sent to a lead who received their audit_reply report and went quiet. Same shape as
+     questionnaire_followup: {{1}} = the OWNER's first name (first word of outreach_leads.contact_name),
+     {{2}} = business name. Registered at Meta by Paul 2026-08-22 as Marketing, locale "en" (plain
+     English — NOT en_GB). `lang` must match Meta exactly.
+     ⛔ ONE PER LEAD, NO OVERRIDE. Because its vars include "contact_first_name", send-whatsapp-message's
+     generic needsContactName branch gives it pitchEverSent (keyed by THIS template name) with no
+     allow_resend escape — a second report nudge is pressure, never service. */
+  hook_followup: { lang: "en", vars: ["contact_first_name", "name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -112,8 +121,8 @@ export const TEMPLATES_NEEDING_REAL_NAME = new Set(["book_call", "re_engage"]);
 /* firstNameFrom + the questionnaire_followup body live in src/lib/questionnaireFollowup.ts — a
    Deno-free module the SPA's preview imports too, so what the operator confirms and what this file
    sends cannot drift. Re-exported so existing edge imports keep one door. */
-import { firstNameFrom, questionnaireFollowupBody } from "../../../src/lib/questionnaireFollowup.ts";
-export { firstNameFrom, questionnaireFollowupBody };
+import { firstNameFrom, questionnaireFollowupBody, hookFollowupBody } from "../../../src/lib/questionnaireFollowup.ts";
+export { firstNameFrom, questionnaireFollowupBody, hookFollowupBody };
 
 // Human-readable copies of the Meta-registered template BODIES, purely so the Inbox
 // can show what the barber actually receives (the real wording lives in Meta and is
@@ -231,6 +240,8 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   /* Body lives in src/lib/questionnaireFollowup.ts (the SPA preview imports the same function);
      this adapter maps the bodies-map calling convention onto it. */
   questionnaire_followup: (b, _u, _t, _c, first) => questionnaireFollowupBody(first ?? "", b),
+  /* Same adapter shape: {{1}} first name, {{2}} business name, from the shared Deno-free module. */
+  hook_followup: (b, _u, _t, _c, first) => hookFollowupBody(first ?? "", b),
   onboarding_followup: onboardingFollowupBody,
   booking_page_intro: bookingPageIntroBody,
   // The "no website" template — registered in Meta as no_website_barbers (the SEND name).

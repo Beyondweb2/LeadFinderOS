@@ -24,3 +24,12 @@ export function questionnaireFollowupBody(firstName: string, businessName: strin
 
 Paul, findable`;
 }
+
+/* hook_followup — the report follow-up to a lead who got the audit_reply (their AI-visibility
+   report) and went quiet. {{1}} = owner first name, {{2}} = business name. Same shared-module
+   reasoning as questionnaireFollowupBody: the SPA preview and the edge sender both import this, so
+   what the operator confirms and what Meta sends cannot drift. Registered at Meta 2026-08-22 as
+   Marketing, locale "en". Reproduced character-for-character from the registration. */
+export function hookFollowupBody(firstName: string, businessName: string): string {
+  return `Hi ${firstName || "there"}, following up on the report I sent for ${businessName || "your business"}. The businesses AI is naming instead of you are picking up work you could be getting. Happy to walk you through how we fix that, no charge to take a look, just reply here. Paul, findable`;
+}

@@ -105,6 +105,34 @@ console.log("\n── THE PREVIEW MATCHES WHAT META SENDS ──");
   ok(!body.includes("Paul here from Findable"), "⛔ the placeholder preview is gone");
 }
 
+console.log("\n── hook_followup: same TWO-VAR PERSONAL-GREETING SHAPE AS questionnaire_followup ──");
+{
+  const t = WA_TEMPLATES["hook_followup"];
+  ok(!!t, "hook_followup is registered");
+  ok(t.lang === "en", `lang is plain "en", NOT en_GB (${t.lang})`);
+  ok(t.vars.length === 2, `TWO variables (${t.vars.length})`);
+  ok(t.vars[0] === "contact_first_name", "{{1}} = the owner's first name");
+  ok(t.vars[1] === "name", "{{2}} = business name");
+
+  // The preview matches the approved body, {{1}}/{{2}} filled.
+  const body = renderTemplateBody("hook_followup", "RG Locksmiths", "", undefined, undefined, "Ronnie");
+  ok(body.startsWith("Hi Ronnie, following up on the report I sent for RG Locksmiths."),
+    "opens with the approved first line, both vars filled");
+  ok(body.includes("no charge to take a look, just reply here."), "carries the approved offer line");
+  ok(body.trimEnd().endsWith("Paul, findable"), "signs off exactly as registered");
+  ok(!body.includes("{{"), "no unfilled placeholders left");
+
+  // ⛔ A blank first name refuses (throws) — a personal greeting must never degrade to "Hi there".
+  let threw = false;
+  try { templateBodyParams(t.vars, "RG Locksmiths", "", { contactName: "", templateName: "hook_followup" }); }
+  catch { threw = true; }
+  ok(threw, "a blank first name refuses rather than sending \"Hi there, following up…\"");
+  let threwMissing = false;
+  try { templateBodyParams(t.vars, "RG Locksmiths", "", { templateName: "hook_followup" }); }
+  catch { threwMissing = true; }
+  ok(threwMissing, "⛔ the contactName ABSENT entirely also refuses (absent is not an empty string)");
+}
+
 console.log("\n── THE TWO ALLOWLISTS AGREE ON EVERY TEMPLATE, NOT JUST THIS ONE ──");
 /* Read out of process-whatsapp-queue's source rather than imported: it is a deliberate copy, and the
    point is to catch the copies diverging. Parsed loosely on purpose — a format change here should
