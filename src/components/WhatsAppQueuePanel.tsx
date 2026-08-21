@@ -17,6 +17,9 @@ interface QueueStatus {
   /** Leads queued in the SEPARATE hook_followup lane (marker column, not status='queued'). Optional
    *  so the panel degrades cleanly against an older function deploy that predates this field. */
   hookQueuedCount?: number;
+  /** Leads queued in the SEPARATE contact_followup lane (opener follow-up; marker column, not
+   *  status='queued'). Optional for the same deploy-order reason as hookQueuedCount. */
+  contactQueuedCount?: number;
   nextSendAt: string | null;
   /** The real next eligible send, computed server-side in Europe/London. Optional so the panel
    *  degrades cleanly against an older function deploy that has not shipped it yet. */
@@ -190,6 +193,13 @@ export function WhatsAppQueuePanel({
             {(status.hookQueuedCount ?? 0) > 0 && (
               <span className="block text-[10px] font-medium text-muted-foreground/70">
                 + {status.hookQueuedCount} hook follow-up{status.hookQueuedCount === 1 ? '' : 's'}
+              </span>
+            )}
+            {/* Same story for the contact_followup (no-reply opener) lane: its own marker, never in
+                the opener count above. Distinct label so the two follow-up lanes aren't confused. */}
+            {(status.contactQueuedCount ?? 0) > 0 && (
+              <span className="block text-[10px] font-medium text-sky-600/80 dark:text-sky-400/80">
+                + {status.contactQueuedCount} no-reply follow-up{status.contactQueuedCount === 1 ? '' : 's'}
               </span>
             )}
           </span>
