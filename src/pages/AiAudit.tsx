@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle,
+  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks,
 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
@@ -66,6 +66,17 @@ const QUESTION_COUNT_OPTIONS = Array.from(
 );
 const clampQuestionCount = (n: number) =>
   Math.min(MAX_QUESTION_COUNT, Math.max(MIN_QUESTION_COUNT, Math.round(n) || DEFAULT_QUESTION_COUNT));
+
+/* FULL MEASUREMENT mode — the deliberate bulk citation gather. Higher ceiling than the quick
+   wizard, mirroring MEASUREMENT_* in create-ai-audit. v1 stays ≤75 so a single run stays under the
+   queue's per-run $1 Apify cap; the run is paced by the queue (≤24 scrapes in flight), never fired
+   at once. Quick audit is completely unchanged. */
+const FULL_MIN_QUESTIONS = 10;
+const FULL_MAX_QUESTIONS = 75;
+const FULL_DEFAULT_QUESTIONS = 40;
+const FULL_QUESTION_OPTIONS = [10, 25, 40, 60, 75];
+const clampFullCount = (n: number) =>
+  Math.min(FULL_MAX_QUESTIONS, Math.max(FULL_MIN_QUESTIONS, Math.round(n) || FULL_DEFAULT_QUESTIONS));
 
 // value = the Country name stored/passed to the audit; the edge toCountryCode /
 // COUNTRY_TO_ISO2 map converts every name to lowercase ISO-2 uniformly. label = display.
@@ -183,6 +194,7 @@ interface PersistedWizard {
   website: string;
   businessScope: 'national' | 'local' | 'hybrid' | null;
   specialisms: string;
+  auditMode?: 'quick' | 'full';
   questionCount: number;
   questions: string[];
   unitCost: number;
@@ -272,8 +284,21 @@ const AiAudit = () => {
   // Optional: null when the user skips it (then we send null and the heuristic still applies).
   const [businessScope, setBusinessScope] = useState<'national' | 'local' | 'hybrid' | null>(persisted?.businessScope ?? null);
   const [specialisms, setSpecialisms] = useState(persisted?.specialisms ?? ''); // optional — grounds question generation
-  const [questionCount, setQuestionCount] = useState<number>(() =>
-    clampQuestionCount(persisted?.questionCount ?? DEFAULT_QUESTION_COUNT));
+  /* Quick audit (current, unchanged) vs Full measurement (deliberate bulk gather). Additive. */
+  const [auditMode, setAuditMode] = useState<'quick' | 'full'>(persisted?.auditMode ?? 'quick');
+  const fullMode = auditMode === 'full';
+  const [questionCount, setQuestionCount] = useState<number>(() => {
+    const m = persisted?.auditMode ?? 'quick';
+    const raw = persisted?.questionCount ?? (m === 'full' ? FULL_DEFAULT_QUESTIONS : DEFAULT_QUESTION_COUNT);
+    return m === 'full' ? clampFullCount(raw) : clampQuestionCount(raw);
+  });
+  /* Switch mode: reset the count to that mode's default and clear any previewed questions so the
+     review step regenerates at the new count/purpose. Quick↔Full only; never touches a run in flight. */
+  const switchAuditMode = useCallback((next: 'quick' | 'full') => {
+    setAuditMode(next);
+    setQuestionCount(next === 'full' ? FULL_DEFAULT_QUESTIONS : DEFAULT_QUESTION_COUNT);
+    setQuestions([]);
+  }, []);
 
   // Existing-lead picker + saved audits
   const [leads, setLeads] = useState<LeadOption[]>([]);
@@ -419,10 +444,10 @@ const AiAudit = () => {
     if (step === 'results') { clearWizard(); return; }
     try {
       sessionStorage.setItem(WIZARD_KEY, JSON.stringify({
-        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, questionCount, questions, unitCost, engineCount,
+        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, unitCost, engineCount,
       }));
     } catch { /* storage unavailable — persistence is best-effort */ }
-  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, questionCount, questions, unitCost, engineCount]);
+  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, unitCost, engineCount]);
 
   /* SETTLED-QUESTION COUNTS for a set of runs — the ONE implementation of "2 of 3 done".
      The queue's terminal statuses are 'done' and 'failed' (NOT 'complete', which is a RUN
@@ -881,6 +906,9 @@ const AiAudit = () => {
           website: website || undefined, business_scope: businessScope || undefined,
           specialisms: specialisms || undefined,
           question_count: questionCount,
+          // Full measurement: same purpose the run uses, so the PREVIEW generates the full count
+          // (a plain call would be clamped to the wizard's 5).
+          ...(fullMode ? { purpose: 'measurement', skip_seo: true } : {}),
         },
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'preview failed');
@@ -892,7 +920,7 @@ const AiAudit = () => {
     } finally {
       setPreviewing(false);
     }
-  }, [businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, questionCount, toast]);
+  }, [businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, questionCount, fullMode, toast]);
 
   // When the review step is first revealed with no questions yet, generate them.
   // Editing type/location later does NOT auto-wipe/regenerate (only reveal-fresh or the
@@ -925,6 +953,10 @@ const AiAudit = () => {
           specialisms: specialisms || undefined,
           question_count: questionCount,
           questions: clean,
+          // Full measurement: the deliberate bulk gather. Server clamps to the measurement ceiling,
+          // forces SEO off, and creates its OWN audit (not a run on an existing one) so start vs
+          // re-measure stay comparable. The queue paces the run — this never fires all at once.
+          ...(fullMode ? { purpose: 'measurement', skip_seo: true } : {}),
           ...(overrideDistance ? { override_distance: true } : {}),
         },
       });
@@ -2190,21 +2222,55 @@ const AiAudit = () => {
                   <p className="text-[11px] text-muted-foreground">Optional — helps ground the questions.</p>
                 </div>
 
-                {/* Number of questions to generate. The real range is WIZARD_MIN/MAX_QUESTIONS =
-                    3–5, default 3 (src/lib/auditQuestionCounts.ts). This comment said "6–12, default
-                    8" — stale, and wrong in a way that would mislead anyone estimating cost from it. */}
+                {/* ── MODE TOGGLE: Quick audit (current) vs Full measurement (bulk gather) ────────
+                    Quick is unchanged (3–5 questions). Full is the deliberate before/after gather —
+                    a large DISTINCT question set × all engines, paced through the same queue. */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Audit mode</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <ChoiceButton
+                      active={!fullMode}
+                      onClick={() => switchAuditMode('quick')}
+                      icon={<Sparkles className="h-4 w-4" />}
+                      label="Quick audit"
+                      hint={`${MIN_QUESTION_COUNT}–${MAX_QUESTION_COUNT} questions · fast check`}
+                    />
+                    <ChoiceButton
+                      active={fullMode}
+                      onClick={() => switchAuditMode('full')}
+                      icon={<ListChecks className="h-4 w-4" />}
+                      label="Full measurement"
+                      hint={`up to ${FULL_MAX_QUESTIONS} questions · before/after gather`}
+                    />
+                  </div>
+                </div>
+
+                {/* Number of questions. Quick: WIZARD 3–5. Full: MEASUREMENT 10–75 (server clamps to
+                    match). Full stays ≤75 so one run stays under the queue's per-run $1 Apify cap. */}
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">How many questions?</Label>
                   <div className="flex items-center gap-3">
-                    <Select value={String(questionCount)} onValueChange={(v) => setQuestionCount(clampQuestionCount(Number(v)))}>
+                    <Select
+                      value={String(questionCount)}
+                      onValueChange={(v) => setQuestionCount(fullMode ? clampFullCount(Number(v)) : clampQuestionCount(Number(v)))}
+                    >
                       <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-                      <SelectContent>{QUESTION_COUNT_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
+                      <SelectContent>
+                        {(fullMode ? FULL_QUESTION_OPTIONS : QUESTION_COUNT_OPTIONS).map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                      </SelectContent>
                     </Select>
                     <span className="text-[11px] text-muted-foreground">
                       We'll generate {questionCount} search question{questionCount === 1 ? '' : 's'}
                       {unitCost > 0 ? ` · est. cost ~$${(questionCount * unitCost).toFixed(2)}` : ''}.
                     </span>
                   </div>
+                  {fullMode && (
+                    <p className="text-[11px] text-muted-foreground/80">
+                      Full measurement gathers citations across ChatGPT, Gemini &amp; Google AI and is
+                      <strong> paced through the send queue</strong> (max ~24 running at once) — it won't fire all at
+                      once. Run this once at the start and again at the end to show before/after. SEO scan is skipped.
+                    </p>
+                  )}
                 </div>
 
                 {/* Generate → reveals the review step, which generates the questions */}
