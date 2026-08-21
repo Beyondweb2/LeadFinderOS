@@ -32,6 +32,12 @@ const json = (b: unknown, s = 200) =>
  *  happened next" list, and the full questionnaire belongs on a record page, not a dashboard. */
 const COLS = "id, lead_id, business_name, contact_email, confirmed_location, services, business_address, status, incomplete, created_at, notify_sent_at, notify_attempts, notify_error";
 
+/** Paid is amount_paid > 0 everywhere (§6); on this table the STATUS carries it. Mirrors
+ *  isPaidSubmission in src/hooks/useSubmissions.ts — the two must agree, so the delete guard and
+ *  the card badge call the same rows paid. */
+const PAID_STATUSES = new Set(["paid", "payment_received", "in_delivery", "completed"]);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405);
@@ -103,6 +109,60 @@ Deno.serve(async (req) => {
       return json({ ok: true, rows: rows ?? [] });
     }
 
+    /* ── DELETE, for clearing test junk from the submissions card (2026-08-22). ────────────────
+       Same operator bar as every other action here: a valid session, then the service role does
+       the write (the table has RLS with NO policies, so a browser .delete() returns 200 and
+       removes nothing — the RLS-no-policy trap §8, in the write direction). Deletes by an explicit
+       id array; nothing FK-references onboarding_responses.id, so a delete leaves no orphans
+       (its own lead_id FK is ON DELETE SET NULL, so the lead is untouched either way).
+
+       ⛔ PAID-ROW PROTECTION IS ENFORCED HERE, NOT ONLY IN THE UI. A bulk delete (delete-selected /
+       delete-all) must never wipe a paying customer's answers — RG and Ronnie's Q2 is real data,
+       not test junk. So a row is treated as paid if its OWN status is paid-class OR its linked lead
+       has amount_paid > 0, and paid ids are SKIPPED unless the caller sets allow_paid (the per-row
+       single-delete confirm sets it; the bulk buttons never do). The count skipped is reported so
+       the UI can say "N paid rows kept", never silently drop the request. */
+    if (body.action === "delete") {
+      const ids = Array.isArray(body.ids) ? body.ids.filter((x: unknown) => typeof x === "string" && UUID_RE.test(x)) : [];
+      if (!ids.length) return json({ ok: false, error: "no_ids" }, 400);
+      const allowPaid = body.allow_paid === true;
+
+      /* Which of these are paid — by the row's own status, or by the lead it links to. */
+      const { data: targets, error: tErr } = await service
+        .from("onboarding_responses")
+        .select("id, status, lead_id")
+        .in("id", ids);
+      if (tErr) return json({ ok: false, error: tErr.message }, 500);
+      const rows = (targets ?? []) as { id: string; status: string | null; lead_id: string | null }[];
+
+      const leadIds = [...new Set(rows.map((r) => r.lead_id).filter((x): x is string => !!x))];
+      const paidLeadIds = new Set<string>();
+      if (leadIds.length) {
+        const { data: leads } = await service
+          .from("outreach_leads").select("id, amount_paid").in("id", leadIds);
+        for (const l of (leads ?? []) as { id: string; amount_paid: number | null }[]) {
+          if ((l.amount_paid ?? 0) > 0) paidLeadIds.add(l.id);
+        }
+      }
+      const isPaidRow = (r: { status: string | null; lead_id: string | null }) =>
+        PAID_STATUSES.has(String(r.status ?? "")) || (r.lead_id != null && paidLeadIds.has(r.lead_id));
+
+      const paidCount = rows.filter((r) => isPaidRow(r)).length;
+      const deletable = allowPaid ? rows.map((r) => r.id) : rows.filter((r) => !isPaidRow(r)).map((r) => r.id);
+      const skippedPaid = allowPaid ? 0 : paidCount;
+
+      let deleted = 0;
+      if (deletable.length) {
+        const { error: dErr, count } = await service
+          .from("onboarding_responses")
+          .delete({ count: "exact" })
+          .in("id", deletable);
+        if (dErr) return json({ ok: false, error: dErr.message }, 500);
+        deleted = count ?? deletable.length;
+      }
+      return json({ ok: true, deleted, skipped_paid: skippedPaid });
+    }
+
     /* Clamped. A dashboard card wants the recent ones; an unbounded limit from the client is how a
        card quietly becomes a full table scan. */
     const raw = Number(body.limit);
@@ -115,7 +175,51 @@ Deno.serve(async (req) => {
       .limit(limit);
     if (error) return json({ ok: false, error: error.message }, 500);
 
-    return json({ ok: true, rows: data ?? [] });
+    /* ── ENRICH EACH ROW WITH ITS LEAD + WHETHER THE NUDGE HAS GONE ─────────────────────────────
+       The per-row "Send nudge" reuses the lead-card guard (row && !rowPaid && !leadPaid), and the
+       send needs a phone — send-whatsapp-message resolves NOTHING from a lead_id, it takes the
+       phone in the request. So the card needs phone / country / contact_name / amount_paid per row,
+       plus whether questionnaire_followup has already gone (one send per lead). Two batched reads,
+       not one per row: a card must not become N round trips. `followup_sent` uses the SAME filter
+       as pitchEverSent — direction outbound, this template, status != failed — so the button's
+       disabled state and the server's own refusal agree (CLAUDE.md §6g). */
+    const listRows = (data ?? []) as Record<string, unknown>[];
+    const leadIds = [...new Set(listRows.map((r) => r.lead_id).filter((x): x is string => typeof x === "string" && !!x))];
+
+    const leadById = new Map<string, { phone: string | null; country: string | null; contact_name: string | null; amount_paid: number | null }>();
+    const followupLeadIds = new Set<string>();
+    if (leadIds.length) {
+      const { data: leads } = await service
+        .from("outreach_leads")
+        .select("id, phone, country, contact_name, amount_paid")
+        .in("id", leadIds);
+      for (const l of (leads ?? []) as { id: string; phone: string | null; country: string | null; contact_name: string | null; amount_paid: number | null }[]) {
+        leadById.set(l.id, { phone: l.phone, country: l.country, contact_name: l.contact_name, amount_paid: l.amount_paid });
+      }
+      const { data: sent } = await service
+        .from("whatsapp_messages")
+        .select("lead_id")
+        .in("lead_id", leadIds)
+        .eq("direction", "outbound")
+        .eq("template_name", "questionnaire_followup")
+        .neq("status", "failed");
+      for (const s of (sent ?? []) as { lead_id: string | null }[]) if (s.lead_id) followupLeadIds.add(s.lead_id);
+    }
+
+    const enriched = listRows.map((r) => {
+      const lid = typeof r.lead_id === "string" ? r.lead_id : null;
+      const lead = lid ? leadById.get(lid) ?? null : null;
+      return {
+        ...r,
+        lead_phone: lead?.phone ?? null,
+        lead_country: lead?.country ?? null,
+        lead_contact_name: lead?.contact_name ?? null,
+        lead_amount_paid: lead?.amount_paid ?? null,
+        followup_sent: lid ? followupLeadIds.has(lid) : false,
+      };
+    });
+
+    return json({ ok: true, rows: enriched });
   } catch (e) {
     console.error("[submissions] error:", (e as Error).message);
     return json({ ok: false, error: (e as Error).message }, 500);
