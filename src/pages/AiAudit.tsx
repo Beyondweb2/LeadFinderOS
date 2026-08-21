@@ -177,11 +177,16 @@ const SEARCH_MIN_BUSINESSES = 8;
 const LIST_POLL_MS = 5000;
 
 
-// Wizard state is persisted to sessionStorage so it survives leaving the page and
-// coming back (unmount/remount) and a tab refresh, but clears when the tab closes.
-// Only the WIZARD fields are persisted — never results/polling state. `revealed` is
-// stored so a return shows ALL previously-answered steps stacked, not just a jump.
-const WIZARD_KEY = 'leadfinder:ai-audit-wizard';
+// Wizard state is persisted to localStorage (USER-SCOPED) so an in-progress New Audit survives
+// leaving the page, a full reload, a NEW TAB and even closing the tab — not just same-tab
+// navigation (sessionStorage only survived the latter, which is why a draft looked wiped after a
+// tab close / reopen). Cleared on a successful submit and by "Start fresh". Only the WIZARD fields
+// are persisted — never results/polling state. `revealed` is stored so a return shows ALL
+// previously-answered steps stacked, not just a jump.
+// ⛔ USER-SCOPED KEY: localStorage outlives a logout on a shared machine, so the draft is keyed by
+// user id — one operator never sees another's half-typed form. Same rule as the Inbox drafts.
+const WIZARD_KEY_BASE = 'leadfinder:ai-audit-wizard';
+const wizardKey = (userId: string | null | undefined) => `${WIZARD_KEY_BASE}:${userId ?? 'anon'}`;
 interface PersistedWizard {
   revealed: number;
   mode: 'new' | 'existing' | null;
@@ -200,10 +205,10 @@ interface PersistedWizard {
   unitCost: number;
   engineCount: number;
 }
-/** Read persisted wizard state (best-effort; null if absent/unavailable/invalid). */
-function loadWizard(): PersistedWizard | null {
+/** Read persisted wizard state for this user (best-effort; null if absent/unavailable/invalid). */
+function loadWizard(userId: string | null | undefined): PersistedWizard | null {
   try {
-    const raw = sessionStorage.getItem(WIZARD_KEY);
+    const raw = localStorage.getItem(wizardKey(userId));
     if (!raw) return null;
     const p = JSON.parse(raw) as Partial<PersistedWizard>;
     return p && typeof p === 'object' ? (p as PersistedWizard) : null;
@@ -211,8 +216,8 @@ function loadWizard(): PersistedWizard | null {
     return null;
   }
 }
-function clearWizard() {
-  try { sessionStorage.removeItem(WIZARD_KEY); } catch { /* storage unavailable */ }
+function clearWizard(userId: string | null | undefined) {
+  try { localStorage.removeItem(wizardKey(userId)); } catch { /* storage unavailable */ }
 }
 /** Furthest revealed index from persisted state (back-compat: old sessions stored a
  *  `step` name instead of `revealed`). Clamped to the wizard range. */
@@ -246,7 +251,7 @@ const AiAudit = () => {
 
   // Rehydrate the wizard once from sessionStorage. Nothing is pre-filled on a fresh
   // start. `step` is only the wizard/results discriminator; results is never persisted.
-  const [persisted] = useState<PersistedWizard | null>(() => loadWizard());
+  const [persisted] = useState<PersistedWizard | null>(() => loadWizard(user?.id));
   const [step, setStep] = useState<Step>('source');
   const [revealed, setRevealed] = useState<number>(() => initialRevealed(persisted));
 
@@ -441,13 +446,13 @@ const AiAudit = () => {
   // Persist wizard state on change so it survives unmount/remount + refresh. Once the
   // audit is running (step 'results'), drop the key so the next visit starts clean.
   useEffect(() => {
-    if (step === 'results') { clearWizard(); return; }
+    if (step === 'results') { clearWizard(user?.id); return; }
     try {
-      sessionStorage.setItem(WIZARD_KEY, JSON.stringify({
+      localStorage.setItem(wizardKey(user?.id), JSON.stringify({
         revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, unitCost, engineCount,
       }));
     } catch { /* storage unavailable — persistence is best-effort */ }
-  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, unitCost, engineCount]);
+  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, unitCost, engineCount, user?.id]);
 
   /* SETTLED-QUESTION COUNTS for a set of runs — the ONE implementation of "2 of 3 done".
      The queue's terminal statuses are 'done' and 'failed' (NOT 'complete', which is a RUN
@@ -747,8 +752,10 @@ const AiAudit = () => {
   }, [user, openRunId, runId, step, rehydrateOpenRun, setOpenRunId, searchParams]);
 
   const resetWizard = () => {
+    clearWizard(user?.id); // drop the saved draft too, so "start fresh" is truly fresh
     setMode(null); setLeadId(null); setBusinessName(''); setBusinessType('');
     setLocationText(''); setCountry(''); setHasWebsite(null); setWebsite(''); setSpecialisms('');
+    setAuditMode('quick'); setQuestionCount(DEFAULT_QUESTION_COUNT);
     setQuestions([]); setUnitCost(0); setEngineCount(SCORED_ENGINES.length);
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
     setOpenRunId(null); setShowDetails(false);
@@ -988,7 +995,7 @@ const AiAudit = () => {
           }
         } catch { /* non-fatal — the audit itself is already running */ }
       }
-      clearWizard(); // audit created successfully → next visit starts clean
+      clearWizard(user?.id); // audit created successfully → next visit starts clean
       setAuditId(data.audit_id);
       setRunId(data.run_id);
       setOpenRunId(data.run_id);
@@ -2131,6 +2138,19 @@ const AiAudit = () => {
               Pick a business, check the details, then review the questions before anything is spent.
             </DialogDescription>
           </DialogHeader>
+
+          {/* START FRESH — your typed answers are saved and restored automatically (they survive
+              leaving, reload, a new tab, even closing the tab). This clears the saved draft so the
+              next audit starts blank — so a stale draft is never trapped. Only shown when there IS
+              something to clear. */}
+          {(mode !== null || !!businessName.trim() || !!businessType.trim() || !!locationText.trim() || !!website.trim() || !!specialisms.trim()) && (
+            <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+              <span>Your progress is saved automatically.</span>
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={startNewAudit}>
+                <RefreshCw className="mr-1 h-3 w-3" /> Start fresh
+              </Button>
+            </div>
+          )}
 
           {/* SOURCE — moved in with the form. Without it the dialog could not switch to a different
               lead once open, which the page could always do. */}
