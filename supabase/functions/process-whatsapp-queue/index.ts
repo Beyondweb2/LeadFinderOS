@@ -1,7 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
-import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, type TemplateVar } from "../_shared/whatsapp-send.ts";
+import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, type TemplateVar } from "../_shared/whatsapp-send.ts";
+import { hookFollowupEligible } from "../_shared/hook-followup-eligibility.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
@@ -228,6 +229,19 @@ function minutesUntilWindowEnd(): number {
   return Math.max(0, WINDOW_END_MIN - (n.hour * 60 + n.minute));
 }
 
+/** The next-send pacing stamp after ANY attempt — the ONE place the spread+jitter formula lives.
+ *  baseGap = time-left-in-window / remaining-cap, jittered, floored and ceilinged. Both the opener
+ *  lane and the hook_followup lane write this, so the two share one pacing clock and one global rate
+ *  (with one send per tick, they interleave at the cap — never a burst). */
+function nextPacingStamp(sentTodayCount: number): string {
+  const remaining = Math.max(1, DAILY_CAP - (sentTodayCount + 1));
+  const minsLeft = minutesUntilWindowEnd();
+  const baseGap = minsLeft / remaining;
+  const jitter = SEND_GAP_JITTER_LOW + Math.random() * (SEND_GAP_JITTER_HIGH - SEND_GAP_JITTER_LOW);
+  const gapMin = Math.min(SEND_GAP_CEILING_MIN, Math.max(SEND_GAP_FLOOR_MIN, Math.round(baseGap * jitter)));
+  return new Date(Date.now() + gapMin * 60000).toISOString();
+}
+
 /** The REAL next eligible send time, as a UTC ISO instant — for DISPLAY ONLY.
  *
  *  ⛔ THIS DECIDES NOTHING. The send gates (windowOpen, cap, next_send_at pacing at the bottom of a
@@ -353,6 +367,11 @@ Deno.serve(async (req) => {
     const { count: phoneHistorySkippedCount } = await service
       .from("outreach_leads").select("id", { count: "exact", head: true })
       .eq("whatsapp_delivery_status", "phone_already_contacted");
+    /* The hook_followup lane's depth — leads marked for the report follow-up, awaiting their paced
+       turn. Reported so the panel/observer can see the backlog draining. Counted like queuedCount. */
+    const { count: hookQueuedCount } = await service
+      .from("outreach_leads").select("id", { count: "exact", head: true })
+      .not("hook_followup_queued_at", "is", null).eq("is_archived", false);
     const { data: stateRow } = await service
       .from("whatsapp_outreach_state").select("next_send_at, paused").eq("id", 1).maybeSingle();
     const nextSendAt: string | null = stateRow?.next_send_at ?? null;
@@ -369,6 +388,8 @@ Deno.serve(async (req) => {
       unverifiedQueuedCount: unverifiedQueuedCount ?? 0,
       // Rows the phone-history seatbelt has bounced (opener refused: number already has a thread).
       phoneHistorySkippedCount: phoneHistorySkippedCount ?? 0,
+      // Leads queued for the hook_followup lane, awaiting their paced turn.
+      hookQueuedCount: hookQueuedCount ?? 0,
       nextSendAt, windowOpen, paused,
       /* The real next eligible send, Europe/London, computed live — what the dashboard shows.
          `nextSendAt` (the raw stored pacing stamp) stays in the payload for back-compat, but the
@@ -688,6 +709,109 @@ Deno.serve(async (req) => {
        are different facts, so they get different skip codes. Without this, pulling 17 leads out of
        the queue by archiving them would look identical to having genuinely finished the list. */
     if (!lead) {
+      /* ══ HOOK FOLLOW-UP LANE ══════════════════════════════════════════════════════════════════
+         Openers have priority; the report follow-up drains only when the opener queue is empty this
+         tick. It reaches here ONLY after the pause/window/cap/pacing gates above have passed, and it
+         sends AT MOST ONE message and writes the shared pacing stamp — so it shares the global cap,
+         window and rate exactly, and a queue of 300 drains over days, never in a burst.
+         ⛔ SEPARATE from the opener send path on purpose: the opener's already_sent guard would
+         refuse every one of these (they all got the report), and its status→initial_contact write
+         would corrupt a report-sent lead. This lane re-messages deliberately and leaves the pipeline
+         status untouched. Every per-lead guard is re-checked HERE (authoritative), not trusted from
+         the client that queued it. */
+      const { data: hookLead } = await service
+        .from("outreach_leads")
+        .select("id, business_name, phone, email, country, contact_name, amount_paid, user_id")
+        .not("hook_followup_queued_at", "is", null)
+        .eq("is_archived", false)
+        .not("phone", "is", null)
+        .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
+        .order("hook_followup_queued_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (hookLead) {
+        const clearMarker = () => service.from("outreach_leads")
+          .update({ hook_followup_queued_at: null }).eq("id", hookLead.id);
+
+        // Re-verify eligibility at send time — de-queue silently if it drifted (e.g. replied since).
+        const elig = await hookFollowupEligible(service, {
+          id: hookLead.id, phone: hookLead.phone, country: hookLead.country, amount_paid: hookLead.amount_paid,
+        });
+        if (!elig.eligible) {
+          await clearMarker();
+          return json({ ok: true, skipped: `hook_ineligible:${elig.reason}`, lane: "hook_followup", lead_id: hookLead.id, business: hookLead.business_name, ...statusPayload });
+        }
+
+        const to = toWhatsAppNumber(hookLead.phone as string, hookLead.country as string | null);
+        if (!to) { await clearMarker(); return json({ ok: true, skipped: "hook_bad_number", lane: "hook_followup", lead_id: hookLead.id, business: hookLead.business_name, ...statusPayload }); }
+
+        // Suppression: one no = suppressed everywhere. Fails closed (service client bypasses RLS).
+        const hSupp = await checkSuppressed(service, { phone: `+${to}`, email: hookLead.email ?? null, leadId: hookLead.id });
+        if (hSupp.suppressed) { await clearMarker(); return json({ ok: true, skipped: "hook_suppressed", lane: "hook_followup", lead_id: hookLead.id, business: hookLead.business_name, ...statusPayload }); }
+
+        // {{1}} = owner first name if we have it, else "there" (the template's allowed fallback);
+        // {{2}} = business name. Resolved server-side, never trusted from the client.
+        const first = firstNameFrom(hookLead.contact_name as string | null);
+        const hLang = TEMPLATES["hook_followup"].lang;
+        const hVars = TEMPLATES["hook_followup"].vars;
+
+        let hMessageId: string | null = null;
+        let hDelivery = "simulated";
+        let hOutcome: "sent" | "no_whatsapp" | "temporary" = "sent";
+        let hError: string | null = null;
+        if (live) {
+          const payload = claimTemplatePayload("hook_followup", hLang, (hookLead.business_name as string) ?? "", "", { contactName: first });
+          const r = await sendViaGraph(accessToken, phoneNumberId, to, payload);
+          if (r.ok) { hMessageId = r.messageId; hDelivery = "sent"; hOutcome = "sent"; }
+          else {
+            hOutcome = classifyFailure(r.failCode) === "permanent" ? "no_whatsapp" : "temporary";
+            hDelivery = hOutcome === "no_whatsapp" ? "no_whatsapp" : "failed_temporary";
+            hError = r.error;
+            console.error(`[hook_followup] send failed (code ${r.failCode ?? "?"}, ${hOutcome}):`, hError);
+          }
+        } else {
+          console.log(`WOULD SEND: hook_followup to ${to} for ${hookLead.business_name} (first="${first || "there"}")`);
+        }
+
+        const hNowIso = new Date().toISOString();
+        // Audit row — an attempt was made, so it counts toward the shared daily cap.
+        await service.from("whatsapp_sends").insert({
+          lead_id: hookLead.id, user_id: null, template: "hook_followup", phone: to,
+          business_name: hookLead.business_name, claim_url: "", test_mode: testMode,
+          message_id: hMessageId, delivery_status: hDelivery, error: hError,
+        });
+
+        if (hOutcome === "sent") {
+          // Clear the marker (out of the lane); DO NOT touch the pipeline status — this is a
+          // follow-up to an existing conversation, not an opener.
+          await clearMarker();
+          try {
+            await service.from("whatsapp_messages").insert({
+              direction: "outbound", user_id: (hookLead.user_id as string | null) ?? null, lead_id: hookLead.id,
+              phone: to, body: renderTemplateBody("hook_followup", (hookLead.business_name as string) ?? "", "", undefined, undefined, first),
+              message_type: "template", template_name: "hook_followup", wa_message_id: hMessageId,
+              status: hDelivery, test_mode: testMode,
+            });
+          } catch (e) { console.error(`[hook_followup] message-log insert threw (non-blocking, ${hookLead.id}):`, (e as Error).message); }
+        } else if (hOutcome === "no_whatsapp") {
+          // Permanent — never retry. Drop the marker.
+          await clearMarker();
+        }
+        // temporary: keep the marker so it retries on a future eligible tick.
+
+        // Share the pacing clock, exactly like the opener lane.
+        await service.from("whatsapp_outreach_state")
+          .update({ next_send_at: nextPacingStamp(sentToday ?? 0), updated_at: hNowIso }).eq("id", 1);
+
+        return json({
+          ok: true, sent: hOutcome === "sent", simulated: !live, outcome: hOutcome, lane: "hook_followup",
+          lead_id: hookLead.id, business: hookLead.business_name, template: "hook_followup", to,
+          message_id: hMessageId, delivery_status: hDelivery, error: hError,
+          ...statusPayload, sentToday: (sentToday ?? 0) + 1,
+        });
+      }
+
       return json({
         ok: true,
         skipped: (archivedQueuedCount ?? 0) > 0
@@ -1021,19 +1145,9 @@ Deno.serve(async (req) => {
         .eq("id", lead.id);
     }
 
-    // Pace the next send after ANY real/simulated attempt (spread quota + jitter).
-    {
-      const remaining = Math.max(1, DAILY_CAP - ((sentToday ?? 0) + 1));
-      const minsLeft = minutesUntilWindowEnd();
-      const baseGap = minsLeft / remaining;
-      const jitter = SEND_GAP_JITTER_LOW + Math.random() * (SEND_GAP_JITTER_HIGH - SEND_GAP_JITTER_LOW);
-      const gapMin = Math.min(
-        SEND_GAP_CEILING_MIN,
-        Math.max(SEND_GAP_FLOOR_MIN, Math.round(baseGap * jitter)),
-      );
-      const next = new Date(Date.now() + gapMin * 60000).toISOString();
-      await service.from("whatsapp_outreach_state").update({ next_send_at: next, updated_at: nowIso }).eq("id", 1);
-    }
+    // Pace the next send after ANY real/simulated attempt (spread quota + jitter — see nextPacingStamp).
+    await service.from("whatsapp_outreach_state")
+      .update({ next_send_at: nextPacingStamp(sentToday ?? 0), updated_at: nowIso }).eq("id", 1);
 
     return json({
       ok: true,
