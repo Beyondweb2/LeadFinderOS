@@ -2422,6 +2422,19 @@ export function OutreachTable({
                             </button>
                           )}
                           <WhatsAppStatusBadge status={lead.whatsapp_status} />
+                          {/* Queued for the no-reply follow-up lane. DERIVED from the marker column
+                              (contact_followup_queued_at), NOT a status change — the pipeline status
+                              stays initial_contact (the lane's eligibility depends on it). Cleared
+                              server-side on send, so this badge disappears once it goes out. */}
+                          {lead.contact_followup_queued_at && (
+                            <Badge
+                              variant="outline"
+                              className="flex-shrink-0 border-sky-500/40 bg-sky-500/10 text-[10px] font-normal text-sky-700 dark:text-sky-400"
+                              title="Queued for the no-reply follow-up (contact_followup). Drains after the opener queue, within the daily window. Sends once per business."
+                            >
+                              Follow-up queued
+                            </Badge>
+                          )}
                           {/* Site claim/upsell funnel (admin) — from generated_sites tracking */}
                           {(() => {
                             const f = sitesByLead[lead.id];
