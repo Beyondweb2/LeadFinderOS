@@ -259,9 +259,13 @@ export async function handleInboundMessages(
 
         // Auto audit_reply rule (SEPARATE from the legacy Automation A/B chain above, which stays
         // gated by AUTO_REPLY_FLOW_ENABLED and untouched): the lead's FIRST substantive human
-        // inbound queues ONE delayed audit_reply, processed ≥3 min later by process-whatsapp-queue
-        // (mode 'auto_replies') so a decline arriving in the meantime cancels it. Hard-gated: the
-        // AUTO_AUDIT_REPLY_ENABLED env kill-switch AND the Inbox UI toggle must BOTH be on.
+        // inbound THAT IS A REPLY TO THE initial_contact OPENER queues ONE delayed audit_reply,
+        // processed ≥3 min later by process-whatsapp-queue (mode 'auto_replies') so a decline
+        // arriving in the meantime cancels it. Hard-gated: the AUTO_AUDIT_REPLY_ENABLED env
+        // kill-switch AND the Inbox UI toggle must BOTH be on.
+        // ⛔ THE OPENER GATE (below) IS LOAD-BEARING: a reply to any OTHER outbound (hook_followup,
+        // contact_followup, audit_reply itself, onboarding_followup, re_engage, or a manual message)
+        // must NOT auto-send the audit report — only a reply to "is this the right number?" should.
         // Queue-time guards here; send-time re-checks live in the processor. The lead_id UNIQUE
         // index on whatsapp_auto_replies makes "once per lead, ever" structural (23505 → skip).
         // Own try/catch — a missing table / any failure can never break the inbound webhook.
@@ -279,7 +283,24 @@ export async function handleInboundMessages(
               .select("id", { count: "exact", head: true })
               .eq("lead_id", leadId).eq("direction", "inbound");
             if ((inboundCount ?? 0) <= 1) {
-              if (looksAutomated(body)) {
+              /* ⛔ THE OPENER GATE — auto-audit fires ONLY when the LAST thing WE sent this lead was
+                 the initial_contact opener. This is the condition the feature's intent always
+                 assumed but the code never enforced: without it, a reply to ANY outbound
+                 (hook_followup, contact_followup, audit_reply, onboarding_followup, re_engage, or a
+                 manual message) auto-sent the audit report, and a first inbound with no prior opener
+                 did too. Non-failed only — a failed opener was never delivered, so the lead cannot be
+                 replying to it. Keyed by lead_id, like the inbound count above. On the "not the
+                 opener" branch we arm NOTHING (no whatsapp_auto_replies row): the reply is already
+                 stored and the lead already shows 'replied' for the operator to handle by hand. */
+              const { data: lastOut } = await service
+                .from("whatsapp_messages")
+                .select("template_name")
+                .eq("lead_id", leadId).eq("direction", "outbound").neq("status", "failed")
+                .order("created_at", { ascending: false }).limit(1).maybeSingle();
+              const lastOutboundTemplate = (lastOut as { template_name: string | null } | null)?.template_name ?? null;
+              if (lastOutboundTemplate !== "initial_contact") {
+                console.log(`[auto-reply] lead ${leadId}: reply arrived but the last outbound was '${lastOutboundTemplate ?? "none"}', not the initial_contact opener — NOT arming an audit pitch.`);
+              } else if (looksAutomated(body)) {
                 // Booking-bot / out-of-office auto-ack — not a human yes. No row, no send; the
                 // thread is already surfaced to the operator (status='replied' + next_action).
                 console.log(`[auto-reply] lead ${leadId}: bot_autoreply_skipped — first inbound matches an auto-responder pattern, not arming a pitch.`);
