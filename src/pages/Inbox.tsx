@@ -292,6 +292,12 @@ const Inbox = () => {
      honest). Derived from the already-loaded message log, so the filter and the button can never
      disagree about who is eligible. */
   const hookState = useMemo(() => {
+    /* ⛔ A PAYING CUSTOMER IS NEVER "hook follow-up due". They paid the report link without
+       necessarily replying on WhatsApp, so they can have no inbound since the report — but this
+       template says "the businesses AI is naming instead of you are picking up work", which is
+       exactly the wrong thing to send someone who has already bought. isPaid is amount_paid > 0
+       (CLAUDE.md §6), the same money-not-status rule the Inbox status filter uses. */
+    const paidKeys = new Set(conversations.filter((c) => c.isPaid).map((c) => c.key));
     const latestReportAt = new Map<string, number>();   // key → newest audit_reply send time (ms)
     const latestInboundAt = new Map<string, number>();  // key → newest inbound time (ms)
     const hookSent = new Set<string>();                  // key → a hook_followup already went out
@@ -308,13 +314,14 @@ const Inbox = () => {
     const now = Date.now();
     const eligible = new Set<string>();
     for (const [key, reportAt] of latestReportAt) {
+      if (paidKeys.has(key)) continue;                       // never re-pitch a paying customer
       if (hookSent.has(key)) continue;                       // already nudged — never twice
       if ((latestInboundAt.get(key) ?? 0) > reportAt) continue; // replied after the report → not quiet
       if (now - reportAt < HOOK_FOLLOWUP_MIN_MS) continue;   // not long enough yet
       eligible.add(key);
     }
     return { eligible, hookSent };
-  }, [messages]);
+  }, [messages, conversations]);
 
   // The list shows fetched conversations; a just-started (synthetic) one is merged in
   // until its first message lands (after which the real row shares its key).
