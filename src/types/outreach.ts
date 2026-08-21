@@ -158,6 +158,9 @@ export interface OutreachLead {
    *  the queue can restore it (instead of wiping to not_contacted). Null when not queued. */
   previous_status?: LeadStatus | null;
   whatsapp_sent_at?: string | null;
+  /** Set = queued for the contact_followup (opener follow-up) drain lane; a timestamp so the lane
+   *  drains oldest-first. Cleared on send or when de-queued. Separate from queued_at / status. */
+  contact_followup_queued_at?: string | null;
   whatsapp_message_id?: string | null;
   whatsapp_delivery_status?: string | null; // 'simulated' | 'sent' | 'no_whatsapp' | 'failed_temporary' | 'failed'
   whatsapp_attempts?: number | null;
@@ -345,6 +348,11 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   { value: 'initial_contact', label: 'Initial contact (opener)' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
   { value: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
+  /* The OPENER follow-up: a business that got the initial_contact opener and never replied. Bulk-
+     queued from Outreach into its OWN drain lane (contact_followup_queued_at), NOT the status=queued
+     path — see handleQueueForWhatsApp. Only eligible leads (contacted 3+ days ago, no reply, once
+     per lead) are queued; the server re-verifies. */
+  { value: 'contact_followup', label: 'No-reply follow-up (chase the opener)' },
   { value: 'book_call', label: 'Arrange a call' },
   /* Re-engage a lead who went quiet. ⚠️ THE DOC COMMENT ABOVE THIS LIST IS ALREADY WRONG for four
      of the entries — book_call, initial_contact and re_engage carry ONE variable (business name)

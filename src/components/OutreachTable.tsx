@@ -214,6 +214,11 @@ const BULK_SITE_GEN_OPTIONS: { value: string; label: string; template: 'barber' 
   { value: 'salon:booking_only', label: 'Salon booking page', template: 'salon', mode: 'booking_only' },
 ];
 
+/* Don't chase an opener sooner than this. ⛔ MUST match CONTACT_FOLLOWUP_MIN_DAYS in
+   supabase/functions/_shared/contact-followup-eligibility.ts — the server re-verifies with the same
+   window, so a mismatch would let the UI queue leads the drainer then silently de-queues. */
+const CONTACT_FOLLOWUP_MIN_DAYS = 3;
+
 type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at' | 'tracked';
 type SortDirection = 'asc' | 'desc';
 
@@ -1247,11 +1252,80 @@ export function OutreachTable({
   // Add selected leads to the WhatsApp outreach queue (status='queued' + queued_at
   // for FIFO order). The template is chosen at queue-time and applied to every
   // selected lead (overrides any per-lead template).
+  /* Bulk-queue the OPENER follow-up (contact_followup) for Contacted businesses that never replied.
+     Its own lane — sets contact_followup_queued_at, leaves the status pill alone. Only leads
+     contacted 3+ days ago are queued; everything held back is reported with a count, nothing is
+     silently dropped. The server (contactFollowupEligible) re-verifies each at send time. */
+  const handleQueueContactFollowup = async () => {
+    if (selectedIds.size === 0 || !onUpdateLead) return;
+    const now = new Date().toISOString();
+    const cutoff = Date.now() - CONTACT_FOLLOWUP_MIN_DAYS * 24 * 60 * 60 * 1000;
+    const ids = Array.from(selectedIds);
+    const leadOf = (id: string) => leads.find((l) => l.id === id);
+    const e164 = (l?: OutreachLead) => (l?.phone ? `+${formatPhoneForWhatsApp(l.phone)}` : '');
+
+    // Cross-channel suppression (one-no-forever): best-effort; the drainer is authoritative.
+    const phones = [...new Set(ids.map((id) => e164(leadOf(id))).filter(Boolean))];
+    let suppressed = new Set<string>();
+    if (phones.length) {
+      const { data: supp } = await (supabase as unknown as SupabaseClient)
+        .from('contact_suppressions').select('phone_e164').in('phone_e164', phones);
+      suppressed = new Set(((supp ?? []) as { phone_e164: string }[]).map((r) => r.phone_e164));
+    }
+
+    // Bucket every selected lead so the toast can account for all of them.
+    let notContacted = 0;   // never got the opener / progressed past it (not an un-replied Contacted lead)
+    let noDate = 0;         // Contacted but no recorded send time — can't judge the 3-day rule (Paul: skip)
+    let tooRecent = 0;      // opener sent < 3 days ago
+    let alreadyQueued = 0;  // already sitting in this lane
+    let suppressedN = 0;    // said no
+    let noPhone = 0;
+    const queueable: string[] = [];
+    for (const id of ids) {
+      const l = leadOf(id);
+      if (!l) continue;
+      if (!l.phone) { noPhone++; continue; }
+      if (suppressed.has(e164(l))) { suppressedN++; continue; }
+      // "Never replied to the opener" proxy: still sitting at initial_contact. A lead that replied
+      // has moved on (replied/interested/…), a fresh lead is not_contacted — both excluded. The
+      // server's no-inbound-since check is authoritative; this keeps the batch honest up front.
+      if (l.status !== 'initial_contact') { notContacted++; continue; }
+      if (l.contact_followup_queued_at) { alreadyQueued++; continue; }
+      const sentAt = l.whatsapp_sent_at ? new Date(l.whatsapp_sent_at).getTime() : NaN;
+      if (!Number.isFinite(sentAt)) { noDate++; continue; }
+      if (sentAt > cutoff) { tooRecent++; continue; }
+      queueable.push(id);
+    }
+
+    // Queue: stamp the lane marker only. Status pill untouched (this is a follow-up, not an opener).
+    queueable.forEach((id) => onUpdateLead(id, { contact_followup_queued_at: now }));
+    setSelectedIds(new Set());
+    setQueueDialogOpen(false);
+
+    const skips = [
+      tooRecent ? `${tooRecent} too recent (<${CONTACT_FOLLOWUP_MIN_DAYS} days)` : '',
+      notContacted ? `${notContacted} not an un-replied Contacted lead` : '',
+      alreadyQueued ? `${alreadyQueued} already queued` : '',
+      noDate ? `${noDate} no recorded contact date` : '',
+      suppressedN ? `${suppressedN} opted out` : '',
+      noPhone ? `${noPhone} no phone` : '',
+    ].filter(Boolean).join(' · ');
+    toast({
+      title: queueable.length ? `Queued ${queueable.length} for no-reply follow-up` : 'Nothing queued',
+      description: `${skips ? `Skipped: ${skips}. ` : ''}Follow-ups drain after openers, within the 7am–9:30pm UK window and daily cap. The server re-checks each one (no reply since, once per business) before it sends.`,
+      variant: queueable.length ? undefined : 'destructive',
+    });
+  };
+
   const handleQueueForWhatsApp = async (template: string) => {
     if (selectedIds.size === 0 || !onUpdateLead) return;
     /* Refuse an unset template here as well as disabling the button. Stamping '' on a batch of leads
        would queue them with no template, and the drainer would then flag every one of them. */
     if (!template) { toast({ title: 'No template chosen', description: 'Pick a template before queueing.', variant: 'destructive' }); return; }
+    /* The OPENER follow-up drains in its OWN lane (contact_followup_queued_at), NOT the status=queued
+       opener path: that path's already_sent guard refuses any lead with prior WhatsApp — which every
+       Contacted business has — and forces status→initial_contact on send. Route it separately. */
+    if (template === 'contact_followup') { await handleQueueContactFollowup(); return; }
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
     const leadOf = (id: string) => leads.find((l) => l.id === id);

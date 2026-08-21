@@ -3,6 +3,7 @@ import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.t
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
 import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { hookFollowupEligible } from "../_shared/hook-followup-eligibility.ts";
+import { contactFollowupEligible } from "../_shared/contact-followup-eligibility.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
@@ -377,6 +378,11 @@ Deno.serve(async (req) => {
     const { count: hookQueuedCount } = await service
       .from("outreach_leads").select("id", { count: "exact", head: true })
       .not("hook_followup_queued_at", "is", null).eq("is_archived", false);
+    /* The contact_followup lane's depth — leads marked for the OPENER follow-up (never replied),
+       awaiting their paced turn. Same shape as hookQueuedCount. */
+    const { count: contactQueuedCount } = await service
+      .from("outreach_leads").select("id", { count: "exact", head: true })
+      .not("contact_followup_queued_at", "is", null).eq("is_archived", false);
     const { data: stateRow } = await service
       .from("whatsapp_outreach_state").select("next_send_at, paused").eq("id", 1).maybeSingle();
     const nextSendAt: string | null = stateRow?.next_send_at ?? null;
@@ -395,6 +401,8 @@ Deno.serve(async (req) => {
       phoneHistorySkippedCount: phoneHistorySkippedCount ?? 0,
       // Leads queued for the hook_followup lane, awaiting their paced turn.
       hookQueuedCount: hookQueuedCount ?? 0,
+      // Leads queued for the contact_followup (opener follow-up) lane, awaiting their paced turn.
+      contactQueuedCount: contactQueuedCount ?? 0,
       nextSendAt, windowOpen, paused,
       /* The real next eligible send, Europe/London, computed live — what the dashboard shows.
          `nextSendAt` (the raw stored pacing stamp) stays in the payload for back-compat, but the
@@ -822,6 +830,104 @@ Deno.serve(async (req) => {
           ok: true, sent: hOutcome === "sent", simulated: !live, outcome: hOutcome, lane: "hook_followup",
           lead_id: hookLead.id, business: hookLead.business_name, template: "hook_followup", to,
           message_id: hMessageId, delivery_status: hDelivery, error: hError,
+          ...statusPayload, sentToday: (sentToday ?? 0) + 1,
+        });
+      }
+
+      /* ══ CONTACT FOLLOW-UP LANE ═══════════════════════════════════════════════════════════════
+         The OPENER follow-up (never replied to initial_contact). Drains only after the opener queue
+         AND the hook lane are empty this tick, so openers and report follow-ups both take priority.
+         Same contract as the hook lane: at most one send, shares the global cap/window/pacing, and
+         is SEPARATE from the opener path on purpose — the opener's already_sent guard would refuse
+         every one of these (they all got the opener) and its status→initial_contact write would
+         corrupt the pipeline. Leaves the pipeline status untouched; re-checks eligibility HERE. */
+      const { data: contactLead } = await service
+        .from("outreach_leads")
+        .select("id, business_name, phone, email, country, amount_paid, user_id")
+        .not("contact_followup_queued_at", "is", null)
+        .eq("is_archived", false)
+        .not("phone", "is", null)
+        .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
+        .order("contact_followup_queued_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (contactLead) {
+        const clearMarker = () => service.from("outreach_leads")
+          .update({ contact_followup_queued_at: null }).eq("id", contactLead.id);
+
+        // Re-verify eligibility at send time — de-queue silently if it drifted (e.g. replied since).
+        const elig = await contactFollowupEligible(service, {
+          id: contactLead.id, phone: contactLead.phone, country: contactLead.country, amount_paid: contactLead.amount_paid,
+        });
+        if (!elig.eligible) {
+          await clearMarker();
+          return json({ ok: true, skipped: `contact_ineligible:${elig.reason}`, lane: "contact_followup", lead_id: contactLead.id, business: contactLead.business_name, ...statusPayload });
+        }
+
+        const to = toWhatsAppNumber(contactLead.phone as string, contactLead.country as string | null);
+        if (!to) { await clearMarker(); return json({ ok: true, skipped: "contact_bad_number", lane: "contact_followup", lead_id: contactLead.id, business: contactLead.business_name, ...statusPayload }); }
+
+        // Suppression: one no = suppressed everywhere. Fails closed (service client bypasses RLS).
+        const cSupp = await checkSuppressed(service, { phone: `+${to}`, email: contactLead.email ?? null, leadId: contactLead.id });
+        if (cSupp.suppressed) { await clearMarker(); return json({ ok: true, skipped: "contact_suppressed", lane: "contact_followup", lead_id: contactLead.id, business: contactLead.business_name, ...statusPayload }); }
+
+        // {{1}} = business name only (contact_followup has a single variable; it opens "Hi," with no
+        // first-name greeting, so no owner name is resolved here).
+        const cLang = TEMPLATES["contact_followup"].lang;
+
+        let cMessageId: string | null = null;
+        let cDelivery = "simulated";
+        let cOutcome: "sent" | "no_whatsapp" | "temporary" = "sent";
+        let cError: string | null = null;
+        if (live) {
+          const payload = claimTemplatePayload("contact_followup", cLang, (contactLead.business_name as string) ?? "", "");
+          const r = await sendViaGraph(accessToken, phoneNumberId, to, payload);
+          if (r.ok) { cMessageId = r.messageId; cDelivery = "sent"; cOutcome = "sent"; }
+          else {
+            cOutcome = classifyFailure(r.failCode) === "permanent" ? "no_whatsapp" : "temporary";
+            cDelivery = cOutcome === "no_whatsapp" ? "no_whatsapp" : "failed_temporary";
+            cError = r.error;
+            console.error(`[contact_followup] send failed (code ${r.failCode ?? "?"}, ${cOutcome}):`, cError);
+          }
+        } else {
+          console.log(`WOULD SEND: contact_followup to ${to} for ${contactLead.business_name}`);
+        }
+
+        const cNowIso = new Date().toISOString();
+        // Audit row — an attempt was made, so it counts toward the shared daily cap.
+        await service.from("whatsapp_sends").insert({
+          lead_id: contactLead.id, user_id: null, template: "contact_followup", phone: to,
+          business_name: contactLead.business_name, claim_url: "", test_mode: testMode,
+          message_id: cMessageId, delivery_status: cDelivery, error: cError,
+        });
+
+        if (cOutcome === "sent") {
+          // Clear the marker (out of the lane); DO NOT touch the pipeline status — this is a
+          // follow-up to an existing conversation, not an opener.
+          await clearMarker();
+          try {
+            await service.from("whatsapp_messages").insert({
+              direction: "outbound", user_id: (contactLead.user_id as string | null) ?? null, lead_id: contactLead.id,
+              phone: to, body: renderTemplateBody("contact_followup", (contactLead.business_name as string) ?? "", ""),
+              message_type: "template", template_name: "contact_followup", wa_message_id: cMessageId,
+              status: cDelivery, test_mode: testMode,
+            });
+          } catch (e) { console.error(`[contact_followup] message-log insert threw (non-blocking, ${contactLead.id}):`, (e as Error).message); }
+        } else if (cOutcome === "no_whatsapp") {
+          // Permanent — never retry. Drop the marker.
+          await clearMarker();
+        }
+        // temporary: keep the marker so it retries on a future eligible tick.
+
+        // Share the pacing clock, exactly like the opener and hook lanes.
+        await service.from("whatsapp_outreach_state")
+          .update({ next_send_at: nextPacingStamp(sentToday ?? 0), updated_at: cNowIso }).eq("id", 1);
+
+        return json({
+          ok: true, sent: cOutcome === "sent", simulated: !live, outcome: cOutcome, lane: "contact_followup",
+          lead_id: contactLead.id, business: contactLead.business_name, template: "contact_followup", to,
+          message_id: cMessageId, delivery_status: cDelivery, error: cError,
           ...statusPayload, sentToday: (sentToday ?? 0) + 1,
         });
       }
