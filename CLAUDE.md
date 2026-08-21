@@ -100,8 +100,8 @@ Git:
 - [ ] Commit with `-F <file>` (PowerShell mis-parses multi-line `-m`). End with:
       `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
 - [ ] Merge `--no-ff`.
-- [ ] **Never stage `HANDOFF.md` or `ONBOARDING.md`.** Untracked on purpose. Stage files explicitly; never
-      `git add -A` blind.
+- [ ] **Never stage `HANDOFF.md`, `ONBOARDING.md`, `HANDOVER_NEXT.md`, `RECON_PAGEDB.md` or
+      `RECON_FOR_CLAUDE.md`.** Untracked on purpose. Stage files explicitly; never `git add -A` blind.
 
 Checks:
 - [ ] `npm run typecheck` — **baseline is 14 errors** (was 15 until 2026-07-30; one `TS2352` cast in
