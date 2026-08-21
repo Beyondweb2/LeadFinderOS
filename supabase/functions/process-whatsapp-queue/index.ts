@@ -118,17 +118,22 @@ const DAILY_CAP = 200;
    number that decided real throughput for months — had no name, so nothing could reference it, no
    comment could be attached to it, and the header comment above described it from memory.
 
-   SEND_GAP_FLOOR_MIN: 20 → 10 on 2026-08-08, then 10 → 4 on 2026-08-22 (with DAILY_CAP → 200 and the
-   cron moved to every-4-minutes, all together — see the DAILY_CAP note). At 20 the queue managed a
-   measured 2.0 sends/hour and ~29 a day across 377 real sends. The brake came off in stages as the
+   SEND_GAP_FLOOR_MIN: 20 → 10 on 2026-08-08, then 10 → 4 → 3 on 2026-08-22 (with DAILY_CAP → 200 and
+   the cron moved to every-4-minutes, all together — see the DAILY_CAP note). At 20 the queue managed
+   a measured 2.0 sends/hour and ~29 a day across 377 real sends. The brake came off in stages as the
    quality rating held Green.
    ⛔ THE FLOOR AND THE CRON GRID BIND TOGETHER — NEITHER ALONE. This function wakes on the cron
    schedule and sends AT MOST ONE lead per tick, so a target gap is rounded UP to the next tick. While
    the cron was every-10-minutes the grid dominated any floor below 10 (a +4 target still landed on
    the next +10 tick), which is why the floor could not be dropped usefully without also speeding the
-   cron. As of 2026-08-22 the cron is every-4-minutes, so a 4-minute floor and a 4-minute grid line
-   up: ~one send every 4–5 min, ~200/day. Dropping the floor further now would need the cron faster
-   again to have any effect.
+   cron.
+   ⛔ 4 → 3 ON 2026-08-22, AND THE REASON IS THE ROUNDING, MEASURED. At a 4-minute floor on a
+   4-minute cron the QUEUE lane paced ~8 min, not 4: next_send_at landed at T+4, the +4 cron tick
+   fired a hair before it, so the send slipped to the tick after — two grid steps, ~8 min, ~108/day
+   queue-only. A floor of 3 puts next_send_at at T+3, comfortably BEFORE the next +4 tick, so that
+   tick is eligible and the send lands ~4 min after the last — true ~4-min queue cadence, ~200/day
+   without leaning on reply traffic. The floor must sit BELOW the grid for the next tick to catch it;
+   going faster still would need the cron faster, not this constant.
    ⚠️ The cron schedule lives ONLY in the database (CLAUDE.md §8) — there is no migration for it, so
    it cannot be read or changed from this repo. Reschedule it by unscheduling `whatsapp-queue-run`
    then re-scheduling it at a 4-minute interval calling public.invoke_whatsapp_queue() (the exact SQL
@@ -139,7 +144,7 @@ const DAILY_CAP = 200;
    always near 10-minute marks whatever this band is; what the band varies is HOW MANY ticks are
    skipped between sends, which is what stops a visible fixed cadence. Widening it further would not
    change the first fact. */
-const SEND_GAP_FLOOR_MIN = 4;
+const SEND_GAP_FLOOR_MIN = 3;
 const SEND_GAP_CEILING_MIN = 180;
 const SEND_GAP_JITTER_LOW = 0.55;
 const SEND_GAP_JITTER_HIGH = 1.65;
