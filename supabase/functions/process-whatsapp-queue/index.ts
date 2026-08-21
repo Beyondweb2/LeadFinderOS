@@ -539,8 +539,17 @@ Deno.serve(async (req) => {
           }
           // 2) Send-time status + suppression (checked HERE, not just at queue time).
           const { data: lead } = await service.from("outreach_leads")
-            .select("id, user_id, status, business_name, is_archived").eq("id", row.lead_id).maybeSingle();
+            .select("id, user_id, status, business_name, is_archived, amount_paid").eq("id", row.lead_id).maybeSingle();
           if (!lead) { await finish("flagged_error", "lead_missing"); results[row.lead_id] = "flagged_error"; continue; }
+          /* ⛔ NEVER AUTO-PITCH A PAYING CUSTOMER. amount_paid > 0 is the money-not-status rule
+             (CLAUDE.md §6): a customer who paid (possibly during the ~3-min delay, or armed before
+             this guard existed) must never receive the audit sales pitch. Authoritative last line —
+             the arm path also refuses, but this catches a lead that became paid after arming. */
+          if (((lead.amount_paid as number | null) ?? 0) > 0) {
+            await finish("skipped_paid", "paying customer — never auto-pitch");
+            results[row.lead_id] = "skipped_paid";
+            continue;
+          }
           /* Archived at send time — e.g. armed by a reply, then archived during the ~3 minute delay,
              which is exactly the window an operator would use to stop it. Recorded rather than
              dropped so the row shows WHY it never sent. Not "cancelled_decline": the business did
