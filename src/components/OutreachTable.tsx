@@ -1297,8 +1297,20 @@ export function OutreachTable({
       queueable.push(id);
     }
 
-    // Queue: stamp the lane marker only. Status pill untouched (this is a follow-up, not an opener).
-    queueable.forEach((id) => onUpdateLead(id, { contact_followup_queued_at: now }));
+    /* Queue: stamp the lane marker AND move the Status pill to "2nd attempt". previous_status is
+       captured so removing it from the queue can restore the lead to Contacted (mirrors the opener
+       queue's cancel). The status change is display only — the drain lane keys on the marker and on
+       message history, never on status, so "2nd attempt" doesn't affect eligibility. It persists
+       after the send (the lane never touches status), which is why it reads for sent as well as
+       queued leads. */
+    queueable.forEach((id) => {
+      const l = leadOf(id);
+      onUpdateLead(id, {
+        contact_followup_queued_at: now,
+        status: 'second_attempt',
+        previous_status: (l?.status ?? 'initial_contact') as LeadStatus,
+      });
+    });
     setSelectedIds(new Set());
     setQueueDialogOpen(false);
 
@@ -2422,19 +2434,8 @@ export function OutreachTable({
                             </button>
                           )}
                           <WhatsAppStatusBadge status={lead.whatsapp_status} />
-                          {/* Queued for the no-reply follow-up lane. DERIVED from the marker column
-                              (contact_followup_queued_at), NOT a status change — the pipeline status
-                              stays initial_contact (the lane's eligibility depends on it). Cleared
-                              server-side on send, so this badge disappears once it goes out. */}
-                          {lead.contact_followup_queued_at && (
-                            <Badge
-                              variant="outline"
-                              className="flex-shrink-0 border-sky-500/40 bg-sky-500/10 text-[10px] font-normal text-sky-700 dark:text-sky-400"
-                              title="Queued for the no-reply follow-up (contact_followup). Drains after the opener queue, within the daily window. Sends once per business."
-                            >
-                              Follow-up queued
-                            </Badge>
-                          )}
+                          {/* The no-reply follow-up state now shows in the STATUS pill ("2nd attempt"),
+                              not a separate tag here — see the second_attempt status set when queueing. */}
                           {/* Site claim/upsell funnel (admin) — from generated_sites tracking */}
                           {(() => {
                             const f = sitesByLead[lead.id];

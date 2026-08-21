@@ -2,6 +2,7 @@ export type LeadStatus =
   | 'not_contacted'
   | 'queued'            // in the WhatsApp outreach queue, not yet sent
   | 'initial_contact'   // unified "I've reached out" (replaces contacted/waiting/delivered)
+  | 'second_attempt'    // queued for / sent the contact_followup no-reply follow-up (set when queued; persists after send since the lane never touches status). Contacted-not-replied, semantically between initial_contact and replied.
   | 'interested'
   | 'not_interested'
   | 'site_sent'
@@ -205,6 +206,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },
   { value: 'queued', label: 'Queued' },
   { value: 'initial_contact', label: 'Contacted' },
+  { value: 'second_attempt', label: '2nd attempt' },
   { value: 'email_sent', label: 'Email Sent' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
@@ -379,6 +381,7 @@ export type PipelineStatus =
   | 'not_contacted'
   | 'queued'
   | 'initial_contact'
+  | 'second_attempt'
   | 'replied'
   | 'site_sent'
   | 'report_sent'
@@ -397,6 +400,7 @@ export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[]
   { value: 'not_contacted', label: 'New' },
   { value: 'queued', label: 'Queued' },
   { value: 'initial_contact', label: 'Contacted' },
+  { value: 'second_attempt', label: '2nd attempt' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'report_sent', label: 'Report Sent' },

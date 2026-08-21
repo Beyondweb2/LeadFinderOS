@@ -17,6 +17,13 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Queued',
     className: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent font-semibold',
   },
+  /* Queued for / sent the no-reply follow-up (contact_followup). Distinct from Contacted so a lead
+     on its second touch is visible at a glance in the Status column. */
+  second_attempt: {
+    label: '2nd attempt',
+    shortLabel: '2nd',
+    className: 'bg-amber-500/20 text-amber-500 border-transparent font-semibold',
+  },
   whatsapp_failed: {
     label: 'WhatsApp Failed',
     shortLabel: 'WA Failed',
