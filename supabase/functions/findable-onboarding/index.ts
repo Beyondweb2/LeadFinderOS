@@ -341,11 +341,18 @@ Deno.serve(async (req) => {
       const q2Town = clip(a.confirmed_location, 120);
       const q2Services = clip(a.services, 2000);
       const q2Address = clip(a.business_address, 300);
-      if (!q2Town || !q2Services || !q2Address) {
+      /* ⛔ TWO REQUIRED NOW, NOT THREE (2026-08-22, URGENT). business_address left the questionnaire:
+         a paying customer was trapped on mobile hand-typing a full address (see OnboardingFlow's
+         STEPS note). The address is collected at delivery instead (the lead usually already has one
+         from Google enrichment). The baseline only ever needed town + services, so this is exactly
+         what startPaidBaseline waits for — and needsQ2() was relaxed to match, or a completed
+         customer would read "awaiting Q2" forever. business_address is still ACCEPTED below and
+         written when present; it is simply no longer a gate. */
+      if (!q2Town || !q2Services) {
         return json({
           ok: false,
           error: "missing_required",
-          missing: [!q2Town && "confirmed_location", !q2Services && "services", !q2Address && "business_address"].filter(Boolean),
+          missing: [!q2Town && "confirmed_location", !q2Services && "services"].filter(Boolean),
         }, 400);
       }
 
@@ -392,19 +399,21 @@ Deno.serve(async (req) => {
       /* NEVER WRITE A NULL OVER AN ANSWER. An optional question left blank must not erase what an
          earlier pass (or the pre-payment form) already stored, and it must not send a column that
          may not exist yet. Same reasoning as NEWER_COLS on the insert path — absence is not an
-         answer (CLAUDE.md §6). The three required fields are never null by the guard above. */
+         answer (CLAUDE.md §6). The two required fields (town, services) are never null by the guard
+         above; business_address may now be null and is simply not written when it is. */
       for (const k of Object.keys(q2)) if (q2[k] == null) delete q2[k];
 
       /* MULTI-PASS SHEDDING, the v18 lesson: each retry can surface the NEXT missing column, so keep
          dropping until the update lands. Longer names before their substrings, or one miss sheds
-         two columns. The three required fields are NOT sheddable — losing them silently is the
-         failure this whole action exists to prevent, so a persistent error is returned instead. */
+         two columns. The two required fields (confirmed_location, services) are NOT sheddable —
+         losing them silently is the failure this whole action exists to prevent, so a persistent
+         error is returned instead. */
       const shedOrder = [
         "services_list", "areas_list", "website_manager_email", "website_manager",
         "website_platform_other", "website_platform", "willing_to_migrate",
         "gbp_verified", "gbp_consent", "gbp_exists", "gbp_status",
         "must_not_say", "photos_status", "competitor_name", "accreditations",
-        "confirmed_phone",
+        "business_address", "confirmed_phone",
       ];
       let payload = { ...q2 };
       let res = await service.from("onboarding_responses").update(payload).eq("id", onboardingId);
