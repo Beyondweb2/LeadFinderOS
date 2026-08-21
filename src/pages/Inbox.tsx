@@ -46,7 +46,7 @@ const HOOK_FOLLOWUP_MIN_MS = HOOK_FOLLOWUP_MIN_DAYS * 24 * 60 * 60 * 1000;
 const HOOK_DUE_FILTER = '__hook_due__';
 /* contact_followup — the EARLIER-stage nudge: got initial_contact, NEVER replied, NO report yet.
    Distinct from hook (post-report) by the presence of a report — the two can never overlap. */
-const CONTACT_FOLLOWUP_MIN_DAYS = 3;
+const CONTACT_FOLLOWUP_MIN_DAYS = 2;
 const CONTACT_FOLLOWUP_MIN_MS = CONTACT_FOLLOWUP_MIN_DAYS * 24 * 60 * 60 * 1000;
 const CONTACT_DUE_FILTER = '__contact_due__';
 /* Rough effective daily throughput of the shared WhatsApp queue at the 120/day cap (measured ~84;
@@ -340,17 +340,21 @@ const Inbox = () => {
     return { eligible, hookSent };
   }, [messages, conversations, leads]);
 
-  /* ══ contact_followup ELIGIBILITY — EARLIER STAGE, NO OVERLAP WITH hook ═══════════════════════
-     "Contact follow-up due" when: got initial_contact (outbound, not failed); has NO report
-     (audit_reply) at all — this is the discriminator that keeps it mutually exclusive with hook,
-     which REQUIRES a report; NEVER replied at all (no inbound ever); ≥ CONTACT_FOLLOWUP_MIN_DAYS
-     since the opener; not paid; no contact_followup already sent (the server also enforces one per
-     lead). A lead who replied, or who got the report, is not here. */
+  /* ══ contact_followup ELIGIBILITY — EARLIER STAGE, REPORT-READY GATE (Option A) ═══════════════
+     "Contact follow-up due" when: got initial_contact (outbound, not failed); NEVER replied at all
+     (no inbound ever); the report has NOT been SENT (no audit_reply message) — this is the
+     discriminator that keeps it mutually exclusive with hook, which REQUIRES a sent report; a report
+     IS READY for them (a completed audit exists — auditByLeadId), so if they reply the report can go
+     out instantly and we only nudge leads we're ready to convert (Paul's Option A); ≥
+     CONTACT_FOLLOWUP_MIN_DAYS since the opener; not paid; no contact_followup already sent (the server
+     also enforces one per lead). */
   const contactState = useMemo(() => {
     const paidKeys = new Set(conversations.filter((c) => c.isPaid).map((c) => c.key));
+    const reportReadyLeadIds = new Set(Object.keys(auditByLeadId)); // leads with a completed audit
+    const leadIdByKey = new Map(conversations.map((c) => [c.key, c.leadId]));
     const latestOpenerAt = new Map<string, number>();  // key → newest initial_contact send time (ms)
     const everInbound = new Set<string>();             // key → any inbound ever (→ they replied)
-    const hasReport = new Set<string>();               // key → an audit_reply exists (→ hook's domain, not this)
+    const reportSent = new Set<string>();              // key → an audit_reply went out (→ hook's domain, not this)
     const contactSent = new Set<string>();             // key → a contact_followup already went out
     for (const m of messages) {
       const key = convKeyFor(m.user_id, m.phone);
@@ -359,7 +363,7 @@ const Inbox = () => {
         everInbound.add(key);
       } else if (m.status !== 'failed') {
         if (m.template_name === 'initial_contact') latestOpenerAt.set(key, Math.max(latestOpenerAt.get(key) ?? 0, t));
-        else if (m.template_name === 'audit_reply') hasReport.add(key);
+        else if (m.template_name === 'audit_reply') reportSent.add(key);
         else if (m.template_name === 'contact_followup') contactSent.add(key);
       }
     }
@@ -367,14 +371,16 @@ const Inbox = () => {
     const eligible = new Set<string>();
     for (const [key, openerAt] of latestOpenerAt) {
       if (paidKeys.has(key)) continue;                     // never nudge a paying customer
-      if (hasReport.has(key)) continue;                    // ⛔ has a report → hook's domain, not this (no overlap)
+      if (reportSent.has(key)) continue;                   // ⛔ report already SENT → hook's domain, not this (no overlap)
       if (everInbound.has(key)) continue;                  // replied at all → not a cold no-reply opener
       if (contactSent.has(key)) continue;                  // already nudged — never twice
+      const lid = leadIdByKey.get(key);
+      if (!lid || !reportReadyLeadIds.has(lid)) continue;  // ⛔ Option A: only nudge when a report is READY to send
       if (now - openerAt < CONTACT_FOLLOWUP_MIN_MS) continue; // not long enough yet
       eligible.add(key);
     }
     return { eligible, contactSent };
-  }, [messages, conversations]);
+  }, [messages, conversations, auditByLeadId]);
 
   // The list shows fetched conversations; a just-started (synthetic) one is merged in
   // until its first message lands (after which the real row shares its key).
@@ -1434,7 +1440,7 @@ const Inbox = () => {
           <DialogHeader>
             <DialogTitle className="text-base">Send contact follow-up to {activeLead?.business_name}</DialogTitle>
             <DialogDescription className="text-xs">
-              For a lead who got the opener and never replied ({CONTACT_FOLLOWUP_MIN_DAYS}+ days, no report sent yet). One per lead — it can’t be sent twice.
+              For a lead who got the opener and never replied ({CONTACT_FOLLOWUP_MIN_DAYS}+ days), with a report already generated and ready to send the moment they reply. One per lead — it can’t be sent twice.
             </DialogDescription>
           </DialogHeader>
           <div className="whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/30 px-2.5 py-2 text-[11px]">
