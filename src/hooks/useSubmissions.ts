@@ -39,6 +39,15 @@ export interface SubmissionRow {
   notify_sent_at: string | null;
   notify_attempts: number | null;
   notify_error: string | null;
+  /* From the linked lead (the endpoint joins outreach_leads). The per-row nudge needs a phone —
+     send-whatsapp-message resolves nothing from a lead_id — and amount_paid to know if the lead
+     itself is paid. All null when there is no lead attached. */
+  lead_phone: string | null;
+  lead_country: string | null;
+  lead_contact_name: string | null;
+  lead_amount_paid: number | null;
+  /** Has questionnaire_followup already gone to this lead (one per lead, no repeats). */
+  followup_sent: boolean;
 }
 
 /** How the notification for a submission actually ended up. Derived, never stored. */
@@ -67,6 +76,12 @@ export function notifyStateFor(r: Pick<SubmissionRow, 'notify_sent_at' | 'notify
 /** Paid is amount_paid > 0 everywhere (§6); on this table the status carries it. */
 const PAID_STATUSES = new Set(['paid', 'payment_received', 'in_delivery', 'completed']);
 export const isPaidSubmission = (r: SubmissionRow) => PAID_STATUSES.has(String(r.status ?? ''));
+
+/** The LINKED LEAD is paid (amount_paid > 0). Distinct from isPaidSubmission: a lead can be paid
+ *  while this particular submission row's status is not paid-class (e.g. an early answers_saved
+ *  row for a customer who has since paid). The nudge and the bulk-delete protection both treat a
+ *  row as paid if EITHER is true — same rule the server enforces. */
+export const isLeadPaid = (r: SubmissionRow) => (r.lead_amount_paid ?? 0) > 0;
 
 /**
  * ⛔ PAID, AND THE SECOND QUESTIONNAIRE IS STILL OUTSTANDING — its own state, never mixed in.
@@ -125,11 +140,26 @@ export function useSubmissions(limit = 25) {
     return { total: rows.length, unpaid, undelivered, awaitingQ2 };
   }, [rows]);
 
+  /* Delete rows through the endpoint (never a direct .delete() — RLS-no-policy would 200 and
+     remove nothing). `allowPaid` is set ONLY by the per-row single-delete confirm; the bulk
+     buttons leave it false so the server skips paid rows. Returns the server's counts so the
+     card can report what was kept. Refetches on success. */
+  const deleteRows = async (ids: string[], allowPaid = false): Promise<{ deleted: number; skippedPaid: number }> => {
+    const { data: res, error: e } = await supabase.functions.invoke('submissions', {
+      body: { action: 'delete', ids, allow_paid: allowPaid },
+    });
+    if (e) throw new Error(e.message);
+    if (!res?.ok) throw new Error(res?.error ?? 'delete failed');
+    await refetch();
+    return { deleted: Number(res.deleted) || 0, skippedPaid: Number(res.skipped_paid) || 0 };
+  };
+
   return {
     rows,
     summary,
     isLoading,
     error: error ? (error as Error).message : null,
     refetch,
+    deleteRows,
   };
 }
