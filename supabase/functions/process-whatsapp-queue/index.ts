@@ -96,32 +96,50 @@ const GRAPH_VERSION = "v21.0";
    07:00 where 100 gave 8.7 and 120 gives 7.3 (floored to 10). The gap is derived from the cap by
    construction: the queue spreads whatever the cap is across the window rather than racing to it and
    stopping.
-   process-sms-queue has its OWN separate DAILY_CAP; this constant does not affect it. */
-const DAILY_CAP = 120;
+   process-sms-queue has its OWN separate DAILY_CAP; this constant does not affect it.
+
+   ✅ 120 → 200 ON 2026-08-22, AND THE CEILING ABOVE WAS LIFTED THE ONLY WAY IT COULD BE — THE CRON.
+   The "~87/day ceiling" and "raising past ~140 does nothing" notes above were TRUE at a 10-minute
+   cron and a 10-minute floor. Both were changed together this day so 200 is actually reachable:
+     • SEND_GAP_FLOOR_MIN 10 → 4 (below), so the pacing targets ~4–5 min instead of clamping to 10;
+     • the cron `whatsapp-queue-run` moved from every-10-minutes to every-4-minutes — DB-ONLY,
+       applied by hand in the SQL editor (CLAUDE.md §8). At a 4-minute cron there are ~15 ticks/hour
+       × 14.5 h ≈ 217 ticks in the window, one send each, so 200 fits with headroom. baseGap at 07:00
+       is 870/199 ≈ 4.37 min, floored at 4.
+   ⛔ ALL THREE MOVE TOGETHER OR NOTHING CHANGES. Cap 200 with a 10-minute cron is still ~87/day (the
+   grid binds); a 4-minute cron with the floor still 10 is still ~87/day (the floor binds). If you
+   step this cap up or down while watching the quality rating, you can do so freely — but if you ever
+   want MORE than ~200 you must also speed the cron again, and if you drop the cap low the floor-4
+   pacing simply spreads fewer sends wider. Lowering the cap alone is always safe.
+   ⚠️ The reply-path-eats-the-budget point below still stands, with more room now (200 not 120). */
+const DAILY_CAP = 200;
 /* ══ THE SEND GAP ═══════════════════════════════════════════════════════════════════════
    ⚠️ THESE WERE BARE LITERALS INSIDE THE PACING EXPRESSION. The floor in particular — the single
    number that decided real throughput for months — had no name, so nothing could reference it, no
    comment could be attached to it, and the header comment above described it from memory.
 
-   SEND_GAP_FLOOR_MIN: 20 → 10 on 2026-08-08. At 20 the queue managed a measured 2.0 sends/hour and
-   ~29 a day across 377 real sends. Paul's engagement and quality rating are fine, so the brake came
-   off.
-   ⛔ BUT THE FLOOR IS NOT WHAT BINDS AFTERWARDS — THE CRON TICK IS. This function wakes on a fixed
-   ~10-minute schedule and sends AT MOST ONE lead per tick, so a target gap is rounded UP to the next
-   tick. That is why the measured median under a 20-minute floor was 29.9 minutes and not 20: the
-   +20 mark is missed by a hair and the send lands on +30. Under a 10-minute floor the same effect
-   puts most gaps at 20 rather than 10. Halving the floor therefore roughly halves the gap — it does
-   not deliver one send every ten minutes. Sends can only ever occur on the cron's grid; going faster
-   than ~3/hour needs the SCHEDULE changed, not this constant.
-   ⚠️ The cron schedule lives ONLY in the database (CLAUDE.md §8) — there is no migration for it,
-   so it cannot be read or changed from this repo.
+   SEND_GAP_FLOOR_MIN: 20 → 10 on 2026-08-08, then 10 → 4 on 2026-08-22 (with DAILY_CAP → 200 and the
+   cron moved to every-4-minutes, all together — see the DAILY_CAP note). At 20 the queue managed a
+   measured 2.0 sends/hour and ~29 a day across 377 real sends. The brake came off in stages as the
+   quality rating held Green.
+   ⛔ THE FLOOR AND THE CRON GRID BIND TOGETHER — NEITHER ALONE. This function wakes on the cron
+   schedule and sends AT MOST ONE lead per tick, so a target gap is rounded UP to the next tick. While
+   the cron was every-10-minutes the grid dominated any floor below 10 (a +4 target still landed on
+   the next +10 tick), which is why the floor could not be dropped usefully without also speeding the
+   cron. As of 2026-08-22 the cron is every-4-minutes, so a 4-minute floor and a 4-minute grid line
+   up: ~one send every 4–5 min, ~200/day. Dropping the floor further now would need the cron faster
+   again to have any effect.
+   ⚠️ The cron schedule lives ONLY in the database (CLAUDE.md §8) — there is no migration for it, so
+   it cannot be read or changed from this repo. Reschedule it by unscheduling `whatsapp-queue-run`
+   then re-scheduling it at a 4-minute interval calling public.invoke_whatsapp_queue() (the exact SQL
+   was handed to Paul with this change).
 
    SEND_GAP_JITTER_*: widened from 0.6–1.4 to 0.55–1.65 so consecutive gaps differ by more ticks.
    ⚠️ Jitter cannot hide the grid. Sends happen when the cron fires, so their clock times are
    always near 10-minute marks whatever this band is; what the band varies is HOW MANY ticks are
    skipped between sends, which is what stops a visible fixed cadence. Widening it further would not
    change the first fact. */
-const SEND_GAP_FLOOR_MIN = 10;
+const SEND_GAP_FLOOR_MIN = 4;
 const SEND_GAP_CEILING_MIN = 180;
 const SEND_GAP_JITTER_LOW = 0.55;
 const SEND_GAP_JITTER_HIGH = 1.65;
