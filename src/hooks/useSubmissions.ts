@@ -90,8 +90,15 @@ export const isLeadPaid = (r: SubmissionRow) => (r.lead_amount_paid ?? 0) > 0;
  * delivered and the exposure is a refund. Finding that out at week eight is finding out too late.
  *
  * ⚠️ DERIVED FROM THE ANSWERS, NOT STORED. Same rule as serveGate: a stored "q2_done" flag would
- * freeze old rows against a stale definition and let the readers drift. The three fields are
+ * freeze old rows against a stale definition and let the readers drift. The two fields are
  * exactly the ones Q2 makes required, so "we have them" and "they finished" cannot disagree.
+ *
+ * ⛔ TWO FIELDS, NOT THREE (2026-08-22). business_address left the questionnaire — it was trapping
+ * paying customers on mobile and is collected at delivery instead — so complete_q2 no longer
+ * requires it. If this still required business_address, every customer who finished the new
+ * two-field Q2 would read "awaiting Q2" forever and be chased for something we no longer ask.
+ * town + services is exactly what startPaidBaseline waits for, so completion still means the
+ * baseline can run.
  *
  * ⚠️ Unpaid rows are NOT in this state. Someone who has not paid has nothing outstanding — they
  * are a chase about money, which the card already shows separately.
@@ -99,7 +106,7 @@ export const isLeadPaid = (r: SubmissionRow) => (r.lead_amount_paid ?? 0) > 0;
 export function needsQ2(r: SubmissionRow): boolean {
   if (!isPaidSubmission(r)) return false;
   const has = (v: string | null) => !!(v ?? '').trim();
-  return !(has(r.confirmed_location) && has(r.services) && has(r.business_address));
+  return !(has(r.confirmed_location) && has(r.services));
 }
 
 /** Whole days since payment-era submission — what the day 2 / day 5 / day 7 chase counts. */
