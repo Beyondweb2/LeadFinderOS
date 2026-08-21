@@ -223,6 +223,38 @@ function minutesUntilWindowEnd(): number {
   return Math.max(0, WINDOW_END_MIN - (n.hour * 60 + n.minute));
 }
 
+/** The REAL next eligible send time, as a UTC ISO instant — for DISPLAY ONLY.
+ *
+ *  ⛔ THIS DECIDES NOTHING. The send gates (windowOpen, cap, next_send_at pacing at the bottom of a
+ *  tick) are untouched; this only tells the dashboard what those gates will do next, because the
+ *  stored `next_send_at` is written only AFTER a send and so reads stale (or Bangkok-clock) the rest
+ *  of the time. Mirrors the SAME window and cap the gates use, in Europe/London.
+ *
+ *  Logic, matching the gate order:
+ *   - inside the window AND under the cap → now + the pending pacing gap (storedNextSendAt if it is
+ *     still in the future, else now: a due queue sends on the next tick).
+ *   - outside the window, OR cap reached → the next 07:00 Europe/London. Cap-hit today rolls to
+ *     tomorrow; before 07:00 today rolls to 07:00 today; after 21:30 today rolls to tomorrow.
+ *  DST-correct because londonInstant round-trips through the London offset. */
+function nextEligibleSendAt(sentToday: number, storedNextSendAt: string | null): string {
+  const n = londonNow();
+  const nowMin = n.hour * 60 + n.minute;
+  const inWindow = nowMin >= WINDOW_START * 60 && nowMin < WINDOW_END_MIN;
+  const underCap = sentToday < DAILY_CAP;
+
+  if (inWindow && underCap) {
+    // The pacing wait already in flight, if it is still ahead of now; otherwise it is due now.
+    const stored = storedNextSendAt ? new Date(storedNextSendAt) : null;
+    return stored && stored.getTime() > Date.now() ? stored.toISOString() : new Date().toISOString();
+  }
+
+  // Next 07:00 Europe/London: today if we are before the window AND still under the cap, else tomorrow.
+  const beforeWindowToday = nowMin < WINDOW_START * 60;
+  const openToday = beforeWindowToday && underCap;
+  const base = londonInstant(n.y, n.mo, n.da, WINDOW_START, 0);
+  return (openToday ? base : new Date(base.getTime() + 24 * 60 * 60 * 1000)).toISOString();
+}
+
 /** UK phone → E.164 digits (no '+', as Meta wants). Mirrors send-reminders. */
 function toWhatsAppNumber(raw: string, country?: string | null): string | null {
   let s = (raw || "").replace(/[^\d+]/g, "");
@@ -333,6 +365,10 @@ Deno.serve(async (req) => {
       // Rows the phone-history seatbelt has bounced (opener refused: number already has a thread).
       phoneHistorySkippedCount: phoneHistorySkippedCount ?? 0,
       nextSendAt, windowOpen, paused,
+      /* The real next eligible send, Europe/London, computed live — what the dashboard shows.
+         `nextSendAt` (the raw stored pacing stamp) stays in the payload for back-compat, but the
+         panel reads THIS. Display only; changes no gate. */
+      nextEligibleSendAt: nextEligibleSendAt(sentToday ?? 0, nextSendAt),
       ukTime: `${String(uk.hour).padStart(2, "0")}:${String(uk.minute).padStart(2, "0")}`,
       // Auto audit_reply rule state: BOTH must be on for the rule to run. Toggle read is
       // defensive (missing column → false), so status works before the SQL has been run.

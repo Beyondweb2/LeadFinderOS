@@ -15,6 +15,9 @@ interface QueueStatus {
    *  queue can be told apart from one holding withdrawn leads. */
   archivedQueuedCount?: number;
   nextSendAt: string | null;
+  /** The real next eligible send, computed server-side in Europe/London. Optional so the panel
+   *  degrades cleanly against an older function deploy that has not shipped it yet. */
+  nextEligibleSendAt?: string | null;
   windowOpen: boolean;
   paused: boolean;
   ukTime: string;
@@ -183,7 +186,16 @@ export function WhatsAppQueuePanel({
         </button>
         <Stat label="Sent today" value={`${status.sentToday} / ${status.cap}`} />
         <Stat label="UK time" value={`${status.ukTime} ${status.windowOpen ? '· open' : '· closed'}`} />
-        <Stat label="Next send" value={status.nextSendAt ? new Date(status.nextSendAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'} />
+        {/* ⛔ READS nextEligibleSendAt (server, Europe/London), NOT the raw nextSendAt pacing stamp
+            which is only written after a send and so reads stale — often on the viewer's clock.
+            Formatted with timeZone: 'Europe/London' so it is UK time wherever the operator is, and
+            suffixed "UK" to match the "UK time" stat beside it. Falls back to nextSendAt only if an
+            older function deploy has not shipped the new field. */}
+        <Stat label="Next send" value={(() => {
+          const iso = status.nextEligibleSendAt ?? status.nextSendAt;
+          if (!iso) return '—';
+          return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }) + ' UK';
+        })()} />
       </div>
 
       {/* Archived leads still sitting at status='queued'. The processor skips them; saying so here
