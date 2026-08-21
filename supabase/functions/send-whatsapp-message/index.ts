@@ -8,6 +8,7 @@ import {
   renderTemplateBody,
   WA_TEMPLATES,
   TEMPLATES_NEEDING_REAL_NAME,
+  TEMPLATES_ALLOWING_NO_FIRST_NAME,
   firstNameFrom,
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
@@ -178,7 +179,13 @@ Deno.serve(async (req) => {
         const { data: cn } = await service
           .from("outreach_leads").select("contact_name").eq("id", resolvedLeadId).maybeSingle();
         const first = firstNameFrom((cn as { contact_name: string | null } | null)?.contact_name);
-        if (!first) return json({ ok: false, error: "no_contact_name" }, 200);
+        /* A blank first name refuses — UNLESS this template allows the "there" fallback
+           (hook_followup, for cold report leads we often have no name for). questionnaire_followup is
+           not in that set, so its refusal is unchanged. When allowed and blank, `first` stays "" and
+           the resolver + body renderer both degrade {{1}} to "there". */
+        if (!first && !TEMPLATES_ALLOWING_NO_FIRST_NAME.has(templateName)) {
+          return json({ ok: false, error: "no_contact_name" }, 200);
+        }
         payload = claimTemplatePayload(templateName, lang, businessName, "", { contactName: first });
         storedBody = renderTemplateBody(templateName, businessName, "", undefined, undefined, first);
         auditClaimUrl = "";
