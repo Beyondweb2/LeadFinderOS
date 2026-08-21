@@ -67,6 +67,20 @@ const BASELINE_MIN_QUESTION_COUNT = 6;
 const BASELINE_MAX_QUESTION_COUNT = 20;
 const BASELINE_DEFAULT_QUESTION_COUNT = BASELINE_QUESTIONS;
 
+/* FULL MEASUREMENT — the operator's DELIBERATE bulk citation gather (AI Audit page, "Full
+   measurement" mode). Reuses the whole existing pipeline — one ai_audit_queue row per question,
+   both engines per row, drained by process-ai-audit-queue at ≤24 in flight, stored + scored
+   exactly like any audit. Operator-JWT callable (like a market audit), NOT internal-only like a
+   baseline. A large DISTINCT question set for BREADTH, run once per gather (twice per client
+   lifecycle: start + re-measure).
+   ⛔ v1 CEILING STAYS UNDER THE PER-RUN CAP_USD ($1 in process-ai-audit-queue): 75 × $0.0104 = $0.78,
+   leaving headroom for the odd retry (a run that exceeds $1 drops its tail as 'cost_cap'). 200
+   questions need auto-splitting across runs — a deliberate later step, not this first version.
+   ⛔ SEO IS FORCED OFF for this purpose (it is per-site, once, and would eat the run's budget). */
+const MEASUREMENT_MIN_QUESTION_COUNT = 10;
+const MEASUREMENT_MAX_QUESTION_COUNT = 75;
+const MEASUREMENT_DEFAULT_QUESTION_COUNT = 40;
+
 /** Clamp an untrusted question-count into [min..max], defaulting to `def`. */
 function clampCount(
   n: unknown,
@@ -266,6 +280,10 @@ Deno.serve(async (req) => {
        the question ceiling below is explicit rather than inherited. */
     const marketOnly: boolean = body.market_only === true;
     const isBaseline = isInternal && body.purpose === "baseline";
+    /* FULL MEASUREMENT — operator-callable (NOT gated on isInternal, exactly like market_only): a
+       deliberate bulk gather the operator triggers from the AI Audit page. Its higher ceiling is
+       explicit below, so a public caller still cannot exceed it. */
+    const isMeasurement: boolean = body.purpose === "measurement";
     /* A MARKET AUDIT HAS ITS OWN CEILING. The wizard bounds are 3..5, so the 8 questions the market
        dialog quotes (and charges for) would have been silently clamped to 5 — the panel promising one
        thing and the queue doing another. MARKET_MAX_QUESTION_COUNT mirrors MARKET_AUDIT_QUESTION_COUNT
@@ -274,6 +292,9 @@ Deno.serve(async (req) => {
     const questionCount = isBaseline
       ? clampCount(body.question_count ?? body.questionCount,
           BASELINE_MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT, BASELINE_DEFAULT_QUESTION_COUNT)
+      : isMeasurement
+        ? clampCount(body.question_count ?? body.questionCount,
+            MEASUREMENT_MIN_QUESTION_COUNT, MEASUREMENT_MAX_QUESTION_COUNT, MEASUREMENT_DEFAULT_QUESTION_COUNT)
       : marketOnly
         ? clampCount(body.question_count ?? body.questionCount,
             MIN_QUESTION_COUNT, MARKET_MAX_QUESTION_COUNT, MARKET_MAX_QUESTION_COUNT)
@@ -283,6 +304,7 @@ Deno.serve(async (req) => {
     // 10 questions to 5 and average two different question sets.
     const MAX_QUESTIONS = isBaseline
       ? BASELINE_MAX_QUESTION_COUNT
+      : isMeasurement ? MEASUREMENT_MAX_QUESTION_COUNT
       : marketOnly ? MARKET_MAX_QUESTION_COUNT : MAX_QUESTION_COUNT;
     // How many runs make up this audit's baseline. Stored on the audit; the queue's completion
     // hook fires the remaining runs and averages them. Absent/0 → an ordinary single-run audit.
@@ -323,7 +345,9 @@ Deno.serve(async (req) => {
     /* Caller asked for NO website SEO scan (market-populating batches). Opt-IN only, so every
        existing caller is untouched, and it can only ever REDUCE spend - which is why it needs no
        internal-caller gate. Applied at the run insert below. */
-    const skipSeo: boolean = body.skip_seo === true;
+    // Full measurement forces SEO off — it is a per-site scan (once, not per-question) and would eat
+    // the per-run cost budget; the mode is about the AI citation gather, not the website grade.
+    const skipSeo: boolean = body.skip_seo === true || isMeasurement;
     /* MARKET-POPULATING AUDIT. Set by the market panel's batch (via bulk-jobs params). It turns on
        cross-audit intent coverage: generation is told what this trade+town has already been asked
        so it covers new ground. Deliberately NOT applied to baselines — a paid client's set must be
@@ -435,7 +459,10 @@ Deno.serve(async (req) => {
     // on the insert path, so reusing here would hand the client a run on their old outreach audit
     // and NO baseline row - and the paid-client backstop, seeing no baseline, would start another
     // one every minute forever. A baseline must be its own audit.
-    if (!effectiveReuseId && leadId && !isBaseline) {
+    /* !isMeasurement, same reason as !isBaseline: a full measurement must be its OWN audit so the
+       start and re-measure gathers are two distinct, comparable audits on the lead — not extra runs
+       bolted onto an old 3-question outreach audit. */
+    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement) {
       const { data: candidates } = await service
         .from("ai_audits")
         .select("id, baseline_target_runs, created_at")
@@ -829,9 +856,13 @@ Deno.serve(async (req) => {
        Only the CALLER decides this - default is unchanged, so every existing path still scans. */
     /* A market audit has no website by definition, so the SEO scan is unreachable for it — the
        skip is structural rather than a flag. skipSeo still applies to the per-business batch. */
-    const runResults = (skipSeo || marketOnly)
+    const runResults: Record<string, unknown> = (skipSeo || marketOnly)
       ? { seo: { skipped: "seo_scan_not_requested", checked_at: new Date().toISOString() } }
       : {};
+    /* Tag full-measurement runs so the start-vs-re-measure before/after can find them later,
+       WITHOUT a schema change (results is jsonb). Inert to everything downstream: the queue's SEO
+       step keys on results.seo and the report on results.seo.categories — neither reads this. */
+    if (isMeasurement) runResults.measurement = true;
     const { data: run, error: runErr } = await service
       .from("ai_audit_runs")
       .insert({ audit_id: auditId, user_id: userId, run_number: runNumber, status: "pending", results: runResults })
