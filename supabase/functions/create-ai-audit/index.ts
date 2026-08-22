@@ -80,6 +80,10 @@ const BASELINE_DEFAULT_QUESTION_COUNT = BASELINE_QUESTIONS;
 const MEASUREMENT_MIN_QUESTION_COUNT = 10;
 const MEASUREMENT_MAX_QUESTION_COUNT = 75;
 const MEASUREMENT_DEFAULT_QUESTION_COUNT = 40;
+/* ⛔ HOW MANY TIMES A FULL MEASUREMENT ASKS EACH QUESTION (per engine). 3 = the proven number the
+   paid baseline uses; frequency ("named 4 of 6") not a single lucky ask. Paul tunes this. Cost
+   scales ~linearly with it (more Apify runs). */
+const MEASUREMENT_RUNS = 3;
 
 /** Clamp an untrusted question-count into [min..max], defaulting to `def`. */
 function clampCount(
@@ -306,10 +310,17 @@ Deno.serve(async (req) => {
       ? BASELINE_MAX_QUESTION_COUNT
       : isMeasurement ? MEASUREMENT_MAX_QUESTION_COUNT
       : marketOnly ? MARKET_MAX_QUESTION_COUNT : MAX_QUESTION_COUNT;
-    // How many runs make up this audit's baseline. Stored on the audit; the queue's completion
-    // hook fires the remaining runs and averages them. Absent/0 → an ordinary single-run audit.
+    /* How many runs make up this audit. Stored as baseline_target_runs; the queue's completion hook
+       (advanceBaseline) fires the remaining runs with the SAME questions and averages them. Absent/0
+       → an ordinary single-run audit.
+       ⛔ A FULL MEASUREMENT NOW ASKS EACH QUESTION MEASUREMENT_RUNS TIMES (per engine) so the result
+       is a FREQUENCY ("named 4 of 6"), not a single lucky ask. It reuses the same multi-run mechanism
+       as the paid baseline — which is why is_measurement below is load-bearing: it marks the audit so
+       startPaidBaseline can NEVER mistake a measurement for a paid baseline and skip a paying client's
+       guarantee measurement. MEASUREMENT_RUNS is the one number to tune. */
     const baselineTargetRuns = isBaseline
       ? Math.min(5, Math.max(1, typeof body.baseline_target_runs === "number" ? Math.round(body.baseline_target_runs) : 1))
+      : isMeasurement ? MEASUREMENT_RUNS
       : 0;
     /* SILENT TRUNCATION WAS THE REAL BUG, not the number. The cap is a cost ceiling and stays, but
        quietly returning fewer questions than were asked for is how a before/after ends up built on a
@@ -827,11 +838,24 @@ Deno.serve(async (req) => {
       // there yet the insert is retried without it, so a pending migration degrades to an
       // ordinary single-run audit instead of failing a paying customer's submission.
       if (baselineTargetRuns > 1) auditRow.baseline_target_runs = baselineTargetRuns;
+      /* ⛔ THE GUARANTEE GUARD. A Full Measurement reuses baseline_target_runs (multi-run), which is
+         the SAME column the paid baseline keys on — so a measurement MUST be marked, or
+         startPaidBaseline would see baseline_target_runs>1 on the lead and skip the real guarantee
+         measurement (§ audit-baseline). is_measurement=true is set here at creation and is the ONLY
+         signal that tells the two apart. Migration-tolerant, same as baseline_target_runs: if the
+         column is missing the insert retries without it — but then it is UNMARKED, so the guarantee
+         guard would not fire, which is exactly why create-ai-audit is deployed only AFTER the column
+         exists (SQL-first). */
+      if (isMeasurement) auditRow.is_measurement = true;
       let { data: audit, error: insErr } = await service
         .from("ai_audits").insert(auditRow).select("id, business_name").single();
-      if (insErr && /baseline_target_runs/i.test(insErr.message ?? "")) {
-        console.warn("[create-ai-audit] baseline_target_runs column missing — creating a single-run audit");
-        delete auditRow.baseline_target_runs;
+      // Shed a missing new column (either one) and retry, longest-name-first so one miss can't mask another.
+      let guard = 0;
+      while (insErr && guard++ < 3) {
+        const missing = ['baseline_target_runs', 'is_measurement'].find((c) => c in auditRow && (insErr!.message ?? '').includes(c));
+        if (!missing) break;
+        console.warn(`[create-ai-audit] column ${missing} missing — retrying insert without it`);
+        delete auditRow[missing];
         ({ data: audit, error: insErr } = await service
           .from("ai_audits").insert(auditRow).select("id, business_name").single());
       }

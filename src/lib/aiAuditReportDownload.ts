@@ -52,5 +52,9 @@ function printHtmlAsPdf(html: string, title: string): void {
 
 /** Save the standalone report as a PDF (print-to-PDF — vector, design-preserving). */
 export function downloadReportHtml(d: AiAuditReportData): void {
-  printHtmlAsPdf(renderReportHtml(d), pdfTitle(d.businessName, "AI-Visibility-Report"));
+  /* ⛔ A DOWNLOADED REPORT IS A CLIENT ARTIFACT — STRIP the internal winnability signal even though
+     the operator's on-screen preview shows it. The operator downloads this to send to the client, so
+     internal must be forced off here regardless of what the passed data carries. Single defensive
+     point: no caller can accidentally hand a client a report with winnability on it. */
+  printHtmlAsPdf(renderReportHtml({ ...d, internal: false }), pdfTitle(d.businessName, "AI-Visibility-Report"));
 }
