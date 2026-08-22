@@ -889,7 +889,34 @@ export function buildReportData(
         }
       }
       const citations = [...citeByDomain.entries()].slice(0, 10).map(([domain, url]) => ({ domain, url }));
-      return { question: r.question, namedYou, namedCount, answers, rivals, citations };
+
+      /* PER-ENGINE — tell ChatGPT / Gemini / AI Overview apart, because they behave differently.
+         For each: did it name the business, who it named, and what it cited. An engine whose key is
+         absent (AI Overview often doesn't render) is reported as "didn't appear", not hidden. Same
+         cleaners as above (isRealCompetitor, domain-dedupe, redirect-unwrap). google_organic is
+         excluded — raw links, not an AI answer. */
+      const perEngine = (['chatgpt', 'gemini', 'ai_overview'] as const).map((engine) => {
+        const er = result[engine];
+        if (!er) return { label: ENGINE_LABELS[engine] ?? engine, ran: false, named: false, rivals: [] as string[], citations: [] as { domain: string; url: string }[] };
+        const seenR = new Set<string>();
+        const engRivals: string[] = [];
+        for (const c of er.competitors ?? []) {
+          if (!isRealCompetitor(c, ctx.locationText)) continue;
+          const t = c.trim(); const k = t.toLowerCase();
+          if (!k || seenR.has(k)) continue;
+          seenR.add(k); engRivals.push(t);
+        }
+        const cm = new Map<string, string>();
+        for (const c of er.citations ?? []) {
+          const url = unwrapCitationUrl(c?.url ?? ''); const dom = citationDomain(url);
+          if (!dom || cm.has(dom)) continue;
+          cm.set(dom, url);
+        }
+        const engCitations = [...cm.entries()].slice(0, 8).map(([domain, url]) => ({ domain, url }));
+        return { label: ENGINE_LABELS[engine] ?? engine, ran: true, named: er.named === true, rivals: engRivals, citations: engCitations };
+      });
+
+      return { question: r.question, namedYou, namedCount, answers, rivals, citations, perEngine };
     });
 
   return {

@@ -80,7 +80,14 @@ export interface AiAuditReportData {
      whether AI named the business (on any scored engine), and the real rival firms it named in
      that answer. Optional so a payload built before this existed still renders — absent means the
      detail page is simply omitted, never a half-built section. */
-  questionBreakdown?: { question: string; namedYou: boolean; namedCount?: number; answers?: number; rivals: string[]; citations?: { domain: string; url: string }[] }[];
+  questionBreakdown?: {
+    question: string; namedYou: boolean; namedCount?: number; answers?: number;
+    rivals: string[]; citations?: { domain: string; url: string }[];
+    /* Per-engine detail — ChatGPT / Gemini / AI Overview told apart. ran=false → the engine didn't
+       return an answer (e.g. Google didn't render an AI Overview for that query). Optional so an
+       older payload without it falls back to the folded rivals/citations. */
+    perEngine?: { label: string; ran: boolean; named: boolean; rivals: string[]; citations: { domain: string; url: string }[] }[];
+  }[];
   generatedAtLabel: string;      // e.g. "11 Jul 2026"
   shareUrl?: string;             // reserved: future public link (not built yet)
   seo?: AiAuditSeo;              // optional website-SEO section; slot renders only when present
@@ -522,49 +529,86 @@ export function renderReportHtml(d: AiAuditReportData): string {
      across a break — a card lives wholly inside one sheet. A 20-question Full Measurement naturally
      runs to several pages; a small quick audit is one. */
   const qb = d.questionBreakdown ?? [];
-  const QUESTIONS_PER_PAGE = 4;
+  const QUESTIONS_PER_PAGE = 3; // cards are taller now (per-engine block); keep a page uncrowded
   const qChunks: typeof qb[] = [];
   for (let i = 0; i < qb.length; i += QUESTIONS_PER_PAGE) qChunks.push(qb.slice(i, i + QUESTIONS_PER_PAGE));
 
+  /* THE SAME WAVE HEADER + FOOTER AS PAGE 1 — reused verbatim so every breakdown page is a full
+     branded report page (Paul's ask). Byte-identical to page 1's inline band/footer below. */
+  const waveBand = (meta: string) => `
+    <header class="band">
+      <div class="band-row">
+        <div class="wordmark">Findable<span class="dot">.</span></div>
+        <div class="band-meta">${meta}</div>
+      </div>
+      <svg class="wave" viewBox="0 0 1200 38" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" fill="#ffffff"/>
+      </svg>
+    </header>`;
+  const siteFooter = `
+    <footer class="site-foot">
+      <div class="row">
+        <span>Prepared for <b>${esc(d.businessName)}</b></span>
+        <span>Findable &middot; AI Visibility Audit &middot; ${esc(d.generatedAtLabel)}${shareFoot}</span>
+      </div>
+      <div class="note">A snapshot of where you stand today. After we&rsquo;ve made changes we ask these questions again, alongside others, to show your before &amp; after.</div>
+    </footer>`;
+
+  // One engine's row inside a question card: name → named / not / didn't-appear → who → sources.
+  const engineRow = (e: NonNullable<(typeof qb)[number]['perEngine']>[number]): string => {
+    if (!e.ran) {
+      return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span><span class="qb-eng-empty">Didn&rsquo;t appear</span></div></div>`;
+    }
+    const state = e.named
+      ? `<span class="qb-badge yes sm">Named you</span>`
+      : `<span class="qb-badge no sm">Not named</span>`;
+    const rivals = e.rivals.length
+      ? `<div class="qb-eng-line"><span class="qb-rlabel">Named:</span> ${e.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}</div>`
+      : `<div class="qb-eng-line"><span class="qb-none">No businesses named.</span></div>`;
+    const sources = e.citations.length
+      ? `<div class="qb-eng-line"><span class="qb-slabel">Sources:</span> ${e.citations.map((c) => `<a class="qb-cite" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(c.domain)}</a>`).join(" ")}</div>`
+      : `<div class="qb-eng-line"><span class="qb-none">No sources cited.</span></div>`;
+    return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span>${state}</div>${rivals}${sources}</div>`;
+  };
+
   const qCard = (q: (typeof qb)[number]): string => {
-    // Count when present (new payloads), else the older boolean. "Named you N×" sums to the
-    // headline "named X out of Y answers", so the detail and the summary agree.
+    // Overall badge (headline-consistent): "Named you N×" sums to the "named X of Y" figure.
     const nc = q.namedCount;
     const badge = nc != null
       ? (nc > 0 ? `<span class="qb-badge yes">Named you ${nc}&times;</span>` : `<span class="qb-badge no">Not named</span>`)
       : (q.namedYou ? `<span class="qb-badge yes">Named you</span>` : `<span class="qb-badge no">Not named</span>`);
-    const rivals = q.rivals.length
-      ? `<span class="qb-rlabel">AI named:</span> ${q.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}`
-      : `<span class="qb-none">No specific businesses named.</span>`;
-    // The sources AI drew on — the point of this on a NOT-NAMED question. Domains, linked to the
-    // page. Real stored data (result[engine].citations); "No sources cited" only when truly empty.
-    const cites = q.citations ?? [];
-    const sources = cites.length
-      ? `<span class="qb-slabel">AI&rsquo;s sources:</span> ${cites.map((c) => `<a class="qb-cite" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(c.domain)}</a>`).join(" ")}`
-      : `<span class="qb-none">No sources cited.</span>`;
+    // Per-engine breakdown when present; older payloads fall back to the folded rivals/sources.
+    let body: string;
+    if (q.perEngine && q.perEngine.length) {
+      body = `<div class="qb-engines">${q.perEngine.map(engineRow).join("")}</div>`;
+    } else {
+      const rivals = q.rivals.length
+        ? `<span class="qb-rlabel">AI named:</span> ${q.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}`
+        : `<span class="qb-none">No specific businesses named.</span>`;
+      const cites = q.citations ?? [];
+      const sources = cites.length
+        ? `<span class="qb-slabel">AI&rsquo;s sources:</span> ${cites.map((c) => `<a class="qb-cite" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(c.domain)}</a>`).join(" ")}`
+        : `<span class="qb-none">No sources cited.</span>`;
+      body = `<div class="qb-line">${rivals}</div><div class="qb-line qb-src">${sources}</div>`;
+    }
     return `<li class="qb-item">
       <div class="qb-top"><span class="qb-q">&ldquo;${esc(q.question)}&rdquo;</span>${badge}</div>
-      <div class="qb-line">${rivals}</div>
-      <div class="qb-line qb-src">${sources}</div>
+      ${body}
     </li>`;
   };
 
   const questionDetail = qb.length === 0 ? "" : qChunks.map((chunk, pi) => `
     <div class="sheet qpage">
-      <header class="band band-slim">
-        <div class="band-row">
-          <div class="wordmark">Findable<span class="dot">.</span></div>
-          <div class="band-meta">Questions &amp; sources${qChunks.length > 1 ? ` &middot; page ${pi + 1} of ${qChunks.length}` : ""}</div>
-        </div>
-      </header>
+      ${waveBand(`Questions &amp; sources${qChunks.length > 1 ? ` &middot; page ${pi + 1} of ${qChunks.length}` : ""}`)}
       <section class="qbreak">
         ${pi === 0 ? `<div class="sec-eyebrow">The detail</div>
-        <div class="sec-title">Every question we asked &mdash; and who AI named</div>
-        <p class="qb-intro">These are the exact questions we put to the AI engines. For each one: how many times it named <b>${esc(d.businessName)}</b>, which businesses it named instead, and the sources AI drew its answer from.</p>` : ""}
+        <div class="sec-title">Every question we asked, engine by engine</div>
+        <p class="qb-intro">These are the exact questions we put to the AI engines. For each one, we show what <b>ChatGPT</b>, <b>Gemini</b> and Google&rsquo;s <b>AI Overview</b> each said &mdash; whether they named <b>${esc(d.businessName)}</b>, who they named instead, and the sources they drew on. The engines behave differently, so telling them apart matters.</p>` : ""}
         <ul class="qb-list">
           ${chunk.map(qCard).join("")}
         </ul>
       </section>
+      ${siteFooter}
     </div>`).join("");
 
   return stripHtmlComments(`<!doctype html>
@@ -647,12 +691,13 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .gb-attr{ font-size:11px; color:var(--muted); font-weight:400; }
   .gb-sum .gb-more{ color:var(--muted); font-weight:400; }
 
-  /* QUESTION-BY-QUESTION DETAIL — each chunk is its OWN .sheet page (.qpage) with a slim band, so
-     it reads as a distinct client page on screen and prints as a fresh A4. The .qbreak here is just
-     the body inside that sheet — no border/break of its own; the sheet does the paging. */
-  .band-slim{ padding:15px 28px; }
-  .band-slim .wordmark{ font-size:18px; }
-  .qpage .qbreak{ padding:20px 28px 22px; }
+  /* QUESTION-BY-QUESTION DETAIL — each chunk is its OWN .sheet page (.qpage) with the SAME wave band
+     and footer as page 1, so it reads as a distinct, fully-branded client page on screen and prints
+     as a fresh A4. .qbreak is just the body inside that sheet; the sheet does the paging.
+     The footer sits at the bottom; a little breathing room above it. */
+  .qpage{ display:flex; flex-direction:column; }
+  .qpage .qbreak{ padding:16px 28px 22px; flex:1 0 auto; }
+  .qpage .site-foot{ margin-top:auto; }
   .qb-intro{ margin:0 0 16px; font-size:14px; font-weight:400; color:var(--muted); max-width:64ch; }
   .qb-intro b{ color:var(--blue); font-weight:700; }
   .qb-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
@@ -674,6 +719,16 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .qb-cite{ display:inline-block; color:var(--blue-2); font-weight:600; font-size:12px; text-decoration:none;
     border-bottom:1px solid var(--line); word-break:break-word; }
   .qb-none{ font-style:italic; color:var(--faint); }
+  /* PER-ENGINE block inside a card — ChatGPT / Gemini / AI Overview told apart. Each engine is a
+     sub-row with a small caps name + its own named/not badge, then who it named and its sources. */
+  .qb-engines{ margin-top:10px; display:flex; flex-direction:column; gap:9px; }
+  .qb-eng{ padding-top:9px; border-top:1px dashed var(--line); }
+  .qb-eng:first-child{ padding-top:0; border-top:none; }
+  .qb-eng-head{ display:flex; align-items:center; gap:9px; }
+  .qb-eng-name{ font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--blue); }
+  .qb-eng-empty{ font-size:11px; font-style:italic; color:var(--faint); }
+  .qb-badge.sm{ font-size:9px; padding:2px 7px; }
+  .qb-eng-line{ margin-top:5px; font-size:12.5px; line-height:1.75; color:var(--muted); }
 
   /* WHY THIS MATTERS &mdash; stakes stats, big coloured numbers, muted supporting text */
   .why{ padding:18px 28px 18px; border-top:1px solid var(--line); }
