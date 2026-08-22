@@ -35,10 +35,13 @@ export function hookFollowupBody(firstName: string, businessName: string): strin
 }
 
 /* contact_followup — the EARLIER-stage nudge: a lead who got the initial_contact opener and never
-   replied at all (before any report). ONE variable: {{1}} = business name. It opens "Hi," (no
-   first-name greeting), so a blank business name just degrades to "your business" and still reads
-   naturally — there is no blank-name problem here. Registered at Meta 2026-08-22 as Marketing,
-   locale "en". Reproduced character-for-character. Shared so the SPA preview and the edge send agree. */
-export function contactFollowupBody(businessName: string): string {
-  return `Hi, just following up on my message, is this the right number for ${businessName || "your business"}? Ran a quick check on how the business shows up when people ask AI like ChatGPT for local recommendations, worth a quick look if you're interested. No bother if not. Paul, findable`;
+   replied at all (before any report). RE-EDITED + RE-APPROVED AT META 2026-08-22 to this short body,
+   which has ZERO variables — the {{1}} business-name placeholder is gone. `vars` was changed to []
+   in BOTH allowlists to match (whatsapp-send.ts WA_TEMPLATES + process-whatsapp-queue's mirror), or
+   Meta would reject the send #132000 (param count). The `businessName` arg is now unused (kept so the
+   two call sites `(b) => contactFollowupBody(b)` don't need touching). Reproduced character-for-
+   character from WhatsApp Manager; shared so the SPA preview and the edge send agree. */
+export function contactFollowupBody(businessName?: string): string {
+  void businessName;
+  return "Hi, did you get my last message? Paul";
 }

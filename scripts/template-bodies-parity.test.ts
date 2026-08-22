@@ -61,10 +61,11 @@ ok(
 );
 // Unknown template + placeholder body → empty (caller falls back to a label).
 ok(readableTemplateBody("[mystery]", "mystery", { businessName: B }) === "", "unknown template placeholder → empty");
-// Empty body, known template → filled copy.
+// Empty body, known template → the template's copy. contact_followup is now a zero-variable
+// fixed string (re-approved at Meta 2026-08-22), so it does NOT include the business name.
 ok(
-  readableTemplateBody(null, "contact_followup", { businessName: B }).includes(B),
-  "empty contact_followup → filled copy with business name",
+  readableTemplateBody(null, "contact_followup", { businessName: B }) === "Hi, did you get my last message? Paul",
+  "empty contact_followup → the exact re-approved fixed text",
 );
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");

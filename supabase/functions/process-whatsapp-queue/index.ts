@@ -203,11 +203,11 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      byte-identical to WA_TEMPLATES in _shared/whatsapp-send.ts, which scripts/re-engage-vars.test.ts
      asserts in BOTH directions. */
   hook_followup: { lang: "en", vars: ["contact_first_name", "name"] },
-  /* Earlier-stage nudge (opener got no reply, before any report) — MANUAL sends via
-     send-whatsapp-message only. {{1}} = business name. Present here only to keep this map
-     byte-identical to WA_TEMPLATES in _shared/whatsapp-send.ts (scripts/re-engage-vars.test.ts
-     asserts both directions). */
-  contact_followup: { lang: "en", vars: ["name"] },
+  /* Earlier-stage nudge (opener got no reply, before any report). Re-approved at Meta 2026-08-22 to
+     "Hi, did you get my last message? Paul" — ZERO variables now, so vars is []. Present here only to
+     keep this map byte-identical to WA_TEMPLATES in _shared/whatsapp-send.ts
+     (scripts/re-engage-vars.test.ts asserts both directions). */
+  contact_followup: { lang: "en", vars: [] },
 };
 /* NO DEFAULT_TEMPLATE.
    It used to be booking_page_intro, applied whenever a lead's whatsapp_template was unset or
