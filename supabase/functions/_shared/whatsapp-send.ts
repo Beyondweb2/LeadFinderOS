@@ -107,14 +107,13 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
      generic needsContactName branch gives it pitchEverSent (keyed by THIS template name) with no
      allow_resend escape — a second report nudge is pressure, never service. */
   hook_followup: { lang: "en", vars: ["contact_first_name", "name"] },
-  /* Earlier-stage nudge — MANUAL sends via send-whatsapp-message ONLY, never queued as an opener.
-     Sent to a lead who got the initial_contact opener and NEVER replied (before any report). ONE
-     variable: {{1}} = business name. Opens "Hi," (no personal greeting), so no blank-name guard is
-     needed — a missing name degrades to "your business". Registered at Meta 2026-08-22 as Marketing,
-     locale "en" (NOT en_GB). `lang` must match Meta exactly.
-     ⛔ ONE PER LEAD. send-whatsapp-message enforces pitchEverSent for it in the name-only branch (a
-     ["name"] template otherwise has no such guard — it is added specifically for this follow-up). */
-  contact_followup: { lang: "en", vars: ["name"] },
+  /* Earlier-stage nudge — sent to a lead who got the initial_contact opener and NEVER replied
+     (before any report). RE-EDITED + RE-APPROVED AT META 2026-08-22 to "Hi, did you get my last
+     message? Paul" — ZERO variables now (the {{1}} business name is gone), so vars is []. It MUST
+     stay [] to match Meta, or the send is rejected #132000 (param count mismatch); the mirror in
+     process-whatsapp-queue carries the same []. locale "en" (NOT en_GB) — `lang` must match Meta.
+     ⛔ ONE PER LEAD. send-whatsapp-message enforces pitchEverSent for it in the name-only branch. */
+  contact_followup: { lang: "en", vars: [] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -342,6 +341,10 @@ export function templateBodyParams(
      ⚠️ NOT A SUBSTITUTE FOR THE EXTRACTOR FIX. Names should not arrive multi-line; this makes sure
      that when they do, it costs nothing. */
   const forMeta = (s: string) => (s ?? "").replace(/\s+/g, " ").trim();
+  /* A template with NO variables (e.g. contact_followup since 2026-08-22) must be sent with NO body
+     component at all — an empty `parameters: []` body is malformed and Meta rejects the send. Return
+     no components so the payload carries just name + language. */
+  if (vars.length === 0) return [];
   return [{
     type: "body",
     parameters: vars.map((v) => ({ type: "text", text: forMeta(resolve(v)) })),
