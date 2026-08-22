@@ -824,7 +824,11 @@ export function buildReportData(
     .filter((r) => r.status === 'done' && r.result)
     .map((r) => {
       const result = r.result!;
-      const namedYou = SCORED_ENGINES.some((e) => result[e]?.named === true);
+      // Count per question the SAME way the headline does (scored engines only), so the per-question
+      // counts SUM to "named X out of Y answers" and the two can never disagree.
+      const answers = SCORED_ENGINES.filter((e) => result[e]).length;
+      const namedCount = SCORED_ENGINES.filter((e) => result[e]?.named === true).length;
+      const namedYou = namedCount > 0;
       const raw: string[] = [];
       for (const engine of DISPLAY_ENGINES) {
         if (engine === 'google_organic') continue; // organic result TITLES aren't AI-named firms
@@ -848,7 +852,7 @@ export function buildReportData(
         seen.add(k);
         rivals.push(label);
       }
-      return { question: r.question, namedYou, rivals };
+      return { question: r.question, namedYou, namedCount, answers, rivals };
     });
 
   return {

@@ -80,7 +80,7 @@ export interface AiAuditReportData {
      whether AI named the business (on any scored engine), and the real rival firms it named in
      that answer. Optional so a payload built before this existed still renders — absent means the
      detail page is simply omitted, never a half-built section. */
-  questionBreakdown?: { question: string; namedYou: boolean; rivals: string[] }[];
+  questionBreakdown?: { question: string; namedYou: boolean; namedCount?: number; answers?: number; rivals: string[] }[];
   generatedAtLabel: string;      // e.g. "11 Jul 2026"
   shareUrl?: string;             // reserved: future public link (not built yet)
   seo?: AiAuditSeo;              // optional website-SEO section; slot renders only when present
@@ -449,69 +449,42 @@ export function renderReportHtml(d: AiAuditReportData): string {
 
   // ── Gut-punch: a clean SUMMARY of the worst answer, with the competitors AI named
   //    instead. Never the raw AI paragraph.
+  /* ══ "WHO AI NAMED" — AN AUDIT-WIDE SUMMARY, CONSISTENT WITH THE HEADLINE ══════════════════
+     ⛔ THIS REPLACED A SINGLE-QUESTION QUOTE BOX (the old "What AI actually said"). That box quoted
+     ONE question that pickGutPunch chose PRECISELY BECAUSE the business was not named in it — so on
+     a client named X times it sat two inches under the "named X times" headline saying "wasn't
+     named", which read as cherry-picking and lost trust (Wilson's, and the reason David flagged it).
+     The fix is to state the WHOLE audit, using the SAME numbers as the hero (d.named / d.total), so
+     the two cannot disagree. The per-question detail — every question with how often you were named
+     — lives on page 2 (questionDetail), not here, so nothing is shown twice.
+     ⚠️ The audit-wide competitor leaders line is KEPT (it was the good part) with its counts, and
+     the denominator is stated so the reader can size it. */
   let gutbox = "";
-  if (d.gutPunch) {
-    const g = d.gutPunch;
-    /* ══ TWO SENTENCES, BECAUSE THEY ARE TWO DIFFERENT CLAIMS ══════════════════════════════
-       ⛔ THE OLD ONE NAMED THE WRONG FIRMS AND COST A PROSPECT. It read "When we asked AI <q>, it
-       recommended X, Y and Z", where X/Y/Z were the rivals in THAT ONE ANSWER. Wilson's Mobile
-       Valeting got "Get A Splash, Fresh Car, Clean Me" while Ultimate Valet Cambridge — the most
-       named firm in his own audit, 5 mentions — never appeared. He read it as random and rejected
-       the report. He was right.
-       ⚠️ THE FIX IS NOT TO SWAP THE NAMES INTO THAT SENTENCE. "When we asked <q>, it recommended
-       <audit-wide leaders>" would be FALSE of that answer. So the quoted question keeps its own
-       true statement, and the leaders get a second sentence that is true of the whole audit.
-       ⚠️ COUNTS ARE SHOWN. "Ultimate Valet Cambridge (5)" is checkable; a bare name is a claim. */
+  {
     const leaders = (d.topCompetitors ?? []).filter((c) => c.name && c.count > 0);
-    const notMentioned = `<b>${esc(d.businessName)}</b> wasn&rsquo;t mentioned at all`;
-    // "When we asked" not "when someone searched": the question is one WE generated and put to
-    // the engines, so asserting a real customer typed it is a claim we cannot support.
-    let summary = `When we asked AI &ldquo;<span class="gb-q">${esc(g.question)}</span>&rdquo;, ${notMentioned}.`;
+    const qCount = d.questionsAsked ?? 0;
+    // Same figures as the hero headline — reinforces it, never contradicts it.
+    const namedLine = d.named > 0
+      ? `AI named <b>${esc(d.businessName)}</b> <b>${d.named}</b> time${d.named === 1 ? "" : "s"}${d.total > 0 ? ` out of ${d.total} answers` : ""}`
+      : `AI never named <b>${esc(d.businessName)}</b>${d.total > 0 ? ` &mdash; not once across ${d.total} answers` : ""}`;
+    let body = `${namedLine}.`;
     if (leaders.length > 0) {
       const chips = leaders.map((c) => `<span class="rv">${esc(c.name)}</span> <span class="rvn">${c.count}×</span>`);
       const list = chips.length === 1
         ? chips[0]
         : `${chips.slice(0, -1).join(", ")} and ${chips[chips.length - 1]}`;
-      /* The denominator is stated so the reader can size the claim themselves — the same reason
-         the headline says "out of N answers" rather than a bare count. */
-      /* Parenthesised, because appended bare it read as part of the last firm's name:
-         "Get a Splash! 3× of 36 mentions across 3 questions". */
       const denom = d.competitorMentions && d.competitorMentions > 0
-        ? ` (from ${d.competitorMentions} competitor mentions across ${d.questionsAsked} question${d.questionsAsked === 1 ? "" : "s"})`
+        ? ` (from ${d.competitorMentions} competitor mentions across ${qCount} question${qCount === 1 ? "" : "s"})`
         : "";
-      summary += ` Across the whole audit the firms AI named most often were ${list}${denom}.`;
-    } else {
-      /* No competitors extracted anywhere. Say that, rather than falling back to the one answer's
-         rivals — which is how the wrong firms got named in the first place. */
-      const uniq = dedupeNames(g.rivals);
-      if (uniq.length) {
-        summary += ` In that answer AI pointed to <span class="rv">${esc(uniq[0])}</span> instead.`;
-      }
+      body += ` The firms AI named most often instead were ${list}${denom}.`;
     }
-    /* ⛔ THIS LINE USED TO SAY "was never named" UNCONDITIONALLY, AND ON A NAMED CLIENT IT
-       CONTRADICTED THE HEADLINE TWO INCHES ABOVE IT. RG Locksmiths' report read "AI names you 8
-       times in 24 answers" and then, in the same eyeful, "RG Locksmiths cambs was never named."
-       Both came from the same run; only the second was a fixed string with no branch on the data.
-
-       ⛔ THE SCOPE OF THE QUOTE IS ONE ANSWER — one question, one engine. pickGutPunch only ever
-       selects a cell where `named` is false (`if (!er || er.named) continue`), so "not named in
-       this answer" is TRUE BY CONSTRUCTION whatever else the audit found. That is the sentence to
-       write when the business was named anywhere, because it is the only one guaranteed true at
-       the scope the reader is looking at.
-
-       ⚠️ "never" IS RESERVED FOR named === 0 ACROSS THE WHOLE AUDIT. Not "never by this engine":
-       a reader takes "never named" as a verdict on the audit, not a footnote about Gemini, and a
-       client who WAS named seven times by ChatGPT must never read the word. The strong sentence
-       survives for the clients it is actually true for — an absent business still gets told so. */
-    const neverNamedAnywhere = d.named === 0;
-    const attribution = neverNamedAnywhere
-      ? `${esc(d.businessName)} was never named.`
-      : `${esc(d.businessName)} wasn&rsquo;t named in this answer.`;
+    const pointer = (d.questionBreakdown?.length ?? 0) > 0
+      ? ` <span class="gb-more">Every question, and how often AI named you in each, is listed on the next page.</span>`
+      : "";
     gutbox = `
     <section class="gutbox">
-      <div class="gb-eyebrow">What AI actually said</div>
-      <p class="gb-sum">${summary}</p>
-      <div class="gb-attr">&mdash; ${esc(g.engineLabel)}. ${attribution}</div>
+      <div class="gb-eyebrow">Who AI named instead</div>
+      <p class="gb-sum">${body}${pointer}</p>
     </section>`;
   }
 
@@ -548,12 +521,19 @@ export function renderReportHtml(d: AiAuditReportData): string {
     <section class="qbreak">
       <div class="sec-eyebrow">The detail</div>
       <div class="sec-title">Every question we asked &mdash; and who AI named</div>
-      <p class="qb-intro">These are the exact questions we put to the AI engines. For each one: whether it named <b>${esc(d.businessName)}</b>, and which businesses it named instead.</p>
+      <p class="qb-intro">These are the exact questions we put to the AI engines. For each one: how many times it named <b>${esc(d.businessName)}</b>, and which businesses it named instead.</p>
       <ul class="qb-list">
         ${qb.map((q) => {
-          const badge = q.namedYou
-            ? `<span class="qb-badge yes">Named you</span>`
-            : `<span class="qb-badge no">Didn&rsquo;t name you</span>`;
+          // Count when present (new payloads), else the older boolean. "Named you N×" sums to the
+          // headline "named X out of Y answers", so the detail and the summary agree.
+          const nc = q.namedCount;
+          const badge = nc != null
+            ? (nc > 0
+                ? `<span class="qb-badge yes">Named you ${nc}&times;</span>`
+                : `<span class="qb-badge no">Not named</span>`)
+            : (q.namedYou
+                ? `<span class="qb-badge yes">Named you</span>`
+                : `<span class="qb-badge no">Not named</span>`);
           const rivals = q.rivals.length
             ? `<span class="qb-rlabel">AI named:</span> ${q.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}`
             : `<span class="qb-none">No specific businesses named.</span>`;
@@ -643,6 +623,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .gb-sum .rvn{ color:var(--muted); font-weight:600; font-size:.85em; white-space:nowrap; }
   .gb-sum b{ color:var(--ink); font-weight:700; }
   .gb-attr{ font-size:11px; color:var(--muted); font-weight:400; }
+  .gb-sum .gb-more{ color:var(--muted); font-weight:400; }
 
   /* QUESTION-BY-QUESTION DETAIL &mdash; the client-facing "page 2". Starts a fresh printed page;
      each question card avoids being split across a page boundary. */
