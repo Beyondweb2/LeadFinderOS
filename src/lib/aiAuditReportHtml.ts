@@ -76,6 +76,11 @@ export interface AiAuditReportData {
   // competitors AI recommended in that answer. The report writes a clean summary of
   // this — it never dumps the raw AI paragraph.
   gutPunch: { question: string; engineLabel: string; rivals: string[] } | null;
+  /* The full question-by-question detail — the client-facing "page 2". Each completed question,
+     whether AI named the business (on any scored engine), and the real rival firms it named in
+     that answer. Optional so a payload built before this existed still renders — absent means the
+     detail page is simply omitted, never a half-built section. */
+  questionBreakdown?: { question: string; namedYou: boolean; rivals: string[] }[];
   generatedAtLabel: string;      // e.g. "11 Jul 2026"
   shareUrl?: string;             // reserved: future public link (not built yet)
   seo?: AiAuditSeo;              // optional website-SEO section; slot renders only when present
@@ -535,6 +540,31 @@ export function renderReportHtml(d: AiAuditReportData): string {
   const emailHref = esc(`mailto:${REPORT_CONTACT_EMAIL}?subject=${encodeURIComponent(`AI Visibility - ${d.businessName}`)}`);
   const waHref = esc(`https://wa.me/${REPORT_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
 
+  // ── QUESTION-BY-QUESTION DETAIL (page 2) — every question asked, whether AI named the business,
+  //    and the real rival firms it named instead. A clean addition; the first-page summary above is
+  //    untouched. Omitted entirely when the payload carries no breakdown (older/market payloads).
+  const qb = d.questionBreakdown ?? [];
+  const questionDetail = qb.length === 0 ? "" : `
+    <section class="qbreak">
+      <div class="sec-eyebrow">The detail</div>
+      <div class="sec-title">Every question we asked &mdash; and who AI named</div>
+      <p class="qb-intro">These are the exact questions we put to the AI engines. For each one: whether it named <b>${esc(d.businessName)}</b>, and which businesses it named instead.</p>
+      <ul class="qb-list">
+        ${qb.map((q) => {
+          const badge = q.namedYou
+            ? `<span class="qb-badge yes">Named you</span>`
+            : `<span class="qb-badge no">Didn&rsquo;t name you</span>`;
+          const rivals = q.rivals.length
+            ? `<span class="qb-rlabel">AI named:</span> ${q.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}`
+            : `<span class="qb-none">No specific businesses named.</span>`;
+          return `<li class="qb-item">
+            <div class="qb-top"><span class="qb-q">&ldquo;${esc(q.question)}&rdquo;</span>${badge}</div>
+            <div class="qb-rivals">${rivals}</div>
+          </li>`;
+        }).join("")}
+      </ul>
+    </section>`;
+
   return stripHtmlComments(`<!doctype html>
 <html lang="en">
 <head>
@@ -613,6 +643,26 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .gb-sum .rvn{ color:var(--muted); font-weight:600; font-size:.85em; white-space:nowrap; }
   .gb-sum b{ color:var(--ink); font-weight:700; }
   .gb-attr{ font-size:11px; color:var(--muted); font-weight:400; }
+
+  /* QUESTION-BY-QUESTION DETAIL &mdash; the client-facing "page 2". Starts a fresh printed page;
+     each question card avoids being split across a page boundary. */
+  .qbreak{ padding:22px 28px 22px; border-top:1px solid var(--line); break-before:page; page-break-before:always; }
+  .qb-intro{ margin:0 0 16px; font-size:14px; font-weight:400; color:var(--muted); max-width:64ch; }
+  .qb-intro b{ color:var(--blue); font-weight:700; }
+  .qb-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+  .qb-item{ padding:12px 14px; background:var(--page); border:1px solid var(--line); border-radius:10px;
+    break-inside:avoid; page-break-inside:avoid; }
+  .qb-top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  .qb-q{ font-size:14px; font-weight:700; color:var(--ink); line-height:1.35; }
+  .qb-badge{ flex:0 0 auto; font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+    padding:3px 9px; border-radius:999px; white-space:nowrap; }
+  .qb-badge.yes{ background:#e7f6ee; color:var(--green); }
+  .qb-badge.no{ background:#fdeaea; color:var(--red); }
+  .qb-rivals{ margin-top:8px; font-size:13px; color:var(--muted); line-height:1.8; }
+  .qb-rlabel{ font-weight:700; color:var(--ink); font-size:12px; margin-right:2px; }
+  .qb-chip{ display:inline-block; background:var(--paper); border:1px solid var(--line); border-radius:999px;
+    padding:2px 9px; font-size:12px; font-weight:600; color:var(--ink); }
+  .qb-none{ font-style:italic; color:var(--faint); }
 
   /* WHY THIS MATTERS &mdash; stakes stats, big coloured numbers, muted supporting text */
   .why{ padding:18px 28px 18px; border-top:1px solid var(--line); }
@@ -804,6 +854,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
       </div>
     </div>
 ${gutbox}
+${questionDetail}
     <!-- ============================================================================
          SEO SECTION SLOT &mdash; renders results.seo when present (overall grade + three
          category grades + a radar of the three scores + the lead findings). Renders
