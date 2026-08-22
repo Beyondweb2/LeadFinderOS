@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -359,6 +360,9 @@ const AiAudit = () => {
   // Review (questions) state
   const [previewing, setPreviewing] = useState(false);
   const [questions, setQuestions] = useState<string[]>(persisted?.questions ?? []);
+  // "Paste your own questions" box (review step). Session-only scratch — not persisted; once applied
+  // it REPLACES the questions list, and that list is what persists and runs.
+  const [pasteQuestions, setPasteQuestions] = useState('');
   // Editable re-run (results view): an inline editor seeded with the current run's questions.
   // Persisted (session, per-user) so a tab-away/reload doesn't lose the operator's edits — the
   // editor reopens with them. reRunForRunId scopes the editor to the run it was opened for, so a
@@ -1652,7 +1656,12 @@ const AiAudit = () => {
   // All required fields present → questions can be generated. Website URL is required
   // only when "has website" is Yes (preserves the has_website behaviour). Specialisms
   // are optional.
-  const canGenerate = !!businessName.trim() && !!businessType.trim() && !!locationText.trim()
+  /* Location is required for LOCAL/HYBRID audits — the questions are "[service] in [town]" and the
+     server refuses a town-less local audit (create-ai-audit: local_scope_needs_town). A NATIONAL /
+     remote client has NO town, and the server skips that gate for business_scope 'national', so a
+     town must NOT be forced here either. Any other scope (including unset) still needs a town. */
+  const canGenerate = !!businessName.trim() && !!businessType.trim()
+    && (!!locationText.trim() || businessScope === 'national')
     && !!country && hasWebsite !== null && (hasWebsite === false || !!website.trim());
 
   // Open a report: prefer the stored snapshot for that run (shown as-is), else the live
@@ -2370,7 +2379,10 @@ const AiAudit = () => {
                     <Sparkles className="mr-2 h-4 w-4" /> Generate questions
                   </Button>
                   {!canGenerate && (
-                    <p className="text-[11px] text-muted-foreground mt-1.5">Fill in name, type, location, country and the website choice to continue.</p>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      Fill in name, type, {businessScope === 'national' ? '' : 'location, '}country and the website choice to continue.
+                      {businessScope !== 'national' && ' (Location is optional if you pick “I work remotely / across the country”.)'}
+                    </p>
                   )}
                 </div>
               </div>
@@ -2391,6 +2403,46 @@ const AiAudit = () => {
               <p className="text-xs text-muted-foreground -mt-1">
                 These are the searches we'll run across {SCORED_ENGINES.map((e) => ENGINE_LABELS[e]).join(' + ')} (plus AI Overview & Google). Edit, add or remove any.
               </p>
+
+              {/* ── PASTE YOUR OWN QUESTIONS (verbatim benchmark) ──────────────────────────────────
+                  For a fixed benchmark the operator supplies the EXACT questions and a re-measure
+                  compares like-for-like, so this REPLACES the whole list — nothing auto-generated is
+                  left mixed in. One per line, stored and run word-for-word (create-ai-audit uses a
+                  full provided set verbatim: no paraphrase, no town injection, no regeneration). */}
+              {(() => {
+                const parsed = pasteQuestions.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+                return (
+                  <div className="rounded-md border border-primary/30 bg-primary/[0.04] p-3 space-y-2">
+                    <Label className="text-xs font-medium">Paste your own questions (one per line)</Label>
+                    <p className="text-[11px] text-muted-foreground -mt-0.5">
+                      <strong>Replaces the list below entirely</strong> — exactly what you paste is what runs and gets stored, word-for-word. Use this for a fixed benchmark you'll re-measure against.
+                    </p>
+                    <Textarea
+                      value={pasteQuestions}
+                      onChange={(e) => setPasteQuestions(e.target.value)}
+                      rows={6}
+                      placeholder={"One question per line…\ne.g. best online menopause clinic UK\nHRT prescription online UK"}
+                      className="text-sm"
+                    />
+                    <div className="flex items-center gap-3">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={parsed.length === 0}
+                        onClick={() => {
+                          setQuestions(parsed);        // REPLACE — no auto-generated questions remain
+                          setPasteQuestions('');
+                          toast({ title: `Replaced with ${parsed.length} pasted question${parsed.length === 1 ? '' : 's'}`, description: 'These run and are stored exactly as pasted.' });
+                        }}
+                      >
+                        Replace list with these
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">{parsed.length} line{parsed.length === 1 ? '' : 's'}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {previewing ? (
                 <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin text-primary" /> Generating questions…
