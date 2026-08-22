@@ -686,6 +686,20 @@ const AiAudit = () => {
     return (q ?? []) as QueueRow[];
   }, []);
 
+  /* All-runs queue rows for an audit — the operator report aggregates across the runs of a Full
+     Measurement (each question asked MEASUREMENT_RUNS times), so buildReportData sees every run and
+     shows the real frequency + the across-runs winnability. For a single-run audit this is just that
+     run's rows. Paginated: questions × runs can exceed one PostgREST page on a big measurement. */
+  const loadAuditRows = useCallback(async (auditId: string): Promise<QueueRow[]> => {
+    const { data: runs } = await supabase.from('ai_audit_runs').select('id').eq('audit_id', auditId);
+    const runIds = ((runs ?? []) as Array<{ id: string }>).map((r) => r.id);
+    if (!runIds.length) return [];
+    const { rows } = await fetchAllRows<QueueRow>('AiAudit (report rows)', (from, to) =>
+      supabase.from('ai_audit_queue').select('id, question, status, result')
+        .in('run_id', runIds).order('id', { ascending: true }).range(from, to));
+    return rows;
+  }, []);
+
   // Restore an opened audit by run id after a remount (route change / refresh) so the user
   // returns to the audit they were on, not the list. Fetches the run + its audit, restores
   // the results state, and lets the poll effect refill the queue rows. Returns false if the
@@ -1447,7 +1461,7 @@ const AiAudit = () => {
     if (!latest) return;
     const rid = latest.id;
     if (reports[rid]) { setReportRunId(rid); return; }   // stored snapshot → show it
-    const rows = await loadRunRows(rid);
+    const rows = await loadAuditRows(audit.id);          // ALL runs — aggregate across the repeats
     setQueueRows(rows);
     const data = buildReportData(rows, latest, {
       businessName: audit.business_name,
@@ -1457,6 +1471,7 @@ const AiAudit = () => {
       isAggregatorUrl,
     });
     if (!data) { toast({ title: 'No completed results to report yet', variant: 'destructive' }); return; }
+    data.internal = true; // operator preview — show the winnability signal (never on the client doc)
     setReports((prev) => ({ ...prev, [rid]: data }));
     setReportRunId(rid);
   };
@@ -1526,15 +1541,21 @@ const AiAudit = () => {
     return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 4).map((x) => x.name);
   })();
 
-  // Live report data derived from the current run's rows (results.seo passed straight
-  // through). Recomputed each render; snapshotted into `reports` only on generate/regenerate.
-  const liveReportData = buildReportData(queueRows, run, {
-    businessName: resultsBusinessName || businessName,
-    businessType,
-    locationText,
-    specialisms,
-    isAggregatorUrl,
-  });
+  // Live report data derived from the loaded rows (all runs once a report is opened; results.seo
+  // passed straight through). Recomputed each render; snapshotted into `reports` on generate/
+  // regenerate. internal:true — this is the OPERATOR preview, so it shows the winnability signal;
+  // the client route (render-audit-report) never sets it.
+  const liveReportData = (() => {
+    const rd = buildReportData(queueRows, run, {
+      businessName: resultsBusinessName || businessName,
+      businessType,
+      locationText,
+      specialisms,
+      isAggregatorUrl,
+    });
+    if (rd) rd.internal = true;
+    return rd;
+  })();
 
   // The business's own website (opened-run schema value, else the wizard URL when it has one) —
   // used by scoreQuestion to exclude own-site citations from the aggregator share. May be "".
@@ -1693,7 +1714,8 @@ const AiAudit = () => {
     setRegenerating(true);
     try {
       const freshRun = await pollRun(rid);          // refresh run + queueRows state, returns the run
-      const rows = await loadRunRows(rid);          // authoritative rows to rebuild from
+      const aId = (freshRun ?? run)?.audit_id;
+      const rows = aId ? await loadAuditRows(aId) : await loadRunRows(rid); // ALL runs — aggregate
       const data = buildReportData(rows, freshRun ?? run, {
         businessName: resultsBusinessName || businessName,
         businessType,
@@ -1706,6 +1728,7 @@ const AiAudit = () => {
         toast({ title: 'Nothing to rebuild yet', description: 'This run has no completed results.', variant: 'destructive' });
         return;
       }
+      data.internal = true; // operator preview — winnability shown here, never on the client doc
       setReports((prev) => ({ ...prev, [rid]: data }));
       toast({ title: 'Report regenerated', description: 'Rebuilt from the latest run data.' });
     } catch (e) {

@@ -164,11 +164,17 @@ Deno.serve(async (req) => {
       .eq("audit_id", audit.id).order("run_number", { ascending: false }).limit(1).maybeSingle();
     if (!run) return unavailable("No audit run yet for this business.");
 
-    // 4) the run's queue rows (the per-question engine data buildReportData folds).
+    /* 4) queue rows across ALL runs of the audit. A Full Measurement asks each question over several
+       runs; buildReportData groups by question and aggregates across them so "named X of Y" is the
+       real frequency (questions × scored engines × runs), not one lucky ask. For a single-run audit
+       this is just that one run's rows — identical to before. */
+    const { data: allRuns } = await service
+      .from("ai_audit_runs").select("id").eq("audit_id", audit.id);
+    const runIds = ((allRuns ?? []) as Array<{ id: string }>).map((r) => r.id);
     const { data: qrows } = await service
       .from("ai_audit_queue")
       .select("id, question, status, result")
-      .eq("run_id", run.id).order("created_at", { ascending: true });
+      .in("run_id", runIds.length ? runIds : [run.id]).order("created_at", { ascending: true });
     const queueRows = (qrows ?? []) as QueueRow[];
 
     // 5) build the report data with the SHARED logic (identical to the in-app report), then render.

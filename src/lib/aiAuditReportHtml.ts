@@ -83,11 +83,23 @@ export interface AiAuditReportData {
   questionBreakdown?: {
     question: string; namedYou: boolean; namedCount?: number; answers?: number;
     rivals: string[]; citations?: { domain: string; url: string }[];
-    /* Per-engine detail — ChatGPT / Gemini / AI Overview told apart. ran=false → the engine didn't
-       return an answer (e.g. Google didn't render an AI Overview for that query). Optional so an
-       older payload without it falls back to the folded rivals/citations. */
-    perEngine?: { label: string; ran: boolean; named: boolean; rivals: string[]; citations: { domain: string; url: string }[] }[];
+    /* Per-engine detail — ChatGPT / Gemini / AI Overview told apart, aggregated ACROSS runs.
+       ranCount = how many runs the engine answered in; named = how many of those it named you in
+       (a count now; older payloads carried a boolean, handled in the renderer). ran=false → the
+       engine never returned an answer. */
+    perEngine?: { label: string; ran: boolean; ranCount?: number; runs?: number; named: number | boolean; rivals: string[]; citations: { domain: string; url: string }[] }[];
+    /* INTERNAL winnability signal (rendered only when `internal` is true — never on the client doc).
+       Structural match for QuestionWinnability in auditReport.ts (kept inline to avoid a circular
+       type import between this file and auditReport.ts). */
+    winnability?: { label: 'wide_open' | 'locked' | 'informational' | 'unclear'; reason: string; distinctFirms: number; topFirmCells: number; totalCells: number; sourceMix: { authority: number; business: number; other: number; total: number } };
   }[];
+  /** How many times each question was asked (per engine) — the "× N asks each" in the working-out. */
+  measurementRuns?: number;
+  /** ⛔ INTERNAL VIEW ONLY. When true the report renders the winnability signal per question. The
+   *  client-facing route (render-audit-report) NEVER sets it, so winnability can never leak to a
+   *  customer (CLAUDE.md bans winnability in customer-facing docs). Only the in-app operator preview
+   *  sets internal:true. */
+  internal?: boolean;
   generatedAtLabel: string;      // e.g. "11 Jul 2026"
   shareUrl?: string;             // reserved: future public link (not built yet)
   seo?: AiAuditSeo;              // optional website-SEO section; slot renders only when present
@@ -554,14 +566,17 @@ export function renderReportHtml(d: AiAuditReportData): string {
       <div class="note">A snapshot of where you stand today. After we&rsquo;ve made changes we ask these questions again, alongside others, to show your before &amp; after.</div>
     </footer>`;
 
-  // One engine's row inside a question card: name → named / not / didn't-appear → who → sources.
+  // One engine's row inside a question card: name → named X of R (across runs) → who → sources.
   const engineRow = (e: NonNullable<(typeof qb)[number]['perEngine']>[number]): string => {
     if (!e.ran) {
       return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span><span class="qb-eng-empty">Didn&rsquo;t appear</span></div></div>`;
     }
-    const state = e.named
-      ? `<span class="qb-badge yes sm">Named you</span>`
-      : `<span class="qb-badge no sm">Not named</span>`;
+    // named is a COUNT now (across runs); older payloads carried a boolean.
+    const namedN = typeof e.named === 'number' ? e.named : (e.named ? 1 : 0);
+    const outOf = e.ranCount ?? 1;
+    const state = namedN > 0
+      ? `<span class="qb-badge yes sm">Named you ${namedN} of ${outOf}</span>`
+      : `<span class="qb-badge no sm">Not named${outOf > 1 ? ` (0 of ${outOf})` : ''}</span>`;
     const rivals = e.rivals.length
       ? `<div class="qb-eng-line"><span class="qb-rlabel">Named:</span> ${e.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}</div>`
       : `<div class="qb-eng-line"><span class="qb-none">No businesses named.</span></div>`;
@@ -571,11 +586,27 @@ export function renderReportHtml(d: AiAuditReportData): string {
     return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span>${state}</div>${rivals}${sources}</div>`;
   };
 
+  // INTERNAL-ONLY winnability chip + the numbers behind it. Rendered only when d.internal === true,
+  // so it can never appear on the client's report (render-audit-report never sets internal).
+  const WIN_LABEL: Record<string, string> = { wide_open: 'WIDE OPEN', locked: 'LOCKED', informational: 'INFORMATIONAL', unclear: 'UNCLEAR' };
+  const winBlock = (w: NonNullable<(typeof qb)[number]['winnability']>): string => {
+    const mix = w.sourceMix;
+    const mixStr = mix.total > 0 ? `sources ${mix.authority} info / ${mix.business} business${mix.other ? ` / ${mix.other} other` : ''}` : 'no sources';
+    return `<div class="qb-win win-${esc(w.label)}">
+      <span class="qb-win-chip">${esc(WIN_LABEL[w.label] ?? w.label)}</span>
+      <span class="qb-win-why">${esc(w.reason)}</span>
+      <span class="qb-win-nums">${w.distinctFirms} distinct firm${w.distinctFirms === 1 ? '' : 's'} · top in ${w.topFirmCells}/${w.totalCells} answers · ${mixStr}</span>
+    </div>`;
+  };
+
   const qCard = (q: (typeof qb)[number]): string => {
-    // Overall badge (headline-consistent): "Named you N×" sums to the "named X of Y" figure.
+    // Overall badge (headline-consistent): "Named you X of Y" sums to the "named X of Y" figure.
     const nc = q.namedCount;
+    const outOf = q.answers;
     const badge = nc != null
-      ? (nc > 0 ? `<span class="qb-badge yes">Named you ${nc}&times;</span>` : `<span class="qb-badge no">Not named</span>`)
+      ? (nc > 0
+          ? `<span class="qb-badge yes">Named you ${nc}${outOf ? ` of ${outOf}` : '&times;'}</span>`
+          : `<span class="qb-badge no">Not named${outOf ? ` (0 of ${outOf})` : ''}</span>`)
       : (q.namedYou ? `<span class="qb-badge yes">Named you</span>` : `<span class="qb-badge no">Not named</span>`);
     // Per-engine breakdown when present; older payloads fall back to the folded rivals/sources.
     let body: string;
@@ -591,9 +622,11 @@ export function renderReportHtml(d: AiAuditReportData): string {
         : `<span class="qb-none">No sources cited.</span>`;
       body = `<div class="qb-line">${rivals}</div><div class="qb-line qb-src">${sources}</div>`;
     }
+    const win = (d.internal === true && q.winnability) ? winBlock(q.winnability) : '';
     return `<li class="qb-item">
       <div class="qb-top"><span class="qb-q">&ldquo;${esc(q.question)}&rdquo;</span>${badge}</div>
       ${body}
+      ${win}
     </li>`;
   };
 
@@ -729,6 +762,18 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .qb-eng-empty{ font-size:11px; font-style:italic; color:var(--faint); }
   .qb-badge.sm{ font-size:9px; padding:2px 7px; }
   .qb-eng-line{ margin-top:5px; font-size:12.5px; line-height:1.75; color:var(--muted); }
+  /* INTERNAL winnability chip — only rendered in the operator preview (d.internal), never on the
+     client document. A tinted strip so it reads as a separate, internal annotation. */
+  .qb-win{ margin-top:10px; padding:8px 10px; border-radius:8px; border:1px dashed var(--line-strong);
+    background:#f8fafc; display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; }
+  .qb-win-chip{ font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
+    padding:2px 8px; border-radius:999px; color:#fff; }
+  .win-wide_open .qb-win-chip{ background:var(--green); }
+  .win-locked .qb-win-chip{ background:var(--red); }
+  .win-informational .qb-win-chip{ background:var(--blue-2); }
+  .win-unclear .qb-win-chip{ background:var(--faint); }
+  .qb-win-why{ font-size:12px; color:var(--ink); font-weight:600; }
+  .qb-win-nums{ font-size:11px; color:var(--muted); width:100%; }
 
   /* WHY THIS MATTERS &mdash; stakes stats, big coloured numbers, muted supporting text */
   .why{ padding:18px 28px 18px; border-top:1px solid var(--line); }
@@ -912,7 +957,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
           <div class="l1">${plural(d.named, "time", "times")} ${esc(d.businessName)} showed up in AI search</div>
           <div class="l2">out of ${d.total} ${plural(d.total, "answer")}</div>
           ${d.questionsAsked && d.enginesUsed
-            ? `<div class="l3">${d.questionsAsked} way${d.questionsAsked === 1 ? "" : "s"} of asking &times; ${d.enginesUsed} AI engine${d.enginesUsed === 1 ? "" : "s"}</div>`
+            ? `<div class="l3">${d.questionsAsked} way${d.questionsAsked === 1 ? "" : "s"} of asking &times; ${d.enginesUsed} AI engine${d.enginesUsed === 1 ? "" : "s"}${(d.measurementRuns ?? 1) > 1 ? ` &times; ${d.measurementRuns} asks each` : ""}</div>`
             : ""}
         </div>
       </div>

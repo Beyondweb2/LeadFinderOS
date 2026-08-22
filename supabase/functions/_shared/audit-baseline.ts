@@ -397,12 +397,27 @@ export async function startPaidBaseline(
     const leadId = row.lead_id as string | null;
     if (!leadId) return { ok: false, skipped: "no_lead_id" };
 
-    // Already has one? Nothing to do — this is what makes retries safe.
-    const { data: existing, error: eErr } = await service
-      .from("ai_audits").select("id, baseline_target_runs").eq("lead_id", leadId);
+    /* Already has one? Nothing to do — this is what makes retries safe.
+       ⛔ THE GUARANTEE GUARD (2026-08-22). A Full Measurement reuses baseline_target_runs (multi-run),
+       so a measurement audit on this lead ALSO has baseline_target_runs>1. Without excluding it, this
+       idempotency check would treat the measurement as "already has a baseline" and SKIP the real
+       paid guarantee measurement — the paying client would never get their day-0. is_measurement is
+       set at creation (create-ai-audit) precisely to tell them apart; a real paid baseline never has
+       it. Migration-tolerant: if the column is not present the select is retried without it and every
+       row reads as non-measurement (the pre-guard behaviour) — but create-ai-audit only marks
+       measurements once the column exists, so in practice the guard is always live here. */
+    let existing: Array<{ id: string; baseline_target_runs: number | null; is_measurement?: boolean | null }> | null = null;
+    let eErr: { message?: string } | null = null;
+    ({ data: existing, error: eErr } = await service
+      .from("ai_audits").select("id, baseline_target_runs, is_measurement").eq("lead_id", leadId));
+    if (eErr && /is_measurement/i.test(eErr.message ?? "")) {
+      console.warn("[baseline] is_measurement column not present yet — reading without it (guard degraded)");
+      ({ data: existing, error: eErr } = await service
+        .from("ai_audits").select("id, baseline_target_runs").eq("lead_id", leadId));
+    }
     if (eErr) return { ok: false, error: `audit lookup failed: ${eErr.message}` };
-    const already = ((existing ?? []) as Array<{ id: string; baseline_target_runs: number | null }>)
-      .find((a) => Number(a.baseline_target_runs ?? 0) > 1);
+    const already = ((existing ?? []) as Array<{ id: string; baseline_target_runs: number | null; is_measurement?: boolean | null }>)
+      .find((a) => Number(a.baseline_target_runs ?? 0) > 1 && a.is_measurement !== true);
     if (already) return { ok: true, audit_id: already.id, skipped: "already_has_baseline" };
 
     /* ⛔ THE BASELINE WAITS FOR THE ANSWERS IT IS MEASURED ON. This is the guarantee path: week

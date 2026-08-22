@@ -12,6 +12,7 @@
    it too and both sides group names identically. */
 import { buildMatchContext, groupNames } from "../../supabase/functions/_shared/market-match.ts";
 import { classifyKnownEntity, isUncleanedName } from './knownEntities.ts';
+import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
 
 // Engines shown in results (queue targets chatgpt+gemini; the actor also returns
@@ -713,6 +714,50 @@ export function citationDomain(raw: string): string {
   } catch { return ''; }
 }
 
+export type WinnabilityLabel = 'wide_open' | 'locked' | 'informational' | 'unclear';
+export interface QuestionWinnability {
+  label: WinnabilityLabel;
+  reason: string;
+  distinctFirms: number;     // distinct real firms named across all (engine × run) cells
+  topFirmCells: number;      // how many cells the most-named firm appeared in
+  totalCells: number;        // (engine × run) cells that returned an answer
+  sourceMix: { authority: number; business: number; other: number; total: number };
+}
+
+/* WINNABILITY for ONE question, computed ACROSS THE REPEATS (engine × run cells). Reliable only
+   because Full Measurement now repeats (single-ask winnability is noise — measured 17.9% flip). It
+   is INTERNAL: rendered only when the report is asked for internally, never on the client document.
+   Conservative — defaults to 'unclear' rather than over-claiming 'wide_open'. `cells` is the list of
+   real-firm-name arrays (one per answered engine×run cell, canonical labels); `domains` is every
+   cited domain across the question. */
+export function computeWinnability(cells: string[][], domains: string[]): QuestionWinnability {
+  const totalCells = cells.length;
+  const tally = new Map<string, number>();
+  let firmMentions = 0;
+  for (const cell of cells) {
+    for (const f of new Set(cell.map((x) => x.toLowerCase()))) { tally.set(f, (tally.get(f) ?? 0) + 1); firmMentions++; }
+  }
+  const distinctFirms = tally.size;
+  const topFirmCells = tally.size ? Math.max(...tally.values()) : 0;
+  const topShare = totalCells > 0 ? topFirmCells / totalCells : 0;
+  const mix = sourceMix(domains);
+  const authorityLean = mix.total > 0 && mix.authority >= Math.max(1, mix.business);
+  let label: WinnabilityLabel;
+  let reason: string;
+  if (totalCells === 0) { label = 'unclear'; reason = 'no answers to read'; }
+  else if (firmMentions === 0) {
+    if (authorityLean) { label = 'informational'; reason = 'no businesses named — AI answered from information/authority sites, so it is not shopping for a business here'; }
+    else { label = 'unclear'; reason = 'no businesses named, but the sources are not clearly informational'; }
+  } else if (distinctFirms <= 3 && topShare >= 0.5) {
+    label = 'locked'; reason = `dominated — ${distinctFirms} firm${distinctFirms === 1 ? '' : 's'} recur, the top one named in ${topFirmCells} of ${totalCells} answers`;
+  } else if (distinctFirms >= 4 && topShare < 0.4 && mix.business >= 1) {
+    label = 'wide_open'; reason = `${distinctFirms} different firms named, none dominant, and business-type sources appear — a page could win a place`;
+  } else {
+    label = 'unclear'; reason = 'mixed or thin signals — not calling it';
+  }
+  return { label, reason, distinctFirms, topFirmCells, totalCells, sourceMix: mix };
+}
+
 export function buildReportData(
   queueRows: QueueRow[],
   run: RunRow | null,
@@ -755,9 +800,20 @@ export function buildReportData(
     if (r.status === "done" && r.result) for (const e of SCORED_ENGINES) if (r.result[e]) enginesSeen.add(e);
   }
 
-  const summary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number } } | null)?.summary;
-  const named = summary?.named_datapoints ?? liveNamed;
-  const total = summary?.total_datapoints ?? liveTotal;
+  /* ⛔ COUNT LIVE ACROSS ALL RUNS, NOT ONE RUN'S STORED SUMMARY. A Full Measurement now asks each
+     question over MEASUREMENT_RUNS runs, and the caller passes the queue rows from ALL runs, so
+     "named X of Y" is distinct-questions × scored-engines × runs — a frequency, not a single ask.
+     run.results.summary is a SINGLE run's tally and would undercount a multi-run audit, so it is no
+     longer used. For a single-run audit liveNamed/liveTotal equal that summary anyway (measured:
+     1,670 claimed = 1,670 real), so this changes nothing for old audits. */
+  const named = liveNamed;
+  const total = liveTotal;
+  // Distinct questions asked (each appears once PER RUN in queueRows) — the "N ways of asking" line
+  // and the per-question breakdown are keyed on this, never on the row count.
+  const distinctQuestions = new Set(
+    queueRows.filter((r) => r.status === 'done' && r.result).map((r) => r.question.trim().toLowerCase()),
+  ).size;
+  const runsCount = Math.max(1, done > 0 && distinctQuestions > 0 ? Math.round(done / distinctQuestions) : 1);
 
   const perEngine = DISPLAY_ENGINES.map((engine) => {
     let n = 0;
@@ -836,88 +892,78 @@ export function buildReportData(
      prospect or client carries it. classifyWinnability stays exported for the operator view in
      AiAudit.tsx, which labels it unreliable. */
 
-  /* ══ PER-QUESTION BREAKDOWN — the client-facing "page 2" ═══════════════════════════════════
-     Every completed question, whether the business was named on any scored engine, and the REAL
-     rival firms AI named in that answer. Reuses the SAME cleaners as the aggregate above
-     (isRealCompetitor filter, google_organic titles excluded, groupNames to fold spelling
-     variants) so the detail can never show junk or a duplicate the summary already dropped.
-     Preserves the order the questions were asked. */
-  const questionBreakdown = queueRows
-    .filter((r) => r.status === 'done' && r.result)
-    .map((r) => {
-      const result = r.result!;
-      // Count per question the SAME way the headline does (scored engines only), so the per-question
-      // counts SUM to "named X out of Y answers" and the two can never disagree.
-      const answers = SCORED_ENGINES.filter((e) => result[e]).length;
-      const namedCount = SCORED_ENGINES.filter((e) => result[e]?.named === true).length;
-      const namedYou = namedCount > 0;
-      const raw: string[] = [];
-      for (const engine of DISPLAY_ENGINES) {
-        if (engine === 'google_organic') continue; // organic result TITLES aren't AI-named firms
-        const er = result[engine];
-        if (!er) continue;
-        for (const c of er.competitors) if (isRealCompetitor(c, ctx.locationText)) raw.push(c.trim());
-      }
-      // Fold spelling variants to one label per firm, then dedupe in first-named order.
-      const grouped = groupNames(raw, ctxMatch);
-      const labelFor = new Map<string, string>();
-      for (const g of grouped.values()) {
-        const label = g.names[0] ?? '';
-        for (const n of g.names) labelFor.set(n.trim().toLowerCase(), label);
-      }
-      const seen = new Set<string>();
-      const rivals: string[] = [];
-      for (const c of raw) {
-        const label = (labelFor.get(c.toLowerCase()) || c).trim();
-        const k = label.toLowerCase();
-        if (!k || seen.has(k)) continue;
-        seen.add(k);
-        rivals.push(label);
-      }
-      /* The sources AI drew on for this question — most useful on a NOT-NAMED answer (what it
-         quoted instead). Deduped by DOMAIN (the signal a client reads), Google redirects unwrapped,
-         first URL per domain kept for the link, capped so a citation-heavy answer stays readable. */
-      const citeByDomain = new Map<string, string>();
-      for (const engine of DISPLAY_ENGINES) {
-        const er = result[engine];
-        if (!er || !Array.isArray(er.citations)) continue;
-        for (const c of er.citations) {
-          const url = unwrapCitationUrl(c?.url ?? '');
-          const domain = citationDomain(url);
-          if (!domain || citeByDomain.has(domain)) continue;
-          citeByDomain.set(domain, url);
-        }
-      }
-      const citations = [...citeByDomain.entries()].slice(0, 10).map(([domain, url]) => ({ domain, url }));
+  /* ══ PER-QUESTION BREAKDOWN — GROUPED ACROSS RUNS ══════════════════════════════════════════
+     A Full Measurement asks each question once per run, so a question appears once PER RUN in
+     queueRows. Group by question and aggregate across the runs: the client card shows a FREQUENCY
+     ("named 4 of 6"), each engine shows "named X of R", the rivals/sources are the union across all
+     runs, and an INTERNAL winnability signal is computed over the (engine × run) cells (reliable
+     only because of the repeats). Same cleaners as the aggregate above; order preserved (first-seen). */
+  const byQuestion = new Map<string, { question: string; rows: QueueRow[] }>();
+  for (const r of queueRows) {
+    if (r.status !== 'done' || !r.result) continue;
+    const key = r.question.trim().toLowerCase();
+    if (!byQuestion.has(key)) byQuestion.set(key, { question: r.question, rows: [] });
+    byQuestion.get(key)!.rows.push(r);
+  }
 
-      /* PER-ENGINE — tell ChatGPT / Gemini / AI Overview apart, because they behave differently.
-         For each: did it name the business, who it named, and what it cited. An engine whose key is
-         absent (AI Overview often doesn't render) is reported as "didn't appear", not hidden. Same
-         cleaners as above (isRealCompetitor, domain-dedupe, redirect-unwrap). google_organic is
-         excluded — raw links, not an AI answer. */
-      const perEngine = (['chatgpt', 'gemini', 'ai_overview'] as const).map((engine) => {
-        const er = result[engine];
-        if (!er) return { label: ENGINE_LABELS[engine] ?? engine, ran: false, named: false, rivals: [] as string[], citations: [] as { domain: string; url: string }[] };
-        const seenR = new Set<string>();
-        const engRivals: string[] = [];
-        for (const c of er.competitors ?? []) {
-          if (!isRealCompetitor(c, ctx.locationText)) continue;
-          const t = c.trim(); const k = t.toLowerCase();
-          if (!k || seenR.has(k)) continue;
-          seenR.add(k); engRivals.push(t);
-        }
-        const cm = new Map<string, string>();
-        for (const c of er.citations ?? []) {
-          const url = unwrapCitationUrl(c?.url ?? ''); const dom = citationDomain(url);
-          if (!dom || cm.has(dom)) continue;
-          cm.set(dom, url);
-        }
-        const engCitations = [...cm.entries()].slice(0, 8).map(([domain, url]) => ({ domain, url }));
-        return { label: ENGINE_LABELS[engine] ?? engine, ran: true, named: er.named === true, rivals: engRivals, citations: engCitations };
-      });
+  const questionBreakdown = [...byQuestion.values()].map(({ question, rows }) => {
+    // Client named-frequency across runs × SCORED engines — sums to the "named X of Y" headline.
+    let namedCount = 0; let answers = 0;
+    for (const r of rows) for (const e of SCORED_ENGINES) {
+      const er = r.result![e]; if (!er) continue; answers++; if (er.named) namedCount++;
+    }
+    const namedYou = namedCount > 0;
 
-      return { question: r.question, namedYou, namedCount, answers, rivals, citations, perEngine };
+    // Per display-engine, across runs: how many of the runs it named you in, plus its rivals/sources.
+    const perEngine = (['chatgpt', 'gemini', 'ai_overview'] as const).map((engine) => {
+      let ranCount = 0; let named = 0;
+      const seenR = new Set<string>(); const engRivals: string[] = [];
+      const cm = new Map<string, string>();
+      for (const r of rows) {
+        const er = r.result![engine]; if (!er) continue;
+        ranCount++; if (er.named) named++;
+        for (const c of er.competitors ?? []) { if (!isRealCompetitor(c, ctx.locationText)) continue; const t = c.trim(); const k = t.toLowerCase(); if (!k || seenR.has(k)) continue; seenR.add(k); engRivals.push(t); }
+        for (const c of er.citations ?? []) { const url = unwrapCitationUrl(c?.url ?? ''); const dom = citationDomain(url); if (!dom || cm.has(dom)) continue; cm.set(dom, url); }
+      }
+      return {
+        label: ENGINE_LABELS[engine] ?? engine,
+        ran: ranCount > 0, ranCount, runs: rows.length, named,
+        rivals: engRivals, citations: [...cm.entries()].slice(0, 8).map(([domain, url]) => ({ domain, url })),
+      };
     });
+
+    // Folded rivals + citations across all runs/engines, and the per-cell firm lists for winnability.
+    const raw: string[] = [];
+    const domains: string[] = [];
+    const cellsRaw: string[][] = []; // real-firm names per answered (engine × run) cell
+    for (const r of rows) for (const engine of DISPLAY_ENGINES) {
+      if (engine === 'google_organic') continue; // organic titles aren't AI-named firms
+      const er = r.result![engine]; if (!er) continue;
+      const cell: string[] = [];
+      for (const c of er.competitors ?? []) if (isRealCompetitor(c, ctx.locationText)) { raw.push(c.trim()); cell.push(c.trim()); }
+      cellsRaw.push(cell);
+      for (const c of er.citations ?? []) { const dom = citationDomain(unwrapCitationUrl(c?.url ?? '')); if (dom) domains.push(dom); }
+    }
+    // Fold spelling variants to one label per firm.
+    const grouped = groupNames(raw, ctxMatch);
+    const labelFor = new Map<string, string>();
+    for (const g of grouped.values()) { const label = g.names[0] ?? ''; for (const n of g.names) labelFor.set(n.trim().toLowerCase(), label); }
+    const canon = (name: string) => (labelFor.get(name.toLowerCase()) || name).trim();
+    const seen = new Set<string>(); const rivals: string[] = [];
+    for (const c of raw) { const label = canon(c); const k = label.toLowerCase(); if (!k || seen.has(k)) continue; seen.add(k); rivals.push(label); }
+    const citeByDomain = new Map<string, string>();
+    for (const r of rows) for (const engine of DISPLAY_ENGINES) {
+      const er = r.result![engine]; if (!er || !Array.isArray(er.citations)) continue;
+      for (const c of er.citations) { const url = unwrapCitationUrl(c?.url ?? ''); const domain = citationDomain(url); if (!domain || citeByDomain.has(domain)) continue; citeByDomain.set(domain, url); }
+    }
+    const citations = [...citeByDomain.entries()].slice(0, 10).map(([domain, url]) => ({ domain, url }));
+
+    // Winnability over the repeats — cells normalised to canonical firm labels so a spelling variant
+    // isn't mistaken for a second firm.
+    const winnability = computeWinnability(cellsRaw.map((cell) => cell.map(canon)), domains);
+
+    return { question, namedYou, namedCount, answers, rivals, citations, perEngine, winnability };
+  });
 
   return {
     businessName: ctx.businessName || 'This business',
@@ -925,7 +971,8 @@ export function buildReportData(
     named,
     total,
     questionBreakdown,
-    questionsAsked: done,          // questions with a completed answer, not questions requested
+    questionsAsked: distinctQuestions, // DISTINCT questions (each asked runsCount times), not run-rows
+    measurementRuns: runsCount,        // how many times each question was asked (per engine)
     enginesUsed: enginesSeen.size, // scored engines that actually returned something
     pct: total > 0 ? Math.round((named / total) * 100) : 0,
     perEngine,
