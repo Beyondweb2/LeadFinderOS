@@ -38,14 +38,32 @@ import { suppress } from "./suppression.ts";
 // an inbound must never wipe quote/deal state.
 const NO_DOWNGRADE = "(payment_received,replied,interested,price_given,in_delivery,completed)";
 
-/** Best text/body for an inbound message. Text → the text body; anything else
- *  (image/audio/document/interactive/button/reaction/…) → a "[type]" placeholder
- *  so the operator can see a reply landed and follow up. */
+/** Best text/body for an inbound message. Text → the text body; a template QUICK-REPLY BUTTON
+ *  or an INTERACTIVE reply → the button/list LABEL (so "Yes please" is stored and treated as a
+ *  real reply, not "[button]"); any other type (image/audio/document/reaction/…) → a "[type]"
+ *  placeholder so the operator can see a reply landed and follow up.
+ *  ⛔ Load-bearing for the auto-pitch: the arm gate keys on isSubstantiveText(body), which rejects
+ *  "[...]" placeholders — so a button reply only triggers a pitch because its label is extracted
+ *  HERE. WhatsApp shapes: text→msg.text.body, template button→msg.button.text (payload as
+ *  fallback), interactive→msg.interactive.button_reply.title / list_reply.title. */
 function bodyFor(msg: Record<string, unknown>): string {
   const type = typeof msg?.type === "string" ? msg.type : "unknown";
   if (type === "text") {
     const t = msg?.text as { body?: string } | undefined;
     return (t?.body ?? "").toString();
+  }
+  if (type === "button") {
+    const b = msg?.button as { text?: string; payload?: string } | undefined;
+    const txt = (b?.text ?? b?.payload ?? "").toString().trim();
+    if (txt) return txt;
+  }
+  if (type === "interactive") {
+    const it = msg?.interactive as {
+      button_reply?: { title?: string };
+      list_reply?: { title?: string };
+    } | undefined;
+    const txt = (it?.button_reply?.title ?? it?.list_reply?.title ?? "").toString().trim();
+    if (txt) return txt;
   }
   return `[${type}]`;
 }
@@ -276,20 +294,29 @@ export async function handleInboundMessages(
              lead could never be pitched. Nothing is lost by not writing: the reply is stored, the
              lead shows as 'replied', and the operator sees the thread in the Inbox. */
           if (autoReplyEnvOn() && (await autoReplyToggleOn(service)) && !leadArchived &&
-              msg?.type === "text" && isSubstantiveText(body)) {
-            // First-inbound-only: this message is already stored, so "first" = exactly one row.
-            const { count: inboundCount } = await service
-              .from("whatsapp_messages")
-              .select("id", { count: "exact", head: true })
-              .eq("lead_id", leadId).eq("direction", "inbound");
-            if ((inboundCount ?? 0) <= 1) {
+              isSubstantiveText(body)) {
+            /* ⛔ ONCE PER BUSINESS, EVER — keyed on the whatsapp_auto_replies slot, NOT "first
+               inbound". The old `inboundCount <= 1` test was fragile in exactly the ways that made
+               this feel dead: a bot-ack, media or reaction as message #1 pushed the real "yes" to
+               inbound #2 (missed), and rapid back-to-back messages could each pass it. The slot is
+               the truth: if this lead already holds ANY row (pending, sent, awaiting_audit, or any
+               flagged/skipped status), the once-ever pitch is already claimed and we never arm
+               again. Note this is NOT the type=="text" gate either — it was dropped above so a
+               template QUICK-REPLY BUTTON (whose label bodyFor now extracts) counts as a real reply.
+               The lead_id UNIQUE index remains the ATOMIC backstop for truly simultaneous messages:
+               every insert below skips on 23505, and the awaiting_audit insert gates the audit
+               firing, so back-to-back replies can never double-audit or double-pitch. */
+            const { data: existingSlot } = await service
+              .from("whatsapp_auto_replies")
+              .select("id").eq("lead_id", leadId).limit(1).maybeSingle();
+            if (!existingSlot) {
               /* ⛔ THE OPENER GATE — auto-audit fires ONLY when the LAST thing WE sent this lead was
                  the initial_contact opener. This is the condition the feature's intent always
                  assumed but the code never enforced: without it, a reply to ANY outbound
                  (hook_followup, contact_followup, audit_reply, onboarding_followup, re_engage, or a
                  manual message) auto-sent the audit report, and a first inbound with no prior opener
                  did too. Non-failed only — a failed opener was never delivered, so the lead cannot be
-                 replying to it. Keyed by lead_id, like the inbound count above. On the "not the
+                 replying to it. Keyed by lead_id, like the slot check above. On the "not the
                  opener" branch we arm NOTHING (no whatsapp_auto_replies row): the reply is already
                  stored and the lead already shows 'replied' for the operator to handle by hand. */
               const { data: lastOut } = await service
