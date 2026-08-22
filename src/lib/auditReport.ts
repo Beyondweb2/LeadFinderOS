@@ -691,6 +691,28 @@ export function classifyWinnability(
 /** Derive the client report's data from a run's queue rows. Pure — used both for the live
  *  report on the results screen and to build a snapshot when opening a past audit's report.
  *  Returns null until at least one question has completed. */
+/* Unwrap a Google redirect citation ("/url?…&url=<real>" or ".../url?…&q=<real>") to the real
+   target, so the client sees "privatedoc.com" not "google.com". Non-redirect URLs pass through. */
+export function unwrapCitationUrl(raw: string): string {
+  const u = (raw ?? '').trim();
+  if (!u) return '';
+  if (/\/url\?/.test(u)) {
+    const m = u.match(/[?&](?:url|q)=([^&]+)/);
+    if (m) { try { return decodeURIComponent(m[1]); } catch { return m[1]; } }
+  }
+  return u;
+}
+
+/** Bare hostname of a URL, lowercased, www stripped. '' when it can't be parsed. */
+export function citationDomain(raw: string): string {
+  const u = unwrapCitationUrl(raw);
+  if (!u) return '';
+  try {
+    const withProto = /^https?:\/\//i.test(u) ? u : `https://${u}`;
+    return new URL(withProto).hostname.toLowerCase().replace(/^www\./, '');
+  } catch { return ''; }
+}
+
 export function buildReportData(
   queueRows: QueueRow[],
   run: RunRow | null,
@@ -852,7 +874,22 @@ export function buildReportData(
         seen.add(k);
         rivals.push(label);
       }
-      return { question: r.question, namedYou, namedCount, answers, rivals };
+      /* The sources AI drew on for this question — most useful on a NOT-NAMED answer (what it
+         quoted instead). Deduped by DOMAIN (the signal a client reads), Google redirects unwrapped,
+         first URL per domain kept for the link, capped so a citation-heavy answer stays readable. */
+      const citeByDomain = new Map<string, string>();
+      for (const engine of DISPLAY_ENGINES) {
+        const er = result[engine];
+        if (!er || !Array.isArray(er.citations)) continue;
+        for (const c of er.citations) {
+          const url = unwrapCitationUrl(c?.url ?? '');
+          const domain = citationDomain(url);
+          if (!domain || citeByDomain.has(domain)) continue;
+          citeByDomain.set(domain, url);
+        }
+      }
+      const citations = [...citeByDomain.entries()].slice(0, 10).map(([domain, url]) => ({ domain, url }));
+      return { question: r.question, namedYou, namedCount, answers, rivals, citations };
     });
 
   return {

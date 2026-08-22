@@ -80,7 +80,7 @@ export interface AiAuditReportData {
      whether AI named the business (on any scored engine), and the real rival firms it named in
      that answer. Optional so a payload built before this existed still renders — absent means the
      detail page is simply omitted, never a half-built section. */
-  questionBreakdown?: { question: string; namedYou: boolean; namedCount?: number; answers?: number; rivals: string[] }[];
+  questionBreakdown?: { question: string; namedYou: boolean; namedCount?: number; answers?: number; rivals: string[]; citations?: { domain: string; url: string }[] }[];
   generatedAtLabel: string;      // e.g. "11 Jul 2026"
   shareUrl?: string;             // reserved: future public link (not built yet)
   seo?: AiAuditSeo;              // optional website-SEO section; slot renders only when present
@@ -516,34 +516,56 @@ export function renderReportHtml(d: AiAuditReportData): string {
   // ── QUESTION-BY-QUESTION DETAIL (page 2) — every question asked, whether AI named the business,
   //    and the real rival firms it named instead. A clean addition; the first-page summary above is
   //    untouched. Omitted entirely when the payload carries no breakdown (older/market payloads).
+  /* The breakdown is its OWN sequence of page-sheets AFTER page 1 (not crammed onto one). Each
+     chunk is a full themed .sheet (blue band + cards), so on screen they read as distinct client
+     pages and in print each starts a fresh A4. QUESTIONS_PER_PAGE keeps a card from ever splitting
+     across a break — a card lives wholly inside one sheet. A 20-question Full Measurement naturally
+     runs to several pages; a small quick audit is one. */
   const qb = d.questionBreakdown ?? [];
-  const questionDetail = qb.length === 0 ? "" : `
-    <section class="qbreak">
-      <div class="sec-eyebrow">The detail</div>
-      <div class="sec-title">Every question we asked &mdash; and who AI named</div>
-      <p class="qb-intro">These are the exact questions we put to the AI engines. For each one: how many times it named <b>${esc(d.businessName)}</b>, and which businesses it named instead.</p>
-      <ul class="qb-list">
-        ${qb.map((q) => {
-          // Count when present (new payloads), else the older boolean. "Named you N×" sums to the
-          // headline "named X out of Y answers", so the detail and the summary agree.
-          const nc = q.namedCount;
-          const badge = nc != null
-            ? (nc > 0
-                ? `<span class="qb-badge yes">Named you ${nc}&times;</span>`
-                : `<span class="qb-badge no">Not named</span>`)
-            : (q.namedYou
-                ? `<span class="qb-badge yes">Named you</span>`
-                : `<span class="qb-badge no">Not named</span>`);
-          const rivals = q.rivals.length
-            ? `<span class="qb-rlabel">AI named:</span> ${q.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}`
-            : `<span class="qb-none">No specific businesses named.</span>`;
-          return `<li class="qb-item">
-            <div class="qb-top"><span class="qb-q">&ldquo;${esc(q.question)}&rdquo;</span>${badge}</div>
-            <div class="qb-rivals">${rivals}</div>
-          </li>`;
-        }).join("")}
-      </ul>
-    </section>`;
+  const QUESTIONS_PER_PAGE = 4;
+  const qChunks: typeof qb[] = [];
+  for (let i = 0; i < qb.length; i += QUESTIONS_PER_PAGE) qChunks.push(qb.slice(i, i + QUESTIONS_PER_PAGE));
+
+  const qCard = (q: (typeof qb)[number]): string => {
+    // Count when present (new payloads), else the older boolean. "Named you N×" sums to the
+    // headline "named X out of Y answers", so the detail and the summary agree.
+    const nc = q.namedCount;
+    const badge = nc != null
+      ? (nc > 0 ? `<span class="qb-badge yes">Named you ${nc}&times;</span>` : `<span class="qb-badge no">Not named</span>`)
+      : (q.namedYou ? `<span class="qb-badge yes">Named you</span>` : `<span class="qb-badge no">Not named</span>`);
+    const rivals = q.rivals.length
+      ? `<span class="qb-rlabel">AI named:</span> ${q.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}`
+      : `<span class="qb-none">No specific businesses named.</span>`;
+    // The sources AI drew on — the point of this on a NOT-NAMED question. Domains, linked to the
+    // page. Real stored data (result[engine].citations); "No sources cited" only when truly empty.
+    const cites = q.citations ?? [];
+    const sources = cites.length
+      ? `<span class="qb-slabel">AI&rsquo;s sources:</span> ${cites.map((c) => `<a class="qb-cite" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(c.domain)}</a>`).join(" ")}`
+      : `<span class="qb-none">No sources cited.</span>`;
+    return `<li class="qb-item">
+      <div class="qb-top"><span class="qb-q">&ldquo;${esc(q.question)}&rdquo;</span>${badge}</div>
+      <div class="qb-line">${rivals}</div>
+      <div class="qb-line qb-src">${sources}</div>
+    </li>`;
+  };
+
+  const questionDetail = qb.length === 0 ? "" : qChunks.map((chunk, pi) => `
+    <div class="sheet qpage">
+      <header class="band band-slim">
+        <div class="band-row">
+          <div class="wordmark">Findable<span class="dot">.</span></div>
+          <div class="band-meta">Questions &amp; sources${qChunks.length > 1 ? ` &middot; page ${pi + 1} of ${qChunks.length}` : ""}</div>
+        </div>
+      </header>
+      <section class="qbreak">
+        ${pi === 0 ? `<div class="sec-eyebrow">The detail</div>
+        <div class="sec-title">Every question we asked &mdash; and who AI named</div>
+        <p class="qb-intro">These are the exact questions we put to the AI engines. For each one: how many times it named <b>${esc(d.businessName)}</b>, which businesses it named instead, and the sources AI drew its answer from.</p>` : ""}
+        <ul class="qb-list">
+          ${chunk.map(qCard).join("")}
+        </ul>
+      </section>
+    </div>`).join("");
 
   return stripHtmlComments(`<!doctype html>
 <html lang="en">
@@ -625,9 +647,12 @@ export function renderReportHtml(d: AiAuditReportData): string {
   .gb-attr{ font-size:11px; color:var(--muted); font-weight:400; }
   .gb-sum .gb-more{ color:var(--muted); font-weight:400; }
 
-  /* QUESTION-BY-QUESTION DETAIL &mdash; the client-facing "page 2". Starts a fresh printed page;
-     each question card avoids being split across a page boundary. */
-  .qbreak{ padding:22px 28px 22px; border-top:1px solid var(--line); break-before:page; page-break-before:always; }
+  /* QUESTION-BY-QUESTION DETAIL — each chunk is its OWN .sheet page (.qpage) with a slim band, so
+     it reads as a distinct client page on screen and prints as a fresh A4. The .qbreak here is just
+     the body inside that sheet — no border/break of its own; the sheet does the paging. */
+  .band-slim{ padding:15px 28px; }
+  .band-slim .wordmark{ font-size:18px; }
+  .qpage .qbreak{ padding:20px 28px 22px; }
   .qb-intro{ margin:0 0 16px; font-size:14px; font-weight:400; color:var(--muted); max-width:64ch; }
   .qb-intro b{ color:var(--blue); font-weight:700; }
   .qb-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
@@ -639,10 +664,15 @@ export function renderReportHtml(d: AiAuditReportData): string {
     padding:3px 9px; border-radius:999px; white-space:nowrap; }
   .qb-badge.yes{ background:#e7f6ee; color:var(--green); }
   .qb-badge.no{ background:#fdeaea; color:var(--red); }
-  .qb-rivals{ margin-top:8px; font-size:13px; color:var(--muted); line-height:1.8; }
+  .qb-line{ margin-top:8px; font-size:13px; color:var(--muted); line-height:1.9; }
   .qb-rlabel{ font-weight:700; color:var(--ink); font-size:12px; margin-right:2px; }
   .qb-chip{ display:inline-block; background:var(--paper); border:1px solid var(--line); border-radius:999px;
     padding:2px 9px; font-size:12px; font-weight:600; color:var(--ink); }
+  /* Sources row — a light divider above it separates "who" (rivals) from "where" (sources). */
+  .qb-src{ margin-top:9px; padding-top:9px; border-top:1px dashed var(--line); }
+  .qb-slabel{ font-weight:700; color:var(--ink); font-size:12px; margin-right:2px; }
+  .qb-cite{ display:inline-block; color:var(--blue-2); font-weight:600; font-size:12px; text-decoration:none;
+    border-bottom:1px solid var(--line); word-break:break-word; }
   .qb-none{ font-style:italic; color:var(--faint); }
 
   /* WHY THIS MATTERS &mdash; stakes stats, big coloured numbers, muted supporting text */
@@ -797,8 +827,11 @@ export function renderReportHtml(d: AiAuditReportData): string {
       -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     body{ background:#fff; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
+    /* Each page-sheet (page 1, then every question page) starts a fresh A4. */
+    .sheet + .sheet{ break-before:page; page-break-before:always; }
     .band,.hero,.gutbox,.why,.dowe,.cta,.site-foot,.seo{ break-inside:avoid; }
     .steps,.stats,.seo-grades,.seo-body,.dowe-panel{ break-inside:avoid; }
+    .qb-item{ break-inside:avoid; page-break-inside:avoid; }
   }
 </style>
 </head>
@@ -835,7 +868,6 @@ export function renderReportHtml(d: AiAuditReportData): string {
       </div>
     </div>
 ${gutbox}
-${questionDetail}
     <!-- ============================================================================
          SEO SECTION SLOT &mdash; renders results.seo when present (overall grade + three
          category grades + a radar of the three scores + the lead findings). Renders
@@ -941,6 +973,7 @@ ${d.showFounderOffer === true ? founderOfferSection(d.founderOfferUrl) : ""}
       <div class="note">A snapshot of where you stand today. After we&rsquo;ve made changes we ask these questions again, alongside others, to show your before &amp; after.</div>
     </footer>
   </div>
+${questionDetail}
 </body>
 </html>`);
 }
