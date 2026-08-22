@@ -814,11 +814,49 @@ export function buildReportData(
      prospect or client carries it. classifyWinnability stays exported for the operator view in
      AiAudit.tsx, which labels it unreliable. */
 
+  /* ══ PER-QUESTION BREAKDOWN — the client-facing "page 2" ═══════════════════════════════════
+     Every completed question, whether the business was named on any scored engine, and the REAL
+     rival firms AI named in that answer. Reuses the SAME cleaners as the aggregate above
+     (isRealCompetitor filter, google_organic titles excluded, groupNames to fold spelling
+     variants) so the detail can never show junk or a duplicate the summary already dropped.
+     Preserves the order the questions were asked. */
+  const questionBreakdown = queueRows
+    .filter((r) => r.status === 'done' && r.result)
+    .map((r) => {
+      const result = r.result!;
+      const namedYou = SCORED_ENGINES.some((e) => result[e]?.named === true);
+      const raw: string[] = [];
+      for (const engine of DISPLAY_ENGINES) {
+        if (engine === 'google_organic') continue; // organic result TITLES aren't AI-named firms
+        const er = result[engine];
+        if (!er) continue;
+        for (const c of er.competitors) if (isRealCompetitor(c, ctx.locationText)) raw.push(c.trim());
+      }
+      // Fold spelling variants to one label per firm, then dedupe in first-named order.
+      const grouped = groupNames(raw, ctxMatch);
+      const labelFor = new Map<string, string>();
+      for (const g of grouped.values()) {
+        const label = g.names[0] ?? '';
+        for (const n of g.names) labelFor.set(n.trim().toLowerCase(), label);
+      }
+      const seen = new Set<string>();
+      const rivals: string[] = [];
+      for (const c of raw) {
+        const label = (labelFor.get(c.toLowerCase()) || c).trim();
+        const k = label.toLowerCase();
+        if (!k || seen.has(k)) continue;
+        seen.add(k);
+        rivals.push(label);
+      }
+      return { question: r.question, namedYou, rivals };
+    });
+
   return {
     businessName: ctx.businessName || 'This business',
     businessType: ctx.businessType || '',
     named,
     total,
+    questionBreakdown,
     questionsAsked: done,          // questions with a completed answer, not questions requested
     enginesUsed: enginesSeen.size, // scored engines that actually returned something
     pct: total > 0 ? Math.round((named / total) * 100) : 0,
