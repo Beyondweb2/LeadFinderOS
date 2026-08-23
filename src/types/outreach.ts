@@ -7,6 +7,8 @@ export type LeadStatus =
   | 'not_interested'
   | 'site_sent'
   | 'report_sent'
+  | 'already_visible'   // AI already names them (>=3 of 6 on the first report). Parked: hidden from the
+                        // default list, viewable via the status filter, and excluded from all automated pitches.
   | 'price_given'       // quote/price sent (operator-set only — nothing auto-writes it)
   | 'in_delivery'       // paid & being delivered (operator-set only)
   | 'opted_out'         // system-written by the suppression paths (drainer/triage) — NOT operator-pickable
@@ -211,6 +213,10 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'report_sent', label: 'Report Sent' },
+  /* Permanent, always-selectable filter option. This list is STATIC — the dropdown does NOT depend on
+     which leads are loaded, so "Already Visible" is offered even when none are on screen. Selecting it
+     un-hides these leads (see OutreachTable's default-hide). Unique label → its own filter group. */
+  { value: 'already_visible', label: 'Already Visible' },
   { value: 'price_given', label: 'Price Given' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
@@ -385,6 +391,7 @@ export type PipelineStatus =
   | 'replied'
   | 'site_sent'
   | 'report_sent'
+  | 'already_visible'
   | 'interested'
   | 'not_interested'
   | 'no_whatsapp'
