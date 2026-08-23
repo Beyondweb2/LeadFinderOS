@@ -97,6 +97,13 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Report',
     className: 'bg-sky-500/20 text-sky-400 border-transparent font-semibold',
   },
+  // AI already names them (>=3 of 6). Parked/hidden from the default list; a distinct teal so a
+  // revealed row reads "Already Visible" rather than falling through to the generic "New" badge.
+  already_visible: {
+    label: 'Already Visible',
+    shortLabel: 'Visible',
+    className: 'bg-teal-500/20 text-teal-300 border-transparent font-semibold',
+  },
   price_given: {
     label: 'Price Given',
     shortLabel: 'Price',

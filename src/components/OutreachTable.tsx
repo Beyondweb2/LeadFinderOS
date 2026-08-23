@@ -1613,6 +1613,16 @@ export function OutreachTable({
       }
     }
 
+    /* ⛔ "Already Visible" is HIDDEN FROM THE DEFAULT LIST — a lead AI already names (>=3 of 6),
+       parked so it is not chased. It stays fully reachable: the status filter offers it permanently
+       (a static option — see OUTREACH_STATUS_OPTIONS), and selecting it runs the wanted-status path
+       ABOVE, which shows exactly these rows. So the hide fires ONLY when no specific status is chosen.
+       All active leads are already loaded client-side (useOutreach fetches every non-archived lead),
+       so this is a reveal, not a fetch. */
+    if (statusFilter === 'all') {
+      result = result.filter((lead) => lead.status !== 'already_visible');
+    }
+
     // Filter by country
     if (countryFilter !== 'all') {
       result = result.filter((lead) => lead.country === countryFilter);
