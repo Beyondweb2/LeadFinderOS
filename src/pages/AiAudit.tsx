@@ -395,6 +395,11 @@ const AiAudit = () => {
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<RunRow | null>(null);
   const [queueRows, setQueueRows] = useState<QueueRow[]>([]);
+  /* ALL-runs queue rows for the REPORT/preview. A Full Measurement asks each question over several
+     runs, so the report aggregates across EVERY run ("named X of 120", not one run's 40). Loaded when
+     results are shown and the tracked run is terminal; queueRows stays the SINGLE active run so the
+     draining progress bar is unaffected. */
+  const [reportRows, setReportRows] = useState<QueueRow[]>([]);
   // Live list of ALL the operator's in-flight audits (pending/running) — so firing a second audit
   // doesn't hide the first; each shows its own X/N. Keyed by run id, refreshed by a poller below.
   const [runningList, setRunningList] = useState<{ runId: string; auditId: string; name: string; done: number; total: number; status: string }[]>([]);
@@ -421,8 +426,12 @@ const AiAudit = () => {
   // Generated report snapshots, keyed by run id. Persisted (per-user, survives navigation
   // AND tab close) so a report that's been generated is shown as-is on return — it is only
   // rebuilt by the explicit Regenerate action, never silently re-derived.
+  /* ⛔ version 2: EVICTS every pre-multi-run-aggregation snapshot. Before the all-runs fix,
+     openReportForCurrentRun snapshotted a SINGLE run's data (a 3-run measurement froze as "X of 40"
+     in localStorage and survived hard reloads). Bumping the key drops those; the next open rebuilds
+     from all runs via loadAuditRows. Harmless for quick audits — their snapshot just rebuilds identical. */
   const [reports, setReports] = usePersistedState<Record<string, AiAuditReportData>>(
-    'ai-audit-reports', {}, { tier: 'local', scope: user?.id ?? null, version: 1 },
+    'ai-audit-reports', {}, { tier: 'local', scope: user?.id ?? null, version: 2 },
   );
 
   /* REMOVED 2026-07-30: playbookRunId / playbookView / playbookGenerating / the `playbooks` snapshot
@@ -1531,6 +1540,20 @@ const AiAudit = () => {
     { named: 0, total: 0, failed: 0, done: 0 },
   );
   const isDraining = !!runId && !(run && TERMINAL.has(run.status));
+  /* Load the ALL-RUNS rows for the report/preview once the tracked run is terminal, so a Full
+     Measurement's in-place preview aggregates across every run (named X of 120). Cleared while
+     draining or when the audit changes, so the draining bar (queueRows) is untouched.
+     openReportForCurrentRun also re-fetches fresh at click, so the snapshot is authoritative even if
+     later measurement runs finished after this loaded. For a 1-run quick audit this is just that run. */
+  useEffect(() => {
+    if (step !== 'results' || !auditId || isDraining) { setReportRows([]); return; }
+    let cancelled = false;
+    (async () => {
+      const rows = await loadAuditRows(auditId);
+      if (!cancelled) setReportRows(rows);
+    })();
+    return () => { cancelled = true; };
+  }, [step, auditId, isDraining, loadAuditRows]);
   /** The open audit's own list row, for its created_at. A business can hold several audits now, so
    *  the results view has to say which one it is showing. */
   /* The grouping/search source: the fetched window PLUS any server-search matches from beyond it
@@ -1586,7 +1609,10 @@ const AiAudit = () => {
   // regenerate. internal:true — this is the OPERATOR preview, so it shows the winnability signal;
   // the client route (render-audit-report) never sets it.
   const liveReportData = (() => {
-    const rd = buildReportData(queueRows, run, {
+    /* ⛔ AGGREGATE ACROSS ALL RUNS. reportRows holds every run's rows once the run is terminal, so a
+       Full Measurement reports "named X of 120". Falls back to queueRows (the single active run) only
+       while draining / before the all-runs load — where a single-run live view is the correct thing. */
+    const rd = buildReportData(reportRows.length ? reportRows : queueRows, run, {
       businessName: resultsBusinessName || businessName,
       businessType,
       locationText,
@@ -1739,9 +1765,26 @@ const AiAudit = () => {
 
   // Snapshot the current run's live report and open it (used by the results screen). If a
   // snapshot already exists it is kept — opening never silently rebuilds it.
-  const openReportForCurrentRun = () => {
+  const openReportForCurrentRun = async () => {
     if (!runId) return;
-    if (!reports[runId] && liveReportData) setReports((prev) => ({ ...prev, [runId]: liveReportData }));
+    if (reports[runId]) { setReportRunId(runId); return; }   // existing snapshot → show it
+    /* Build from ALL runs (loadAuditRows), exactly like viewReport/regenerateReport, so a Full
+       Measurement's snapshot is "named X of 120", not one run's 40. A 1-run quick audit's loadAuditRows
+       returns just that run → identical to before. Fresh at click, so it reflects every run that has
+       finished, even if later measurement runs completed after the in-place preview loaded. */
+    const aId = run?.audit_id ?? auditId;
+    const rows = aId ? await loadAuditRows(aId) : await loadRunRows(runId);
+    const data = buildReportData(rows, run, {
+      businessName: resultsBusinessName || businessName,
+      businessType,
+      locationText,
+      specialisms,
+      isAggregatorUrl,
+      ownWebsite,
+    });
+    if (!data) { toast({ title: 'No completed results to report yet', variant: 'destructive' }); return; }
+    data.internal = true; // operator preview — winnability shown here, never on the client doc
+    setReports((prev) => ({ ...prev, [runId]: data }));
     setReportRunId(runId);
   };
   // Rebuild the open report from the LATEST run data: re-fetch the run + its rows, rebuild
