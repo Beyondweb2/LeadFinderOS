@@ -1520,7 +1520,7 @@ const AiAudit = () => {
       isAggregatorUrl,
     });
     if (!data) { toast({ title: 'No completed results to report yet', variant: 'destructive' }); return; }
-    data.internal = true; // operator preview — show the winnability signal (never on the client doc)
+    data.internal = true; // snapshot default — OVERRIDDEN at render/print by AiAuditReport's Client/Internal toggle (showInternal); Client is what shows unless the operator switches
     setReports((prev) => ({ ...prev, [rid]: data }));
     setReportRunId(rid);
   };
@@ -1619,7 +1619,7 @@ const AiAudit = () => {
       specialisms,
       isAggregatorUrl,
     });
-    if (rd) rd.internal = true;
+    if (rd) rd.internal = true; // snapshot default — OVERRIDDEN at render/print by AiAuditReport's Client/Internal toggle (showInternal)
     return rd;
   })();
 
@@ -1811,7 +1811,7 @@ const AiAudit = () => {
         toast({ title: 'Nothing to rebuild yet', description: 'This run has no completed results.', variant: 'destructive' });
         return;
       }
-      data.internal = true; // operator preview — winnability shown here, never on the client doc
+      data.internal = true; // snapshot default — OVERRIDDEN at render/print by AiAuditReport's Client/Internal toggle (showInternal); Client is what shows unless the operator switches
       setReports((prev) => ({ ...prev, [rid]: data }));
       toast({ title: 'Report regenerated', description: 'Rebuilt from the latest run data.' });
     } catch (e) {
@@ -1975,9 +1975,14 @@ const AiAudit = () => {
   if (reportRunId && openReportData) {
     return (
       <AiAuditReport
+        /* key per report: remounting on open resets the Client/Internal toggle to Client (safety —
+           an internal selection never carries into the next report). */
+        key={reportRunId}
         data={openReportData}
         onBack={() => setReportRunId(null)}
-        onDownload={() => downloadReportHtml(openReportData)}
+        /* Print follows the current view: the toggle hands us its choice; Client is the default and
+           downloadReportHtml also fails safe to Client if internal is unset. */
+        onDownload={(internal) => downloadReportHtml({ ...openReportData, internal })}
         onRegenerate={canRegenerate ? regenerateReport : undefined}
         regenerating={regenerating}
       />
