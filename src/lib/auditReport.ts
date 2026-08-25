@@ -737,7 +737,13 @@ export function computeWinnability(cells: string[][], domains: string[]): Questi
   for (const cell of cells) {
     for (const f of new Set(cell.map((x) => x.toLowerCase()))) { tally.set(f, (tally.get(f) ?? 0) + 1); firmMentions++; }
   }
-  const distinctFirms = tally.size;
+  /* ⛔ COUNT ONLY FIRMS THAT RECUR ACROSS ≥2 CELLS. A real firm is named across the repeats (engine ×
+     run); a one-off prose fragment the extractor scraped ("Brain", "Is AndroFeme", "So I'd") appears
+     in a single verbose answer and nowhere else. Requiring ≥2 cells excludes those from the winnability
+     count so a dirty run can't inflate distinctFirms and wrongly push a question to WIDE OPEN. This
+     leans on the repeats — the exact reason winnability is only computed on a multi-run measurement.
+     (extract-competitors cleans the STORED names separately; this is the deterministic backstop.) */
+  const distinctFirms = [...tally.values()].filter((c) => c >= 2).length;
   const topFirmCells = tally.size ? Math.max(...tally.values()) : 0;
   const topShare = totalCells > 0 ? topFirmCells / totalCells : 0;
   const mix = sourceMix(domains);
