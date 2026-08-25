@@ -50,11 +50,13 @@ function printHtmlAsPdf(html: string, title: string): void {
   iframe.srcdoc = titled;
 }
 
-/** Save the standalone report as a PDF (print-to-PDF — vector, design-preserving). */
+/** Save the standalone report as a PDF (print-to-PDF — vector, design-preserving). Prints whichever
+ *  version the operator is viewing — the Client/Internal toggle in AiAuditReport sets `d.internal`. */
 export function downloadReportHtml(d: AiAuditReportData): void {
-  /* ⛔ A DOWNLOADED REPORT IS A CLIENT ARTIFACT — STRIP the internal winnability signal even though
-     the operator's on-screen preview shows it. The operator downloads this to send to the client, so
-     internal must be forced off here regardless of what the passed data carries. Single defensive
-     point: no caller can accidentally hand a client a report with winnability on it. */
-  printHtmlAsPdf(renderReportHtml({ ...d, internal: false }), pdfTitle(d.businessName, "AI-Visibility-Report"));
+  /* ⛔ CLIENT IS THE DEFAULT, AND THAT DEFAULT IS DEFENSIVE. Winnability is included ONLY when
+     `internal` is EXPLICITLY true; an unset/false flag renders the CLIENT document. So a caller that
+     forgets to pass a choice can never hand a client a report with the internal notes on it — the
+     leak direction fails safe. The operator preview's toggle defaults to Client and resets to Client
+     on every report open, so producing the internal PDF is always a conscious two-step choice. */
+  printHtmlAsPdf(renderReportHtml({ ...d, internal: d.internal === true }), pdfTitle(d.businessName, "AI-Visibility-Report"));
 }

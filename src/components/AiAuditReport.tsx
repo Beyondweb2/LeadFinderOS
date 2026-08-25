@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, RefreshCw, Loader2 } from 'lucide-react';
 import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtml';
@@ -10,14 +10,23 @@ import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtm
 // `data` is a persisted snapshot held by the parent — the report shown on return is the
 // one that was generated, not a fresh derivation. `onRegenerate` (when provided) is the
 // ONLY path that rebuilds it from the latest run data.
+//
+// ⛔ CLIENT vs INTERNAL: a toggle chooses which version is rendered AND printed. The internal
+// version shows the winnability annotation; the client version strips it. CLIENT IS THE DEFAULT and
+// resets to client on every open (the parent gives this component key={reportRunId}, so opening a
+// report remounts it and showInternal falls back to false). onDownload is handed the CURRENT choice
+// so print follows the view. The parent's snapshot may carry internal:true; this override decides.
 export function AiAuditReport({ data, onBack, onDownload, onRegenerate, regenerating }: {
   data: AiAuditReportData;
   onBack: () => void;
-  onDownload: () => void;
+  onDownload: (internal: boolean) => void;
   onRegenerate?: () => void;
   regenerating?: boolean;
 }) {
-  const html = renderReportHtml(data);
+  // Default false = CLIENT. Safety: never carry an internal state into the next report — the parent
+  // remounts this component per report (key={reportRunId}), so every open starts on Client.
+  const [showInternal, setShowInternal] = useState(false);
+  const html = renderReportHtml({ ...data, internal: showInternal });
   const frameRef = useRef<HTMLIFrameElement>(null);
 
   const fit = () => {
@@ -34,15 +43,33 @@ export function AiAuditReport({ data, onBack, onDownload, onRegenerate, regenera
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to results
         </Button>
         <div className="flex items-center gap-3">
-          <span className="hidden sm:inline text-xs text-muted-foreground">This is exactly what your prospect receives.</span>
+          {/* Version toggle — CLIENT is the default; Internal shows the winnability notes and is
+              clearly marked "not for the client". Download/print follows whichever is selected. */}
+          <div className="inline-flex items-center rounded-md border border-border overflow-hidden text-xs">
+            <button
+              type="button"
+              onClick={() => setShowInternal(false)}
+              aria-pressed={!showInternal}
+              className={`px-2.5 h-7 font-medium transition-colors ${!showInternal ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground'}`}
+            >Client</button>
+            <button
+              type="button"
+              onClick={() => setShowInternal(true)}
+              aria-pressed={showInternal}
+              className={`px-2.5 h-7 font-medium transition-colors ${showInternal ? 'bg-amber-500 text-white' : 'bg-background text-muted-foreground hover:text-foreground'}`}
+            >Internal</button>
+          </div>
+          <span className={`hidden sm:inline text-xs ${showInternal ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
+            {showInternal ? '⚠ Internal view — winnability shown. Not for the client.' : 'This is exactly what your prospect receives.'}
+          </span>
           {onRegenerate && (
             <Button variant="outline" size="sm" onClick={onRegenerate} disabled={regenerating} title="Rebuild this report from the latest run data">
               {regenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               {regenerating ? 'Regenerating…' : 'Regenerate'}
             </Button>
           )}
-          <Button size="sm" onClick={onDownload}>
-            <Download className="mr-2 h-4 w-4" /> Download PDF
+          <Button size="sm" onClick={() => onDownload(showInternal)}>
+            <Download className="mr-2 h-4 w-4" /> {showInternal ? 'Download PDF · Internal' : 'Download PDF · Client'}
           </Button>
         </div>
       </div>
