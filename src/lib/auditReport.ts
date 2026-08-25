@@ -746,14 +746,14 @@ export function computeWinnability(cells: string[][], domains: string[]): Questi
   let reason: string;
   if (totalCells === 0) { label = 'unclear'; reason = 'no answers to read'; }
   else if (firmMentions === 0) {
-    if (authorityLean) { label = 'informational'; reason = 'no businesses named — AI answered from information/authority sites, so it is not shopping for a business here'; }
+    if (authorityLean) { label = 'informational'; reason = 'AI answers this with general information rather than naming businesses. Potentially winnable with a strong Q&A or article page — worth testing.'; }
     else { label = 'unclear'; reason = 'no businesses named, but the sources are not clearly informational'; }
   } else if (distinctFirms <= 3 && topShare >= 0.5) {
     label = 'locked'; reason = `dominated — ${distinctFirms} firm${distinctFirms === 1 ? '' : 's'} recur, the top one named in ${topFirmCells} of ${totalCells} answers`;
   } else if (distinctFirms >= 4 && topShare < 0.4 && mix.business >= 1) {
     label = 'wide_open'; reason = `${distinctFirms} different firms named, none dominant, and business-type sources appear — a page could win a place`;
   } else {
-    label = 'unclear'; reason = 'mixed or thin signals — not calling it';
+    label = 'unclear'; reason = 'Mixed signals — no clear incumbent. Worth a closer look as a possible content target.';
   }
   return { label, reason, distinctFirms, topFirmCells, totalCells, sourceMix: mix };
 }
