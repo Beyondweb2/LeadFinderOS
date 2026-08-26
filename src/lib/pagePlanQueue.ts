@@ -10,9 +10,10 @@
    index exactly once, nothing unknown. Any violation falls back to singleton clusters LOUDLY
    (partitionOk=false) rather than silently dropping a question.
 
-   ⛔ Waves are EVIDENCE BANDS, not quotas. A topic's pages share ONE wave (the doc's "publish
-   complete clusters"): the topic sits in the wave its best page earns. Holds are itemised with
-   reasons, never silent; the operator can un-hold anything.
+   ⛔ Waves are EVIDENCE BANDS, not quotas — and each page's OWN SCORE decides its wave (wave 1 =
+   top priorities; Paul's rule 2026-08-28, superseding the earlier topic-grouped waves — a low-score
+   page must never ride wave 1 on a sibling's strength). `topic` survives as the hub grouping.
+   Holds are itemised with reasons, never silent; the operator can un-hold anything.
 
    Pure + dependency-free (edge fn AND SPA import it); scripts/page-plan-queue.test.ts drives it.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -32,6 +33,9 @@ export interface QuestionSignals {
   /** Majority classifyWinnability verdict across the measurement runs. */
   winnability: WinnVerdict;
   winnabilityReason: string;
+  /** The incumbent firms classifyWinnability saw on the majority-verdict run — who a locked
+   *  market is actually held by, for the locked-hold wording. */
+  incumbents?: string[];
   /** Per scored engine: named-in-N-of-M-runs counts; null = engine never answered. */
   named: { chatgpt: EngineNamed | null; gemini: EngineNamed | null };
   /** Business-type sources cited (a business page can plausibly rank there). */
@@ -236,11 +240,16 @@ export const NEAR_DUP_JACCARD = 0.8;
 
 export function scoreCluster(signals: QuestionSignals[]): {
   score: number; reasons: string[]; winnability: WinnVerdict; defend: boolean; defendReason: string | null;
-  geminiGap: boolean;
+  geminiGap: boolean; lockedHold: boolean; lockedReason: string | null;
 } {
-  /* Defend is PER QUESTION, from the actual run counts — and GEMINI-FIRST (see the rule block
-     above): a page holds ONLY when every measured question has Gemini named. One defended variant
-     never holds a page whose other variants are winnable. */
+  /* ⛔ THE PAGE'S OUTCOME IS EVALUATED IN THIS ORDER (Paul's rule, 2026-08-28):
+       1. market LOCKED (every winnable question's majority verdict is 'locked') → HOLD — strong
+          incumbents dominate regardless of the client's own counts; own wording, names the
+          incumbents. Takes priority over everything.
+       2. Gemini named (≥2 of ≥2 runs, every measured question) → HOLD as defend (Gemini-first:
+          pages are the Gemini lever; already-named wording with real counts).
+       3. ChatGPT named but Gemini absent → BUILD, tagged "Gemini gap".
+       4. else → BUILD (best; wide-open ranks highest). */
   const measured = signals.filter((s) => s.winnability !== 'unmeasured' || s.named.chatgpt || s.named.gemini);
   const defend = measured.length > 0 && measured.every((s) => questionDefends(s));
   /* Client-safe wording that claims ONLY what it measured: a single-question page must talk about
@@ -265,7 +274,17 @@ export function scoreCluster(signals: QuestionSignals[]): {
   let score = WINNABILITY_BASE[best];
   reasons.push(`${best.replace(/_/g, ' ')}${bestSig?.winnabilityReason ? ` (${bestSig.winnabilityReason})` : ''}`);
 
-  if (defend) reasons.push(defendReason!);
+  /* Priority 1 — LOCKED market. 'locked' is last in the order above, so best === 'locked' means
+     every winnable question is locked: strong incumbents dominate whatever the client's own counts
+     say. Own wording, deliberately different from the defend wording, naming the incumbents. */
+  const lockedHold = best === 'locked';
+  const incumbents = [...new Set(signals.flatMap((s) => (s.winnability === 'locked' ? s.incumbents ?? [] : [])))].slice(0, 3);
+  const lockedReason = lockedHold
+    ? `Held — market locked: ${incumbents.length ? incumbents.join(', ') : 'a small, consistent set of incumbents'} dominate${incumbents.length === 1 ? 's' : ''} the answers here and a new page's win chance is low right now. Revisit as the site's authority grows.`
+    : null;
+
+  if (lockedHold) reasons.push(lockedReason!);
+  else if (defend) reasons.push(defendReason!);
   else if (geminiGap) {
     /* Deliberately NO absence/gap bonus: these rank below the wide-open builds (later wave) —
        the client already has ChatGPT presence here, so fresh ground comes first. */
@@ -279,11 +298,11 @@ export function scoreCluster(signals: QuestionSignals[]): {
   const extra = Math.min(5, signals.length - 1);
   if (extra > 0) { score += extra * 2; reasons.push(`${signals.length} question variants merged — demand signal (+${extra * 2})`); }
 
-  return { score: Math.max(0, Math.min(100, score)), reasons, winnability: best, defend, defendReason, geminiGap };
+  return { score: Math.max(0, Math.min(100, score)), reasons, winnability: best, defend, defendReason, geminiGap, lockedHold, lockedReason };
 }
 
-/** Assemble the queue: score each cluster, flag near-dups, hold defend/locked, and assign waves
- *  with SIBLINGS KEPT TOGETHER — a topic's pages all take the wave its best page earns. */
+/** Assemble the queue: score each cluster, flag near-dups, hold locked/defend (in that priority),
+ *  and assign waves BY SCORE — wave 1 means "top priorities". */
 export function buildQueue(
   questions: string[], clusters: ClusterProposal[], signalsByQuestion: Map<string, QuestionSignals>,
 ): PlannedQueuePage[] {
@@ -292,15 +311,16 @@ export function buildQueue(
     const primary = questions[c.primaryIndex];
     const ordered = [primary, ...qs.filter((q) => q !== primary)];
     const sig = qs.map((q) => signalsByQuestion.get(q)).filter((s): s is QuestionSignals => !!s);
-    const { score, reasons, winnability, defend, defendReason, geminiGap } = sig.length
+    const { score, reasons, winnability, defend, defendReason, geminiGap, lockedHold, lockedReason } = sig.length
       ? scoreCluster(sig)
-      : { score: 0, reasons: ['no measured answers for any variant'], winnability: 'unmeasured' as const, defend: false, defendReason: null, geminiGap: false };
-    /* ⛔ THE ONLY HOLD IS THE GEMINI DEFEND (Paul's rule, 2026-08-28). 'locked' no longer
-       auto-holds — it builds with its low score (it sinks to the bottom of wave 2) and keeps its
-       label so the odds are visible. ChatGPT-named pages BUILD with the Gemini-gap tag. */
+      : { score: 0, reasons: ['no measured answers for any variant'], winnability: 'unmeasured' as const, defend: false, defendReason: null, geminiGap: false, lockedHold: false, lockedReason: null };
+    /* Holds, in priority order (see scoreCluster's rule block): 1. LOCKED market (own wording,
+       names the incumbents), 2. Gemini DEFEND (already-named wording, real counts). Everything
+       else builds — ChatGPT-named pages build with the Gemini-gap tag. */
     let status: PlannedQueuePage['status'] = 'planned';
     let heldReason: string | null = null;
-    if (defend) { status = 'held'; heldReason = defendReason; }
+    if (lockedHold) { status = 'held'; heldReason = lockedReason; }
+    else if (defend) { status = 'held'; heldReason = defendReason; }
     return {
       job: c.job, topic: c.topic || 'general', primaryQuestion: primary, questions: ordered,
       rationale: c.rationale, score, scoreReasons: reasons, winnability,
@@ -319,23 +339,15 @@ export function buildQueue(
     }
   }
 
-  // Waves: group by topic; a topic's wave = the band of its BEST planned page (complete clusters).
-  const byTopic = new Map<string, PlannedQueuePage[]>();
-  for (const p of pages) { const arr = byTopic.get(p.topic) ?? []; arr.push(p); byTopic.set(p.topic, arr); }
-  const topicBest = new Map<string, number>();
-  for (const [t, arr] of byTopic) {
-    const planned = arr.filter((p) => p.status === 'planned');
-    topicBest.set(t, planned.length ? Math.max(...planned.map((p) => p.score)) : Math.max(...arr.map((p) => p.score)));
-  }
-  const topicsOrdered = [...topicBest.entries()].sort((x, y) => y[1] - x[1]).map(([t]) => t);
+  /* Waves BY SCORE (Paul's rule, 2026-08-28): wave 1 means "top priorities", so each page's OWN
+     score decides its wave — a score-35 gap page must never sit in wave 1 next to a score-85
+     wide-open page just because they share a topic. (This supersedes the earlier topic-grouped
+     waves; `topic` survives as the hub grouping for display and later hub pages.) */
+  const ranked = [...pages].sort((x, y) => y.score - x.score);
   let pos1 = 0, pos2 = 0;
-  for (const t of topicsOrdered) {
-    const wave = (topicBest.get(t) ?? 0) >= WAVE1_MIN_SCORE ? 1 : 2;
-    const members = (byTopic.get(t) ?? []).sort((x, y) => y.score - x.score);
-    for (const p of members) {
-      p.wave = wave;
-      p.position = wave === 1 ? pos1++ : pos2++;
-    }
+  for (const p of ranked) {
+    p.wave = p.score >= WAVE1_MIN_SCORE ? 1 : 2;
+    p.position = p.wave === 1 ? pos1++ : pos2++;
   }
 
   /* ⛔ ROW LABELS MUST BE UNAMBIGUOUS. The job label is model-written; nothing stops it producing

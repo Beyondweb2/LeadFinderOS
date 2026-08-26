@@ -13,8 +13,8 @@ import {
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
 const en = (named: number, runs: number): EngineNamed => ({ named, runs });
-const sig = (q: string, w: WinnVerdict, cg: EngineNamed | null, gm: EngineNamed | null, biz = false): QuestionSignals =>
-  ({ question: q, winnability: w, winnabilityReason: 'test', named: { chatgpt: cg, gemini: gm }, businessSources: biz });
+const sig = (q: string, w: WinnVerdict, cg: EngineNamed | null, gm: EngineNamed | null, biz = false, inc: string[] = []): QuestionSignals =>
+  ({ question: q, winnability: w, winnabilityReason: 'test', incumbents: inc, named: { chatgpt: cg, gemini: gm }, businessSources: biz });
 
 console.log('── PRE-MERGE ──');
 {
@@ -122,10 +122,18 @@ console.log('── ⛔ GEMINI-FIRST THREE-WAY: build / build-with-gap-tag / def
   ]);
   ok(!mixed.defend, 'one defended sibling never holds a page with an absent variant');
   ok(mixed.winnability === 'open', '  and the page winnability comes from the winnable variant');
-  // locked no longer auto-holds — it builds with its low score.
+  // 0. LOCKED market -> HOLD, priority over everything, OWN wording naming the incumbents.
   const locked = buildQueue(['q'], [{ job: 'q', topic: 't', primaryIndex: 0, questionIndices: [0], rationale: '' }],
-    new Map([['q', sig('q', 'locked', en(0, 3), en(0, 3))]]));
-  ok(locked[0].status === 'planned' && locked[0].score < WAVE1_MIN_SCORE, 'locked BUILDS low (only the Gemini defend holds)');
+    new Map([['q', sig('q', 'locked', en(0, 3), en(0, 3), false, ['LockRite', 'Keytek'])]]));
+  ok(locked[0].status === 'held', 'a LOCKED market HOLDS (priority 1)');
+  ok((locked[0].heldReason ?? '').includes('market locked') && (locked[0].heldReason ?? '').includes('LockRite'),
+    '  with its OWN wording, naming the incumbents');
+  ok(!(locked[0].heldReason ?? '').includes('Already named'), '  and never the defend wording');
+  const lockedNoInc = scoreCluster([sig('q', 'locked', en(0, 3), en(0, 3))]);
+  ok((lockedNoInc.lockedReason ?? '').includes('a small, consistent set of incumbents'), '  no incumbent names -> honest generic phrasing');
+  // A page with one locked question and one open question BUILDS (something to win).
+  const mixedLock = scoreCluster([sig('a', 'locked', en(0, 3), en(0, 3)), sig('b', 'open', en(0, 3), en(0, 3))]);
+  ok(!mixedLock.lockedHold && mixedLock.winnability === 'open', 'locked + open variants -> builds on the open one');
 }
 
 console.log('── WINNABILITY LABELS MAP THROUGH ──');
@@ -138,7 +146,7 @@ console.log('── WINNABILITY LABELS MAP THROUGH ──');
   ok(nlr.winnability === 'no_local_race', 'no_local_race maps through');
 }
 
-console.log('── WAVES KEEP TOPICS TOGETHER + NEAR-DUP + QUEUE ASSEMBLY ──');
+console.log('── WAVES BY SCORE + NEAR-DUP + QUEUE ASSEMBLY ──');
 {
   const qs = ['strong testosterone q', 'weak testosterone q', 'hrt monthly cost q', 'locked incumbent q', 'defended q', 'the monthly hrt cost q'];
   const clusters: ClusterProposal[] = qs.map((q, i) => ({
@@ -147,20 +155,24 @@ console.log('── WAVES KEEP TOPICS TOGETHER + NEAR-DUP + QUEUE ASSEMBLY ─�
     primaryIndex: i, questionIndices: [i], rationale: '',
   }));
   const signals = new Map<string, QuestionSignals>([
-    [qs[0], sig(qs[0], 'open', en(0, 3), en(0, 3), true)],
-    [qs[1], sig(qs[1], 'contested', en(0, 3), en(0, 3))],
-    [qs[2], sig(qs[2], 'contested', en(1, 3), en(1, 3))],   // partial presence on BOTH engines: no absence bonus, no gap -> stays under WAVE1_MIN
-    [qs[3], sig(qs[3], 'locked', en(0, 3), en(0, 3))],
+    [qs[0], sig(qs[0], 'open', en(0, 3), en(0, 3), true)],   // 85 -> wave 1
+    [qs[1], sig(qs[1], 'contested', en(1, 3), en(1, 3))],    // 50, SAME topic as the 85 -> must stay wave 2
+    [qs[2], sig(qs[2], 'contested', en(1, 3), en(1, 3))],
+    [qs[3], sig(qs[3], 'locked', en(0, 3), en(0, 3), false, ['Incumbent Ltd'])],
     [qs[4], sig(qs[4], 'named', en(3, 3), en(2, 3))],
     [qs[5], sig(qs[5], 'contested', en(1, 3), en(1, 3))],
   ]);
   const pages = buildQueue(qs, clusters, signals);
   const p = (job: string) => pages.find((x) => x.job === job)!;
-  ok(p('testo strong').wave === 1 && p('testo weak').wave === 1, 'siblings share the strong page\'s wave (complete clusters)');
-  ok(p('hrt cost').wave === 2, 'a weak topic lands in wave 2');
-  ok(p('locked one').status === 'planned' && p('locked one').wave === 2, 'locked builds low in wave 2 (only the Gemini defend holds)');
+  ok(p('testo strong').wave === 1, 'a high-score page lands in wave 1');
+  ok(p('testo weak').wave === 2, '⛔ a LOW-score page stays in wave 2 even sharing a topic with a wave-1 page (score decides)');
+  ok(p('hrt cost').wave === 2, 'a weak page lands in wave 2');
+  ok(p('locked one').status === 'held' && p('locked one').heldReason!.includes('market locked') && p('locked one').heldReason!.includes('Incumbent Ltd'),
+    'locked HOLDS with its own wording naming the incumbents');
   ok(p('defended one').status === 'held' && p('defended one').heldReason!.includes('ChatGPT 3/3'), 'defend hold cites the real counts');
   ok(p('hrt cost dup').nearDupOf === qs[2], `near-identical primaries flag as duplicates (J>=${NEAR_DUP_JACCARD})`);
+  const w1 = pages.filter((x) => x.wave === 1).sort((a, b) => a.position - b.position);
+  ok(w1.every((x, i) => i === 0 || w1[i - 1].score >= x.score), 'wave positions follow score order');
   const noSig = buildQueue(['q'], [{ job: 'q', topic: 't', primaryIndex: 0, questionIndices: [0], rationale: '' }], new Map());
   ok(noSig[0].winnability === 'unmeasured' && noSig[0].scoreReasons[0].includes('no measured answers'), 'absent signals -> unmeasured, never confident');
 }

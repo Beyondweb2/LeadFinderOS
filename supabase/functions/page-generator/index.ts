@@ -331,12 +331,13 @@ Deno.serve(async (req) => {
             classifyWinnability(result, { businessName: qaAudit.business_name, locationText: locText, ownWebsite, isAggregatorUrl }));
           const labels = perRun.map((v) => toVerdict(v.verdict));
           const wv = majorityVerdict(labels);
-          const reason = perRun.find((v) => toVerdict(v.verdict) === wv)?.reason ?? "";
+          const majRun = perRun.find((v) => toVerdict(v.verdict) === wv);
           const nr = namedByQ.get(q) ?? { chatgpt: [0, 0] as [number, number], gemini: [0, 0] as [number, number] };
           signals.set(q, {
             question: q,
             winnability: wv,
-            winnabilityReason: reason,
+            winnabilityReason: majRun?.reason ?? "",
+            incumbents: (majRun?.namedFirms ?? []).slice(0, 5),
             named: {
               chatgpt: nr.chatgpt[1] > 0 ? { named: nr.chatgpt[0], runs: nr.chatgpt[1] } : null,
               gemini: nr.gemini[1] > 0 ? { named: nr.gemini[0], runs: nr.gemini[1] } : null,
