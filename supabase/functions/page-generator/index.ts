@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildPagePlan, stuffingCheck, enforceNaturalness, MAX_TOWN_MENTIONS, MAX_KEYWORD_DENSITY_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
+import { buildPagePlan, stuffingCheck, enforceNaturalness, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
 
 // page-generator — service-plus-town delivery pages, from the OVERLAP of the client's
 // questionnaire (services_list x areas_list) and their baseline audit's exact measured queries.
@@ -251,15 +251,19 @@ Return via return_page.`;
     if (out.kind === "no_credits") return json({ ok: false, error: "no_credits" }, 200);
     if (out.kind === "error") return json({ ok: false, error: out.error, detail: (out as { detail?: string }).detail }, 502);
 
-    /* Escalating strictness on failure — the OLD version did ONE soft "shorten" retry and could keep
-       a still-stuffed draft (densityPct <= previous). Now: up to 3 attempts, each with genuinely
-       stricter instructions, and we keep the FIRST that PASSES (else the lowest-density draft). */
+    /* Escalating strictness on failure — up to 3 attempts, each with genuinely stricter instructions.
+       Keep the FIRST that PASSES; else keep the draft CLOSEST to passing (lowest stuffScore), so a
+       mid-loop error never leaves us with a worse draft than one we already had. */
+    const stuffScore = (c: StuffingVerdict): number =>
+      Math.max(0, c.townCount - MAX_TOWN_MENTIONS)
+      + Math.max(0, c.phraseCount - MAX_SERVICE_PHRASE_REPEATS)
+      + Math.max(0, c.topWordPct - MAX_SINGLE_WORD_PCT);
     const strictFeedback = (c: StuffingVerdict, level: number): string => {
       const rules = [
         `name the town "${page.town}" at most TWICE — say "here"/"locally"/"the area" everywhere else`,
-        `use the words from "${page.service}" far LESS — never repeat the service phrase; vary the language`,
+        `never repeat the exact phrase "${page.service}"; use it once at most and vary the wording elsewhere`,
+        `do not lean on any single word — vary your vocabulary so nothing is hammered`,
         `do NOT name any other town, city or area`,
-        `keyword density MUST be under ${MAX_KEYWORD_DENSITY_PCT}%`,
       ];
       if (level >= 2) rules.push(`name the town "${page.town}" only ONCE, and use the phrase "${page.service}" only ONCE in the whole page`);
       return `YOUR PREVIOUS DRAFT READ AS KEYWORD-STUFFED (${c.detail}). Rewrite it to read like a human wrote it:\n- ${rules.join("\n- ")}`;
@@ -273,15 +277,15 @@ Return via return_page.`;
       attempts++;
       if (retry.kind !== "page") break; // no_credits / error mid-loop → stop, use best so far
       const rc = stuffingCheck(`${retry.h1} ${retry.bodyHtml}`, page.service, page.town);
-      if (rc.densityPct < best.check.densityPct) best = { out: retry, check: rc };
+      if (stuffScore(rc) < stuffScore(best.check)) best = { out: retry, check: rc };
       out = retry; check = rc;
       if (rc.verdict === "ok") { best = { out: retry, check: rc }; break; }
     }
     out = best.out;
 
-    /* ⛔ MECHANICAL BACKSTOP — the page handed over is GUARANTEED under the limits (town cap, no other
-       towns, density < 3%). No more "fix it yourself" warnings. Regeneration above does the natural
-       writing; this only guarantees the numbers on whatever it produced. */
+    /* ⛔ MECHANICAL BACKSTOP — the page handed over is GUARANTEED under the town cap and to name NO
+       other towns. Regeneration above does the natural writing (and, with the fixed metric, natural
+       copy passes on its own); this only guarantees the town count and no-other-towns. */
     const otherTowns = [homeTown, ...areas].filter((a) => a && a.toLowerCase() !== page.town.toLowerCase());
     const enforced = enforceNaturalness(out.bodyHtml, page.service, page.town, otherTowns, out.h1);
 
