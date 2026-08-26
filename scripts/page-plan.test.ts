@@ -16,7 +16,7 @@
    ============================================================ */
 import {
   buildPagePlan, serviceMatches, townMatches, stuffingCheck, slugFor,
-  MAX_TOWN_MENTIONS,
+  MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT,
 } from "../src/lib/pagePlan.ts";
 
 let f = 0;
@@ -138,6 +138,35 @@ console.log("\n── THE ANTI-STUFFING CHECK ──");
 
   const empty = stuffingCheck('', 'Emergency lockouts', 'Huntingdon');
   ok(empty.verdict === 'ok' && empty.wordCount === 0, 'empty input does not divide by zero or false-alarm');
+
+  /* ⛔ THE FALSE-FLAG WE FIXED (2026-08-27): a natural "Lock changes" page uses "lock/locks" heavily
+     but says the exact phrase once and the town once. The OLD raw-density metric flagged this at
+     ~4-5%; the new metric must pass it silently. */
+  const naturalLock = `<h1>Lock Changes in Huntingdon</h1><p>If you need new locks or want to upgrade
+    the ones you have, we can help. We understand how much it matters to feel secure at home, so we
+    fit reliable locks quickly. When you call us for a lock change we discuss what you need, then a
+    locksmith visits to assess your locks and recommend the best replacement. Whether it is a worn
+    lock or an upgrade to something more secure, we make sure the new locks work smoothly. Our team
+    is DBS checked and fully insured. Get in touch for any lock-related work.</p>`;
+  const v3 = stuffingCheck(naturalLock, 'Lock changes', 'Huntingdon');
+  ok(v3.verdict === 'ok', `natural lock-changes copy grades ok despite heavy "lock" use (${v3.detail})`);
+  ok(v3.topWordPct < MAX_SINGLE_WORD_PCT, `  natural "lock" use (${v3.topWordPct}%) stays under the ${MAX_SINGLE_WORD_PCT}% backstop`);
+
+  /* Exact-phrase hammering trips the phrase cap even when the town is used sparingly. */
+  const phraseHammer = `<p>Need lock changes? Our lock changes are fast. For lock changes, book lock
+    changes today. Lock changes done right, lock changes you can trust. We do lock changes across the
+    area.</p>`;
+  const v4 = stuffingCheck(phraseHammer, 'Lock changes', 'Huntingdon');
+  ok(v4.phraseCount > MAX_SERVICE_PHRASE_REPEATS, `  exact phrase repeated ${v4.phraseCount}x trips the phrase cap`);
+  ok(v4.verdict === 'stuffed', `  phrase-hammered copy grades stuffed (${v4.detail})`);
+
+  /* Bare-noun spam (one word hammered) trips the backstop even with no phrase repeats and a low town. */
+  const nounSpam = `<p>Security security security. We are security first: security experts, security
+    minded, security led. Security matters. Security here, security there, security everywhere for
+    your peace of mind and total security.</p>`;
+  const v5 = stuffingCheck(nounSpam, 'Lock changes', 'Huntingdon');
+  ok(v5.topWordPct > MAX_SINGLE_WORD_PCT, `  bare-noun spam ("${v5.topWord}" ${v5.topWordPct}%) trips the backstop`);
+  ok(v5.verdict === 'stuffed', `  bare-noun-spam copy grades stuffed (${v5.detail})`);
 }
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILED`);

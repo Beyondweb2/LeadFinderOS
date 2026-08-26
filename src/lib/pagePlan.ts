@@ -170,48 +170,100 @@ export function buildPagePlan(input: PagePlanInput): PagePlan {
 
 export interface StuffingVerdict {
   wordCount: number;
+  /** Exact town-name mentions (contiguous). Over-use is the classic doorway signal. */
   townCount: number;
-  serviceTokenCount: number;
-  densityPct: number;
+  /** Exact, contiguous repeats of the multi-word SERVICE PHRASE ("lock changes" as a run) — NOT the
+   *  raw count of the generic words that make it up. Natural copy repeats the phrase once or twice. */
+  phraseCount: number;
+  /** The most-repeated single CONTENT word — function words, the service's own tokens and the town
+   *  all excluded, so natural "lock" use never shows here. The bare-noun-spam backstop. */
+  topWord: string;
+  /** topWord's share of all words, percent. Natural use of "lock/locks" sits well under the cap. */
+  topWordPct: number;
   verdict: 'ok' | 'stuffed';
   detail: string;
 }
 
-/** Maximum town mentions before a page reads as a doorway page. Lowered 4 → 3 (2026-08-27): the
- *  generator now aims for 2 and the backstop trims to this. */
+/* ⛔ WHY THIS MEASURES PHRASES + TOWN + A SINGLE-WORD BACKSTOP, NOT RAW "KEYWORD DENSITY" (2026-08-27).
+   The old metric summed EVERY occurrence of the service's stemmed tokens (lock/locks, change/changes)
+   and called it density — so a genuinely clean locksmith page hit 3.6-5.2% purely from unavoidable use
+   of "lock", and false-flagged as stuffed. A locksmith page HAS to say "lock" a lot; that is not
+   stuffing. Doorway stuffing is three specific things, and this now measures exactly those:
+     • the TOWN name hammered (townCount)                              — MAX_TOWN_MENTIONS
+     • the exact service PHRASE repeated ("lock changes … lock changes") — MAX_SERVICE_PHRASE_REPEATS
+     • one content word spammed regardless of phrase (bare "locksmith" ×30) — MAX_SINGLE_WORD_PCT
+   Natural use of the generic service words no longer counts toward a fail. Validated on 4 freshly
+   generated pages 2026-08-27 (all clean, top word ~3-4%); the old 5.7% doorway still fails all three. */
 export const MAX_TOWN_MENTIONS = 3;
-/** Maximum (town + service-token) share of all words, percent. RG's stuffed pages ran 5.7% on one
- *  token alone; natural copy sits comfortably under this. */
-export const MAX_KEYWORD_DENSITY_PCT = 3.0;
+/* Raised 4 → 5 after validation (2026-08-27): 4 freshly generated RG pages read the exact phrase up
+   to 4x on genuinely natural copy (the H1's one mandatory use + a few in body), so 4 sat ON the
+   observed natural ceiling. 5 gives natural copy a unit of headroom; doorways hammered it 7-11x, so
+   the margin below the doorway floor is preserved. */
+export const MAX_SERVICE_PHRASE_REPEATS = 5;
+/* Validated generous: the same 4 pages topped out at ~2% on any single non-service word; bare-noun
+   spam runs 26-41%. 6% sits far from both. */
+export const MAX_SINGLE_WORD_PCT = 6.0;
+
+/** Function words the single-word backstop must never mistake for a stuffing keyword. Includes the
+ *  neutral replacements the backstop itself introduces ("here", "locally") so enforcement can't
+ *  create a new top word. */
+const STOPWORDS = new Set<string>([
+  ...NOISE,
+  'to', 'is', 'are', 'it', 'we', 'our', 'us', 'you', 'they', 'their', 'them', 'he', 'she',
+  'with', 'on', 'at', 'by', 'from', 'that', 'this', 'these', 'those', 'be', 'been', 'being',
+  'was', 'were', 'will', 'would', 'can', 'could', 'should', 'have', 'has', 'had', 'not', 'no',
+  'if', 'or', 'but', 'so', 'what', 'when', 'who', 'how', 'why', 'all', 'more', 'most', 'some',
+  'out', 'up', 'into', 'about', 'than', 'then', 'there', 'also', 'just', 'very', 'here', 'locally',
+  'your', 'll', 're', 've', 'don', 'won', 'us',
+]);
+
+/** Count contiguous occurrences of a token run inside a token array. */
+function countRuns(hay: string[], needle: string[]): number {
+  if (needle.length === 0 || needle.length > hay.length) return 0;
+  let n = 0;
+  outer: for (let i = 0; i + needle.length <= hay.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (hay[i + j] !== needle[j]) continue outer;
+    n++;
+  }
+  return n;
+}
 
 export function stuffingCheck(bodyHtmlOrText: string, service: string, town: string): StuffingVerdict {
   const text = String(bodyHtmlOrText ?? '').replace(/<[^>]*>/g, ' ');
   const words = tokens(text);
   const wordCount = words.length;
 
-  const townToks = tokens(town);
-  let townCount = 0;
-  if (townToks.length > 0) {
-    for (let i = 0; i + townToks.length <= words.length; i++) {
-      let hit = true;
-      for (let j = 0; j < townToks.length; j++) if (words[i + j] !== townToks[j]) { hit = false; break; }
-      if (hit) townCount++;
-    }
-  }
+  const townCount = countRuns(words, tokens(town));
 
-  const svcToks = new Set(subPhrases(service).flat());
-  const serviceTokenCount = words.filter((w) => svcToks.has(w)).length;
+  // Exact service-phrase repeats — MULTI-word sub-phrases only. A single-token service ("locksmith")
+  // is intentionally NOT phrase-counted; that is the natural-noun case the backstop governs, so that
+  // natural use of the generic word never fails here.
+  const phraseCount = subPhrases(service)
+    .filter((p) => p.length >= 2)
+    .reduce((sum, p) => sum + countRuns(words, p), 0);
 
-  const densityPct = wordCount > 0
-    ? Math.round(((townCount + serviceTokenCount) / wordCount) * 1000) / 10
-    : 0;
-  const stuffed = townCount > MAX_TOWN_MENTIONS || densityPct > MAX_KEYWORD_DENSITY_PCT;
+  // Bare-noun-spam backstop: the most-repeated content word's share of the page — EXCLUDING the
+  // service's own tokens and the town, so natural heavy use of "lock/locks" (requirement: must never
+  // count) can trip nothing here, while a non-service noun spammed ("locksmith" ×30) still does.
+  const ignore = new Set<string>([...STOPWORDS, ...subPhrases(service).flat(), ...tokens(town)]);
+  const freq = new Map<string, number>();
+  for (const w of words) if (w.length >= 3 && !ignore.has(w)) freq.set(w, (freq.get(w) ?? 0) + 1);
+  let topWord = '', topN = 0;
+  for (const [w, n] of freq) if (n > topN) { topN = n; topWord = w; }
+  const topWordPct = wordCount > 0 ? Math.round((topN / wordCount) * 1000) / 10 : 0;
+
+  const reasons: string[] = [];
+  if (townCount > MAX_TOWN_MENTIONS) reasons.push(`town ${townCount}x (max ${MAX_TOWN_MENTIONS})`);
+  if (phraseCount > MAX_SERVICE_PHRASE_REPEATS) reasons.push(`exact phrase ${phraseCount}x (max ${MAX_SERVICE_PHRASE_REPEATS})`);
+  if (topWordPct > MAX_SINGLE_WORD_PCT) reasons.push(`"${topWord}" ${topWordPct}% of words (max ${MAX_SINGLE_WORD_PCT}%)`);
+  const stuffed = reasons.length > 0;
+
   return {
-    wordCount, townCount, serviceTokenCount, densityPct,
+    wordCount, townCount, phraseCount, topWord, topWordPct,
     verdict: stuffed ? 'stuffed' : 'ok',
     detail: stuffed
-      ? `town ${townCount}x (max ${MAX_TOWN_MENTIONS}), keyword density ${densityPct}% (max ${MAX_KEYWORD_DENSITY_PCT}%)`
-      : `town ${townCount}x, keyword density ${densityPct}% — natural`,
+      ? reasons.join(', ')
+      : `town ${townCount}x, phrase ${phraseCount}x, top word "${topWord}" ${topWordPct}% — natural`,
   };
 }
 
@@ -221,12 +273,12 @@ export function stuffingCheck(bodyHtmlOrText: string, service: string, town: str
         experiment AND cuts stuffing). HARD guarantee.
      2. TOWN CAP — town mentions beyond MAX_TOWN_MENTIONS (counting the H1's) become neutrals.
         HARD guarantee.
-   ⛔ DENSITY IS NOT MECHANICALLY STRIPPED. It was tried and removed (2026-08-27): replacing the
-   service noun ("lock") to hit a number produces GIBBERISH ("we change your it / the work") and
-   still cannot guarantee <3%, because the H1's own "service + town" keywords count and dominate on a
-   short page. Density is instead driven down by the strengthened prompt + up-to-3 stricter
-   regenerations in the edge fn — which produces NATURAL copy. So this backstop guarantees the town
-   count and no-other-towns; the returned `check` reports the real density honestly.
+   ⛔ THE SERVICE VOCABULARY IS NOT MECHANICALLY STRIPPED. It was tried and removed (2026-08-27):
+   replacing the service noun ("lock") to hit a number produces GIBBERISH ("we change your it / the
+   work"). With the metric fixed to measure exact-phrase repeats + a single-word backstop rather than
+   raw density, natural copy passes on its own; the phrase/backstop signals are driven down by the
+   strengthened prompt + up-to-3 stricter regenerations in the edge fn. So this backstop guarantees
+   the town count and no-other-towns; the returned `check` reports the phrase/word signals honestly.
    Operates on TEXT NODES only (never inside <tags>), so it cannot corrupt the HTML.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 const NEUTRAL_TOWN = ['here', 'the area', 'locally'];

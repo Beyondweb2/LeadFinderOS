@@ -38,7 +38,7 @@ interface GeneratedPage {
   key: string; service: string; town: string; queries: string[]; slug: string;
   title: string; meta_description: string; h1: string; body_html: string;
 }
-interface Naturalness { townCount: number; densityPct: number; verdict: 'ok' | 'stuffed'; detail: string; regenerated: boolean }
+interface Naturalness { townCount: number; phraseCount: number; topWord: string; topWordPct: number; verdict: 'ok' | 'stuffed'; detail: string; regenerated: boolean }
 type GenState =
   | { kind: 'busy' }
   | { kind: 'no_credits' }
