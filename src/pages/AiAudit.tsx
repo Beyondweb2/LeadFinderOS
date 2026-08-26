@@ -3,7 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { asPence, SEO_SCAN_USD } from '@/lib/marketView';
 import { supabase } from '@/integrations/supabase/client';
-import type { TablesInsert } from '@/integrations/supabase/types';
+import { reAuditFromSource, RE_AUDIT_EST_USD_PER_QUESTION } from '@/lib/reAudit';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -1152,7 +1152,8 @@ const AiAudit = () => {
    *  against the cap by ~5x. Fixing it means editing a shared module and redeploying every function
    *  that imports it — including the paid-baseline path — so it is deliberately NOT touched here.
    *  Still an ESTIMATE on screen: cost varies per run and the actual figure is recorded afterwards. */
-  const RE_AUDIT_EST_USD_PER_QUESTION = 0.0125;
+  // RE_AUDIT_EST_USD_PER_QUESTION now lives in src/lib/reAudit.ts (imported above) — shared with the
+  // Baseline page's "Re-run this measurement" cost line so the two estimates cannot drift.
 
   const startReAudit = () => {
     if (!auditId || isDraining) return;
@@ -1175,64 +1176,19 @@ const AiAudit = () => {
     if (clean.length === 0) { toast({ title: 'Add at least one question', variant: 'destructive' }); return; }
     setReAuditBusy(true);
     try {
-      /* Columns listed explicitly rather than select('*') so a column added later cannot silently
-         join the copy without someone deciding that it should. is_measurement + baseline_target_runs
-         ARE now read — deliberately — so a Full Measurement re-audits LIKE-FOR-LIKE. The finalised-
-         state columns (baseline, baseline_completed_at, …) are still NOT copied: the copy must start
-         fresh so advanceBaseline fires its runs. */
-      // Non-literal string so supabase-js uses its generic overload and doesn't type-validate the
-      // column list — is_measurement isn't in the generated types yet (added by hand in SQL).
-      const srcSelect: string = 'lead_id, business_name, business_type, location_text, country, has_website, website, business_scope, specialism, credentials, business_phone, business_address, business_email, client_links, is_measurement, baseline_target_runs';
-      const { data: src, error: readErr } = await supabase
-        .from('ai_audits')
-        .select(srcSelect)
-        .eq('id', auditId)
-        .maybeSingle();
-      if (readErr || !src) throw new Error(readErr?.message ?? 'could not read the audit to copy');
-
-      /* ⛔ TYPE-AWARE. If the original was a Full Measurement, the copy carries is_measurement + its
-         run target forward so it re-measures the SAME way (3 runs, full question set), and the
-         create-ai-audit call sends purpose:'measurement' so the reuse branch keeps the FULL question
-         set (not the 5-question wizard clamp) and skips the SEO scan. advanceBaseline then fires runs
-         2 & 3 off baseline_target_runs. A quick audit carries neither → single run, questions clamped
-         as before. The guarantee guard (is_measurement) keeps this from ever being read as a paid
-         baseline even when the copy carries a lead. */
-      const srcMarkers = src as unknown as { is_measurement?: boolean | null; baseline_target_runs?: number | null };
-      const srcTargetRuns = Number(srcMarkers.baseline_target_runs ?? 0);
-      /* ⛔ A PAID BASELINE IS ALSO A MEASUREMENT. The guarantee/paid path sets baseline_target_runs=3
-         but NOT is_measurement (that column postdates it), so keying only on is_measurement re-ran a
-         paid baseline as a 5-question single-run quick audit — RG Locksmiths, 2026-08-26. Treat EITHER
-         marker as a measurement: is_measurement OR a run target > 1. A quick audit has neither
-         (baseline_target_runs null → 0), so it stays a single-run quick re-audit, unchanged. */
-      const srcIsMeasurement = srcMarkers.is_measurement === true || srcTargetRuns > 1;
-      // Copy the business fields; carry the measurement markers ONLY when the original had them (a
-      // quick audit's copy must not inherit a run target). Start from the read row, drop both
-      // markers, then re-add conditionally — so a quick re-audit is byte-for-byte the old behaviour.
-      const copyRow: Record<string, unknown> = { ...(src as unknown as Record<string, unknown>), user_id: user.id };
-      delete copyRow.is_measurement;
-      delete copyRow.baseline_target_runs;
-      if (srcIsMeasurement) {
-        copyRow.is_measurement = true;
-        if (srcTargetRuns > 1) copyRow.baseline_target_runs = srcTargetRuns;
-      }
-      const { data: created, error: insErr } = await supabase
-        .from('ai_audits')
-        // cast via unknown: copyRow carries is_measurement, a hand-added column absent from the
-        // generated types — the DB column exists, so the extra key inserts fine at runtime.
-        .insert(copyRow as unknown as TablesInsert<'ai_audits'>)
-        .select('id')
-        .single();
-      if (insErr || !created) throw new Error(insErr?.message ?? 'could not create the new audit');
-
-      // The NEW audit id — so create-ai-audit's reuse branch runs against the copy, never the original.
-      const { data, error } = await supabase.functions.invoke('create-ai-audit', {
-        body: { audit_id: created.id, questions: clean, ...(srcIsMeasurement ? { purpose: 'measurement', skip_seo: true } : {}) },
+      /* ⛔ THE SHARED HELPER OWNS THE FIXED LOGIC. reAuditFromSource (src/lib/reAudit.ts) reads the
+         source audit's markers, applies the exact type-aware check (is_measurement === true ||
+         baseline_target_runs > 1), mints the copy and calls create-ai-audit with purpose:'measurement'
+         when it is a measurement. The Baseline page's "Re-run this measurement" calls the SAME helper,
+         so the two paths cannot drift back into the 5-question / 1-run bug. */
+      const res = await reAuditFromSource(supabase as unknown as SupabaseClient, {
+        sourceAuditId: auditId, userId: user.id, questions: clean,
       });
-      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 're-audit failed');
+      if (!res.ok) throw new Error('error' in res ? res.error : 're-audit failed');
 
       setReAuditOpen(false); setReAuditQuestions([]);
-      setAuditId(created.id);
-      setRunId(data.run_id); setOpenRunId(data.run_id);
+      setAuditId(res.auditId);
+      if (res.runId) { setRunId(res.runId); setOpenRunId(res.runId); }
       setRun(null); setQueueRows([]);
       toast({ title: 'Re-audit started', description: 'New audit row created — the original is untouched.' });
       loadSaved();
