@@ -1347,11 +1347,23 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   `plan_update` on the page-generator fn + `src/lib/pagePlanQueue.ts` (pure, tested).** Measured
   questions → ONE AI clustering call (indices, not echoed strings) → **`validateClusters` enforces a
   perfect partition in code** (dropped/duplicated/unknown index → LOUD singleton fallback, never a
-  silent drop) → deterministic scoring (winnability via `computeWinnability` over the baseline
-  repeats + engine gap + client absence, reasons itemised in `score_reasons`) → **waves keep a
-  topic's pages together** (the doc's "publish complete clusters"; a topic takes its best page's
-  band, `WAVE1_MIN_SCORE`). Defend (named ≥ `DEFEND_NAMED_RATE`) and locked → HELD with reasons,
-  un-holdable; near-dups flagged (`NEAR_DUP_JACCARD`), stage-1 gate only.
+  silent drop) → deterministic scoring + **waves keep a topic's pages together** (the doc's
+  "publish complete clusters"; a topic takes its best page's band, `WAVE1_MIN_SCORE`). Held pages
+  carry reasons, un-holdable; near-dups flagged (`NEAR_DUP_JACCARD`), stage-1 gate only.
+  ⛔ **Three rules from Paul's eyeball of the real RG plan (2026-08-28) — do not regress them:**
+  - **TOWN IS A HARD SPLIT DIMENSION** for local clients: `enforceTownSplit` (towns = the lead's
+    questionnaire confirmed_location + areas_list) splits any cluster spanning towns AFTER
+    validation — the model is also told, but the CODE is the guarantee. Within-town merges stay
+    allowed; national clients (no towns) untouched; splits reported, never silent.
+  - **HOLDS ARE PER QUESTION, FROM RUN COUNTS.** A question is "named" when some engine named the
+    client in ≥`DEFEND_NAMED_RATE` of ≥2 runs; a page holds only when EVERY measured question is
+    named; the reason prints the counts ("ChatGPT 3/3 · Gemini 0/3"). The old cluster-max rule held
+    Peterborough (0/3) on Huntingdon's 100% — the exact fault. `named_rate` is stored as COUNTS
+    (`{named,runs}` per engine); the UI renders counts and legacy fractions.
+  - **WINNABILITY IS `classifyWinnability` PER RUN folded by `majorityVerdict`** (the audit page's
+    own vocabulary: named/open/contested/locked/no_local_race; `unmeasured` for no data) — NOT
+    computeWinnability's internal labels, which read "unclear" on nearly everything and matched
+    nothing Paul sees on the audit screen.
   - ⛔ **Tables `client_pages` + `client_page_questions`** (migration `20260828090000`, owner RLS
     policies IN the migration — the RLS-no-policy trap). **SQL is hand-run by Paul**; until it runs,
     plan actions return typed `plan_tables_missing` and the UI says "run the SQL". `plan_build`
