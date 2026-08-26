@@ -177,8 +177,9 @@ export interface StuffingVerdict {
   detail: string;
 }
 
-/** Maximum town mentions before a page reads as a doorway page. */
-export const MAX_TOWN_MENTIONS = 4;
+/** Maximum town mentions before a page reads as a doorway page. Lowered 4 → 3 (2026-08-27): the
+ *  generator now aims for 2 and the backstop trims to this. */
+export const MAX_TOWN_MENTIONS = 3;
 /** Maximum (town + service-token) share of all words, percent. RG's stuffed pages ran 5.7% on one
  *  token alone; natural copy sits comfortably under this. */
 export const MAX_KEYWORD_DENSITY_PCT = 3.0;
@@ -212,4 +213,61 @@ export function stuffingCheck(bodyHtmlOrText: string, service: string, town: str
       ? `town ${townCount}x (max ${MAX_TOWN_MENTIONS}), keyword density ${densityPct}% (max ${MAX_KEYWORD_DENSITY_PCT}%)`
       : `town ${townCount}x, keyword density ${densityPct}% — natural`,
   };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   MECHANICAL BACKSTOP — the CLEAN, safe guarantees, run on whatever the model returned:
+     1. NO OTHER TOWNS — any other-area name becomes "here"/"the area" (protects the controlled
+        experiment AND cuts stuffing). HARD guarantee.
+     2. TOWN CAP — town mentions beyond MAX_TOWN_MENTIONS (counting the H1's) become neutrals.
+        HARD guarantee.
+   ⛔ DENSITY IS NOT MECHANICALLY STRIPPED. It was tried and removed (2026-08-27): replacing the
+   service noun ("lock") to hit a number produces GIBBERISH ("we change your it / the work") and
+   still cannot guarantee <3%, because the H1's own "service + town" keywords count and dominate on a
+   short page. Density is instead driven down by the strengthened prompt + up-to-3 stricter
+   regenerations in the edge fn — which produces NATURAL copy. So this backstop guarantees the town
+   count and no-other-towns; the returned `check` reports the real density honestly.
+   Operates on TEXT NODES only (never inside <tags>), so it cannot corrupt the HTML.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+const NEUTRAL_TOWN = ['here', 'the area', 'locally'];
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const mapTextNodes = (html: string, fn: (t: string) => string): string =>
+  String(html ?? '').replace(/(<[^>]+>)|([^<]+)/g, (_m, tag, text) => (tag ? tag : fn(text ?? '')));
+
+export interface EnforceResult {
+  html: string;
+  check: StuffingVerdict;
+  townTrimmed: boolean;
+  otherTownsStripped: boolean;
+}
+
+export function enforceNaturalness(
+  bodyHtml: string, service: string, town: string, otherTowns: string[], h1 = '',
+): EnforceResult {
+  let html = String(bodyHtml ?? '');
+  let townTrimmed = false, otherTownsStripped = false;
+  let rot = 0;
+
+  // 1. Other towns → neutral. Longest first so "st neots" is handled before a bare "st".
+  const others = [...new Set(otherTowns.map((t) => String(t ?? '').trim()).filter(Boolean))]
+    .sort((a, b) => b.length - a.length);
+  for (const ot of others) {
+    const re = new RegExp(`\\b${escapeRe(ot)}\\b`, 'gi');
+    html = mapTextNodes(html, (t) => t.replace(re, () => { otherTownsStripped = true; return NEUTRAL_TOWN[rot++ % NEUTRAL_TOWN.length]; }));
+  }
+
+  // 2. Town beyond the cap → neutral. The H1 (unmodified) legitimately carries the town, so the
+  //    body budget is the cap MINUS whatever the H1 already spends.
+  const h1TownCount = stuffingCheck(h1, service, town).townCount;
+  const bodyKeep = Math.max(0, MAX_TOWN_MENTIONS - h1TownCount);
+  const townRe = new RegExp(`\\b${escapeRe(town)}\\b`, 'gi');
+  let seen = 0; rot = 0;
+  html = mapTextNodes(html, (t) => t.replace(townRe, (m) => {
+    seen++;
+    if (seen <= bodyKeep) return m;
+    townTrimmed = true;
+    return NEUTRAL_TOWN[rot++ % NEUTRAL_TOWN.length];
+  }));
+
+  return { html, check: stuffingCheck(`${h1} ${html}`, service, town), townTrimmed, otherTownsStripped };
 }
