@@ -1301,6 +1301,28 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   interruption" rule). Pages are scoped by clientId so one client's pages never show under another.
   A page cached >24h shows a "generated earlier" note (`STALE_MS`); the Clear button wipes a client's
   pages but keeps the plan visible. No DB, no server storage — held per-browser, not cross-device.
+- ⛔ **PAGE COMPLETENESS: real CONTACT + INTERNAL LINKS + LOCAL AREAS are appended MECHANICALLY,
+  after enforceNaturalness (2026-08-27).** Four completeness fixes, all grounded in REAL data, none
+  invented:
+  - **Contact CTA + NAP**: the edge fn now reads `outreach_leads.phone/website/address` (+ onboarding
+    `confirmed_phone/business_address/contact_name`) and appends a "Get in touch" block with the REAL
+    phone. The street ADDRESS is added ONLY on the home-town page (`normTown(page.town) ===
+    normTown(homeTown)`) — on an away-town page it would name the home town and break the single-town
+    rule. Missing field → drops, never faked.
+  - **Internal links**: Home (`{site}`) + Contact (`{site}contact/`, operator-confirmable per client)
+    as real `<a>`. hrefs live in tags so they don't affect the density check.
+  - **Local areas**: there is NO verified neighbourhood source — the audit stores COMPETITORS +
+    `answer_text` junk, `uk_towns` only has "East of England"/lat-lng (Cambridge isn't even in it),
+    and RG's own site just says "surrounding areas". So neighbourhoods are an OPTIONAL operator field
+    (`local_areas`, per-client, persisted), woven in verbatim, invent-none; empty → "the surrounding
+    area". ⛔ Do NOT try to mine neighbourhoods from the audit — proven three ways they aren't there,
+    and competitor names must never go on the client's own page (§6).
+  - ⛔ The CTA/NAP/links block is appended AFTER enforceNaturalness so it's never trimmed/mangled;
+    the naturalness verdict is computed on the MODEL body only (the factual block isn't "copy").
+  - **Title/meta application**: the generator always produced them; the UI now maps each output to its
+    WordPress home (Yoast SEO title / Yoast meta / WP slug / Elementor H1 / body → HTML widget) so they
+    stop being dropped on paste. ⚠️ The 3 live RG Huntingdon pages predate this — set their title/meta
+    in Yoast retroactively.
 - ⚠️ `page_key` is RE-DERIVED server-side on generate — a client can never request a pair the
   overlap didn't produce. Hosting format is a dropdown (`website_platform` is NULL for both
   current clients; it seeds the default when a future client fills it). Typed `no_credits` while

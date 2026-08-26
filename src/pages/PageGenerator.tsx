@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
@@ -32,6 +33,7 @@ interface PlanData {
   inputs: {
     services: string[]; areas: string[]; homeTown: string;
     accreditations: string | null; mustNotSay: string | null; hostingDefault: string | null;
+    website: string | null; contactDefault: string | null; hasPhone: boolean; hasAddress: boolean;
     baselineRuns: number; questionCount: number;
   };
   plan: { pages: PlanPage[]; excluded: { question: string; reason: string }[]; unmeasuredAreas: string[] };
@@ -41,6 +43,12 @@ interface GeneratedPage {
   title: string; meta_description: string; h1: string; body_html: string;
 }
 interface Naturalness { townCount: number; phraseCount: number; topWord: string; topWordPct: number; verdict: 'ok' | 'stuffed'; detail: string; regenerated: boolean }
+/* What the server's mechanical block actually put on the page (real client data). */
+interface Applied { phone: boolean; address: boolean; links: number; areas: string[] }
+/* Per-client generator settings the operator controls — persisted per client. contactUrl seeds the
+   internal contact link; localAreas are REAL nearby areas the operator supplies (no verified source
+   exists to derive them), woven in verbatim. */
+interface ClientSettings { contactUrl: string; localAreas: string }
 
 /* A page's render state. `done` carries generatedAt so the view can flag pages generated over a day
    ago. busy / error / no_credits are TRANSIENT (in-memory only) — never persisted, so navigating
@@ -49,14 +57,14 @@ type PageView =
   | { kind: 'busy' }
   | { kind: 'no_credits' }
   | { kind: 'error'; message: string }
-  | { kind: 'done'; page: GeneratedPage; naturalness: Naturalness; generatedAt: number };
+  | { kind: 'done'; page: GeneratedPage; naturalness: Naturalness; applied?: Applied; generatedAt: number };
 type Transient = Exclude<PageView, { kind: 'done' }>;
 
 /* Per-CLIENT cache, persisted to localStorage (tier 'both') so generated pages survive both in-app
    navigation AND a full refresh / browser reopen. Keyed by client, so switching clients shows that
    client's pages, never another's. Only successfully-generated pages are held — restoring is a pure
    read that NEVER calls the generator, so returning to the page costs nothing. */
-interface CachedPage { page: GeneratedPage; naturalness: Naturalness; generatedAt: number }
+interface CachedPage { page: GeneratedPage; naturalness: Naturalness; applied?: Applied; generatedAt: number }
 interface ClientCache { plan: PlanData | null; pages: Record<string, CachedPage> }
 type CacheShape = Record<string, ClientCache>;
 
@@ -84,6 +92,10 @@ const PageGenerator = () => {
     validate: (d) => (d && typeof d === 'object' ? (d as CacheShape) : null),
   });
   const [hosting, setHosting] = usePersistedState<Hosting>('pagegen-hosting', 'wordpress', { tier: 'both', scope: user?.id });
+  const [settings, setSettings] = usePersistedState<Record<string, ClientSettings>>('pagegen-settings', {}, {
+    tier: 'both', scope: user?.id, version: 1,
+    validate: (d) => (d && typeof d === 'object' ? (d as Record<string, ClientSettings>) : null),
+  });
   const [transient, setTransient] = useState<Record<string, Transient>>({});
   const [planBusy, setPlanBusy] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -93,13 +105,21 @@ const PageGenerator = () => {
   const plan = current?.plan ?? null;
   const cachedCount = current ? Object.keys(current.pages).length : 0;
 
+  // Operator settings for this client. contactUrl falls back to the server's default ({site}/contact/).
+  const cs: ClientSettings = (clientId && settings[clientId]) || { contactUrl: '', localAreas: '' };
+  const contactUrlValue = cs.contactUrl || (plan?.inputs.contactDefault ?? '');
+  const setSetting = (patch: Partial<ClientSettings>) => {
+    if (!clientId) return;
+    setSettings((s) => ({ ...s, [clientId]: { contactUrl: '', localAreas: '', ...s[clientId], ...patch } }));
+  };
+
   // A page's render state: an in-flight/transient state wins; otherwise the cached generated page
   // (a pure read — never a generator call); otherwise nothing yet.
   const viewFor = (key: string): PageView | undefined => {
     const t = transient[key];
     if (t) return t;
     const cp = current?.pages[key];
-    return cp ? { kind: 'done', page: cp.page, naturalness: cp.naturalness, generatedAt: cp.generatedAt } : undefined;
+    return cp ? { kind: 'done', page: cp.page, naturalness: cp.naturalness, applied: cp.applied, generatedAt: cp.generatedAt } : undefined;
   };
 
   useEffect(() => {
@@ -141,14 +161,18 @@ const PageGenerator = () => {
     setTransient((t) => ({ ...t, [page.key]: { kind: 'busy' } }));
     try {
       const { data: res, error } = await supabase.functions.invoke('page-generator', {
-        body: { action: 'generate', lead_id: clientId, page_key: page.key },
+        body: {
+          action: 'generate', lead_id: clientId, page_key: page.key,
+          contact_url: contactUrlValue || undefined,
+          local_areas: cs.localAreas.trim() || undefined,
+        },
       });
       if (error) throw new Error(error.message);
       if (!res?.ok) {
         if (res?.error === 'no_credits') { setTransient((t) => ({ ...t, [page.key]: { kind: 'no_credits' } })); return; }
         throw new Error(res?.error ?? 'generation failed');
       }
-      const done: CachedPage = { page: res.page, naturalness: res.naturalness, generatedAt: Date.now() };
+      const done: CachedPage = { page: res.page, naturalness: res.naturalness, applied: res.applied, generatedAt: Date.now() };
       setCache((c) => ({
         ...c,
         [clientId]: { plan: c[clientId]?.plan ?? plan, pages: { ...(c[clientId]?.pages ?? {}), [page.key]: done } },
@@ -249,6 +273,41 @@ const PageGenerator = () => {
 
           <Card>
             <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Contact &amp; local areas</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <p className="text-xs text-muted-foreground">
+                Every page ends with the client's real phone and links — pulled automatically
+                ({plan.inputs.hasPhone ? 'phone found' : 'no phone on file — CTA will point to the contact page only'}
+                {plan.inputs.hasAddress ? ', address on the home-town page' : ''}). Set the two below per client.
+              </p>
+              <div className="grid gap-1">
+                <label className="text-xs text-muted-foreground">Contact page URL (used for the internal link)</label>
+                <Input
+                  value={contactUrlValue}
+                  placeholder={plan.inputs.contactDefault ?? 'https://theirsite.co.uk/contact/'}
+                  onChange={(e) => setSetting({ contactUrl: e.target.value })}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="grid gap-1">
+                <label className="text-xs text-muted-foreground">
+                  Local areas covered (optional, comma-separated) — REAL areas the client actually serves.
+                  These get woven in verbatim; leave blank and pages just say "the surrounding area".
+                  Nothing is invented — there's no verified source of neighbourhoods, so this only uses what you enter.
+                </label>
+                <Input
+                  value={cs.localAreas}
+                  placeholder="e.g. Oxmoor, Hartford, Stukeley Meadows"
+                  onChange={(e) => setSetting({ localAreas: e.target.value })}
+                  className="h-8 text-xs"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   The page set — {plan.plan.pages.length} page{plan.plan.pages.length === 1 ? '' : 's'}, each aimed at measured queries
@@ -314,16 +373,35 @@ const PageGenerator = () => {
                             <Copy className="mr-1.5 h-3 w-3" /> Copy full {hosting === 'other' ? 'text' : 'HTML'}
                           </Button>
                         </div>
-                        <div className="grid gap-1 text-xs">
-                          {([['Slug', g.page.slug], ['Title tag', g.page.title], ['Meta description', g.page.meta_description], ['H1', g.page.h1]] as const).map(([label, value]) => (
+                        {g.applied && (
+                          <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
+                            {g.applied.phone && <Badge variant="outline" className="text-[10px] font-normal">✓ phone CTA</Badge>}
+                            {g.applied.address && <Badge variant="outline" className="text-[10px] font-normal">✓ address (NAP)</Badge>}
+                            {g.applied.links > 0 && <Badge variant="outline" className="text-[10px] font-normal">✓ {g.applied.links} internal link{g.applied.links === 1 ? '' : 's'}</Badge>}
+                            {g.applied.areas.length > 0 && <Badge variant="outline" className="text-[10px] font-normal">✓ areas: {g.applied.areas.join(', ')}</Badge>}
+                          </div>
+                        )}
+                        {/* Apply in WordPress — each field to its home so the title tag & meta never get dropped. */}
+                        <div className="rounded border border-border/40 bg-muted/30 p-2 space-y-1 text-xs">
+                          <p className="font-medium text-muted-foreground">Apply in WordPress — paste each into its place:</p>
+                          {([
+                            ['SEO title tag', g.page.title, 'Yoast → “SEO title”'],
+                            ['Meta description', g.page.meta_description, 'Yoast → “Meta description”'],
+                            ['Permalink slug', g.page.slug, 'WordPress → “Slug”'],
+                            ['H1 heading', g.page.h1, 'Elementor → top Heading widget (H1)'],
+                          ] as const).map(([label, value, dest]) => (
                             <div key={label} className="flex items-baseline gap-2">
                               <span className="w-28 shrink-0 text-muted-foreground">{label}</span>
                               <span className="min-w-0 break-words">{value}</span>
+                              <span className="shrink-0 text-[10px] text-primary/70">{dest}</span>
                               <Button variant="ghost" size="sm" className="h-6 px-1.5 shrink-0" onClick={() => copy(label, value)}>
                                 <Copy className="h-3 w-3" />
                               </Button>
                             </div>
                           ))}
+                          <p className="text-[10px] text-muted-foreground pt-0.5">
+                            Body → “Copy full {hosting === 'other' ? 'text' : 'HTML'}” above, into an Elementor HTML/Text widget.
+                          </p>
                         </div>
                         {/* The body, rendered so Paul reads it as a page — the copy button carries the HTML. */}
                         <div className="rounded border border-border/50 bg-background p-3 text-sm [&_h2]:mt-3 [&_h2]:mb-1 [&_h2]:text-base [&_h2]:font-semibold [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5"
