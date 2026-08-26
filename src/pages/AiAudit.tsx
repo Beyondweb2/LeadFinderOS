@@ -1198,8 +1198,13 @@ const AiAudit = () => {
          as before. The guarantee guard (is_measurement) keeps this from ever being read as a paid
          baseline even when the copy carries a lead. */
       const srcMarkers = src as unknown as { is_measurement?: boolean | null; baseline_target_runs?: number | null };
-      const srcIsMeasurement = srcMarkers.is_measurement === true;
       const srcTargetRuns = Number(srcMarkers.baseline_target_runs ?? 0);
+      /* ⛔ A PAID BASELINE IS ALSO A MEASUREMENT. The guarantee/paid path sets baseline_target_runs=3
+         but NOT is_measurement (that column postdates it), so keying only on is_measurement re-ran a
+         paid baseline as a 5-question single-run quick audit — RG Locksmiths, 2026-08-26. Treat EITHER
+         marker as a measurement: is_measurement OR a run target > 1. A quick audit has neither
+         (baseline_target_runs null → 0), so it stays a single-run quick re-audit, unchanged. */
+      const srcIsMeasurement = srcMarkers.is_measurement === true || srcTargetRuns > 1;
       // Copy the business fields; carry the measurement markers ONLY when the original had them (a
       // quick audit's copy must not inherit a run target). Start from the read row, drop both
       // markers, then re-add conditionally — so a quick re-audit is byte-for-byte the old behaviour.
@@ -1248,9 +1253,12 @@ const AiAudit = () => {
          full question set isn't silently clamped to the 5-question wizard cap (the before/after
          path is Re-audit, which mints a fresh copy). Read the flag fresh so it's right even if the
          open audit changed. */
-      const curSelect: string = 'is_measurement'; // non-literal: skip column type-validation (see confirmReAudit)
+      const curSelect: string = 'is_measurement, baseline_target_runs'; // non-literal: skip column type-validation (see confirmReAudit)
       const { data: cur } = await supabase.from('ai_audits').select(curSelect).eq('id', auditId).maybeSingle();
-      const curIsMeasurement = (cur as unknown as { is_measurement?: boolean | null } | null)?.is_measurement === true;
+      const curMarkers = cur as unknown as { is_measurement?: boolean | null; baseline_target_runs?: number | null } | null;
+      // Same rule as confirmReAudit: a paid baseline (baseline_target_runs > 1) counts as a measurement
+      // even though is_measurement is false, so its full question set isn't clamped to 5.
+      const curIsMeasurement = curMarkers?.is_measurement === true || Number(curMarkers?.baseline_target_runs ?? 0) > 1;
       const { data, error } = await supabase.functions.invoke('create-ai-audit', {
         body: { audit_id: auditId, questions: clean, ...(curIsMeasurement ? { purpose: 'measurement', skip_seo: true } : {}) },
       });
