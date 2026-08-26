@@ -228,8 +228,13 @@ export function scoreCluster(signals: QuestionSignals[]): {
   const measured = signals.filter((s) => s.winnability !== 'unmeasured' || s.named.chatgpt || s.named.gemini);
   const namedQs = signals.filter((s) => questionIsNamed(s));
   const defend = measured.length > 0 && namedQs.length === measured.length;
+  /* Client-safe wording that claims ONLY what it measured: a single-question page must talk about
+     "this question", never "every question" (the 2026-08-28 wording fault — it read as a claim
+     about other questions). Multi-question pages itemise each question's counts. */
   const defendReason = defend
-    ? `client already named on every question here — ${signals.map((s) => `"${s.question}": ${namedCountsLabel(s)}`).join('; ')}`
+    ? (signals.length === 1
+      ? `Already named for this question (${namedCountsLabel(signals[0])}) — defend the existing page rather than build a new one.`
+      : `Already named for all ${signals.length} questions on this page — ${signals.map((s) => `"${s.question}": ${namedCountsLabel(s)}`).join('; ')} — defend rather than build new.`)
     : null;
 
   // Best winnability among the NOT-already-named variants — that's what the page can win.
@@ -275,7 +280,7 @@ export function buildQueue(
       : { score: 0, reasons: ['no measured answers for any variant'], winnability: 'unmeasured' as const, defend: false, defendReason: null };
     let status: PlannedQueuePage['status'] = 'planned';
     let heldReason: string | null = null;
-    if (defend) { status = 'held'; heldReason = `defend, not a new page — ${defendReason}`; }
+    if (defend) { status = 'held'; heldReason = defendReason; }
     else if (winnability === 'locked') { status = 'held'; heldReason = 'locked — a small consistent incumbent set holds this; low odds for a new page'; }
     return {
       job: c.job, topic: c.topic || 'general', primaryQuestion: primary, questions: ordered,
@@ -312,6 +317,20 @@ export function buildQueue(
       p.wave = wave;
       p.position = wave === 1 ? pos1++ : pos2++;
     }
+  }
+
+  /* ⛔ ROW LABELS MUST BE UNAMBIGUOUS. The job label is model-written; nothing stops it producing
+     the same generic label for two different questions ("Locksmith Services in Cambridge" twice —
+     one build, one hold — reading as the tool contradicting itself). Any label shared by more than
+     one page is replaced, on EVERY page in the collision, by that page's own primary question —
+     unique by construction, and it says exactly which question the row is about. */
+  const byJob = new Map<string, PlannedQueuePage[]>();
+  for (const p of pages) {
+    const k = p.job.trim().toLowerCase();
+    (byJob.get(k) ?? byJob.set(k, []).get(k)!).push(p);
+  }
+  for (const group of byJob.values()) {
+    if (group.length > 1) for (const p of group) p.job = p.primaryQuestion;
   }
   return pages;
 }

@@ -95,6 +95,13 @@ console.log('── HOLD IS PER QUESTION (the lock-changes-Peterborough fault) �
   const named = scoreCluster([sig('emergency lockouts huntingdon', 'named', en(3, 3), en(3, 3))]);
   ok(named.defend, 'a fully-named page defends');
   ok((named.defendReason ?? '').includes('ChatGPT 3/3 · Gemini 3/3'), `  reason carries the verifiable counts`);
+  ok((named.defendReason ?? '').includes('this question') && !(named.defendReason ?? '').includes('every question'),
+    '  single-question hold says "this question", never "every question" (the wording fault)');
+  const namedMulti = scoreCluster([
+    sig('q one', 'named', en(3, 3), en(2, 3)), sig('q two', 'named', en(2, 3), en(3, 3)),
+  ]);
+  ok((namedMulti.defendReason ?? '').includes('all 2 questions') && (namedMulti.defendReason ?? '').includes('"q one"'),
+    '  multi-question hold itemises each question\'s counts');
   // Mixed page: one named variant + one absent variant -> NOT held (there is something to win).
   const mixed = scoreCluster([
     sig('window locks huntingdon', 'named', en(3, 3), en(3, 3)),
@@ -142,6 +149,28 @@ console.log('── WAVES KEEP TOPICS TOGETHER + NEAR-DUP + QUEUE ASSEMBLY ─�
   ok(p('hrt cost dup').nearDupOf === qs[2], `near-identical primaries flag as duplicates (J>=${NEAR_DUP_JACCARD})`);
   const noSig = buildQueue(['q'], [{ job: 'q', topic: 't', primaryIndex: 0, questionIndices: [0], rationale: '' }], new Map());
   ok(noSig[0].winnability === 'unmeasured' && noSig[0].scoreReasons[0].includes('no measured answers'), 'absent signals -> unmeasured, never confident');
+}
+
+console.log('── ⛔ ROW LABELS ARE UNAMBIGUOUS (the same-title build-vs-hold fault) ──');
+{
+  // The fault: two different questions both labelled "Locksmith Services in Cambridge" — one
+  // build, one hold — reading as the tool contradicting itself about one page.
+  const qs = ['emergency lockouts locksmiths in Cambridge UK', 'lock changes locksmiths in Cambridge UK', 'burglary repairs in Cambridge UK'];
+  const clusters: ClusterProposal[] = [
+    { job: 'Locksmith Services in Cambridge', topic: 'cambridge', primaryIndex: 0, questionIndices: [0], rationale: '' },
+    { job: 'Locksmith Services in Cambridge', topic: 'cambridge', primaryIndex: 1, questionIndices: [1], rationale: '' },
+    { job: 'Burglary repairs in Cambridge', topic: 'cambridge', primaryIndex: 2, questionIndices: [2], rationale: '' },
+  ];
+  const signals = new Map<string, QuestionSignals>([
+    [qs[0], sig(qs[0], 'named', en(2, 3), en(0, 3))],
+    [qs[1], sig(qs[1], 'open', en(0, 3), en(0, 3))],
+    [qs[2], sig(qs[2], 'open', en(0, 3), en(0, 3))],
+  ]);
+  const pages = buildQueue(qs, clusters, signals);
+  const jobs = pages.map((p) => p.job);
+  ok(new Set(jobs.map((j) => j.toLowerCase())).size === jobs.length, 'no two rows share a label');
+  ok(jobs.includes(qs[0]) && jobs.includes(qs[1]), '  colliding labels are replaced by each page\'s own primary question');
+  ok(jobs.includes('Burglary repairs in Cambridge'), '  a unique label is left alone');
 }
 
 console.log('── TOP SOURCES ──');
