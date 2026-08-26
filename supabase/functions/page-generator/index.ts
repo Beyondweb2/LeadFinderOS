@@ -347,11 +347,31 @@ Return via return_page.`;
     cta += `</p>`;
     const finalBody = `${enforced.html}\n${cta}`;
 
+    /* SEO TITLE TAG — built deterministically (not the model's) so the client's REAL phone is always
+       present, in the "[Service] in [Town] | [Name] [phone]" pattern their existing titles use, and
+       ALWAYS ≤ 60 chars. Phone shows in local UK form (07762…) as searchers expect. Fitting order:
+       full name+phone, then trim trailing name words (never to a lone initial), then drop the name
+       keeping the phone, then just service+town — the phone is the last thing to go, never truncated. */
+    const seoTitle = (() => {
+      const svc = page.service.replace(/\b\w/g, (c) => c.toUpperCase());
+      const base = `${svc} in ${page.town}`;
+      const tel = phone.replace(/^\+44\s?/, "0").trim();
+      const words = audit.business_name.trim().split(/\s+/).filter(Boolean);
+      for (let n = words.length; n >= 1; n--) {
+        if (n < words.length && n < 2) break; // don't truncate a name down to a single initial
+        const nm = words.slice(0, n).join(" ");
+        const t = tel ? `${base} | ${nm} ${tel}` : `${base} | ${nm}`;
+        if (t.length <= 60) return t;
+      }
+      if (tel && `${base} | ${tel}`.length <= 60) return `${base} | ${tel}`;
+      return base.length <= 60 ? base : base.slice(0, 60).trim();
+    })();
+
     return json({
       ok: true,
       page: {
         key: page.key, service: page.service, town: page.town, queries: page.queries, slug: page.slug,
-        title: out.title, meta_description: out.meta, h1: out.h1, body_html: finalBody,
+        title: seoTitle, meta_description: out.meta, h1: out.h1, body_html: finalBody,
       },
       naturalness: {
         ...enforced.check, attempts, regenerated: attempts > 1,
