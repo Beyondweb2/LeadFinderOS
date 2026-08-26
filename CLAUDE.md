@@ -1360,9 +1360,17 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   - ⚠️ Verified on real data 2026-08-28 (dry-run, ~4p total): RG 12→12 (service+town questions,
     nothing to merge — partition held) with **8/12 held as defend** (his re-measured baseline now
     names him 100% on Huntingdon questions); Solene 20→9 with sensible merges (6 testosterone-route
-    variants → one page). ⚠️ **No SPLIT control exists** — an over-merged cluster is fixed by
-    Rebuild or not at all; stage-2 candidate. Stage 2 = research-question input + full quality gate;
-    Stage 3 = hand-off to the generator + content on the same rows.
+    variants → one page). ⚠️ **Clustering is non-deterministic across rebuilds** (a Solene re-run
+    gave 12 pages, both partitions valid) — a Rebuild is a fresh proposal, not a refresh. ⚠️ **No
+    SPLIT control exists** — an over-merged cluster is fixed by Rebuild or not at all; stage-2
+    candidate. Stage 2 = research-question input + full quality gate; Stage 3 = hand-off to the
+    generator + content on the same rows.
+  - ✅ **Per-page CITED SOURCES (client feedback: the most valuable output — "where to get
+    listed").** `topSources()` (pure, tested) counts the cited domains across a page's questions;
+    `plan_build` attaches top 5 (`client_pages.top_sources`, jsonb [{domain,count}]) with a
+    **column-shed retry** so a pre-column DB still takes the plan; the row renders "engines
+    currently read: …". Migration `20260828110000` is the idempotent ALTER for a DB that ran the
+    base migration before the column existed.
 - ⚠️ `page_key` is RE-DERIVED server-side on generate — a client can never request a pair the
   overlap didn't produce. Hosting format is a dropdown (`website_platform` is NULL for both
   current clients; it seeds the default when a future client fills it). Typed `no_credits` while
