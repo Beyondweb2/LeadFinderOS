@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { BackLink } from '@/components/BackLink';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Target } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, Target, RefreshCw } from 'lucide-react';
 import { fetchAllRows } from '@/lib/fetchAllRows';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { reAuditFromSource, RE_AUDIT_EST_USD_PER_QUESTION } from '@/lib/reAudit';
 import {
   buildBaselineView, BANDS, BAND_LABEL, BAND_MEANING,
   type BaselineView, type Band, type QueueRowLite,
@@ -43,14 +47,48 @@ interface AuditRow {
   business_name: string | null;
   baseline: { measured_at?: string } | null;
   baseline_completed_at: string | null;
+  // Gate + carry the run target for "Re-run this measurement". is_measurement is a hand-added column
+  // (absent from generated types) — read via the loosely-typed client below so it does not type-error.
+  is_measurement: boolean | null;
+  baseline_target_runs: number | null;
 }
 
 export default function Baseline() {
   const { auditId } = useParams<{ auditId: string }>();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
   const [audit, setAudit] = useState<AuditRow | null>(null);
   const [view, setView] = useState<BaselineView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);   // "Re-run this measurement" confirm step
+  const [reRunBusy, setReRunBusy] = useState(false);
+
+  /* Re-run THIS baseline as a full measurement, via the SAME shared helper the AI Audit page's
+     Re-audit uses (reAuditFromSource) — so the fixed logic (all questions, all runs, purpose:
+     'measurement') cannot drift. Targets THIS page's auditId and THIS baseline's exact question list;
+     mints a NEW audit (the "after"), leaving this baseline untouched; then jumps to the new run so it
+     can be watched. Gated in the UI on baseline_target_runs > 1 so it only fires for real measurements. */
+  const runReMeasure = async () => {
+    if (!auditId || !user || reRunBusy) return;
+    setReRunBusy(true);
+    try {
+      const res = await reAuditFromSource(supabase as unknown as SupabaseClient, {
+        sourceAuditId: auditId,
+        userId: user.id,
+        questions: (view?.questions ?? []).map((q) => q.question),
+      });
+      if (!res.ok) throw new Error('error' in res ? res.error : 're-audit failed');
+      toast({ title: 'Re-measurement started', description: 'A new measurement is running — opening it now.' });
+      navigate(res.runId ? `/ai-audit?runId=${res.runId}` : '/ai-audit');
+    } catch (e) {
+      toast({ title: "Couldn't start the re-measurement", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setReRunBusy(false);
+      setConfirming(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!auditId) return;
@@ -60,7 +98,7 @@ export default function Baseline() {
       const client = supabase as unknown as SupabaseClient;
       const { data: a, error: aErr } = await client
         .from('ai_audits')
-        .select('id, lead_id, business_name, baseline, baseline_completed_at')
+        .select('id, lead_id, business_name, baseline, baseline_completed_at, is_measurement, baseline_target_runs')
         .eq('id', auditId).maybeSingle();
       if (aErr) throw aErr;
       if (!a) { setError('No audit with that id.'); setAudit(null); setView(null); return; }
@@ -134,6 +172,32 @@ export default function Baseline() {
             </p>
           </div>
         </div>
+
+        {/* Re-run this measurement — full 3-run re-measure of THIS baseline, via the shared helper.
+            Only for real measurements (baseline_target_runs > 1); a confirm step guards the spend. */}
+        {(audit.baseline_target_runs ?? 0) > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {!confirming ? (
+              <Button variant="outline" size="sm" onClick={() => setConfirming(true)} disabled={reRunBusy}>
+                <RefreshCw className="mr-2 h-4 w-4" /> Re-run this measurement
+              </Button>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+                <span className="text-xs text-muted-foreground">
+                  Runs a full {audit.baseline_target_runs}-run measurement of these {view.questions.length} questions
+                  {' '}(~${(view.questions.length * (audit.baseline_target_runs ?? view.runsCounted) * RE_AUDIT_EST_USD_PER_QUESTION).toFixed(2)}
+                  {' '}/ ~{Math.round(view.questions.length * (audit.baseline_target_runs ?? view.runsCounted) * RE_AUDIT_EST_USD_PER_QUESTION * 80)}p Apify, estimate).
+                  {' '}Creates a new audit for the &ldquo;after&rdquo; — this baseline is untouched.
+                </span>
+                <Button size="sm" onClick={runReMeasure} disabled={reRunBusy}>
+                  {reRunBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {reRunBusy ? 'Starting…' : 'Yes, run it'}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirming(false)} disabled={reRunBusy}>Cancel</Button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Band counts — the shape of the work at a glance, worst first. */}
         <div className="flex flex-wrap gap-1.5">
