@@ -1343,6 +1343,26 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   - ⚠️ SPA: `mode` toggle (persisted); Q&A picks a client + a question (baseline list or free-type).
     `activeClientId` = qa audit id or service lead id (different id spaces → one cache serves both).
     Draft pages carry no naturalness/applied badges; `renderDone` is shared by both modes.
+- ⛔ **THE PAGE-PLAN QUEUE (Stage 1, 2026-08-28) — `/page-plan` + `plan_build`/`plan_get`/
+  `plan_update` on the page-generator fn + `src/lib/pagePlanQueue.ts` (pure, tested).** Measured
+  questions → ONE AI clustering call (indices, not echoed strings) → **`validateClusters` enforces a
+  perfect partition in code** (dropped/duplicated/unknown index → LOUD singleton fallback, never a
+  silent drop) → deterministic scoring (winnability via `computeWinnability` over the baseline
+  repeats + engine gap + client absence, reasons itemised in `score_reasons`) → **waves keep a
+  topic's pages together** (the doc's "publish complete clusters"; a topic takes its best page's
+  band, `WAVE1_MIN_SCORE`). Defend (named ≥ `DEFEND_NAMED_RATE`) and locked → HELD with reasons,
+  un-holdable; near-dups flagged (`NEAR_DUP_JACCARD`), stage-1 gate only.
+  - ⛔ **Tables `client_pages` + `client_page_questions`** (migration `20260828090000`, owner RLS
+    policies IN the migration — the RLS-no-policy trap). **SQL is hand-run by Paul**; until it runs,
+    plan actions return typed `plan_tables_missing` and the UI says "run the SQL". `plan_build`
+    without `dry_run` REPLACES the stored plan (the confirm says so); `dry_run: true` computes
+    without tables — how the samples were produced.
+  - ⚠️ Verified on real data 2026-08-28 (dry-run, ~4p total): RG 12→12 (service+town questions,
+    nothing to merge — partition held) with **8/12 held as defend** (his re-measured baseline now
+    names him 100% on Huntingdon questions); Solene 20→9 with sensible merges (6 testosterone-route
+    variants → one page). ⚠️ **No SPLIT control exists** — an over-merged cluster is fixed by
+    Rebuild or not at all; stage-2 candidate. Stage 2 = research-question input + full quality gate;
+    Stage 3 = hand-off to the generator + content on the same rows.
 - ⚠️ `page_key` is RE-DERIVED server-side on generate — a client can never request a pair the
   overlap didn't produce. Hosting format is a dropdown (`website_platform` is NULL for both
   current clients; it seeds the default when a future client fills it). Typed `no_credits` while

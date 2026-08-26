@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildPagePlan, stuffingCheck, enforceNaturalness, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
+import { computeWinnability, isRealCompetitor, unwrapCitationUrl, SCORED_ENGINES } from "../../../src/lib/auditReport.ts";
+import { preMergeQuestions, validateClusters, buildQueue, type ClusterProposal, type QuestionSignals } from "../../../src/lib/pagePlanQueue.ts";
 
 // page-generator — service-plus-town delivery pages, from the OVERLAP of the client's
 // questionnaire (services_list x areas_list) and their baseline audit's exact measured queries.
@@ -155,17 +157,18 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "";
 
-    /* ══ ARTICLE / Q&A MODE — audit-based (works for lead-less national clients), self-contained so
-       the service+area path below is untouched. ═══════════════════════════════════════════════ */
-    if (action === "qa_clients" || action === "qa_plan" || action === "qa_generate") {
+    /* ══ ARTICLE / Q&A MODE + PAGE-PLAN QUEUE — audit-based (works for lead-less national clients),
+       self-contained so the service+area path below is untouched. ═════════════════════════════ */
+    const AUDIT_ACTIONS = ["qa_clients", "qa_plan", "qa_generate", "plan_build", "plan_get", "plan_update"];
+    if (AUDIT_ACTIONS.includes(action)) {
       const { data: auds } = await service
         .from("ai_audits")
-        .select("id, business_name, business_type, business_scope, baseline_target_runs, created_at")
+        .select("id, lead_id, business_name, business_type, business_scope, location_text, baseline_target_runs, created_at")
         .gt("baseline_target_runs", 1)
         .eq("user_id", userId)
         .neq("is_market", true)
         .order("created_at", { ascending: false });
-      const audits = (auds ?? []) as Array<{ id: string; business_name: string; business_type: string | null; business_scope: string | null; baseline_target_runs: number; created_at: string }>;
+      const audits = (auds ?? []) as Array<{ id: string; lead_id: string | null; business_name: string; business_type: string | null; business_scope: string | null; location_text: string | null; baseline_target_runs: number; created_at: string }>;
 
       if (action === "qa_clients") {
         const seen = new Set<string>();
@@ -175,9 +178,78 @@ Deno.serve(async (req) => {
         return json({ ok: true, clients });
       }
 
+      /* ── plan_update: edit ONE queue row (reorder / wave / hold / remove / job / merge). Keyed by
+         page id; ownership = the row's user_id, so it needs no audit_id. ──────────────────────── */
+      if (action === "plan_update") {
+        try {
+          const pageId = typeof body.page_id === "string" ? body.page_id : "";
+          if (!pageId) return json({ ok: false, error: "page_id required" }, 400);
+          const { data: row, error: readErr } = await service.from("client_pages")
+            .select("id, user_id, baseline_audit_id").eq("id", pageId).maybeSingle();
+          if (readErr) throw readErr;
+          if (!row || (row as { user_id: string }).user_id !== userId) return json({ ok: false, error: "not_found" }, 404);
+
+          const mergeInto = typeof body.merge_into === "string" ? body.merge_into : "";
+          if (mergeInto) {
+            const { data: target } = await service.from("client_pages").select("id, user_id").eq("id", mergeInto).maybeSingle();
+            if (!target || (target as { user_id: string }).user_id !== userId) return json({ ok: false, error: "merge_target_not_found" }, 404);
+            // Move question variants across (skip ones the target already has), then mark merged.
+            const { data: srcQs } = await service.from("client_page_questions").select("question_text, baseline_audit_id, named_rate").eq("page_id", pageId);
+            const { data: tgtQs } = await service.from("client_page_questions").select("question_text").eq("page_id", mergeInto);
+            const have = new Set((tgtQs ?? []).map((q) => (q as { question_text: string }).question_text));
+            const toMove = (srcQs ?? []).filter((q) => !have.has((q as { question_text: string }).question_text));
+            if (toMove.length) await service.from("client_page_questions").insert(toMove.map((q) => ({ ...(q as object), page_id: mergeInto })));
+            await service.from("client_pages").update({ status: "merged", held_reason: "merged by operator", near_dup_of: mergeInto, updated_at: new Date().toISOString() }).eq("id", pageId);
+            return json({ ok: true });
+          }
+
+          const set = (body.set ?? {}) as Record<string, unknown>;
+          const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+          if (Number.isInteger(set.wave) && (set.wave as number) >= 1 && (set.wave as number) <= 9) patch.wave = set.wave;
+          if (Number.isInteger(set.position) && (set.position as number) >= 0) patch.position = set.position;
+          if (typeof set.status === "string" && ["planned", "held", "removed"].includes(set.status)) {
+            patch.status = set.status;
+            patch.held_reason = set.status === "held" ? (typeof set.held_reason === "string" ? set.held_reason : "held by operator") : null;
+          }
+          if (typeof set.job === "string" && set.job.trim()) patch.job = set.job.trim();
+          if (Object.keys(patch).length === 1) return json({ ok: false, error: "nothing_to_update" }, 400);
+          const { error: updErr } = await service.from("client_pages").update(patch).eq("id", pageId);
+          if (updErr) throw updErr;
+          return json({ ok: true });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (/client_pages|client_page_questions/.test(msg) && /does not exist|schema cache/i.test(msg)) return json({ ok: false, error: "plan_tables_missing" }, 200);
+          throw e;
+        }
+      }
+
       const auditId = typeof body.audit_id === "string" ? body.audit_id.trim() : "";
       const qaAudit = audits.find((a) => a.id === auditId);
       if (!qaAudit) return json({ ok: false, error: "no_audit_for_client" }, 404);
+
+      /* ── plan_get: the stored queue for a client, waves + questions, pure read. ─────────────── */
+      if (action === "plan_get") {
+        try {
+          const { data: pages, error: pErr } = await service.from("client_pages")
+            .select("*").eq("baseline_audit_id", auditId).eq("user_id", userId)
+            .order("wave", { ascending: true }).order("position", { ascending: true });
+          if (pErr) throw pErr;
+          const ids = (pages ?? []).map((p) => (p as { id: string }).id);
+          const { data: qs } = ids.length
+            ? await service.from("client_page_questions").select("page_id, question_text, named_rate").in("page_id", ids)
+            : { data: [] };
+          const byPage = new Map<string, unknown[]>();
+          for (const q of qs ?? []) {
+            const pid = (q as { page_id: string }).page_id;
+            (byPage.get(pid) ?? byPage.set(pid, []).get(pid)!).push(q);
+          }
+          return json({ ok: true, pages: (pages ?? []).map((p) => ({ ...(p as object), questions: byPage.get((p as { id: string }).id) ?? [] })) });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (/client_pages|client_page_questions/.test(msg) && /does not exist|schema cache/i.test(msg)) return json({ ok: false, error: "plan_tables_missing" }, 200);
+          throw e;
+        }
+      }
 
       const { data: qaRuns } = await service.from("ai_audit_runs")
         .select("id").eq("audit_id", auditId).in("status", ["complete", "capped"])
@@ -190,6 +262,162 @@ Deno.serve(async (req) => {
 
       if (action === "qa_plan") {
         return json({ ok: true, client: { audit_id: auditId, business_name: qaAudit.business_name, business_type: qaAudit.business_type, scope: qaAudit.business_scope }, questions: qaQuestions });
+      }
+
+      /* ── plan_build: cluster (AI proposes, code verifies) → score → waves → persist (or dry-run).
+         One priced AI call; everything else is deterministic and tested (pagePlanQueue.ts). ────── */
+      if (action === "plan_build") {
+        const dryRun = body.dry_run === true;
+        // Signals per distinct question, from the SAME latest runs the question list came from.
+        const { data: resRows } = await service.from("ai_audit_queue")
+          .select("question, result").in("run_id", qaRunIds).eq("status", "done");
+        const cellsByQ = new Map<string, string[][]>();
+        const domainsByQ = new Map<string, string[]>();
+        const namedByQ = new Map<string, { chatgpt: [number, number]; gemini: [number, number] }>();
+        const locText = qaAudit.location_text ?? "";
+        const hostOf = (u: string): string => { try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; } };
+        for (const r of resRows ?? []) {
+          const q = String((r as { question: string }).question ?? "").trim();
+          const result = ((r as { result: unknown }).result ?? {}) as Record<string, { named?: boolean; competitors?: string[]; citations?: { url?: string }[] }>;
+          if (!q) continue;
+          const cells = cellsByQ.get(q) ?? []; const doms = domainsByQ.get(q) ?? [];
+          const named = namedByQ.get(q) ?? { chatgpt: [0, 0] as [number, number], gemini: [0, 0] as [number, number] };
+          for (const eng of SCORED_ENGINES) {
+            const er = result[eng];
+            if (!er) continue;
+            cells.push((er.competitors ?? []).filter((c) => isRealCompetitor(c, locText)));
+            for (const cit of er.citations ?? []) { const h = hostOf(unwrapCitationUrl(cit?.url ?? "")); if (h) doms.push(h); }
+            named[eng][1]++; if (er.named) named[eng][0]++;
+          }
+          cellsByQ.set(q, cells); domainsByQ.set(q, doms); namedByQ.set(q, named);
+        }
+        const signals = new Map<string, QuestionSignals>();
+        for (const q of qaQuestions) {
+          const w = computeWinnability(cellsByQ.get(q) ?? [], domainsByQ.get(q) ?? []);
+          const nr = namedByQ.get(q) ?? { chatgpt: [0, 0] as [number, number], gemini: [0, 0] as [number, number] };
+          signals.set(q, {
+            question: q,
+            winnability: w.label === "wide_open" || w.label === "locked" || w.label === "informational" ? w.label : "unclear",
+            winnabilityReason: w.reason,
+            namedRate: {
+              chatgpt: nr.chatgpt[1] > 0 ? nr.chatgpt[0] / nr.chatgpt[1] : null,
+              gemini: nr.gemini[1] > 0 ? nr.gemini[0] / nr.gemini[1] : null,
+            },
+            businessSources: w.sourceMix.business >= 1,
+          });
+        }
+
+        // Deterministic pre-merge, then ONE clustering call over the kept questions.
+        const { kept, mergedInto } = preMergeQuestions(qaQuestions);
+        const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+        if (!OPENAI_API_KEY) return json({ ok: false, error: "openai_not_configured" }, 500);
+        const numbered = kept.map((q, i) => `${i}: ${q}`).join("\n");
+        const clusterRes = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: MODEL, temperature: 0.3,
+            messages: [
+              { role: "system", content: `You cluster a business's customer questions into DISTINCT CUSTOMER JOBS — one cluster per page. MERGE questions that one page genuinely answers (same job, phrased differently). SPLIT when the honest answer materially changes. Also group clusters under a short TOPIC (a hub theme; related clusters share a topic). Return indices into the numbered list via return_clusters — every index EXACTLY once, none invented.` },
+              { role: "user", content: `Business: ${qaAudit.business_name}${qaAudit.business_type ? ` (${qaAudit.business_type})` : ""}.\nQuestions:\n${numbered}\nReturn via return_clusters.` },
+            ],
+            tools: [{
+              type: "function",
+              function: {
+                name: "return_clusters",
+                description: "The clustering: a perfect partition of the question indices.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    clusters: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          job: { type: "string", description: "the distinct customer job, short" },
+                          topic: { type: "string", description: "short hub theme grouping related clusters" },
+                          primary_index: { type: "integer" },
+                          question_indices: { type: "array", items: { type: "integer" } },
+                          rationale: { type: "string", description: "one line: why merged / kept apart" },
+                        },
+                        required: ["job", "topic", "primary_index", "question_indices", "rationale"],
+                        additionalProperties: false,
+                      },
+                    },
+                  },
+                  required: ["clusters"], additionalProperties: false,
+                },
+              },
+            }],
+            tool_choice: { type: "function", function: { name: "return_clusters" } },
+          }),
+        });
+        if (!clusterRes.ok) {
+          const txt = await clusterRes.text().catch(() => "");
+          if (clusterRes.status === 429 || /insufficient_quota|credit_balance_exhausted|no credits/i.test(txt)) return json({ ok: false, error: "no_credits" }, 200);
+          return json({ ok: false, error: `openai_http_${clusterRes.status}`, detail: txt.slice(0, 200) }, 502);
+        }
+        const cData = await clusterRes.json();
+        let proposals: ClusterProposal[] = [];
+        try {
+          const raw = JSON.parse(cData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ?? "{}") as { clusters?: Array<Record<string, unknown>> };
+          proposals = (raw.clusters ?? []).map((c) => ({
+            job: String(c.job ?? "").trim() || "untitled job",
+            topic: String(c.topic ?? "").trim() || "general",
+            primaryIndex: Number(c.primary_index),
+            questionIndices: Array.isArray(c.question_indices) ? c.question_indices.map(Number) : [],
+            rationale: String(c.rationale ?? "").trim(),
+          }));
+        } catch { proposals = []; }
+
+        const { partitionOk, clusters, problems } = validateClusters(kept, proposals);
+        const pages = buildQueue(kept, clusters, signals);
+        // Re-attach pre-merged exact duplicates to the page holding their keeper.
+        for (const [dup, keeper] of mergedInto) {
+          const pg = pages.find((p) => p.questions.includes(keeper));
+          if (pg && !pg.questions.includes(dup)) pg.questions.push(dup);
+        }
+
+        if (dryRun) return json({ ok: true, dryRun: true, partitionOk, problems, pages, questionCount: qaQuestions.length });
+
+        // Persist: rebuild REPLACES this client's plan (the UI's confirm says so).
+        try {
+          const slugOf = (job: string, i: number): string => {
+            const s = job.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
+            return s || `page-${i}`;
+          };
+          await service.from("client_pages").delete().eq("baseline_audit_id", auditId).eq("user_id", userId);
+          const inserted: string[] = [];
+          for (let i = 0; i < pages.length; i++) {
+            const p = pages[i];
+            const { data: row, error: insErr } = await service.from("client_pages").insert({
+              user_id: userId, baseline_audit_id: auditId, lead_id: qaAudit.lead_id,
+              page_type: "qa", job: p.job, topic: p.topic, primary_question: p.primaryQuestion,
+              slug: slugOf(p.job, i), rationale: p.rationale, winnability: p.winnability,
+              score: p.score, score_reasons: p.scoreReasons, wave: p.wave, position: p.position,
+              status: p.status, held_reason: p.heldReason,
+            }).select("id").single();
+            if (insErr || !row) throw insErr ?? new Error("insert failed");
+            inserted.push((row as { id: string }).id);
+            const qRows = p.questions.map((q) => ({
+              page_id: (row as { id: string }).id, baseline_audit_id: auditId, question_text: q,
+              named_rate: signals.get(q)?.namedRate ?? null,
+            }));
+            if (qRows.length) { const { error: qErr } = await service.from("client_page_questions").insert(qRows); if (qErr) throw qErr; }
+          }
+          // near-dup links now that ids exist
+          for (let i = 0; i < pages.length; i++) {
+            const nd = pages[i].nearDupOf;
+            if (!nd) continue;
+            const j = pages.findIndex((p) => p.primaryQuestion === nd);
+            if (j >= 0) await service.from("client_pages").update({ near_dup_of: inserted[j] }).eq("id", inserted[i]);
+          }
+          return json({ ok: true, partitionOk, problems, built: pages.length, questionCount: qaQuestions.length });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (/client_pages|client_page_questions/.test(msg) && /does not exist|schema cache/i.test(msg)) return json({ ok: false, error: "plan_tables_missing" }, 200);
+          throw e;
+        }
       }
 
       // ── qa_generate: scaffold ONE Q&A page for a question (from the list OR free-typed). ──
