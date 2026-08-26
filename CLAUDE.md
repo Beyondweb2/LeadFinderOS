@@ -1535,6 +1535,15 @@ by the single account below.** §6's paginate rule, caught in this file's own no
 
 ## 8. Known open problems — don't rediscover these
 
+- 🔴 **REPORT-ACCURACY BUG, LOGGED 2026-08-28, NOT FIXED: `classifySource` (`src/lib/sourceType.ts`)
+  grades ANY `.org`/`.org.uk` domain as 'authority', so real businesses on .org read as official
+  bodies** — seen live: `cbsaccountants.org` and `spriggsandco.org` (actual accountancy firms)
+  graded authority in the book-wide scan. Affects the "which sources each engine reads" output in
+  client reports and the page-plan queue (the most valued client output — David), the winnability
+  source-mix, and the authority-locked hold. Sits alongside the @graph crawler bug as
+  report-accuracy work. ⚠️ The @graph crawler bug itself is NOT recorded anywhere in this repo's
+  docs — Paul tracks it; ask him for the details before fixing either. A fix needs care: many
+  genuine authorities ARE .org (nice.org.uk, thebms.org.uk, cochrane.org) — do not patch blind.
 - 🔴 **THE WHATSAPP DAILY CAP IS ALMOST OUT OF ROAD, AND REPLIES SPEND IT WITHOUT BEING LIMITED BY
   IT.** `DAILY_CAP` in `process-whatsapp-queue` — **120** since 2026-08-12 (40 → 60 → 100 → 120, each
   raise on a Green quality rating). Two facts neither file reveals on its own:

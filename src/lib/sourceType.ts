@@ -43,7 +43,16 @@ const endsWithAny = (host: string, suffixes: string[]): boolean =>
   suffixes.some((s) => host === s || host.endsWith('.' + s));
 
 /** Classify one domain. Curated authority list first; then academic/gov/charity TLDs (info-leaning);
- *  then a commercial TLD → business; else 'other' (unknown — treated cautiously downstream). */
+ *  then a commercial TLD → business; else 'other' (unknown — treated cautiously downstream).
+ *
+ *  🔴 KNOWN ISSUE (logged 2026-08-28, NOT yet fixed — see CLAUDE.md §8): the blanket
+ *  `.org` / `.org.uk` → 'authority' rule misgrades REAL BUSINESSES that happen to sit on .org
+ *  domains as official bodies. Seen live in the book-wide scan: `cbsaccountants.org` and
+ *  `spriggsandco.org` — both actual accountancy FIRMS — graded 'authority'. This is a
+ *  REPORT-ACCURACY bug, not just a winnability nit: the same classifier powers the "which sources
+ *  each engine reads" output in client reports and the page-plan queue — the most valued client
+ *  output. A fix needs care (many genuine authorities ARE .org: nice.org.uk, thebms.org.uk,
+ *  cochrane.org), so it is deliberately deferred rather than patched blind. */
 export function classifySource(domain: string): SourceType {
   const host = norm(domain);
   if (!host) return 'other';
