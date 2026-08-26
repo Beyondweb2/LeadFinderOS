@@ -2,7 +2,7 @@
    the AI partition is VERIFIED (nothing dropped/duplicated, fallback loud), waves keep a topic's
    pages together, defend/locked hold with reasons, near-dups flag. Run: npx tsx scripts/page-plan-queue.test.ts */
 import {
-  preMergeQuestions, validateClusters, scoreCluster, buildQueue,
+  preMergeQuestions, validateClusters, scoreCluster, buildQueue, topSources,
   WAVE1_MIN_SCORE, NEAR_DUP_JACCARD, type ClusterProposal, type QuestionSignals,
 } from '../src/lib/pagePlanQueue.ts';
 
@@ -87,6 +87,17 @@ console.log('── WAVES KEEP TOPICS TOGETHER + HOLDS + NEAR-DUP ──');
   ok(p('hrt cost dup').nearDupOf === qs[2], `near-identical primaries flag as duplicates (J>=${NEAR_DUP_JACCARD})`);
   const w1 = pages.filter((x) => x.wave === 1).map((x) => x.position);
   ok(new Set(w1).size === w1.length, 'positions unique within a wave');
+}
+
+console.log('── TOP SOURCES ──');
+{
+  const t = topSources(['nhs.uk', 'healthline.com', 'NHS.UK ', 'menopausedirectory.com', 'nhs.uk', 'healthline.com', '', 'a.com', 'b.com', 'c.com', 'd.com']);
+  ok(t[0].domain === 'nhs.uk' && t[0].count === 3, 'most-cited domain first (case/space-folded)');
+  ok(t[1].domain === 'healthline.com' && t[1].count === 2, '  second by count');
+  ok(t.length === 5, '  capped at 5');
+  ok(topSources([]).length === 0, '  no citations -> empty, never invented');
+  const ties = topSources(['b.com', 'a.com']);
+  ok(ties[0].domain === 'a.com', '  ties break alphabetically (stable display)');
 }
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILED`);
