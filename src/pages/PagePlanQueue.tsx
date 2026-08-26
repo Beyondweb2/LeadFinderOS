@@ -41,6 +41,17 @@ const namedCell = (v: unknown): string => {
   return '—';
 };
 
+/* Gemini-gap tag, derived from the STORED counts (same rule as the lib): named on ChatGPT in ≥half
+   of ≥2 runs but not on Gemini. Pages are the Gemini lever (§5: ChatGPT reads directories, Gemini
+   reads the client's own site), so these BUILD — the tag just shows the existing ChatGPT strength. */
+const engNamed = (v: unknown): boolean => {
+  if (!v || typeof v !== 'object' || !('named' in (v as object))) return false;
+  const e = v as { named: number; runs: number };
+  return e.runs >= 2 && e.named / e.runs >= 0.5;
+};
+const isGeminiGapRow = (r: PlanRow): boolean =>
+  r.status === 'planned' && r.questions.some((q) => engNamed(q.named_rate?.chatgpt) && !engNamed(q.named_rate?.gemini));
+
 /* Winnability badges in the AUDIT'S vocabulary (classifyWinnability verdicts, majority across the
    runs) — so the queue's label matches what the audit page shows for the same question. */
 const WINN_STYLE: Record<string, string> = {
@@ -155,6 +166,11 @@ const PagePlanQueue = () => {
           )}
           <Badge variant="outline" className="text-[10px] font-normal">{r.topic}</Badge>
           {r.winnability && <Badge variant="outline" className={`text-[10px] ${WINN_STYLE[r.winnability] ?? ''}`}>{r.winnability.replace('_', ' ')}</Badge>}
+          {isGeminiGapRow(r) && (
+            <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-500">
+              Gemini gap — already strong on ChatGPT
+            </Badge>
+          )}
           <Badge variant="outline" className="text-[10px] font-normal">score {r.score ?? '—'}</Badge>
           {r.questions.length > 1 && <Badge variant="outline" className="text-[10px] font-normal">{r.questions.length} variants merged</Badge>}
           {r.near_dup_of && (
