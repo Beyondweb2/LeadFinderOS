@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, FileCode2, Copy, Sparkles, PiggyBank, AlertTriangle } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { usePersistedState } from '@/hooks/usePersistedState';
+import { Loader2, FileCode2, Copy, Sparkles, PiggyBank, AlertTriangle, Trash2, Clock } from 'lucide-react';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    PAGE GENERATOR — the delivery pages a client needs, aimed at the exact queries we measure.
@@ -39,11 +41,26 @@ interface GeneratedPage {
   title: string; meta_description: string; h1: string; body_html: string;
 }
 interface Naturalness { townCount: number; phraseCount: number; topWord: string; topWordPct: number; verdict: 'ok' | 'stuffed'; detail: string; regenerated: boolean }
-type GenState =
+
+/* A page's render state. `done` carries generatedAt so the view can flag pages generated over a day
+   ago. busy / error / no_credits are TRANSIENT (in-memory only) — never persisted, so navigating
+   away mid-generation or after a hiccup can never restore a stuck spinner or a stale error. */
+type PageView =
   | { kind: 'busy' }
   | { kind: 'no_credits' }
   | { kind: 'error'; message: string }
-  | { kind: 'done'; page: GeneratedPage; naturalness: Naturalness };
+  | { kind: 'done'; page: GeneratedPage; naturalness: Naturalness; generatedAt: number };
+type Transient = Exclude<PageView, { kind: 'done' }>;
+
+/* Per-CLIENT cache, persisted to localStorage (tier 'both') so generated pages survive both in-app
+   navigation AND a full refresh / browser reopen. Keyed by client, so switching clients shows that
+   client's pages, never another's. Only successfully-generated pages are held — restoring is a pure
+   read that NEVER calls the generator, so returning to the page costs nothing. */
+interface CachedPage { page: GeneratedPage; naturalness: Naturalness; generatedAt: number }
+interface ClientCache { plan: PlanData | null; pages: Record<string, CachedPage> }
+type CacheShape = Record<string, ClientCache>;
+
+const STALE_MS = 24 * 60 * 60 * 1000; // a cached page older than this shows a "generated earlier" note
 
 type Hosting = 'wordpress' | 'ours' | 'other';
 
@@ -59,13 +76,31 @@ const htmlToPlainText = (html: string): string =>
 
 const PageGenerator = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [clients, setClients] = useState<ClientRow[]>([]);
-  const [clientId, setClientId] = useState<string>('');
-  const [plan, setPlan] = useState<PlanData | null>(null);
+  const [clientId, setClientId] = usePersistedState<string>('pagegen-client', '', { tier: 'both', scope: user?.id });
+  const [cache, setCache] = usePersistedState<CacheShape>('pagegen-cache', {}, {
+    tier: 'both', scope: user?.id, version: 1,
+    validate: (d) => (d && typeof d === 'object' ? (d as CacheShape) : null),
+  });
+  const [hosting, setHosting] = usePersistedState<Hosting>('pagegen-hosting', 'wordpress', { tier: 'both', scope: user?.id });
+  const [transient, setTransient] = useState<Record<string, Transient>>({});
   const [planBusy, setPlanBusy] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
-  const [hosting, setHosting] = useState<Hosting>('wordpress');
-  const [gen, setGen] = useState<Record<string, GenState>>({});
+
+  // The current client's cache. plan + pages are read straight from here — no fetch, no generate.
+  const current: ClientCache | undefined = clientId ? cache[clientId] : undefined;
+  const plan = current?.plan ?? null;
+  const cachedCount = current ? Object.keys(current.pages).length : 0;
+
+  // A page's render state: an in-flight/transient state wins; otherwise the cached generated page
+  // (a pure read — never a generator call); otherwise nothing yet.
+  const viewFor = (key: string): PageView | undefined => {
+    const t = transient[key];
+    if (t) return t;
+    const cp = current?.pages[key];
+    return cp ? { kind: 'done', page: cp.page, naturalness: cp.naturalness, generatedAt: cp.generatedAt } : undefined;
+  };
 
   useEffect(() => {
     void (async () => {
@@ -74,18 +109,26 @@ const PageGenerator = () => {
     })();
   }, []);
 
+  // On mount, if a client was persisted, only fetch the plan when it is NOT already cached — a
+  // normal return shows the cached plan + pages instantly and fires no call at all.
+  useEffect(() => {
+    if (clientId && !cache[clientId]?.plan) void loadPlan(clientId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const loadPlan = async (leadId: string) => {
     setClientId(leadId);
-    setPlan(null);
-    setGen({});
+    setTransient({});          // ephemeral busy/error belong to the client we're leaving
     setPlanError(null);
     if (!leadId) return;
     setPlanBusy(true);
     try {
       const { data: res, error } = await supabase.functions.invoke('page-generator', { body: { action: 'plan', lead_id: leadId } });
       if (error || !res?.ok) throw new Error(error?.message ?? res?.error ?? 'plan failed');
-      setPlan(res as PlanData);
-      const def = String((res as PlanData).inputs.hostingDefault ?? '').toLowerCase();
+      const p = res as PlanData;
+      // Refresh the plan; KEEP any pages already generated for this client.
+      setCache((c) => ({ ...c, [leadId]: { plan: p, pages: c[leadId]?.pages ?? {} } }));
+      const def = String(p.inputs.hostingDefault ?? '').toLowerCase();
       if (def.includes('wordpress')) setHosting('wordpress');
     } catch (e) {
       setPlanError(e instanceof Error ? e.message : 'plan failed');
@@ -95,20 +138,33 @@ const PageGenerator = () => {
   };
 
   const generate = async (page: PlanPage) => {
-    setGen((g) => ({ ...g, [page.key]: { kind: 'busy' } }));
+    setTransient((t) => ({ ...t, [page.key]: { kind: 'busy' } }));
     try {
       const { data: res, error } = await supabase.functions.invoke('page-generator', {
         body: { action: 'generate', lead_id: clientId, page_key: page.key },
       });
       if (error) throw new Error(error.message);
       if (!res?.ok) {
-        if (res?.error === 'no_credits') { setGen((g) => ({ ...g, [page.key]: { kind: 'no_credits' } })); return; }
+        if (res?.error === 'no_credits') { setTransient((t) => ({ ...t, [page.key]: { kind: 'no_credits' } })); return; }
         throw new Error(res?.error ?? 'generation failed');
       }
-      setGen((g) => ({ ...g, [page.key]: { kind: 'done', page: res.page, naturalness: res.naturalness } }));
+      const done: CachedPage = { page: res.page, naturalness: res.naturalness, generatedAt: Date.now() };
+      setCache((c) => ({
+        ...c,
+        [clientId]: { plan: c[clientId]?.plan ?? plan, pages: { ...(c[clientId]?.pages ?? {}), [page.key]: done } },
+      }));
+      setTransient((t) => { const n = { ...t }; delete n[page.key]; return n; }); // clear busy → render falls to cache
     } catch (e) {
-      setGen((g) => ({ ...g, [page.key]: { kind: 'error', message: e instanceof Error ? e.message : 'generation failed' } }));
+      setTransient((t) => ({ ...t, [page.key]: { kind: 'error', message: e instanceof Error ? e.message : 'generation failed' } }));
     }
+  };
+
+  // Wipe this client's generated pages (keep the plan visible so it can be regenerated).
+  const clearCached = () => {
+    if (!clientId) return;
+    setCache((c) => ({ ...c, [clientId]: { plan: c[clientId]?.plan ?? plan, pages: {} } }));
+    setTransient({});
+    toast({ title: 'Cleared cached pages', description: 'Generate again for fresh copy.' });
   };
 
   const copy = async (label: string, text: string) => {
@@ -193,13 +249,23 @@ const PageGenerator = () => {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                The page set — {plan.plan.pages.length} page{plan.plan.pages.length === 1 ? '' : 's'}, each aimed at measured queries
-              </CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  The page set — {plan.plan.pages.length} page{plan.plan.pages.length === 1 ? '' : 's'}, each aimed at measured queries
+                </CardTitle>
+                {cachedCount > 0 && (
+                  <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{cachedCount} generated & saved on this device</span>
+                    <Button variant="ghost" size="sm" className="h-7" onClick={clearCached}>
+                      <Trash2 className="mr-1.5 h-3 w-3" /> Clear
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {plan.plan.pages.map((p) => {
-                const g = gen[p.key];
+                const g = viewFor(p.key);
                 return (
                   <div key={p.key} className="rounded-md border border-border/60 p-3 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -239,6 +305,11 @@ const PageGenerator = () => {
                             </Badge>
                           )}
                           {g.naturalness.regenerated && <span className="text-muted-foreground">(auto-rewritten once for naturalness)</span>}
+                          {Date.now() - g.generatedAt > STALE_MS && (
+                            <span className="flex items-center gap-1 text-muted-foreground">
+                              <Clock className="h-3 w-3" /> generated earlier — regenerate if you've changed anything
+                            </span>
+                          )}
                           <Button variant="outline" size="sm" className="ml-auto h-7" onClick={() => copy('Full page', fullOutput(g.page))}>
                             <Copy className="mr-1.5 h-3 w-3" /> Copy full {hosting === 'other' ? 'text' : 'HTML'}
                           </Button>

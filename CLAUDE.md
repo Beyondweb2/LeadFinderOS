@@ -1271,10 +1271,36 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   Huntingdon UK") → "homepage covers it"; measured-but-not-offered services (Ronnie's "cobbler",
   "key cutting") → excluded with reason; wanted-but-never-measured areas (RG: St Ives, Brampton,
   Godmanchester, Chatteris) listed as no-page.
-- ⛔ **ANTI-STUFFING IS CODE, NOT PROMPT**: `stuffingCheck` (town ≤ `MAX_TOWN_MENTIONS` 4, density
-  ≤ `MAX_KEYWORD_DENSITY_PCT` 3%) grades every generated page server-side — RG's old 5.7% doorway
-  pages grade `stuffed` — one auto-rewrite on failure, still-stuffed returned FLAGGED. gpt-4o,
-  `must_not_say` is a hard prompt rule (RG: never claim MLA), no outcome promises, invent nothing.
+- ⛔ **ANTI-STUFFING IS CODE, NOT PROMPT — AND IT MEASURES PHRASE+TOWN+NOUN-SPAM, NOT RAW DENSITY
+  (rebuilt 2026-08-27).** The old `stuffingCheck` summed EVERY occurrence of the service's stemmed
+  tokens (lock/locks, change/changes) as "keyword density" ≤ 3% — so a genuinely CLEAN locksmith
+  page hit 3.6-5.2% purely from unavoidable use of "lock" and false-flagged as stuffed. A locksmith
+  page HAS to say "lock" a lot; that is not stuffing. `stuffingCheck` now grades the three real
+  doorway signals: town over-use (`MAX_TOWN_MENTIONS` 3), **exact contiguous SERVICE-PHRASE repeats**
+  (`MAX_SERVICE_PHRASE_REPEATS` 5 — multi-word phrases only; a single-token service is left to the
+  backstop), and a **bare-noun-spam backstop** (`MAX_SINGLE_WORD_PCT` 6% — the most-repeated content
+  word EXCLUDING the service tokens and the town, so natural "lock" use trips nothing while
+  "locksmith"×30 still does). `MAX_KEYWORD_DENSITY_PCT`/`serviceTokenCount`/`densityPct` are GONE.
+  ⛔ **Caps are MEASURED, not guessed** (§4): 4 freshly generated RG pages 2026-08-27 all graded ok
+  (top word ~2%, exact phrase up to 4x → cap raised 4→5 to sit above the observed natural ceiling);
+  doorways hammer the phrase 7-11x and a noun 26-41%, so every cap keeps a clear margin. The
+  mechanical backstop still HARD-guarantees the town cap + no-other-towns; natural copy now passes
+  the metric on its own (no more "fix it yourself" warnings). gpt-4o, `must_not_say` is a hard prompt
+  rule (RG: never claim MLA), no outcome promises, invent nothing. ⚠️ **The SPA fix was TYPE-ONLY**
+  (PageGenerator's `Naturalness` interface renamed) so the SPA bundle is unchanged — the real change
+  is the edge fn (v4, deployed), proven live because generations now return `phraseCount`/`topWord`/
+  `topWordPct`, fields only the new code produces.
+- ⛔ **GENERATED PAGES ARE CACHED CLIENT-SIDE, PER CLIENT, IN localStorage (2026-08-27).** The edge
+  fn stores NOTHING (its DB calls are all reads), so every `generate` is a live paid OpenAI call —
+  and before this, navigating away wiped the in-memory `gen` map (AppLayout remounts, §6c), so
+  returning meant regenerating and paying again. `PageGenerator.tsx` now holds generated pages in
+  `usePersistedState` (`pagegen-cache`, tier `both`, scoped by `user.id`), keyed by clientId. ⛔ **The
+  rules that must not regress:** restoring is a PURE READ — it never calls the generator, so returning
+  costs nothing; only an explicit "Regenerate" click spends. busy/error/no_credits are TRANSIENT
+  (in-memory only) and never persisted (no stuck spinner on return — the §6c "never persist an
+  interruption" rule). Pages are scoped by clientId so one client's pages never show under another.
+  A page cached >24h shows a "generated earlier" note (`STALE_MS`); the Clear button wipes a client's
+  pages but keeps the plan visible. No DB, no server storage — held per-browser, not cross-device.
 - ⚠️ `page_key` is RE-DERIVED server-side on generate — a client can never request a pair the
   overlap didn't produce. Hosting format is a dropdown (`website_platform` is NULL for both
   current clients; it seeds the default when a future client fills it). Typed `no_credits` while
