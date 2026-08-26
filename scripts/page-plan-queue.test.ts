@@ -5,7 +5,7 @@
    Run: npx tsx scripts/page-plan-queue.test.ts */
 import {
   preMergeQuestions, validateClusters, scoreCluster, buildQueue, topSources,
-  enforceTownSplit, majorityVerdict, questionIsNamed, namedCountsLabel,
+  enforceTownSplit, majorityVerdict, questionDefends, questionIsGeminiGap, namedCountsLabel,
   WAVE1_MIN_SCORE, NEAR_DUP_JACCARD,
   type ClusterProposal, type QuestionSignals, type WinnVerdict, type EngineNamed,
 } from '../src/lib/pagePlanQueue.ts';
@@ -78,40 +78,54 @@ console.log('── MAJORITY VERDICT + PER-QUESTION NAMED ──');
   ok(majorityVerdict(['named', 'open', 'open']) === 'open', '  1-of-3 named does not read as named');
   ok(majorityVerdict(['named', 'open']) === 'named', '  ties break toward named (never under-claims presence)');
   ok(majorityVerdict([]) === 'unmeasured', '  no runs -> unmeasured, never confident');
-  ok(questionIsNamed(sig('q', 'open', en(2, 3), en(0, 3))), 'named 2/3 on one engine -> named');
-  ok(!questionIsNamed(sig('q', 'open', en(1, 3), en(0, 3))), '  1/3 is not named');
-  ok(!questionIsNamed(sig('q', 'open', en(1, 1), null)), '  a single-run fluke never defends (needs >=2 runs)');
+  ok(questionDefends(sig('q', 'open', en(0, 3), en(2, 3))), 'Gemini 2/3 -> defends');
+  ok(!questionDefends(sig('q', 'open', en(3, 3), en(0, 3))), '  ChatGPT 3/3 with Gemini 0/3 does NOT defend (Gemini-first)');
+  ok(!questionDefends(sig('q', 'open', en(0, 3), en(1, 3))), '  Gemini 1/3 is not named');
+  ok(!questionDefends(sig('q', 'open', null, en(1, 1))), '  a single-run fluke never defends (needs >=2 runs)');
+  ok(questionIsGeminiGap(sig('q', 'named', en(3, 3), en(0, 3))), 'ChatGPT-named + Gemini-absent = Gemini gap');
+  ok(!questionIsGeminiGap(sig('q', 'open', en(1, 3), en(0, 3))), '  ChatGPT 1/3 is not a gap (not strong)');
+  ok(!questionIsGeminiGap(sig('q', 'named', en(3, 3), en(2, 3))), '  Gemini-named is a defend, not a gap');
   ok(namedCountsLabel(sig('q', 'open', en(3, 3), en(0, 3))) === 'ChatGPT 3/3 · Gemini 0/3', 'counts label is the verifiable numbers');
   ok(namedCountsLabel(sig('q', 'open', null, en(1, 3))) === 'ChatGPT — · Gemini 1/3', '  absent engine shows as —');
 }
 
-console.log('── HOLD IS PER QUESTION (the lock-changes-Peterborough fault) ──');
+console.log('── ⛔ GEMINI-FIRST THREE-WAY: build / build-with-gap-tag / defend ──');
 {
-  // A page whose ONLY question is absent (0/3, 0/3) must NEVER hold — whatever its siblings do.
+  // 1. BUILD (best): Gemini absent, ChatGPT absent -> full scoring, wide-open ranks highest.
   const absent = scoreCluster([sig('lock changes peterborough', 'open', en(0, 3), en(0, 3), true)]);
-  ok(!absent.defend, 'an absent question (0/3 both engines) never defends');
+  ok(!absent.defend && !absent.geminiGap, 'neither engine named -> plain build');
   ok(absent.reasons.some((r) => r.includes('absent from every answer')), '  and scores the absence bonus');
-  // Fully named page -> held, with the REAL numbers in the reason.
+  ok(absent.score >= WAVE1_MIN_SCORE, `  wide-open build clears wave 1 (${absent.score})`);
+  // 2. BUILD (Gemini gap): ChatGPT 3/3, Gemini 0/3 -> BUILDS, tagged, scored below the wide-open build.
+  const gap = scoreCluster([sig('lock changes huntingdon', 'named', en(3, 3), en(0, 3), true)]);
+  ok(!gap.defend, 'ChatGPT-named + Gemini-absent BUILDS (never holds)');
+  ok(gap.geminiGap, '  and carries the Gemini-gap flag');
+  ok(gap.reasons.some((r) => r.includes('Already strong on ChatGPT') && r.includes('Gemini gap')), '  with the client-safe tag line');
+  ok(gap.score < absent.score, `  gap build (${gap.score}) ranks below the wide-open build (${absent.score})`);
+  // 3. DEFEND: ONLY Gemini named (>= 2 of 3) holds.
   const named = scoreCluster([sig('emergency lockouts huntingdon', 'named', en(3, 3), en(3, 3))]);
-  ok(named.defend, 'a fully-named page defends');
-  ok((named.defendReason ?? '').includes('ChatGPT 3/3 · Gemini 3/3'), `  reason carries the verifiable counts`);
+  ok(named.defend, 'Gemini 3/3 defends');
+  ok((named.defendReason ?? '').includes('ChatGPT 3/3 · Gemini 3/3'), '  reason carries the verifiable counts');
   ok((named.defendReason ?? '').includes('this question') && !(named.defendReason ?? '').includes('every question'),
-    '  single-question hold says "this question", never "every question" (the wording fault)');
+    '  single-question hold says "this question", never "every question"');
+  const gmOnly = scoreCluster([sig('q', 'named', en(0, 3), en(2, 3))]);
+  ok(gmOnly.defend, '  Gemini 2/3 alone defends (ChatGPT irrelevant to the hold)');
   const namedMulti = scoreCluster([
     sig('q one', 'named', en(3, 3), en(2, 3)), sig('q two', 'named', en(2, 3), en(3, 3)),
   ]);
-  ok((namedMulti.defendReason ?? '').includes('all 2 questions') && (namedMulti.defendReason ?? '').includes('"q one"'),
+  ok(namedMulti.defend && (namedMulti.defendReason ?? '').includes('all 2 questions') && (namedMulti.defendReason ?? '').includes('"q one"'),
     '  multi-question hold itemises each question\'s counts');
-  // Mixed page: one named variant + one absent variant -> NOT held (there is something to win).
+  // Mixed page: one Gemini-defended variant + one absent variant -> NOT held.
   const mixed = scoreCluster([
     sig('window locks huntingdon', 'named', en(3, 3), en(3, 3)),
     sig('upvc door huntingdon', 'open', en(0, 3), en(0, 3)),
   ]);
-  ok(!mixed.defend, 'one named sibling never holds a page with an absent variant');
+  ok(!mixed.defend, 'one defended sibling never holds a page with an absent variant');
   ok(mixed.winnability === 'open', '  and the page winnability comes from the winnable variant');
-  // Engine gap from counts.
-  const gap = scoreCluster([sig('q', 'contested', en(1, 3), en(0, 3))]);
-  ok(gap.reasons.some((r) => r.includes('absent on Gemini')), 'named on ChatGPT only -> Gemini gap reason');
+  // locked no longer auto-holds — it builds with its low score.
+  const locked = buildQueue(['q'], [{ job: 'q', topic: 't', primaryIndex: 0, questionIndices: [0], rationale: '' }],
+    new Map([['q', sig('q', 'locked', en(0, 3), en(0, 3))]]));
+  ok(locked[0].status === 'planned' && locked[0].score < WAVE1_MIN_SCORE, 'locked BUILDS low (only the Gemini defend holds)');
 }
 
 console.log('── WINNABILITY LABELS MAP THROUGH ──');
@@ -144,7 +158,7 @@ console.log('── WAVES KEEP TOPICS TOGETHER + NEAR-DUP + QUEUE ASSEMBLY ─�
   const p = (job: string) => pages.find((x) => x.job === job)!;
   ok(p('testo strong').wave === 1 && p('testo weak').wave === 1, 'siblings share the strong page\'s wave (complete clusters)');
   ok(p('hrt cost').wave === 2, 'a weak topic lands in wave 2');
-  ok(p('locked one').status === 'held' && !!p('locked one').heldReason, 'locked -> held WITH a reason');
+  ok(p('locked one').status === 'planned' && p('locked one').wave === 2, 'locked builds low in wave 2 (only the Gemini defend holds)');
   ok(p('defended one').status === 'held' && p('defended one').heldReason!.includes('ChatGPT 3/3'), 'defend hold cites the real counts');
   ok(p('hrt cost dup').nearDupOf === qs[2], `near-identical primaries flag as duplicates (J>=${NEAR_DUP_JACCARD})`);
   const noSig = buildQueue(['q'], [{ job: 'q', topic: 't', primaryIndex: 0, questionIndices: [0], rationale: '' }], new Map());

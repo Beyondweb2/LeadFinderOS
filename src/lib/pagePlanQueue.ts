@@ -55,14 +55,27 @@ export function majorityVerdict(verdicts: WinnVerdict[]): WinnVerdict {
   return best;
 }
 
-/** A question reads as ALREADY NAMED when some engine named the client in at least half its runs,
- *  with ≥2 runs measured (a single-run fluke never defends). Counts-based so the reason can show
- *  the exact numbers. */
-export function questionIsNamed(s: QuestionSignals): boolean {
-  for (const e of [s.named.chatgpt, s.named.gemini]) {
-    if (e && e.runs >= 2 && e.named / e.runs >= DEFEND_NAMED_RATE) return true;
-  }
-  return false;
+/* ⛔ GEMINI-FIRST BUILD/HOLD RULE (Paul's call, 2026-08-28). Pages on the client's own site are
+   the GEMINI lever — §5's measured model: ChatGPT reads directories, Gemini reads the business's
+   own website (ABLM's own-site pages moved Gemini 0→3 and ChatGPT not at all). So being named on
+   ChatGPT is directory-driven and does NOT justify holding a page; only Gemini presence does.
+   Three-way outcome per question:
+     - Gemini named (≥half of ≥2 runs)                → DEFEND (the only hold)
+     - ChatGPT named but Gemini absent                → BUILD, tagged "Gemini gap" — still shown,
+                                                        so nobody builds blind to existing strength
+     - neither                                        → BUILD (best; wide-open ranks highest)
+   Engine presence is counts-based (≥2 runs — a single-run fluke never decides) so every reason
+   can print the verifiable numbers. */
+function engineNamed(e: EngineNamed | null): boolean {
+  return !!e && e.runs >= 2 && e.named / e.runs >= DEFEND_NAMED_RATE;
+}
+/** The ONLY condition that defends/holds: Gemini named the client in ≥half of ≥2 runs. */
+export function questionDefends(s: QuestionSignals): boolean {
+  return engineNamed(s.named.gemini);
+}
+/** Named on ChatGPT but absent on Gemini — a BUILD with the "Gemini gap" tag, never a hold. */
+export function questionIsGeminiGap(s: QuestionSignals): boolean {
+  return engineNamed(s.named.chatgpt) && !engineNamed(s.named.gemini);
 }
 
 /** "ChatGPT 3/3 · Gemini 0/3" — the verifiable named-counts line for one question. */
@@ -92,6 +105,8 @@ export interface PlannedQueuePage {
   position: number;            // order within the wave
   status: 'planned' | 'held';
   heldReason: string | null;
+  /** BUILD tagged "Gemini gap": already strong on ChatGPT, absent on Gemini — never a hold. */
+  geminiGap: boolean;
   nearDupOf: string | null;    // another page's primaryQuestion when the two look near-identical
   /** The domains the engines actually cited answering this page's questions — "where the engines
    *  are looking", i.e. where to get listed. Top recurring, most-cited first. */
@@ -221,24 +236,27 @@ export const NEAR_DUP_JACCARD = 0.8;
 
 export function scoreCluster(signals: QuestionSignals[]): {
   score: number; reasons: string[]; winnability: WinnVerdict; defend: boolean; defendReason: string | null;
+  geminiGap: boolean;
 } {
-  /* Defend is PER QUESTION, from the actual run counts — and a page holds only when EVERY measured
-     question is already named. One named variant must never hold a page whose other variants are
-     absent (the lock-changes-Peterborough fault: held on a sibling's 100% while itself at 0/3). */
+  /* Defend is PER QUESTION, from the actual run counts — and GEMINI-FIRST (see the rule block
+     above): a page holds ONLY when every measured question has Gemini named. One defended variant
+     never holds a page whose other variants are winnable. */
   const measured = signals.filter((s) => s.winnability !== 'unmeasured' || s.named.chatgpt || s.named.gemini);
-  const namedQs = signals.filter((s) => questionIsNamed(s));
-  const defend = measured.length > 0 && namedQs.length === measured.length;
+  const defend = measured.length > 0 && measured.every((s) => questionDefends(s));
   /* Client-safe wording that claims ONLY what it measured: a single-question page must talk about
-     "this question", never "every question" (the 2026-08-28 wording fault — it read as a claim
-     about other questions). Multi-question pages itemise each question's counts. */
+     "this question", never "every question". Multi-question pages itemise each question's counts. */
   const defendReason = defend
     ? (signals.length === 1
       ? `Already named for this question (${namedCountsLabel(signals[0])}) — defend the existing page rather than build a new one.`
       : `Already named for all ${signals.length} questions on this page — ${signals.map((s) => `"${s.question}": ${namedCountsLabel(s)}`).join('; ')} — defend rather than build new.`)
     : null;
+  /* The Gemini-gap BUILD: strong on ChatGPT (directory-driven), absent on Gemini (what a page
+     moves). Builds, tagged, and scored below the wide-open builds — the tag exists so nobody
+     builds blind to existing ChatGPT strength. */
+  const geminiGap = !defend && signals.some((s) => questionIsGeminiGap(s));
 
-  // Best winnability among the NOT-already-named variants — that's what the page can win.
-  const winnable = signals.filter((s) => !questionIsNamed(s));
+  // Best winnability among the NOT-defended variants — that's what the page can win.
+  const winnable = signals.filter((s) => !questionDefends(s));
   const pool = winnable.length ? winnable : signals;
   const order: WinnVerdict[] = ['open', 'contested', 'no_local_race', 'unmeasured', 'named', 'locked'];
   const best = order.find((w) => pool.some((s) => s.winnability === w)) ?? 'unmeasured';
@@ -248,21 +266,20 @@ export function scoreCluster(signals: QuestionSignals[]): {
   reasons.push(`${best.replace(/_/g, ' ')}${bestSig?.winnabilityReason ? ` (${bestSig.winnabilityReason})` : ''}`);
 
   if (defend) reasons.push(defendReason!);
-  else {
+  else if (geminiGap) {
+    /* Deliberately NO absence/gap bonus: these rank below the wide-open builds (later wave) —
+       the client already has ChatGPT presence here, so fresh ground comes first. */
+    const g = signals.find((s) => questionIsGeminiGap(s))!;
+    reasons.push(`Already strong on ChatGPT (${namedCountsLabel(g)}) — this page targets the Gemini gap.`);
+  } else {
     const anyNamed = signals.some((s) => (s.named.chatgpt?.named ?? 0) + (s.named.gemini?.named ?? 0) > 0);
     if (!anyNamed && measured.length > 0) { score += 10; reasons.push('client absent from every answer (+10)'); }
-    else if (anyNamed) {
-      const onCg = signals.some((s) => (s.named.chatgpt?.named ?? 0) > 0);
-      const onGm = signals.some((s) => (s.named.gemini?.named ?? 0) > 0);
-      const gap = onCg && !onGm ? 'Gemini' : onGm && !onCg ? 'ChatGPT' : null;
-      if (gap) { score += 5; reasons.push(`engine gap — absent on ${gap} (+5)`); }
-    }
   }
   if (signals.some((s) => s.businessSources)) { score += 5; reasons.push('business-type sources cited (+5)'); }
   const extra = Math.min(5, signals.length - 1);
   if (extra > 0) { score += extra * 2; reasons.push(`${signals.length} question variants merged — demand signal (+${extra * 2})`); }
 
-  return { score: Math.max(0, Math.min(100, score)), reasons, winnability: best, defend, defendReason };
+  return { score: Math.max(0, Math.min(100, score)), reasons, winnability: best, defend, defendReason, geminiGap };
 }
 
 /** Assemble the queue: score each cluster, flag near-dups, hold defend/locked, and assign waves
@@ -275,17 +292,19 @@ export function buildQueue(
     const primary = questions[c.primaryIndex];
     const ordered = [primary, ...qs.filter((q) => q !== primary)];
     const sig = qs.map((q) => signalsByQuestion.get(q)).filter((s): s is QuestionSignals => !!s);
-    const { score, reasons, winnability, defend, defendReason } = sig.length
+    const { score, reasons, winnability, defend, defendReason, geminiGap } = sig.length
       ? scoreCluster(sig)
-      : { score: 0, reasons: ['no measured answers for any variant'], winnability: 'unmeasured' as const, defend: false, defendReason: null };
+      : { score: 0, reasons: ['no measured answers for any variant'], winnability: 'unmeasured' as const, defend: false, defendReason: null, geminiGap: false };
+    /* ⛔ THE ONLY HOLD IS THE GEMINI DEFEND (Paul's rule, 2026-08-28). 'locked' no longer
+       auto-holds — it builds with its low score (it sinks to the bottom of wave 2) and keeps its
+       label so the odds are visible. ChatGPT-named pages BUILD with the Gemini-gap tag. */
     let status: PlannedQueuePage['status'] = 'planned';
     let heldReason: string | null = null;
     if (defend) { status = 'held'; heldReason = defendReason; }
-    else if (winnability === 'locked') { status = 'held'; heldReason = 'locked — a small consistent incumbent set holds this; low odds for a new page'; }
     return {
       job: c.job, topic: c.topic || 'general', primaryQuestion: primary, questions: ordered,
       rationale: c.rationale, score, scoreReasons: reasons, winnability,
-      wave: 2, position: 0, status, heldReason, nearDupOf: null,
+      wave: 2, position: 0, status, heldReason, geminiGap, nearDupOf: null,
     };
   });
 
