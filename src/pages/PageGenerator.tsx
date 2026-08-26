@@ -39,9 +39,10 @@ interface PlanData {
   plan: { pages: PlanPage[]; excluded: { question: string; reason: string }[]; unmeasuredAreas: string[] };
 }
 interface GeneratedPage {
-  key: string; service: string; town: string; queries: string[]; slug: string;
-  title: string; meta_description: string; h1: string; body_html: string;
+  key: string; service?: string; town?: string; question?: string; queries: string[]; slug: string;
+  title: string; meta_description: string; h1: string; body_html: string; draft?: boolean;
 }
+interface QaClient { audit_id: string; business_name: string; business_type: string | null; baseline_at: string }
 interface Naturalness { townCount: number; phraseCount: number; topWord: string; topWordPct: number; verdict: 'ok' | 'stuffed'; detail: string; regenerated: boolean }
 /* What the server's mechanical block actually put on the page (real client data). */
 interface Applied { phone: boolean; address: boolean; links: number; areas: string[] }
@@ -57,14 +58,14 @@ type PageView =
   | { kind: 'busy' }
   | { kind: 'no_credits' }
   | { kind: 'error'; message: string }
-  | { kind: 'done'; page: GeneratedPage; naturalness: Naturalness; applied?: Applied; generatedAt: number };
+  | { kind: 'done'; page: GeneratedPage; naturalness?: Naturalness; applied?: Applied; draft?: boolean; generatedAt: number };
 type Transient = Exclude<PageView, { kind: 'done' }>;
 
 /* Per-CLIENT cache, persisted to localStorage (tier 'both') so generated pages survive both in-app
    navigation AND a full refresh / browser reopen. Keyed by client, so switching clients shows that
    client's pages, never another's. Only successfully-generated pages are held — restoring is a pure
    read that NEVER calls the generator, so returning to the page costs nothing. */
-interface CachedPage { page: GeneratedPage; naturalness: Naturalness; applied?: Applied; generatedAt: number }
+interface CachedPage { page: GeneratedPage; naturalness?: Naturalness; applied?: Applied; draft?: boolean; generatedAt: number }
 interface ClientCache { plan: PlanData | null; pages: Record<string, CachedPage> }
 type CacheShape = Record<string, ClientCache>;
 
@@ -96,21 +97,31 @@ const PageGenerator = () => {
     tier: 'both', scope: user?.id, version: 1,
     validate: (d) => (d && typeof d === 'object' ? (d as Record<string, ClientSettings>) : null),
   });
+  // Mode toggle + Q&A state (audit-based; national/regulated clients have no lead).
+  const [mode, setMode] = usePersistedState<'service' | 'qa'>('pagegen-mode', 'service', { tier: 'both', scope: user?.id });
+  const [qaClients, setQaClients] = useState<QaClient[]>([]);
+  const [qaClientId, setQaClientId] = usePersistedState<string>('pagegen-qa-client', '', { tier: 'both', scope: user?.id });
+  const [qaQuestions, setQaQuestions] = useState<string[]>([]);
+  const [qaClientInfo, setQaClientInfo] = useState<{ business_name: string; business_type: string | null } | null>(null);
+  const [qaQuestion, setQaQuestion] = useState('');
+  const [qaBusy, setQaBusy] = useState(false);
   const [transient, setTransient] = useState<Record<string, Transient>>({});
   const [planBusy, setPlanBusy] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
 
-  // The current client's cache. plan + pages are read straight from here — no fetch, no generate.
-  const current: ClientCache | undefined = clientId ? cache[clientId] : undefined;
+  // The active client id depends on the mode (service = lead id, Q&A = audit id — different id spaces,
+  // so one cache keyed by this id serves both without collision).
+  const activeClientId = mode === 'qa' ? qaClientId : clientId;
+  const current: ClientCache | undefined = activeClientId ? cache[activeClientId] : undefined;
   const plan = current?.plan ?? null;
   const cachedCount = current ? Object.keys(current.pages).length : 0;
 
   // Operator settings for this client. contactUrl falls back to the server's default ({site}/contact/).
-  const cs: ClientSettings = (clientId && settings[clientId]) || { contactUrl: '', localAreas: '' };
+  const cs: ClientSettings = (activeClientId && settings[activeClientId]) || { contactUrl: '', localAreas: '' };
   const contactUrlValue = cs.contactUrl || (plan?.inputs.contactDefault ?? '');
   const setSetting = (patch: Partial<ClientSettings>) => {
-    if (!clientId) return;
-    setSettings((s) => ({ ...s, [clientId]: { contactUrl: '', localAreas: '', ...s[clientId], ...patch } }));
+    if (!activeClientId) return;
+    setSettings((s) => ({ ...s, [activeClientId]: { contactUrl: '', localAreas: '', ...s[activeClientId], ...patch } }));
   };
 
   // A page's render state: an in-flight/transient state wins; otherwise the cached generated page
@@ -119,7 +130,7 @@ const PageGenerator = () => {
     const t = transient[key];
     if (t) return t;
     const cp = current?.pages[key];
-    return cp ? { kind: 'done', page: cp.page, naturalness: cp.naturalness, applied: cp.applied, generatedAt: cp.generatedAt } : undefined;
+    return cp ? { kind: 'done', page: cp.page, naturalness: cp.naturalness, applied: cp.applied, draft: cp.draft, generatedAt: cp.generatedAt } : undefined;
   };
 
   useEffect(() => {
@@ -128,6 +139,15 @@ const PageGenerator = () => {
       if (res?.ok) setClients(res.clients ?? []);
     })();
   }, []);
+
+  // Q&A clients load when the mode is (or becomes) Q&A; questions reload for the persisted client
+  // (they're free — no AI — and not worth persisting; generated pages are cached separately).
+  useEffect(() => {
+    if (mode !== 'qa') return;
+    void loadQaClients();
+    if (qaClientId && qaQuestions.length === 0) void selectQaClient(qaClientId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
 
   // On mount, if a client was persisted, only fetch the plan when it is NOT already cached — a
   // normal return shows the cached plan + pages instantly and fires no call at all.
@@ -185,10 +205,56 @@ const PageGenerator = () => {
 
   // Wipe this client's generated pages (keep the plan visible so it can be regenerated).
   const clearCached = () => {
-    if (!clientId) return;
-    setCache((c) => ({ ...c, [clientId]: { plan: c[clientId]?.plan ?? plan, pages: {} } }));
+    if (!activeClientId) return;
+    setCache((c) => ({ ...c, [activeClientId]: { plan: c[activeClientId]?.plan ?? plan, pages: {} } }));
     setTransient({});
     toast({ title: 'Cleared cached pages', description: 'Generate again for fresh copy.' });
+  };
+
+  // ── Q&A MODE handlers (audit-based). ──────────────────────────────────────────────────────
+  const loadQaClients = async () => {
+    const { data: res } = await supabase.functions.invoke('page-generator', { body: { action: 'qa_clients' } });
+    if (res?.ok) setQaClients(res.clients ?? []);
+  };
+
+  const selectQaClient = async (auditId: string) => {
+    setQaClientId(auditId);
+    setTransient({});
+    setQaQuestions([]);
+    setQaClientInfo(null);
+    if (!auditId) return;
+    setPlanBusy(true);
+    try {
+      const { data: res, error } = await supabase.functions.invoke('page-generator', { body: { action: 'qa_plan', audit_id: auditId } });
+      if (error || !res?.ok) throw new Error(error?.message ?? res?.error ?? 'plan failed');
+      setQaQuestions(res.questions ?? []);
+      setQaClientInfo({ business_name: res.client?.business_name ?? '', business_type: res.client?.business_type ?? null });
+    } catch (e) {
+      setPlanError(e instanceof Error ? e.message : 'plan failed');
+    } finally {
+      setPlanBusy(false);
+    }
+  };
+
+  const generateQA = async (question: string) => {
+    const key = question.trim();
+    if (!key || !qaClientId) return;
+    setTransient((t) => ({ ...t, [key]: { kind: 'busy' } }));
+    try {
+      const { data: res, error } = await supabase.functions.invoke('page-generator', {
+        body: { action: 'qa_generate', audit_id: qaClientId, question: key, contact_url: (cs.contactUrl || '').trim() || undefined },
+      });
+      if (error) throw new Error(error.message);
+      if (!res?.ok) {
+        if (res?.error === 'no_credits') { setTransient((t) => ({ ...t, [key]: { kind: 'no_credits' } })); return; }
+        throw new Error(res?.error ?? 'generation failed');
+      }
+      const done: CachedPage = { page: res.page, draft: true, generatedAt: Date.now() };
+      setCache((c) => ({ ...c, [qaClientId]: { plan: c[qaClientId]?.plan ?? null, pages: { ...(c[qaClientId]?.pages ?? {}), [key]: done } } }));
+      setTransient((t) => { const n = { ...t }; delete n[key]; return n; });
+    } catch (e) {
+      setTransient((t) => ({ ...t, [key]: { kind: 'error', message: e instanceof Error ? e.message : 'generation failed' } }));
+    }
   };
 
   const copy = async (label: string, text: string) => {
@@ -205,6 +271,60 @@ const PageGenerator = () => {
     return hosting === 'other' ? `${p.h1}\n\n${htmlToPlainText(p.body_html)}` : html;
   };
 
+  // The generated-page result block, shared by both modes. A Q&A draft shows the review banner and
+  // has no naturalness/applied badges; a service page shows those and no banner.
+  const renderDone = (g: Extract<PageView, { kind: 'done' }>) => (
+    <div className="space-y-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+      {g.draft && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span><strong>Draft for client review.</strong> Fill every <code>[CLIENT INPUT]</code> blank with verified information before publishing. Do not publish unverified medical or factual claims.</span>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {g.naturalness && (g.naturalness.verdict === 'ok' ? (
+          <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-500 text-[10px]">natural · {g.naturalness.detail}</Badge>
+        ) : (
+          <Badge variant="outline" className="border-red-500/40 text-red-600 dark:text-red-500 text-[10px]"><AlertTriangle className="mr-1 h-3 w-3" /> still reads stuffed after a retry — {g.naturalness.detail}. Edit before pasting.</Badge>
+        ))}
+        {g.naturalness?.regenerated && <span className="text-muted-foreground">(auto-rewritten once for naturalness)</span>}
+        {Date.now() - g.generatedAt > STALE_MS && (
+          <span className="flex items-center gap-1 text-muted-foreground"><Clock className="h-3 w-3" /> generated earlier — regenerate if you've changed anything</span>
+        )}
+        <Button variant="outline" size="sm" className="ml-auto h-7" onClick={() => copy('Full page', fullOutput(g.page))}>
+          <Copy className="mr-1.5 h-3 w-3" /> Copy full {hosting === 'other' ? 'text' : 'HTML'}
+        </Button>
+      </div>
+      {g.applied && (
+        <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
+          {g.applied.phone && <Badge variant="outline" className="text-[10px] font-normal">✓ phone CTA</Badge>}
+          {g.applied.address && <Badge variant="outline" className="text-[10px] font-normal">✓ address (NAP)</Badge>}
+          {g.applied.links > 0 && <Badge variant="outline" className="text-[10px] font-normal">✓ {g.applied.links} internal link{g.applied.links === 1 ? '' : 's'}</Badge>}
+          {g.applied.areas.length > 0 && <Badge variant="outline" className="text-[10px] font-normal">✓ areas: {g.applied.areas.join(', ')}</Badge>}
+        </div>
+      )}
+      <div className="rounded border border-border/40 bg-muted/30 p-2 space-y-1 text-xs">
+        <p className="font-medium text-muted-foreground">Apply in WordPress — paste each into its place:</p>
+        {([
+          ['SEO title tag', g.page.title, 'Yoast → “SEO title”'],
+          ['Meta description', g.page.meta_description, 'Yoast → “Meta description”'],
+          ['Permalink slug', g.page.slug, 'WordPress → “Slug”'],
+          ['H1 heading', g.page.h1, 'Elementor → top Heading (H1)'],
+        ] as const).map(([label, value, dest]) => (
+          <div key={label} className="flex items-baseline gap-2">
+            <span className="w-28 shrink-0 text-muted-foreground">{label}</span>
+            <span className="min-w-0 break-words">{value}</span>
+            <span className="shrink-0 text-[10px] text-primary/70">{dest}</span>
+            <Button variant="ghost" size="sm" className="h-6 px-1.5 shrink-0" onClick={() => copy(label, value)}><Copy className="h-3 w-3" /></Button>
+          </div>
+        ))}
+        <p className="text-[10px] text-muted-foreground pt-0.5">Body → “Copy full {hosting === 'other' ? 'text' : 'HTML'}” above, into an Elementor HTML/Text widget.</p>
+      </div>
+      <div className="rounded border border-border/50 bg-background p-3 text-sm [&_h2]:mt-3 [&_h2]:mb-1 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:font-semibold [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5"
+        dangerouslySetInnerHTML={{ __html: g.page.body_html }} />
+    </div>
+  );
+
   return (
     <div className="space-y-5 max-w-4xl">
       <SEOHead title="Page generator | LeadFinder Pro" description="Service and area pages matched to the measured baseline queries." canonical="/page-generator" noindex />
@@ -216,6 +336,13 @@ const PageGenerator = () => {
         </p>
       </div>
 
+      <div className="flex gap-1 rounded-md border border-border/60 p-1 w-fit">
+        <Button size="sm" variant={mode === 'service' ? 'default' : 'ghost'} className="h-7" onClick={() => setMode('service')}>Service + Area</Button>
+        <Button size="sm" variant={mode === 'qa' ? 'default' : 'ghost'} className="h-7" onClick={() => setMode('qa')}>Article / Q&amp;A</Button>
+      </div>
+
+      {mode === 'service' && (
+      <>
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -351,63 +478,7 @@ const PageGenerator = () => {
                     {g?.kind === 'error' && (
                       <p className="text-sm text-destructive">Couldn't generate: {g.message}</p>
                     )}
-                    {g?.kind === 'done' && (
-                      <div className="space-y-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          {g.naturalness.verdict === 'ok' ? (
-                            <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-500 text-[10px]">
-                              natural · {g.naturalness.detail}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="border-red-500/40 text-red-600 dark:text-red-500 text-[10px]">
-                              <AlertTriangle className="mr-1 h-3 w-3" /> still reads stuffed after a retry — {g.naturalness.detail}. Edit before pasting.
-                            </Badge>
-                          )}
-                          {g.naturalness.regenerated && <span className="text-muted-foreground">(auto-rewritten once for naturalness)</span>}
-                          {Date.now() - g.generatedAt > STALE_MS && (
-                            <span className="flex items-center gap-1 text-muted-foreground">
-                              <Clock className="h-3 w-3" /> generated earlier — regenerate if you've changed anything
-                            </span>
-                          )}
-                          <Button variant="outline" size="sm" className="ml-auto h-7" onClick={() => copy('Full page', fullOutput(g.page))}>
-                            <Copy className="mr-1.5 h-3 w-3" /> Copy full {hosting === 'other' ? 'text' : 'HTML'}
-                          </Button>
-                        </div>
-                        {g.applied && (
-                          <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-                            {g.applied.phone && <Badge variant="outline" className="text-[10px] font-normal">✓ phone CTA</Badge>}
-                            {g.applied.address && <Badge variant="outline" className="text-[10px] font-normal">✓ address (NAP)</Badge>}
-                            {g.applied.links > 0 && <Badge variant="outline" className="text-[10px] font-normal">✓ {g.applied.links} internal link{g.applied.links === 1 ? '' : 's'}</Badge>}
-                            {g.applied.areas.length > 0 && <Badge variant="outline" className="text-[10px] font-normal">✓ areas: {g.applied.areas.join(', ')}</Badge>}
-                          </div>
-                        )}
-                        {/* Apply in WordPress — each field to its home so the title tag & meta never get dropped. */}
-                        <div className="rounded border border-border/40 bg-muted/30 p-2 space-y-1 text-xs">
-                          <p className="font-medium text-muted-foreground">Apply in WordPress — paste each into its place:</p>
-                          {([
-                            ['SEO title tag', g.page.title, 'Yoast → “SEO title”'],
-                            ['Meta description', g.page.meta_description, 'Yoast → “Meta description”'],
-                            ['Permalink slug', g.page.slug, 'WordPress → “Slug”'],
-                            ['H1 heading', g.page.h1, 'Elementor → top Heading widget (H1)'],
-                          ] as const).map(([label, value, dest]) => (
-                            <div key={label} className="flex items-baseline gap-2">
-                              <span className="w-28 shrink-0 text-muted-foreground">{label}</span>
-                              <span className="min-w-0 break-words">{value}</span>
-                              <span className="shrink-0 text-[10px] text-primary/70">{dest}</span>
-                              <Button variant="ghost" size="sm" className="h-6 px-1.5 shrink-0" onClick={() => copy(label, value)}>
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ))}
-                          <p className="text-[10px] text-muted-foreground pt-0.5">
-                            Body → “Copy full {hosting === 'other' ? 'text' : 'HTML'}” above, into an Elementor HTML/Text widget.
-                          </p>
-                        </div>
-                        {/* The body, rendered so Paul reads it as a page — the copy button carries the HTML. */}
-                        <div className="rounded border border-border/50 bg-background p-3 text-sm [&_h2]:mt-3 [&_h2]:mb-1 [&_h2]:text-base [&_h2]:font-semibold [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5"
-                          dangerouslySetInnerHTML={{ __html: g.page.body_html }} />
-                      </div>
-                    )}
+                    {g?.kind === 'done' && renderDone(g)}
                   </div>
                 );
               })}
@@ -441,6 +512,114 @@ const PageGenerator = () => {
             </Card>
           )}
         </>
+      )}
+      </>
+      )}
+
+      {mode === 'qa' && (
+      <>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <FileCode2 className="h-4 w-4 text-primary" /> Client (any with a baseline — national clients included)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Select value={qaClientId} onValueChange={selectQaClient}>
+              <SelectTrigger className="w-72"><SelectValue placeholder="Pick a client…" /></SelectTrigger>
+              <SelectContent>
+                {qaClients.map((c) => (
+                  <SelectItem key={c.audit_id} value={c.audit_id}>{c.business_name}{c.business_type ? ` — ${c.business_type}` : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {planBusy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          </div>
+          {qaClientId && (
+            <div className="grid gap-1">
+              <label className="text-xs text-muted-foreground">Booking / contact URL (optional — used for the closing call-to-action link)</label>
+              <Input value={cs.contactUrl} placeholder="https://theirsite.co.uk/book/" onChange={(e) => setSetting({ contactUrl: e.target.value })} className="h-8 text-xs" />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {qaClientId && (
+        <>
+          <Card className="border-amber-500/40 bg-amber-500/5">
+            <CardContent className="p-3 text-xs text-amber-700 dark:text-amber-400">
+              <strong>Draft mode — safety.</strong> Q&amp;A drafts contain the structure only. Every specific
+              fact, price, dose, eligibility rule or medical claim is left as a <code>[CLIENT INPUT: …]</code>
+              blank for a qualified expert to fill and verify. Nothing factual is generated. Do not publish
+              until every blank is filled and a clinician/expert has reviewed it.
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Write a Q&amp;A page</CardTitle>
+                {cachedCount > 0 && (
+                  <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{cachedCount} generated & saved on this device</span>
+                    <Button variant="ghost" size="sm" className="h-7" onClick={clearCached}><Trash2 className="mr-1.5 h-3 w-3" /> Clear</Button>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="grid gap-1 flex-1 min-w-[16rem]">
+                  <label className="text-xs text-muted-foreground">A customer question (type your own, or pick a measured one below)</label>
+                  <Input value={qaQuestion} placeholder="e.g. How much does AndroFeme cost in the UK?" onChange={(e) => setQaQuestion(e.target.value)} className="h-8 text-sm" />
+                </div>
+                <Button size="sm" disabled={!qaQuestion.trim() || viewFor(qaQuestion.trim())?.kind === 'busy'} onClick={() => generateQA(qaQuestion)}>
+                  <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Generate
+                </Button>
+              </div>
+
+              {qaQuestions.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Measured baseline questions ({qaQuestions.length}):</p>
+                  {qaQuestions.map((q) => {
+                    const g = viewFor(q);
+                    return (
+                      <div key={q} className="rounded-md border border-border/60 p-3 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm">{q}</span>
+                          <Button size="sm" className="ml-auto" disabled={g?.kind === 'busy'} onClick={() => generateQA(q)}>
+                            {g?.kind === 'busy' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+                            {g?.kind === 'done' ? 'Regenerate' : 'Generate'}
+                          </Button>
+                        </div>
+                        {g?.kind === 'no_credits' && (
+                          <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                            <PiggyBank className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                            <span>AI credits need topping up — resumes the moment credits land.</span>
+                          </div>
+                        )}
+                        {g?.kind === 'error' && <p className="text-sm text-destructive">Couldn't generate: {g.message}</p>}
+                        {g?.kind === 'done' && renderDone(g)}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* A free-typed question that isn't in the baseline list still shows its result here. */}
+              {qaQuestion.trim() && !qaQuestions.includes(qaQuestion.trim()) && (() => {
+                const g = viewFor(qaQuestion.trim());
+                return g?.kind === 'done' ? <div className="rounded-md border border-border/60 p-3">{renderDone(g)}</div>
+                  : g?.kind === 'error' ? <p className="text-sm text-destructive">Couldn't generate: {g.message}</p>
+                  : g?.kind === 'no_credits' ? <p className="text-sm text-amber-600">AI credits need topping up.</p>
+                  : null;
+              })()}
+            </CardContent>
+          </Card>
+        </>
+      )}
+      </>
       )}
     </div>
   );
