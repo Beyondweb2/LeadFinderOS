@@ -1,9 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildPagePlan, stuffingCheck, enforceNaturalness, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
-import { classifyWinnability, unwrapCitationUrl, SCORED_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
-import { sourceMix } from "../../../src/lib/sourceType.ts";
+import { classifyWinnability, unwrapCitationUrl, SCORED_ENGINES, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
+import { sourceMix, classifySource } from "../../../src/lib/sourceType.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
-import { preMergeQuestions, validateClusters, buildQueue, topSources, enforceTownSplit, majorityVerdict, type ClusterProposal, type QuestionSignals, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
+import { preMergeQuestions, validateClusters, buildQueue, topSources, enforceTownSplit, majorityVerdict, AUTHORITY_LOCK_SHARE, AUTHORITY_LOCK_MIN_CITES, type ClusterProposal, type QuestionSignals, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
 
 // page-generator — service-plus-town delivery pages, from the OVERLAP of the client's
 // questionnaire (services_list x areas_list) and their baseline audit's exact measured queries.
@@ -305,6 +305,11 @@ Deno.serve(async (req) => {
         const runsByQ = new Map<string, EngineMap[]>();
         const domainsByQ = new Map<string, string[]>();
         const namedByQ = new Map<string, { chatgpt: [number, number]; gemini: [number, number] }>();
+        /* Per-question AUTHORITY-LOCK evidence: how many RUNS met the test (client absent, ≥3
+           citations, ≥70% authority share, ZERO commercial sites — the defining clause: one
+           commercial citation means a slot is winnable, so the question stays open), plus the
+           authority domains those runs cited, for the hold wording. */
+        const authByQ = new Map<string, { runs: number; domains: string[] }>();
         const locText = qaAudit.location_text ?? "";
         const hostOf = (u: string): string => { try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; } };
         for (const r of resRows ?? []) {
@@ -314,11 +319,21 @@ Deno.serve(async (req) => {
           (runsByQ.get(q) ?? runsByQ.set(q, []).get(q)!).push(result);
           const doms = domainsByQ.get(q) ?? [];
           const named = namedByQ.get(q) ?? { chatgpt: [0, 0] as [number, number], gemini: [0, 0] as [number, number] };
+          const rowDoms: string[] = [];
           for (const eng of SCORED_ENGINES) {
             const er = result[eng];
             if (!er) continue;
-            for (const cit of er.citations ?? []) { const h = hostOf(unwrapCitationUrl(cit?.url ?? "")); if (h) doms.push(h); }
+            for (const cit of er.citations ?? []) { const h = hostOf(unwrapCitationUrl(cit?.url ?? "")); if (h) { doms.push(h); rowDoms.push(h); } }
             named[eng][1]++; if (er.named) named[eng][0]++;
+          }
+          const namedAnywhere = DISPLAY_ENGINES.some((e) => result[e]?.named);
+          const mixR = sourceMix(rowDoms);
+          if (!namedAnywhere && mixR.total >= AUTHORITY_LOCK_MIN_CITES && mixR.business === 0
+            && mixR.authority / mixR.total >= AUTHORITY_LOCK_SHARE) {
+            const a = authByQ.get(q) ?? { runs: 0, domains: [] };
+            a.runs++;
+            a.domains.push(...rowDoms.filter((d) => classifySource(d) === "authority"));
+            authByQ.set(q, a);
           }
           domainsByQ.set(q, doms); namedByQ.set(q, named);
         }
@@ -338,6 +353,8 @@ Deno.serve(async (req) => {
             winnability: wv,
             winnabilityReason: majRun?.reason ?? "",
             incumbents: (majRun?.namedFirms ?? []).slice(0, 5),
+            authorityLockRuns: authByQ.get(q)?.runs ?? 0,
+            authorityDomains: [...new Set(authByQ.get(q)?.domains ?? [])].slice(0, 5),
             named: {
               chatgpt: nr.chatgpt[1] > 0 ? { named: nr.chatgpt[0], runs: nr.chatgpt[1] } : null,
               gemini: nr.gemini[1] > 0 ? { named: nr.gemini[0], runs: nr.gemini[1] } : null,

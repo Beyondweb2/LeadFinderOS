@@ -5,8 +5,8 @@
    Run: npx tsx scripts/page-plan-queue.test.ts */
 import {
   preMergeQuestions, validateClusters, scoreCluster, buildQueue, topSources,
-  enforceTownSplit, majorityVerdict, questionDefends, questionIsGeminiGap, namedCountsLabel,
-  WAVE1_MIN_SCORE, NEAR_DUP_JACCARD,
+  enforceTownSplit, majorityVerdict, questionDefends, questionIsGeminiGap, questionIsAuthorityLocked,
+  namedCountsLabel, WAVE1_MIN_SCORE, NEAR_DUP_JACCARD, AUTHORITY_LOCK_MIN_RUNS,
   type ClusterProposal, type QuestionSignals, type WinnVerdict, type EngineNamed,
 } from '../src/lib/pagePlanQueue.ts';
 
@@ -134,6 +134,36 @@ console.log('── ⛔ GEMINI-FIRST THREE-WAY: build / build-with-gap-tag / def
   // A page with one locked question and one open question BUILDS (something to win).
   const mixedLock = scoreCluster([sig('a', 'locked', en(0, 3), en(0, 3)), sig('b', 'open', en(0, 3), en(0, 3))]);
   ok(!mixedLock.lockedHold && mixedLock.winnability === 'open', 'locked + open variants -> builds on the open one');
+}
+
+console.log('── ⛔ AUTHORITY-LOCKED (priority 2): only-official-bodies questions hold ──');
+{
+  const auth = (q: string, runs: number, doms: string[] = ['gov.uk', 'nhs.uk']): QuestionSignals =>
+    ({ ...sig(q, 'no_local_race', en(0, 3), en(0, 3)), authorityLockRuns: runs, authorityDomains: doms });
+  ok(questionIsAuthorityLocked(auth('q', AUTHORITY_LOCK_MIN_RUNS)), `>=${AUTHORITY_LOCK_MIN_RUNS} triggering runs -> authority-locked`);
+  ok(!questionIsAuthorityLocked(auth('q', 1)), '  ONE triggering run never holds (single-run winnability is noise)');
+  // Page-level hold with its own wording naming the domains.
+  const held = scoreCluster([auth('tax return help portsmouth', 2, ['gov.uk'])]);
+  ok(held.authorityHold, 'a fully authority-locked page HOLDS');
+  ok((held.authorityReason ?? '').includes('only from official bodies') && (held.authorityReason ?? '').includes('gov.uk'),
+    '  with its own wording, naming the actual domains');
+  ok((held.authorityReason ?? '').includes('Q&A-style page could be tested'), '  and the try-later line');
+  ok(!(held.authorityReason ?? '').includes('Already named'), '  never the defend wording');
+  // The defining clause lives upstream (a run with ANY commercial citation never counts), so a
+  // question with 0 triggering runs — the Solene legitimacy case — stays a build.
+  const solene = scoreCluster([{ ...sig('are online clinics legitimate', 'open', en(0, 3), en(0, 3), true), authorityLockRuns: 0 }]);
+  ok(!solene.authorityHold, 'commercial-cited question (0 triggering runs) stays open — the Solene case');
+  // Mixed: one authority-locked + one open variant -> builds on the open one.
+  const mixed = scoreCluster([auth('a', 2), sig('b', 'open', en(0, 3), en(0, 3))]);
+  ok(!mixed.authorityHold && mixed.winnability === 'open', 'authority-locked + open variants -> builds on the open one');
+  // Priority: firm-locked beats authority-locked.
+  const both = scoreCluster([{ ...sig('q', 'locked', en(0, 3), en(0, 3), false, ['Incumbent Ltd']), authorityLockRuns: 2 }]);
+  ok(both.lockedHold && (both.lockedReason ?? '').includes('market locked'), 'firm-locked takes priority over authority-locked');
+  // Priority: authority-locked beats defend (a gemini-named + authority question is impossible in
+  // practice — named short-circuits the run test — but the ORDER must still be deterministic).
+  const inQueue = buildQueue(['q'], [{ job: 'q', topic: 't', primaryIndex: 0, questionIndices: [0], rationale: '' }],
+    new Map([['q', auth('q', 2, ['nice.org.uk'])]]));
+  ok(inQueue[0].status === 'held' && inQueue[0].heldReason!.includes('official bodies'), 'buildQueue holds it with the authority wording');
 }
 
 console.log('── WINNABILITY LABELS MAP THROUGH ──');

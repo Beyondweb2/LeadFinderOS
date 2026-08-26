@@ -36,10 +36,34 @@ export interface QuestionSignals {
   /** The incumbent firms classifyWinnability saw on the majority-verdict run — who a locked
    *  market is actually held by, for the locked-hold wording. */
   incumbents?: string[];
+  /** How many runs triggered the AUTHORITY-LOCK test (see questionIsAuthorityLocked), and the
+   *  authority domains those runs cited — for the hold wording. */
+  authorityLockRuns?: number;
+  authorityDomains?: string[];
   /** Per scored engine: named-in-N-of-M-runs counts; null = engine never answered. */
   named: { chatgpt: EngineNamed | null; gemini: EngineNamed | null };
   /** Business-type sources cited (a business page can plausibly rank there). */
   businessSources: boolean;
+}
+
+/* ⛔ AUTHORITY-LOCKED (Paul's spec, 2026-08-28; thresholds MEASURED over 3,233 stored question-runs
+   before building — §4's constants rule). A question is authority-locked when the engines answer it
+   ONLY from official bodies (NHS/NICE/CQC/gov.uk-class domains): in a run, the client is absent,
+   there are ≥AUTHORITY_LOCK_MIN_CITES citations, the authority share is ≥AUTHORITY_LOCK_SHARE, and —
+   THE DEFINING CLAUSE — **not one commercial/business site is cited**. If even one commercial site
+   is cited, the question stays open: a commercial page IS winning a citation slot there, so a young
+   site can plausibly win one too (proven on Solene's "are online clinics legitimate?" — CQC dominates
+   but privatedoc.com/themenopausedirectory.co.uk are cited, and it must NOT lock). The run test is
+   computed engine-side (edge fn) from the stored citations; ≥AUTHORITY_LOCK_MIN_RUNS runs must agree
+   (single-run winnability flips 17.9% — never hold on one run). Measured 2026-08-28: this holds
+   NOTHING in the current book (0 majority questions at every threshold 70–90%) — it is deliberately
+   a safety net for future authority-owned questions (e.g. "tax return help" → 12/12 gov.uk). */
+export const AUTHORITY_LOCK_SHARE = 0.7;
+export const AUTHORITY_LOCK_MIN_CITES = 3;
+export const AUTHORITY_LOCK_MIN_RUNS = 2;
+
+export function questionIsAuthorityLocked(s: QuestionSignals): boolean {
+  return (s.authorityLockRuns ?? 0) >= AUTHORITY_LOCK_MIN_RUNS;
 }
 
 /** Majority verdict across a question's runs; ties break toward the FIRST in priority order
@@ -241,15 +265,19 @@ export const NEAR_DUP_JACCARD = 0.8;
 export function scoreCluster(signals: QuestionSignals[]): {
   score: number; reasons: string[]; winnability: WinnVerdict; defend: boolean; defendReason: string | null;
   geminiGap: boolean; lockedHold: boolean; lockedReason: string | null;
+  authorityHold: boolean; authorityReason: string | null;
 } {
   /* ⛔ THE PAGE'S OUTCOME IS EVALUATED IN THIS ORDER (Paul's rule, 2026-08-28):
-       1. market LOCKED (every winnable question's majority verdict is 'locked') → HOLD — strong
+       1. FIRM-locked (every winnable question's majority verdict is 'locked') → HOLD — strong
           incumbents dominate regardless of the client's own counts; own wording, names the
           incumbents. Takes priority over everything.
-       2. Gemini named (≥2 of ≥2 runs, every measured question) → HOLD as defend (Gemini-first:
+       2. AUTHORITY-locked (every measured question authority-locked — see the rule block above:
+          only-official-bodies citations, zero commercial sites, ≥2 runs) → HOLD, own wording
+          naming the authority domains; a Q&A-style page can be tested later.
+       3. Gemini named (≥2 of ≥2 runs, every measured question) → HOLD as defend (Gemini-first:
           pages are the Gemini lever; already-named wording with real counts).
-       3. ChatGPT named but Gemini absent → BUILD, tagged "Gemini gap".
-       4. else → BUILD (best; wide-open ranks highest). */
+       4. ChatGPT named but Gemini absent → BUILD, tagged "Gemini gap".
+       5. else → BUILD (best; wide-open ranks highest). */
   const measured = signals.filter((s) => s.winnability !== 'unmeasured' || s.named.chatgpt || s.named.gemini);
   const defend = measured.length > 0 && measured.every((s) => questionDefends(s));
   /* Client-safe wording that claims ONLY what it measured: a single-question page must talk about
@@ -283,7 +311,16 @@ export function scoreCluster(signals: QuestionSignals[]): {
     ? `Held — market locked: ${incumbents.length ? incumbents.join(', ') : 'a small, consistent set of incumbents'} dominate${incumbents.length === 1 ? 's' : ''} the answers here and a new page's win chance is low right now. Revisit as the site's authority grows.`
     : null;
 
+  /* Priority 2 — AUTHORITY-locked: every measured question is answered only from official bodies
+     (zero commercial citations, ≥2 runs each). Own wording, names the actual domains. */
+  const authorityHold = !lockedHold && measured.length > 0 && measured.every((s) => questionIsAuthorityLocked(s));
+  const authDomains = [...new Set(signals.flatMap((s) => s.authorityDomains ?? []))].slice(0, 4);
+  const authorityReason = authorityHold
+    ? `Held — the engines answer this only from official bodies (${authDomains.length ? authDomains.join(', ') : 'e.g. NHS/NICE/CQC/gov.uk'}). A normal business page is unlikely to displace them. A Q&A-style page could be tested here later.`
+    : null;
+
   if (lockedHold) reasons.push(lockedReason!);
+  else if (authorityHold) reasons.push(authorityReason!);
   else if (defend) reasons.push(defendReason!);
   else if (geminiGap) {
     /* Deliberately NO absence/gap bonus: these rank below the wide-open builds (later wave) —
@@ -298,7 +335,7 @@ export function scoreCluster(signals: QuestionSignals[]): {
   const extra = Math.min(5, signals.length - 1);
   if (extra > 0) { score += extra * 2; reasons.push(`${signals.length} question variants merged — demand signal (+${extra * 2})`); }
 
-  return { score: Math.max(0, Math.min(100, score)), reasons, winnability: best, defend, defendReason, geminiGap, lockedHold, lockedReason };
+  return { score: Math.max(0, Math.min(100, score)), reasons, winnability: best, defend, defendReason, geminiGap, lockedHold, lockedReason, authorityHold, authorityReason };
 }
 
 /** Assemble the queue: score each cluster, flag near-dups, hold locked/defend (in that priority),
@@ -311,15 +348,16 @@ export function buildQueue(
     const primary = questions[c.primaryIndex];
     const ordered = [primary, ...qs.filter((q) => q !== primary)];
     const sig = qs.map((q) => signalsByQuestion.get(q)).filter((s): s is QuestionSignals => !!s);
-    const { score, reasons, winnability, defend, defendReason, geminiGap, lockedHold, lockedReason } = sig.length
+    const { score, reasons, winnability, defend, defendReason, geminiGap, lockedHold, lockedReason, authorityHold, authorityReason } = sig.length
       ? scoreCluster(sig)
-      : { score: 0, reasons: ['no measured answers for any variant'], winnability: 'unmeasured' as const, defend: false, defendReason: null, geminiGap: false, lockedHold: false, lockedReason: null };
+      : { score: 0, reasons: ['no measured answers for any variant'], winnability: 'unmeasured' as const, defend: false, defendReason: null, geminiGap: false, lockedHold: false, lockedReason: null, authorityHold: false, authorityReason: null };
     /* Holds, in priority order (see scoreCluster's rule block): 1. LOCKED market (own wording,
        names the incumbents), 2. Gemini DEFEND (already-named wording, real counts). Everything
        else builds — ChatGPT-named pages build with the Gemini-gap tag. */
     let status: PlannedQueuePage['status'] = 'planned';
     let heldReason: string | null = null;
     if (lockedHold) { status = 'held'; heldReason = lockedReason; }
+    else if (authorityHold) { status = 'held'; heldReason = authorityReason; }
     else if (defend) { status = 'held'; heldReason = defendReason; }
     return {
       job: c.job, topic: c.topic || 'general', primaryQuestion: primary, questions: ordered,
