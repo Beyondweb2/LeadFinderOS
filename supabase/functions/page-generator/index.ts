@@ -1,7 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildPagePlan, stuffingCheck, enforceNaturalness, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
-import { computeWinnability, isRealCompetitor, unwrapCitationUrl, SCORED_ENGINES } from "../../../src/lib/auditReport.ts";
-import { preMergeQuestions, validateClusters, buildQueue, topSources, type ClusterProposal, type QuestionSignals } from "../../../src/lib/pagePlanQueue.ts";
+import { classifyWinnability, unwrapCitationUrl, SCORED_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
+import { sourceMix } from "../../../src/lib/sourceType.ts";
+import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { preMergeQuestions, validateClusters, buildQueue, topSources, enforceTownSplit, majorityVerdict, type ClusterProposal, type QuestionSignals, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
 
 // page-generator — service-plus-town delivery pages, from the OVERLAP of the client's
 // questionnaire (services_list x areas_list) and their baseline audit's exact measured queries.
@@ -277,42 +279,69 @@ Deno.serve(async (req) => {
          One priced AI call; everything else is deterministic and tested (pagePlanQueue.ts). ────── */
       if (action === "plan_build") {
         const dryRun = body.dry_run === true;
-        // Signals per distinct question, from the SAME latest runs the question list came from.
+
+        /* The town list — for LOCAL clients (a lead with a questionnaire), each town is a distinct
+           provider-selection job and MUST split clusters. National clients (no lead/questionnaire,
+           e.g. Solene) get an empty list and are untouched. Also fetch the lead's website so
+           classifyWinnability can skip own-site citations. */
+        let towns: string[] = [];
+        let ownWebsite = "";
+        if (qaAudit.lead_id) {
+          const { data: obTown } = await service.from("onboarding_responses")
+            .select("confirmed_location, areas_list").eq("lead_id", qaAudit.lead_id)
+            .order("created_at", { ascending: false }).limit(1).maybeSingle();
+          const o = obTown as { confirmed_location: string | null; areas_list: string[] | null } | null;
+          towns = [...new Set([(o?.confirmed_location ?? "").trim(), ...(Array.isArray(o?.areas_list) ? o!.areas_list : []).map((a) => String(a ?? "").trim())].filter(Boolean))];
+          const { data: leadW } = await service.from("outreach_leads").select("website").eq("id", qaAudit.lead_id).maybeSingle();
+          ownWebsite = String((leadW as { website?: string } | null)?.website ?? "");
+        }
+
+        /* Signals per distinct question, from the SAME latest runs the question list came from.
+           Winnability = classifyWinnability PER RUN (the audit page's own vocabulary and rule),
+           folded by majorityVerdict — single-run winnability is noise (measured 17.9% flip).
+           Named = counts per engine (named-in-N-of-M-runs) so holds can print verifiable numbers. */
         const { data: resRows } = await service.from("ai_audit_queue")
           .select("question, result").in("run_id", qaRunIds).eq("status", "done");
-        const cellsByQ = new Map<string, string[][]>();
+        const runsByQ = new Map<string, EngineMap[]>();
         const domainsByQ = new Map<string, string[]>();
         const namedByQ = new Map<string, { chatgpt: [number, number]; gemini: [number, number] }>();
         const locText = qaAudit.location_text ?? "";
         const hostOf = (u: string): string => { try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; } };
         for (const r of resRows ?? []) {
           const q = String((r as { question: string }).question ?? "").trim();
-          const result = ((r as { result: unknown }).result ?? {}) as Record<string, { named?: boolean; competitors?: string[]; citations?: { url?: string }[] }>;
+          const result = ((r as { result: unknown }).result ?? {}) as EngineMap;
           if (!q) continue;
-          const cells = cellsByQ.get(q) ?? []; const doms = domainsByQ.get(q) ?? [];
+          (runsByQ.get(q) ?? runsByQ.set(q, []).get(q)!).push(result);
+          const doms = domainsByQ.get(q) ?? [];
           const named = namedByQ.get(q) ?? { chatgpt: [0, 0] as [number, number], gemini: [0, 0] as [number, number] };
           for (const eng of SCORED_ENGINES) {
             const er = result[eng];
             if (!er) continue;
-            cells.push((er.competitors ?? []).filter((c) => isRealCompetitor(c, locText)));
             for (const cit of er.citations ?? []) { const h = hostOf(unwrapCitationUrl(cit?.url ?? "")); if (h) doms.push(h); }
             named[eng][1]++; if (er.named) named[eng][0]++;
           }
-          cellsByQ.set(q, cells); domainsByQ.set(q, doms); namedByQ.set(q, named);
+          domainsByQ.set(q, doms); namedByQ.set(q, named);
         }
+        const toVerdict = (v: string): WinnVerdict =>
+          v === "no-local-race" ? "no_local_race"
+          : v === "named" || v === "open" || v === "contested" || v === "locked" ? v : "unmeasured";
         const signals = new Map<string, QuestionSignals>();
         for (const q of qaQuestions) {
-          const w = computeWinnability(cellsByQ.get(q) ?? [], domainsByQ.get(q) ?? []);
+          const perRun = (runsByQ.get(q) ?? []).map((result) =>
+            classifyWinnability(result, { businessName: qaAudit.business_name, locationText: locText, ownWebsite, isAggregatorUrl }));
+          const labels = perRun.map((v) => toVerdict(v.verdict));
+          const wv = majorityVerdict(labels);
+          const reason = perRun.find((v) => toVerdict(v.verdict) === wv)?.reason ?? "";
           const nr = namedByQ.get(q) ?? { chatgpt: [0, 0] as [number, number], gemini: [0, 0] as [number, number] };
           signals.set(q, {
             question: q,
-            winnability: w.label === "wide_open" || w.label === "locked" || w.label === "informational" ? w.label : "unclear",
-            winnabilityReason: w.reason,
-            namedRate: {
-              chatgpt: nr.chatgpt[1] > 0 ? nr.chatgpt[0] / nr.chatgpt[1] : null,
-              gemini: nr.gemini[1] > 0 ? nr.gemini[0] / nr.gemini[1] : null,
+            winnability: wv,
+            winnabilityReason: reason,
+            named: {
+              chatgpt: nr.chatgpt[1] > 0 ? { named: nr.chatgpt[0], runs: nr.chatgpt[1] } : null,
+              gemini: nr.gemini[1] > 0 ? { named: nr.gemini[0], runs: nr.gemini[1] } : null,
             },
-            businessSources: w.sourceMix.business >= 1,
+            businessSources: sourceMix(domainsByQ.get(q) ?? []).business >= 1,
           });
         }
 
@@ -327,7 +356,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             model: MODEL, temperature: 0.3,
             messages: [
-              { role: "system", content: `You cluster a business's customer questions into DISTINCT CUSTOMER JOBS — one cluster per page. MERGE questions that one page genuinely answers (same job, phrased differently). SPLIT when the honest answer materially changes. Also group clusters under a short TOPIC (a hub theme; related clusters share a topic). Return indices into the numbered list via return_clusters — every index EXACTLY once, none invented.` },
+              { role: "system", content: `You cluster a business's customer questions into DISTINCT CUSTOMER JOBS — one cluster per page. MERGE questions that one page genuinely answers (same job, phrased differently). SPLIT when the honest answer materially changes. ⛔ NEVER merge questions about DIFFERENT towns/places — for a local business each town is a separate provider-selection job, so "X in TownA" and "X in TownB" are ALWAYS separate clusters. Also group clusters under a short TOPIC (a hub theme; related clusters share a topic). Return indices into the numbered list via return_clusters — every index EXACTLY once, none invented.` },
               { role: "user", content: `Business: ${qaAudit.business_name}${qaAudit.business_type ? ` (${qaAudit.business_type})` : ""}.\nQuestions:\n${numbered}\nReturn via return_clusters.` },
             ],
             tools: [{
@@ -379,7 +408,10 @@ Deno.serve(async (req) => {
           }));
         } catch { proposals = []; }
 
-        const { partitionOk, clusters, problems } = validateClusters(kept, proposals);
+        const { partitionOk, clusters: validated, problems } = validateClusters(kept, proposals);
+        /* ⛔ TOWN HARD SPLIT — whatever the model proposed, a cluster is never allowed to span
+           towns (code disposes). Splits are reported, never silent. */
+        const { clusters, splits: townSplits } = enforceTownSplit(kept, validated, towns);
         const pages = buildQueue(kept, clusters, signals);
         // Re-attach pre-merged exact duplicates to the page holding their keeper.
         for (const [dup, keeper] of mergedInto) {
@@ -392,7 +424,7 @@ Deno.serve(async (req) => {
           p.topSources = topSources(p.questions.flatMap((q) => domainsByQ.get(q) ?? []));
         }
 
-        if (dryRun) return json({ ok: true, dryRun: true, partitionOk, problems, pages, questionCount: qaQuestions.length });
+        if (dryRun) return json({ ok: true, dryRun: true, partitionOk, problems, townSplits, pages, questionCount: qaQuestions.length });
 
         // Persist: rebuild REPLACES this client's plan (the UI's confirm says so).
         try {
@@ -422,7 +454,7 @@ Deno.serve(async (req) => {
             inserted.push((row as { id: string }).id);
             const qRows = p.questions.map((q) => ({
               page_id: (row as { id: string }).id, baseline_audit_id: auditId, question_text: q,
-              named_rate: signals.get(q)?.namedRate ?? null,
+              named_rate: signals.get(q)?.named ?? null,
             }));
             if (qRows.length) { const { error: qErr } = await service.from("client_page_questions").insert(qRows); if (qErr) throw qErr; }
           }
@@ -433,7 +465,7 @@ Deno.serve(async (req) => {
             const j = pages.findIndex((p) => p.primaryQuestion === nd);
             if (j >= 0) await service.from("client_pages").update({ near_dup_of: inserted[j] }).eq("id", inserted[i]);
           }
-          return json({ ok: true, partitionOk, problems, built: pages.length, questionCount: qaQuestions.length });
+          return json({ ok: true, partitionOk, problems, townSplits, built: pages.length, questionCount: qaQuestions.length });
         } catch (e) {
           const msg = errMsg(e);
           if (/client_pages|client_page_questions/.test(msg) && /does not exist|schema cache/i.test(msg)) return json({ ok: false, error: "plan_tables_missing" }, 200);
