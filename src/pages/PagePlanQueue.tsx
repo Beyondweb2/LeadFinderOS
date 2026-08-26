@@ -26,6 +26,7 @@ interface PlanRow {
   winnability: string | null; score: number | null; score_reasons: string[] | null;
   wave: number; position: number; status: 'planned' | 'held' | 'merged' | 'removed';
   held_reason: string | null; near_dup_of: string | null;
+  top_sources: { domain: string; count: number }[] | null;
   questions: { question_text: string; named_rate: { chatgpt: number | null; gemini: number | null } | null }[];
 }
 
@@ -157,6 +158,13 @@ const PagePlanQueue = () => {
           </span>
         </div>
         <p className="text-xs text-muted-foreground">{r.primary_question}</p>
+        {(r.top_sources?.length ?? 0) > 0 && (
+          <p className="text-xs">
+            <span className="text-muted-foreground">engines currently read:</span>{' '}
+            {r.top_sources!.map((s) => s.domain).join(', ')}
+            <span className="text-muted-foreground"> — where to get listed</span>
+          </p>
+        )}
         {r.status === 'held' && r.held_reason && <p className="text-xs text-amber-600 dark:text-amber-500">held: {r.held_reason}</p>}
         {mergeFrom === r.id && (
           <div className="flex items-center gap-2 text-xs">
@@ -173,6 +181,10 @@ const PagePlanQueue = () => {
           <div className="rounded border border-border/40 bg-muted/30 p-2 space-y-1 text-xs">
             {r.rationale && <p><span className="text-muted-foreground">Why grouped this way:</span> {r.rationale}</p>}
             {(r.score_reasons ?? []).map((s, i) => <p key={i} className="text-muted-foreground">· {s}</p>)}
+            {(r.top_sources?.length ?? 0) > 0 && (
+              <p><span className="text-muted-foreground">Cited sources (times cited):</span>{' '}
+                {r.top_sources!.map((s) => `${s.domain} (${s.count})`).join(' · ')}</p>
+            )}
             <p className="font-medium text-muted-foreground pt-1">Questions this page answers (named-rate ChatGPT / Gemini):</p>
             {r.questions.map((q) => (
               <p key={q.question_text}>“{q.question_text}” <span className="text-muted-foreground">— {rate(q.named_rate?.chatgpt ?? null)} / {rate(q.named_rate?.gemini ?? null)}</span></p>

@@ -23,6 +23,7 @@ create table if not exists public.client_pages (
   status             text not null default 'planned' check (status in ('planned','held','merged','removed')),
   held_reason        text,
   near_dup_of        uuid references public.client_pages(id) on delete set null,
+  top_sources        jsonb,                        -- [{domain, count}] — where the engines are looking
   -- generated content lands here in Stage 3 (draft -> approved -> live machine comes with it):
   title              text, meta_description text, h1 text, body_html text,
   created_at         timestamptz not null default now(),

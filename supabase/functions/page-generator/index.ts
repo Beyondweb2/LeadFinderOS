@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildPagePlan, stuffingCheck, enforceNaturalness, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
 import { computeWinnability, isRealCompetitor, unwrapCitationUrl, SCORED_ENGINES } from "../../../src/lib/auditReport.ts";
-import { preMergeQuestions, validateClusters, buildQueue, type ClusterProposal, type QuestionSignals } from "../../../src/lib/pagePlanQueue.ts";
+import { preMergeQuestions, validateClusters, buildQueue, topSources, type ClusterProposal, type QuestionSignals } from "../../../src/lib/pagePlanQueue.ts";
 
 // page-generator — service-plus-town delivery pages, from the OVERLAP of the client's
 // questionnaire (services_list x areas_list) and their baseline audit's exact measured queries.
@@ -377,6 +377,11 @@ Deno.serve(async (req) => {
           const pg = pages.find((p) => p.questions.includes(keeper));
           if (pg && !pg.questions.includes(dup)) pg.questions.push(dup);
         }
+        /* "Where the engines are looking" — the top recurring cited domains across the page's
+           questions, from citations the audit already captured. Shows where to get listed. */
+        for (const p of pages) {
+          p.topSources = topSources(p.questions.flatMap((q) => domainsByQ.get(q) ?? []));
+        }
 
         if (dryRun) return json({ ok: true, dryRun: true, partitionOk, problems, pages, questionCount: qaQuestions.length });
 
@@ -390,13 +395,20 @@ Deno.serve(async (req) => {
           const inserted: string[] = [];
           for (let i = 0; i < pages.length; i++) {
             const p = pages[i];
-            const { data: row, error: insErr } = await service.from("client_pages").insert({
+            const rowObj: Record<string, unknown> = {
               user_id: userId, baseline_audit_id: auditId, lead_id: qaAudit.lead_id,
               page_type: "qa", job: p.job, topic: p.topic, primary_question: p.primaryQuestion,
               slug: slugOf(p.job, i), rationale: p.rationale, winnability: p.winnability,
               score: p.score, score_reasons: p.scoreReasons, wave: p.wave, position: p.position,
-              status: p.status, held_reason: p.heldReason,
-            }).select("id").single();
+              status: p.status, held_reason: p.heldReason, top_sources: p.topSources ?? [],
+            };
+            let { data: row, error: insErr } = await service.from("client_pages").insert(rowObj).select("id").single();
+            // A DB created before the top_sources migration must still take the plan — shed the
+            // column and retry once (the findable-onboarding column-shedding lesson).
+            if (insErr && /top_sources/i.test(insErr.message ?? "")) {
+              delete rowObj.top_sources;
+              ({ data: row, error: insErr } = await service.from("client_pages").insert(rowObj).select("id").single());
+            }
             if (insErr || !row) throw insErr ?? new Error("insert failed");
             inserted.push((row as { id: string }).id);
             const qRows = p.questions.map((q) => ({

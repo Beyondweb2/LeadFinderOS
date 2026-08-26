@@ -50,6 +50,23 @@ export interface PlannedQueuePage {
   status: 'planned' | 'held';
   heldReason: string | null;
   nearDupOf: string | null;    // another page's primaryQuestion when the two look near-identical
+  /** The domains the engines actually cited answering this page's questions — "where the engines
+   *  are looking", i.e. where to get listed. Top recurring, most-cited first. */
+  topSources?: { domain: string; count: number }[];
+}
+
+/** Top recurring cited source domains: count every citation, most-cited first (ties alphabetical),
+ *  top `limit`. Pure counting over what the audit already captured — no new data collection. */
+export function topSources(domains: string[], limit = 5): { domain: string; count: number }[] {
+  const tally = new Map<string, number>();
+  for (const d of domains) {
+    const clean = String(d ?? '').trim().toLowerCase();
+    if (clean) tally.set(clean, (tally.get(clean) ?? 0) + 1);
+  }
+  return [...tally.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([domain, count]) => ({ domain, count }));
 }
 
 /* ── tokenising (same light stem as pagePlan.ts, kept local so this module stays leaf) ─────── */
