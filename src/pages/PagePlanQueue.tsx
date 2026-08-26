@@ -27,14 +27,29 @@ interface PlanRow {
   wave: number; position: number; status: 'planned' | 'held' | 'merged' | 'removed';
   held_reason: string | null; near_dup_of: string | null;
   top_sources: { domain: string; count: number }[] | null;
-  questions: { question_text: string; named_rate: { chatgpt: number | null; gemini: number | null } | null }[];
+  /* named_rate is counts ({named, runs} per engine) since 2026-08-28; older rows may carry a plain
+     fraction — render both, never crash on either. */
+  questions: { question_text: string; named_rate: { chatgpt: unknown; gemini: unknown } | null }[];
 }
 
+const namedCell = (v: unknown): string => {
+  if (v && typeof v === 'object' && 'named' in (v as object)) {
+    const e = v as { named: number; runs: number };
+    return `${e.named}/${e.runs}`;
+  }
+  if (typeof v === 'number') return `${Math.round(v * 100)}%`; // legacy fraction shape
+  return '—';
+};
+
+/* Winnability badges in the AUDIT'S vocabulary (classifyWinnability verdicts, majority across the
+   runs) — so the queue's label matches what the audit page shows for the same question. */
 const WINN_STYLE: Record<string, string> = {
-  wide_open: 'border-emerald-500/40 text-emerald-600 dark:text-emerald-500',
-  informational: 'border-sky-500/40 text-sky-600 dark:text-sky-400',
-  unclear: 'border-border text-muted-foreground',
+  open: 'border-emerald-500/40 text-emerald-600 dark:text-emerald-500',
+  contested: 'border-sky-500/40 text-sky-600 dark:text-sky-400',
+  no_local_race: 'border-violet-500/40 text-violet-600 dark:text-violet-400',
+  named: 'border-emerald-500/40 text-emerald-600 dark:text-emerald-500',
   locked: 'border-red-500/40 text-red-600 dark:text-red-500',
+  unmeasured: 'border-border text-muted-foreground',
 };
 
 const PagePlanQueue = () => {
@@ -123,7 +138,6 @@ const PagePlanQueue = () => {
 
   const row = (r: PlanRow, siblings: PlanRow[]) => {
     const idx = siblings.findIndex((s) => s.id === r.id);
-    const rate = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`);
     return (
       <div key={r.id} className={`rounded-md border p-3 space-y-1.5 ${r.status === 'held' ? 'border-amber-500/40 bg-amber-500/5' : 'border-border/60'}`}>
         <div className="flex flex-wrap items-center gap-2">
@@ -149,7 +163,7 @@ const PagePlanQueue = () => {
           <span className="ml-auto flex items-center gap-1">
             <Button size="sm" variant="ghost" className="h-7 px-1.5" disabled={idx <= 0} onClick={() => swap(r, siblings[idx - 1])} title="Move up"><ArrowUp className="h-3.5 w-3.5" /></Button>
             <Button size="sm" variant="ghost" className="h-7 px-1.5" disabled={idx >= siblings.length - 1} onClick={() => swap(r, siblings[idx + 1])} title="Move down"><ArrowDown className="h-3.5 w-3.5" /></Button>
-            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => update(r.id, { set: { wave: r.wave === 1 ? 2 : 1 } })}>→ wave {r.wave === 1 ? 2 : 1}</Button>
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" title={`Move this page to wave ${r.wave === 1 ? 2 : 1}`} onClick={() => update(r.id, { set: { wave: r.wave === 1 ? 2 : 1 } })}>Move to wave {r.wave === 1 ? 2 : 1}</Button>
             {r.status === 'held'
               ? <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Un-hold" onClick={() => update(r.id, { set: { status: 'planned' } })}><Play className="h-3.5 w-3.5" /></Button>
               : <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Hold" onClick={() => update(r.id, { set: { status: 'held', held_reason: 'held by operator' } })}><Pause className="h-3.5 w-3.5" /></Button>}
@@ -185,9 +199,9 @@ const PagePlanQueue = () => {
               <p><span className="text-muted-foreground">Cited sources (times cited):</span>{' '}
                 {r.top_sources!.map((s) => `${s.domain} (${s.count})`).join(' · ')}</p>
             )}
-            <p className="font-medium text-muted-foreground pt-1">Questions this page answers (named-rate ChatGPT / Gemini):</p>
+            <p className="font-medium text-muted-foreground pt-1">Questions this page answers (named in N of M runs — ChatGPT / Gemini):</p>
             {r.questions.map((q) => (
-              <p key={q.question_text}>“{q.question_text}” <span className="text-muted-foreground">— {rate(q.named_rate?.chatgpt ?? null)} / {rate(q.named_rate?.gemini ?? null)}</span></p>
+              <p key={q.question_text}>“{q.question_text}” <span className="text-muted-foreground">— ChatGPT {namedCell(q.named_rate?.chatgpt)} / Gemini {namedCell(q.named_rate?.gemini)}</span></p>
             ))}
           </div>
         )}

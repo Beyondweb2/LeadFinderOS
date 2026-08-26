@@ -17,15 +17,58 @@
    Pure + dependency-free (edge fn AND SPA import it); scripts/page-plan-queue.test.ts drives it.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
+/* Winnability in the AUDIT'S OWN VOCABULARY (classifyWinnability verdicts), so the queue's label
+   matches what the audit page shows for the same question. 'unmeasured' is the absent-value case —
+   never a confident label. Computed PER RUN and folded by majorityVerdict() (single-run winnability
+   is noise — measured 17.9% flip). */
+export type WinnVerdict = 'named' | 'open' | 'contested' | 'locked' | 'no_local_race' | 'unmeasured';
+
+/** Named counts for one engine: how many of the runs named the client. Counts, not a rate, so a
+ *  hold reason can print the verifiable "ChatGPT 3/3 · Gemini 0/3". */
+export interface EngineNamed { named: number; runs: number }
+
 export interface QuestionSignals {
   question: string;
-  /** computeWinnability label across the measurement repeats. */
-  winnability: 'wide_open' | 'locked' | 'informational' | 'unclear';
+  /** Majority classifyWinnability verdict across the measurement runs. */
+  winnability: WinnVerdict;
   winnabilityReason: string;
-  /** Per scored engine: fraction of answered cells naming the client (0..1), null = engine absent. */
-  namedRate: { chatgpt: number | null; gemini: number | null };
+  /** Per scored engine: named-in-N-of-M-runs counts; null = engine never answered. */
+  named: { chatgpt: EngineNamed | null; gemini: EngineNamed | null };
   /** Business-type sources cited (a business page can plausibly rank there). */
   businessSources: boolean;
+}
+
+/** Majority verdict across a question's runs; ties break toward the FIRST in priority order
+ *  (named beats open beats contested… so a tie never under-claims the client's presence).
+ *  Empty input → 'unmeasured', never a confident label. */
+const VERDICT_PRIORITY: WinnVerdict[] = ['named', 'open', 'contested', 'locked', 'no_local_race'];
+export function majorityVerdict(verdicts: WinnVerdict[]): WinnVerdict {
+  const real = verdicts.filter((v) => v !== 'unmeasured');
+  if (real.length === 0) return 'unmeasured';
+  const tally = new Map<WinnVerdict, number>();
+  for (const v of real) tally.set(v, (tally.get(v) ?? 0) + 1);
+  let best: WinnVerdict = 'unmeasured', bestN = -1;
+  for (const v of VERDICT_PRIORITY) {
+    const n = tally.get(v) ?? 0;
+    if (n > bestN) { best = v; bestN = n; }
+  }
+  return best;
+}
+
+/** A question reads as ALREADY NAMED when some engine named the client in at least half its runs,
+ *  with ≥2 runs measured (a single-run fluke never defends). Counts-based so the reason can show
+ *  the exact numbers. */
+export function questionIsNamed(s: QuestionSignals): boolean {
+  for (const e of [s.named.chatgpt, s.named.gemini]) {
+    if (e && e.runs >= 2 && e.named / e.runs >= DEFEND_NAMED_RATE) return true;
+  }
+  return false;
+}
+
+/** "ChatGPT 3/3 · Gemini 0/3" — the verifiable named-counts line for one question. */
+export function namedCountsLabel(s: QuestionSignals): string {
+  const one = (name: string, e: EngineNamed | null) => (e ? `${name} ${e.named}/${e.runs}` : `${name} —`);
+  return `${one('ChatGPT', s.named.chatgpt)} · ${one('Gemini', s.named.gemini)}`;
 }
 
 export interface ClusterProposal {
@@ -44,7 +87,7 @@ export interface PlannedQueuePage {
   rationale: string;
   score: number;               // 0..100
   scoreReasons: string[];      // every point-worth of reasoning, itemised
-  winnability: QuestionSignals['winnability'];
+  winnability: WinnVerdict;
   wave: number;                // 1..N; held pages keep their computed wave for un-holding
   position: number;            // order within the wave
   status: 'planned' | 'held';
@@ -118,11 +161,58 @@ export function validateClusters(
   return { partitionOk: false, clusters: singles, problems };
 }
 
+/* ── TOWN HARD SPLIT — for local/service clients, each town is a distinct provider-selection job
+   (the £500 doc): a cluster is NEVER allowed to span towns, whatever the model proposed. Model
+   proposes, code disposes. Merging variants WITHIN one town stays allowed. National clients pass
+   an empty town list and are untouched. ────────────────────────────────────────────────────── */
+function firstTownOf(question: string, towns: string[]): string {
+  const qToks = tokensOf(question);
+  const contains = (needle: string[]): boolean => {
+    if (needle.length === 0 || needle.length > qToks.length) return false;
+    outer: for (let i = 0; i + needle.length <= qToks.length; i++) {
+      for (let j = 0; j < needle.length; j++) if (qToks[i + j] !== needle[j]) continue outer;
+      return true;
+    }
+    return false;
+  };
+  for (const t of towns) if (contains(tokensOf(t))) return t;
+  return '';
+}
+
+export function enforceTownSplit(
+  questions: string[], clusters: ClusterProposal[], towns: string[],
+): { clusters: ClusterProposal[]; splits: string[] } {
+  if (towns.length === 0) return { clusters, splits: [] };
+  const out: ClusterProposal[] = [];
+  const splits: string[] = [];
+  for (const c of clusters) {
+    const byTown = new Map<string, number[]>();
+    for (const i of c.questionIndices) {
+      const t = firstTownOf(questions[i] ?? '', towns);
+      (byTown.get(t) ?? byTown.set(t, []).get(t)!).push(i);
+    }
+    if (byTown.size <= 1) { out.push(c); continue; }
+    splits.push(`"${c.job}" spanned ${byTown.size} towns — split (each town is its own local job)`);
+    for (const [town, idxs] of byTown) {
+      const primaryIndex = idxs.includes(c.primaryIndex) ? c.primaryIndex : idxs[0];
+      const jobHasTown = town && tokensOf(c.job).join(' ').includes(tokensOf(town).join(' '));
+      out.push({
+        job: town && !jobHasTown ? `${c.job} — ${town}` : c.job,
+        topic: c.topic,
+        primaryIndex,
+        questionIndices: idxs,
+        rationale: `${c.rationale ? `${c.rationale} ` : ''}(town split enforced: each town is a distinct local job)`,
+      });
+    }
+  }
+  return { clusters: out, splits };
+}
+
 /* ── scoring — winnability first (evidence-led), then engine gap + client absence + demand ─── */
-const WINNABILITY_BASE: Record<QuestionSignals['winnability'], number> = {
-  wide_open: 70, informational: 55, unclear: 35, locked: 10,
+const WINNABILITY_BASE: Record<WinnVerdict, number> = {
+  open: 70, no_local_race: 55, contested: 50, named: 30, unmeasured: 20, locked: 10,
 };
-/** A question where the client is already named this often reads "defend", not "build new". */
+/** Named in at least this share of runs (≥2 runs) on some engine = "already named" for that question. */
 export const DEFEND_NAMED_RATE = 0.5;
 /** Wave 1 = topics whose best page clears this; everything else planned lands in wave 2. */
 export const WAVE1_MIN_SCORE = 55;
@@ -130,32 +220,44 @@ export const WAVE1_MIN_SCORE = 55;
 export const NEAR_DUP_JACCARD = 0.8;
 
 export function scoreCluster(signals: QuestionSignals[]): {
-  score: number; reasons: string[]; winnability: QuestionSignals['winnability']; defend: boolean;
+  score: number; reasons: string[]; winnability: WinnVerdict; defend: boolean; defendReason: string | null;
 } {
-  // Best winnability among variants — a cluster is as winnable as its most winnable question.
-  const order: QuestionSignals['winnability'][] = ['wide_open', 'informational', 'unclear', 'locked'];
-  const best = order.find((w) => signals.some((s) => s.winnability === w)) ?? 'unclear';
+  /* Defend is PER QUESTION, from the actual run counts — and a page holds only when EVERY measured
+     question is already named. One named variant must never hold a page whose other variants are
+     absent (the lock-changes-Peterborough fault: held on a sibling's 100% while itself at 0/3). */
+  const measured = signals.filter((s) => s.winnability !== 'unmeasured' || s.named.chatgpt || s.named.gemini);
+  const namedQs = signals.filter((s) => questionIsNamed(s));
+  const defend = measured.length > 0 && namedQs.length === measured.length;
+  const defendReason = defend
+    ? `client already named on every question here — ${signals.map((s) => `"${s.question}": ${namedCountsLabel(s)}`).join('; ')}`
+    : null;
+
+  // Best winnability among the NOT-already-named variants — that's what the page can win.
+  const winnable = signals.filter((s) => !questionIsNamed(s));
+  const pool = winnable.length ? winnable : signals;
+  const order: WinnVerdict[] = ['open', 'contested', 'no_local_race', 'unmeasured', 'named', 'locked'];
+  const best = order.find((w) => pool.some((s) => s.winnability === w)) ?? 'unmeasured';
+  const bestSig = pool.find((s) => s.winnability === best);
   const reasons: string[] = [];
   let score = WINNABILITY_BASE[best];
-  reasons.push(`${best.replace('_', ' ')} (${signals.find((s) => s.winnability === best)?.winnabilityReason ?? ''})`);
+  reasons.push(`${best.replace(/_/g, ' ')}${bestSig?.winnabilityReason ? ` (${bestSig.winnabilityReason})` : ''}`);
 
-  const rates = signals.flatMap((s) => [s.namedRate.chatgpt, s.namedRate.gemini]).filter((r): r is number => r !== null);
-  const maxRate = rates.length ? Math.max(...rates) : 0;
-  const defend = maxRate >= DEFEND_NAMED_RATE;
-  if (defend) reasons.push(`already named in ${Math.round(maxRate * 100)}% of answers — defend, not a new page`);
-  else if (maxRate === 0 && rates.length > 0) { score += 10; reasons.push('client absent from every answer (+10)'); }
-  else if (maxRate > 0) {
-    // Engine gap: named somewhere but not everywhere — the page targets the absent engine.
-    const gapEngine = signals.some((s) => (s.namedRate.chatgpt ?? 0) > 0) && !signals.some((s) => (s.namedRate.gemini ?? 0) > 0)
-      ? 'Gemini' : signals.some((s) => (s.namedRate.gemini ?? 0) > 0) && !signals.some((s) => (s.namedRate.chatgpt ?? 0) > 0)
-      ? 'ChatGPT' : null;
-    if (gapEngine) { score += 5; reasons.push(`engine gap — absent on ${gapEngine} (+5)`); }
+  if (defend) reasons.push(defendReason!);
+  else {
+    const anyNamed = signals.some((s) => (s.named.chatgpt?.named ?? 0) + (s.named.gemini?.named ?? 0) > 0);
+    if (!anyNamed && measured.length > 0) { score += 10; reasons.push('client absent from every answer (+10)'); }
+    else if (anyNamed) {
+      const onCg = signals.some((s) => (s.named.chatgpt?.named ?? 0) > 0);
+      const onGm = signals.some((s) => (s.named.gemini?.named ?? 0) > 0);
+      const gap = onCg && !onGm ? 'Gemini' : onGm && !onCg ? 'ChatGPT' : null;
+      if (gap) { score += 5; reasons.push(`engine gap — absent on ${gap} (+5)`); }
+    }
   }
   if (signals.some((s) => s.businessSources)) { score += 5; reasons.push('business-type sources cited (+5)'); }
   const extra = Math.min(5, signals.length - 1);
   if (extra > 0) { score += extra * 2; reasons.push(`${signals.length} question variants merged — demand signal (+${extra * 2})`); }
 
-  return { score: Math.max(0, Math.min(100, score)), reasons, winnability: best, defend };
+  return { score: Math.max(0, Math.min(100, score)), reasons, winnability: best, defend, defendReason };
 }
 
 /** Assemble the queue: score each cluster, flag near-dups, hold defend/locked, and assign waves
@@ -168,12 +270,12 @@ export function buildQueue(
     const primary = questions[c.primaryIndex];
     const ordered = [primary, ...qs.filter((q) => q !== primary)];
     const sig = qs.map((q) => signalsByQuestion.get(q)).filter((s): s is QuestionSignals => !!s);
-    const { score, reasons, winnability, defend } = sig.length
+    const { score, reasons, winnability, defend, defendReason } = sig.length
       ? scoreCluster(sig)
-      : { score: 0, reasons: ['no measured answers for any variant'], winnability: 'unclear' as const, defend: false };
+      : { score: 0, reasons: ['no measured answers for any variant'], winnability: 'unmeasured' as const, defend: false, defendReason: null };
     let status: PlannedQueuePage['status'] = 'planned';
     let heldReason: string | null = null;
-    if (defend) { status = 'held'; heldReason = 'client already named here — defend the position, a new page is not the move'; }
+    if (defend) { status = 'held'; heldReason = `defend, not a new page — ${defendReason}`; }
     else if (winnability === 'locked') { status = 'held'; heldReason = 'locked — a small consistent incumbent set holds this; low odds for a new page'; }
     return {
       job: c.job, topic: c.topic || 'general', primaryQuestion: primary, questions: ordered,
