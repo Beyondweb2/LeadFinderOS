@@ -1360,12 +1360,24 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
     THREE-WAY rule in `scoreCluster`: Gemini named in ≥`DEFEND_NAMED_RATE` of ≥2 runs → **DEFEND,
     the ONLY hold**; ChatGPT-named but Gemini-absent → **BUILD tagged "Gemini gap"** (amber badge,
     derived in the SPA from the stored counts; scored low → later wave, no absence bonus);
-    neither → plain BUILD, wide-open first. `locked` no longer auto-holds — it builds with its low
-    score. A page holds only when EVERY measured question defends; reasons print the counts
-    ("ChatGPT 3/3 · Gemini 0/3"). The old cluster-max rule held Peterborough (0/3) on Huntingdon's
-    100% — the exact fault. `named_rate` is stored as COUNTS (`{named,runs}` per engine); the UI
-    renders counts and legacy fractions. ⚠️ A gap build can still ride WAVE 1 when its topic's best
-    page earns wave 1 (complete-clusters beats score banding, deliberately).
+    neither → plain BUILD, wide-open first. A page holds only when EVERY measured question defends;
+    reasons print the counts ("ChatGPT 3/3 · Gemini 0/3"). The old cluster-max rule held
+    Peterborough (0/3) on Huntingdon's 100% — the exact fault. `named_rate` is stored as COUNTS
+    (`{named,runs}` per engine); the UI renders counts and legacy fractions.
+  - **LOCKED MARKETS HOLD AGAIN, PRIORITY 1 (corrected 2026-08-28 — the Gemini-first rule was only
+    ever meant for the defend case).** Page order: locked → HOLD with its OWN wording naming the
+    incumbents ("Held — market locked: X, Y dominate… revisit as the site's authority grows",
+    incumbents = classifyWinnability's namedFirms on the majority run, `QuestionSignals.incumbents`);
+    then Gemini-defend; then gap-build; then build. Locked+open variants still BUILD on the open
+    one. ⚠️ No real client currently has a locked page under the majority grader (the earlier
+    Solene "locked" came from the OLD computeWinnability grader) — the path is test-pinned, not yet
+    seen live.
+  - **WAVES ARE BY SCORE (2026-08-28, supersedes topic-grouped waves).** Each page's OWN score
+    picks its wave (≥`WAVE1_MIN_SCORE` → wave 1); positions follow score order. A score-35 gap page
+    can no longer ride wave 1 on a topic sibling's 85. `topic` survives as the hub grouping.
+  - ⚠️ **`client_pages.lead_id` is NOT NULL in the live table** (2026-08-21 legacy shape) — a
+    lead-less national client (Solene) FAILS to persist until Paul runs the drop-not-null ALTER
+    (handed 2026-08-28). Dry-runs unaffected. RG persists fine (has a lead).
   - **WINNABILITY IS `classifyWinnability` PER RUN folded by `majorityVerdict`** (the audit page's
     own vocabulary: named/open/contested/locked/no_local_race; `unmeasured` for no data) — NOT
     computeWinnability's internal labels, which read "unclear" on nearly everything and matched
