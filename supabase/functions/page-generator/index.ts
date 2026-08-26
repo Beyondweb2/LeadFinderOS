@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildPagePlan, stuffingCheck, type PagePlan, type PlannedPage } from "../../../src/lib/pagePlan.ts";
+import { buildPagePlan, stuffingCheck, enforceNaturalness, MAX_TOWN_MENTIONS, MAX_KEYWORD_DENSITY_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
 
 // page-generator — service-plus-town delivery pages, from the OVERLAP of the client's
 // questionnaire (services_list x areas_list) and their baseline audit's exact measured queries.
@@ -51,30 +51,37 @@ const PAGE_TOOL = {
   },
 };
 
-function systemPrompt(mustNotSay: string): string {
+function systemPrompt(mustNotSay: string, town: string): string {
   return `You write ONE service-plus-town page for a small UK trade business's own website. The page
 exists so AI assistants (ChatGPT, Gemini) that read the site can learn this business does THIS
-service in THIS town. You return ONLY structured parts via the return_page tool.
+service in ${town}. You return ONLY structured parts via the return_page tool.
 
 STYLE — this is the part that matters most. The page must read like the owner wrote it on a good
 day: plain, warm, specific, useful. The FAILURE MODE you must avoid is the keyword-stuffed doorway
 page: the town hammered into every sentence, the service repeated like a chant, interchangeable
-template copy. Pages exactly like that were REMOVED from a client's site because they read as spam.
+template copy. Pages exactly like that were REMOVED from a client's site because they read as spam
+and AI refused to cite them.
 
 HARD RULES:
 - UK English. 350-500 words in body_html. Clean HTML only: h2, p, ul/li, strong.
-- Mention the town AT MOST 4 times in the body. Use "here", "locally", "the area" instead.
-- Use the service phrase naturally, not repeatedly; vary the wording like a human would.
+- Name the town "${town}" AT MOST TWICE in the whole body. Everywhere else say "here", "locally",
+  "the area" or "in the area" — do NOT keep writing the town name.
+- Use the SERVICE phrase about ONCE. Do NOT repeat the service phrase, and do NOT repeat its core
+  keywords over and over — vary the language the way a person would (say it a different way, use
+  the specific thing being done, or just "the work" / "the job"). The page must never read like a
+  keyword list. Aim for keyword density comfortably UNDER 3%.
+- ⛔ WRITE ONLY ABOUT ${town}. Do NOT name, list or mention ANY other town, city, village or area —
+  not even to say the business "also covers" them. This page is about ${town} and nothing else.
 - NEVER promise outcomes: no "you'll rank", no "AI will recommend you", no "guaranteed".
 - INVENT NOTHING: no prices, no response times, no opening hours, no years-in-business, no reviews,
-  no certifications beyond the accreditations given. If a fact was not given, do not state it.
+  no testimonials, no certifications beyond the accreditations given, and NO local landmarks, street
+  names or area facts you were not given. If a fact was not given, do not state it.
 - Do not fabricate phone numbers, emails or forms — refer to "get in touch" generically; the
   business's own site template carries the real contact details.
-- Structure freely (do NOT reuse the same section shape every time): a short opening that names the
-  service and town once, then 2-3 h2 sections a customer would actually want (what happens when you
-  call someone out, what it typically involves, why locals use a nearby firm), optionally ONE short
-  ul. End with a low-key invitation to get in touch.
-- Mention 1-2 of the OTHER areas the business covers in one natural sentence near the end.
+- Structure FREELY — do NOT reuse the same section shape or headings every time. A short opening,
+  then 2-3 h2 sections a customer would actually want (what happens when you call someone out, what
+  it typically involves, why people use a nearby firm), optionally ONE short ul. Vary the headings
+  and their order. End with a low-key invitation to get in touch.
 ${mustNotSay ? `- THE CLIENT'S OWN HARD RULE — things this business must NEVER claim or imply: "${mustNotSay}". Respect this absolutely.` : ""}`;
 }
 
@@ -189,16 +196,18 @@ Deno.serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) return json({ ok: false, error: "openai_not_configured" }, 500);
 
-    const otherAreas = [homeTown, ...areas].filter((a) => a && a.toLowerCase() !== page.town.toLowerCase()).slice(0, 3);
+    /* The home town is DELIBERATELY not named in the prompt: on a page for a DIFFERENT town, "based
+       in {homeTown}" would name another town and contaminate the controlled experiment. The backstop
+       also strips it (homeTown is in otherTowns below). The business reads as "a local firm serving
+       {town}" without naming where it is based. */
     const userPrompt = (feedback?: string) =>
-`Business: ${audit.business_name}${audit.business_type ? ` (${audit.business_type})` : ""}, based in ${homeTown}.
+`Business: ${audit.business_name}${audit.business_type ? ` (${audit.business_type})` : ""}. A local firm serving ${page.town} and the surrounding area.
 Write the page for: ${page.service} — ${page.town}.
 The exact search queries this page must genuinely answer (a reader asking these should find this page useful):
 ${page.queries.map((q) => `- ${q}`).join("\n")}
-Other services the business offers: ${services.filter((s) => s !== page.service).join(", ") || "(none listed)"}.
-Other areas covered (mention 1-2 naturally near the end): ${otherAreas.join(", ") || "(none)"}.
+Other services this business offers (CONTEXT ONLY — do not list them and do not turn them into their own pages): ${services.filter((s) => s !== page.service).join(", ") || "(none listed)"}.
 Accreditations you may state (ONLY these): ${ob.accreditations || "(none — state none)"}.
-${feedback ? `\nYOUR PREVIOUS DRAFT FAILED THE NATURALNESS CHECK: ${feedback}. Rewrite with the town and service words used LESS — say it once, then write like a human.` : ""}
+${feedback ? `\n${feedback}` : ""}
 Return via return_page.`;
 
     const callOpenAI = async (prompt: string) => {
@@ -209,7 +218,7 @@ Return via return_page.`;
           model: MODEL,
           temperature: 0.6,
           messages: [
-            { role: "system", content: systemPrompt((ob.must_not_say ?? "").trim()) },
+            { role: "system", content: systemPrompt((ob.must_not_say ?? "").trim(), page.town) },
             { role: "user", content: prompt },
           ],
           tools: [PAGE_TOOL],
@@ -242,29 +251,50 @@ Return via return_page.`;
     if (out.kind === "no_credits") return json({ ok: false, error: "no_credits" }, 200);
     if (out.kind === "error") return json({ ok: false, error: out.error, detail: (out as { detail?: string }).detail }, 502);
 
-    /* The code-side guard the prompt cannot bypass: ONE regenerate with the verdict as feedback,
-       then return honestly flagged if still stuffed — never silently. */
+    /* Escalating strictness on failure — the OLD version did ONE soft "shorten" retry and could keep
+       a still-stuffed draft (densityPct <= previous). Now: up to 3 attempts, each with genuinely
+       stricter instructions, and we keep the FIRST that PASSES (else the lowest-density draft). */
+    const strictFeedback = (c: StuffingVerdict, level: number): string => {
+      const rules = [
+        `name the town "${page.town}" at most TWICE — say "here"/"locally"/"the area" everywhere else`,
+        `use the words from "${page.service}" far LESS — never repeat the service phrase; vary the language`,
+        `do NOT name any other town, city or area`,
+        `keyword density MUST be under ${MAX_KEYWORD_DENSITY_PCT}%`,
+      ];
+      if (level >= 2) rules.push(`name the town "${page.town}" only ONCE, and use the phrase "${page.service}" only ONCE in the whole page`);
+      return `YOUR PREVIOUS DRAFT READ AS KEYWORD-STUFFED (${c.detail}). Rewrite it to read like a human wrote it:\n- ${rules.join("\n- ")}`;
+    };
+
     let check = stuffingCheck(`${out.h1} ${out.bodyHtml}`, page.service, page.town);
-    let regenerated = false;
-    if (check.verdict === "stuffed") {
-      const retry = await callOpenAI(userPrompt(check.detail));
-      if (retry.kind === "page") {
-        const retryCheck = stuffingCheck(`${retry.h1} ${retry.bodyHtml}`, page.service, page.town);
-        if (retryCheck.verdict === "ok" || retryCheck.densityPct <= check.densityPct) {
-          out = retry; check = retryCheck; regenerated = true;
-        }
-      } else if (retry.kind === "no_credits") {
-        /* First call succeeded, retry hit the wall: return the first draft, flagged. */
-      }
+    let best = { out, check };
+    let attempts = 1;
+    while (check.verdict === "stuffed" && attempts < 3) {
+      const retry = await callOpenAI(userPrompt(strictFeedback(check, attempts)));
+      attempts++;
+      if (retry.kind !== "page") break; // no_credits / error mid-loop → stop, use best so far
+      const rc = stuffingCheck(`${retry.h1} ${retry.bodyHtml}`, page.service, page.town);
+      if (rc.densityPct < best.check.densityPct) best = { out: retry, check: rc };
+      out = retry; check = rc;
+      if (rc.verdict === "ok") { best = { out: retry, check: rc }; break; }
     }
+    out = best.out;
+
+    /* ⛔ MECHANICAL BACKSTOP — the page handed over is GUARANTEED under the limits (town cap, no other
+       towns, density < 3%). No more "fix it yourself" warnings. Regeneration above does the natural
+       writing; this only guarantees the numbers on whatever it produced. */
+    const otherTowns = [homeTown, ...areas].filter((a) => a && a.toLowerCase() !== page.town.toLowerCase());
+    const enforced = enforceNaturalness(out.bodyHtml, page.service, page.town, otherTowns, out.h1);
 
     return json({
       ok: true,
       page: {
         key: page.key, service: page.service, town: page.town, queries: page.queries, slug: page.slug,
-        title: out.title, meta_description: out.meta, h1: out.h1, body_html: out.bodyHtml,
+        title: out.title, meta_description: out.meta, h1: out.h1, body_html: enforced.html,
       },
-      naturalness: { ...check, regenerated },
+      naturalness: {
+        ...enforced.check, attempts, regenerated: attempts > 1,
+        mechanicallyEnforced: enforced.townTrimmed || enforced.otherTownsStripped,
+      },
     });
   } catch (e) {
     console.error("[page-generator] error:", e);
