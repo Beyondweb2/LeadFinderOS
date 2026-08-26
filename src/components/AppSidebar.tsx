@@ -11,7 +11,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  LayoutDashboard, Search, ClipboardList, FileText, FileCode2,
+  LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered,
   HelpCircle, Users, MessageSquare, MessageSquareQuote, Inbox, Sparkles, Map
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -33,6 +33,7 @@ export function AppSidebar() {
     { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },
     { title: 'Review replies', url: '/review-replies', icon: MessageSquareQuote, description: 'Draft replies to client Google reviews' },
     { title: 'Page generator', url: '/page-generator', icon: FileCode2, description: 'Client delivery pages, aimed at the measured queries' },
+    { title: 'Page plan', url: '/page-plan', icon: ListOrdered, description: 'The per-client page queue: distinct jobs, waves, editable' },
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
     { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle, description: t('nav.howToUseDesc') },
     { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare, description: t('nav.feedbackDesc') },

@@ -47,6 +47,7 @@ const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Coverage = lazy(() => import("./pages/Coverage"));
 const ReviewReply = lazy(() => import("./pages/ReviewReply"));
 const PageGenerator = lazy(() => import("./pages/PageGenerator"));
+const PagePlanQueue = lazy(() => import("./pages/PagePlanQueue"));
 const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
@@ -503,6 +504,20 @@ const App = () => {
                   <SubscriptionGate>
                     <AppLayout>
                       <PageGenerator />
+                    </AppLayout>
+                  </SubscriptionGate>
+                </ProtectedRoute>
+              }
+            />
+            {/* Page-plan queue — measured questions clustered into distinct-job pages, scored,
+                waved, stored + editable. See src/pages/PagePlanQueue.tsx + src/lib/pagePlanQueue.ts. */}
+            <Route
+              path="/page-plan"
+              element={
+                <ProtectedRoute>
+                  <SubscriptionGate>
+                    <AppLayout>
+                      <PagePlanQueue />
                     </AppLayout>
                   </SubscriptionGate>
                 </ProtectedRoute>
