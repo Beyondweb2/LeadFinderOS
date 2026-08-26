@@ -35,6 +35,15 @@ interface OnboardingRow {
   business_address: string | null; confirmed_phone: string | null; contact_name: string | null;
 }
 
+/* supabase-js errors are PLAIN OBJECTS, not Error instances — String(e) gives "[object Object]",
+   which both hid the real message from the 500 payload AND broke the tables-missing regex
+   (diagnosed live 2026-08-28: a missing column surfaced as "unknown_error"). Always read .message. */
+const errMsg = (e: unknown): string => {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object" && "message" in e) return String((e as { message?: unknown }).message ?? "");
+  return String(e);
+};
+
 const normTown = (s: string): string => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const escHtml = (s: string): string =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -217,7 +226,7 @@ Deno.serve(async (req) => {
           if (updErr) throw updErr;
           return json({ ok: true });
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg = errMsg(e);
           if (/client_pages|client_page_questions/.test(msg) && /does not exist|schema cache/i.test(msg)) return json({ ok: false, error: "plan_tables_missing" }, 200);
           throw e;
         }
@@ -245,7 +254,7 @@ Deno.serve(async (req) => {
           }
           return json({ ok: true, pages: (pages ?? []).map((p) => ({ ...(p as object), questions: byPage.get((p as { id: string }).id) ?? [] })) });
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg = errMsg(e);
           if (/client_pages|client_page_questions/.test(msg) && /does not exist|schema cache/i.test(msg)) return json({ ok: false, error: "plan_tables_missing" }, 200);
           throw e;
         }
@@ -426,7 +435,7 @@ Deno.serve(async (req) => {
           }
           return json({ ok: true, partitionOk, problems, built: pages.length, questionCount: qaQuestions.length });
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg = errMsg(e);
           if (/client_pages|client_page_questions/.test(msg) && /does not exist|schema cache/i.test(msg)) return json({ ok: false, error: "plan_tables_missing" }, 200);
           throw e;
         }
@@ -789,6 +798,6 @@ Return via return_page.`;
     });
   } catch (e) {
     console.error("[page-generator] error:", e);
-    return json({ ok: false, error: e instanceof Error ? e.message : "unknown_error" }, 500);
+    return json({ ok: false, error: errMsg(e) || "unknown_error" }, 500);
   }
 });

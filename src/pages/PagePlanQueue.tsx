@@ -232,9 +232,10 @@ const PagePlanQueue = () => {
       {tablesMissing && (
         <Card className="border-amber-500/40 bg-amber-500/5">
           <CardContent className="p-4 text-sm">
-            The plan tables don't exist yet — run the migration
-            <code className="mx-1">supabase/migrations/20260828090000_page_plan_queue.sql</code>
-            in the Supabase SQL editor, then press Build.
+            The plan schema isn't in place yet (a table or one of its columns is missing) — run
+            <code className="mx-1">supabase/migrations/20260828130000_page_plan_reconcile.sql</code>
+            in the Supabase SQL editor (it's idempotent and also covers a fresh database after the
+            base migration), then press Build.
           </CardContent>
         </Card>
       )}
