@@ -95,6 +95,46 @@ ${localAreas.length
 ${mustNotSay ? `- THE CLIENT'S OWN HARD RULE — things this business must NEVER claim or imply: "${mustNotSay}". Respect this absolutely.` : ""}`;
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   ARTICLE / Q&A MODE — informational pages for national / regulated clients (e.g. Solene, a
+   menopause clinic). The SAFETY MODEL IS STRUCTURAL, not a prompt promise: the model returns ONLY
+   generic framing + related questions + LABELS for the facts an expert must supply. The page is then
+   ASSEMBLED IN CODE, with every specific fact rendered as a [CLIENT INPUT: …] blank. The model cannot
+   emit a price/dose/eligibility/medical claim, because those slots are written by code as blanks, not
+   by the model. The failure mode is a visible blank on the page, never a wrong fact.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+const QA_TOOL = {
+  type: "function",
+  function: {
+    name: "return_qa",
+    description: "Return ONLY the safe scaffolding for a Q&A page — never any answer, fact or figure.",
+    parameters: {
+      type: "object",
+      properties: {
+        intro: { type: "string", description: "1-2 GENERIC framing sentences introducing the topic. NO facts, numbers, prices, doses, dates, statistics or claims." },
+        subQuestions: { type: "array", items: { type: "string" }, description: "3-5 related questions a reader would also ask. Questions ONLY, never answers." },
+        factSlots: { type: "array", items: { type: "string" }, description: "2-5 short LABELS naming the specific facts an expert must supply to answer the main question (e.g. 'exact current UK price'). Labels, not values." },
+        meta: { type: "string", description: "Generic meta description <=155 chars, NO specific facts; use the literal token [CLIENT INPUT: ...] if a fact is essential." },
+      },
+      required: ["intro", "subQuestions", "factSlots", "meta"],
+      additionalProperties: false,
+    },
+  },
+};
+
+function systemPromptQA(businessType: string, mustNotSay: string): string {
+  return `You draft the STRUCTURE ONLY of an informational Q&A page for ${businessType || "a UK business"}'s own website. A qualified expert fills in every fact afterwards — you never do.
+
+⛔ ABSOLUTE SAFETY RULE: NEVER state any specific fact, figure, price, dose, eligibility rule, date, statistic, brand claim, or medical/clinical assertion — not even an approximate or "typical" one. Anything specific is a factSlot LABEL for the expert, never something you write. When in any doubt, make it a factSlot.
+
+Return ONLY via return_qa:
+- intro: 1-2 short GENERIC framing sentences about the topic — no digits, no prices, no claims; safe framing a compliance lawyer would clear.
+- subQuestions: 3-5 related questions a reader would also ask. Questions ONLY.
+- factSlots: 2-5 short labels naming the specific facts the expert must supply for the main answer.
+- meta: a generic meta description (<=155 chars) with NO specific facts.
+${mustNotSay ? `\nThe business must NEVER claim or imply: "${mustNotSay}".` : ""}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -114,6 +154,133 @@ Deno.serve(async (req) => {
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const body = await req.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "";
+
+    /* ══ ARTICLE / Q&A MODE — audit-based (works for lead-less national clients), self-contained so
+       the service+area path below is untouched. ═══════════════════════════════════════════════ */
+    if (action === "qa_clients" || action === "qa_plan" || action === "qa_generate") {
+      const { data: auds } = await service
+        .from("ai_audits")
+        .select("id, business_name, business_type, business_scope, baseline_target_runs, created_at")
+        .gt("baseline_target_runs", 1)
+        .eq("user_id", userId)
+        .neq("is_market", true)
+        .order("created_at", { ascending: false });
+      const audits = (auds ?? []) as Array<{ id: string; business_name: string; business_type: string | null; business_scope: string | null; baseline_target_runs: number; created_at: string }>;
+
+      if (action === "qa_clients") {
+        const seen = new Set<string>();
+        const clients = audits
+          .filter((a) => { const k = (a.business_name ?? "").toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; })
+          .map((a) => ({ audit_id: a.id, business_name: a.business_name, business_type: a.business_type, baseline_at: a.created_at }));
+        return json({ ok: true, clients });
+      }
+
+      const auditId = typeof body.audit_id === "string" ? body.audit_id.trim() : "";
+      const qaAudit = audits.find((a) => a.id === auditId);
+      if (!qaAudit) return json({ ok: false, error: "no_audit_for_client" }, 404);
+
+      const { data: qaRuns } = await service.from("ai_audit_runs")
+        .select("id").eq("audit_id", auditId).in("status", ["complete", "capped"])
+        .order("created_at", { ascending: false }).limit(qaAudit.baseline_target_runs);
+      const qaRunIds = (qaRuns ?? []).map((r) => String((r as { id: string }).id));
+      const { data: qaQRows } = qaRunIds.length
+        ? await service.from("ai_audit_queue").select("question").in("run_id", qaRunIds).order("created_at", { ascending: true })
+        : { data: [] as Array<{ question: string }> };
+      const qaQuestions = [...new Set((qaQRows ?? []).map((r) => String((r as { question: string }).question ?? "").trim()).filter(Boolean))];
+
+      if (action === "qa_plan") {
+        return json({ ok: true, client: { audit_id: auditId, business_name: qaAudit.business_name, business_type: qaAudit.business_type, scope: qaAudit.business_scope }, questions: qaQuestions });
+      }
+
+      // ── qa_generate: scaffold ONE Q&A page for a question (from the list OR free-typed). ──
+      const question = typeof body.question === "string" ? body.question.trim() : "";
+      if (!question) return json({ ok: false, error: "question_required" }, 400);
+      const qaContactUrl = httpUrl(typeof body.contact_url === "string" ? body.contact_url : "");
+
+      const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+      if (!OPENAI_API_KEY) return json({ ok: false, error: "openai_not_configured" }, 500);
+
+      const callQA = async () => {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: MODEL, temperature: 0.5,
+            messages: [
+              { role: "system", content: systemPromptQA(qaAudit.business_type ?? "", "") },
+              { role: "user", content: `The question this page answers: "${question}". Business: ${qaAudit.business_name}${qaAudit.business_type ? ` (${qaAudit.business_type})` : ""}. Return the scaffolding via return_qa.` },
+            ],
+            tools: [QA_TOOL], tool_choice: { type: "function", function: { name: "return_qa" } },
+          }),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          if (res.status === 429 || /insufficient_quota|credit_balance_exhausted|no credits/i.test(txt)) return { kind: "no_credits" as const };
+          return { kind: "error" as const, error: `openai_http_${res.status}`, detail: txt.slice(0, 200) };
+        }
+        const data = await res.json();
+        const raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+        if (typeof raw !== "string") return { kind: "error" as const, error: "model_no_tool_output" };
+        try {
+          const p = JSON.parse(raw) as { intro?: unknown; subQuestions?: unknown; factSlots?: unknown; meta?: unknown };
+          return {
+            kind: "qa" as const,
+            intro: typeof p.intro === "string" ? p.intro.trim() : "",
+            subQuestions: Array.isArray(p.subQuestions) ? p.subQuestions.map((s) => String(s ?? "").trim()).filter(Boolean) : [],
+            factSlots: Array.isArray(p.factSlots) ? p.factSlots.map((s) => String(s ?? "").trim()).filter(Boolean) : [],
+            meta: typeof p.meta === "string" ? p.meta.trim() : "",
+          };
+        } catch { return { kind: "error" as const, error: "model_bad_json" }; }
+      };
+
+      let qaOut = await callQA();
+      if (qaOut.kind === "no_credits") return json({ ok: false, error: "no_credits" }, 200);
+      if (qaOut.kind === "error") return json({ ok: false, error: qaOut.error, detail: (qaOut as { detail?: string }).detail }, 502);
+      if (qaOut.kind === "qa" && qaOut.subQuestions.length < 3) { // anti-thin: one retry for more sub-questions
+        const retry = await callQA();
+        if (retry.kind === "qa" && retry.subQuestions.length > qaOut.subQuestions.length) qaOut = retry;
+      }
+      const qa = qaOut as { intro: string; subQuestions: string[]; factSlots: string[]; meta: string };
+
+      /* ASSEMBLE — every specific fact is a [CLIENT INPUT] blank placed BY CODE. The model's only prose
+         (intro, meta) is digit-guarded: anything with a number/currency/% is dropped for a safe template,
+         since invented specifics almost always carry a figure. */
+      const factFree = (s: string) => (/[0-9£$%]/.test(s) ? "" : s.trim());
+      const ci = (label: string) => `[CLIENT INPUT: ${label}]`;
+      const introSafe = factFree(qa.intro) || `Many people ask this, and the right answer depends on your circumstances. The verified details below are provided by ${qaAudit.business_name}.`;
+      const slots = (qa.factSlots.length ? qa.factSlots : ["the specific facts needed to answer this question"]).slice(0, 5);
+      const subs = qa.subQuestions.slice(0, 5);
+
+      const body_parts = [
+        `<!-- DRAFT FOR CLIENT REVIEW — fill EVERY [CLIENT INPUT] blank with verified information before publishing. Do NOT publish unverified medical or factual claims. -->`,
+        `<p>${escHtml(introSafe)}</p>`,
+        `<h2>The short answer</h2>`,
+        `<p><strong>${escHtml(ci(`a direct, verified answer to "${question}"`))}</strong></p>`,
+        `<ul>${slots.map((s) => `<li>${escHtml(ci(s))}</li>`).join("")}</ul>`,
+      ];
+      if (subs.length) {
+        body_parts.push(`<h2>Related questions</h2>`);
+        for (const sq of subs) body_parts.push(`<h3>${escHtml(sq)}</h3><p>${escHtml(ci(`verified answer to: ${sq}`))}</p>`);
+      }
+      body_parts.push(`<h2>Sources</h2><p>${escHtml(ci("cite the sources for the facts above (e.g. NHS, NICE, product information)"))}</p>`);
+      body_parts.push(`<p><em>Reviewed by ${escHtml(ci("name of the qualified expert who checked this, and the date"))}</em></p>`);
+      body_parts.push(`<h2>Speak to the team</h2><p>For advice specific to your situation, get in touch${qaContactUrl ? ` — <a href="${escHtml(qaContactUrl)}">book a consultation</a>` : ""}.</p>`);
+
+      const title = question.length <= 60 ? question : (() => {
+        let t = ""; for (const w of question.split(/\s+/)) { if (`${t} ${w}`.trim().length > 60) break; t = `${t} ${w}`.trim(); } return t || question.slice(0, 60);
+      })();
+      const metaSafe = (factFree(qa.meta) || `${qaAudit.business_name} answers "${question}". ${ci("one-line verified summary")}`).slice(0, 200);
+      const slug = question.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
+
+      return json({
+        ok: true,
+        page: {
+          key: `qa:${slug}`, question, queries: [question], slug,
+          title, meta_description: metaSafe, h1: question, body_html: body_parts.join("\n"), draft: true,
+        },
+        qa: { subQuestionCount: subs.length, factSlotCount: slots.length, introFromModel: !!factFree(qa.intro) },
+      });
+    }
 
     /* ── THE CLIENTS: leads with a paid baseline, owned by the caller. ─────────────────────── */
     const { data: baselines } = await service

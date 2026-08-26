@@ -1323,6 +1323,26 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
     WordPress home (Yoast SEO title / Yoast meta / WP slug / Elementor H1 / body → HTML widget) so they
     stop being dropped on paste. ⚠️ The 3 live RG Huntingdon pages predate this — set their title/meta
     in Yoast retroactively.
+- ⛔ **SECOND MODE — "ARTICLE / Q&A" — built 2026-08-27, SAFETY IS STRUCTURAL.** A toggle picks
+  Service+Area (unchanged) or Article/Q&A (informational pages for national/regulated clients like
+  Solene, a menopause clinic). Q&A actions are **`qa_clients` / `qa_plan` / `qa_generate`**,
+  AUDIT-BASED not lead-based — Solene has an audit but **no lead_id, no questionnaire, no contact
+  data**, so it is invisible to the service path; the service path is untouched.
+  - 🔴 **THE MODEL NEVER EMITS A FACT — BY CONSTRUCTION, not by prompt trust.** `qa_generate` asks
+    gpt-4o for STRUCTURE ONLY (`return_qa`: generic intro, 3-5 related sub-questions, and *labels*
+    naming the facts an expert must supply — `factSlots`). The edge fn then ASSEMBLES the page in
+    code with every specific fact rendered as a `[CLIENT INPUT: …]` blank. The model cannot output a
+    price/dose/eligibility/medical claim because those slots are written by code as blanks. The
+    model's only prose (intro, meta) is **digit-guarded** — anything with `[0-9£$%]` is dropped for a
+    safe template. Verified live: "How much does AndroFeme cost in the UK?" → 13 blanks, banner
+    present, **zero invented figures in the prose**. The failure mode is a visible blank, never a
+    wrong fact.
+  - ⛔ Every draft carries a review banner (UI + an HTML comment in the body) and Sources +
+    "Reviewed by [CLIENT INPUT]" blanks. **Do not weaken this into free-writing medical content** —
+    that was examined and rejected; the human/clinician is the accuracy gate.
+  - ⚠️ SPA: `mode` toggle (persisted); Q&A picks a client + a question (baseline list or free-type).
+    `activeClientId` = qa audit id or service lead id (different id spaces → one cache serves both).
+    Draft pages carry no naturalness/applied badges; `renderDone` is shared by both modes.
 - ⚠️ `page_key` is RE-DERIVED server-side on generate — a client can never request a pair the
   overlap didn't produce. Hosting format is a dropdown (`website_platform` is NULL for both
   current clients; it seeds the default when a future client fills it). Typed `no_credits` while
