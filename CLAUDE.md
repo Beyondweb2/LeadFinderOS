@@ -1357,6 +1357,19 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
     plan actions return typed `plan_tables_missing` and the UI says "run the SQL". `plan_build`
     without `dry_run` REPLACES the stored plan (the confirm says so); `dry_run: true` computes
     without tables — how the samples were produced.
+  - 🔴 **`CREATE TABLE IF NOT EXISTS` AGAINST A TABLE THAT EXISTS IN A DIFFERENT SHAPE IS A SILENT
+    NO-OP — it bit this exact feature on day one (2026-08-28).** BOTH tables already existed,
+    created 2026-08-21 in the RECON_PAGEDB shape (11 RG capture rows, old baseline `f64920ce` —
+    KEPT, invisible to the queue). Paul ran the migration "successfully" (policies + ALTERs
+    succeeded) yet 10 queue columns never materialised → `plan_get` 500'd on `ORDER BY wave`
+    (42703). Fix: migration `20260828130000` (additive ALTERs, idempotent) — which also had to
+    WIDEN the old status CHECK (`draft/approved/live/archived`) or every `'planned'` insert would
+    have been refused next. ⚠️ **The compounding trap: supabase-js errors are PLAIN OBJECTS, not
+    `Error` instances** — `String(e)` = `"[object Object]"`, so the 500 read `unknown_error` and
+    the typed fallback regex could never match. `errMsg()` in the edge fn now reads `.message`;
+    never write `e instanceof Error ? e.message : String(e)` around a supabase call. Rule: when a
+    migration "ran fine" but the code still can't see a column, diff the LIVE columns against the
+    CREATE TABLE — do not re-run the migration and do not trust IF NOT EXISTS.
   - ⚠️ Verified on real data 2026-08-28 (dry-run, ~4p total): RG 12→12 (service+town questions,
     nothing to merge — partition held) with **8/12 held as defend** (his re-measured baseline now
     names him 100% on Huntingdon questions); Solene 20→9 with sensible merges (6 testosterone-route
