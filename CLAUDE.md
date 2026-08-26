@@ -1355,11 +1355,17 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
     questionnaire confirmed_location + areas_list) splits any cluster spanning towns AFTER
     validation — the model is also told, but the CODE is the guarantee. Within-town merges stay
     allowed; national clients (no towns) untouched; splits reported, never silent.
-  - **HOLDS ARE PER QUESTION, FROM RUN COUNTS.** A question is "named" when some engine named the
-    client in ≥`DEFEND_NAMED_RATE` of ≥2 runs; a page holds only when EVERY measured question is
-    named; the reason prints the counts ("ChatGPT 3/3 · Gemini 0/3"). The old cluster-max rule held
-    Peterborough (0/3) on Huntingdon's 100% — the exact fault. `named_rate` is stored as COUNTS
-    (`{named,runs}` per engine); the UI renders counts and legacy fractions.
+  - **HOLDS ARE PER QUESTION, FROM RUN COUNTS — AND GEMINI-FIRST (Paul's rule, 2026-08-28).**
+    Pages are the GEMINI lever (§5: ChatGPT reads directories, Gemini reads the own site), so the
+    THREE-WAY rule in `scoreCluster`: Gemini named in ≥`DEFEND_NAMED_RATE` of ≥2 runs → **DEFEND,
+    the ONLY hold**; ChatGPT-named but Gemini-absent → **BUILD tagged "Gemini gap"** (amber badge,
+    derived in the SPA from the stored counts; scored low → later wave, no absence bonus);
+    neither → plain BUILD, wide-open first. `locked` no longer auto-holds — it builds with its low
+    score. A page holds only when EVERY measured question defends; reasons print the counts
+    ("ChatGPT 3/3 · Gemini 0/3"). The old cluster-max rule held Peterborough (0/3) on Huntingdon's
+    100% — the exact fault. `named_rate` is stored as COUNTS (`{named,runs}` per engine); the UI
+    renders counts and legacy fractions. ⚠️ A gap build can still ride WAVE 1 when its topic's best
+    page earns wave 1 (complete-clusters beats score banding, deliberately).
   - **WINNABILITY IS `classifyWinnability` PER RUN folded by `majorityVerdict`** (the audit page's
     own vocabulary: named/open/contested/locked/no_local_race; `unmeasured` for no data) — NOT
     computeWinnability's internal labels, which read "unclear" on nearly everything and matched
