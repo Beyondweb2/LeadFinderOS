@@ -30,7 +30,13 @@ interface OnboardingRow {
   lead_id: string; created_at: string;
   services_list: string[] | null; areas_list: string[] | null; confirmed_location: string | null;
   website_platform: string | null; accreditations: string | null; must_not_say: string | null;
+  business_address: string | null; confirmed_phone: string | null; contact_name: string | null;
 }
+
+const normTown = (s: string): string => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const escHtml = (s: string): string =>
+  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const httpUrl = (s: string): string => (/^https?:\/\//i.test(String(s ?? "").trim()) ? String(s).trim() : "");
 
 const PAGE_TOOL = {
   type: "function",
@@ -51,7 +57,7 @@ const PAGE_TOOL = {
   },
 };
 
-function systemPrompt(mustNotSay: string, town: string): string {
+function systemPrompt(mustNotSay: string, town: string, localAreas: string[]): string {
   return `You write ONE service-plus-town page for a small UK trade business's own website. The page
 exists so AI assistants (ChatGPT, Gemini) that read the site can learn this business does THIS
 service in ${town}. You return ONLY structured parts via the return_page tool.
@@ -76,8 +82,12 @@ HARD RULES:
 - INVENT NOTHING: no prices, no response times, no opening hours, no years-in-business, no reviews,
   no testimonials, no certifications beyond the accreditations given, and NO local landmarks, street
   names or area facts you were not given. If a fact was not given, do not state it.
-- Do not fabricate phone numbers, emails or forms — refer to "get in touch" generically; the
-  business's own site template carries the real contact details.
+${localAreas.length
+  ? `- You MAY mention these specific nearby areas the business genuinely covers, and ONLY these, ONCE, woven in naturally (e.g. "…including ${localAreas.slice(0, 2).join(" and ")}"): ${localAreas.join(", ")}. Do NOT invent any other place names and do NOT turn them into a list.`
+  : `- Do NOT name any specific neighbourhoods, districts or nearby areas — none were given, so refer only to "the area" / "the surrounding area".`}
+- Do NOT write any phone number, email, address, opening hours or links yourself — a contact section
+  with the business's REAL details is added automatically AFTER your copy. Write the informational
+  body only; you may end with a short, natural lead-in to getting in touch (with no number).
 - Structure FREELY — do NOT reuse the same section shape or headings every time. A short opening,
   then 2-3 h2 sections a customer would actually want (what happens when you call someone out, what
   it typically involves, why people use a nearby firm), optionally ONE short ul. Vary the headings
@@ -137,7 +147,7 @@ Deno.serve(async (req) => {
     /* ── INPUT 1: the newest questionnaire row. ────────────────────────────────────────────── */
     const { data: obRow } = await service
       .from("onboarding_responses")
-      .select("lead_id, created_at, services_list, areas_list, confirmed_location, website_platform, accreditations, must_not_say")
+      .select("lead_id, created_at, services_list, areas_list, confirmed_location, website_platform, accreditations, must_not_say, business_address, confirmed_phone, contact_name")
       .eq("lead_id", leadId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -150,6 +160,22 @@ Deno.serve(async (req) => {
     if (services.length === 0 || !homeTown) {
       return json({ ok: false, error: "questionnaire_incomplete", detail: "services_list or confirmed_location missing" }, 422);
     }
+
+    /* ── The client's REAL contact data — for the CTA + NAP + internal links. Phone: the client's
+       confirmed answer first, else the enriched lead phone. Address: the Google-formatted lead
+       address first (cleaner), else the questionnaire's. Name for the CTA: contact_name, else the
+       business name. NEVER invented — a missing field simply drops from the block. ─────────────── */
+    const { data: leadRow } = await service
+      .from("outreach_leads")
+      .select("phone, website, address")
+      .eq("id", leadId)
+      .maybeSingle();
+    const lead = (leadRow ?? {}) as { phone: string | null; website: string | null; address: string | null };
+    const phone = (ob.confirmed_phone ?? lead.phone ?? "").trim();
+    const address = (lead.address ?? ob.business_address ?? "").trim();
+    const contactName = (ob.contact_name ?? "").trim() || audit.business_name;
+    const siteRoot = (() => { const w = httpUrl(lead.website ?? ""); return w ? w.replace(/\/+$/, "") + "/" : ""; })();
+    const contactDefault = siteRoot ? `${siteRoot}contact/` : "";
 
     /* ── INPUT 2: the baseline questions — LATEST baseline_target_runs runs only. ──────────── */
     const { data: runs } = await service
@@ -178,6 +204,8 @@ Deno.serve(async (req) => {
           services, areas, homeTown,
           accreditations: ob.accreditations, mustNotSay: ob.must_not_say,
           hostingDefault: ob.website_platform,           // null today for both clients — the dropdown decides
+          website: siteRoot || null, contactDefault: contactDefault || null,
+          hasPhone: !!phone, hasAddress: !!address,
           questionnaireAt: ob.created_at,
           baselineAuditId: audit.id, baselineRuns: runIds.length, questionCount: questions.length,
         },
@@ -192,6 +220,18 @@ Deno.serve(async (req) => {
     const pageKey = typeof body.page_key === "string" ? body.page_key : "";
     const page: PlannedPage | undefined = plan.pages.find((p) => p.key === pageKey);
     if (!page) return json({ ok: false, error: "page_not_in_plan" }, 400);
+
+    /* Optional operator-supplied inputs. local_areas: REAL nearby areas the operator entered from the
+       client's own knowledge (no verified source of neighbourhoods exists to derive them — the audit
+       holds competitors, not geography). contact_url: the client's real contact page, defaulting to
+       {site}/contact/. Both are validated; anything malformed is dropped, never guessed. */
+    const rawAreas = typeof body.local_areas === "string"
+      ? body.local_areas
+      : Array.isArray(body.local_areas) ? body.local_areas.join(",") : "";
+    const localAreas = rawAreas.split(",").map((s) => s.trim())
+      .filter((s) => s && s.length <= 40 && !/[<>]/.test(s)).slice(0, 8);
+    const contactUrl = httpUrl(typeof body.contact_url === "string" ? body.contact_url : "") || contactDefault;
+    const isHomeTown = normTown(page.town) === normTown(homeTown);
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) return json({ ok: false, error: "openai_not_configured" }, 500);
@@ -218,7 +258,7 @@ Return via return_page.`;
           model: MODEL,
           temperature: 0.6,
           messages: [
-            { role: "system", content: systemPrompt((ob.must_not_say ?? "").trim(), page.town) },
+            { role: "system", content: systemPrompt((ob.must_not_say ?? "").trim(), page.town, localAreas) },
             { role: "user", content: prompt },
           ],
           tools: [PAGE_TOOL],
@@ -289,16 +329,36 @@ Return via return_page.`;
     const otherTowns = [homeTown, ...areas].filter((a) => a && a.toLowerCase() !== page.town.toLowerCase());
     const enforced = enforceNaturalness(out.bodyHtml, page.service, page.town, otherTowns, out.h1);
 
+    /* ⛔ REAL CONTACT + INTERNAL LINKS — appended AFTER enforceNaturalness so these guaranteed-correct
+       details are never trimmed or mangled by the town-cap / other-town backstop. Everything here is
+       the client's REAL data (verbatim from their record); a missing field simply drops. The street
+       address appears ONLY on the home-town page — on an away-town page it would name the home town
+       and break the single-town rule. Links live in href attributes, so they don't affect density. */
+    const linkParts: string[] = [];
+    if (contactUrl) linkParts.push(`drop us a message on our <a href="${escHtml(contactUrl)}">contact page</a>`);
+    if (siteRoot) linkParts.push(`see the rest of what we do on our <a href="${escHtml(siteRoot)}">home page</a>`);
+    let cta = `<h2>Get in touch</h2><p>`;
+    cta += phone
+      ? `Call ${escHtml(contactName)} on <strong>${escHtml(phone)}</strong> and we'll talk through what you need`
+      : `Get in touch and we'll talk through what you need`;
+    if (isHomeTown && address) cta += `. You'll find us at ${escHtml(address)}`;
+    cta += `.`;
+    if (linkParts.length) cta += ` Or ${linkParts.join(", or ")}.`;
+    cta += `</p>`;
+    const finalBody = `${enforced.html}\n${cta}`;
+
     return json({
       ok: true,
       page: {
         key: page.key, service: page.service, town: page.town, queries: page.queries, slug: page.slug,
-        title: out.title, meta_description: out.meta, h1: out.h1, body_html: enforced.html,
+        title: out.title, meta_description: out.meta, h1: out.h1, body_html: finalBody,
       },
       naturalness: {
         ...enforced.check, attempts, regenerated: attempts > 1,
         mechanicallyEnforced: enforced.townTrimmed || enforced.otherTownsStripped,
       },
+      // What the mechanical block actually applied — so the UI can show it plainly.
+      applied: { phone: !!phone, address: isHomeTown && !!address, links: linkParts.length, areas: localAreas },
     });
   } catch (e) {
     console.error("[page-generator] error:", e);
