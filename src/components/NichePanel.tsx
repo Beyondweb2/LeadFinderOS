@@ -4,15 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Telescope, CheckCircle2, MinusCircle, XCircle, HelpCircle, Search, Store } from 'lucide-react';
-import { rateLabel, sharePct, nicheVerdict, resultsBelongToTown, type NicheAnalysis } from '@/lib/nicheView';
-import { Link } from 'react-router-dom';
-import { marketViewHref } from '@/lib/coverageState';
+import { rateLabel, sharePct, nicheVerdict, type NicheAnalysis } from '@/lib/nicheView';
+import { useNavigate } from 'react-router-dom';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { pickCampaignForTrade } from '@/lib/campaignForTrade';
 import { useToast } from '@/hooks/use-toast';
-import type { SearchFilters } from '@/types/lead';
+import { useTownLeadSearch, type TownSearchState } from '@/hooks/useTownLeadSearch';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    NICHE PANEL (Phase 1) — the read-only niche analysis inside Market view: one trade folded
@@ -30,85 +29,81 @@ type State =
   | { kind: 'done'; niche: NicheAnalysis };
 
 /* ── the per-town outreach handoff ───────────────────────────────────────────────────────────
- * ⛔ WHY THIS IS NO LONGER A LINK. It was `<a href={findLeadsHref(...)}>`, and two things followed.
- * A raw <a> is a FULL PAGE RELOAD: the SPA is torn down and re-booted — entry chunk, providers,
- * page data — and only THEN does the search start, so it never felt like the Find Leads page,
- * which starts searching on the click. And the search's result landed on another screen, so
- * getting those businesses into the CRM meant a second journey.
+ * ⛔ EACH ROW OWNS ITS OWN SEARCH, AND THAT IS THE WHOLE POINT. It first ran through
+ * LeadSearchContext.search() — the Find Leads page's search — which is single-flight by design:
+ * its first act is `abortRef.current.abort()`, and it writes into ONE global leads/lastSearch. So
+ * pressing a second town CANCELLED the first, and only the last finisher had results. Rows now use
+ * `useTownLeadSearch`, which keeps a status and a result set PER TRADE+TOWN, so several towns
+ * search at once and each offers "Add all" the moment IT finishes.
  *
- * Now the row runs THE SAME SEARCH IN PLACE, through the same `search()` from LeadSearchContext
- * that Find Leads itself calls (the provider wraps the whole app), then offers "Add all N" over
- * what came back. "View results" is a client-side <Link> with NO `run=search`, so the page shows
- * the results already in the context instead of paying for them again.
+ * ⛔ THE WRONG-TOWN GUARD IS NOW STRUCTURAL RATHER THAN A COMPARISON. Results are keyed by
+ * trade+town, so a row can only ever render its own — there is no shared array to mis-attribute,
+ * which is a stronger guarantee than the `resultsBelongToTown` comparison it replaces. That
+ * predicate now has NO CALLER (it stays in nicheView.ts, tested, as the record of the hazard —
+ * anything that routes rows back through one shared result set needs it again).
  *
- * 🔴 THE GUARD THAT MATTERS: `leads` AND `lastSearch` ARE GLOBAL — ONE SET FOR THE WHOLE APP.
- * There is exactly one result set, so a row may only claim it when `lastSearch` names THAT row's
- * trade AND town. Without that test, searching Wakefield and then looking at the Bedford row would
- * offer "Add all 20" over Wakefield's businesses and write them against Bedford — the wrong-town
- * fault this codebase already paid for once (CLAUDE.md §6b). The comparison is on the SEARCH that
- * produced the results, never on which button was pressed last.
- * ⚠️ `isLoading` is global too, so a search started by one row disables the others and says why.
+ * "View" hands this row's already-fetched results to the Find Leads page via `adoptResults` and
+ * navigates with NO `run=search`, so the page shows them without paying for the same search twice.
+ *
+ * ⚠️ The per-row "Market view" / targets link is GONE (Paul, 2026-08-28: never used, and the
+ * niche verdict button at the top of Coverage is the market read now).
  */
 function TownRow({
-  trade, town, businesses, cells, searchingTown, setSearchingTown,
+  trade, town, businesses, cells, state, onSearch, onAdded,
 }: {
   trade: string; town: string; businesses: number; cells: number;
-  searchingTown: string | null;
-  setSearchingTown: (t: string | null) => void;
+  state: TownSearchState;
+  onSearch: () => void;
+  onAdded: (added: number, dupes: number) => void;
 }) {
   const { toast } = useToast();
-  const { leads, isLoading, search, lastSearch } = useLeadSearchContext();
+  const navigate = useNavigate();
+  const { adoptResults } = useLeadSearchContext();
   const { addLead } = useOutreach();
   const { campaigns } = useCampaigns();
   const [adding, setAdding] = useState(false);
-  const [added, setAdded] = useState<{ added: number; dupes: number } | null>(null);
+  const [elapsed, setElapsed] = useState(0);
 
-  /* Do the results on screen belong to THIS row? Both halves, always. */
-  const mine = resultsBelongToTown(lastSearch, trade, town);
-  const searchingHere = searchingTown === town && isLoading;
-  const searchingElsewhere = isLoading && !searchingHere;
-  const haveResults = mine && !isLoading && leads.length > 0;
-  const emptyResults = mine && !isLoading && leads.length === 0 && searchingTown === town;
+  /* Ticks only while THIS row is searching. A number that moves is what separates "working" from
+     "hung" — the complaint that started this. */
+  const searching = state.kind === 'searching';
+  useEffect(() => {
+    if (!searching) { setElapsed(0); return; }
+    const t0 = state.kind === 'searching' ? state.startedAt : Date.now();
+    const id = setInterval(() => setElapsed(Math.round((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searching]);
 
-  const runSearch = async () => {
-    setAdded(null);
-    setSearchingTown(town);
-    try {
-      /* The same filter shape SearchForm builds: town-only, 50km, UK. Sent through the context so
-         the results land where the Find Leads page reads them (memory + sessionStorage). */
-      /* ⚠️ TYPED, NOT CAST. An `as never` here would hide a real mismatch — a renamed or added
-         required filter would compile and then behave differently from the Find Leads page, which
-         is the exact class of divergence this change exists to remove. */
-      const filters: SearchFilters = {
-        keyword: trade, location: town, radius: 50_000, country: 'UK', townOnly: true,
-      };
-      await search(filters);
-    } catch (e) {
-      toast({ title: `Search failed for ${town}`, description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
-    }
-  };
+  const rowLeads = state.kind === 'done' || state.kind === 'added' ? state.leads : [];
 
   const addAll = async () => {
-    if (!haveResults || adding) return;
+    if (!rowLeads.length || adding) return;
     setAdding(true);
     try {
       const campaignId = pickCampaignForTrade(trade, campaigns, null).campaignId;
       let ok = 0; let dupes = 0;
-      /* Same single-add path Find Leads uses (addLead, silent, trade+town stamped on the row), so
-         nothing about a lead added here differs from one added on that page. A duplicate returns
-         null and is COUNTED, never re-added. */
-      for (const lead of leads) {
+      /* The SAME single-add path Find Leads uses: addLead, silent, with the trade and town stamped
+         on the row so the lead is auditable (no trade = no audit, and addLead blocks that anyway).
+         A duplicate returns null and is COUNTED, never re-added. */
+      for (const lead of rowLeads) {
         const created = await addLead(lead, 'UK', 'no_website', campaignId, null, true, trade, town);
         if (created) ok++; else dupes++;
       }
-      setAdded({ added: ok, dupes });
+      onAdded(ok, dupes);
       toast({
-        title: `Added ${ok} lead${ok === 1 ? '' : 's'} from ${town}`,
+        title: `${town}: added ${ok} lead${ok === 1 ? '' : 's'}`,
         description: dupes > 0 ? `${dupes} were already in the CRM and were skipped.` : 'All new.',
       });
     } finally {
       setAdding(false);
     }
+  };
+
+  /* Hand the page this row's results, then navigate. No run=search, so nothing is re-fetched. */
+  const openInFindLeads = () => {
+    adoptResults(rowLeads, { keyword: trade, location: town, country: 'UK' });
+    navigate(`/find-leads?mode=leads&keyword=${encodeURIComponent(trade)}&location=${encodeURIComponent(town)}`);
   };
 
   return (
@@ -117,48 +112,53 @@ function TownRow({
         {town} — {businesses} businesses, {cells} answers
       </span>
 
-      <Link to={marketViewHref(trade, town, 'measured')} className="shrink-0 text-[11px] text-primary hover:underline"
-        title="Open this town's market view — its target list and Add-all-targets button">
-        <Store className="mr-0.5 inline h-3 w-3" />targets
-      </Link>
-
-      {searchingHere && (
+      {state.kind === 'searching' && (
         <span className="shrink-0 text-[11px] text-primary">
           <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
-          Searching {town}… <span className="text-muted-foreground">(20–30s)</span>
+          Searching {town}… {elapsed > 0 ? `${elapsed}s` : ''}
         </span>
       )}
 
-      {haveResults && (
+      {state.kind === 'error' && (
         <>
-          <Button size="sm" variant="default" className="h-6 shrink-0 px-2 text-[11px]" onClick={addAll} disabled={adding}
-            title={`Add all ${leads.length} businesses found in ${town} to the CRM`}>
-            {adding ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Store className="mr-1 h-3 w-3" />}
-            {adding ? 'Adding…' : `Add all ${leads.length}`}
+          <span className="shrink-0 text-[11px] text-destructive" title={state.message}>search failed</span>
+          <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]" onClick={onSearch}>
+            <Search className="mr-1 h-3 w-3" />try again
           </Button>
-          {/* ⚠️ NO `run=search` — the whole point. The results are already in the context, so the
-              page renders them instead of paying for the same search twice. */}
-          <Link to={`/find-leads?mode=leads&keyword=${encodeURIComponent(trade)}&location=${encodeURIComponent(town)}`}
-            className="shrink-0 text-[11px] text-primary hover:underline"
-            title="Open Find Leads with these results already loaded — no new search">
-            <Search className="mr-0.5 inline h-3 w-3" />view results
-          </Link>
         </>
       )}
 
-      {added && !haveResults && (
-        <span className="shrink-0 text-[11px] text-emerald-600">Added {added.added}{added.dupes ? ` · ${added.dupes} already there` : ''}</span>
+      {state.kind === 'added' && (
+        <span className="shrink-0 text-[11px] text-emerald-600">
+          Added {state.added}{state.dupes ? ` · ${state.dupes} already there` : ''}
+        </span>
       )}
-      {emptyResults && <span className="shrink-0 text-[11px] text-muted-foreground">no businesses found</span>}
 
-      {!searchingHere && !haveResults && (
-        <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]" onClick={runSearch}
-          disabled={searchingElsewhere}
-          title={searchingElsewhere
-            ? `A search is already running (${searchingTown ?? 'another town'}) — one at a time`
-            : `Run the normal lead search for ${trade} in ${town} (~11p of Places quota, free within 72h of the same search)`}>
+      {(state.kind === 'done' || state.kind === 'added') && rowLeads.length > 0 && (
+        <>
+          {state.kind === 'done' && (
+            <Button size="sm" variant="default" className="h-6 shrink-0 px-2 text-[11px]" onClick={addAll} disabled={adding}
+              title={`Add all ${rowLeads.length} businesses found in ${town} to the CRM`}>
+              {adding ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Store className="mr-1 h-3 w-3" />}
+              {adding ? 'Adding…' : `Add all ${rowLeads.length} to CRM`}
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="h-6 shrink-0 px-2 text-[11px]" onClick={openInFindLeads}
+            title={`Open Find Leads showing these ${rowLeads.length} results — no new search`}>
+            <Search className="mr-1 h-3 w-3" />View
+          </Button>
+        </>
+      )}
+
+      {state.kind === 'done' && rowLeads.length === 0 && (
+        <span className="shrink-0 text-[11px] text-muted-foreground">no businesses found</span>
+      )}
+
+      {(state.kind === 'idle' || state.kind === 'added') && (
+        <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]" onClick={onSearch}
+          title={`Run the lead search for ${trade} in ${town} in the background (~11p of Places quota, free within 72h of the same search)`}>
           <Search className="mr-1 h-3 w-3" />
-          {searchingElsewhere ? 'waiting…' : added ? 'search again' : 'find leads'}
+          {state.kind === 'added' ? 'search again' : 'find leads'}
         </Button>
       )}
     </div>
@@ -167,9 +167,11 @@ function TownRow({
 
 export default function NichePanel({ trade, autoLoad = false }: { trade: string; autoLoad?: boolean }) {
   const [state, setState] = useState<State>({ kind: 'idle' });
-  /* WHICH ROW OWNS THE RUNNING SEARCH. Lives in the panel, not the row: `isLoading` is global, so
-     only the panel can tell "this row is searching" from "another row is". */
-  const [searchingTown, setSearchingTown] = useState<string | null>(null);
+  /* ⛔ THE SEARCHES LIVE IN THE PANEL, KEYED BY TOWN, so they survive a row re-render and several
+     can be in flight at once. `isLeadExcluded` comes from the context so a row drops exactly the
+     businesses the Find Leads page would drop — one rule, not a copy. */
+  const { isLeadExcluded } = useLeadSearchContext();
+  const { stateFor, start, markAdded, searchingCount } = useTownLeadSearch(isLeadExcluded);
   /* Ticks only while the fold is in flight; cleared on unmount and on completion, so nothing
      keeps running behind a finished panel. */
   const [elapsed, setElapsed] = useState(0);
@@ -367,11 +369,22 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
             ))}
           </div>
           <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Towns in this niche</p>
-            {/* ⛔ THE OUTREACH HANDOFF — reuses the EXISTING CRM bridge verbatim: findLeadsHref
-                (the normal prefilled lead search that feeds Add-to-CRM) and marketViewHref (the
-                per-town panel that owns "Add all N targets"). No lead-creation code here, and
-                'measured' is passed so no arrival spend-confirm is ever attached (§6c). */}
+            <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Towns in this niche
+              {/* Several towns can search at once, so say how many are running — otherwise the only
+                  signal is per-row and you cannot see the batch you kicked off. */}
+              {searchingCount > 0 && (
+                <span className="inline-flex items-center gap-1 font-normal normal-case text-primary">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {searchingCount} searching
+                </span>
+              )}
+            </p>
+            {/* ⛔ THE OUTREACH HANDOFF — each row searches INDEPENDENTLY (useTownLeadSearch), so
+                several towns run at once and each offers "Add all N to CRM" as it finishes. The
+                add goes through the SAME addLead the Find Leads page uses; View hands the results
+                to that page rather than re-fetching them. The per-town "Market view" link was
+                removed 2026-08-28 — the niche verdict at the top of Coverage is the market read. */}
             {n.towns.slice(0, 8).map((t) => (
               <TownRow
                 key={t.town}
@@ -379,8 +392,9 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
                 town={t.town}
                 businesses={t.businesses}
                 cells={t.cells}
-                searchingTown={searchingTown}
-                setSearchingTown={setSearchingTown}
+                state={stateFor(trade, t.town)}
+                onSearch={() => start(trade, t.town)}
+                onAdded={(added, dupes) => markAdded(trade, t.town, added, dupes)}
               />
             ))}
             {n.towns.length > 8 && <p className="text-[11px] text-muted-foreground">+{n.towns.length - 8} more towns</p>}

@@ -49,6 +49,16 @@ interface LeadSearchContextType {
   search: (filters: SearchFilters, skipTrialCount?: boolean, isDemo?: boolean) => Promise<void>;
   /** What produced `leads`. Survives a reload because it is persisted WITH them. */
   lastSearch: LastSearch | null;
+  /** ⛔ THE EXCLUSION RULE, SHARED RATHER THAN COPIED. The niche panel runs its own parallel
+   *  per-town searches (useTownLeadSearch), and it must drop the same businesses this page drops
+   *  or a lead added from a row would be one the page had hidden. Exported so there is one rule. */
+  isLeadExcluded: (lead: Lead) => boolean;
+  /** ⛔ HAND THIS PAGE A RESULT SET THAT WAS ALREADY FETCHED ELSEWHERE, so "View" on a town row
+   *  opens Find Leads showing results instead of paying for the same search again. Sets `leads` +
+   *  `lastSearch` together and persists them exactly as a real search does — they are stored in
+   *  ONE write precisely so results can never outlive the search that produced them (the 168-row
+   *  no-keyword fault). Deliberately does NOT touch loading/error state: nothing is in flight. */
+  adoptResults: (leads: Lead[], search: LastSearch) => void;
   /** Manually correct a result's website status. Persists + wins over auto-detection. */
   setWebsiteOverride: (lead: Lead, status: WebsiteStatus) => void;
   retryLastSearch: () => void;
@@ -660,6 +670,20 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     });
   }, [leads, websiteOverrides]);
 
+  /* ⛔ ONE WRITE, BOTH VALUES. `leads` and `lastSearch` are persisted together by the effect above,
+     and the reason is recorded there: results that outlive the search that produced them wrote 168
+     un-auditable CRM rows. Adopting a result set must therefore set BOTH, never just the leads. */
+  const adoptResults = useCallback((incoming: Lead[], search: LastSearch) => {
+    setLeads(incoming);
+    setLastSearch(search);
+    /* Clear the states that describe a JUST-FINISHED search on this page, so an adopted set does
+       not arrive under a stale error card or an old "town filter fell back" warning. */
+    setSearchError(null);
+    setSearchNotice(null);
+    setTownFilterFallback(null);
+    setExpanded(false);
+  }, []);
+
   const contextValue = useMemo(() => ({
     leads: displayedLeads,
     isLoading,
@@ -680,8 +704,10 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     townFilterFallback,
     resolvedLocation,
     lastSearch,
+    isLeadExcluded: isExcluded,
+    adoptResults,
     locationCandidates,
-  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch]);
+  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch, isExcluded, adoptResults]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>

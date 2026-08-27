@@ -292,3 +292,38 @@ export function resultsBelongToTown(
   if (!kw || !loc) return false;                    // a search we cannot attribute owns nothing
   return kw === norm(trade) && loc === norm(town);
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   PARALLEL PER-TOWN LEAD SEARCHES — the pure half (the hook that uses these is
+   src/hooks/useTownLeadSearch.ts, which cannot be imported by a node test because it pulls in
+   the supabase client).
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** One key per (trade, town). Case- and space-insensitive: the towns come from stored audit text,
+ *  whose casing is not normalised, so "wakefield " and "Wakefield" must be one row.
+ *  ⛔ THE KEY IS WHAT MAKES SEVERAL SEARCHES AT ONCE SAFE. Each row reads and writes only its own
+ *  entry, so there is no shared result array to mis-attribute — a stronger guarantee than
+ *  comparing a global lastSearch. A collision across trades or towns would show one town's leads
+ *  under another, so the separator is included in the fold test. */
+export function townSearchKey(trade: string, town: string): string {
+  /* ⛔ THE PARTS ARE ENCODED, so the separator cannot be forged. Caught by the test: a plain
+     `${trade}::${town}` made ('a', 'b::c') and ('a::b', 'c') the SAME key — one town's results
+     rendered under another. No real trade or town contains '::', but a key whose uniqueness
+     depends on that is uniqueness by luck, and this is the value the whole no-mis-attribution
+     guarantee rests on. */
+  const n = (v: string) => encodeURIComponent(String(v ?? '').trim().toLowerCase());
+  return `${n(trade)}::${n(town)}`;
+}
+
+const LEAD_STATUS_ORDER: Record<string, number> = {
+  NO_WEBSITE: 0, DIRECTORY_ONLY: 0, UNCERTAIN: 1, HAS_OWN_WEBSITE: 2,
+};
+
+/** The Find Leads page's own ordering (no-website first), restated once so a row adds in the same
+ *  order the page displays. An UNRECOGNISED status sorts LAST rather than first — absence must not
+ *  promote a business to the top of the list. */
+export function sortLeadsForDisplay<T extends { websiteStatus: string }>(leads: T[]): T[] {
+  return [...leads].sort(
+    (a, b) => (LEAD_STATUS_ORDER[a.websiteStatus] ?? 9) - (LEAD_STATUS_ORDER[b.websiteStatus] ?? 9),
+  );
+}
