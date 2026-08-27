@@ -1,5 +1,5 @@
 /* Tests for src/lib/nicheView.ts pure helpers. Run: npx tsx scripts/niche-view.test.ts */
-import { nicheTradeKey, rateLabel, sharePct } from '../src/lib/nicheView.ts';
+import { nicheTradeKey, rateLabel, sharePct, resultsBelongToTown } from '../src/lib/nicheView.ts';
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -23,3 +23,26 @@ ok(sharePct(5, 0) === 0, 'share of nothing is 0');
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILED`);
 if (f > 0) process.exit(1);
+
+/* ══ WHOSE RESULTS ARE THESE? — the guard on the per-town "Add all" ═══════════════════════════
+   The lead search has ONE global result set, so every town row sees the same `leads`. If a row
+   can claim results it did not produce, "Add all" writes one town's businesses against another —
+   the wrong-town fault (CLAUDE.md §6b). Both fields must match, and absence owns nothing. */
+{
+  const S = (keyword: string | null, location: string | null) => ({ keyword, location });
+
+  ok(resultsBelongToTown(S('Plumbers', 'Wakefield'), 'Plumbers', 'Wakefield') === true, 'exact match owns the results');
+  ok(resultsBelongToTown(S('  plumbers ', 'WAKEFIELD'), 'Plumbers', 'wakefield ') === true, 'case and whitespace are ignored');
+
+  // ⛔ THE TWO FAILURES THAT WOULD WRITE LEADS AGAINST THE WRONG THING.
+  ok(resultsBelongToTown(S('Plumbers', 'Wakefield'), 'Plumbers', 'Bedford') === false, 'same trade, DIFFERENT town → owns nothing');
+  ok(resultsBelongToTown(S('Locksmiths', 'Wakefield'), 'Plumbers', 'Wakefield') === false, 'same town, DIFFERENT trade → owns nothing');
+
+  // Absence is never an answer.
+  ok(resultsBelongToTown(null, 'Plumbers', 'Wakefield') === false, 'null lastSearch owns nothing');
+  ok(resultsBelongToTown(undefined, 'Plumbers', 'Wakefield') === false, 'undefined lastSearch owns nothing');
+  ok(resultsBelongToTown(S(null, 'Wakefield'), 'Plumbers', 'Wakefield') === false, 'missing keyword owns nothing');
+  ok(resultsBelongToTown(S('Plumbers', null), 'Plumbers', 'Wakefield') === false, 'missing location owns nothing');
+  ok(resultsBelongToTown(S('   ', '  '), 'Plumbers', 'Wakefield') === false, 'blank strings own nothing');
+  ok(resultsBelongToTown(S('Plumbers', ''), 'Plumbers', '') === false, 'a blank ROW town cannot be matched by a blank search');
+}

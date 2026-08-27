@@ -265,3 +265,30 @@ export function nicheVerdict(n: NicheAnalysis): NicheVerdict {
     ...n.sources.filter((x) => x.total > 0).map((x) => `${x.label} citations: ${sharePct(x.directory, x.total)}% directories, ${sharePct(x.other, x.total)}% other businesses' sites`),
   ], tierNote, gaps };
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   WHOSE RESULTS ARE THESE? — the guard on the niche panel's per-town "Add all".
+
+   🔴 THE LEAD SEARCH HAS ONE GLOBAL RESULT SET (LeadSearchContext), so every town row in the
+   panel is looking at the same `leads` array. A row may therefore only offer "Add all" when the
+   SEARCH THAT PRODUCED those results names that row's trade AND town. Test only the town and a
+   Plumbers/Wakefield search would arm the Locksmiths/Wakefield row; test neither and searching
+   Wakefield then pressing Bedford's button writes Wakefield's businesses against Bedford — the
+   wrong-town fault this product has already paid for once (CLAUDE.md §6b, 28 reports).
+
+   ⚠️ IT KEYS ON THE SEARCH, NEVER ON WHICH BUTTON WAS PRESSED LAST. A pressed-button flag would
+   still be set after the results were replaced by a search from somewhere else in the app.
+   ⚠️ ABSENT MEANS NO. A null lastSearch, or one missing either field, owns nothing.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+export function resultsBelongToTown(
+  lastSearch: { keyword?: string | null; location?: string | null } | null | undefined,
+  trade: string,
+  town: string,
+): boolean {
+  if (!lastSearch) return false;
+  const norm = (v: string | null | undefined) => String(v ?? '').trim().toLowerCase();
+  const kw = norm(lastSearch.keyword);
+  const loc = norm(lastSearch.location);
+  if (!kw || !loc) return false;                    // a search we cannot attribute owns nothing
+  return kw === norm(trade) && loc === norm(town);
+}
