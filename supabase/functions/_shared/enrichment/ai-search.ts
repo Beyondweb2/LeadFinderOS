@@ -369,123 +369,34 @@ function citationOf(src: unknown): AiCitation {
   return { title: asStr(firstKey(r, ["title", "name"])), url: asStr(firstKey(r, ["url", "link"])) };
 }
 
-/* ── competitors: best-effort, unstructured. Refine here. ─────────────────────
- * There is NO structured brand field in this actor's output. We build a candidate
- * name pool from (a) organicResults titles (leading segment before a delimiter) and
- * (b) proper-noun-ish sequences in the engine's answer_text, then drop the audited
- * business and dedup. This is approximate — it can miss names or catch a stray
- * capitalised phrase — kept deliberately simple so it's easy to tune. */
-
-/* ── junk guard ───────────────────────────────────────────────────────────────
- * The AI-Overview full-page scrape mixes rendered page FURNITURE into answer_text:
- * social/share widgets, nav/footer links and cookie notices. Those capitalise like
- * names, so the raw candidate pool picks up "ShareThis", "Report", "Privacy Policy.
- * Share". Worse, adjacent inline share-button labels are scraped with the spaces
- * already lost and get swallowed as one franken-token ("FacebookGmailXRedditWhatsApp
- * Thank"). This predicate rejects both classes at the source so they never become a
- * stored competitor. Conservative: prefer dropping a borderline candidate to keeping
- * furniture — the downstream isRealCompetitor filter is a second line of defence. */
-const FURNITURE_TERMS = new Set<string>([
-  // social / share widgets
-  "sharethis", "share", "share this", "facebook", "gmail", "reddit", "whatsapp",
-  "twitter", "linkedin", "pinterest", "telegram", "messenger", "tumblr", "instagram",
-  "youtube", "tiktok", "email", "print", "copy link", "copy",
-  // nav / footer / action labels
-  "privacy", "privacy policy", "terms", "terms of service", "terms and conditions",
-  "terms of use", "contact", "contact us", "about", "about us", "report", "sign in",
-  "sign up", "signin", "signup", "log in", "logout", "login", "register", "subscribe",
-  "newsletter", "home", "menu", "search", "read more", "learn more", "more",
-  "back to top", "copyright", "all rights reserved", "disclaimer", "sitemap",
-  "feedback", "help", "support", "faq", "advertise", "careers", "jobs", "press",
-  "follow us", "share on", "next", "previous", "close",
-  // cookie / consent
-  "cookie", "cookies", "cookie policy", "cookie settings", "accept", "accept all",
-  "manage cookies", "we use cookies", "consent", "preferences", "settings",
-]);
-// Social-brand substrings that mark a token as a share-row fragment even when glued
-// to other text (e.g. "ShareThis", "…WhatsAppThank").
-const FURNITURE_SUBSTR = /sharethis|facebook|whatsapp|reddit|linkedin|pinterest/i;
-
-/** Count lower→upper transitions inside a single (whitespace-free) token. Real brands
- *  rarely have 3+ internal camel humps; concatenated link labels have many. */
-function camelHumps(token: string): number {
-  let n = 0;
-  for (let i = 1; i < token.length; i++) {
-    if (/[a-zà-ÿ]/.test(token[i - 1]) && /[A-ZÀ-Þ]/.test(token[i])) n++;
-  }
-  return n;
-}
-
-/** True if a candidate name is page furniture or a concatenated link-label franken-word,
- *  not a real business/brand. Applied at the dedup chokepoint so BOTH the answer-text and
- *  organic-title paths are covered. */
-function isJunkCandidate(name: string): boolean {
-  const cleaned = name.replace(/[.\s]+$/, "").trim(); // drop trailing period/space ("Policy." )
-  const key = norm(cleaned);
-  if (!key) return true;
-  if (FURNITURE_TERMS.has(key)) return true;              // whole candidate is furniture
-  if (FURNITURE_TERMS.has(key.split(/\s+/)[0])) return true; // leads with furniture ("Privacy Policy. Share")
-  if (FURNITURE_SUBSTR.test(cleaned)) return true;        // social share-row fragment
-  // Concatenation franken-word: a spaceless token that's either very long or has many
-  // camel humps is glued link labels, not one brand.
-  if (!/\s/.test(cleaned) && (cleaned.length > 25 || camelHumps(cleaned) >= 3)) return true;
-  return false;
-}
-
-/** Leading business-name segment of a SERP/result title. */
-function organicTitleName(title: string): string {
-  return asStr(title).split(TITLE_DELIMS)[0].trim();
-}
-
-/** Candidate names from the item's organicResults titles. */
-function extractOrganicNames(item: Record<string, unknown>): string[] {
-  const raw = item["organicResults"] ?? item["results"];
-  const results = Array.isArray(raw) ? raw : [];
-  return results
-    .map((r) => organicTitleName(asStr((asRecord(r) ?? {}).title)))
-    .filter((n) => n.length >= 3);
-}
-
-/** ROUGH proper-noun extraction from free text — sequences of 1–4 capitalised words.
- *  Noisy by nature (may catch place names / marketing phrases); refine as needed. */
-function extractTextNames(text: string): string[] {
-  const matches = asStr(text).match(/[A-Z][\wÀ-ÿ&'’.]+(?:\s+[A-Z][\wÀ-ÿ&'’.]+){0,3}/g) ?? [];
-  const out: string[] = [];
-  for (const m of matches) {
-    // A period+space is a sentence/element boundary the "." in the char class wrongly bridges
-    // (so a real firm gets fused to trailing furniture: "…Accountants. ShareThis"). Split on
-    // it so the real name survives on its own and only the furniture half is rejected later.
-    for (const part of m.split(/\.\s+/)) {
-      const s = part.replace(/\.$/, "").trim();
-      if (s.length >= 3) out.push(s);
-    }
-  }
-  return out;
-}
-
-/** Dedup names case-insensitively (first-seen casing), dropping the audited business
- *  (and any candidate that is a sub/superstring of it, to strip self-mentions). */
-function dedupExcludingSelf(names: string[], businessName: string): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const n of names) {
-    const key = norm(n);
-    if (!key || seen.has(key)) continue;
-    if (isSelfName(n, businessName)) continue; // drop the audited business (name-variance aware)
-    if (isJunkCandidate(n)) continue; // drop page furniture + concatenated link-label franken-words
-    seen.add(key);
-    out.push(n);
-  }
-  return out;
-}
-
-/** Competitors an engine mentions: organic-title names that appear in its answer_text,
- *  plus rough names pulled straight from the answer_text. Best-effort. */
-function competitorsForEngine(answerText: string, organicNames: string[], businessName: string): string[] {
-  const fromOrganic = organicNames.filter((n) => contains(answerText, n));
-  const fromText = extractTextNames(answerText);
-  return dedupExcludingSelf([...fromOrganic, ...fromText], businessName);
-}
+/* ══ COMPETITORS ARE NO LONGER EXTRACTED HERE. THE REGEX SCRAPER IS DELETED. ═════════════════
+ * 2026-08-28, Paul's call, and it is a deletion rather than a filter on purpose.
+ *
+ * WHAT USED TO BE HERE: a "best-effort" scraper that took every sequence of 1–4 capitalised
+ * words out of answer_text (plus organicResults titles), dropped page furniture, and STORED the
+ * result as this engine's `competitors`. Its output was the DEFAULT state of the field, and
+ * extract-competitors (the LLM) only ever overwrote it afterwards. So any answer the cleaner did
+ * not reach kept scraper output, and that output was indistinguishable from real firms to every
+ * consumer downstream.
+ *
+ * WHAT IT COST: Solene's 47-question measurement, 2026-08-27. 381 stored strings that were not
+ * businesses — "Testosterone" 33x and "Hormone Replacement Therapy" 43x led the client report's
+ * "who AI named instead", alongside 48 scraped tracking ids ("AAAAABqkCA", "Xdaj6AH7genL7KP9o").
+ * The scraper cannot be fixed by a better word list, because deciding whether a capitalised
+ * phrase is a hireable FIRM is a judgement about meaning: the display filters carry
+ * accountancy/trades/hospitality vocabulary, so medical nouns walked straight through, and a
+ * medical list would only have moved the hole to the next trade.
+ *
+ * ⛔ SO THE FIELD NOW STARTS EMPTY AND extract-competitors IS ITS ONLY WRITER. The failure mode
+ * changes from "junk that reads as real firms" to "no names yet", which is honest, visible, and
+ * what the operator asked for. src/lib/competitorCleaning.ts + the cleaning stamp say WHICH of
+ * those two an empty list is, so blank can never be mistaken for "AI named nobody".
+ *
+ * ⚠️ answer_text is untouched and is the cleaner's whole input, so the extraction stays
+ * re-runnable over stored answers with no Apify spend — that is how Solene was repaired.
+ * ⚠️ The self-mention exclusion moved with it: extract-competitors is told the audited business
+ * and drops it. `named` is unaffected either way — nameMatches reads answer_text, never this list.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════ */
 
 /* ── AI Overview furniture strip ─────────────────────────────────────────────
  * Google's full-page AI Overview scrape appends UI chrome AFTER the real answer —
@@ -515,13 +426,12 @@ function stripAiOverviewFurniture(text: string): string {
 /** An AI engine block: {text, sources[]}. named = name in answer OR in a source title. */
 function normalizeEngineBlock(
   block: Record<string, unknown>,
-  organicNames: string[],
   businessName: string,
   /* Optional, and absent means the strict match only — see the block above nameMatches. */
   ctx?: NameMatchContext,
 ): AiEngineResult {
-  // Clean once at the top so named-detection, competitorsForEngine, AND the stored answer_text
-  // all get the furniture-stripped value.
+  // Clean once at the top so named-detection AND the stored answer_text both get the
+  // furniture-stripped value. (It was also the scraper's input until that was deleted above.)
   const answer_text = stripAiOverviewFurniture(asStr(firstKey(block, TEXT_KEYS)));
   const rawSources = firstKey(block, SOURCES_KEYS);
   const sources = Array.isArray(rawSources) ? rawSources : [];
@@ -533,7 +443,9 @@ function normalizeEngineBlock(
   const named = nameMatches(answer_text, businessName, ctx) || srcIndex >= 0;
   // position: 1-based source index where the business first appears (else null).
   const position = srcIndex >= 0 ? srcIndex + 1 : null;
-  const competitors = competitorsForEngine(answer_text, organicNames, businessName);
+  /* ⛔ ALWAYS EMPTY AT SCAN TIME — see the block above. extract-competitors fills this in from
+     answer_text at run finalisation; until it does, "no names yet" is the truthful state. */
+  const competitors: string[] = [];
   return { named, position, competitors, citations, answer_text };
 }
 
@@ -547,16 +459,16 @@ function normalizeEngineBlock(
  */
 export function normalizeAiSearch(items: unknown[], businessName: string, ctx?: NameMatchContext): AiSearchResult {
   const item = asRecord(Array.isArray(items) ? items[0] : items) ?? {};
-  const organicNames = extractOrganicNames(item);
   const out: AiSearchResult = {};
   for (const engine of AI_ENGINES) {
-    // google_organic DROPPED: raw SERP titles aren't a scored engine and aren't AI naming firms, so
-    // it's no longer emitted → ABSENT downstream (not zero-scored). organicNames is still extracted
-    // above and feeds competitor detection for chatgpt/gemini. Re-enable by restoring normalizeOrganic
-    // and: out.google_organic = normalizeOrganic(item, organicNames, businessName).
+    /* google_organic DROPPED: raw SERP titles aren't a scored engine and aren't AI naming firms, so
+       it's no longer emitted → ABSENT downstream (not zero-scored). Re-enable by restoring
+       normalizeOrganic and: out.google_organic = normalizeOrganic(item, organicNames, businessName).
+       ⚠️ That would need `organicNames` back too — it was extracted here to feed the regex
+       competitor scraper, which is deleted (see the block above), so nothing reads it now. */
     if (engine === "google_organic") continue;
     const block = asRecord(firstKey(item, ENGINE_BLOCK_KEYS[engine]));
-    if (block) out[engine] = normalizeEngineBlock(block, organicNames, businessName, ctx);
+    if (block) out[engine] = normalizeEngineBlock(block, businessName, ctx);
   }
   return out;
 }

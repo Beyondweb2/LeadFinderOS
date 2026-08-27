@@ -12,7 +12,7 @@
    it too and both sides group names identically. */
 import { buildMatchContext, groupNames } from "../../supabase/functions/_shared/market-match.ts";
 import { classifyKnownEntity } from './knownEntities.ts';
-import { assessCompetitorCleanliness, collectCompetitorNames, isProvableJunkName } from './competitorCleaning.ts';
+import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from './competitorCleaning.ts';
 import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
 
@@ -789,8 +789,12 @@ export function buildReportData(
      it degrades to "we measured what AI said about you" instead of naming nonsense.
      ⚠️ The verdict is DERIVED from the names, not read from a stamp — every audit before
      2026-08-28 has no stamp, and absence must not read as clean (competitorCleaning.ts). */
-  const cleanliness = assessCompetitorCleanliness(collectCompetitorNames(queueRows), run?.results);
-  const rivalsSuppressed = cleanliness.verdict === 'dirty';
+  const cleanliness = assessCompetitorCleanliness(collectCompetitorNames(queueRows), run?.results,
+    { answeredCells: countAnsweredCells(queueRows) });
+  /* ⚠️ `suppressNames`, NOT `verdict === 'dirty'`. The verdict is also dirty when the run holds NO
+     names and no cleaning receipt — nothing to withhold there, and blanking on it would strip the
+     gut-punch from historic reports whose regex list happened to be empty. */
+  const rivalsSuppressed = cleanliness.suppressNames;
   const keepRival = (c: string) => !rivalsSuppressed && isRealCompetitor(c, ctx.locationText);
 
   let done = 0;

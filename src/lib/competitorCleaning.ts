@@ -68,6 +68,12 @@ export interface CleanlinessAssessment {
   namesConsidered: number;
   /** The stamp, when the run carries one. */
   stamp: CompetitorCleaningStamp | null;
+  /** ⛔ WITHHOLD THE NAMES FROM THE CLIENT REPORT? A NARROWER QUESTION THAN `verdict`, and they
+   *  must stay separate. Suppression is for "we hold names we cannot trust"; the verdict is also
+   *  `dirty` when we hold NO names and no receipt, and there is nothing to suppress in that case —
+   *  blanking then would strip the gut-punch out of historic reports whose regex list was simply
+   *  empty, changing documents already sent. Warn on `verdict`, suppress on this. */
+  suppressNames: boolean;
   /** One line for the operator. Empty when there is nothing to say. */
   warning: string;
 }
@@ -171,6 +177,11 @@ export function readCleaningStamp(results: unknown): CompetitorCleaningStamp | n
 export function assessCompetitorCleanliness(
   names: Iterable<string>,
   results?: unknown,
+  /** How many (question × engine) answers this run actually has. Needed since 2026-08-28: the
+   *  regex scraper is deleted, so an EMPTY competitor list is now ambiguous — it means either "AI
+   *  named nobody" or "the cleaner never ran". Without this the two are indistinguishable and the
+   *  second one reads as the first, which is the absent-value fault wearing new clothes. */
+  opts?: { answeredCells?: number },
 ): CleanlinessAssessment {
   const stamp = readCleaningStamp(results);
   const junk = new Set<string>();
@@ -185,7 +196,7 @@ export function assessCompetitorCleanliness(
 
   if (junkExamples.length >= JUNK_NAMES_PROVING_UNCLEANED) {
     return {
-      verdict: 'dirty', junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp,
+      verdict: 'dirty', suppressNames: true, junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp,
       warning: `Competitor names not cleaned — do not send to client. ${junkExamples.length} of ` +
         `${considered} stored names are raw text, not businesses (e.g. ${junkExamples.slice(0, 4).join(', ')}).`,
     };
@@ -196,15 +207,52 @@ export function assessCompetitorCleanliness(
     const done = stamp.items_cleaned ?? 0;
     const tot = stamp.items_total ?? 0;
     return {
-      verdict: 'dirty', junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp,
+      verdict: 'dirty', suppressNames: true, junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp,
       warning: `Competitor names only partly cleaned (${done} of ${tot} answers read) — ` +
         `do not send to client until re-extracted.`,
     };
   }
-  if (considered === 0) return { verdict: 'unknown', junkExamples: [], junkCount: 0, namesConsidered: 0, stamp, warning: '' };
+  /* ⛔ EMPTY, WITH ANSWERS THAT SHOULD HAVE BEEN READ AND NO COMPLETED RECEIPT. Since the regex
+     scraper was deleted, this is what a run looks like when the cleaner never ran — identical on
+     screen to a run where AI genuinely named nobody. A completed stamp is the ONLY thing that tells
+     them apart, so without one we say we cannot tell rather than printing "no competitors". */
+  const answered = opts?.answeredCells ?? 0;
+  if (considered === 0 && answered > 0 && !(stamp && stamp.complete === true)) {
+    return {
+      verdict: 'dirty', suppressNames: false, junkExamples: [], junkCount: 0, namesConsidered: 0, stamp,
+      warning: `No competitor names recorded for ${answered} answer${answered === 1 ? '' : 's'}, and ` +
+        `no completed cleaning receipt — this may be "AI named nobody" or the cleaner not having run. ` +
+        `Re-extract to settle it before sending anything to a client.`,
+    };
+  }
+  /* Empty WITH a completed receipt is a known, correct answer: the cleaner read every answer and
+     found no hireable firm in any of them. That is `clean`, not `unknown` — "unknown" is reserved
+     for having nothing to judge at all, and conflating the two would throw away the one signal
+     that distinguishes a real "AI named nobody" from a cleaning failure. */
+  if (considered === 0 && stamp?.complete === true) {
+    return { verdict: 'clean', suppressNames: false, junkExamples: [], junkCount: 0, namesConsidered: 0, stamp, warning: '' };
+  }
+  if (considered === 0) return { verdict: 'unknown', suppressNames: false, junkExamples: [], junkCount: 0, namesConsidered: 0, stamp, warning: '' };
   /* Clean. Any 1–2 stragglers are still reported (junkExamples) so the operator can see them, and
      isRealCompetitor drops them from display — they just do not condemn the whole run. */
-  return { verdict: 'clean', junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp, warning: '' };
+  return { verdict: 'clean', suppressNames: false, junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp, warning: '' };
+}
+
+/** How many (question × engine) answers a run holds — the denominator that tells an empty
+ *  competitor list apart from an unread one. Counts an engine only when it has answer_text, which
+ *  is exactly what extract-competitors counts as an item, so the two agree by construction. */
+export function countAnsweredCells(
+  rows: Array<{ status?: string | null; result?: Record<string, { answer_text?: string | null } | undefined> | null } | null | undefined>,
+  engines: readonly string[] = ['chatgpt', 'gemini', 'ai_overview'],
+): number {
+  let n = 0;
+  for (const row of rows ?? []) {
+    if (!row || row.status !== 'done') continue;
+    const res = row.result;
+    if (!res || typeof res !== 'object') continue;
+    for (const e of engines) if (String(res[e]?.answer_text ?? '').trim()) n++;
+  }
+  return n;
 }
 
 /** Every stored competitor string on a run's queue rows — the input `assessCompetitorCleanliness`

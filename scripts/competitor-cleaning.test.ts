@@ -6,6 +6,7 @@
  */
 import {
   assessCompetitorCleanliness, isProvableJunkName, readCleaningStamp, collectCompetitorNames,
+  countAnsweredCells,
 } from '../src/lib/competitorCleaning';
 
 let pass = 0;
@@ -136,6 +137,59 @@ for (const n of ['You', 'The', 'Yes', 'However', 'Ask', 'Once', 'Keep']) {
     JSON.stringify(names));
 }
 
+/* ── EMPTY IS AMBIGUOUS NOW THAT THE REGEX SCRAPER IS DELETED (2026-08-28) ──────────────────
+ *  A run with answers and no names is EITHER "AI named nobody" OR "the cleaner never ran", and
+ *  only a completed receipt tells them apart. Getting this wrong turns a silent cleaning failure
+ *  into a confident "no competitors" — the same absent-value fault the scraper caused, inverted. */
+{
+  const a = assessCompetitorCleanliness([], { competitor_cleaning: { complete: true, items_total: 6, items_cleaned: 6 } }, { answeredCells: 6 });
+  ok('empty + COMPLETE receipt → clean (AI really named nobody)', a.verdict === 'clean', a.verdict);
+  ok('and it says nothing alarming', a.warning === '');
+
+  const b = assessCompetitorCleanliness([], undefined, { answeredCells: 6 });
+  ok('empty + NO receipt + answers exist → dirty, not "no competitors"', b.verdict === 'dirty', b.verdict);
+  ok('warning names the ambiguity', b.warning.includes('may be') && b.warning.includes('cleaner not having run'), b.warning);
+  ok('warning counts the unread answers', b.warning.includes('6 answers'), b.warning);
+
+  const c = assessCompetitorCleanliness([], { competitor_cleaning: { complete: false, items_total: 6, items_cleaned: 0 } }, { answeredCells: 6 });
+  ok('empty + FAILED receipt → dirty', c.verdict === 'dirty', c.verdict);
+
+  const d = assessCompetitorCleanliness([], undefined, { answeredCells: 0 });
+  ok('empty with NO answers at all → unknown (nothing to get wrong)', d.verdict === 'unknown', d.verdict);
+  const e = assessCompetitorCleanliness([], undefined);
+  ok('no answeredCells passed → old behaviour, unknown', e.verdict === 'unknown', e.verdict);
+}
+{
+  const rows = [
+    { status: 'done', result: { chatgpt: { answer_text: 'a' }, gemini: { answer_text: '' }, ai_overview: { answer_text: 'c' } } },
+    { status: 'done', result: { chatgpt: { answer_text: '   ' } } },
+    { status: 'failed', result: { chatgpt: { answer_text: 'x' } } },
+    { status: 'done', result: null },
+    null,
+  ];
+  ok('countAnsweredCells counts only done rows with real answer text',
+    countAnsweredCells(rows as never) === 2, String(countAnsweredCells(rows as never)));
+}
+/* ── SUPPRESSION IS NARROWER THAN THE VERDICT ────────────────────────────────────────────────
+ *  The report withholds names only when we HOLD names we cannot trust. "No names and no receipt"
+ *  still warns the operator, but suppressing there would blank the gut-punch on historic reports
+ *  whose regex list was simply empty — changing documents already sent. */
+{
+  const junky = assessCompetitorCleanliness(['You', 'However', 'Once', 'Newson Health']);
+  ok('provable junk → suppress', junky.verdict === 'dirty' && junky.suppressNames === true);
+
+  const partial = assessCompetitorCleanliness(['Newson Health'],
+    { competitor_cleaning: { complete: false, items_total: 137, items_cleaned: 60 } });
+  ok('partly cleaned → suppress', partial.verdict === 'dirty' && partial.suppressNames === true);
+
+  const emptyNoReceipt = assessCompetitorCleanliness([], undefined, { answeredCells: 6 });
+  ok('empty + no receipt → warn but DO NOT suppress',
+    emptyNoReceipt.verdict === 'dirty' && emptyNoReceipt.suppressNames === false,
+    `${emptyNoReceipt.verdict}/${emptyNoReceipt.suppressNames}`);
+
+  const fine = assessCompetitorCleanliness(['Newson Health', 'Menopause Care']);
+  ok('clean → never suppress', fine.verdict === 'clean' && fine.suppressNames === false);
+}
 console.log(`\ncompetitor-cleaning: ${pass} passed, ${fails.length} failed`);
 if (fails.length) { for (const f of fails) console.log(`  ✗ ${f}`); process.exit(1); }
 console.log('✓ all green');
