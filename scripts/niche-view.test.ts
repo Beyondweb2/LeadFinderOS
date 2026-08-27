@@ -1,5 +1,6 @@
 /* Tests for src/lib/nicheView.ts pure helpers. Run: npx tsx scripts/niche-view.test.ts */
 import { nicheTradeKey, rateLabel, sharePct, resultsBelongToTown } from '../src/lib/nicheView.ts';
+import { townSearchKey, sortLeadsForDisplay } from '../src/lib/nicheView.ts';
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -45,4 +46,33 @@ if (f > 0) process.exit(1);
   ok(resultsBelongToTown(S('Plumbers', null), 'Plumbers', 'Wakefield') === false, 'missing location owns nothing');
   ok(resultsBelongToTown(S('   ', '  '), 'Plumbers', 'Wakefield') === false, 'blank strings own nothing');
   ok(resultsBelongToTown(S('Plumbers', ''), 'Plumbers', '') === false, 'a blank ROW town cannot be matched by a blank search');
+}
+
+/* ══ PARALLEL PER-TOWN SEARCH KEYS ═══════════════════════════════════════════════════════════
+   Each row's search is stored under its OWN key, which is what makes several towns at once safe:
+   there is no shared result array to mis-attribute. The key must fold casing/whitespace (towns
+   come from stored audit text, whose casing is not normalised) and must NEVER collide across
+   different trades or different towns — a collision is one town's leads shown under another. */
+{
+  ok(townSearchKey('Plumbers', 'Wakefield') === townSearchKey('plumbers', ' wakefield '),
+    'key folds case and surrounding whitespace');
+  ok(townSearchKey('Plumbers', 'Wakefield') !== townSearchKey('Plumbers', 'Loughborough'),
+    'two towns of one trade get DIFFERENT keys (parallel searches cannot collide)');
+  ok(townSearchKey('Plumbers', 'Wakefield') !== townSearchKey('Locksmiths', 'Wakefield'),
+    'two trades in one town get DIFFERENT keys');
+  ok(townSearchKey('a', 'b::c') !== townSearchKey('a::b', 'c'),
+    'a town containing the separator cannot forge another key');
+}
+
+/* The display sort must match the Find Leads page's, or "Add all" adds in a different order than
+   the page shows — and the no-website-first ordering is the whole point of the lead list. */
+{
+  const L = (websiteStatus: string, name: string) => ({ websiteStatus, name } as never);
+  const sorted = sortLeadsForDisplay([
+    L('HAS_OWN_WEBSITE', 'has'), L('NO_WEBSITE', 'none'), L('UNCERTAIN', 'maybe'), L('DIRECTORY_ONLY', 'dir'),
+  ]).map((l: { name: string }) => l.name);
+  ok(sorted[0] === 'none' && sorted[1] === 'dir', `no-website and directory-only first (${sorted.join(',')})`);
+  ok(sorted[2] === 'maybe' && sorted[3] === 'has', `then uncertain, then has-own-site (${sorted.join(',')})`);
+  const unknown = sortLeadsForDisplay([L('WEIRD_NEW_STATUS', 'x'), L('NO_WEBSITE', 'n')]).map((l: { name: string }) => l.name);
+  ok(unknown[0] === 'n', 'an UNKNOWN status sorts last rather than jumping to the top');
 }
