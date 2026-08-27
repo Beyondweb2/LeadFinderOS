@@ -76,7 +76,10 @@ console.log('── MAJORITY VERDICT + PER-QUESTION NAMED ──');
 {
   ok(majorityVerdict(['open', 'open', 'contested']) === 'open', 'majority across runs wins');
   ok(majorityVerdict(['named', 'open', 'open']) === 'open', '  1-of-3 named does not read as named');
-  ok(majorityVerdict(['named', 'open']) === 'named', '  ties break toward named (never under-claims presence)');
+  ok(majorityVerdict(['contested', 'open', 'named']) === 'open', '  ⛔ the live 1/3 bug: a 1-1-1 tie must NOT label named (needs >=2 named runs)');
+  ok(majorityVerdict(['named', 'open']) === 'open', '  a 2-way tie with ONE named run is not named either');
+  ok(majorityVerdict(['named', 'named', 'open']) === 'named', '  2 of 3 named runs -> named');
+  ok(majorityVerdict(['named']) === 'unmeasured', '  a lone named run never establishes presence');
   ok(majorityVerdict([]) === 'unmeasured', '  no runs -> unmeasured, never confident');
   ok(questionDefends(sig('q', 'open', en(0, 3), en(2, 3))), 'Gemini 2/3 -> defends');
   ok(!questionDefends(sig('q', 'open', en(3, 3), en(0, 3))), '  ChatGPT 3/3 with Gemini 0/3 does NOT defend (Gemini-first)');
@@ -101,6 +104,11 @@ console.log('── ⛔ GEMINI-FIRST THREE-WAY: build / build-with-gap-tag / def
   ok(!gap.defend, 'ChatGPT-named + Gemini-absent BUILDS (never holds)');
   ok(gap.geminiGap, '  and carries the Gemini-gap flag');
   ok(gap.reasons.some((r) => r.includes('Already strong on ChatGPT') && r.includes('Gemini gap')), '  with the client-safe tag line');
+  ok(!gap.reasons.some((r) => r.includes('defend this')), '  ⛔ a BUILD card never says "defend this" (the audit-page wording stays off the queue)');
+  ok(gap.reasons[0].includes('close the Gemini gap'), '  the base line reads as a build targeting the gap');
+  const oddNamed = scoreCluster([sig('q', 'named', en(1, 3), en(0, 3))]);
+  ok(!oddNamed.defend && !oddNamed.reasons.some((r) => r.includes('defend this')) && oddNamed.reasons[0].includes('builds'),
+    '  a non-gap named-label build also gets build wording, never "defend this"');
   ok(gap.score < absent.score, `  gap build (${gap.score}) ranks below the wide-open build (${absent.score})`);
   // 3. DEFEND: ONLY Gemini named (>= 2 of 3) holds.
   const named = scoreCluster([sig('emergency lockouts huntingdon', 'named', en(3, 3), en(3, 3))]);
