@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Loader2, MapPin, Plus, RefreshCw, Search, Sparkles, Store } from 'lucide-react';
+import NichePanel from '@/components/NichePanel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -678,6 +679,11 @@ export default function MarketPanel({ trade, town, openSearchConfirm, selectedCa
 
   return (
     <div className="space-y-4">
+      {/* ⛔ NICHE ANALYSIS FIRST — the outreach DECISION comes before the per-town detail: is this
+          trade worth mass outreach at all? Folded across every town holding the trade's audits.
+          Free, explicit click (Market view never spends on open — §6e). Per-town machinery below
+          is unchanged, and still owns the add-to-CRM bridge. */}
+      {chosen?.trade && <NichePanel trade={chosen.trade} />}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Store className="h-4 w-4" />

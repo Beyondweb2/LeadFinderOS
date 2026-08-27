@@ -6,6 +6,10 @@ import { directPoolCacheKeys, generateCacheKey, MARKET_POOL_RADIUS_M } from "../
 import { questionKey } from "../../../src/lib/seedGuard.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { classifyKnownEntity, isUncleanedName } from "../../../src/lib/knownEntities.ts";
+import { classifyWinnability, unwrapCitationUrl, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
+import { majorityVerdict, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
+import { classifySource } from "../../../src/lib/sourceType.ts";
+import { nicheTradeKey, ENGINE_LABELS_NICHE } from "../../../src/lib/nicheView.ts";
 import {
   EVIDENCE_MIN_AUDITS, JUNK_RATIO_PER_AUDIT, MAX_PER_ENGINE_CAP,
   ESTABLISHED_MIN_AUDIT_SHARE, ESTABLISHED_MIN_MENTION_SHARE, expectedPrimaryType,
@@ -155,6 +159,125 @@ Deno.serve(async (req) => {
       }
       const options = [...byPair.values()].sort((a, b) => b.audits - a.audits || a.trade.localeCompare(b.trade) || a.town.localeCompare(b.town));
       return json({ ok: true, options });
+    }
+
+    /* ══ NICHE — the outreach decision engine's read-only fold (Phase 1, 2026-08-28, Paul's spec).
+       One trade folded across EVERY town holding its audits: per-engine named rates, winnability
+       counts (majorityVerdict over per-run classifyWinnability), and the directory-vs-own-site
+       source split — the hand-run plumber recon, automatic and repeatable.
+       ⛔ DERIVED ON READ, never stored. ⛔ BUSINESS AUDITS ONLY for the numbers: market audits'
+       `named` was matched against a pseudo-name and would dilute the rates with structural zeros;
+       they are counted separately as Phase-2 intel. Zero spend: pure reads. ═══════════════════ */
+    if (action === "niche") {
+      const tradeIn = typeof body.trade === "string" ? body.trade.trim() : "";
+      const key = nicheTradeKey(tradeIn);
+      if (!key) return json({ ok: false, error: "trade required" }, 400);
+
+      const audits = await all<AuditRow & { website?: string | null; baseline_target_runs?: number | null; created_at?: string }>(
+        service, "ai_audits", "id, business_type, location_text, business_name, is_market, website, baseline_target_runs, created_at",
+        (q) => q.eq("user_id", userId));
+      const mine = audits.filter((a) => nicheTradeKey(a.business_type) === key && a.is_market !== true);
+      const marketAudits = audits.filter((a) => nicheTradeKey(a.business_type) === key && a.is_market === true).length;
+      if (mine.length === 0) return json({ ok: true, niche: null, marketAudits, reason: "no business audits for this trade yet" });
+
+      const auditIds = new Set(mine.map((a) => a.id));
+      const runs = await all<{ id: string; audit_id: string; status: string }>(
+        service, "ai_audit_runs", "id, audit_id, status", (q) => q.in("status", ["complete", "capped"]));
+      const wantedRuns = runs.filter((r) => auditIds.has(r.audit_id)).map((r) => r.id);
+      const qrows: { audit_id: string; run_id: string; question: string; result: unknown }[] = [];
+      for (let i = 0; i < wantedRuns.length; i += 40) {
+        const batch = wantedRuns.slice(i, i + 40);
+        qrows.push(...await all<{ audit_id: string; run_id: string; question: string; result: unknown }>(
+          service, "ai_audit_queue", "audit_id, run_id, question, result",
+          (q) => q.in("run_id", batch).eq("status", "done")));
+      }
+
+      const hostOf = (u: string): string => { try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; } };
+      const auditById = new Map(mine.map((a) => [a.id, a]));
+      const byAudit = new Map<string, typeof qrows>();
+      for (const r of qrows) (byAudit.get(r.audit_id) ?? byAudit.set(r.audit_id, []).get(r.audit_id)!).push(r);
+
+      const engNamed: Record<string, [number, number]> = {};
+      const srcSplit: Record<string, { directory: number; ownSite: number; authority: number; other: number; total: number }> = {};
+      const domCount: Record<string, Map<string, number>> = {};
+      const winnability: Record<string, number> = {};
+      const townAgg = new Map<string, { town: string; businesses: Set<string>; audits: number; cells: number }>();
+      const bizNames = new Set<string>();
+      let cellsTotal = 0, questionsTotal = 0, multiRunAudits = 0, multiRunQuestions = 0, auditsWithAnswers = 0;
+
+      for (const a of mine) {
+        const rows = byAudit.get(a.id) ?? [];
+        if (rows.length === 0) continue;
+        auditsWithAnswers++;
+        const isMulti = (a.baseline_target_runs ?? 0) > 1;
+        if (isMulti) multiRunAudits++;
+        bizNames.add((a.business_name ?? "").toLowerCase());
+        const townRaw = (a.location_text ?? "").trim() || "(unknown town)";
+        const tKey = townRaw.toLowerCase();
+        const tAgg = townAgg.get(tKey) ?? { town: townRaw, businesses: new Set<string>(), audits: 0, cells: 0 };
+        tAgg.audits++; tAgg.businesses.add((a.business_name ?? "").toLowerCase());
+        const own = hostOf(String(a.website ?? ""));
+        const byQ = new Map<string, EngineMap[]>();
+        for (const r of rows) {
+          const res = (r.result ?? {}) as EngineMap;
+          (byQ.get(r.question) ?? byQ.set(r.question, []).get(r.question)!).push(res);
+          for (const e of DISPLAY_ENGINES) {
+            const er = (res as Record<string, { named?: boolean; citations?: { url?: string }[] } | undefined>)[e];
+            if (!er) continue;
+            engNamed[e] = engNamed[e] ?? [0, 0];
+            engNamed[e][1]++; cellsTotal++; tAgg.cells++;
+            if (er.named) engNamed[e][0]++;
+            srcSplit[e] = srcSplit[e] ?? { directory: 0, ownSite: 0, authority: 0, other: 0, total: 0 };
+            domCount[e] = domCount[e] ?? new Map();
+            for (const c of (er.citations ?? [])) {
+              const h = hostOf(unwrapCitationUrl(c?.url ?? "")); if (!h) continue;
+              domCount[e].set(h, (domCount[e].get(h) ?? 0) + 1);
+              srcSplit[e].total++;
+              // Order matters and mirrors the hand recon exactly: own site first, then directory,
+              // then authority split OUT of "other" (extra detail; dir/own axes unchanged).
+              if (own && h.endsWith(own)) srcSplit[e].ownSite++;
+              else if (isAggregatorUrl(`https://${h}/`)) srcSplit[e].directory++;
+              else if (classifySource(h) === "authority") srcSplit[e].authority++;
+              else srcSplit[e].other++;
+            }
+          }
+        }
+        questionsTotal += byQ.size;
+        for (const [, runResults] of byQ) {
+          if (isMulti && runResults.length > 1) multiRunQuestions++;
+          const verdicts = runResults.map((res) => {
+            const v = classifyWinnability(res, {
+              businessName: a.business_name ?? "", locationText: a.location_text ?? "",
+              ownWebsite: String(a.website ?? ""), isAggregatorUrl,
+            }).verdict;
+            return (v === "no-local-race" ? "no_local_race" : v) as WinnVerdict;
+          });
+          const m = majorityVerdict(verdicts);
+          winnability[m] = (winnability[m] ?? 0) + 1;
+        }
+        townAgg.set(tKey, tAgg);
+      }
+
+      const engines = DISPLAY_ENGINES
+        .filter((e) => engNamed[e])
+        .map((e) => ({ engine: e, label: ENGINE_LABELS_NICHE[e] ?? e, named: engNamed[e][0], answered: engNamed[e][1] }));
+      const sources = Object.entries(srcSplit).map(([e, s]) => ({ engine: e, label: ENGINE_LABELS_NICHE[e] ?? e, ...s }));
+      const topDomains = Object.fromEntries(Object.entries(domCount).map(([e, m]) =>
+        [e, [...m.entries()].sort((x, y) => y[1] - x[1]).slice(0, 10).map(([domain, count]) => ({ domain, count }))]));
+
+      const niche = {
+        trade: tradeIn, tradeKey: key,
+        sample: {
+          audits: auditsWithAnswers, businesses: bizNames.size, towns: townAgg.size,
+          questions: questionsTotal, cells: cellsTotal, multiRunAudits, multiRunQuestions,
+        },
+        engines, winnability, sources, topDomains,
+        towns: [...townAgg.values()]
+          .map((t) => ({ town: t.town, businesses: t.businesses.size, audits: t.audits, cells: t.cells }))
+          .sort((x, y) => y.cells - x.cells),
+        marketAudits,
+      };
+      return json({ ok: true, niche });
     }
 
     if (action !== "view") return json({ ok: false, error: `unknown action "${action}"` }, 400);
