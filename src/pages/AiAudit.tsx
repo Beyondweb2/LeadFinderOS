@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { parseQuestionPaste, pasteLineCount } from '@/lib/questionPaste';
+import { isMeasurementSource, runsForReAudit } from '@/lib/measurementRuns';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -1558,6 +1559,12 @@ const AiAudit = () => {
   }, [savedAudits, searchExtras]);
 
   const openAuditRow = listSource.find((a) => a.id === auditId) ?? null;
+  /* Runs + cost for the re-audit estimate, DERIVED from the source audit's own markers with the
+     SAME rule the server applies (measurement -> MEASUREMENT_RUNS, else 1), so the figure approved
+     here is the figure actually spent. */
+  const reAuditIsMeasurement = isMeasurementSource(openAuditRow);
+  const reAuditRuns = runsForReAudit(reAuditIsMeasurement);
+  const reAuditEstUsd = reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION * reAuditRuns;
 
   // The re-run editor is open only for the run it was opened for (persisted flag is run-scoped),
   // so a stale editor can't reopen over a different audit after a tab-away/reload.
@@ -2826,20 +2833,29 @@ const AiAudit = () => {
                   </Button>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
                     <div className="text-xs text-muted-foreground">
+                      {/* ⛔ THE ESTIMATE MUST PRICE WHAT THE SERVER WILL ACTUALLY DO. It used to say
+                          "× 1 run" and multiply by 1 while create-ai-audit ran MEASUREMENT_RUNS (3)
+                          on the measurement path — a 47-question Solene re-audit priced at ~47p
+                          against a real ~£1.17. The run count is now DERIVED from the same rule the
+                          server applies (isMeasurementSource → runsForReAudit), off the source
+                          audit's own markers, and scripts/check-measurement-runs.mjs fails the build
+                          if the two constants ever diverge again. Display only — nothing about how
+                          the audit runs changed. */}
                       <span className="font-medium text-foreground">
                         {reAuditQuestions.filter((q) => q.trim()).length} question{reAuditQuestions.filter((q) => q.trim()).length === 1 ? '' : 's'}
+                        {' × '}{reAuditRuns} run{reAuditRuns === 1 ? '' : 's'}
                       </span>
                       {' · '}
-                      {/* Estimate, said plainly — the per-question rate is derived from measured spend
-                          (see RE_AUDIT_EST_USD_PER_QUESTION) but a given run still varies. */}
                       estimated cost{' '}
                       <span className="font-medium text-foreground">
-                        ${(reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION).toFixed(4)}
+                        ${reAuditEstUsd.toFixed(2)}
                       </span>
-                      {' '}(~{Math.round(reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION * 80)}p)
+                      {' '}(~£{(reAuditEstUsd * 0.8).toFixed(2)})
                       <span className="block text-[10px] text-muted-foreground/70">
-                        ${RE_AUDIT_EST_USD_PER_QUESTION}/question × 1 run, from measured spend (81 runs, mean
-                        $0.042/run). Varies per run — the actual figure is recorded when it finishes.
+                        ${RE_AUDIT_EST_USD_PER_QUESTION}/question × {reAuditRuns} run{reAuditRuns === 1 ? '' : 's'}
+                        {reAuditRuns > 1 ? ' (measurement — each question is asked on every run, matching the original baseline)' : ''},
+                        from measured spend (81 runs, mean $0.042/run). Varies per run — the actual figure
+                        is recorded when it finishes.
                       </span>
                     </div>
                     <Button size="sm" onClick={confirmReAudit}

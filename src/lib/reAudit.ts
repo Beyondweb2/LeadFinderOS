@@ -19,8 +19,17 @@ import type { TablesInsert } from '@/integrations/supabase/types';
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
 /** Per-question Apify estimate shared by every re-audit cost line (AI Audit + Baseline). An
- *  ESTIMATE: actual actor spend varies per run and is recorded afterwards (CLAUDE.md §8). */
-export const RE_AUDIT_EST_USD_PER_QUESTION = 0.0125;
+ *  ESTIMATE: actual actor spend varies per run and is recorded afterwards (CLAUDE.md §8).
+ *
+ *  ⛔ PRICED AGAINST REAL BILLED ROWS, not a price list (§4's constants rule). Corrected
+ *  0.0125 → 0.0104 on 2026-08-28: `ai_audit_runs.actor_cost_usd` for Solene's own 3-run baseline
+ *  (audit 527752c7, 20 questions per run) billed $0.2200 / $0.2075 / $0.1950 = $0.01100 / $0.01037 /
+ *  $0.00975 per question, mean **$0.01038** — the same client, question style and engines a
+ *  re-audit of it will use. 0.0125 was the older figure derived from 3-5 question runs and ran ~20%
+ *  high, so the screen overstated a 47-question × 3-run measurement as £1.41 against a real ~£1.17.
+ *  CLAUDE.md §8's constants table already recorded 0.0104 as the re-measured truth; this is the
+ *  copy that was left behind. */
+export const RE_AUDIT_EST_USD_PER_QUESTION = 0.0104;
 
 export type ReAuditOutcome =
   | { ok: true; auditId: string; runId: string | null; measurement: boolean; targetRuns: number }
