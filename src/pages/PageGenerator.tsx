@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -109,6 +110,26 @@ const PageGenerator = () => {
   const [planBusy, setPlanBusy] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
 
+  /* ── URL SEED (the page-plan "Build this page" handoff) — the §6c Coverage lesson applied:
+     mode/client here are PERSISTED state that races URL seeds, so the seed is captured ONCE on
+     first render, the one-shot params are STRIPPED immediately (a refresh/back must not re-seed),
+     the seed deliberately OVERWRITES the persisted mode/client, and the target page is only
+     highlighted once the loaded plan proves the seed LANDED (the key exists). Nothing here ever
+     generates — the seed only selects and points. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const seedRef = useRef<{ mode: 'service' | 'qa'; client: string; pageKey: string | null; question: string | null } | null | 'none'>(null);
+  if (seedRef.current === null) {
+    const m = searchParams.get('mode');
+    const client = (searchParams.get('client') ?? '').trim();
+    seedRef.current = (m === 'service' || m === 'qa') && client
+      ? { mode: m, client, pageKey: searchParams.get('page_key'), question: searchParams.get('question') }
+      : 'none';
+  }
+  const hasSeed = seedRef.current !== 'none';
+  /** The seeded page key awaiting its landed-check; set when the seed applies, cleared once checked. */
+  const [seedKey, setSeedKey] = useState<string | null>(null);
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
+
   // The active client id depends on the mode (service = lead id, Q&A = audit id — different id spaces,
   // so one cache keyed by this id serves both without collision).
   const activeClientId = mode === 'qa' ? qaClientId : clientId;
@@ -142,19 +163,54 @@ const PageGenerator = () => {
 
   // Q&A clients load when the mode is (or becomes) Q&A; questions reload for the persisted client
   // (they're free — no AI — and not worth persisting; generated pages are cached separately).
+  // ⚠️ The seed effect below owns selection when a seed exists — this effect must not race it by
+  //    re-selecting the PERSISTED qa client over the seeded one (it still loads the client list).
   useEffect(() => {
     if (mode !== 'qa') return;
     void loadQaClients();
-    if (qaClientId && qaQuestions.length === 0) void selectQaClient(qaClientId);
+    if (!hasSeed && qaClientId && qaQuestions.length === 0) void selectQaClient(qaClientId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   // On mount, if a client was persisted, only fetch the plan when it is NOT already cached — a
   // normal return shows the cached plan + pages instantly and fires no call at all.
+  // ⚠️ Skipped entirely when a URL seed exists: the seed decides what loads.
   useEffect(() => {
-    if (clientId && !cache[clientId]?.plan) void loadPlan(clientId);
+    if (!hasSeed && clientId && !cache[clientId]?.plan) void loadPlan(clientId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── APPLY THE SEED, once: strip the one-shot params, overwrite persisted mode/client, load. ──
+  useEffect(() => {
+    const s = seedRef.current;
+    if (!s || s === 'none') return;
+    setSearchParams({}, { replace: true });     // one-shot: refresh/back never re-seeds
+    setMode(s.mode);
+    if (s.mode === 'service') {
+      setSeedKey(s.pageKey);                    // landed-check runs when the plan arrives
+      void loadPlan(s.client);
+    } else {
+      void selectQaClient(s.client);
+      if (s.question) setQaQuestion(s.question);
+      toast({ title: 'Loaded from the page plan', description: 'Q&A mode — review the question below, then press Generate.' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── SEED LANDED-CHECK: only claim the target once the freshly loaded plan PROVES the key
+  //    exists; a missing key is said out loud, never silently the wrong page. ──
+  useEffect(() => {
+    if (!seedKey || !plan || mode !== 'service') return;
+    if (plan.plan.pages.some((p) => p.key === seedKey)) {
+      setHighlightKey(seedKey);
+      setTimeout(() => document.getElementById(`pgpage-${seedKey}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+      toast({ title: 'Loaded from the page plan', description: 'The target page is highlighted — press Generate when ready.' });
+    } else {
+      toast({ title: "That page isn't in this client's current plan", description: 'The plan may have changed since the queue was built — pick the page manually.', variant: 'destructive' });
+    }
+    setSeedKey(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, seedKey]);
 
   const loadPlan = async (leadId: string) => {
     setClientId(leadId);
@@ -453,7 +509,7 @@ const PageGenerator = () => {
               {plan.plan.pages.map((p) => {
                 const g = viewFor(p.key);
                 return (
-                  <div key={p.key} className="rounded-md border border-border/60 p-3 space-y-2">
+                  <div key={p.key} id={`pgpage-${p.key}`} className={`rounded-md border p-3 space-y-2 ${highlightKey === p.key ? 'border-primary ring-2 ring-primary/40' : 'border-border/60'}`}>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-sm">{p.service} — {p.town}</span>
                       {p.queries.map((q) => (
