@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { parseQuestionPaste, pasteLineCount } from '@/lib/questionPaste';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,8 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks,
-} from 'lucide-react';
+  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
@@ -382,6 +382,12 @@ const AiAudit = () => {
   // is a worse failure than losing a few typed edits.
   const [reAuditOpen, setReAuditOpen] = useState(false);
   const [reAuditQuestions, setReAuditQuestions] = useState<string[]>([]);
+  /* Paste-a-list: the raw textarea and its open/closed state. Parsed by the pure
+     parseQuestionPaste (blank lines dropped, list markers stripped, duplicates collapsed) into the
+     SAME editable rows below, so pasted questions can still be tweaked or deleted before running.
+     Nothing about how the audit RUNS changes — this is only how questions get entered. */
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
   const [reAuditBusy, setReAuditBusy] = useState(false);
   const [reRunQuestions, setReRunQuestions] = usePersistedState<string[]>(
     'ai-audit-rerun-questions', [], { tier: 'session', scope: user?.id ?? null, version: 1 },
@@ -1168,7 +1174,28 @@ const AiAudit = () => {
     setReAuditOpen(true);
   };
 
-  const cancelReAudit = () => { setReAuditOpen(false); setReAuditQuestions([]); };
+  const cancelReAudit = () => { setReAuditOpen(false); setReAuditQuestions([]); setPasteOpen(false); setPasteText(''); };
+
+  /* Apply a pasted list: REPLACE ALL (clear the existing rows) or ADD TO LIST (append, skipping
+     questions already present so a re-paste can't duplicate them). Empty parse -> say so, change
+     nothing. */
+  const applyPaste = (mode: 'replace' | 'append') => {
+    const parsed = parseQuestionPaste(pasteText);
+    if (parsed.length === 0) {
+      toast({ title: 'Nothing to add', description: 'No questions found in that paste — one question per line.', variant: 'destructive' });
+      return;
+    }
+    setReAuditQuestions((prev) => {
+      if (mode === 'replace') return parsed;
+      const have = new Set(prev.map((q) => q.trim().toLowerCase()).filter(Boolean));
+      const add = parsed.filter((q) => !have.has(q.toLowerCase()));
+      const kept = prev.filter((q) => q.trim());   // drop the empty placeholder row when appending
+      return [...kept, ...add];
+    });
+    setPasteOpen(false); setPasteText('');
+    toast({ title: mode === 'replace' ? `Replaced with ${parsed.length} question${parsed.length === 1 ? '' : 's'}` : `Added ${parsed.length} pasted question${parsed.length === 1 ? '' : 's'}`,
+      description: 'Edit or delete any of them below before running.' });
+  };
 
   const confirmReAudit = async () => {
     if (!auditId || !user) return;
@@ -2744,6 +2771,43 @@ const AiAudit = () => {
                     Questions are copied exactly as they were asked, including any misspellings, so the
                     comparison is like-for-like. Edit them only if you want to measure something different.
                   </p>
+                  {/* PASTE A LIST — one question per line; numbered/bulleted lines are cleaned. */}
+                  <div className="rounded-md border border-border/60 bg-background/60 p-2">
+                    {!pasteOpen ? (
+                      <Button variant="outline" size="sm" disabled={reAuditBusy} onClick={() => setPasteOpen(true)}>
+                        <ClipboardList className="mr-2 h-4 w-4" /> Paste a list
+                      </Button>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-[11px] text-muted-foreground">
+                          One question per line. Blank lines are ignored, and numbered or bulleted lines
+                          (&ldquo;1.&rdquo;, &ldquo;2)&rdquo;, &ldquo;-&rdquo;) are cleaned up automatically.
+                        </p>
+                        <Textarea
+                          value={pasteText}
+                          onChange={(e) => setPasteText(e.target.value)}
+                          disabled={reAuditBusy}
+                          rows={8}
+                          placeholder={['How much does AndroFeme cost in the UK?', 'Can I get HRT online without a GP referral?', '3. Which UK clinics prescribe testosterone?'].join('\n')}
+                          className="text-sm"
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button size="sm" disabled={reAuditBusy || !pasteText.trim()} onClick={() => applyPaste('replace')}>
+                            Replace all ({parseQuestionPaste(pasteText).length})
+                          </Button>
+                          <Button variant="outline" size="sm" disabled={reAuditBusy || !pasteText.trim()} onClick={() => applyPaste('append')}>
+                            Add to list ({parseQuestionPaste(pasteText).length})
+                          </Button>
+                          <Button variant="ghost" size="sm" disabled={reAuditBusy} onClick={() => { setPasteOpen(false); setPasteText(''); }}>Cancel</Button>
+                          {pasteText.trim() && (
+                            <span className="text-[11px] text-muted-foreground">
+                              {parseQuestionPaste(pasteText).length} clean question{parseQuestionPaste(pasteText).length === 1 ? '' : 's'} from {pasteLineCount(pasteText)} line{pasteLineCount(pasteText) === 1 ? '' : 's'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     {reAuditQuestions.map((q, i) => (
                       <div key={i} className="flex items-center gap-2">
