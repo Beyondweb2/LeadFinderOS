@@ -61,10 +61,16 @@ export function renderPagePlanHtml(d: PagePlanReportData): string {
           `<span class="pp-chip">${esc(s.domain)}${internal ? ` (${s.count})` : ''}</span>`).join(' ')}</div>`
       : '';
     const held = it.heldReason ? `<div class="pp-held">${esc(it.heldReason)}</div>` : '';
+    /* The status pill next to the score, DISPLAY ONLY: on a BUILDING card a bare "named" pill
+       contradicts the BUILD chip (Paul, 2026-08-28) — gap builds read "Gemini gap", a non-gap
+       named-label build reads "partly named"; "named" stays on held/defend cards. */
+    const pill = it.labelKind === 'gap' ? 'Gemini gap'
+      : it.labelKind === 'build' && it.winnability === 'named' ? 'partly named'
+      : it.winnability ? it.winnability.replace(/_/g, ' ') : null;
     const intBlock = internal
       ? `<div class="pp-int">
           ${it.score != null ? `<span class="pp-int-chip">score ${it.score}</span>` : ''}
-          ${it.winnability ? `<span class="pp-int-chip">${esc(it.winnability.replace(/_/g, ' '))}</span>` : ''}
+          ${pill ? `<span class="pp-int-chip">${esc(pill)}</span>` : ''}
           ${it.rationale ? `<div class="pp-int-line">Grouping: ${esc(it.rationale)}</div>` : ''}
           ${it.scoreReasons.map((r) => `<div class="pp-int-line">&middot; ${esc(r)}</div>`).join('')}
         </div>`

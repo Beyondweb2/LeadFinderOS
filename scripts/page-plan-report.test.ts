@@ -80,6 +80,9 @@ console.log('── ⛔ CLIENT vs INTERNAL (leak-safe) ──');
   ok(client.includes('defend the existing page'), '  held reasons (client-safe wording) show in both views');
   ok(internal.includes('score 85') && internal.includes('both ask about online HRT') && internal.includes('(15)'),
     'internal view shows scores, rationale and source counts');
+  // The status pill next to the score must match the BUILD decision, never contradict it.
+  ok(internal.includes('<span class="pp-int-chip">Gemini gap</span>') && !/pp-int-chip">named</.test(internal),
+    'a gap BUILD card\'s pill reads "Gemini gap", never a bare "named"');
 }
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILED`);

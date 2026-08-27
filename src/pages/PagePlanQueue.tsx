@@ -73,8 +73,22 @@ const WINN_STYLE: Record<string, string> = {
   contested: 'border-sky-500/40 text-sky-600 dark:text-sky-400',
   no_local_race: 'border-violet-500/40 text-violet-600 dark:text-violet-400',
   named: 'border-emerald-500/40 text-emerald-600 dark:text-emerald-500',
+  'Gemini gap': 'border-amber-500/40 text-amber-600 dark:text-amber-500',
+  'partly named': 'border-border text-muted-foreground',
   locked: 'border-red-500/40 text-red-600 dark:text-red-500',
   unmeasured: 'border-border text-muted-foreground',
+};
+
+/* The small status pill, DISPLAY ONLY: a bare "named" pill on a BUILDING card contradicts the
+   BUILD chip beside it (Paul, 2026-08-28). On builds the pill reflects the build state — the gap
+   builds read "Gemini gap", a rare non-gap named-label build reads "partly named" — while "named"
+   stays exactly right on held/defend cards. No decision, score or reason text changes here. */
+const pillFor = (r: PlanRow): string | null => {
+  if (!r.winnability) return null;
+  if (r.status !== 'planned') return r.winnability.replace(/_/g, ' ');
+  if (isGeminiGapRow(r)) return 'Gemini gap';
+  if (r.winnability === 'named') return 'partly named';
+  return r.winnability.replace(/_/g, ' ');
 };
 
 const PagePlanQueue = () => {
@@ -215,7 +229,7 @@ const PagePlanQueue = () => {
             <span className="font-medium text-sm cursor-pointer" title="Click to rename" onClick={() => setEditing({ id: r.id, job: r.job })}>{r.job}</span>
           )}
           <Badge variant="outline" className="text-[10px] font-normal">{r.topic}</Badge>
-          {r.winnability && <Badge variant="outline" className={`text-[10px] ${WINN_STYLE[r.winnability] ?? ''}`}>{r.winnability.replace('_', ' ')}</Badge>}
+          {pillFor(r) && <Badge variant="outline" className={`text-[10px] ${WINN_STYLE[pillFor(r)!] ?? WINN_STYLE[r.winnability ?? ''] ?? ''}`}>{pillFor(r)}</Badge>}
           {isGeminiGapRow(r) && (
             <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-500">
               Gemini gap — already strong on ChatGPT
