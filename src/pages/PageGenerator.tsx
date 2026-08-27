@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { Loader2, FileCode2, Copy, Sparkles, PiggyBank, AlertTriangle, Trash2, Clock } from 'lucide-react';
+import { suggestCredentials } from '@/lib/tradeCredentials';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    PAGE GENERATOR — the delivery pages a client needs, aimed at the exact queries we measure.
@@ -164,10 +165,14 @@ const PageGenerator = () => {
   const [scan, setScan] = useState<null | {
     phone?: string; address?: string; email?: string; hours?: string;
     areas: string[];
-    credentials: { text: string; context?: string }[];
     cached: boolean; found: boolean;
   }>(null);
   const [credPicked, setCredPicked] = useState<Set<string>>(new Set());
+  /* ⛔ TRADE-BASED, NOT SCRAPED (Paul, 2026-08-28). A scraped credential arrives wearing evidence
+     ("it is on their site") and invites a rubber-stamp tick, while a site only proves a claim was
+     made ONCE — never that a registration is CURRENT. A generic trade suggestion cannot be mistaken
+     for evidence, so it forces the operator to supply the knowledge. Derived, never stored. */
+  const credSuggestions = useMemo(() => suggestCredentials(plan?.client.trade ?? null), [plan?.client.trade]);
 
   const scanSite = async () => {
     const site = plan?.inputs.website;
@@ -182,20 +187,19 @@ const PageGenerator = () => {
       if (error || !data?.success) throw new Error(error?.message ?? data?.error ?? 'scan failed');
       const d = (data.details ?? {}) as Record<string, unknown>;
       const areas = Array.isArray(d.areas) ? (d.areas as string[]) : [];
-      const credentials = Array.isArray(d.credentials) ? (d.credentials as { text: string; context?: string }[]) : [];
       setScan({
         phone: typeof d.phone === 'string' ? d.phone : undefined,
         address: typeof d.address === 'string' ? d.address : undefined,
         email: typeof d.email === 'string' ? d.email : undefined,
         hours: typeof d.hours === 'string' ? d.hours : undefined,
-        areas, credentials, cached: !!data.cached, found: !!data.found,
+        areas, cached: !!data.cached, found: !!data.found,
       });
       /* ⛔ PRE-FILL IS FACTUAL-ONLY, AND ONLY WHERE THE FIELD IS EMPTY — a scan must not overwrite
          something the operator typed. Blank findings leave the field blank; nothing is guessed. */
       if (areas.length && !cs.localAreas.trim()) setSetting({ localAreas: areas.join(', ') });
       toast({
-        title: areas.length || credentials.length ? 'Scanned their site' : 'Scanned — nothing to fill',
-        description: `${areas.length} area${areas.length === 1 ? '' : 's'} pre-filled · ${credentials.length} credential suggestion${credentials.length === 1 ? '' : 's'} to confirm${data.cached ? ' (cached)' : ''}`,
+        title: areas.length ? 'Scanned their site' : 'Scanned — nothing to fill',
+        description: `${areas.length} area${areas.length === 1 ? '' : 's'} pre-filled${data.cached ? ' (cached)' : ''}. Credentials are never scraped — tick the real ones below.`,
       });
     } catch (e) {
       toast({ title: "Couldn't scan the site", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
@@ -206,11 +210,14 @@ const PageGenerator = () => {
 
   /* Ticking a suggestion writes it into the SAME credentials field the operator types into, so the
      server still receives one plain string and the "verbatim, never generated" contract is unchanged. */
-  const toggleCred = (text: string) => {
+  const toggleCred = (label: string) => {
     const next = new Set(credPicked);
-    if (next.has(text)) next.delete(text); else next.add(text);
+    if (next.has(label)) next.delete(label); else next.add(label);
     setCredPicked(next);
-    const picked = (scan?.credentials ?? []).filter((c) => next.has(c.text)).map((c) => c.text);
+    /* Rebuilt from the SUGGESTION LIST order, not from tick order, so the field reads the same way
+       whichever sequence they were clicked in. Still one plain string to the server, so the
+       "verbatim, never generated" contract is untouched — and the operator can edit it afterwards. */
+    const picked = credSuggestions.filter((c) => next.has(c.label)).map((c) => c.label);
     setSetting({ credentials: picked.join(', ') });
   };
 
@@ -599,30 +606,33 @@ const PageGenerator = () => {
                       </p>
                     ) : null}
 
-                    {/* ⛔ CREDENTIALS — UNTICKED, ALWAYS. Nothing here is selected by the scan. */}
-                    {scan.credentials.length > 0 ? (
+                    {/* ⛔ CREDENTIALS — TRADE-BASED SUGGESTIONS, NEVER SCRAPED AND NEVER PRE-TICKED.
+                        Shown in the SAME step as the scanned facts so one place covers both, but they
+                        are a menu of what this trade commonly holds — NOT a finding about this client.
+                        Nothing selects them; `credPicked` is only ever written by a click. */}
+                    {credSuggestions.length > 0 ? (
                       <div className="grid gap-1">
                         <p className="font-medium text-amber-700 dark:text-amber-400">
-                          {scan.credentials.length} credential claim(s) found on their site — tick only the ones you know are current:
+                          Credentials for {plan.client.trade || 'this trade'} — tick only the ones you know this client
+                          genuinely holds and are current. Not scraped, not suggested by evidence:
                         </p>
-                        {scan.credentials.map((c) => (
-                          <label key={c.text} className="flex cursor-pointer items-start gap-2">
-                            <input type="checkbox" className="mt-0.5" checked={credPicked.has(c.text)}
-                              onChange={() => toggleCred(c.text)} />
+                        {credSuggestions.map((c) => (
+                          <label key={c.label} className="flex cursor-pointer items-start gap-2">
+                            <input type="checkbox" className="mt-0.5" checked={credPicked.has(c.label)}
+                              onChange={() => toggleCred(c.label)} />
                             <span>
-                              <span className="font-medium">{c.text}</span>
-                              {c.context ? <span className="text-muted-foreground"> — “{c.context}”</span> : null}
+                              <span className="font-medium">{c.label}</span>
+                              {c.note ? <span className="text-muted-foreground"> — {c.note}</span> : null}
                             </span>
                           </label>
                         ))}
                         <p className="text-muted-foreground">
-                          A website shows a claim was made once, not that it is still valid. Nothing is
-                          ticked for you, and an unticked claim never reaches a page.
+                          These are the schemes that exist in this trade, not claims about this client.
+                          Nothing is ticked for you, and an unticked credential never reaches a page. Add a
+                          registration number by editing the field below after ticking.
                         </p>
                       </div>
-                    ) : (
-                      <p className="text-muted-foreground">No credential claims found — the field stays blank for you to fill.</p>
-                    )}
+                    ) : null /* unreachable: suggestCredentials always returns the every-trade set */}
                   </div>
                 )}
               </div>
