@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Loader2, EyeOff, Eye, MapPin } from 'lucide-react';
+import { Loader2, EyeOff, Eye, MapPin, Telescope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
+import NichePanel from '@/components/NichePanel';
 import { useCoverage } from '@/hooks/useCoverage';
 import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX } from '@/lib/trades';
 import {
@@ -127,6 +128,16 @@ export default function Coverage() {
 
   const [showSuppressed, setShowSuppressed] = usePersistedState<boolean>(
     'coverage-show-suppressed', false, { tier: 'session', scope: user?.id },
+  );
+
+  /* ⛔ WHETHER THE NICHE VERDICT IS OPEN IS CONFIGURATION, NOT AN INTERRUPTION, so it persists —
+     §6c's line: a panel you chose to have open is part of how the page is set up, and losing it on
+     every navigation is exactly the complaint. It is NOT a dialog (nothing springs over the page
+     and nothing blocks the towns underneath), so the never-persist-an-open-dialog rule does not
+     apply. 'session' rather than 'local': re-opening it re-reads, and while that read is free it is
+     not instant, so a brand-new tab should start on the town table. */
+  const [nicheOpen, setNicheOpen] = usePersistedState<boolean>(
+    'coverage-niche-open', false, { tier: 'session', scope: user?.id },
   );
 
   /* ⛔ STAYS useState, DELIBERATELY. This is which row is mid-request, not how the page is
@@ -530,6 +541,26 @@ export default function Coverage() {
             </SelectContent>
           </Select>
         </div>
+        {/* ⛔ THE NICHE VERDICT BELONGS TO THE TRADE, SO IT LIVES NEXT TO THE TRADE PICKER.
+            It used to be reachable ONLY from inside MarketPanel, which needs a chosen trade AND
+            town — so the one question that decides whether a whole trade is worth outreach was
+            gated behind picking a single town and pressing a per-town button, and read as if it
+            were about that town. The fold itself was always trade-wide (market-view's `niche`
+            action takes a trade and no town); only the door was in the wrong place.
+            ⚠️ FREE, and the label says so: `niche` re-reads stored audits and touches no paid API. */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Whole trade</label>
+          <Button
+            variant={nicheOpen ? 'default' : 'outline'}
+            size="sm"
+            className="h-9"
+            onClick={() => setNicheOpen((v) => !v)}
+            title={`Is ${trade} worth mass outreach? Reads every stored ${trade} audit across all towns — free, no searches`}
+          >
+            <Telescope className="mr-1.5 h-3.5 w-3.5" />
+            {nicheOpen ? 'Hide niche verdict' : 'Niche verdict · free'}
+          </Button>
+        </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Region</label>
           <Select value={region ?? '__all'} onValueChange={(v) => { setParam('region', v === '__all' ? null : v); setSavedRegion(v === '__all' ? '' : v); }}>
@@ -553,6 +584,15 @@ export default function Coverage() {
           {showSuppressed ? 'Hiding none' : 'Show suppressed'}
         </Button>
       </div>
+
+      {/* ⛔ ABOVE THE TOWN TABLE, BECAUSE IT IS THE QUESTION THAT COMES FIRST. "Is this trade worth
+          working at all?" is answered before "which town next?", so the verdict sits between the
+          trade picker and the towns rather than inside one town's panel.
+          ⚠️ key={trade} REMOUNTS ON A TRADE CHANGE, and that is a correctness guard, not a
+          preference: without it, switching Plumbers → Locksmiths would leave the plumber fold on
+          screen under a Locksmiths heading until the refetch landed — a stale read presented as a
+          decision, which is the harm §6c weighs above losing your place. */}
+      {nicheOpen && <NichePanel key={trade} trade={trade} autoLoad />}
 
       {/* ⛔ THE HEADLINE IS THE POINT OF THE PAGE. "6 of 87 done" in one look, with the breakdown
           beside it. The counts sum to the total because a town shows at its furthest rung only. */}

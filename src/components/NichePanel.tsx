@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,7 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'done'; niche: NicheAnalysis };
 
-export default function NichePanel({ trade }: { trade: string }) {
+export default function NichePanel({ trade, autoLoad = false }: { trade: string; autoLoad?: boolean }) {
   const [state, setState] = useState<State>({ kind: 'idle' });
 
   const load = async () => {
@@ -38,7 +38,32 @@ export default function NichePanel({ trade }: { trade: string }) {
     }
   };
 
+  /* ⛔ AUTO-LOAD IS SAFE HERE ONLY BECAUSE THE FOLD IS FREE. Coverage's "Niche verdict" button is
+     the trade-level entry point, and making the operator press a second "Analyse" button inside the
+     panel he just opened is the friction that made this feature undiscoverable in the first place.
+     Nothing here reaches Apify or Places — market-view's `niche` action only re-reads stored audits
+     (§6e: opening a view never spends), so a click that loads is not a click that costs.
+     ⚠️ Fires once per mount, and Coverage remounts it with key={trade}, so switching trade cannot
+     leave one trade's numbers under another trade's heading. */
+  useEffect(() => {
+    if (autoLoad) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLoad, trade]);
+
   if (state.kind === 'idle' || state.kind === 'busy') {
+    /* Auto-loading opens straight into a spinner — the invitation card below would flash the
+       "Analyse niche" button for a moment and then replace itself, which reads as a misclick. */
+    if (autoLoad) {
+      return (
+        <Card className="border-primary/25">
+          <CardContent className="flex items-center gap-3 p-4 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="font-medium">Reading every stored {trade} audit…</span>
+            <span className="text-muted-foreground">All towns, no new searches.</span>
+          </CardContent>
+        </Card>
+      );
+    }
     return (
       <Card className="border-primary/25">
         <CardContent className="flex flex-wrap items-center gap-3 p-4">
@@ -56,7 +81,19 @@ export default function NichePanel({ trade }: { trade: string }) {
     );
   }
   if (state.kind === 'error') {
-    return <Card className="border-destructive/40 bg-destructive/10"><CardContent className="p-4 text-sm text-destructive">Niche analysis failed: {state.message}</CardContent></Card>;
+    /* ⚠️ A RETRY EXISTS BECAUSE AUTO-LOAD REMOVED THE ONE THAT USED TO BE IMPLICIT. Before, a
+       failure left the invitation card's own button on screen; opening straight into the fold means
+       a transient failure would otherwise leave a dead card with no way forward but a page reload. */
+    return (
+      <Card className="border-destructive/40 bg-destructive/10">
+        <CardContent className="flex flex-wrap items-center gap-3 p-4 text-sm">
+          <span className="min-w-0 flex-1 text-destructive">Niche analysis failed: {state.message}</span>
+          <Button size="sm" variant="outline" onClick={load}>
+            <Telescope className="mr-1.5 h-3.5 w-3.5" /> Try again · free
+          </Button>
+        </CardContent>
+      </Card>
+    );
   }
   if (state.kind === 'none') {
     return (
