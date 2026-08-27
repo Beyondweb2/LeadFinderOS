@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
-import { Loader2, ListOrdered, Sparkles, ArrowUp, ArrowDown, Pause, Play, Trash2, GitMerge, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, ListOrdered, Sparkles, ArrowUp, ArrowDown, Pause, Play, Trash2, GitMerge, AlertTriangle, ChevronDown, ChevronRight, FileDown } from 'lucide-react';
+import { renderPagePlanHtml, type PagePlanReportItem, type PlanLabelKind } from '@/lib/pagePlanReportHtml';
+import { downloadHtmlDocAsPdf } from '@/lib/aiAuditReportDownload';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    PAGE-PLAN QUEUE (Stage 1) — the per-client months-long working plan: measured questions clustered
@@ -52,6 +54,18 @@ const engNamed = (v: unknown): boolean => {
 const isGeminiGapRow = (r: PlanRow): boolean =>
   r.status === 'planned' && r.questions.some((q) => engNamed(q.named_rate?.chatgpt) && !engNamed(q.named_rate?.gemini));
 
+/* One row's verdict as a printable label — the same derivations the screen uses (held wording for
+   the kind, stored counts for the gap), so the PDF can never disagree with the screen. */
+const printLabelFor = (r: PlanRow): { kind: PlanLabelKind; label: string } => {
+  if (r.status === 'held') {
+    const hr = r.held_reason ?? '';
+    if (hr.includes('market locked')) return { kind: 'locked', label: 'Hold — market locked' };
+    if (hr.includes('official bodies')) return { kind: 'authority', label: 'Hold — authority sources' };
+    return { kind: 'defend', label: 'Defend — already named' };
+  }
+  return isGeminiGapRow(r) ? { kind: 'gap', label: 'Build — Gemini gap' } : { kind: 'build', label: 'Build' };
+};
+
 /* Winnability badges in the AUDIT'S vocabulary (classifyWinnability verdicts, majority across the
    runs) — so the queue's label matches what the audit page shows for the same question. */
 const WINN_STYLE: Record<string, string> = {
@@ -76,6 +90,10 @@ const PagePlanQueue = () => {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<{ id: string; job: string } | null>(null);
   const [mergeFrom, setMergeFrom] = useState<string>('');
+  /* Client vs Internal for the PRINTED document — same leak-safe rule as the audit report:
+     default CLIENT, reset to Client on every client switch, so the internal PDF is always a
+     conscious two-step choice and a forgotten toggle can never hand a client the internal notes. */
+  const [showInternal, setShowInternal] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -87,6 +105,7 @@ const PagePlanQueue = () => {
   const load = async (auditId: string) => {
     setClientId(auditId);
     setRows([]); setError(null); setTablesMissing(false); setMergeFrom('');
+    setShowInternal(false); // never carry an internal choice across clients (leak-safe default)
     if (!auditId) return;
     setBusy(true);
     try {
@@ -140,6 +159,37 @@ const PagePlanQueue = () => {
   const swap = async (a: PlanRow, b: PlanRow) => {
     await update(a.id, { set: { position: b.position } }, false);
     await update(b.id, { set: { position: a.position } }, true);
+  };
+
+  /* Assemble the printable document from the SAME rows the screen renders, and print via the SAME
+     print-to-PDF path as the audit report. Prints whichever view the toggle shows. */
+  const downloadPdf = () => {
+    const client = clients.find((c) => c.audit_id === clientId);
+    const activeRows = rows.filter((r) => r.status === 'planned' || r.status === 'held')
+      .sort((a, b) => a.wave - b.wave || a.position - b.position);
+    const byWave = new Map<number, PagePlanReportItem[]>();
+    for (const r of activeRows) {
+      const { kind, label } = printLabelFor(r);
+      const item: PagePlanReportItem = {
+        job: r.job, topic: r.topic, labelKind: kind, label,
+        winnability: r.winnability,
+        questions: r.questions.map((q) => ({
+          text: q.question_text, chatgpt: namedCell(q.named_rate?.chatgpt), gemini: namedCell(q.named_rate?.gemini),
+        })),
+        sources: r.top_sources ?? [],
+        heldReason: r.held_reason,
+        score: r.score, rationale: r.rationale, scoreReasons: r.score_reasons ?? [],
+      };
+      (byWave.get(r.wave) ?? byWave.set(r.wave, []).get(r.wave)!).push(item);
+    }
+    const html = renderPagePlanHtml({
+      businessName: client?.business_name ?? 'Client',
+      businessType: client?.business_type ?? null,
+      generatedAtLabel: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+      internal: showInternal,
+      waves: [...byWave.entries()].sort((a, b) => a[0] - b[0]).map(([wave, items]) => ({ wave, items })),
+    });
+    downloadHtmlDocAsPdf(html, client?.business_name ?? 'Client', 'Page-Plan');
   };
 
   const active = rows.filter((r) => r.status === 'planned' || r.status === 'held');
@@ -254,6 +304,27 @@ const PagePlanQueue = () => {
               {building ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
               {rows.length ? 'Rebuild plan · ~2p' : 'Build plan · ~2p'}
             </Button>
+          )}
+          {active.length > 0 && (
+            <span className="flex items-center gap-2 ml-auto">
+              {/* Same Client/Internal toggle semantics as the audit report: Client is the default,
+                  Download prints whichever view is selected. */}
+              <span className="inline-flex overflow-hidden rounded-md border border-border text-xs" role="group" aria-label="Report view">
+                <button
+                  type="button" aria-pressed={!showInternal}
+                  className={`px-2.5 h-7 font-medium transition-colors ${!showInternal ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground'}`}
+                  onClick={() => setShowInternal(false)}
+                >Client</button>
+                <button
+                  type="button" aria-pressed={showInternal}
+                  className={`px-2.5 h-7 font-medium transition-colors ${showInternal ? 'bg-amber-500 text-white' : 'bg-background text-muted-foreground hover:text-foreground'}`}
+                  onClick={() => setShowInternal(true)}
+                >Internal</button>
+              </span>
+              <Button size="sm" variant="outline" onClick={downloadPdf}>
+                <FileDown className="mr-1.5 h-3.5 w-3.5" /> Download PDF{showInternal ? ' (internal)' : ''}
+              </Button>
+            </span>
           )}
           {busy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
         </CardContent>

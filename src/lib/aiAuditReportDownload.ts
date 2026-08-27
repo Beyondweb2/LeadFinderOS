@@ -60,3 +60,10 @@ export function downloadReportHtml(d: AiAuditReportData): void {
      on every report open, so producing the internal PDF is always a conscious two-step choice. */
   printHtmlAsPdf(renderReportHtml({ ...d, internal: d.internal === true }), pdfTitle(d.businessName, "AI-Visibility-Report"));
 }
+
+/** Save ANY self-contained branded document (e.g. the printable page plan) as a PDF via the SAME
+ *  print-to-PDF path the audit report uses — identical pagination, colours and filename behaviour.
+ *  The caller renders the HTML (client or internal view) and this prints exactly what it was given. */
+export function downloadHtmlDocAsPdf(html: string, businessName: string, filenameSuffix: string): void {
+  printHtmlAsPdf(html, pdfTitle(businessName, filenameSuffix));
+}
