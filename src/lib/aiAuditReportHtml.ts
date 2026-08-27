@@ -460,6 +460,80 @@ function seoSection(seo: AiAuditSeo | undefined): string {
  * on key words + numbers so they pop; everything else stays muted with generous white
  * space. Purposeful graphics only — no decorative fills.
  */
+/* ================================================================================================
+   SHARED REPORT CHROME - the Findable page identity (blue band + wordmark + wave, the
+   "Prepared for" footer, the A4 sheet/print rules), exported so OTHER printable documents
+   (src/lib/pagePlanReportHtml.ts) render in the IDENTICAL template. The audit renderer below
+   consumes these same exports, so the two documents cannot drift apart.
+   ================================================================================================ */
+export const REPORT_CHROME_CSS_CORE = `
+  :root{
+    --blue:#1a3d7c; --blue-2:#2a5aa8; --yellow:#ffd23f;
+    --ink:#0f172a; --muted:#5b6472; --faint:#9aa3b2; --line:#e9edf3;
+    --line-strong:#94a3b8; /* darker grey &mdash; for SEO graphics that must stay visible on the --page tint */
+    --red:#e11d2a; --amber:#c2820b; --green:#15a34a; --paper:#ffffff; --page:#eef1f6;
+    --foot:#102a58;
+  }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  html,body{ margin:0; padding:0; }
+  body{ background:var(--page); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5; -webkit-font-smoothing:antialiased; }
+  .sheet{ max-width:760px; margin:24px auto; background:var(--paper); border-radius:14px; overflow:hidden;
+    box-shadow:0 8px 40px rgba(15,23,42,.12); }
+
+  /* Header band &mdash; Findable blue with a yellow wordmark and a wave bottom edge */
+  .band{ position:relative; background:var(--blue); color:#fff; padding:22px 28px 34px; }
+  .band-row{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  .wordmark{ font-size:22px; font-weight:900; letter-spacing:-.02em; color:var(--yellow); }
+  .wordmark .dot{ color:#fff; }
+  .band-meta{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#b9c8e4; font-weight:700; }
+  .wave{ position:absolute; left:0; right:0; bottom:-1px; width:100%; height:38px; display:block; }
+`;
+
+export const REPORT_CHROME_CSS_FOOT = `
+  .site-foot{ background:var(--foot); padding:12px 28px 14px; }
+  .site-foot .row{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    font-size:11px; color:#c7d5ee; font-weight:400; }
+  .site-foot .row b{ color:#fff; font-weight:700; }
+  .site-foot .row a{ color:var(--yellow); text-decoration:none; }
+  .site-foot .note{ margin-top:8px; font-size:11px; font-weight:400; color:#8fa4c8; }
+`;
+
+export const REPORT_CHROME_CSS_PRINT = `  @page{ size:A4; margin:10mm; }
+  @media print{
+    html,body,.sheet,.band,.site-foot{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    body{ background:#fff; }
+    .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
+    .sheet + .sheet{ break-before:page; page-break-before:always; }
+    .band,.site-foot{ break-inside:avoid; }
+  }`;
+
+/** The blue Findable header band with the wave bottom edge. NOTE: metaHtml is the right-hand
+ *  label (section name, page X of Y) and must be pre-escaped HTML. */
+export function renderWaveBand(metaHtml: string): string {
+  return `<header class="band">
+      <div class="band-row">
+        <div class="wordmark">Findable<span class="dot">.</span></div>
+        <div class="band-meta">${metaHtml}</div>
+      </div>
+      <svg class="wave" viewBox="0 0 1200 38" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" fill="#ffffff"/>
+      </svg>
+    </header>`;
+}
+
+/** The dark "Prepared for <client>" footer. metaHtml is the right-hand line, pre-escaped. */
+export function renderSiteFooter(opts: { businessName: string; metaHtml: string; note: string }): string {
+  return `<footer class="site-foot">
+      <div class="row">
+        <span>Prepared for <b>${esc(opts.businessName)}</b></span>
+        <span>${opts.metaHtml}</span>
+      </div>
+      <div class="note">${opts.note}</div>
+    </footer>`;
+}
+
 export function renderReportHtml(d: AiAuditReportData): string {
   const type = d.businessType.trim() || "business like yours";
   /* hasRivals gates every clause that mentions competitors: with no rival names measured, saying
@@ -547,24 +621,12 @@ export function renderReportHtml(d: AiAuditReportData): string {
 
   /* THE SAME WAVE HEADER + FOOTER AS PAGE 1 — reused verbatim so every breakdown page is a full
      branded report page (Paul's ask). Byte-identical to page 1's inline band/footer below. */
-  const waveBand = (meta: string) => `
-    <header class="band">
-      <div class="band-row">
-        <div class="wordmark">Findable<span class="dot">.</span></div>
-        <div class="band-meta">${meta}</div>
-      </div>
-      <svg class="wave" viewBox="0 0 1200 38" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" fill="#ffffff"/>
-      </svg>
-    </header>`;
-  const siteFooter = `
-    <footer class="site-foot">
-      <div class="row">
-        <span>Prepared for <b>${esc(d.businessName)}</b></span>
-        <span>Findable &middot; AI Visibility Audit &middot; ${esc(d.generatedAtLabel)}${shareFoot}</span>
-      </div>
-      <div class="note">A snapshot of where you stand today. After we&rsquo;ve made changes we ask these questions again, alongside others, to show your before &amp; after.</div>
-    </footer>`;
+  const waveBand = (meta: string) => renderWaveBand(meta);
+  const siteFooter = renderSiteFooter({
+    businessName: d.businessName,
+    metaHtml: `Findable &middot; AI Visibility Audit &middot; ${esc(d.generatedAtLabel)}${shareFoot}`,
+    note: "A snapshot of where you stand today. After we&rsquo;ve made changes we ask these questions again, alongside others, to show your before &amp; after.",
+  });
 
   // One engine's row inside a question card: name → named X of R (across runs) → who → sources.
   const engineRow = (e: NonNullable<(typeof qb)[number]['perEngine']>[number]): string => {
@@ -660,28 +722,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
 <link rel="icon" type="image/svg+xml" href="${favicon}" />
 <title>AI Visibility Report &mdash; ${esc(d.businessName)}</title>
 <style>
-  :root{
-    --blue:#1a3d7c; --blue-2:#2a5aa8; --yellow:#ffd23f;
-    --ink:#0f172a; --muted:#5b6472; --faint:#9aa3b2; --line:#e9edf3;
-    --line-strong:#94a3b8; /* darker grey &mdash; for SEO graphics that must stay visible on the --page tint */
-    --red:#e11d2a; --amber:#c2820b; --green:#15a34a; --paper:#ffffff; --page:#eef1f6;
-    --foot:#102a58;
-  }
-  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  html,body{ margin:0; padding:0; }
-  body{ background:var(--page); color:var(--ink);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    line-height:1.5; -webkit-font-smoothing:antialiased; }
-  .sheet{ max-width:760px; margin:24px auto; background:var(--paper); border-radius:14px; overflow:hidden;
-    box-shadow:0 8px 40px rgba(15,23,42,.12); }
-
-  /* Header band &mdash; Findable blue with a yellow wordmark and a wave bottom edge */
-  .band{ position:relative; background:var(--blue); color:#fff; padding:22px 28px 34px; }
-  .band-row{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
-  .wordmark{ font-size:22px; font-weight:900; letter-spacing:-.02em; color:var(--yellow); }
-  .wordmark .dot{ color:#fff; }
-  .band-meta{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#b9c8e4; font-weight:700; }
-  .wave{ position:absolute; left:0; right:0; bottom:-1px; width:100%; height:38px; display:block; }
+${REPORT_CHROME_CSS_CORE}
 
   /* One-line explainer */
   .explainer{ padding:16px 28px 4px; font-size:17px; line-height:1.4; color:#334155; font-weight:400; max-width:70ch; }
@@ -879,12 +920,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     background:rgba(255,255,255,.06); font-size:13px; line-height:1.55; color:#e6ecf7;
     max-width:70ch; border-radius:0 6px 6px 0; }
   .offer-after{ margin:10px 0 0; font-size:12.5px; color:#c7d3ea; max-width:66ch; }
-  .site-foot{ background:var(--foot); padding:12px 28px 14px; }
-  .site-foot .row{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
-    font-size:11px; color:#c7d5ee; font-weight:400; }
-  .site-foot .row b{ color:#fff; font-weight:700; }
-  .site-foot .row a{ color:var(--yellow); text-decoration:none; }
-  .site-foot .note{ margin-top:8px; font-size:11px; font-weight:400; color:#8fa4c8; }
+${REPORT_CHROME_CSS_FOOT}
 
   /* MOBILE (~phones) — the report is opened mostly on phones via a WhatsApp link. Stack the
      multi-column sections, fix the hero's non-shrinking number block, make the CTA full-width
@@ -919,17 +955,13 @@ export function renderReportHtml(d: AiAuditReportData): string {
     .seo-grade-split{ display:none; }
   }
 
-  @page{ size:A4; margin:10mm; }
+${REPORT_CHROME_CSS_PRINT}
   @media print{
-    /* Force backgrounds (blue header band, section tints, CTA, footer, dots, icon tiles) to
-       print WITHOUT the user ticking Chrome's "Background graphics" &mdash; exact colour adjust. */
-    html,body,.sheet,.band,.hero,.gutbox,.why,.dowe,.cta,.site-foot,.seo,.find-dot,.step .ic{
+    /* Audit-specific print rules ON TOP of the shared chrome print CSS above: force the section
+       tints/CTA/dots to colour-print and keep the audit blocks unsplit. */
+    .hero,.gutbox,.why,.dowe,.cta,.seo,.find-dot,.step .ic{
       -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
-    body{ background:#fff; }
-    .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
-    /* Each page-sheet (page 1, then every question page) starts a fresh A4. */
-    .sheet + .sheet{ break-before:page; page-break-before:always; }
-    .band,.hero,.gutbox,.why,.dowe,.cta,.site-foot,.seo{ break-inside:avoid; }
+    .hero,.gutbox,.why,.dowe,.cta,.seo{ break-inside:avoid; }
     .steps,.stats,.seo-grades,.seo-body,.dowe-panel{ break-inside:avoid; }
     .qb-item{ break-inside:avoid; page-break-inside:avoid; }
   }
@@ -937,15 +969,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
 </head>
 <body>
   <div class="sheet">
-    <header class="band">
-      <div class="band-row">
-        <div class="wordmark">Findable<span class="dot">.</span></div>
-        <div class="band-meta">AI Visibility Report &middot; ${esc(d.generatedAtLabel)}</div>
-      </div>
-      <svg class="wave" viewBox="0 0 1200 38" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" fill="#ffffff"/>
-      </svg>
-    </header>
+    ${renderWaveBand(`AI Visibility Report &middot; ${esc(d.generatedAtLabel)}`)}
 
     <div class="explainer">We asked AI the kinds of questions customers ask when they&rsquo;re looking for ${article(type)} <b>${esc(type)}</b>, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
 
@@ -1065,13 +1089,7 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : site
     </section>
 
 ${d.showFounderOffer === true ? founderOfferSection(d.founderOfferUrl) : ""}
-    <footer class="site-foot">
-      <div class="row">
-        <span>Prepared for <b>${esc(d.businessName)}</b></span>
-        <span>Findable &middot; AI Visibility Audit &middot; ${esc(d.generatedAtLabel)}${shareFoot}</span>
-      </div>
-      <div class="note">A snapshot of where you stand today. After we&rsquo;ve made changes we ask these questions again, alongside others, to show your before &amp; after.</div>
-    </footer>
+    ${siteFooter}
   </div>
 ${questionDetail}
 </body>
