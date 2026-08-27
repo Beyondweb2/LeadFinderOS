@@ -1113,6 +1113,27 @@ worst-first, >40% is excluded as already winning, and both exclusions are itemis
     rows were DECLINED 2026-08-15 — do not build them unasked. (The baseline-priority queue lane
     was also declined that day, then **explicitly APPROVED and built 2026-08-17** as the seatbelt
     for concurrent measures — see the concurrency bullet below.)
+- ✅ **THE NICHE VERDICT'S FRONT DOOR IS ON COVERAGE, BESIDE THE TRADE PICKER (2026-08-28).** It was
+  reachable ONLY from inside `MarketPanel`, which needs a chosen trade AND town — so the read that
+  decides whether a whole trade is worth outreach sat behind picking one town and pressing a per-town
+  button, and read as though it were about that town. **The fold was always trade-wide**
+  (`market-view`'s `niche` action takes a trade and no town, and folds every business audit of that
+  trade across every town); only the door was wrong. `NichePanel` gained `autoLoad`, so opening the
+  panel loads it — safe ONLY because the fold is free (§6e's opening-a-view-never-spends rule holds:
+  it re-reads stored audits and touches no paid API).
+  - ⛔ **`key={trade}` ON THE PANEL IS A CORRECTNESS GUARD, NOT A PREFERENCE.** Without the remount,
+    switching Plumbers → Locksmiths leaves the plumber fold on screen under a Locksmiths heading
+    until the refetch lands — a stale read presented as a decision, which §6c weighs above losing
+    your place.
+  - The open state persists (session, user-scoped): a panel you chose to open is configuration, and
+    it is not a dialog, so the never-persist-an-open-dialog rule does not apply. Session not local
+    because re-opening re-reads, and free is not instant.
+  - ⚠️ **Auto-load removed the implicit retry** (the invitation card's own button), so the error state
+    got an explicit one — an auto-loaded panel that fails must not be a dead card.
+  - **Measured live 2026-08-28, Plumbers:** 75 businesses · 18 towns · 85 audits · 1,100 answers →
+    **worth_outreach, tier INDICATIVE.** ChatGPT 112/485 (23.1%), Gemini 22/485 (4.5%), AI Overview
+    5/130 (3.8%); directory share ChatGPT 46.9% vs **Gemini 12.5%** (Gemini reads other businesses'
+    own sites 85.8% of the time) — §5's model, at trade scale, from one free click.
 - ⚠️ Old-SPA/new-payload overlap is a 10-minute sessionStorage cache (`useMarketView`), same as
   every market-view deploy. Deploy `market-view` BEFORE pushing the SPA.
 
