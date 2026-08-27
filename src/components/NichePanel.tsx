@@ -3,8 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Telescope } from 'lucide-react';
-import { rateLabel, sharePct, type NicheAnalysis } from '@/lib/nicheView';
+import { Loader2, Telescope, CheckCircle2, MinusCircle, XCircle, HelpCircle, Search, Store } from 'lucide-react';
+import { rateLabel, sharePct, nicheVerdict, type NicheAnalysis } from '@/lib/nicheView';
+import { findLeadsHref, marketViewHref } from '@/lib/coverageState';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    NICHE PANEL (Phase 1) — the read-only niche analysis inside Market view: one trade folded
@@ -69,6 +70,20 @@ export default function NichePanel({ trade }: { trade: string }) {
   const w = n.winnability;
   const wOrder = ['open', 'contested', 'named', 'locked', 'no_local_race', 'unmeasured'];
   const singleRunQ = n.sample.questions - n.sample.multiRunQuestions;
+  /* THE DECISION, DERIVED ON READ — never stored (a stored verdict freezes a stale rule). */
+  const v = nicheVerdict(n);
+  const VSTYLE = {
+    worth_outreach: { cls: 'border-emerald-500/40 bg-emerald-500/5', icon: <CheckCircle2 className="h-4 w-4 text-emerald-600" /> },
+    mixed: { cls: 'border-amber-500/40 bg-amber-500/5', icon: <MinusCircle className="h-4 w-4 text-amber-600" /> },
+    avoid: { cls: 'border-red-500/40 bg-red-500/5', icon: <XCircle className="h-4 w-4 text-red-600" /> },
+    no_verdict: { cls: 'border-border bg-muted/40', icon: <HelpCircle className="h-4 w-4 text-muted-foreground" /> },
+  }[v.kind];
+  const TIER_LABEL = { measured: 'MEASURED', indicative: 'INDICATIVE', unmeasured: 'UNMEASURED' }[v.tier];
+  const TIER_CLS = {
+    measured: 'border-emerald-500/40 text-emerald-600',
+    indicative: 'border-amber-500/40 text-amber-600',
+    unmeasured: 'border-border text-muted-foreground',
+  }[v.tier];
 
   return (
     <Card className="border-primary/25">
@@ -82,6 +97,24 @@ export default function NichePanel({ trade }: { trade: string }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
+        {/* ⛔ THE DECISION FIRST (Paul's layout call): the worth-outreach / avoid call leads, the
+            evidence sits under it. The tier chip gates only the CONFIDENT WORDING — the numbers
+            below are always shown, whatever the tier. */}
+        <div className={`rounded-lg border p-3 ${VSTYLE.cls}`}>
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0">{VSTYLE.icon}</span>
+            <div className="min-w-0 space-y-1">
+              <p className="text-[15px] font-semibold leading-snug">{v.headline}</p>
+              <p className="text-xs text-muted-foreground">{v.engineStory}</p>
+            </div>
+            <Badge variant="outline" className={`ml-auto shrink-0 text-[10px] font-bold ${TIER_CLS}`}>{TIER_LABEL}</Badge>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">{v.tierNote}</p>
+          {v.gaps.length > 0 && (
+            <p className="mt-1 text-[11px] text-muted-foreground">To firm this up: {v.gaps.join(' · ')}.</p>
+          )}
+        </div>
+
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Named rate, per engine</p>
           {n.engines.map((e) => (
@@ -136,8 +169,20 @@ export default function NichePanel({ trade }: { trade: string }) {
           </div>
           <div>
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Towns in this niche</p>
+            {/* ⛔ THE OUTREACH HANDOFF — reuses the EXISTING CRM bridge verbatim: findLeadsHref
+                (the normal prefilled lead search that feeds Add-to-CRM) and marketViewHref (the
+                per-town panel that owns "Add all N targets"). No lead-creation code here, and
+                'measured' is passed so no arrival spend-confirm is ever attached (§6c). */}
             {n.towns.slice(0, 8).map((t) => (
-              <p key={t.town} className="text-[11px] text-muted-foreground">{t.town} — {t.businesses} businesses, {t.cells} answers</p>
+              <div key={t.town} className="flex items-center gap-1.5 py-0.5">
+                <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{t.town} — {t.businesses} businesses, {t.cells} answers</span>
+                <a href={marketViewHref(trade, t.town, 'measured')} className="shrink-0 text-[11px] text-primary hover:underline" title="Open this town's market view — its target list and Add-all-targets button">
+                  <Store className="mr-0.5 inline h-3 w-3" />targets
+                </a>
+                <a href={findLeadsHref(trade, t.town)} className="shrink-0 text-[11px] text-primary hover:underline" title="Find leads in this town — the normal prefilled search (~11p of Places quota, free within 72h of the last identical search)">
+                  <Search className="mr-0.5 inline h-3 w-3" />find leads
+                </a>
+              </div>
             ))}
             {n.towns.length > 8 && <p className="text-[11px] text-muted-foreground">+{n.towns.length - 8} more towns</p>}
           </div>
