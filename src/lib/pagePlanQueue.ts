@@ -66,21 +66,28 @@ export function questionIsAuthorityLocked(s: QuestionSignals): boolean {
   return (s.authorityLockRuns ?? 0) >= AUTHORITY_LOCK_MIN_RUNS;
 }
 
-/** Majority verdict across a question's runs; ties break toward the FIRST in priority order
- *  (named beats open beats contested… so a tie never under-claims the client's presence).
- *  Empty input → 'unmeasured', never a confident label. */
+/** Majority verdict across a question's runs. Empty input → 'unmeasured', never a confident label.
+ *
+ *  ⛔ 'named' NEEDS ≥`NAMED_LABEL_MIN_RUNS` NAMED RUNS (Paul's rule, 2026-08-28 — found live: a
+ *  card at ChatGPT 1/3 · Gemini 0/3 read "named" because its runs graded [contested, open, named],
+ *  a 1-1-1 tie, and the old tie-break put 'named' first so ONE named run won any tie). A single
+ *  run's presence is noise (17.9% flip); the label rule now matches the hold rules: at least 2 of
+ *  3 runs. Below that, 'named' is removed from the fold and the label comes from the remaining
+ *  verdicts (open beats contested beats locked…); a lone named run with nothing else → 'unmeasured'. */
+export const NAMED_LABEL_MIN_RUNS = 2;
 const VERDICT_PRIORITY: WinnVerdict[] = ['named', 'open', 'contested', 'locked', 'no_local_race'];
 export function majorityVerdict(verdicts: WinnVerdict[]): WinnVerdict {
   const real = verdicts.filter((v) => v !== 'unmeasured');
   if (real.length === 0) return 'unmeasured';
   const tally = new Map<WinnVerdict, number>();
   for (const v of real) tally.set(v, (tally.get(v) ?? 0) + 1);
-  let best: WinnVerdict = 'unmeasured', bestN = -1;
+  if ((tally.get('named') ?? 0) < NAMED_LABEL_MIN_RUNS) tally.delete('named');
+  let best: WinnVerdict = 'unmeasured', bestN = 0;
   for (const v of VERDICT_PRIORITY) {
     const n = tally.get(v) ?? 0;
     if (n > bestN) { best = v; bestN = n; }
   }
-  return best;
+  return best; // tally emptied (lone named run) → 'unmeasured': one run never establishes presence
 }
 
 /* ⛔ GEMINI-FIRST BUILD/HOLD RULE (Paul's call, 2026-08-28). Pages on the client's own site are
@@ -300,7 +307,16 @@ export function scoreCluster(signals: QuestionSignals[]): {
   const bestSig = pool.find((s) => s.winnability === best);
   const reasons: string[] = [];
   let score = WINNABILITY_BASE[best];
-  reasons.push(`${best.replace(/_/g, ' ')}${bestSig?.winnabilityReason ? ` (${bestSig.winnabilityReason})` : ''}`);
+  /* ⛔ A BUILD CARD MUST NEVER SAY "DEFEND THIS" (Paul, 2026-08-28). classifyWinnability's 'named'
+     reason is the AUDIT PAGE's wording ("You're already named on ChatGPT — defend this.") — right
+     there, contradictory on a card the queue decided to BUILD. When the page builds, the named
+     base-line is rewritten in queue language; the audit page's own wording is untouched. */
+  const baseReason = best === 'named' && !defend
+    ? (geminiGap
+      ? 'named on ChatGPT only — building this page to close the Gemini gap'
+      : 'named in some answers — not consistently enough to hold, so this page builds')
+    : `${best.replace(/_/g, ' ')}${bestSig?.winnabilityReason ? ` (${bestSig.winnabilityReason})` : ''}`;
+  reasons.push(baseReason);
 
   /* Priority 1 — LOCKED market. 'locked' is last in the order above, so best === 'locked' means
      every winnable question is locked: strong incumbents dominate whatever the client's own counts
