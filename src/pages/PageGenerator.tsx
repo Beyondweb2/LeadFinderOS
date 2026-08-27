@@ -148,6 +148,72 @@ const PageGenerator = () => {
     setSettings((s) => ({ ...s, [activeClientId]: { contactUrl: '', localAreas: '', credentials: '', ...s[activeClientId], ...patch } }));
   };
 
+  /* ══ SCAN THEIR SITE ══════════════════════════════════════════════════════════════════════
+     Reuses the EXISTING scan-site-details function (raw fetch, no Apify, ~$0.005, cached 30d) —
+     the same one the AI Audit page uses — now also returning areas + credentials.
+
+     🔴 THE SPLIT IS THE WHOLE FEATURE. FACTUAL findings (areas) PRE-FILL a field the operator then
+     reviews. CREDENTIALS are TRUST AND SAFETY CLAIMS and arrive UNTICKED: a website says a claim
+     was made at some point, never that a registration is CURRENT — a badge outlives a lapsed
+     membership and numbers go stale. So a scraped credential can only ever become a SUGGESTION the
+     operator actively ticks. `credPicked` starts empty on every scan and is never seeded from the
+     scan result; there is no code path that ticks one automatically.
+     ⚠️ Transient, in-memory only — never persisted, so returning to the page cannot restore a
+     stale suggestion list or a half-confirmed tick (the §6c never-persist-an-interruption rule). */
+  const [scanning, setScanning] = useState(false);
+  const [scan, setScan] = useState<null | {
+    phone?: string; address?: string; email?: string; hours?: string;
+    areas: string[];
+    credentials: { text: string; context?: string }[];
+    cached: boolean; found: boolean;
+  }>(null);
+  const [credPicked, setCredPicked] = useState<Set<string>>(new Set());
+
+  const scanSite = async () => {
+    const site = plan?.inputs.website;
+    if (!site || scanning || !clientId) return;
+    setScanning(true);
+    setScan(null);
+    setCredPicked(new Set());   // never carry ticks across scans
+    try {
+      const { data, error } = await supabase.functions.invoke('scan-site-details', {
+        body: { website: site, business_name: plan?.client.business_name || undefined },
+      });
+      if (error || !data?.success) throw new Error(error?.message ?? data?.error ?? 'scan failed');
+      const d = (data.details ?? {}) as Record<string, unknown>;
+      const areas = Array.isArray(d.areas) ? (d.areas as string[]) : [];
+      const credentials = Array.isArray(d.credentials) ? (d.credentials as { text: string; context?: string }[]) : [];
+      setScan({
+        phone: typeof d.phone === 'string' ? d.phone : undefined,
+        address: typeof d.address === 'string' ? d.address : undefined,
+        email: typeof d.email === 'string' ? d.email : undefined,
+        hours: typeof d.hours === 'string' ? d.hours : undefined,
+        areas, credentials, cached: !!data.cached, found: !!data.found,
+      });
+      /* ⛔ PRE-FILL IS FACTUAL-ONLY, AND ONLY WHERE THE FIELD IS EMPTY — a scan must not overwrite
+         something the operator typed. Blank findings leave the field blank; nothing is guessed. */
+      if (areas.length && !cs.localAreas.trim()) setSetting({ localAreas: areas.join(', ') });
+      toast({
+        title: areas.length || credentials.length ? 'Scanned their site' : 'Scanned — nothing to fill',
+        description: `${areas.length} area${areas.length === 1 ? '' : 's'} pre-filled · ${credentials.length} credential suggestion${credentials.length === 1 ? '' : 's'} to confirm${data.cached ? ' (cached)' : ''}`,
+      });
+    } catch (e) {
+      toast({ title: "Couldn't scan the site", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  /* Ticking a suggestion writes it into the SAME credentials field the operator types into, so the
+     server still receives one plain string and the "verbatim, never generated" contract is unchanged. */
+  const toggleCred = (text: string) => {
+    const next = new Set(credPicked);
+    if (next.has(text)) next.delete(text); else next.add(text);
+    setCredPicked(next);
+    const picked = (scan?.credentials ?? []).filter((c) => next.has(c.text)).map((c) => c.text);
+    setSetting({ credentials: picked.join(', ') });
+  };
+
   // A page's render state: an in-flight/transient state wins; otherwise the cached generated page
   // (a pure read — never a generator call); otherwise nothing yet.
   const viewFor = (key: string): PageView | undefined => {
@@ -498,6 +564,67 @@ const PageGenerator = () => {
                   onChange={(e) => setSetting({ localAreas: e.target.value })}
                   className="h-8 text-xs"
                 />
+              </div>
+              {/* ══ SCAN THEIR SITE — factual pre-fill, credentials as suggestions ══════════════
+                  Raw fetch of their own site (no Apify, ~$0.005, cached 30 days). */}
+              <div className="grid gap-1 rounded-md border border-border bg-muted/30 p-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                    onClick={scanSite} disabled={scanning || !plan.inputs.website}
+                    title={plan.inputs.website
+                      ? `Read ${plan.inputs.website} and fill in what it says (no Apify, about half a penny)`
+                      : 'No website stored for this client'}>
+                    {scanning ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                    {scanning ? 'Scanning their site…' : 'Scan their site'}
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    {plan.inputs.website ?? 'no website on record'}
+                  </span>
+                </div>
+                {scan && (
+                  <div className="grid gap-1 text-[11px]">
+                    {/* FACTUAL — areas pre-filled above; phone/address shown for comparison only,
+                        because the generator reads those from the client record, not from here. */}
+                    <p className="text-muted-foreground">
+                      Found on their site:{' '}
+                      {scan.areas.length ? `${scan.areas.length} area(s) — pre-filled above` : 'no areas named'}
+                      {scan.phone ? ` · phone ${scan.phone}` : ''}
+                      {scan.address ? ` · address ${scan.address}` : ''}
+                      {scan.cached ? ' · (cached)' : ''}
+                    </p>
+                    {(scan.phone && plan.inputs.hasPhone) || (scan.address && plan.inputs.hasAddress) ? (
+                      <p className="text-muted-foreground">
+                        Phone/address are taken from the client record, not from this scan — if the site
+                        disagrees with what is stored, fix it on the lead.
+                      </p>
+                    ) : null}
+
+                    {/* ⛔ CREDENTIALS — UNTICKED, ALWAYS. Nothing here is selected by the scan. */}
+                    {scan.credentials.length > 0 ? (
+                      <div className="grid gap-1">
+                        <p className="font-medium text-amber-700 dark:text-amber-400">
+                          {scan.credentials.length} credential claim(s) found on their site — tick only the ones you know are current:
+                        </p>
+                        {scan.credentials.map((c) => (
+                          <label key={c.text} className="flex cursor-pointer items-start gap-2">
+                            <input type="checkbox" className="mt-0.5" checked={credPicked.has(c.text)}
+                              onChange={() => toggleCred(c.text)} />
+                            <span>
+                              <span className="font-medium">{c.text}</span>
+                              {c.context ? <span className="text-muted-foreground"> — “{c.context}”</span> : null}
+                            </span>
+                          </label>
+                        ))}
+                        <p className="text-muted-foreground">
+                          A website shows a claim was made once, not that it is still valid. Nothing is
+                          ticked for you, and an unticked claim never reaches a page.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">No credential claims found — the field stays blank for you to fill.</p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="grid gap-1">
                 <label className="text-xs text-muted-foreground">

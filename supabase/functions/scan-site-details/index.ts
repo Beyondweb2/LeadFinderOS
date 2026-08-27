@@ -249,7 +249,21 @@ function pickMainEmail(cands: { email: string; fromContact: boolean }[], siteDom
 
 /* ── LLM details extraction ──────────────────────────────────────────────────── */
 
-interface ScannedDetails { phone?: string; address?: string; email?: string; hours?: string }
+/* `areas` and `credentials` were added 2026-08-28 for the page generator's autofill.
+   ⛔ THE TWO ARE HANDLED DIFFERENTLY BY THE CALLER, AND THAT SPLIT IS THE POINT. Areas are
+   FACTUAL and pre-fill a field the operator reviews. Credentials are TRUST AND SAFETY CLAIMS and
+   are only ever offered as UNTICKED SUGGESTIONS — a website is the worst possible source for
+   whether a registration is CURRENT (a badge outlives a lapsed membership, and numbers go stale),
+   so "it appears on their site" is evidence it was once claimed, never evidence it is true today.
+   This function reports what it read; it decides nothing. */
+interface ScannedDetails {
+  phone?: string; address?: string; email?: string; hours?: string;
+  /** Place names the site says the business covers. Literal only. */
+  areas?: string[];
+  /** Credential-like claims found VERBATIM, each with the sentence it came from so the operator
+   *  can judge it without opening the site. Never applied automatically. */
+  credentials?: { text: string; context?: string }[];
+}
 
 const SYSTEM_PROMPT = `You extract a business's contact details from the plain text of THEIR OWN website.
 
@@ -260,9 +274,13 @@ Capture what is SHOWN — do not invent. Rules:
 - "email": the business email exactly as written. Omit if none shown.
 - "address": the full postal address as one comma-joined line exactly as written (street, town, county, postcode). Omit if none shown — do NOT assemble an address from stray fragments.
 - "hours": opening hours as a short single string exactly as written (e.g. "Mon - Fri: 9am - 5pm"). Omit if none shown.
+- "areas": the towns, villages, cities or districts the site says the business COVERS or SERVES (e.g. from "Areas we cover", a footer list, or "serving X, Y and Z"). Place names only, exactly as written, no counties-as-catch-alls like "the Midlands" and no phrases like "and surrounding areas". Omit the field entirely if the site names no areas.
+- "credentials": accreditations, memberships, certifications, awards or insurance statements the site CLAIMS — e.g. "Gas Safe registered", "NICEIC approved", "DBS checked", "Which? Trusted Trader", "City & Guilds qualified", "fully insured", "£2m public liability". For each: "text" is the claim exactly as written (include a registration number ONLY if one is literally shown next to it), and "context" is the short sentence or label it appeared in, so a human can judge it. Include a claim made in an image's alt text or a badge caption. Do NOT include a scheme name that only appears as a link to that scheme's own site with no claim of membership. Omit the field entirely if none are claimed.
+
+⛔ NEVER INFER A CREDENTIAL. Do not conclude "Gas Safe" because the business does boilers, or "insured" because it is a trade. Only report a claim the text actually makes. A missing credential is the correct answer; a wrong one is a false trust claim on a real business's page.
 
 Return ONLY a JSON object of this exact shape (omit any field not found):
-{"phone"?: string, "address"?: string, "email"?: string, "hours"?: string}`;
+{"phone"?: string, "address"?: string, "email"?: string, "hours"?: string, "areas"?: string[], "credentials"?: [{"text": string, "context"?: string}]}`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -303,9 +321,13 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // _v2: the extraction was fixed (deterministic email + stronger hours prompt + zwsp strip);
-    // bump the version so already-cached empty-detail results don't keep coming back.
-    const cacheKey = `${auditId || homepage.hostname}:site_details_v2`;
+    /* _v2: the extraction was fixed (deterministic email + stronger hours prompt + zwsp strip);
+       bump the version so already-cached empty-detail results don't keep coming back.
+       ⛔ _v3 (2026-08-28): `areas` and `credentials` were ADDED to the extraction. The cache has a
+       30-day TTL, so without a bump a client scanned last week would return a hit with neither
+       field and the page generator would show "site names no areas / no credentials" — an absent
+       value reading as a measured "none". Add a field, bump the version. */
+    const cacheKey = `${auditId || homepage.hostname}:site_details_v3`;
 
     // cache → cap → run → persist (enrichment_cache/usage + api_usage_log).
     const outcome = await runEnrichSource<{
@@ -399,6 +421,42 @@ Deno.serve(async (req) => {
           if (address) details.address = address;
           if (email) details.email = email; // LLM email is a fallback; harvested wins below
           if (hours) details.hours = hours;
+
+          /* AREAS — place names only, deduped case-insensitively, bounded. Anything phrase-shaped
+             ("and surrounding areas", a county catch-all) is dropped here as well as in the prompt:
+             the operator field weaves these in verbatim, so a phrase would read as a place. */
+          const rawAreas = Array.isArray(parsed?.areas) ? parsed.areas : [];
+          const seenArea = new Set<string>();
+          const areas: string[] = [];
+          for (const a of rawAreas) {
+            const t = typeof a === "string" ? a.trim().replace(/\s+/g, " ") : "";
+            if (!t || t.length > 40 || /[<>]/.test(t)) continue;
+            if (/\b(?:surrounding|areas?|nearby|county|shire|midlands|region|beyond|more)\b/i.test(t)) continue;
+            const k = t.toLowerCase();
+            if (seenArea.has(k)) continue;
+            seenArea.add(k);
+            areas.push(t);
+            if (areas.length >= 12) break;
+          }
+          if (areas.length) details.areas = areas;
+
+          /* CREDENTIALS — reported with their context, NEVER applied. Deduped on the claim text.
+             ⛔ NO NORMALISING AND NO TIDYING: the operator ticks these into a page, so the wording
+             must be what the site actually said, not our paraphrase of it. */
+          const rawCreds = Array.isArray(parsed?.credentials) ? parsed.credentials : [];
+          const seenCred = new Set<string>();
+          const creds: { text: string; context?: string }[] = [];
+          for (const c of rawCreds) {
+            const text = pick((c as { text?: unknown })?.text, 120);
+            if (!text) continue;
+            const k = text.toLowerCase();
+            if (seenCred.has(k)) continue;
+            seenCred.add(k);
+            const context = pick((c as { context?: unknown })?.context, 240);
+            creds.push(context ? { text, context } : { text });
+            if (creds.length >= 10) break;
+          }
+          if (creds.length) details.credentials = creds;
         } catch (e) {
           console.error("[scan-site-details] JSON parse failed:", (e as Error).message);
         }
