@@ -73,23 +73,38 @@ for (const n of ['You', 'The', 'Yes', 'However', 'Ask', 'Once', 'Keep']) {
   ok('clean → no warning', a.warning === '');
 }
 {
-  const a = assessCompetitorCleanliness(['Newson Health', 'You', 'AAAAABqkCA']);
-  ok('junk present → dirty', a.verdict === 'dirty', a.verdict);
-  ok('dirty warning names the count', a.warning.includes('2 of 3'), a.warning);
+  const a = assessCompetitorCleanliness(['Newson Health', 'You', 'AAAAABqkCA', 'However']);
+  ok('junk at/over the threshold → dirty', a.verdict === 'dirty', a.verdict);
+  ok('dirty warning names the count', a.warning.includes('3 of 4'), a.warning);
   ok('dirty warning says do not send', a.warning.includes('do not send to client'));
-  ok('junk examples listed', a.junkExamples.length === 2, JSON.stringify(a.junkExamples));
+  ok('junk examples listed', a.junkExamples.length === 3, JSON.stringify(a.junkExamples));
 }
 {
-  // ⛔ THE STAMP MUST NOT OVERRIDE THE EVIDENCE.
-  const a = assessCompetitorCleanliness(['You', 'Newson Health'],
+  /* ⛔ ONE OR TWO AMBIGUOUS NAMES MUST NOT CONDEMN A CLEANED RUN. The live case: gpt-4o
+     correctly returned "Hers" (forhers.com, a real brand) on Solene's cleaned run 3, and "hers"
+     is a pronoun in the marker list. At a threshold of 1 that blanked every rival on a run cleaned
+     60/60. The name is still reported, and still filtered out of display by isRealCompetitor. */
+  const a = assessCompetitorCleanliness(['Newson Health', 'Menopause Care', 'Hers'],
+    { competitor_cleaning: { complete: true, items_total: 60, items_cleaned: 60 } });
+  ok('one ambiguous single-word brand → still clean', a.verdict === 'clean', a.verdict);
+  ok('but it is still reported', a.junkExamples.includes('Hers'), JSON.stringify(a.junkExamples));
+  ok('clean → no warning even with a straggler', a.warning === '');
+  const b = assessCompetitorCleanliness(['Newson Health', 'Hers', 'You'],
+    { competitor_cleaning: { complete: true, items_total: 60, items_cleaned: 60 } });
+  ok('two stragglers → still clean', b.verdict === 'clean', b.verdict);
+}
+{
+  // ⛔ THE STAMP MUST NOT OVERRIDE THE EVIDENCE once the junk is provable.
+  const a = assessCompetitorCleanliness(['You', 'However', 'Once', 'Newson Health'],
     { competitor_cleaning: { complete: true, items_total: 10, items_cleaned: 10 } });
-  ok('a "complete" stamp over junk names is still dirty', a.verdict === 'dirty', a.verdict);
+  ok('a "complete" stamp over provable junk is still dirty', a.verdict === 'dirty', a.verdict);
 }
 {
   // An incomplete stamp is dirty even with no PROVABLE junk — unprovable content junk may lurk.
   const a = assessCompetitorCleanliness(['Newson Health'],
     { competitor_cleaning: { complete: false, items_total: 137, items_cleaned: 60 } });
-  ok('incomplete stamp → dirty', a.verdict === 'dirty', a.verdict);
+  ok('incomplete stamp → dirty at ZERO junk (the threshold never applies to the stamp)',
+    a.verdict === 'dirty', a.verdict);
   ok('incomplete warning shows coverage', a.warning.includes('60 of 137'), a.warning);
 }
 {

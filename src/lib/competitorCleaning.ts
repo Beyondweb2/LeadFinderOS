@@ -39,6 +39,27 @@ export interface CompetitorCleaningStamp {
 
 export type CleanlinessVerdict = 'clean' | 'dirty' | 'unknown';
 
+/* ⛔ HOW MUCH PROVABLE JUNK MEANS "NEVER CLEANED" — MEASURED, NOT PICKED, and the reason it is not
+ * 1 was found by running this code against the freshly cleaned Solene runs.
+ *
+ * A single marker hit does NOT prove a raw fold, because a few real brands ARE single English
+ * words. The live case: gpt-4o cleanly returned **"Hers"** (forhers.com, a real telehealth brand)
+ * from a Gemini answer, and "hers" is a pronoun in UNCLEANED_MARKER_WORDS. At a threshold of 1 that
+ * one name blanked every rival on a properly cleaned 20-question run — punishing the client report
+ * for the cleaner doing its job.
+ *
+ * The measured distribution has an enormous gap, so the line is easy:
+ *     CLEANED runs (Solene 1/2/3 after cleaning, + the 43 clean runs of 25-27 Aug):  0, 0, 1, 2
+ *     UNCLEANED runs (Solene run 1 before; 0b041217):                             123, 73+
+ * 3 sits mid-gap with a ~40x margin either side. Re-derive it before changing it.
+ *
+ * ⚠️ This is a threshold on the DIRTY VERDICT ONLY (whether to withhold the whole run's rivals).
+ * Every individual junk name is still filtered out of display by isRealCompetitor regardless of
+ * count — so 1 or 2 stragglers are removed, they are simply not treated as proof the run is raw.
+ * ⚠️ And it never overrides the STAMP: an explicitly incomplete clean is dirty at any junk count,
+ * because unprovable content-word junk ("Testosterone") may be sitting in the part never read. */
+export const JUNK_NAMES_PROVING_UNCLEANED = 3;
+
 export interface CleanlinessAssessment {
   verdict: CleanlinessVerdict;
   /** Distinct names that PROVE raw output — shown to the operator so the flag states its working. */
@@ -162,26 +183,28 @@ export function assessCompetitorCleanliness(
   }
   const junkExamples = [...junk].sort((a, b) => a.localeCompare(b));
 
-  if (junkExamples.length > 0) {
+  if (junkExamples.length >= JUNK_NAMES_PROVING_UNCLEANED) {
     return {
       verdict: 'dirty', junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp,
       warning: `Competitor names not cleaned — do not send to client. ${junkExamples.length} of ` +
         `${considered} stored names are raw text, not businesses (e.g. ${junkExamples.slice(0, 4).join(', ')}).`,
     };
   }
-  /* No PROVABLE junk. An explicitly incomplete stamp still means part of the run was never read,
-     so content-word junk ("Testosterone") could be sitting there unprovable — say so. */
+  /* Not enough to prove a raw fold. An explicitly incomplete stamp still means part of the run was
+     never read, so content-word junk ("Testosterone") could be sitting there unprovable — say so. */
   if (stamp && stamp.complete === false) {
     const done = stamp.items_cleaned ?? 0;
     const tot = stamp.items_total ?? 0;
     return {
-      verdict: 'dirty', junkExamples: [], junkCount: 0, namesConsidered: considered, stamp,
+      verdict: 'dirty', junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp,
       warning: `Competitor names only partly cleaned (${done} of ${tot} answers read) — ` +
         `do not send to client until re-extracted.`,
     };
   }
   if (considered === 0) return { verdict: 'unknown', junkExamples: [], junkCount: 0, namesConsidered: 0, stamp, warning: '' };
-  return { verdict: 'clean', junkExamples: [], junkCount: 0, namesConsidered: considered, stamp, warning: '' };
+  /* Clean. Any 1–2 stragglers are still reported (junkExamples) so the operator can see them, and
+     isRealCompetitor drops them from display — they just do not condemn the whole run. */
+  return { verdict: 'clean', junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp, warning: '' };
 }
 
 /** Every stored competitor string on a run's queue rows — the input `assessCompetitorCleanliness`
