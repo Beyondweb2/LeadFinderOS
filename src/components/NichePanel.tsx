@@ -4,8 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Telescope, CheckCircle2, MinusCircle, XCircle, HelpCircle, Search, Store } from 'lucide-react';
-import { rateLabel, sharePct, nicheVerdict, type NicheAnalysis } from '@/lib/nicheView';
-import { findLeadsHref, marketViewHref } from '@/lib/coverageState';
+import { rateLabel, sharePct, nicheVerdict, resultsBelongToTown, type NicheAnalysis } from '@/lib/nicheView';
+import { Link } from 'react-router-dom';
+import { marketViewHref } from '@/lib/coverageState';
+import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
+import { useOutreach } from '@/hooks/useOutreach';
+import { useCampaigns } from '@/hooks/useCampaigns';
+import { pickCampaignForTrade } from '@/lib/campaignForTrade';
+import { useToast } from '@/hooks/use-toast';
+import type { SearchFilters } from '@/types/lead';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    NICHE PANEL (Phase 1) — the read-only niche analysis inside Market view: one trade folded
@@ -22,8 +29,156 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'done'; niche: NicheAnalysis };
 
+/* ── the per-town outreach handoff ───────────────────────────────────────────────────────────
+ * ⛔ WHY THIS IS NO LONGER A LINK. It was `<a href={findLeadsHref(...)}>`, and two things followed.
+ * A raw <a> is a FULL PAGE RELOAD: the SPA is torn down and re-booted — entry chunk, providers,
+ * page data — and only THEN does the search start, so it never felt like the Find Leads page,
+ * which starts searching on the click. And the search's result landed on another screen, so
+ * getting those businesses into the CRM meant a second journey.
+ *
+ * Now the row runs THE SAME SEARCH IN PLACE, through the same `search()` from LeadSearchContext
+ * that Find Leads itself calls (the provider wraps the whole app), then offers "Add all N" over
+ * what came back. "View results" is a client-side <Link> with NO `run=search`, so the page shows
+ * the results already in the context instead of paying for them again.
+ *
+ * 🔴 THE GUARD THAT MATTERS: `leads` AND `lastSearch` ARE GLOBAL — ONE SET FOR THE WHOLE APP.
+ * There is exactly one result set, so a row may only claim it when `lastSearch` names THAT row's
+ * trade AND town. Without that test, searching Wakefield and then looking at the Bedford row would
+ * offer "Add all 20" over Wakefield's businesses and write them against Bedford — the wrong-town
+ * fault this codebase already paid for once (CLAUDE.md §6b). The comparison is on the SEARCH that
+ * produced the results, never on which button was pressed last.
+ * ⚠️ `isLoading` is global too, so a search started by one row disables the others and says why.
+ */
+function TownRow({
+  trade, town, businesses, cells, searchingTown, setSearchingTown,
+}: {
+  trade: string; town: string; businesses: number; cells: number;
+  searchingTown: string | null;
+  setSearchingTown: (t: string | null) => void;
+}) {
+  const { toast } = useToast();
+  const { leads, isLoading, search, lastSearch } = useLeadSearchContext();
+  const { addLead } = useOutreach();
+  const { campaigns } = useCampaigns();
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState<{ added: number; dupes: number } | null>(null);
+
+  /* Do the results on screen belong to THIS row? Both halves, always. */
+  const mine = resultsBelongToTown(lastSearch, trade, town);
+  const searchingHere = searchingTown === town && isLoading;
+  const searchingElsewhere = isLoading && !searchingHere;
+  const haveResults = mine && !isLoading && leads.length > 0;
+  const emptyResults = mine && !isLoading && leads.length === 0 && searchingTown === town;
+
+  const runSearch = async () => {
+    setAdded(null);
+    setSearchingTown(town);
+    try {
+      /* The same filter shape SearchForm builds: town-only, 50km, UK. Sent through the context so
+         the results land where the Find Leads page reads them (memory + sessionStorage). */
+      /* ⚠️ TYPED, NOT CAST. An `as never` here would hide a real mismatch — a renamed or added
+         required filter would compile and then behave differently from the Find Leads page, which
+         is the exact class of divergence this change exists to remove. */
+      const filters: SearchFilters = {
+        keyword: trade, location: town, radius: 50_000, country: 'UK', townOnly: true,
+      };
+      await search(filters);
+    } catch (e) {
+      toast({ title: `Search failed for ${town}`, description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    }
+  };
+
+  const addAll = async () => {
+    if (!haveResults || adding) return;
+    setAdding(true);
+    try {
+      const campaignId = pickCampaignForTrade(trade, campaigns, null).campaignId;
+      let ok = 0; let dupes = 0;
+      /* Same single-add path Find Leads uses (addLead, silent, trade+town stamped on the row), so
+         nothing about a lead added here differs from one added on that page. A duplicate returns
+         null and is COUNTED, never re-added. */
+      for (const lead of leads) {
+        const created = await addLead(lead, 'UK', 'no_website', campaignId, null, true, trade, town);
+        if (created) ok++; else dupes++;
+      }
+      setAdded({ added: ok, dupes });
+      toast({
+        title: `Added ${ok} lead${ok === 1 ? '' : 's'} from ${town}`,
+        description: dupes > 0 ? `${dupes} were already in the CRM and were skipped.` : 'All new.',
+      });
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 py-0.5">
+      <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+        {town} — {businesses} businesses, {cells} answers
+      </span>
+
+      <Link to={marketViewHref(trade, town, 'measured')} className="shrink-0 text-[11px] text-primary hover:underline"
+        title="Open this town's market view — its target list and Add-all-targets button">
+        <Store className="mr-0.5 inline h-3 w-3" />targets
+      </Link>
+
+      {searchingHere && (
+        <span className="shrink-0 text-[11px] text-primary">
+          <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+          Searching {town}… <span className="text-muted-foreground">(20–30s)</span>
+        </span>
+      )}
+
+      {haveResults && (
+        <>
+          <Button size="sm" variant="default" className="h-6 shrink-0 px-2 text-[11px]" onClick={addAll} disabled={adding}
+            title={`Add all ${leads.length} businesses found in ${town} to the CRM`}>
+            {adding ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Store className="mr-1 h-3 w-3" />}
+            {adding ? 'Adding…' : `Add all ${leads.length}`}
+          </Button>
+          {/* ⚠️ NO `run=search` — the whole point. The results are already in the context, so the
+              page renders them instead of paying for the same search twice. */}
+          <Link to={`/find-leads?mode=leads&keyword=${encodeURIComponent(trade)}&location=${encodeURIComponent(town)}`}
+            className="shrink-0 text-[11px] text-primary hover:underline"
+            title="Open Find Leads with these results already loaded — no new search">
+            <Search className="mr-0.5 inline h-3 w-3" />view results
+          </Link>
+        </>
+      )}
+
+      {added && !haveResults && (
+        <span className="shrink-0 text-[11px] text-emerald-600">Added {added.added}{added.dupes ? ` · ${added.dupes} already there` : ''}</span>
+      )}
+      {emptyResults && <span className="shrink-0 text-[11px] text-muted-foreground">no businesses found</span>}
+
+      {!searchingHere && !haveResults && (
+        <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]" onClick={runSearch}
+          disabled={searchingElsewhere}
+          title={searchingElsewhere
+            ? `A search is already running (${searchingTown ?? 'another town'}) — one at a time`
+            : `Run the normal lead search for ${trade} in ${town} (~11p of Places quota, free within 72h of the same search)`}>
+          <Search className="mr-1 h-3 w-3" />
+          {searchingElsewhere ? 'waiting…' : added ? 'search again' : 'find leads'}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export default function NichePanel({ trade, autoLoad = false }: { trade: string; autoLoad?: boolean }) {
   const [state, setState] = useState<State>({ kind: 'idle' });
+  /* WHICH ROW OWNS THE RUNNING SEARCH. Lives in the panel, not the row: `isLoading` is global, so
+     only the panel can tell "this row is searching" from "another row is". */
+  const [searchingTown, setSearchingTown] = useState<string | null>(null);
+  /* Ticks only while the fold is in flight; cleared on unmount and on completion, so nothing
+     keeps running behind a finished panel. */
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (state.kind !== 'busy') { setElapsed(0); return; }
+    const t0 = Date.now();
+    const id = setInterval(() => setElapsed(Math.round((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [state.kind]);
 
   const load = async () => {
     setState({ kind: 'busy' });
@@ -54,12 +209,19 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
     /* Auto-loading opens straight into a spinner — the invitation card below would flash the
        "Analyse niche" button for a moment and then replace itself, which reads as a misclick. */
     if (autoLoad) {
+      /* ⚠️ THE ELAPSED COUNTER IS THE FIX FOR THE ACTUAL COMPLAINT. This fold takes ~11s on a big
+         trade (Plumbers: 85 audits, 18 towns, 1,100 answers), and it used to sit behind one static
+         line — which reads as hung rather than working. A number that moves is the difference
+         between "slow" and "broken", and it costs nothing. */
       return (
         <Card className="border-primary/25">
-          <CardContent className="flex items-center gap-3 p-4 text-sm">
+          <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 text-sm">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
             <span className="font-medium">Reading every stored {trade} audit…</span>
-            <span className="text-muted-foreground">All towns, no new searches.</span>
+            <span className="text-muted-foreground">
+              All towns, no new searches{elapsed > 0 ? ` · ${elapsed}s` : ''}
+              {elapsed >= 8 ? ' · a big trade takes 10–15s' : ''}
+            </span>
           </CardContent>
         </Card>
       );
@@ -211,15 +373,15 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
                 per-town panel that owns "Add all N targets"). No lead-creation code here, and
                 'measured' is passed so no arrival spend-confirm is ever attached (§6c). */}
             {n.towns.slice(0, 8).map((t) => (
-              <div key={t.town} className="flex items-center gap-1.5 py-0.5">
-                <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{t.town} — {t.businesses} businesses, {t.cells} answers</span>
-                <a href={marketViewHref(trade, t.town, 'measured')} className="shrink-0 text-[11px] text-primary hover:underline" title="Open this town's market view — its target list and Add-all-targets button">
-                  <Store className="mr-0.5 inline h-3 w-3" />targets
-                </a>
-                <a href={findLeadsHref(trade, t.town)} className="shrink-0 text-[11px] text-primary hover:underline" title="Find leads in this town — the normal prefilled search (~11p of Places quota, free within 72h of the last identical search)">
-                  <Search className="mr-0.5 inline h-3 w-3" />find leads
-                </a>
-              </div>
+              <TownRow
+                key={t.town}
+                trade={trade}
+                town={t.town}
+                businesses={t.businesses}
+                cells={t.cells}
+                searchingTown={searchingTown}
+                setSearchingTown={setSearchingTown}
+              />
             ))}
             {n.towns.length > 8 && <p className="text-[11px] text-muted-foreground">+{n.towns.length - 8} more towns</p>}
           </div>
