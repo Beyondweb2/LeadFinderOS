@@ -16,6 +16,7 @@
    ============================================================ */
 import {
   buildPagePlan, serviceMatches, townMatches, stuffingCheck, slugFor,
+  enforceCatchmentHonesty, FALSE_BASE_RE,
   MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT,
 } from "../src/lib/pagePlan.ts";
 
@@ -167,6 +168,26 @@ console.log("\n── THE ANTI-STUFFING CHECK ──");
   const v5 = stuffingCheck(nounSpam, 'Lock changes', 'Huntingdon');
   ok(v5.topWordPct > MAX_SINGLE_WORD_PCT, `  bare-noun spam ("${v5.topWord}" ${v5.topWordPct}%) trips the backstop`);
   ok(v5.verdict === 'stuffed', `  bare-noun-spam copy grades stuffed (${v5.detail})`);
+}
+
+console.log("\n── ⛔ CATCHMENT HONESTY — no page may claim a base in a town the client only covers ──");
+{
+  ok(FALSE_BASE_RE.test('We are based here in town'), 'FALSE_BASE_RE catches "based here"');
+  ok(FALSE_BASE_RE.test('visit our premises for a quote'), '  and premises-style claims');
+  ok(!FALSE_BASE_RE.test('We cover Peterborough from our base in Huntingdon'), '  but "our base in <home town>" is honest and passes');
+  ok(!FALSE_BASE_RE.test('our database of locks'), '  and "database" never false-positives');
+
+  // The strip-manufactured case: "based in Huntingdon" -> town swapped for a neutral -> "based here".
+  const manufactured = '<p>We are based here and cover the area.</p><p>Our team is locally based.</p>';
+  const r = enforceCatchmentHonesty(manufactured);
+  ok(r.fixed, 'the hard guarantee reports it fixed something');
+  ok(!FALSE_BASE_RE.test(r.html.replace(/locally/g, '')), '  and the output carries no base claim');
+  ok(r.html.includes('serving this area') && r.html.includes('nearby'), '  with readable substitutions');
+  ok(r.html.startsWith('<p>'), '  HTML tags untouched (text nodes only)');
+
+  const honest = '<p>We cover the town and travel to you.</p>';
+  const r2 = enforceCatchmentHonesty(honest);
+  ok(!r2.fixed && r2.html === honest, 'honest copy passes through byte-identical');
 }
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILED`);

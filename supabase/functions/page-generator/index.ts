@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildPagePlan, stuffingCheck, enforceNaturalness, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
+import { buildPagePlan, stuffingCheck, enforceNaturalness, enforceCatchmentHonesty, FALSE_BASE_RE, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
 import { classifyWinnability, unwrapCitationUrl, SCORED_ENGINES, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
 import { sourceMix, classifySource } from "../../../src/lib/sourceType.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
@@ -70,7 +70,7 @@ const PAGE_TOOL = {
   },
 };
 
-function systemPrompt(mustNotSay: string, town: string, localAreas: string[]): string {
+function systemPrompt(mustNotSay: string, town: string, localAreas: string[], isHomeTown: boolean): string {
   return `You write ONE service-plus-town page for a small UK trade business's own website. The page
 exists so AI assistants (ChatGPT, Gemini) that read the site can learn this business does THIS
 service in ${town}. You return ONLY structured parts via the return_page tool.
@@ -92,6 +92,12 @@ HARD RULES:
 - ⛔ WRITE ONLY ABOUT ${town}. Do NOT name, list or mention ANY other town, city, village or area —
   not even to say the business "also covers" them. This page is about ${town} and nothing else.
 - NEVER promise outcomes: no "you'll rank", no "AI will recommend you", no "guaranteed".
+${isHomeTown
+  ? `- The business IS genuinely based in ${town} — you may naturally say "based in ${town}" or "based here".`
+  : `- ⛔ HONESTY — THE BUSINESS IS NOT BASED IN ${town}. It covers ${town} from a base elsewhere (the
+  true base is stated automatically after your copy). NEVER write "based here", "based locally",
+  "locally based", "our premises/office/shop/branch/workshop", or ANYTHING implying a physical
+  presence in ${town}. Say the firm SERVES or covers ${town} — the team travels to the customer.`}
 - INVENT NOTHING: no prices, no response times, no opening hours, no years-in-business, no reviews,
   no testimonials, no certifications beyond the accreditations given, and NO local landmarks, street
   names or area facts you were not given. If a fact was not given, do not state it.
@@ -707,7 +713,7 @@ Deno.serve(async (req) => {
        also strips it (homeTown is in otherTowns below). The business reads as "a local firm serving
        {town}" without naming where it is based. */
     const userPrompt = (feedback?: string) =>
-`Business: ${audit.business_name}${audit.business_type ? ` (${audit.business_type})` : ""}. A local firm serving ${page.town} and the surrounding area.
+`Business: ${audit.business_name}${audit.business_type ? ` (${audit.business_type})` : ""}. ${isHomeTown ? `A local firm based in ${page.town}.` : `A firm covering ${page.town} and the surrounding area from its base nearby — NOT based in ${page.town} (the true base is added automatically; do not name it).`}
 Write the page for: ${page.service} — ${page.town}.
 The exact search queries this page must genuinely answer (a reader asking these should find this page useful):
 ${page.queries.map((q) => `- ${q}`).join("\n")}
@@ -724,7 +730,7 @@ Return via return_page.`;
           model: MODEL,
           temperature: 0.6,
           messages: [
-            { role: "system", content: systemPrompt((ob.must_not_say ?? "").trim(), page.town, localAreas) },
+            { role: "system", content: systemPrompt((ob.must_not_say ?? "").trim(), page.town, localAreas, isHomeTown) },
             { role: "user", content: prompt },
           ],
           tools: [PAGE_TOOL],
@@ -775,17 +781,26 @@ Return via return_page.`;
       return `YOUR PREVIOUS DRAFT READ AS KEYWORD-STUFFED (${c.detail}). Rewrite it to read like a human wrote it:\n- ${rules.join("\n- ")}`;
     };
 
+    /* CATCHMENT HONESTY joins the regeneration trigger: on a town the client only covers, a draft
+       claiming a base there ("based here", "our premises"…) is regenerated with the honesty rule
+       restated — and whatever survives is mechanically fixed after enforceNaturalness below. */
+    const dishonest = (bodyHtml: string): boolean => !isHomeTown && FALSE_BASE_RE.test(bodyHtml);
+    const badness = (c: StuffingVerdict, o: { bodyHtml: string }): number =>
+      stuffScore(c) + (dishonest(o.bodyHtml) ? 50 : 0);
+    const honestyFeedback = `\n- ⛔ the business is NOT based in ${page.town} — remove every "based here"/"based locally"/premises-style claim; say it SERVES ${page.town}`;
+
     let check = stuffingCheck(`${out.h1} ${out.bodyHtml}`, page.service, page.town);
     let best = { out, check };
     let attempts = 1;
-    while (check.verdict === "stuffed" && attempts < 3) {
-      const retry = await callOpenAI(userPrompt(strictFeedback(check, attempts)));
+    while ((check.verdict === "stuffed" || dishonest(out.bodyHtml)) && attempts < 3) {
+      const fb = strictFeedback(check, attempts) + (dishonest(out.bodyHtml) ? honestyFeedback : "");
+      const retry = await callOpenAI(userPrompt(fb));
       attempts++;
       if (retry.kind !== "page") break; // no_credits / error mid-loop → stop, use best so far
       const rc = stuffingCheck(`${retry.h1} ${retry.bodyHtml}`, page.service, page.town);
-      if (stuffScore(rc) < stuffScore(best.check)) best = { out: retry, check: rc };
+      if (badness(rc, retry) < badness(best.check, best.out)) best = { out: retry, check: rc };
       out = retry; check = rc;
-      if (rc.verdict === "ok") { best = { out: retry, check: rc }; break; }
+      if (rc.verdict === "ok" && !dishonest(retry.bodyHtml)) { best = { out: retry, check: rc }; break; }
     }
     out = best.out;
 
@@ -794,6 +809,10 @@ Return via return_page.`;
        copy passes on its own); this only guarantees the town count and no-other-towns. */
     const otherTowns = [homeTown, ...areas].filter((a) => a && a.toLowerCase() !== page.town.toLowerCase());
     const enforced = enforceNaturalness(out.bodyHtml, page.service, page.town, otherTowns, out.h1);
+    /* ⛔ HARD HONESTY GUARANTEE, applied AFTER the town strip — which can itself MANUFACTURE the
+       false claim ("based in Huntingdon" → town swapped for a neutral → "based here"). Home-town
+       pages are untouched: "based here" is true there. */
+    const honesty = isHomeTown ? { html: enforced.html, fixed: false } : enforceCatchmentHonesty(enforced.html);
 
     /* ⛔ REAL CONTACT + INTERNAL LINKS — appended AFTER enforceNaturalness so these guaranteed-correct
        details are never trimmed or mangled by the town-cap / other-town backstop. Everything here is
@@ -804,6 +823,9 @@ Return via return_page.`;
     if (contactUrl) linkParts.push(`drop us a message on our <a href="${escHtml(contactUrl)}">contact page</a>`);
     if (siteRoot) linkParts.push(`see the rest of what we do on our <a href="${escHtml(siteRoot)}">home page</a>`);
     let cta = `<h2>Get in touch</h2><p>`;
+    /* The honest catchment statement — the base stated plainly, the team travels. Appended after
+       every strip/fix, so the home-town name here is never mangled. */
+    if (!isHomeTown && homeTown) cta += `We cover ${escHtml(page.town)} from our base in ${escHtml(homeTown)} — we come to you. `;
     cta += phone
       ? `Call ${escHtml(contactName)} on <strong>${escHtml(phone)}</strong> and we'll talk through what you need`
       : `Get in touch and we'll talk through what you need`;
@@ -811,7 +833,7 @@ Return via return_page.`;
     cta += `.`;
     if (linkParts.length) cta += ` Or ${linkParts.join(", or ")}.`;
     cta += `</p>`;
-    const finalBody = `${enforced.html}\n${cta}`;
+    const finalBody = `${honesty.html}\n${cta}`;
 
     /* SEO TITLE TAG — built deterministically (not the model's) so the client's REAL phone is always
        present, in the "[Service] in [Town] | [Name] [phone]" pattern their existing titles use, and
@@ -844,7 +866,7 @@ Return via return_page.`;
         mechanicallyEnforced: enforced.townTrimmed || enforced.otherTownsStripped,
       },
       // What the mechanical block actually applied — so the UI can show it plainly.
-      applied: { phone: !!phone, address: isHomeTown && !!address, links: linkParts.length, areas: localAreas },
+      applied: { phone: !!phone, address: isHomeTown && !!address, links: linkParts.length, areas: localAreas, homePage: isHomeTown, honestyFixed: honesty.fixed },
     });
   } catch (e) {
     console.error("[page-generator] error:", e);
