@@ -1543,6 +1543,77 @@ by the single account below.** §6's paginate rule, caught in this file's own no
 
 ## 8. Known open problems — don't rediscover these
 
+- 🔴 **A 3-RUN MEASUREMENT ONLY REPEATS 20 QUESTIONS. FOUND 2026-08-28, NOT FIXED — PAUL'S CALL
+  BECAUSE THE FIX COSTS APIFY.** Solene's 47-question measurement (audit `c2be3e5d`) ran
+  **47 questions in run 1 and 20 in runs 2 and 3** — the same 20 both times, all drawn from run 1.
+  So **20 questions have 3 runs and 27 have ONE**, which is exactly the "single-run audits give
+  unreliable winnability" problem the measurement path exists to avoid.
+  - **Cause:** `advanceBaseline` (`_shared/audit-baseline.ts:300`) fires every repeat run with
+    `purpose: "baseline"`, and create-ai-audit clamps that to **`BASELINE_MAX_QUESTION_COUNT = 20`**
+    — not `MEASUREMENT_MAX_QUESTION_COUNT` (75). A measurement's own repeats are re-graded as
+    baselines on the way out.
+  - ⚠️ **The comment at `create-ai-audit:306` warns about this exact failure** ("a baseline REPEAT
+    run … would silently truncate 10 questions to 5 and average two different question sets"). The
+    measurement path re-introduced it because advanceBaseline hardcodes the purpose. Fixing it means
+    passing `purpose: "measurement"` when `is_measurement` is true — one line, but re-running the
+    missing 27 questions twice is **~54 Apify calls**, so it is a spend decision, not a code
+    decision.
+  - ⚠️ **Any "5 of N" figure on a measurement is therefore over an UNEVEN denominator.** Solene reads
+    5 named of 174 answer-cells; 27 of its questions contribute a third as many cells as the rest.
+- ✅ **THE COMPETITOR-NAME CLEANER SILENTLY CLEANED PART OF A RUN AND RETURNED `ok:true` — FIXED
+  2026-08-28.** `extract-competitors` packed every answer into ONE OpenAI call capped at
+  `MAX_ITEMS = 60` (question × engine) and `break`ed out. Solene's 47-question run is **137 items**,
+  so **77 answers were never shown to the model**, the 60 that were went in a single ~302,000-char
+  prompt with no output bound (long enough for the tool-call arguments to truncate and fail
+  `JSON.parse`), and the function reported success. The run shipped **381 raw regex strings as
+  competitor firms** — "Testosterone", "Estrogen", "Sleep", plus 48 scraped tracking ids
+  ("AAAAABqkCA", "Xdaj6AH7genL7KP9o") — and the "who AI named instead" headline counted them.
+  - ⛔ **IT WAS NOT THE OPENAI CREDIT OUTAGE, and that was the first hypothesis.** Measured: **43 of
+    the last 45 completed runs cleaned fine over 25–27 Aug**, including Solene's own 20-question
+    run 2. Every clean run in the book is ≤20 questions (≤60 items) — **47 questions is the first
+    thing that ever tripped the cap**, so the bug was latent from the day the cleaner was written.
+    Before blaming credit again, grade the last N runs' names; the tell is a run with an engine
+    block holding **more than `MAX_PER_ENGINE` (8)** names, which proves it was never rewritten.
+  - **The fix:** items are BATCHED (`BATCH_ITEMS = 24`, sequential — concurrency on a big run is the
+    fastest route to a 429), `max_tokens` is stated, one failing batch no longer loses the others,
+    `MAX_TOTAL_ITEMS` is a real ceiling that REPORTS when it bites, and a model that omits ids is
+    recorded rather than assumed complete. Cost scales with answer volume, not batch count:
+    **137 items ≈ 20p**, all three Solene runs **34p** (measured, gpt-4o).
+  - ⛔ **THE FAIL-SAFE IS DERIVED FROM THE NAMES, NOT READ FROM THE RECEIPT.**
+    `src/lib/competitorCleaning.ts` grades a run clean/dirty from the stored names themselves;
+    the new stamp (`ai_audit_runs.results.competitor_cleaning`, jsonb — **no migration**) is only
+    corroboration, because **every audit before 2026-08-28 has no stamp and absence must not read
+    as clean**. A stamp claiming `complete` over provable junk is still graded dirty. A **dirty run
+    withholds every rival name from the client report** (gutPunch included — it LEADS the report)
+    and the AI Audit page shows "Competitor names not cleaned — do not send to client" with the
+    offending strings.
+  - ⛔ **THE STRUCTURAL TESTS CANNOT CATCH CONTENT-WORD JUNK, AND MUST NOT PRETEND TO.**
+    `isRealCompetitor`'s word sets are accountancy/trades/hospitality, so **medical nouns sail
+    through** — no test can know "Testosterone" is not a clinic. That is why the CLEANER is the fix
+    and the withholding is the seatbelt; do **not** answer this by adding a medical word list (the
+    "Safe printed as RG Locksmiths' third competitor" lesson, one trade later).
+  - ⛔ **TWO THRESHOLDS, BOTH MEASURED, BOTH FOUND BY A FALSE POSITIVE ON REAL DATA:**
+    - the code-like-name test's **uppercase ratio is 0.50 because 0.35 deleted `GenderGP`**, a real
+      clinic (3 upper of 8 letters, 2 case flips — identical arithmetic to `AAAAABqkCA` on every
+      clause except the ratio, where the id sits at 0.80). Found by sweeping the predicate over all
+      **1,090 distinct names Solene really stored**: final result **123 flagged, ZERO multi-word and
+      ZERO firm-shaped names**. Re-run the sweep, not just the unit test.
+    - **`JUNK_NAMES_PROVING_UNCLEANED = 3`, because 1 blanked a correctly cleaned run.** gpt-4o
+      properly returned **"Hers"** (forhers.com, a real brand) and "hers" is a pronoun in
+      `UNCLEANED_MARKER_WORDS`. Measured gap: cleaned runs **0, 0, 1, 2** markers; uncleaned
+      **123, 73+**. The threshold governs ONLY whether to withhold the whole run's rivals — every
+      individual junk name is still filtered from display at any count.
+  - ⚠️ **`named` IS UNAFFECTED BY ANY OF THIS** — it comes from `nameMatches(answer_text, …)` at scan
+    time and never reads `competitors` (Solene: 5 named, before and after cleaning). **Winnability
+    DOES read them** (`classifyWinnability` counts distinct real firms), so junk inflates `U` and
+    grades questions `contested`/`locked` that are really `open`/`no_local_race`. After cleaning,
+    Solene's 87 question-cells read **43 no-local-race, 31 open, 8 contested, 5 named**, mean 1.69
+    real firms per question.
+  - **Redeployed for it:** `extract-competitors`, `render-audit-report`, `process-ai-audit-queue`,
+    `findable-onboarding`, `market-view`, `page-generator`, `instantly-push`. ⚠️ **`send-whatsapp-message`
+    and `process-whatsapp-queue` also import `auditReport.ts` (via `_shared/audit-reply.ts`) and were
+    left on the §6g hold** — their WhatsApp `{{2}}` competitor lists keep the old filtering until
+    that hold lifts. Redeploy them with it.
 - 🔴 **REPORT-ACCURACY BUG, LOGGED 2026-08-28, NOT FIXED: `classifySource` (`src/lib/sourceType.ts`)
   grades ANY `.org`/`.org.uk` domain as 'authority', so real businesses on .org read as official
   bodies** — seen live: `cbsaccountants.org` and `spriggsandco.org` (actual accountancy firms)
