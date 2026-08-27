@@ -1323,6 +1323,14 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
     WordPress home (Yoast SEO title / Yoast meta / WP slug / Elementor H1 / body → HTML widget) so they
     stop being dropped on paste. ⚠️ The 3 live RG Huntingdon pages predate this — set their title/meta
     in Yoast retroactively.
+  - ⛔ **CATCHMENT HONESTY (2026-08-28): "based here" is allowed ONLY on the client's real home town
+    page** (`isHomeTown`, from questionnaire confirmed_location). On covered-from-a-distance towns a
+    base claim is a doorway signal AND dishonest — and `enforceNaturalness`'s town strip could
+    MANUFACTURE it ("based in Huntingdon" → neutral swap → "based here"). Three layers: prompt
+    branch; `FALSE_BASE_RE` joins the regeneration trigger (proven live: Peterborough draft 1 was
+    dishonest, regenerated clean); `enforceCatchmentHonesty()` as the hard guarantee AFTER the town
+    strip. Catchment CTAs open with the honest line "We cover {town} from our base in {homeTown} —
+    we come to you" (appended post-strip; "our base in X" deliberately does not match FALSE_BASE_RE).
 - ⛔ **SECOND MODE — "ARTICLE / Q&A" — built 2026-08-27, SAFETY IS STRUCTURAL.** A toggle picks
   Service+Area (unchanged) or Article/Q&A (informational pages for national/regulated clients like
   Solene, a menopause clinic). Q&A actions are **`qa_clients` / `qa_plan` / `qa_generate`**,
