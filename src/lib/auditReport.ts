@@ -11,7 +11,8 @@
    the whole chain (market-match -> ai-search -> apify) uses no Deno globals, so the SPA can import
    it too and both sides group names identically. */
 import { buildMatchContext, groupNames } from "../../supabase/functions/_shared/market-match.ts";
-import { classifyKnownEntity, isUncleanedName } from './knownEntities.ts';
+import { classifyKnownEntity } from './knownEntities.ts';
+import { assessCompetitorCleanliness, collectCompetitorNames, isProvableJunkName } from './competitorCleaning.ts';
 import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
 
@@ -300,11 +301,15 @@ export function isRealCompetitor(name: string, locationText: string): boolean {
   if (!words.length) return false;
   // Gov/tax authority, statutory term, or accounting software → never a competing firm.
   if (isNotACompetitor(nl, words)) return false;
-  /* A single English function word ("always", "ask") is provably not a firm — the same marker test
-     the market fold uses (knownEntities.ts), so a report and the panel can never disagree on what
-     raw-extractor junk is. Broader than the word sets above for bare function words; adds nothing
-     for multi-word names (the marker test is single-token only). */
-  if (isUncleanedName(n)) return false;
+  /* Provably-not-a-firm strings from the raw regex extractor: a single English function word
+     ("always", "ask") — the same marker test the market fold uses, so a report and the panel can
+     never disagree — PLUS a code-like token.
+     ⛔ THE CODE-LIKE HALF WAS ADDED 2026-08-28 BECAUSE 48 OF THEM REACHED A HEADLINE. Solene's
+     answers carried scraped tracking/video ids ("AAAAABqkCA", "Xdaj6AH7genL7KP9o"), and they pass
+     every set above: one token, 4+ chars, capitalised, in no vocabulary list. Structural, so it
+     needs no per-trade word list (competitorCleaning.ts) — and swept over all 1,090 names Solene
+     really stored: 0 multi-word names and 0 firm-shaped names flagged. */
+  if (isProvableJunkName(n)) return false;
   /* A known DIRECTORY (Checkatrade, Yell, Trustpilot…) is a source, not a rival firm a customer
      hires instead — it passed every set above and could print as a client's "competitor". Known
      NATIONALS stay: Able Group really is a rival. (knownEntities.ts, 2026-08-19.) */
@@ -774,6 +779,20 @@ export function buildReportData(
     ownWebsite?: string;
   },
 ): AiAuditReportData | null {
+  /* ⛔ A RUN WE CANNOT PROVE WAS CLEANED PRINTS NO RIVAL NAMES AT ALL. Paul's rule, 2026-08-28:
+     "I never want a junk-named report going to a client without me knowing." The deterministic
+     filters below catch function words and code-like tokens, but they CANNOT catch content-word
+     junk — Solene's report led with "Testosterone" and "Hormone Replacement Therapy" as rival
+     firms, and no structural test can know those aren't clinics. So when the stored names carry
+     PROOF the LLM cleaner never covered this run, the honest output is silence: the report already
+     handles zero rivals gracefully (`hasRivals` gates every clause that mentions competitors), so
+     it degrades to "we measured what AI said about you" instead of naming nonsense.
+     ⚠️ The verdict is DERIVED from the names, not read from a stamp — every audit before
+     2026-08-28 has no stamp, and absence must not read as clean (competitorCleaning.ts). */
+  const cleanliness = assessCompetitorCleanliness(collectCompetitorNames(queueRows), run?.results);
+  const rivalsSuppressed = cleanliness.verdict === 'dirty';
+  const keepRival = (c: string) => !rivalsSuppressed && isRealCompetitor(c, ctx.locationText);
+
   let done = 0;
   let liveNamed = 0;
   let liveTotal = 0;
@@ -838,7 +857,7 @@ export function buildReportData(
       if (!er) continue;
       if (engine === 'google_organic') continue; // organic result TITLES aren't AI-named firms
       for (const c of er.competitors) {
-        if (!isRealCompetitor(c, ctx.locationText)) continue;
+        if (!keepRival(c)) continue;
         const key = c.trim().toLowerCase();
         if (!key) continue;
         const cur = counts.get(key);
@@ -928,7 +947,7 @@ export function buildReportData(
       for (const r of rows) {
         const er = r.result![engine]; if (!er) continue;
         ranCount++; if (er.named) named++;
-        for (const c of er.competitors ?? []) { if (!isRealCompetitor(c, ctx.locationText)) continue; const t = c.trim(); const k = t.toLowerCase(); if (!k || seenR.has(k)) continue; seenR.add(k); engRivals.push(t); }
+        for (const c of er.competitors ?? []) { if (!keepRival(c)) continue; const t = c.trim(); const k = t.toLowerCase(); if (!k || seenR.has(k)) continue; seenR.add(k); engRivals.push(t); }
         for (const c of er.citations ?? []) { const url = unwrapCitationUrl(c?.url ?? ''); const dom = citationDomain(url); if (!dom || cm.has(dom)) continue; cm.set(dom, url); }
       }
       return {
@@ -946,7 +965,7 @@ export function buildReportData(
       if (engine === 'google_organic') continue; // organic titles aren't AI-named firms
       const er = r.result![engine]; if (!er) continue;
       const cell: string[] = [];
-      for (const c of er.competitors ?? []) if (isRealCompetitor(c, ctx.locationText)) { raw.push(c.trim()); cell.push(c.trim()); }
+      for (const c of er.competitors ?? []) if (keepRival(c)) { raw.push(c.trim()); cell.push(c.trim()); }
       cellsRaw.push(cell);
       for (const c of er.citations ?? []) { const dom = citationDomain(unwrapCitationUrl(c?.url ?? '')); if (dom) domains.push(dom); }
     }
@@ -988,7 +1007,10 @@ export function buildReportData(
        report while Ultimate Valet, the top firm in his own data, went unmentioned. */
     topCompetitors,
     competitorMentions,
-    gutPunch: pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
+    /* Suppressed alongside every other rival list — the gut-punch LEADS the report, so an
+       uncleaned run must not open with "AI recommended Testosterone instead of you". With no
+       gutPunch the report falls back to its measured-verdict opening. */
+    gutPunch: rivalsSuppressed ? null : pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
     // The date the AUDIT WAS MEASURED, not the date someone happened to open the link.
     // render-audit-report rebuilds this on every request, so new Date() re-dated a three-week-old
     // report to today every time it was viewed — which also makes it useless as the day-0 artefact

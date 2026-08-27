@@ -30,6 +30,7 @@ import { AiAuditReport } from '@/components/AiAuditReport';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
+import { assessCompetitorCleanliness, collectCompetitorNames } from '@/lib/competitorCleaning';
 import {
   DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, classifyWinnability,
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
@@ -1532,6 +1533,16 @@ const AiAudit = () => {
     { named: 0, total: 0, failed: 0, done: 0 },
   );
   const isDraining = !!runId && !(run && TERMINAL.has(run.status));
+
+  /* ⛔ WERE THIS RUN'S COMPETITOR NAMES ACTUALLY CLEANED? Derived from the stored names every time
+     they change — never read from a receipt alone, because every audit before 2026-08-28 has no
+     receipt and an absent one must not read as clean. A `dirty` verdict is the ONLY thing standing
+     between a junk-named report and a client, so it is shown here as a warning, the report
+     withholds rival names, and the Re-extract button turns primary. */
+  const competitorCleanliness = useMemo(
+    () => assessCompetitorCleanliness(collectCompetitorNames(queueRows), run?.results),
+    [queueRows, run?.results],
+  );
   /* Load the ALL-RUNS rows for the report/preview once the tracked run is terminal, so a Full
      Measurement's in-place preview aggregates across every run (named X of 120). Cleared while
      draining or when the audit changes, so the draining bar (queueRows) is untouched.
@@ -2715,10 +2726,34 @@ const AiAudit = () => {
                       </Link>
                     </Button>
                   )}
-                  {/* Re-extract competitors — FREE/instant: recompute from stored answers, no re-scrape. */}
+                  {/* ⛔ THE FAIL-SAFE, VISIBLE. Paul's rule 2026-08-28: never ship a junk-named report
+                      without knowing. Basis="the names themselves", so it fires on historic audits too. */}
+                  {competitorCleanliness.verdict === 'dirty' && !isDraining && (
+                    <div className="w-full rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-sm">
+                      <div className="font-medium text-amber-700 dark:text-amber-400">
+                        Competitor names not cleaned — do not send to client
+                      </div>
+                      <div className="mt-1 text-muted-foreground">
+                        {competitorCleanliness.warning}
+                        {' '}Rival names are withheld from the report until this is re-extracted, so it
+                        cannot print raw text as a competitor.
+                      </div>
+                      {competitorCleanliness.junkExamples.length > 0 && (
+                        <div className="mt-1 font-mono text-xs text-muted-foreground">
+                          {competitorCleanliness.junkExamples.slice(0, 12).join(' · ')}
+                          {competitorCleanliness.junkExamples.length > 12
+                            ? ` · +${competitorCleanliness.junkExamples.length - 12} more` : ''}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Re-extract competitors — FREE/instant: recompute from stored answers, no re-scrape.
+                      Highlighted when the stored names PROVE the cleaner never covered this run, so
+                      the fix sits under the warning rather than somewhere else on the page. */}
                   {!isDraining && liveTally.done > 0 && (
-                    <Button variant="outline" size="sm" onClick={reextractCompetitors} disabled={reextracting}
-                      title="Recompute competitor names from the stored answers — free, no new search">
+                    <Button variant={competitorCleanliness.verdict === 'dirty' ? 'default' : 'outline'} size="sm"
+                      onClick={reextractCompetitors} disabled={reextracting}
+                      title="Recompute competitor names from the stored answers — an AI re-read, no new search">
                       {reextracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
                       {reextracting ? 'Re-extracting…' : 'Re-extract competitors'}
                     </Button>

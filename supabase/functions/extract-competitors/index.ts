@@ -16,9 +16,26 @@ const corsHeaders = {
 
 const MODEL = "gpt-4o";
 const MAX_ANSWER_CHARS = 4_000;   // truncate each stored answer_text packed into the prompt
-const MAX_ITEMS = 60;             // bound total (question × engine) items in one call
 const MAX_NAME_LEN = 60;          // reject absurdly long "names" (fragments)
 const MAX_PER_ENGINE = 8;         // cap competitors kept per engine
+
+/* ⛔ THE 2026-08-28 FIX: THIS USED TO BE ONE CALL CAPPED AT 60 ITEMS, AND THE CAP WAS SILENT.
+ * Solene's 47-question measurement is 137 (question × engine) items. The old loop `break`ed at 60,
+ * so 77 answers were NEVER SHOWN TO THE MODEL — and the function still returned {ok:true}, so a
+ * run that was ~0% cleaned reported success and shipped 381 raw regex names ("Testosterone",
+ * "AAAAABqkCA", "You") as competitor firms. Worse, the 60 it did send were packed into a single
+ * ~302,000-character prompt with no output bound, so the tool-call arguments were long enough to
+ * truncate and fail JSON.parse — losing the batch as well.
+ *
+ * Now: items are BATCHED, every batch is its own call, and coverage is REPORTED and STAMPED.
+ *  · BATCH_ITEMS small enough that one call's prompt and its tool output both fit comfortably.
+ *  · MAX_TOTAL_ITEMS is a real ceiling (a genuine bound on spend), and hitting it is recorded as
+ *    incomplete rather than passed off as done.
+ *  · One batch failing (rate limit, bad JSON) no longer loses the others.
+ * Cost scales with answer volume, not with batch count: ~£0.20 for a 137-item run on gpt-4o. */
+const BATCH_ITEMS = 24;
+const MAX_TOTAL_ITEMS = 400;
+const MAX_OUTPUT_TOKENS = 4_000;  // stated, not defaulted — a truncated tool call is unparseable
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -54,6 +71,27 @@ function cleanNames(names: unknown, businessName: string): string[] {
     if (out.length >= MAX_PER_ENGINE) break;
   }
   return out;
+}
+
+/* Record the cleaning outcome on the run (results.competitor_cleaning) WITHOUT touching the
+ * names — used on the total-failure path, where there is nothing cleaned to write but the operator
+ * still has to be told. Read-modify-write so a concurrent finalise cannot lose the questions fold.
+ * Never throws: a missing receipt must not turn a cleaning failure into a 500 with no reason.
+ * ⛔ The SPA does not trust this stamp on its own — src/lib/competitorCleaning.ts re-derives the
+ * verdict from the names themselves, because every audit before 2026-08-28 has no stamp at all. */
+// deno-lint-ignore no-explicit-any
+async function stampCleaning(service: any, runId: string, s: {
+  items_total: number; items_cleaned: number; complete: boolean; errors: string[];
+}): Promise<void> {
+  try {
+    const { data } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
+    const cur = data?.results && typeof data.results === "object" ? data.results : {};
+    await service.from("ai_audit_runs")
+      .update({ results: { ...cur, competitor_cleaning: { at: new Date().toISOString(), model: MODEL, ...s } } })
+      .eq("id", runId);
+  } catch (e) {
+    console.error("[extract-competitors] could not stamp cleaning outcome:", e instanceof Error ? e.message : e);
+  }
 }
 
 const SYSTEM_PROMPT =
@@ -184,35 +222,46 @@ Deno.serve(async (req) => {
         const answer = str(er?.answer_text);
         if (!answer) continue;
         items.push({ id: `${r.id}::${engine}`, rowId: r.id, engine, label, question: str(r.question), answer: answer.slice(0, MAX_ANSWER_CHARS) });
-        if (items.length >= MAX_ITEMS) break;
+        if (items.length >= MAX_TOTAL_ITEMS) break;
       }
-      if (items.length >= MAX_ITEMS) break;
+      if (items.length >= MAX_TOTAL_ITEMS) break;
+    }
+    /* Did the ceiling actually bite? Counted independently of `items` so the stamp can SAY SO — the
+       old code could not distinguish "read every answer" from "stopped at 60 and said ok". */
+    let answerItemsAvailable = 0;
+    for (const r of rows) {
+      if (r.status !== "done" || !r.result || typeof r.result !== "object") continue;
+      for (const engine of Object.keys(ANSWER_ENGINES)) {
+        if (str(((r.result as Row)[engine] as Row)?.answer_text)) answerItemsAvailable++;
+      }
     }
 
     // Nothing to read (no completed answers) — nothing to change.
     if (items.length === 0) return json({ ok: true, changed: 0, note: "no_answer_text" });
 
-    const userPrompt =
+    /* One OpenAI call for one batch. Returns the ids it cleaned, or throws with a typed reason.
+       Kept as a local closure so it can see OPENAI_API_KEY / businessName without threading them. */
+    const cleanBatch = async (batch: Item[]): Promise<Map<string, string[]>> => {
+      const userPrompt =
 `Business (exclude from every list): ${businessName}
 Location: ${location}
 
 Read each answer below and return the real competitor firms it recommended, per id.
 
-${items.map((it) => `[id: ${it.id}] engine: ${it.label} — question: "${it.question}"
+${batch.map((it) => `[id: ${it.id}] engine: ${it.label} — question: "${it.question}"
 """
 ${it.answer}
 """`).join("\n\n")}
 
 Return one entry per id via return_competitors.`;
 
-    let raw: string | undefined;
-    try {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           model: MODEL,
           temperature: 0, // deterministic — same stored answers → same competitors
+          max_tokens: MAX_OUTPUT_TOKENS,
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userPrompt },
@@ -223,24 +272,51 @@ Return one entry per id via return_competitors.`;
       });
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
-        return json({ ok: false, error: `openai_http_${res.status}`, detail: txt.slice(0, 300) }, 502);
+        /* Surface OpenAI's own words — "You have no credits remaining" is the one failure the
+           operator can actually act on, and it used to be invisible (CLAUDE.md §6e). */
+        throw new Error(`openai_http_${res.status}: ${txt.slice(0, 200)}`);
       }
       const data = await res.json();
-      raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    } catch (e) {
-      return json({ ok: false, error: "openai_request_failed", detail: e instanceof Error ? e.message : String(e) }, 502);
-    }
+      const raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+      if (typeof raw !== "string") throw new Error("model_no_tool_output");
+      let parsed: unknown;
+      try { parsed = JSON.parse(raw); } catch { throw new Error("model_bad_json"); }
+      const out = new Map<string, string[]>();
+      const results = (parsed as Row)?.results;
+      for (const r of Array.isArray(results) ? results : []) {
+        const id = str(r?.id);
+        if (id) out.set(id, cleanNames(r?.competitors, businessName));
+      }
+      return out;
+    };
 
-    if (typeof raw !== "string") return json({ ok: false, error: "model_no_tool_output" }, 422);
-    let parsed: unknown;
-    try { parsed = JSON.parse(raw); } catch { return json({ ok: false, error: "model_bad_json" }, 422); }
-
-    // Map id → cleaned competitor names (light backstop over the AI's judgement).
+    /* Run the batches SEQUENTIALLY. Deliberate: concurrent calls on a big run are the fastest way
+       to a 429, and this path is never user-blocking (the queue fires it after finalisation). */
     const byId = new Map<string, string[]>();
-    const results = (parsed as Row)?.results;
-    for (const r of Array.isArray(results) ? results : []) {
-      const id = str(r?.id);
-      if (id) byId.set(id, cleanNames(r?.competitors, businessName));
+    const batchErrors: string[] = [];
+    for (let i = 0; i < items.length; i += BATCH_ITEMS) {
+      const batch = items.slice(i, i + BATCH_ITEMS);
+      try {
+        const got = await cleanBatch(batch);
+        for (const [k, v] of got) byId.set(k, v);
+        /* A batch the model answered PARTIALLY is recorded, because the ids it omitted keep their
+           raw names — the recorded failure mode from 2026-08-19 ("changed=7 of 8 rows"). */
+        const missed = batch.filter((it) => !got.has(it.id)).length;
+        if (missed > 0) batchErrors.push(`batch ${i / BATCH_ITEMS + 1}: model omitted ${missed} of ${batch.length} ids`);
+      } catch (e) {
+        const why = e instanceof Error ? e.message : String(e);
+        console.error(`[extract-competitors] batch ${i / BATCH_ITEMS + 1} failed for run ${runId}: ${why}`);
+        batchErrors.push(`batch ${i / BATCH_ITEMS + 1}: ${why}`);
+      }
+    }
+    if (items.length > 0 && byId.size === 0) {
+      /* NOTHING was cleaned. This must be a hard failure, not {ok:true, changed:0} — the caller
+         (and the operator) has to be able to tell "no junk to remove" from "cleaning did not run".
+         Stamped first so the flag survives even though the request fails. */
+      await stampCleaning(service, runId, {
+        items_total: answerItemsAvailable, items_cleaned: 0, complete: false, errors: batchErrors.slice(0, 8),
+      });
+      return json({ ok: false, error: "cleaning_failed", itemsTotal: answerItemsAvailable, itemsCleaned: 0, errors: batchErrors.slice(0, 8) }, 502);
     }
 
     // Rewrite competitors per row×engine in the queue rows (the store the report reads).
@@ -269,11 +345,25 @@ Return one entry per id via return_competitors.`;
       const result = updatedResults.get(r.id) ?? (r.status === "done" ? r.result : null);
       return { question: r.question, status: r.status, engines: r.status === "done" ? result : null };
     });
+    /* ⛔ THE STAMP GOES IN THE SAME WRITE AS THE CLEANED SNAPSHOT. Two writes would leave a window
+       where the names are new and the receipt is old. jsonb — no migration. */
+    const complete = byId.size >= items.length && items.length >= answerItemsAvailable && batchErrors.length === 0;
+    const stamp = {
+      at: new Date().toISOString(),
+      model: MODEL,
+      items_total: answerItemsAvailable,
+      items_cleaned: byId.size,
+      complete,
+      errors: batchErrors.slice(0, 8),
+    };
     const { error: upErr } = await service
-      .from("ai_audit_runs").update({ results: { ...cur, questions } }).eq("id", runId);
+      .from("ai_audit_runs").update({ results: { ...cur, questions, competitor_cleaning: stamp } }).eq("id", runId);
     if (upErr) return json({ ok: false, error: "store_failed", detail: upErr.message }, 500);
 
-    return json({ ok: true, changed, itemsRead: items.length });
+    return json({
+      ok: true, changed, itemsRead: items.length, itemsTotal: answerItemsAvailable,
+      itemsCleaned: byId.size, complete, errors: batchErrors.slice(0, 8),
+    });
   } catch (e) {
     console.error("[extract-competitors] error:", e);
     return json({ ok: false, error: e instanceof Error ? e.message : "unknown_error" }, 500);
