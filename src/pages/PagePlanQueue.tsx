@@ -9,8 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
-import { Loader2, ListOrdered, Sparkles, ArrowUp, ArrowDown, Pause, Play, Trash2, GitMerge, AlertTriangle, ChevronDown, ChevronRight, FileDown } from 'lucide-react';
+import { Loader2, ListOrdered, Sparkles, ArrowUp, ArrowDown, Pause, Play, Trash2, GitMerge, AlertTriangle, ChevronDown, ChevronRight, FileDown, Hammer } from 'lucide-react';
 import { renderPagePlanHtml, type PagePlanReportItem, type PlanLabelKind } from '@/lib/pagePlanReportHtml';
+import { resolveHandoff, handoffUrl } from '@/lib/pagePlanHandoff';
+import { useNavigate } from 'react-router-dom';
 import { downloadHtmlDocAsPdf } from '@/lib/aiAuditReportDownload';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
@@ -25,6 +27,7 @@ import { downloadHtmlDocAsPdf } from '@/lib/aiAuditReportDownload';
 interface QaClient { audit_id: string; business_name: string; business_type: string | null }
 interface PlanRow {
   id: string; job: string; topic: string; primary_question: string; rationale: string | null;
+  lead_id: string | null; baseline_audit_id: string;
   winnability: string | null; score: number | null; score_reasons: string[] | null;
   wave: number; position: number; status: 'planned' | 'held' | 'merged' | 'removed';
   held_reason: string | null; near_dup_of: string | null;
@@ -94,6 +97,7 @@ const pillFor = (r: PlanRow): string | null => {
 const PagePlanQueue = () => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [clients, setClients] = useState<QaClient[]>([]);
   const [clientId, setClientId] = usePersistedState<string>('pageplan-client', '', { tier: 'both', scope: user?.id });
   const [rows, setRows] = useState<PlanRow[]>([]);
@@ -175,6 +179,40 @@ const PagePlanQueue = () => {
     await update(b.id, { set: { position: a.position } }, true);
   };
 
+  /* ── "BUILD THIS PAGE" — the plan→generator handoff. MODE IS DERIVED, never asked (and never
+     read from the row's page_type, which is hardcoded 'qa'): a lead client whose verbatim question
+     sits in a real generator service page → Service+Area seeded with that page's key; everything
+     else → Q&A seeded with the question. The generator plan read is FREE (no AI). NO auto-generate,
+     NO auto-publish — the seed only selects and highlights; a genuine resolution failure is said
+     out loud and navigates nowhere (never the wrong page). */
+  const [handingOff, setHandingOff] = useState('');
+  const buildThis = async (r: PlanRow) => {
+    setHandingOff(r.id);
+    try {
+      let genPages: { key: string; queries: string[] }[] | null = null;
+      let genExcluded: { question: string; reason: string }[] | null = null;
+      if (r.lead_id) {
+        const { data: res, error: err } = await supabase.functions.invoke('page-generator', { body: { action: 'plan', lead_id: r.lead_id } });
+        if (!err && res?.ok) { genPages = res.plan?.pages ?? []; genExcluded = res.plan?.excluded ?? []; }
+        // err or !ok leaves genPages null → resolveHandoff returns 'unresolved' (honest, no guess)
+      }
+      const target = resolveHandoff(
+        { lead_id: r.lead_id, baseline_audit_id: r.baseline_audit_id, primary_question: r.primary_question, questions: r.questions.map((q) => q.question_text) },
+        genPages, genExcluded,
+      );
+      if (target.mode === 'unresolved') {
+        toast({ title: "Couldn't match this row to a page", description: target.reason, variant: 'destructive' });
+        return;
+      }
+      if (target.mode === 'qa' && target.note) toast({ title: 'Opening as a Q&A article', description: target.note });
+      navigate(handoffUrl(target)!);
+    } catch (e) {
+      toast({ title: "Couldn't match this row to a page", description: e instanceof Error ? e.message : 'Open the page generator manually.', variant: 'destructive' });
+    } finally {
+      setHandingOff('');
+    }
+  };
+
   /* Assemble the printable document from the SAME rows the screen renders, and print via the SAME
      print-to-PDF path as the audit report. Prints whichever view the toggle shows. */
   const downloadPdf = () => {
@@ -241,6 +279,14 @@ const PagePlanQueue = () => {
             <span className="flex items-center gap-1 text-[10px] text-amber-600"><AlertTriangle className="h-3 w-3" /> near-duplicate of “{jobOf(r.near_dup_of) ?? 'another page'}”</span>
           )}
           <span className="ml-auto flex items-center gap-1">
+            {r.status === 'planned' && (
+              <Button size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={handingOff === r.id}
+                title="Open the page generator pre-filled for this page (nothing generates until you press Generate there)"
+                onClick={() => buildThis(r)}>
+                {handingOff === r.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Hammer className="mr-1 h-3 w-3" />}
+                Build this page
+              </Button>
+            )}
             <Button size="sm" variant="ghost" className="h-7 px-1.5" disabled={idx <= 0} onClick={() => swap(r, siblings[idx - 1])} title="Move up"><ArrowUp className="h-3.5 w-3.5" /></Button>
             <Button size="sm" variant="ghost" className="h-7 px-1.5" disabled={idx >= siblings.length - 1} onClick={() => swap(r, siblings[idx + 1])} title="Move down"><ArrowDown className="h-3.5 w-3.5" /></Button>
             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" title={`Move this page to wave ${r.wave === 1 ? 2 : 1}`} onClick={() => update(r.id, { set: { wave: r.wave === 1 ? 2 : 1 } })}>Move to wave {r.wave === 1 ? 2 : 1}</Button>
