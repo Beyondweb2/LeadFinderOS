@@ -1560,6 +1560,34 @@ by the single account below.** §6's paginate rule, caught in this file's own no
     decision.
   - ⚠️ **Any "5 of N" figure on a measurement is therefore over an UNEVEN denominator.** Solene reads
     5 named of 174 answer-cells; 27 of its questions contribute a third as many cells as the rest.
+- ⛔ **THERE IS NO REGEX COMPETITOR EXTRACTOR ANY MORE. DELETED 2026-08-28 — DO NOT REINSTATE ONE.**
+  `ai-search.ts` stores `competitors: []` at scan time and **`extract-competitors` (the LLM) is the
+  field's ONLY writer**. The scraper took every run of 1–4 capitalised words out of `answer_text`
+  and stored it, so its output was the field's DEFAULT state and the cleaner merely overwrote it —
+  meaning any answer the cleaner did not reach kept scraper output that no consumer could tell from
+  a real firm. A better word list cannot fix that: judging whether a capitalised phrase is a
+  **hireable firm** is a judgement about meaning, which is exactly why the display filters (built on
+  accountancy/trades/hospitality vocabulary) passed medical nouns straight through.
+  - ⚠️ **`nameMatches` CANNOT BE REUSED FOR THIS, and the brief that asked for it assumed otherwise.**
+    It is a deterministic string matcher answering "does this text contain **this one known** name?"
+    — it cannot discover unknown firms. So competitor extraction keeps an OpenAI dependency;
+    what changed is that the dependency can no longer fail *silently*.
+  - ⛔ **THE NEW AMBIGUITY, CLOSED IN THE SAME COMMIT: an empty list means EITHER "AI named nobody"
+    OR "the cleaner never ran".** Printing them the same way is the absent-value fault inverted.
+    `countAnsweredCells()` supplies the denominator, an empty list with answers and **no completed
+    receipt** warns instead of reading as "no competitors", and empty **with** a completed receipt is
+    `clean` (a known answer). `process-ai-audit-queue` now stamps a FAILURE receipt when the
+    extract-competitors invoke cannot be reached at all, so **every finalised run carries a receipt
+    either way**.
+  - ⚠️ **SUPPRESSION IS A SEPARATE FIELD FROM THE VERDICT (`suppressNames`), and the split is
+    load-bearing.** The report withholds names only when we HOLD names we cannot trust. Keying it on
+    `verdict === 'dirty'` would also blank the gut-punch on historic runs whose regex list happened
+    to be empty — silently changing reports already sent.
+  - ⚠️ **Market path consequence:** an uncleaned fold is now EMPTY rather than dirty, and
+    `marketShape` returns **`unmeasured`** with no leader, so it cannot grade arithmetic over
+    fragments. The `names_uncleaned` refusal still fires for historic folds, which keep their names.
+  - **Deployed for it:** `create-ai-audit`, `process-ai-audit-queue`, `market-view`, `derive-audit`,
+    `check-directory-listings`, `backfill-lead-towns`, `render-audit-report`, `findable-onboarding`.
 - ✅ **THE COMPETITOR-NAME CLEANER SILENTLY CLEANED PART OF A RUN AND RETURNED `ok:true` — FIXED
   2026-08-28.** `extract-competitors` packed every answer into ONE OpenAI call capped at
   `MAX_ITEMS = 60` (question × engine) and `break`ed out. Solene's 47-question run is **137 items**,
