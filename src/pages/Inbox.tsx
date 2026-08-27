@@ -460,6 +460,12 @@ const Inbox = () => {
       const { error } = await updateLeadStatus(c.leadId, status);
       if (error) { toast({ title: 'Could not update status', description: error, variant: 'destructive' }); return; }
       patchLeadStatus(c.leadId, status); // optimistic local update — no full re-query/spinner
+      /* ⛔ AND THE SYNTHETIC COPY, or the header/list pill would show the OLD status until the next
+         refetch. `conversations` is derived from `leads`, so patchLeadStatus covers every real
+         conversation — but a synthetic one (startFromLead, a lead with no thread yet) is a useState
+         SNAPSHOT outside that derivation. Patching it here keeps the one-source-of-truth promise for
+         the only object that holds a second copy. Same handler, no second update path. */
+      setSynthetic((s) => (s && s.leadId === c.leadId ? { ...s, leadStatus: status } : s));
       if (status === 'not_interested') toast({ title: 'Marked not interested', description: 'Hidden from the list — reappears if they reply.' });
     } finally {
       setSavingStatusKey(null);
@@ -1152,7 +1158,20 @@ const Inbox = () => {
               <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{active.unassigned ? `Unassigned · +${active.phone}` : active.label}</p>
-                  <p className="text-[11px] text-muted-foreground">+{active.phone}</p>
+                  {/* ⛔ SAME PILL, SAME STATE, SAME HANDLER as the list pill below — deliberately NOT a
+                      second copy. `active` IS the list's own conversation object (conversations.find
+                      by activeKey), and handleSetStatus → patchLeadStatus patches `leads` by leadId in
+                      useInbox, which `conversations` is derived from. So a change in either place
+                      re-renders BOTH from one source of truth; two different statuses for one business
+                      is structurally impossible. The spinner keys off the same savingStatusKey. */}
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    {active.leadId && (
+                      savingStatusKey === active.key
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                        : <PipelineStatusSelect value={active.leadStatus} onValueChange={(status) => handleSetStatus(active, status)} />
+                    )}
+                    <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {/* View their site — PREVIEW link (does NOT count as an "opened" event). */}
