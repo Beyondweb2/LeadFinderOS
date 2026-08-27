@@ -282,6 +282,37 @@ export function stuffingCheck(bodyHtmlOrText: string, service: string, town: str
    Operates on TEXT NODES only (never inside <tags>), so it cannot corrupt the HTML.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 const NEUTRAL_TOWN = ['here', 'the area', 'locally'];
+
+/* ═══ CATCHMENT HONESTY (2026-08-28, Paul's spec) — a page for a town the client only COVERS must
+   never imply a physical base there ("based here", "our premises", …). That is a doorway-page
+   signal AI ignores AND dishonest to the customer. Two pieces:
+   - FALSE_BASE_RE detects base-claims so the generate loop can REGENERATE with honesty feedback;
+   - enforceCatchmentHonesty() is the HARD guarantee, run AFTER enforceNaturalness — which matters
+     because the other-town strip itself can MANUFACTURE the claim: an honest "based in Huntingdon"
+     on a Peterborough page gets its town swapped for a neutral, yielding "based here"/"based
+     locally". Fixing after the strip catches both model-written and strip-manufactured claims.
+   The true base is then stated honestly by the mechanical CTA ("We cover {town} from our base in
+   {homeTown}"), which is appended after all of this and is never trimmed. */
+export const FALSE_BASE_RE = /\bbased\b|\bour (?:premises|office|shop|workshop|branch)\b|\bcome (?:and )?(?:visit|see) us\b/i;
+
+const CATCHMENT_FIXES: [RegExp, string][] = [
+  [/\bbeing based (?:right )?(?:here|locally|in the (?:local )?area)\b/gi, 'serving the area'],
+  [/\bbased (?:right )?here\b/gi, 'serving this area'],
+  [/\bbased locally\b/gi, 'serving the area'],
+  [/\bbased in (?:the )?(?:local )?area\b/gi, 'covering the area'],
+  [/\blocally[- ]based\b/gi, 'nearby'],
+  [/\bour (?:premises|office|shop|workshop|branch) (?:here|in the area)\b/gi, 'our service in the area'],
+];
+
+export function enforceCatchmentHonesty(bodyHtml: string): { html: string; fixed: boolean } {
+  let fixed = false;
+  const html = mapTextNodes(String(bodyHtml ?? ''), (t) => {
+    let out = t;
+    for (const [re, sub] of CATCHMENT_FIXES) out = out.replace(re, () => { fixed = true; return sub; });
+    return out;
+  });
+  return { html, fixed };
+}
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const mapTextNodes = (html: string, fn: (t: string) => string): string =>
   String(html ?? '').replace(/(<[^>]+>)|([^<]+)/g, (_m, tag, text) => (tag ? tag : fn(text ?? '')));
