@@ -30,7 +30,7 @@ import { AiAuditReport } from '@/components/AiAuditReport';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
-import { assessCompetitorCleanliness, collectCompetitorNames } from '@/lib/competitorCleaning';
+import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
 import {
   DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, classifyWinnability,
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
@@ -1540,7 +1540,8 @@ const AiAudit = () => {
      between a junk-named report and a client, so it is shown here as a warning, the report
      withholds rival names, and the Re-extract button turns primary. */
   const competitorCleanliness = useMemo(
-    () => assessCompetitorCleanliness(collectCompetitorNames(queueRows), run?.results),
+    () => assessCompetitorCleanliness(collectCompetitorNames(queueRows), run?.results,
+      { answeredCells: countAnsweredCells(queueRows) }),
     [queueRows, run?.results],
   );
   /* Load the ALL-RUNS rows for the report/preview once the tracked run is terminal, so a Full

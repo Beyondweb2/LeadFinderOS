@@ -686,6 +686,33 @@ async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolea
  * that have no unsettled rows left (self-healing after a prior tick).
  */
 // deno-lint-ignore no-explicit-any
+/* ⛔ EVERY FINALISED RUN MUST LEAVE A CLEANING RECEIPT, INCLUDING A FAILED ONE. Since 2026-08-28
+ * the regex competitor scraper is deleted (ai-search.ts), so a run whose cleaning never happened
+ * has an EMPTY competitor list — indistinguishable on screen from "AI named nobody" unless
+ * something records the attempt. extract-competitors stamps its own outcome; this covers the case
+ * where it could not be reached at all, which is precisely the silent one.
+ * Read-modify-write on results (jsonb, no migration) and never throws: a missing receipt must not
+ * flip a finalised run back out of complete. */
+// deno-lint-ignore no-explicit-any
+async function stampCleaningFailure(service: any, runId: string, detail: string): Promise<void> {
+  try {
+    const { data } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
+    const cur = data?.results && typeof data.results === "object" ? data.results : {};
+    await service.from("ai_audit_runs").update({
+      results: {
+        ...cur,
+        competitor_cleaning: {
+          at: new Date().toISOString(), model: null, items_total: null, items_cleaned: 0,
+          complete: false, errors: [detail],
+        },
+      },
+    }).eq("id", runId);
+  } catch (e) {
+    console.error(`[process-ai-audit-queue] could not stamp cleaning failure for ${runId}:`, e instanceof Error ? e.message : e);
+  }
+}
+
+// deno-lint-ignore no-explicit-any
 async function finaliseSettledRuns(service: any, runIds: string[], estCost: number, cappedRuns?: Set<string>, apifyToken = ""): Promise<number> {
   let ids = runIds;
   if (ids.length === 0) {
@@ -939,9 +966,12 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
           if (!res.ok) {
             const txt = await res.text().catch(() => "");
             console.error(`[process-ai-audit-queue] extract-competitors failed for run ${runId}: HTTP ${res.status} ${txt.slice(0, 300)}`);
+            await stampCleaningFailure(service, runId, `invoke HTTP ${res.status}: ${txt.slice(0, 160)}`);
           }
         } catch (e) {
-          console.error(`[process-ai-audit-queue] extract-competitors invoke error for run ${runId}:`, e instanceof Error ? e.message : String(e));
+          const why = e instanceof Error ? e.message : String(e);
+          console.error(`[process-ai-audit-queue] extract-competitors invoke error for run ${runId}:`, why);
+          await stampCleaningFailure(service, runId, `invoke error: ${why.slice(0, 160)}`);
         }
       })());
       // Automation B: queue the audit_reply send for AFTER extraction. Only for a genuinely
