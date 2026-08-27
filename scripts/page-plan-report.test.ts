@@ -81,8 +81,12 @@ console.log('── ⛔ CLIENT vs INTERNAL (leak-safe) ──');
   ok(internal.includes('score 85') && internal.includes('both ask about online HRT') && internal.includes('(15)'),
     'internal view shows scores, rationale and source counts');
   // The status pill next to the score must match the BUILD decision, never contradict it.
-  ok(internal.includes('<span class="pp-int-chip">Gemini gap</span>') && !/pp-int-chip">named</.test(internal),
-    'a gap BUILD card\'s pill reads "Gemini gap", never a bare "named"');
+  // Scope: BUILD cards only — the wave-2 DEFEND card legitimately keeps its "named" pill.
+  ok(internal.includes('<span class="pp-int-chip">Gemini gap</span>'), 'a gap BUILD card\'s pill reads "Gemini gap"');
+  const gapCard = internal.match(/Comparison of UK services[\s\S]*?<\/li>/)?.[0] ?? '';
+  ok(!!gapCard && !gapCard.includes('pp-int-chip">named<'), '  and that card carries no bare "named" pill');
+  const defendCard = internal.match(/Emergency lockouts — Huntingdon[\s\S]*?<\/li>/)?.[0] ?? '';
+  ok(!!defendCard && defendCard.includes('pp-int-chip">named<'), '  while the DEFEND card keeps "named" (correct there)');
 }
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILED`);
