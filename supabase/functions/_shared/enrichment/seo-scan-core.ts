@@ -116,12 +116,28 @@ export function severityOf(v: unknown): Finding["severity"] {
   return "med";
 }
 
+/** Page-scope context for finding titles — the site-level truths the wording must not contradict. */
+export interface IssueScope { totalPages: number; schemaPages: number; hasStructuredData: boolean }
+
 /** Collect + dedupe the actor's structured issue objects across ALL crawled pages.
  *  Verified shape: audit.issues.structured.{critical|warnings|info}[] =
  *  { id, message, category, priority, estimatedImpact, fixHint, pagesAffected }.
  *  title<-message, detail<-fixHint, severity<-estimatedImpact. Dedupe by message so a site-wide
- *  issue shows once; keep the highest severity and sum affected pages. */
-export function collectIssues(pages: Record<string, unknown>[], cap: number): Finding[] {
+ *  issue shows once; keep the highest severity and sum affected pages.
+ *
+ *  ⛔ THE PRESENTATION FIX (2026-08-28, the "@graph bug" David reported — the parser was actually
+ *  fine; the WORDING was the fault). The actor's issues are PER-PAGE, but the verbatim titles read
+ *  as site-wide: Solene's stored scan said "No structured data found" while its own baseline said
+ *  hasStructuredData: true, 2 of 3 pages — a one-subpage gap presented as a whole-site failure.
+ *  With `scope` provided:
+ *    - the schema issue is RECONCILED with the site-level truth: when the site HAS structured data,
+ *      it is rewritten to "Structured data missing on N of M crawled pages (present on the others)";
+ *      when the site genuinely has none anywhere, the original wording stands;
+ *    - every OTHER page-scoped issue carries its already-computed affected count — "… — on N of M
+ *      crawled pages" — whenever it does NOT affect every crawled page.
+ *  Only the wording/scope changes; what counts as a finding, dedupe, severity and ordering are
+ *  untouched. */
+export function collectIssues(pages: Record<string, unknown>[], cap: number, scope?: IssueScope): Finding[] {
   const byKey = new Map<string, Finding & { affected: number }>();
   for (const p of pages) {
     const structured = rec(rec(rec(p.audit)?.issues)?.structured) ?? {};
@@ -147,7 +163,19 @@ export function collectIssues(pages: Record<string, unknown>[], cap: number): Fi
   return [...byKey.values()]
     .sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.affected - a.affected)
     .slice(0, cap)
-    .map(({ title, detail, severity }) => ({ title, detail, severity }));
+    .map(({ title, detail, severity, affected }) => {
+      let t = title;
+      if (scope) {
+        const missing = scope.totalPages - scope.schemaPages;
+        if (/no structured data found/i.test(title) && scope.hasStructuredData && missing >= 1) {
+          t = `Structured data missing on ${missing} of ${scope.totalPages} crawled pages (present on the others)`;
+        } else if (scope.totalPages > 1) {
+          const n = Math.min(affected, scope.totalPages);
+          if (n < scope.totalPages) t = `${t} — on ${n} of ${scope.totalPages} crawled pages`;
+        }
+      }
+      return { title: t, detail, severity };
+    });
 }
 
 export type SeoScanCoreResult =
@@ -201,9 +229,10 @@ export async function runSeoScanCore(website: string, opts: { token: string }): 
   const contentTechScore = avgScores(cats, CONTENTTECH_KEYS);
   const overallScore = clamp(onPageScore * GRADE_WEIGHTS.onPage + contentTechScore * GRADE_WEIGHTS.contentTechnical);
 
-  const leadFindings = collectIssues(pages, MAX_LEAD_FINDINGS);
-  const detailIssues = collectIssues(pages, MAX_DETAIL_ISSUES);
   const schemaPages = schemaPageCount(pages);
+  const scope: IssueScope = { totalPages: pages.length, schemaPages, hasStructuredData: schemaPages > 0 };
+  const leadFindings = collectIssues(pages, MAX_LEAD_FINDINGS, scope);
+  const detailIssues = collectIssues(pages, MAX_DETAIL_ISSUES, scope);
 
   const seo = {
     overallGrade: letter(overallScore),

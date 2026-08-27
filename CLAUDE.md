@@ -1549,9 +1549,19 @@ by the single account below.** §6's paginate rule, caught in this file's own no
   graded authority in the book-wide scan. Affects the "which sources each engine reads" output in
   client reports and the page-plan queue (the most valued client output — David), the winnability
   source-mix, and the authority-locked hold. Sits alongside the @graph crawler bug as
-  report-accuracy work. ⚠️ The @graph crawler bug itself is NOT recorded anywhere in this repo's
-  docs — Paul tracks it; ask him for the details before fixing either. A fix needs care: many
+  report-accuracy work. A fix needs care: many
   genuine authorities ARE .org (nice.org.uk, thebms.org.uk, cochrane.org) — do not patch blind.
+  ✅ **THE "@GRAPH CRAWLER BUG" IS RESOLVED (2026-08-28) AND WAS NEVER A PARSER BUG.** Recon proved
+  the Apify actor (smart-digital~complete-seo-audit-tool) steps into @graph fine (Solene's single
+  @graph script → jsonLd:true; all 5 jsonLd:false sites checked genuinely have zero ld+json). The
+  real fault: `collectIssues` (seo-scan-core.ts) hoisted the actor's PER-PAGE issues into
+  site-sounding headlines — Solene's report said "No structured data found" while its own baseline
+  said hasStructuredData:true, 2/3 pages. Fixed presentation-only: with `IssueScope`, the schema
+  issue reconciles against the site-level truth ("Structured data missing on N of M crawled pages
+  (present on the others)") and every partial issue carries "— on N of M crawled pages"; full-
+  coverage and 1-page crawls keep plain titles; no-scope callers unchanged. Deployed run-seo-scan
+  v23 + process-ai-audit-queue v98 + check-directory-listings v7. ⚠️ Findings are STORED per scan —
+  the fix reaches NEW scans only; old reports keep their stored wording until re-scanned.
 - 🔴 **THE WHATSAPP DAILY CAP IS ALMOST OUT OF ROAD, AND REPLIES SPEND IT WITHOUT BEING LIMITED BY
   IT.** `DAILY_CAP` in `process-whatsapp-queue` — **120** since 2026-08-12 (40 → 60 → 100 → 120, each
   raise on a Green quality rating). Two facts neither file reveals on its own:
