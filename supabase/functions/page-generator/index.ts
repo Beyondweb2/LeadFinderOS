@@ -99,8 +99,13 @@ ${isHomeTown
   "locally based", "our premises/office/shop/branch/workshop", or ANYTHING implying a physical
   presence in ${town}. Say the firm SERVES or covers ${town} — the team travels to the customer.`}
 - INVENT NOTHING: no prices, no response times, no opening hours, no years-in-business, no reviews,
-  no testimonials, no certifications beyond the accreditations given, and NO local landmarks, street
-  names or area facts you were not given. If a fact was not given, do not state it.
+  no testimonials, NO certifications, accreditations, memberships, awards or registration numbers of
+  ANY kind, and NO local landmarks, street names or area facts you were not given. If a fact was not
+  given, do not state it.
+- ⛔ DO NOT WRITE ANY CREDENTIAL. Never say "Gas Safe", "DBS checked", "fully insured", "certified",
+  "accredited", "approved", "registered", "member of", "Which? Trusted Trader" or any award — even if
+  you believe it. A credentials line carrying the client's REAL, operator-entered wording is appended
+  automatically AFTER your copy. These are trust and safety claims: a wrong one is worse than none.
 ${localAreas.length
   ? `- You MAY mention these specific nearby areas the business genuinely covers, and ONLY these, ONCE, woven in naturally (e.g. "…including ${localAreas.slice(0, 2).join(" and ")}"): ${localAreas.join(", ")}. Do NOT invent any other place names and do NOT turn them into a list.`
   : `- Do NOT name any specific neighbourhoods, districts or nearby areas — none were given, so refer only to "the area" / "the surrounding area".`}
@@ -702,6 +707,20 @@ Deno.serve(async (req) => {
       : Array.isArray(body.local_areas) ? body.local_areas.join(",") : "";
     const localAreas = rawAreas.split(",").map((s) => s.trim())
       .filter((s) => s && s.length <= 40 && !/[<>]/.test(s)).slice(0, 8);
+    /* ⛔ CREDENTIALS: OPERATOR-ENTERED, RENDERED VERBATIM, NEVER GENERATED. Paul enters the real
+       wording per client ("Gas Safe registered no. 12345, DBS checked, fully insured"); it is written
+       into the page as plain text by the code below, not by the model, which is now forbidden from
+       writing any credential at all. Empty → the line is OMITTED ENTIRELY. These are trust and
+       safety claims, so the only two possible outcomes are the operator's own words or silence.
+       ⚠️ Falls back to the questionnaire's `accreditations` (the client's own answer) when the
+       operator field is blank, so RG's "DBS checked, Fully insured" is not lost. Tags are stripped
+       rather than escaped-and-kept: a stray "<" in free text should not become visible markup. */
+    const rawCreds = typeof body.credentials === "string" ? body.credentials : "";
+    const credentials = (rawCreds.trim() || (ob.accreditations ?? "").trim())
+      /* ⚠️ THE WHITESPACE CLASS IS \s — WRITTEN AS /s+/ IT ATE EVERY LETTER "s", turning
+         "Gas Safe registered" into "Ga  Safe regi tered" on a trust claim. Caught by the live
+         proof, not by typecheck: both forms are valid regexes. */
+      .replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
     const contactUrl = httpUrl(typeof body.contact_url === "string" ? body.contact_url : "") || contactDefault;
     const isHomeTown = normTown(page.town) === normTown(homeTown);
 
@@ -718,7 +737,7 @@ Write the page for: ${page.service} — ${page.town}.
 The exact search queries this page must genuinely answer (a reader asking these should find this page useful):
 ${page.queries.map((q) => `- ${q}`).join("\n")}
 Other services this business offers (CONTEXT ONLY — do not list them and do not turn them into their own pages): ${services.filter((s) => s !== page.service).join(", ") || "(none listed)"}.
-Accreditations you may state (ONLY these): ${ob.accreditations || "(none — state none)"}.
+Do NOT state any accreditation, certification or award — a credentials line is appended automatically after your copy.
 ${feedback ? `\n${feedback}` : ""}
 Return via return_page.`;
 
@@ -833,7 +852,16 @@ Return via return_page.`;
     cta += `.`;
     if (linkParts.length) cta += ` Or ${linkParts.join(", or ")}.`;
     cta += `</p>`;
-    const finalBody = `${honesty.html}\n${cta}`;
+    /* THE TRUST LINE — verbatim operator wording, immediately above the contact block so a reader
+       (and an assistant) meets the credentials and the phone number together. Plain text, no widget,
+       no script. A trailing full stop is added only if the operator did not type one, so
+       "…no. 12345" never becomes "…no. 12345.." and a typed sentence is left alone.
+       ⛔ APPENDED AFTER enforceNaturalness AND enforceCatchmentHonesty, like the contact block, so a
+       registration number can never be trimmed or mangled by the town-cap backstop. */
+    const credLine = credentials
+      ? `<p><strong>Our credentials:</strong> ${escHtml(credentials)}${/[.!?]$/.test(credentials) ? "" : "."}</p>`
+      : "";
+    const finalBody = `${honesty.html}\n${credLine}${credLine ? "\n" : ""}${cta}`;
 
     /* SEO TITLE TAG — built deterministically (not the model's) so the client's REAL phone is always
        present, in the "[Service] in [Town] | [Name] [phone]" pattern their existing titles use, and
@@ -866,7 +894,7 @@ Return via return_page.`;
         mechanicallyEnforced: enforced.townTrimmed || enforced.otherTownsStripped,
       },
       // What the mechanical block actually applied — so the UI can show it plainly.
-      applied: { phone: !!phone, address: isHomeTown && !!address, links: linkParts.length, areas: localAreas, homePage: isHomeTown, honestyFixed: honesty.fixed },
+      applied: { phone: !!phone, address: isHomeTown && !!address, links: linkParts.length, areas: localAreas, homePage: isHomeTown, honestyFixed: honesty.fixed, credentials: credentials || null },
     });
   } catch (e) {
     console.error("[page-generator] error:", e);

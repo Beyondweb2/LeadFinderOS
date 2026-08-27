@@ -46,11 +46,14 @@ interface GeneratedPage {
 interface QaClient { audit_id: string; business_name: string; business_type: string | null; baseline_at: string }
 interface Naturalness { townCount: number; phraseCount: number; topWord: string; topWordPct: number; verdict: 'ok' | 'stuffed'; detail: string; regenerated: boolean }
 /* What the server's mechanical block actually put on the page (real client data). */
-interface Applied { phone: boolean; address: boolean; links: number; areas: string[] }
+interface Applied { phone: boolean; address: boolean; links: number; areas: string[]; credentials?: string | null }
 /* Per-client generator settings the operator controls — persisted per client. contactUrl seeds the
    internal contact link; localAreas are REAL nearby areas the operator supplies (no verified source
-   exists to derive them), woven in verbatim. */
-interface ClientSettings { contactUrl: string; localAreas: string }
+   exists to derive them), woven in verbatim.
+   ⛔ credentials are TRUST AND SAFETY CLAIMS: entered once per client in the operator's own wording
+   and rendered VERBATIM by the server, never written by the model (which is now forbidden from
+   emitting any credential at all). Blank means the line is omitted — never softened, never guessed. */
+interface ClientSettings { contactUrl: string; localAreas: string; credentials: string }
 
 /* A page's render state. `done` carries generatedAt so the view can flag pages generated over a day
    ago. busy / error / no_credits are TRANSIENT (in-memory only) — never persisted, so navigating
@@ -138,11 +141,11 @@ const PageGenerator = () => {
   const cachedCount = current ? Object.keys(current.pages).length : 0;
 
   // Operator settings for this client. contactUrl falls back to the server's default ({site}/contact/).
-  const cs: ClientSettings = (activeClientId && settings[activeClientId]) || { contactUrl: '', localAreas: '' };
+  const cs: ClientSettings = (activeClientId && settings[activeClientId]) || { contactUrl: '', localAreas: '', credentials: '' };
   const contactUrlValue = cs.contactUrl || (plan?.inputs.contactDefault ?? '');
   const setSetting = (patch: Partial<ClientSettings>) => {
     if (!activeClientId) return;
-    setSettings((s) => ({ ...s, [activeClientId]: { contactUrl: '', localAreas: '', ...s[activeClientId], ...patch } }));
+    setSettings((s) => ({ ...s, [activeClientId]: { contactUrl: '', localAreas: '', credentials: '', ...s[activeClientId], ...patch } }));
   };
 
   // A page's render state: an in-flight/transient state wins; otherwise the cached generated page
@@ -241,6 +244,9 @@ const PageGenerator = () => {
           action: 'generate', lead_id: clientId, page_key: page.key,
           contact_url: contactUrlValue || undefined,
           local_areas: cs.localAreas.trim() || undefined,
+          /* Omitted when blank so the server falls back to the questionnaire's own accreditations
+             rather than being handed an empty string that would look like "deliberately none". */
+          credentials: cs.credentials.trim() || undefined,
         },
       });
       if (error) throw new Error(error.message);
@@ -357,6 +363,13 @@ const PageGenerator = () => {
           {g.applied.address && <Badge variant="outline" className="text-[10px] font-normal">✓ address (NAP)</Badge>}
           {g.applied.links > 0 && <Badge variant="outline" className="text-[10px] font-normal">✓ {g.applied.links} internal link{g.applied.links === 1 ? '' : 's'}</Badge>}
           {g.applied.areas.length > 0 && <Badge variant="outline" className="text-[10px] font-normal">✓ areas: {g.applied.areas.join(', ')}</Badge>}
+          {/* Shows the credentials line VERBATIM, so the operator can read back exactly what went on
+              the page rather than trusting a tick. Absent badge = no credential on the page at all. */}
+          {g.applied.credentials && (
+            <Badge variant="outline" className="max-w-full truncate text-[10px] font-normal" title={g.applied.credentials}>
+              ✓ credentials: {g.applied.credentials}
+            </Badge>
+          )}
         </div>
       )}
       <div className="rounded border border-border/40 bg-muted/30 p-2 space-y-1 text-xs">
@@ -483,6 +496,21 @@ const PageGenerator = () => {
                   value={cs.localAreas}
                   placeholder="e.g. Oxmoor, Hartford, Stukeley Meadows"
                   onChange={(e) => setSetting({ localAreas: e.target.value })}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="grid gap-1">
+                <label className="text-xs text-muted-foreground">
+                  Credentials / accreditations (optional) — the client's REAL ones, in your wording.
+                  Written onto every page as plain text, exactly as typed. Leave this blank and the
+                  client's OWN questionnaire answer is used instead; if they gave none either, no
+                  credential appears at all. The model is forbidden from writing any credential, so
+                  nothing here is ever invented — it is your words, their words, or silence.
+                </label>
+                <Input
+                  value={cs.credentials}
+                  placeholder="e.g. Gas Safe registered no. 12345, DBS checked, fully insured"
+                  onChange={(e) => setSetting({ credentials: e.target.value })}
                   className="h-8 text-xs"
                 />
               </div>
