@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { usePersistedState } from '@/hooks/usePersistedState';
+import { usePersistedState, updatePersistedValue } from '@/hooks/usePersistedState';
 import { Loader2, FileCode2, Copy, Sparkles, PiggyBank, AlertTriangle, Trash2, Clock } from 'lucide-react';
 import { suggestCredentials } from '@/lib/tradeCredentials';
 
@@ -103,6 +103,17 @@ const PageGenerator = () => {
     validate: (d) => (d && typeof d === 'object' ? (d as Record<string, ClientSettings>) : null),
   });
   // Mode toggle + Q&A state (audit-based; national/regulated clients have no lead).
+  /* ⛔ PAID RESULTS MUST SURVIVE THE COMPONENT. generate()/qaGenerate() await a PAID OpenAI call and
+     then setCache — but setState on an unmounted component is a no-op, so navigating away mid-call
+     silently binned the finished page and the spend. This writes the SAME update into the
+     pagegen-cache STORAGE entry first (updatePersistedValue mirrors the hook's key/tier/version
+     exactly), then setCache for the mounted case. Mounted: both agree (the hook re-persists the
+     same value). Unmounted: the storage write is what the next mount rehydrates from. */
+  const cacheOpts = { tier: 'both' as const, scope: user?.id, version: 1 };
+  const commitToCache = (updater: (c: CacheShape) => CacheShape) => {
+    updatePersistedValue<CacheShape>('pagegen-cache', cacheOpts, (cur) => updater(cur ?? {}));
+    setCache(updater);
+  };
   const [mode, setMode] = usePersistedState<'service' | 'qa'>('pagegen-mode', 'service', { tier: 'both', scope: user?.id });
   const [qaClients, setQaClients] = useState<QaClient[]>([]);
   const [qaClientId, setQaClientId] = usePersistedState<string>('pagegen-qa-client', '', { tier: 'both', scope: user?.id });
@@ -299,7 +310,7 @@ const PageGenerator = () => {
       if (error || !res?.ok) throw new Error(error?.message ?? res?.error ?? 'plan failed');
       const p = res as PlanData;
       // Refresh the plan; KEEP any pages already generated for this client.
-      setCache((c) => ({ ...c, [leadId]: { plan: p, pages: c[leadId]?.pages ?? {} } }));
+      commitToCache((c) => ({ ...c, [leadId]: { plan: p, pages: c[leadId]?.pages ?? {} } }));
       const def = String(p.inputs.hostingDefault ?? '').toLowerCase();
       if (def.includes('wordpress')) setHosting('wordpress');
     } catch (e) {
@@ -328,7 +339,7 @@ const PageGenerator = () => {
         throw new Error(res?.error ?? 'generation failed');
       }
       const done: CachedPage = { page: res.page, naturalness: res.naturalness, applied: res.applied, generatedAt: Date.now() };
-      setCache((c) => ({
+      commitToCache((c) => ({
         ...c,
         [clientId]: { plan: c[clientId]?.plan ?? plan, pages: { ...(c[clientId]?.pages ?? {}), [page.key]: done } },
       }));
@@ -385,7 +396,7 @@ const PageGenerator = () => {
         throw new Error(res?.error ?? 'generation failed');
       }
       const done: CachedPage = { page: res.page, draft: true, generatedAt: Date.now() };
-      setCache((c) => ({ ...c, [qaClientId]: { plan: c[qaClientId]?.plan ?? null, pages: { ...(c[qaClientId]?.pages ?? {}), [key]: done } } }));
+      commitToCache((c) => ({ ...c, [qaClientId]: { plan: c[qaClientId]?.plan ?? null, pages: { ...(c[qaClientId]?.pages ?? {}), [key]: done } } }));
       setTransient((t) => { const n = { ...t }; delete n[key]; return n; });
     } catch (e) {
       setTransient((t) => ({ ...t, [key]: { kind: 'error', message: e instanceof Error ? e.message : 'generation failed' } }));

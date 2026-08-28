@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { OwnerProvider } from "@/contexts/OwnerContext";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
@@ -248,20 +248,66 @@ const App = () => {
               {/* Legacy alias — kept so old links / bookmarks / in-flight ?next= links don't 404. */}
               <Route path="/barber-login" element={<BarberLogin />} />
              <Route path="/guide" element={<HowToUse />} />
+            {/* ══ THE OPERATOR SHELL — ONE layout route, not fifteen wrappers ═══════════════════
+                Every operator page used to carry its own <ProtectedRoute><SubscriptionGate>
+                <AppLayout> stack, so EVERY navigation unmounted and remounted the whole shell —
+                sidebar, scroll container, providers — and nothing inside a page could survive by
+                staying mounted (§6c's root cause, half two). The shell now mounts ONCE and the
+                pages render through <Outlet/>. Collapsed 2026-08-28 after checking all fifteen
+                wrappers were BYTE-IDENTICAL (no route passed AppLayout any props); routes with a
+                different stack (admin/RequireAdmin, barber, public) are untouched below.
+                ⚠️ usePersistedScroll keys on the pathname and now sees route changes WITHOUT a
+                remount — it restores per-route scroll on the key change, and resets to top for a
+                route with nothing stored (see the stored===null branch it gained with this). */}
             <Route
-              path="/"
               element={
                 <ProtectedRoute>
                   <SubscriptionGate>
                     <AppLayout>
-                      <FirstTimeRedirect>
-                        <Dashboard />
-                      </FirstTimeRedirect>
+                      <Outlet />
                     </AppLayout>
                   </SubscriptionGate>
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route path="/" element={<FirstTimeRedirect> <Dashboard /> </FirstTimeRedirect>} />
+              <Route path="/find-leads" element={<Index />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/outreach" element={<Outreach />} />
+              {/* Archive route removed - merged into Outreach */}
+              {/* Track Leads route removed - folded into Outreach (row-click detail modal) */}
+              {/* OPERATOR baseline view. Inside ProtectedRoute + SubscriptionGate like every other
+              operator page - deliberately NOT public: the client gets a week-8 before-and-after,
+              not the working detail. */}
+              <Route path="/baseline/:auditId" element={<BaselinePage />} />
+              {/* OPERATOR delivery checklist. Same shell as /baseline/:auditId and for the same reason:
+              WHO'S WINNING is the client's competitor list, which is working intelligence, not
+              something the client is shown. The id resolves as an AUDIT id first — see usePlaybook. */}
+              <Route path="/playbook/:id" element={<PlaybookPage />} />
+              {/* /paid-clients is GONE (2026-08-12). Paying customers live in Outreach (the
+              "Paid (money in)" filter, keyed on amount_paid > 0) and in the Inbox (paid
+              conversations are exempt from the status filter). The payment and delivery
+              editors moved into LeadDetailDialog, which is now the only place an amount can
+              be corrected. No redirect: the page was operator-only and never linked from
+              anywhere a prospect could reach. */}
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/how-to-use" element={<HowToUse />} />
+              {/* WhatsApp Inbox — operator-gated + in-app (each operator sees only their own) */}
+              <Route path="/inbox" element={<Inbox />} />
+              {/* Team feedback board — operator-gated + in-app (barbers excluded by RLS) */}
+              <Route path="/feedback" element={<Feedback />} />
+              <Route path="/coverage" element={<Coverage />} />
+              {/* Stateless review-reply generator — paste a Google review in, copy a reply out (or a
+              don't-reply verdict). No Google API, no storage; see src/pages/ReviewReply.tsx. */}
+              <Route path="/review-replies" element={<ReviewReply />} />
+              {/* Delivery page generator — service+town pages from the questionnaire × baseline
+              overlap, paste-ready per page. See src/pages/PageGenerator.tsx + src/lib/pagePlan.ts. */}
+              <Route path="/page-generator" element={<PageGenerator />} />
+              {/* Page-plan queue — measured questions clustered into distinct-job pages, scored,
+              waved, stored + editable. See src/pages/PagePlanQueue.tsx + src/lib/pagePlanQueue.ts. */}
+              <Route path="/page-plan" element={<PagePlanQueue />} />
+              <Route path="/ai-audit" element={<AiAudit />} />
+            </Route>
             <Route
               path="/barber"
               element={
@@ -270,30 +316,6 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            <Route 
-              path="/find-leads" 
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <Index />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <Dashboard />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              } 
-            />
             {/* Rep-facing site editor (any authenticated operator; RLS scopes it to
                 the lead-owner). Distinct from the admin-only /admin/sites/:id. */}
             <Route
@@ -301,106 +323,6 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <SiteManage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/outreach"
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <Outreach />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
-            {/* Archive route removed - merged into Outreach */}
-            {/* Track Leads route removed - folded into Outreach (row-click detail modal) */}
-            {/* OPERATOR baseline view. Inside ProtectedRoute + SubscriptionGate like every other
-                operator page - deliberately NOT public: the client gets a week-8 before-and-after,
-                not the working detail. */}
-            <Route
-              path="/baseline/:auditId"
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <BaselinePage />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
-            {/* OPERATOR delivery checklist. Same shell as /baseline/:auditId and for the same reason:
-                WHO'S WINNING is the client's competitor list, which is working intelligence, not
-                something the client is shown. The id resolves as an AUDIT id first — see usePlaybook. */}
-            <Route
-              path="/playbook/:id"
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <PlaybookPage />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
-            {/* /paid-clients is GONE (2026-08-12). Paying customers live in Outreach (the
-                "Paid (money in)" filter, keyed on amount_paid > 0) and in the Inbox (paid
-                conversations are exempt from the status filter). The payment and delivery
-                editors moved into LeadDetailDialog, which is now the only place an amount can
-                be corrected. No redirect: the page was operator-only and never linked from
-                anywhere a prospect could reach. */}
-            <Route 
-              path="/templates" 
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <Templates />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              } 
-            />
-            <Route
-              path="/how-to-use"
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <HowToUse />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
-            {/* WhatsApp Inbox — operator-gated + in-app (each operator sees only their own) */}
-            <Route
-              path="/inbox"
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <Inbox />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
-            {/* Team feedback board — operator-gated + in-app (barbers excluded by RLS) */}
-            <Route
-              path="/feedback"
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <Feedback />
-                     </AppLayout>
-                   </SubscriptionGate>
                 </ProtectedRoute>
               }
             />
@@ -469,72 +391,6 @@ const App = () => {
             {/* The market view is a MODE on Find Leads now, not a page of its own. Kept as a
                 redirect so an old bookmark or link lands somewhere sensible instead of a 404. */}
             <Route path="/market" element={<Navigate to="/find-leads" replace />} />
-            <Route
-              path="/coverage"
-              element={
-                <ProtectedRoute>
-                  <SubscriptionGate>
-                    <AppLayout>
-                      <Coverage />
-                    </AppLayout>
-                  </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
-            {/* Stateless review-reply generator — paste a Google review in, copy a reply out (or a
-                don't-reply verdict). No Google API, no storage; see src/pages/ReviewReply.tsx. */}
-            <Route
-              path="/review-replies"
-              element={
-                <ProtectedRoute>
-                  <SubscriptionGate>
-                    <AppLayout>
-                      <ReviewReply />
-                    </AppLayout>
-                  </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
-            {/* Delivery page generator — service+town pages from the questionnaire × baseline
-                overlap, paste-ready per page. See src/pages/PageGenerator.tsx + src/lib/pagePlan.ts. */}
-            <Route
-              path="/page-generator"
-              element={
-                <ProtectedRoute>
-                  <SubscriptionGate>
-                    <AppLayout>
-                      <PageGenerator />
-                    </AppLayout>
-                  </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
-            {/* Page-plan queue — measured questions clustered into distinct-job pages, scored,
-                waved, stored + editable. See src/pages/PagePlanQueue.tsx + src/lib/pagePlanQueue.ts. */}
-            <Route
-              path="/page-plan"
-              element={
-                <ProtectedRoute>
-                  <SubscriptionGate>
-                    <AppLayout>
-                      <PagePlanQueue />
-                    </AppLayout>
-                  </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/ai-audit"
-              element={
-                <ProtectedRoute>
-                  <SubscriptionGate>
-                    <AppLayout>
-                      <AiAudit />
-                    </AppLayout>
-                  </SubscriptionGate>
-                </ProtectedRoute>
-              }
-            />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

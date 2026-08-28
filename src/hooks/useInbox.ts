@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -89,73 +90,106 @@ export function windowFor(lastInboundAt: string | null): { open: boolean; hoursL
   return { open: true, hoursLeft: Math.max(1, Math.ceil((WINDOW_MS - elapsed) / (60 * 60 * 1000))) };
 }
 
+/** Everything the Inbox reads, in one fetch — one cache entry, one invalidation target. */
+interface InboxData {
+  messages: WaMessage[];
+  leads: LeadLite[];
+  sites: Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>;
+  audits: Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>;
+}
+
+/* Key includes the user id (the useCoverage pattern): firing before it resolves would cache the
+   result under `undefined` and never be read again under the real id — hence `enabled` below. */
+export const inboxQueryKey = (userId: string | null | undefined) => ['inbox', userId ?? null] as const;
+
+/* Stable empties so a loading render doesn't mint new arrays every time (memo inputs stay stable). */
+const NO_MESSAGES: WaMessage[] = [];
+const NO_LEADS: LeadLite[] = [];
+const NO_SITES: InboxData['sites'] = [];
+const NO_AUDITS: InboxData['audits'] = [];
+
+async function fetchInboxData(): Promise<InboxData> {
+  const [msgRes, leadRes, siteRes, reportRes] = await Promise.all([
+    /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
+       on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
+       This is the fastest-growing table in the system — every send and every reply. */
+    fetchAllRows<WaMessage>('Inbox (messages)', (from, to) =>
+      sb.from('whatsapp_messages').select('*')
+        .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)),
+    // is_archived = false: an archived lead is one the operator has stopped working, so its thread
+    // leaves the Inbox and it also leaves the start-a-conversation picker below. Un-archiving
+    // brings the whole thread back — nothing is deleted, and the messages are untouched.
+    /* ⛔ PAGINATED, AND THIS ONE LOST A PAYING CUSTOMER. It asked for 1,031 rows (not archived +
+       has a phone) and PostgREST silently returned 1,000 — so 31 leads were absent from
+       `ownLeadIds`, and the conversation build below drops any thread whose lead is not in it
+       (`if (!leadId || !ownLeadIds.has(leadId)) continue`). RG Locksmiths, a paid client with 17
+       messages, therefore never became a conversation AT ALL: no filter, no reload and no search
+       could bring him back, because he was gone before the list existed.
+       ⚠️ AND IT WAS INTERMITTENT, WHICH IS WHY IT LOOKED LIKE A DISPLAY BUG. There was no
+       `.order()` either, so WHICH 1,000 came back was arbitrary and shifted as rows were written —
+       he was visible one day and gone the next, with nothing having changed about him.
+       `.order('id')` is the unique tiebreaker fetchAllRows needs: on a non-unique sort a tied row
+       can be fetched twice and another missed at a page boundary — the same reasoning already
+       written above the messages read. */
+    fetchAllRows<LeadLite>('Inbox (leads)', (from, to) =>
+      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at')
+        .eq('is_archived', false).not('phone', 'is', null)
+        .order('id', { ascending: true }).range(from, to)),
+    // share_token / booking_only are not in the generated types yet — untyped sb. RLS
+    // scopes rows to the operator. Ordered newest-first so the per-lead pick takes the latest.
+    /* ⛔ PAGINATED FOR THE SAME REASON, BEFORE IT BITES. `created_at` is NOT unique here, so `id`
+       is the tiebreaker; the newest-first order the per-lead pick relies on stays primary. */
+    fetchAllRows<InboxData['sites'][number]>('Inbox (sites)', (from, to) =>
+      sb.from('generated_sites').select('id, site_name, lead_id, share_token, booking_only, first_opened_at, claimed_at, addon_interest_at')
+        .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
+    // Per-lead audits + run statuses → the report-ready pill (/a/<auditId>, served live) + the
+    // audit_reply guard + the running-audit spinner. Newest-first; RLS scopes to own audits.
+    /* ⛔ PAGINATED — truncation here would silently drop the report-ready pill and the audit_reply
+       guard for whichever leads fell outside the window. Same id tiebreaker. */
+    fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', (from, to) =>
+      sb.from('ai_audits').select('id, lead_id, created_at, ai_audit_runs(status)')
+        .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
+  ]);
+  return {
+    messages: msgRes.rows,
+    leads: leadRes.rows.filter((l) => (l.phone ?? '').trim()),
+    sites: siteRes.rows,
+    audits: reportRes.rows,
+  };
+}
+
 export function useInbox() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<WaMessage[]>([]);
-  const [leads, setLeads] = useState<LeadLite[]>([]);
-  const [sites, setSites] = useState<Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>>([]);
-  const [audits, setAudits] = useState<Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const queryKey = inboxQueryKey(user?.id);
 
-  const fetchAll = useCallback(async () => {
-    setIsLoading(true);
-    const [msgRes, leadRes, siteRes, reportRes] = await Promise.all([
-      /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
-         on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
-         This is the fastest-growing table in the system — every send and every reply. */
-      fetchAllRows<WaMessage>('Inbox (messages)', (from, to) =>
-        sb.from('whatsapp_messages').select('*')
-          .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)),
-      // is_archived = false: an archived lead is one the operator has stopped working, so its thread
-      // leaves the Inbox and it also leaves the "start a conversation" picker below. Un-archiving
-      // brings the whole thread back — nothing is deleted, and the messages are untouched.
-      /* ⛔ PAGINATED, AND THIS ONE LOST A PAYING CUSTOMER. It asked for 1,031 rows (not archived +
-         has a phone) and PostgREST silently returned 1,000 — so 31 leads were absent from
-         `ownLeadIds`, and the conversation build below drops any thread whose lead is not in it
-         (`if (!leadId || !ownLeadIds.has(leadId)) continue`). RG Locksmiths, a paid client with 17
-         messages, therefore never became a conversation AT ALL: no filter, no reload and no search
-         could bring him back, because he was gone before the list existed.
-         ⚠️ AND IT WAS INTERMITTENT, WHICH IS WHY IT LOOKED LIKE A DISPLAY BUG. There was no
-         `.order()` either, so WHICH 1,000 came back was arbitrary and shifted as rows were written —
-         he was visible one day and gone the next, with nothing having changed about him.
-         `.order('id')` is the unique tiebreaker fetchAllRows needs: on a non-unique sort a tied row
-         can be fetched twice and another missed at a page boundary — the same reasoning already
-         written above the messages read. */
-      fetchAllRows<LeadLite>('Inbox (leads)', (from, to) =>
-        sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at')
-          .eq('is_archived', false).not('phone', 'is', null)
-          .order('id', { ascending: true }).range(from, to)),
-      // share_token / booking_only aren't in the generated types yet — untyped sb. RLS
-      // scopes rows to the operator's own sites (admins see all). Ordered newest-first
-      // so the per-lead pick below takes the most recent site.
-      /* ⛔ PAGINATED FOR THE SAME REASON, BEFORE IT BITES. Smaller than the leads table today, so
-         nothing is visibly wrong — which is exactly the state the leads read was in until it crossed
-         1,000 and started dropping threads silently. `created_at` is NOT unique here, so `id` is
-         added as the tiebreaker rather than trusted; the newest-first order the per-lead pick relies
-         on is preserved as the primary sort. */
-      fetchAllRows<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>('Inbox (sites)', (from, to) =>
-        sb.from('generated_sites').select('id, site_name, lead_id, share_token, booking_only, first_opened_at, claimed_at, addon_interest_at')
-          .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
-      // Per-lead audits + their run statuses → the report-ready pill's /a/<auditId> (served LIVE by
-      // render-audit-report from the audit; no stored report row) + the audit_reply guard. Newest-first;
-      // RLS scopes to the operator's own audits.
-      /* ⛔ PAGINATED — and this is the one closest to biting: 216+ non-market audits and one more on
-         every outreach batch. Truncation here would silently drop the report-ready pill and the
-         audit_reply guard for whichever leads fell outside the window, i.e. it would stop the pitch
-         being sendable to a lead whose report exists. Same id tiebreaker on a non-unique created_at. */
-      fetchAllRows<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>('Inbox (audits)', (from, to) =>
-        sb.from('ai_audits').select('id, lead_id, created_at, ai_audit_runs(status)')
-          .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
-    ]);
-    /* All four now come back as fetchAllRows results (`.rows`), not PostgREST responses (`.data`). */
-    setMessages(msgRes.rows);
-    setLeads(leadRes.rows.filter((l) => (l.phone ?? '').trim()));
-    setSites(siteRes.rows);
-    setAudits(reportRes.rows);
-    setIsLoading(false);
-  }, []);
+  /* ⛔ REACT QUERY, THE SAME WAY useOutreach/useCoverage USE IT (App.tsx defaults:
+     refetchOnWindowFocus:false, staleTime 5min). The old shape — useEffect→fetchAll with
+     isLoading starting true — refetched EVERYTHING with a full-screen spinner on every visit;
+     now a return inside the stale window renders instantly from cache, and a stale return
+     renders the cache while refreshing in the background.
+     ⚠️ THE STALENESS RISK IS HANDLED BY INVALIDATION, NOT BY SHORT TTLs: send() below and every
+     mutating caller in Inbox.tsx (remove-from-inbox, the follow-up sends, starting an audit)
+     await refetch/fetchAll, which BYPASSES staleTime — so an action is never followed by a stale
+     list. patchLeadStatus keeps its optimistic no-spinner behaviour by patching the CACHE. */
+  const query = useQuery({
+    queryKey,
+    queryFn: fetchInboxData,
+    enabled: !!user?.id,
+  });
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  const messages = query.data?.messages ?? NO_MESSAGES;
+  const leads = query.data?.leads ?? NO_LEADS;
+  const sites = query.data?.sites ?? NO_SITES;
+  const audits = query.data?.audits ?? NO_AUDITS;
+  const isLoading = query.isLoading;
+
+  /* Force-refresh: query.refetch always hits the network (staleTime does not apply to an explicit
+     refetch). Same contract the old fetchAll gave its callers — awaiting it means the new rows
+     are on screen. */
+  const { refetch: queryRefetch } = query;
+  const fetchAll = useCallback(async () => { await queryRefetch(); }, [queryRefetch]);
+
 
   const leadNameById = useMemo(() => {
     const m: Record<string, string> = {};
@@ -294,8 +328,13 @@ export function useInbox() {
   // Optimistic single-lead status patch — updates local `leads` state so the derived
   // `conversations`/`list` recompute (leadStatus + hide filters) WITHOUT a full
   // re-query. Mirrors Outreach's single-row setLeads; avoids the isLoading spinner.
+  /* Optimistic, no spinner — patches the QUERY CACHE (the only source of `leads` now), so the
+     derived conversations/list recompute exactly as when this patched useState. The DB write
+     happens at the call site; the next real refetch reconciles against the DB truth. */
   const patchLeadStatus = useCallback((leadId: string, status: string) =>
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status } : l)), []);
+    queryClient.setQueryData<InboxData>(queryKey, (prev) =>
+      prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, status } : l)) } : prev),
+    [queryClient, queryKey]);
 
   return { user, messages, leads, conversations, messagesForKey, sitesByLeadId, auditByLeadId, auditRunningLeadIds, isLoading, refetch: fetchAll, send, patchLeadStatus };
 }

@@ -450,6 +450,12 @@ export function OutreachTable({
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  /* Bumped whenever filter STATE is written from outside the inputs (the restore-on-mount effect,
+     and Clear all). The search/location inputs are UNCONTROLLED (defaultValue + debounce, for typing
+     performance), so a restored or cleared value would otherwise apply to the table while the box
+     kept showing its old text — an invisible filter, which reads as "my leads vanished". Keying the
+     inputs on this stamp remounts them with the current value. */
+  const [filterInputStamp, setFilterInputStamp] = useState(0);
   const [isRecoveringPhones, setIsRecoveringPhones] = useState(false);
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
   const { logAttempt } = useOutreachAttempt();
@@ -630,6 +636,8 @@ export function OutreachTable({
     } else if (typeof parsed.currentPage === 'number' && parsed.currentPage > 0) {
       setCurrentPage(parsed.currentPage);
     }
+    // Remount the uncontrolled search/location inputs so they DISPLAY the restored values.
+    setFilterInputStamp((v) => v + 1);
     // Restore last contacted lead highlight
     try {
       const last = sessionStorage.getItem(lastContactedKey) || localStorage.getItem(lastContactedKey);
@@ -2112,9 +2120,38 @@ export function OutreachTable({
           
           {/* Filters row */}
           <div className="flex flex-wrap gap-2">
+            {/* ⛔ THE FILTERED PILL — filters PERSIST across navigation (the tableState restore
+                above), which is the feature; the risk it creates is a remembered filter reading as
+                "my leads vanished" days later. So whenever ANY filter is non-default, say so
+                visibly, with a one-click reset of ALL of them (the dropdown's own Clear only covers
+                its nine toggles). Clearing also bumps filterInputStamp so the uncontrolled inputs
+                visibly empty rather than keeping stale text over an unfiltered table. */}
+            {(searchQuery !== '' || locationFilter !== '' || statusFilter !== 'all' || countryFilter !== 'all'
+              || trackedOnly || hasEmail || hasInstagram || hasFacebook || hasWhatsApp
+              || hideNoWhatsApp || hideNotInterested || sigWebsite || sigFacebook || sigInstagram) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery(''); setLocationFilter('');
+                  setStatusFilter('all'); setCountryFilter('all');
+                  setTrackedOnly(false);
+                  setHasEmail(false); setHasInstagram(false); setHasFacebook(false); setHasWhatsApp(false);
+                  setHideNoWhatsApp(false); setHideNotInterested(false);
+                  setSigWebsite(false); setSigFacebook(false); setSigInstagram(false);
+                  setCurrentPage(1);
+                  setFilterInputStamp((v) => v + 1);
+                }}
+                className="inline-flex h-8 items-center gap-1 rounded-full border border-amber-500/50 bg-amber-500/10 px-2.5 text-xs font-semibold text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
+                title="Filters are active (they persist between visits) — click to clear them all and show every lead"
+              >
+                <X className="h-3 w-3" />
+                Filtered
+              </button>
+            )}
             <div className="relative flex-1 min-w-[120px] max-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
+                key={`sq-${filterInputStamp}`}
                 placeholder="Search..."
                 defaultValue={searchQuery}
                 onChange={(e) => {
@@ -2125,6 +2162,7 @@ export function OutreachTable({
             </div>
             <div className="relative flex-1 min-w-[120px] max-w-[200px]">
               <Input
+                key={`lq-${filterInputStamp}`}
                 placeholder="City, postcode, area..."
                 defaultValue={locationFilter}
                 onChange={(e) => {

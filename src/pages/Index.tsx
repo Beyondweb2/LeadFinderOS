@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { usePersistedState } from '@/hooks/usePersistedState';
 import { SearchForm } from '@/components/SearchForm';
 import MarketPanel from '@/components/MarketPanel';
 import { LeadsTable } from '@/components/LeadsTable';
@@ -70,11 +72,26 @@ const Index = () => {
   const urlLocation = (searchParams.get('location') ?? '').trim();
   /* Seeded from the URL on FIRST RENDER, not in an effect, so the panel never paints an empty
      market for a frame before correcting itself. */
-  const [activeMode, setActiveMode] = useState<SearchMode>(
-    urlMode === 'market' && urlTrade && urlTown ? 'market' : 'leads',
+  /* ⛔ THE URL STILL WINS; THE MEMORY ONLY FILLS A BARE ONE — the Coverage-trade rule (§6c),
+     applied to the leads/market split. The sidebar links to plain /find-leads, so before this,
+     leaving a market view and coming back always reset to leads: `urlMode` collapses URL-silence
+     to 'leads', and the back/forward sync effect below then FORCED the state to match. The saved
+     view is consulted only when the URL carries no mode param at all; an explicit ?mode= (a
+     Coverage link, a niche-row handoff, back/forward) behaves exactly as before.
+     ⚠️ A remembered market restores ONLY with both trade AND town — a half-remembered market
+     would render an empty panel asking for inputs the user never cleared. */
+  const { user } = useAuth();
+  const urlHasExplicitMode = searchParams.get('mode') !== null;
+  const [savedView, setSavedView] = usePersistedState<{ mode: SearchMode; trade: string; town: string }>(
+    'find-leads-view', { mode: 'leads', trade: '', town: '' },
+    { tier: 'session', scope: user?.id, version: 1 },
   );
-  const [marketTrade, setMarketTrade] = useState(urlMode === 'market' ? urlTrade : '');
-  const [marketTown, setMarketTown] = useState(urlMode === 'market' ? urlTown : '');
+  const restoredMarket = !urlHasExplicitMode && savedView.mode === 'market' && !!savedView.trade && !!savedView.town;
+  const [activeMode, setActiveMode] = useState<SearchMode>(() =>
+    urlHasExplicitMode ? (urlMode === 'market' && urlTrade && urlTown ? 'market' : 'leads')
+      : restoredMarket ? 'market' : 'leads');
+  const [marketTrade, setMarketTrade] = useState(() => (urlHasExplicitMode ? (urlMode === 'market' ? urlTrade : '') : (restoredMarket ? savedView.trade : '')));
+  const [marketTown, setMarketTown] = useState(() => (urlHasExplicitMode ? (urlMode === 'market' ? urlTown : '') : (restoredMarket ? savedView.town : '')));
   /* ⛔ THESE WERE useState AND THAT WAS THE BUG. They were set only by pressing Search, while the
      RESULTS came back from sessionStorage on mount — so returning to this page rather than
      re-searching left the results on screen with no keyword or town behind them, and Add wrote a
@@ -154,12 +171,17 @@ const Index = () => {
      not enough on its own — this re-syncs when the query string moves under us. Guarded on real
      change so it cannot loop against setSearchParams. */
   useEffect(() => {
+    /* A BARE URL EXPRESSES NO OPINION, so it must not stamp on the restored view — without this
+       guard, restoring a market from memory was immediately reverted to leads by this very
+       effect (URL-silence collapses to leads in `urlMode`). Explicit params behave as before. */
+    if (searchParams.get('mode') === null) return;
     const wantMode: SearchMode = urlMode === 'market' && urlTrade && urlTown ? 'market' : 'leads';
     setActiveMode((m) => (m === wantMode ? m : wantMode));
     if (wantMode === 'market') {
       setMarketTrade((t) => (t === urlTrade ? t : urlTrade));
       setMarketTown((w) => (w === urlTown ? w : urlTown));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlMode, urlTrade, urlTown]);
 
   /* Consume the one-shot intent. `replace` so it does not become a history entry you can go BACK
@@ -193,19 +215,21 @@ const Index = () => {
       setActiveMode('market');
       setMarketTrade(t);
       setMarketTown(w);
+      setSavedView({ mode: 'market', trade: t, town: w });
       // replace, not push: re-searching the same page should not stack history entries the back
       // button then has to walk through one at a time.
       setSearchParams({ mode: 'market', trade: t, town: w }, { replace: true });
       return;
     }
     setActiveMode('leads');
+    setSavedView({ mode: 'leads', trade: '', town: '' });
     // Drop the market params so a later refresh does not resurrect a market view over lead results.
     setSearchParams({}, { replace: true });
     // Region tiling is capped out of the UI (slider max = 50km) — always a normal
     // single-centre search. The backend tiledRegionSearch stays in place but
     // dormant: the frontend never sends region:true.
     search(filters, false, false);
-  }, [search, setSearchParams]);
+  }, [search, setSearchParams, setSavedView]);
 
   // Notify when a region search was downgraded to a single area (daily budget).
   useEffect(() => {
