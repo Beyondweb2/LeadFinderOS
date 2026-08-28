@@ -322,7 +322,11 @@ export default function Coverage() {
     | { phase: 'searching' }
     | { phase: 'confirm'; audits: number; estUsd: number }
     | { phase: 'blocked'; reason: string }
-    | { phase: 'loaded'; targets: MarketPoolRow[]; poolState: string }
+    /* `measured`: whether the market has a real verdict behind these rows. On an unmeasured town
+       the pool is UNSCORED (verdict 'unmeasured', never 'target' — §6e), so "Add all" is adding
+       every found business minus chains/off-trade, and the wording must say that rather than
+       claim a ≤40%-named target list that does not exist yet. */
+    | { phase: 'loaded'; targets: MarketPoolRow[]; poolState: string; measured: boolean }
     | { phase: 'adding' }
     | { phase: 'added'; added: number; already: number };
   const [rowFlow, setRowFlow] = useState<Record<string, RowFlow>>({});
@@ -363,6 +367,7 @@ export default function Coverage() {
       phase: 'loaded',
       targets: auditableTargets(pool),
       poolState: view?.poolState?.state ?? 'never_searched',
+      measured: (view?.concentration?.marketAuditsComplete ?? 0) >= MARKET_AUDIT_MIN_AUDITS,
     });
   };
 
@@ -404,9 +409,34 @@ export default function Coverage() {
       setFlow(id, { phase: 'blocked', reason: `Places found no ${trade} inside the ${townName} boundary -- nothing to show, and nothing was audited.` });
       return;
     }
-    /* The pool now exists, so the ordinary free read reveals the targets. Invalidating coverage is
-       what relabels this row (and any other town sharing the pair) back to "Market view". */
-    await onMarketView(id, townName);
+    /* ⛔ FIND LEADS ENDS IN "ADD ALL", NEVER IN THE MEASURE CONFIRM — fixed 2026-08-28. This used
+       to delegate to onMarketView, whose job is to route the MARKET VIEW button: measured towns
+       reveal, unmeasured ones raise the paid-measure confirm. Chained after a Find-leads press,
+       that branch meant an UNMEASURED town paid ~9p for the search and was then asked to buy a
+       measure it never requested — a different purchase, in a dialog, over the results it had
+       just paid to see. The two buttons are two jobs (the 2026-08-11 split), so this now does its
+       own FREE re-read and reveals directly. onMarketView and its confirm are UNTOUCHED — the
+       Market view button still gates its spend exactly as before. */
+    setFlow(id, { phase: 'loading' });
+    const view = await fetchMarketView(townName);
+    if (!view) {
+      /* The search itself succeeded and is cached for 72h — say that, so a transient read failure
+         does not read as 9p wasted. */
+      setFlow(id, { phase: 'blocked', reason: `found ${found} businesses (search saved, free for 72h) but could not read the market -- try again or open View` });
+      void refetch();
+      return;
+    }
+    /* THE IN-FLIGHT DEFERRAL, KEPT: audits already running for this town (started elsewhere or on
+       a previous visit) own the row — defer to the live spinner rather than revealing a
+       half-measured pool as final. Same condition onMarketView uses. */
+    const completed = view.concentration?.marketAuditsComplete ?? 0;
+    if ((view.marketProgress ?? []).length > 0 && completed < MARKET_AUDIT_MIN_AUDITS) {
+      setFlow(id, null);
+      void refreshInFlight();
+      void refetch();
+      return;
+    }
+    revealLoaded(id, view);
     /* Relabels this row (and any town sharing the pair) back to "Market view". */
     void refetch();
   };
@@ -928,7 +958,14 @@ export default function Coverage() {
                         ? (
                           <Button
                             variant="ghost" size="sm" className="h-7 text-xs text-emerald-700"
-                            title={`Add all ${f.targets.length} ≤40%-named targets to Outreach as not contacted — winners, wrong-trade and chains excluded. Nothing is queued or sent.`}
+                            /* ⛔ SAY WHAT IS ACTUALLY BEING ADDED. On a measured market these are
+                               the scored ≤40%-named targets; on an UNMEASURED one (Find leads on a
+                               fresh town) nothing is scored yet, so the same click adds every found
+                               business minus chains/off-trade — claiming a target list there would
+                               be a verdict nobody has measured. */
+                            title={f.measured
+                              ? `Add all ${f.targets.length} ≤40%-named targets to Outreach as not contacted — winners, wrong-trade and chains excluded. Nothing is queued or sent.`
+                              : `Add all ${f.targets.length} businesses found here to Outreach as not contacted — chains and wrong-trade excluded. This market is not measured yet, so these are unscored (not a target list). Nothing is queued or sent.`}
                             onClick={() => setAddConfirmId(t.id)}
                           >
                             Add all {f.targets.length} · ~{asPence(f.targets.length * PLACE_DETAILS_USD)}
