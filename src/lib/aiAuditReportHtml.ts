@@ -113,6 +113,19 @@ export interface AiAuditReportData {
    *  actually opens) is what passes it. */
   showFounderOffer?: boolean;
   /**
+   * Drop the three SELLING sections — "Why this matters" (the 45% stat), the three-step "why you're
+   * named so rarely", and the "Ready to get started" CTA — leaving the measurement itself intact.
+   *
+   * ⛔ FOR THE WELCOME PACK, AND ONLY THE CLIENT RENDER PATH. The pack goes to someone who has
+   * ALREADY paid: pitching them their own product back, with a "Ready to get started?" button and an
+   * Email-us CTA, reads as a company that does not know who it is writing to. The numbers and the
+   * per-question detail are exactly what they should keep.
+   * ⚠️ DEFAULTS TO FALSE, so every existing caller — the prospect-facing render-audit-report route,
+   * the in-app preview, the standalone download — is byte-identical to before. The edge function is
+   * deliberately NOT changed; nothing server-side sets this.
+   */
+  hidePitch?: boolean;
+  /**
    * Where the offer button goes: this reader's own onboarding link, carrying their lead.
    *
    * ⛔ PASSED IN, NEVER BUILT HERE. It needs the lead id and the configured site origin (Deno env),
@@ -1000,6 +1013,8 @@ ${gutbox}
 ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : siteCheckPendingSection()}
 
     <!-- WHY THIS MATTERS (stakes) -->
+    <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
+${d.hidePitch ? "" : `
     <section class="why">
       <div class="sec-eyebrow">The stakes</div>
       <div class="sec-title">Why this matters</div>
@@ -1017,9 +1032,11 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : site
            caveat matters more here than on the marketing page.
            ⚠️ CROSS-SURFACE: the site's WhyThisMatters section carries this wording too. Change both. -->
       <div class="src">Source: BrightLocal Local Consumer Review Survey 2026 &mdash; 1,002 US adults; UK behaviour follows the same pattern, and the year-on-year comparison is self-reported within the same survey series.</div>
-    </section>
+    </section>`}
 
     <!-- WHAT WE DO (solution) &mdash; the confident turn from problem to fix -->
+    <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
+${d.hidePitch ? "" : `
     <section class="dowe">
       <div class="sec-eyebrow">The fix</div>
       <!-- The title names the ARGUMENT this section makes, not an inventory. It read "Here's what we
@@ -1068,9 +1085,11 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : site
           </div>
         </div>
       </div>
-    </section>
+    </section>`}
 
     <!-- CTA -->
+    <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
+${d.hidePitch ? "" : `
     <section class="cta">
       <h3>Ready to get <span class="y">started</span>?</h3>
       <!-- "READS", NOT "SAYS", and it matters twice over. It is more accurate — AI reads sources
@@ -1086,7 +1105,7 @@ ${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : site
              reassurance that makes the other two thinkable. Outline rather than filled. -->
         <a class="cta-btn site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">Who we are</a>
       </div>
-    </section>
+    </section>`}
 
 ${d.showFounderOffer === true ? founderOfferSection(d.founderOfferUrl) : ""}
     ${siteFooter}

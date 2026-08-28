@@ -4,6 +4,7 @@ import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar 
 import { Link } from 'react-router-dom';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
+import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
@@ -622,6 +623,11 @@ function LeadDetailBody({
             <ClipboardList className="h-3 w-3" />
             Playbook
           </Link>
+
+          {/* CLIENT WELCOME PACK — one PDF: cover, plan, get more reviews, then their audit report
+              with the selling sections hidden. Refuses with a toast when the lead has no completed
+              audit, because the report IS the pack's last section. */}
+          {!isDemoLead(lead.id) && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
 
           {/* Site check on engagement — renders only for a replied-or-beyond lead with a real
               website whose completed audit skipped the SEO scan (the email lane's up-front skip). */}

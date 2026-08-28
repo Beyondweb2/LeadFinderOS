@@ -3,6 +3,7 @@
 // server-side (the Deno edge fn render-audit-report reuses renderReportHtml). These use the
 // DOM (offscreen iframe + window.print) and only ever run in the SPA.
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml';
+import { buildWelcomePackHtml, type WelcomePackInput } from './welcomePackHtml';
 
 /** "ABLM Associates" + suffix → a clean PDF filename base ("ABLM-Associates-…"). Chrome/Edge
  *  use the document <title> as the default "Save as PDF" filename. */
@@ -66,4 +67,20 @@ export function downloadReportHtml(d: AiAuditReportData): void {
  *  The caller renders the HTML (client or internal view) and this prints exactly what it was given. */
 export function downloadHtmlDocAsPdf(html: string, businessName: string, filenameSuffix: string): void {
   printHtmlAsPdf(html, pdfTitle(businessName, filenameSuffix));
+}
+
+/* ══ WELCOME PACK ═════════════════════════════════════════════════════════════════════════════
+   ONE PDF for a client who has just paid: cover, plan, how it works, get more reviews, then their
+   audit report with the selling sections hidden.
+
+   ⛔ SAME PRINT PATH AS EVERY OTHER DOCUMENT — printHtmlAsPdf, the offscreen-iframe helper above.
+   No second PDF mechanism, so pagination, vector output and the Save-as-PDF filename behave exactly
+   as they do for the audit report and the page plan.
+   ⚠️ THE TITLE IS THE FILENAME. Chrome and Edge use the document <title> as the default "Save as
+   PDF" name, which is why it is set to the human-readable form rather than run through pdfTitle()'s
+   hyphenated slug: the client sees this file's name.
+   ⚠️ hidePitch is forced inside buildWelcomePackHtml, not passed here — a caller cannot forget it. */
+export function downloadWelcomePack(input: WelcomePackInput): void {
+  const name = (input.businessName || 'your business').trim();
+  printHtmlAsPdf(buildWelcomePackHtml(input), `Findable Welcome Pack - ${name}`);
 }
