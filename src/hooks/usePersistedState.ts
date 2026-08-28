@@ -133,3 +133,34 @@ export function usePersistedState<T>(
 
   return [value, setValue, clear];
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   UNMOUNT-SAFE WRITE-THROUGH — update a persisted key's STORAGE directly, outside React.
+
+   ⛔ WHY THIS EXISTS. PageGenerator's generate() awaits a PAID OpenAI call and then setCache()s the
+   result. Navigate away mid-call and the response still arrives — but setState on an unmounted
+   component is a no-op, so the finished page was silently discarded and the spend wasted. This
+   writes the result into the SAME storage entry usePersistedState reads on next mount, so the work
+   survives whether or not the component is still there. The caller should ALSO set component state
+   (when mounted the two agree; when unmounted the setState is inert and this write is what counts).
+
+   ⚠️ USE ONLY FOR COMPLETED RESULTS WORTH MONEY. This bypasses React — a mounted component does NOT
+   see the write until remount — so it is a write-through companion to a setState, never a
+   replacement for one. The read-modify-write is safe from interleaving because JS continuations run
+   one at a time; two resolving generations each read-then-write sequentially.
+   ⚠️ Key/tier/version/scope MUST match the hook call it mirrors, or it writes an entry nobody reads.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+export function updatePersistedValue<T>(
+  key: string,
+  opts: { tier?: PersistTier; scope?: string | null; version?: number },
+  updater: (current: T | undefined) => T,
+): void {
+  const { tier = 'session', scope = null, version = 1 } = opts;
+  const storageKey = scope ? `${PREFIX}${key}:${scope}` : `${PREFIX}${key}`;
+  try {
+    const current = readPersisted<T>(storageKey, tier, version);
+    writePersisted(storageKey, tier, version, updater(current));
+  } catch {
+    /* best-effort — a blocked store loses the write-through, exactly as the hook itself would */
+  }
+}

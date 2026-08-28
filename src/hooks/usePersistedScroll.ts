@@ -50,12 +50,16 @@ export function usePersistedScroll(params: {
     if (!el) return;
 
     const stored = safeRead(storageKey);
-    if (stored === null) return;
 
     // Defer until after paint so layout is stable
     requestAnimationFrame(() => {
       try {
-        el.scrollTop = stored;
+        /* ⛔ NOTHING STORED MEANS TOP, EXPLICITLY. This used to `return` on null — harmless while
+           every navigation remounted the layout (a fresh container starts at 0 anyway), but the
+           layout is now ONE persistent route (App.tsx's operator shell), so the container KEEPS the
+           previous route's scroll across a navigation. Without this reset, opening a never-visited
+           page landed you mid-way down it, inheriting the page you came from. */
+        el.scrollTop = stored === null ? 0 : stored;
       } catch {
         // ignore
       }
