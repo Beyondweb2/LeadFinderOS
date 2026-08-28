@@ -1581,6 +1581,32 @@ by the single account below.** §6's paginate rule, caught in this file's own no
     decision.
   - ⚠️ **Any "5 of N" figure on a measurement is therefore over an UNEVEN denominator.** Solene reads
     5 named of 174 answer-cells; 27 of its questions contribute a third as many cells as the rest.
+- ✅ **RE-AUDIT — ONE PATH, ONE PRICING RULE, AND `baseline_target_runs` IS THE LOAD-BEARING WRITE.**
+  `src/lib/reAudit.ts` mints a NEW `ai_audits` row from a source audit (the source is never touched)
+  for both callers — the AI Audit page's Re-audit button and Baseline's "Re-run this measurement".
+  Since 2026-08-28 the dialog carries a **Quick / Full measurement** toggle, seeded from the source
+  so leaving it alone reproduces the old behaviour.
+  - ⛔ **`purpose: 'measurement'` ALONE DOES NOT GET YOU 3 RUNS.** `advanceBaseline` returns early on
+    `!(target > 1)`, and `create-ai-audit` writes `baseline_target_runs` **only in its new-audit
+    INSERT branch** — never on the reuse path a re-audit takes (it has no `.update()` on `ai_audits`
+    at all). So the copy row must carry **`is_measurement: true` AND `baseline_target_runs`** itself,
+    or a Full-measurement press runs ONCE at the three-run price.
+  - ⛔ **THE PRICE AND THE CHARGE ARE ONE FUNCTION CALL, NOT TWO THAT AGREE.** The cost line and the
+    `baseline_target_runs` write both go through **`runsForReAuditMode(mode, sourceTargetRuns)`**
+    (`src/lib/measurementRuns.ts`). The predecessor `runsForReAudit(isMeasurement)` was **DELETED**
+    rather than kept — it priced from what the source WAS while the dialog prices from what the
+    operator PICKED, and two pricing rules in one leaf is one autocomplete away from the original
+    fault (the screen said "× 1 run" while the server ran `MEASUREMENT_RUNS`, pricing a 47-question
+    Solene re-audit at ~47p against a real ~£1.17). `scripts/re-audit-mode.test.ts` asserts the
+    property, not the numbers.
+  - ⚠️ **An absent source target (null / 0 / 1) falls back to `MEASUREMENT_RUNS`, never to 1** — the
+    absent-value rule on the one column that decides what is charged.
+  - ⚠️ **`isMeasurementSource` survives on purpose**: what the source WAS is a different question
+    from what to run, and it is the only thing that can warn about a downgrade. A downgrade is
+    allowed (it can only cost less) but named — a 1-run "after" does not compare against a repeated
+    "before".
+  - ⚠️ **`RE_AUDIT_EST_USD_PER_QUESTION = 0.0104`**, measured off `ai_audit_runs.actor_cost_usd` for
+    Solene's own 3-run 20-question baseline (§4's constants rule). It was 0.0125, ~20% high.
 - ⛔ **THERE IS NO REGEX COMPETITOR EXTRACTOR ANY MORE. DELETED 2026-08-28 — DO NOT REINSTATE ONE.**
   `ai-search.ts` stores `competitors: []` at scan time and **`extract-competitors` (the LLM) is the
   field's ONLY writer**. The scraper took every run of 1–4 capitalised words out of `answer_text`
