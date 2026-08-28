@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TablesInsert } from '@/integrations/supabase/types';
+import { defaultReAuditMode, runsForReAuditMode, type ReAuditMode } from './measurementRuns';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    RE-AUDIT — mint a NEW audit (the "after" of a before/after) from an existing source audit,
@@ -50,7 +51,12 @@ const SRC_SELECT: string =
  */
 export async function reAuditFromSource(
   supabase: SupabaseClient,
-  opts: { sourceAuditId: string; userId: string; questions: string[] },
+  opts: {
+    sourceAuditId: string; userId: string; questions: string[];
+    /** The operator's choice from the Re-audit dialog. Omitted → the source's own implied mode,
+     *  i.e. exactly the behaviour every existing caller had (the Baseline page passes nothing). */
+    mode?: ReAuditMode;
+  },
 ): Promise<ReAuditOutcome> {
   const clean = opts.questions.map((q) => (q ?? '').trim()).filter(Boolean);
   if (clean.length === 0) return { ok: false, error: 'no questions to re-audit' };
@@ -60,16 +66,30 @@ export async function reAuditFromSource(
   if (readErr || !src) return { ok: false, error: readErr?.message ?? 'could not read the audit to copy' };
 
   const markers = src as unknown as { is_measurement?: boolean | null; baseline_target_runs?: number | null };
-  const targetRuns = Number(markers.baseline_target_runs ?? 0);
-  const isMeasurement = markers.is_measurement === true || targetRuns > 1;
+  const sourceTargetRuns = Number(markers.baseline_target_runs ?? 0);
+  /* The chosen mode wins; absent, the source's own markers decide exactly as before. */
+  const mode: ReAuditMode = opts.mode ?? defaultReAuditMode(markers);
+  const isMeasurement = mode === 'measurement';
+  const targetRuns = runsForReAuditMode(mode, sourceTargetRuns);
 
-  // Copy business fields; carry the measurement markers ONLY when it is a measurement.
+  /* Copy business fields; carry the measurement markers ONLY when this run is a measurement.
+     ⛔ BOTH MARKERS, AND baseline_target_runs IS THE LOAD-BEARING ONE. `purpose:'measurement'` alone
+     is NOT enough to get 3 runs: advanceBaseline returns early on `!(target > 1)`
+     (_shared/audit-baseline.ts), and create-ai-audit writes baseline_target_runs only in its
+     NEW-AUDIT insert branch — never on the reuse path a re-audit takes (it has no .update() on
+     ai_audits at all). So without this write the copy would run ONCE while the dialog priced three,
+     which is the mispriced-run fault in a new place. It is written from runsForReAuditMode, the same
+     function the cost line uses, so the number charged is the number shown.
+     ⚠️ is_measurement=true is also what makes advanceBaseline send purpose:'measurement' on the
+     REPEATS (the 2026-08-28 clamp fix), so runs 2 and 3 carry the full question set rather than the
+     baseline's 20-question ceiling — and it keeps startPaidBaseline from ever mistaking a
+     re-measure for a new paid baseline. */
   const copyRow: Record<string, unknown> = { ...(src as unknown as Record<string, unknown>), user_id: opts.userId };
   delete copyRow.is_measurement;
   delete copyRow.baseline_target_runs;
   if (isMeasurement) {
     copyRow.is_measurement = true;
-    if (targetRuns > 1) copyRow.baseline_target_runs = targetRuns;
+    copyRow.baseline_target_runs = targetRuns;
   }
 
   const { data: created, error: insErr } = await supabase
