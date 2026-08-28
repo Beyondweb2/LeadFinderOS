@@ -41,7 +41,20 @@ interface AuditRowLite {
   created_at: string;
 }
 
-export function WelcomePackButton({ leadId, businessName }: { leadId: string; businessName: string }) {
+export function WelcomePackButton({
+  leadId, businessName, className, iconOnly = false,
+}: {
+  leadId: string;
+  businessName: string;
+  /** ⚠️ PRESENTATION ONLY. The Inbox thread header is a row of 7x7 icon squares sharing one class
+   *  (HEADER_ICON_BTN), so it passes that class in rather than a second component being written.
+   *  Omitted → the Outreach modal's amber pill, unchanged. */
+  className?: string;
+  /** Icon square with no visible text — the Inbox row's convention, where "Welcome pack" is carried
+   *  by title/aria-label exactly as every sibling button's label is. Visible text in a 7x7 square
+   *  would break the row. */
+  iconOnly?: boolean;
+}) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [reviewLink, setReviewLink] = useState('');
@@ -136,11 +149,16 @@ export function WelcomePackButton({ leadId, businessName }: { leadId: string; bu
         type="button"
         onClick={onOpen}
         disabled={checking}
-        className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-700 hover:bg-amber-500/20 disabled:opacity-60 dark:text-amber-400"
-        title="Build the client welcome pack PDF: cover, plan, get more reviews, and their audit report with the sales pitch removed"
+        className={className ?? 'inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-700 hover:bg-amber-500/20 disabled:opacity-60 dark:text-amber-400'}
+        aria-label="Welcome pack"
+        /* The pill keeps its ORIGINAL tooltip byte-for-byte (the Outreach button must not change);
+           the icon-only variant leads with the label, because in that row the tooltip IS the label. */
+        title={iconOnly
+          ? 'Welcome pack — build the client PDF: cover, plan, get more reviews, and their audit report with the sales pitch removed'
+          : 'Build the client welcome pack PDF: cover, plan, get more reviews, and their audit report with the sales pitch removed'}
       >
         {checking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Gift className="h-3 w-3" />}
-        Welcome pack
+        {iconOnly ? null : 'Welcome pack'}
       </button>
 
       <Dialog open={open} onOpenChange={(v) => { if (!busy) setOpen(v); }}>
