@@ -32,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2 } from 'lucide-react';
 
@@ -1261,6 +1262,20 @@ const Inbox = () => {
                   <a href={`https://wa.me/${active.phone}`} target="_blank" rel="noreferrer" title="Open this chat in the WhatsApp app" aria-label="Open in WhatsApp app" className={HEADER_ICON_BTN}>
                     <MessageCircle className="h-4 w-4" />
                   </a>
+                  {/* CLIENT WELCOME PACK — the SAME component the Outreach lead modal renders, so
+                      there is exactly one pack code path: it resolves this lead's own audit and calls
+                      downloadWelcomePack itself. Only the styling differs (this row is 7x7 icon
+                      squares sharing HEADER_ICON_BTN), which is why the class is passed in rather
+                      than a second button being written. Label carried by title/aria-label, as every
+                      sibling in this row does. */}
+                  {active.leadId && (
+                    <WelcomePackButton
+                      leadId={active.leadId}
+                      businessName={activeLead?.business_name ?? active.label ?? 'this client'}
+                      className={HEADER_ICON_BTN}
+                      iconOnly
+                    />
+                  )}
                   {/* Remove from inbox → sets the lead to Closed (hidden here; stays in Outreach). */}
                   {active.leadId && (
                     <button type="button" onClick={() => handleRemoveFromInbox(active)} disabled={removingKey === active.key} title="Remove from inbox (mark Closed)" aria-label="Remove from inbox" className={cn(HEADER_ICON_BTN, 'hover:text-destructive')}>
