@@ -78,7 +78,11 @@ const clampQuestionCount = (n: number) =>
 const FULL_MIN_QUESTIONS = 10;
 const FULL_MAX_QUESTIONS = 75;
 const FULL_DEFAULT_QUESTIONS = 40;
-const FULL_QUESTION_OPTIONS = [10, 25, 40, 60, 75];
+/* 20 is here for a reason: it is the BASELINE repeat ceiling, so a 20-question measurement is
+   the largest one whose runs 2 and 3 carried the full set even BEFORE the advanceBaseline purpose fix
+   (2026-08-28). Kept as an option because it is the safe choice on any deploy where that fix is not
+   live. */
+const FULL_QUESTION_OPTIONS = [10, 20, 25, 40, 60, 75];
 const clampFullCount = (n: number) =>
   Math.min(FULL_MAX_QUESTIONS, Math.max(FULL_MIN_QUESTIONS, Math.round(n) || FULL_DEFAULT_QUESTIONS));
 

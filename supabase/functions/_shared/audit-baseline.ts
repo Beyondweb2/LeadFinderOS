@@ -200,10 +200,27 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     recordOutcome(service, auditId, { at, source, ...o })
       .catch((e) => console.error("[baseline] could not record outcome:", e instanceof Error ? e.message : e));
   try {
-    const { data: audit, error: aErr } = await service
+    /* ⛔ `is_measurement` IS READ HERE FOR THE REPEAT'S PURPOSE — see the purpose branch below.
+       MIGRATION-TOLERANT, the same way startPaidBaseline reads it: it is a hand-added column, so a
+       select that fails ON THAT NAME is retried without it and every row then reads as
+       non-measurement, which is exactly the behaviour this function had before. Failing closed that
+       way keeps paid baselines correct on a DB that has not got the column. */
+    const AUDIT_COLS_BASE =
+      "id, user_id, lead_id, business_name, business_type, location_text, country, has_website, website, specialism, business_scope, baseline_target_runs, baseline";
+    // deno-lint-ignore no-explicit-any
+    let audit: any = null;
+    let aErr: { message?: string } | null = null;
+    ({ data: audit, error: aErr } = await service
       .from("ai_audits")
-      .select("id, user_id, lead_id, business_name, business_type, location_text, country, has_website, website, specialism, business_scope, baseline_target_runs, baseline")
-      .eq("id", auditId).maybeSingle();
+      .select(`${AUDIT_COLS_BASE}, is_measurement`)
+      .eq("id", auditId).maybeSingle());
+    if (aErr && /is_measurement/i.test(aErr.message ?? "")) {
+      console.warn("[baseline] is_measurement column not present — reading without it (repeats stay on the baseline cap)");
+      ({ data: audit, error: aErr } = await service
+        .from("ai_audits")
+        .select(AUDIT_COLS_BASE)
+        .eq("id", auditId).maybeSingle());
+    }
     // Column missing (migration not run) or no audit → nothing to advance.
     if (aErr) {
       console.warn("[baseline] skipped:", aErr.message);
@@ -211,6 +228,9 @@ export async function advanceBaseline(service: Client, auditId: string, source =
       return;
     }
     const target = Number(audit?.baseline_target_runs ?? 0);
+    /* Read ONCE, next to the target, so the purpose sent on the repeat below cannot drift from the
+       audit it belongs to. A missing column (see the tolerant select above) reads as false. */
+    const isMeasurementAudit = (audit as { is_measurement?: boolean | null } | null)?.is_measurement === true;
     if (!audit || !(target > 1)) return;          // not a paid baseline audit
     if (audit.baseline) return;                    // already finalised
 
@@ -297,7 +317,24 @@ export async function advanceBaseline(service: Client, auditId: string, source =
         user_id: audit.user_id,
         audit_id: auditId,           // re-run path: same audit, next run_number
         questions,                   // verbatim repeat — the whole point
-        purpose: "baseline",         // keeps the wider provided-question cap
+        /* ⛔ THE REPEAT MUST BE GRADED AS WHAT IT IS. This said `purpose: "baseline"` for every
+           repeat, which sent a MEASUREMENT's runs 2 and 3 through create-ai-audit's BASELINE ceiling
+           (BASELINE_MAX_QUESTION_COUNT = 20) — so a 47-question measurement ran 47 / 20 / 20 and a
+           25-question one ran 25 / 20 / 20. Twenty-seven of Solene's questions were measured ONCE,
+           which is precisely the single-run unreliability a 3-run measurement exists to avoid.
+           The comment at create-ai-audit:306 warns about this exact failure for baselines; the
+           measurement path re-introduced it because the purpose was hardcoded here.
+
+           ⚠️ PAID BASELINES ARE UNCHANGED — they are not measurements, so they still send
+           "baseline" and still clamp at 20, deliberately: the guarantee's cost ceiling.
+           ⚠️ AND THE MEASUREMENT PATH GETS ITS SEO SKIP BACK ON THE REPEATS. create-ai-audit:361 is
+           `skipSeo = body.skip_seo === true || isMeasurement`, so a repeat sent as "baseline" was not
+           structurally skipping the scan the way run 1 does. Sending the true purpose makes runs 2
+           and 3 behave like run 1 in both respects, which is the whole point of a repeat.
+           ⚠️ Safe on the reuse path: create-ai-audit honours an EXPLICIT body.audit_id regardless of
+           purpose (the !isMeasurement guard at :476 only blocks AUTO-discovering a reuse target),
+           and it never UPDATEs ai_audits, so a repeat cannot rewrite the audit's own markers. */
+        purpose: isMeasurementAudit ? "measurement" : "baseline",
         question_count: questions.length,
         business_scope: audit.business_scope ?? undefined,
         // MUST accompany business_scope. Sending scope='local' without it is what killed every
