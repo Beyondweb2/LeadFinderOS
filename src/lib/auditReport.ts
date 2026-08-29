@@ -719,7 +719,14 @@ export function citationDomain(raw: string): string {
   } catch { return ''; }
 }
 
-export type WinnabilityLabel = 'wide_open' | 'locked' | 'informational' | 'unclear';
+export type WinnabilityLabel = 'named' | 'wide_open' | 'locked' | 'informational' | 'unclear';
+
+/* ⛔ THE CLIENT'S OWN RESULT OUTRANKS EVERY COMPETITOR SIGNAL. Named in at least this share of the
+   scored answers → the question is WON, and the verdict says so instead of grading the race.
+   0.5 is the project's existing "already named" bar (DEFEND_NAMED_RATE in pagePlanQueue.ts, the
+   Gemini-first hold rule), reused here so the report and the page plan cannot disagree about which
+   questions are already won. */
+export const WINNABILITY_NAMED_SHARE = 0.5;
 export interface QuestionWinnability {
   label: WinnabilityLabel;
   reason: string;
@@ -735,7 +742,15 @@ export interface QuestionWinnability {
    Conservative — defaults to 'unclear' rather than over-claiming 'wide_open'. `cells` is the list of
    real-firm-name arrays (one per answered engine×run cell, canonical labels); `domains` is every
    cited domain across the question. */
-export function computeWinnability(cells: string[][], domains: string[]): QuestionWinnability {
+export function computeWinnability(
+  cells: string[][],
+  domains: string[],
+  /* The client's OWN result on this question: how many scored answers named them, out of how many
+     scored answers there were. Optional so older callers keep the previous behaviour exactly.
+     ⚠️ ABSENT MEANS "NOT MEASURED", NEVER "NOT NAMED" — a missing argument must not be read as a
+     zero and turn a won question into "worth testing" (the absent-value rule, CLAUDE.md §6). */
+  client?: { named: number; answers: number },
+): QuestionWinnability {
   const totalCells = cells.length;
   const tally = new Map<string, number>();
   let firmMentions = 0;
@@ -755,7 +770,21 @@ export function computeWinnability(cells: string[][], domains: string[]): Questi
   const authorityLean = mix.total > 0 && mix.authority >= Math.max(1, mix.business);
   let label: WinnabilityLabel;
   let reason: string;
-  if (totalCells === 0) { label = 'unclear'; reason = 'no answers to read'; }
+  /* ⛔ TESTED FIRST, BEFORE ANY COMPETITOR GRADING. This function used to see only the rivals and
+     the sources, so a question where the client was named in 5 of 6 answers fell through to the
+     final `else` and printed "Mixed signals — worth a closer look as a possible content target".
+     The document was grading the race while ignoring the fact that the client had already won it,
+     which reads as the tool disregarding its own measurement. A won question is not a target. */
+  const clientAnswers = client?.answers ?? 0;
+  const clientShare = clientAnswers > 0 ? (client!.named / clientAnswers) : 0;
+  if (clientAnswers > 0 && clientShare >= WINNABILITY_NAMED_SHARE) {
+    label = 'named';
+    /* ⚠️ PLAIN TEXT, NOT AN HTML ENTITY. The renderer prints this through esc(), so "&rsquo;" would
+       be escaped to "&amp;rsquo;" and show as literal markup on the page. Every other reason string
+       here uses literal characters (the em dashes below) for the same reason. */
+    reason = `You’re already being named here — in ${client!.named} of ${clientAnswers} answers. Protect this: keep the page that earns it live and current.`;
+  }
+  else if (totalCells === 0) { label = 'unclear'; reason = 'no answers to read'; }
   else if (firmMentions === 0) {
     if (authorityLean) { label = 'informational'; reason = 'AI answers this with general information rather than naming businesses. Potentially winnable with a strong Q&A or article page — worth testing.'; }
     else { label = 'unclear'; reason = 'no businesses named, but the sources are not clearly informational'; }
@@ -956,6 +985,13 @@ export function buildReportData(
       }
       return {
         label: ENGINE_LABELS[engine] ?? engine,
+        /* ⛔ `counted` = does this engine feed the question's "named in X of Y answers" total?
+           Only SCORED_ENGINES do. The rows render DISPLAY_ENGINES, which is wider — AI Overview is
+           shown but never counted — so without this flag an AI Overview row showing a count the
+           header ignores would look like an arithmetic error. It is absent from the numbers today
+           because AI Overview is no longer scraped; the flag makes the reconciliation hold if it
+           ever comes back, rather than leaving a trap for whoever sees it first. */
+        counted: (SCORED_ENGINES as readonly string[]).includes(engine),
         ran: ranCount > 0, ranCount, runs: rows.length, named,
         rivals: engRivals, citations: [...cm.entries()].slice(0, 8).map(([domain, url]) => ({ domain, url })),
       };
@@ -989,7 +1025,12 @@ export function buildReportData(
 
     // Winnability over the repeats — cells normalised to canonical firm labels so a spelling variant
     // isn't mistaken for a second firm.
-    const winnability = computeWinnability(cellsRaw.map((cell) => cell.map(canon)), domains);
+    /* The client's own result is passed in so a question they already win is graded as won rather
+       than as a content target. Same two numbers the header badge prints, so the verdict and the
+       badge can never tell the reader different stories about the same question. */
+    const winnability = computeWinnability(
+      cellsRaw.map((cell) => cell.map(canon)), domains, { named: namedCount, answers },
+    );
 
     return { question, namedYou, namedCount, answers, rivals, citations, perEngine, winnability };
   });
