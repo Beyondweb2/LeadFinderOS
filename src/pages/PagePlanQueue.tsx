@@ -82,6 +82,17 @@ const WINN_STYLE: Record<string, string> = {
   unmeasured: 'border-border text-muted-foreground',
 };
 
+/* ⛔ Q&A / INFORMATIONAL — DERIVED FROM `winnability`, NOT FROM `page_type`. DISPLAY ONLY.
+   page_type looks like the field for this and is NOT: plan_build inserts the literal "qa" on EVERY
+   row, town pages included (page-generator/index.ts:470), which is why pagePlanHandoff.ts already
+   refuses to read it. The plan also never stores the report's "informational" label — it grades with
+   classifyWinnability's vocabulary, where the equivalent verdict is `no_local_race`: "No local firms
+   named — AI gives generic advice, so there is no local race to win here" (auditReport.ts:669). That
+   is the informational question, and it is the one per-row field that marks one.
+   ⚠️ Adds nothing to the decision: the pill is rendered beside the existing status pill and no
+   score, wave, hold or stored value reads it. */
+const isQaRow = (r: PlanRow): boolean => r.winnability === 'no_local_race';
+
 /* The small status pill, DISPLAY ONLY: a bare "named" pill on a BUILDING card contradicts the
    BUILD chip beside it (Paul, 2026-08-28). On builds the pill reflects the build state — the gap
    builds read "Gemini gap", a rare non-gap named-label build reads "partly named" — while "named"
@@ -268,6 +279,11 @@ const PagePlanQueue = () => {
           )}
           <Badge variant="outline" className="text-[10px] font-normal">{r.topic}</Badge>
           {pillFor(r) && <Badge variant="outline" className={`text-[10px] ${WINN_STYLE[pillFor(r)!] ?? WINN_STYLE[r.winnability ?? ''] ?? ''}`}>{pillFor(r)}</Badge>}
+          {/* Q&A marker — same Badge component and the same class string the "no local race"
+              pill already uses, so it introduces no new colour or shape. */}
+          {isQaRow(r) && (
+            <Badge variant="outline" className={`text-[10px] ${WINN_STYLE.no_local_race}`}>Q&amp;A</Badge>
+          )}
           {isGeminiGapRow(r) && (
             <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-500">
               Gemini gap — already strong on ChatGPT
