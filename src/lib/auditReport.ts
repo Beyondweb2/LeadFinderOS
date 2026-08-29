@@ -989,8 +989,11 @@ export function buildReportData(
            Only SCORED_ENGINES do. The rows render DISPLAY_ENGINES, which is wider — AI Overview is
            shown but never counted — so without this flag an AI Overview row showing a count the
            header ignores would look like an arithmetic error. It is absent from the numbers today
-           because AI Overview is no longer scraped; the flag makes the reconciliation hold if it
-           ever comes back, rather than leaving a trap for whoever sees it first. */
+           🔴 AND IT IS NOT HYPOTHETICAL: AI Overview IS being scraped again. Measured on the live
+           ABLM report 2026-08-29 — it returned on 14 of 20 questions, so its rows showed counts the
+           header excludes and the card appeared not to add up. Several comments in this repo still
+           claim it is "no longer scraped"; they are stale. The flag is what makes the card
+           reconcile: an engine outside SCORED_ENGINES says so on its own row. */
         counted: (SCORED_ENGINES as readonly string[]).includes(engine),
         ran: ranCount > 0, ranCount, runs: rows.length, named,
         rivals: engRivals, citations: [...cm.entries()].slice(0, 8).map(([domain, url]) => ({ domain, url })),

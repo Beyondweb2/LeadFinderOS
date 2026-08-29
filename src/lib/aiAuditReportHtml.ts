@@ -653,9 +653,12 @@ export function renderReportHtml(d: AiAuditReportData): string {
       ? `<span class="qb-badge yes sm">Named you ${namedN} of ${outOf}</span>`
       : `<span class="qb-badge no sm">Not named${outOf > 1 ? ` (0 of ${outOf})` : ''}</span>`;
     /* An engine that RAN but does not feed the question total is said so plainly, so its count can
-       never look like it should have been added to the header. Renders nothing today (AI Overview
-       is no longer scraped, so it never runs); `counted !== false` keeps older payloads, which
-       carry no flag, exactly as they were. */
+       never look like it should have been added to the header.
+       🔴 THIS RENDERS ON REAL REPORTS: AI Overview IS being scraped again — measured live
+       2026-08-29, it returned on 14 of 20 questions of ABLM's audit — even though several comments
+       in this repo still say it is "no longer scraped". Its counts sit outside SCORED_ENGINES, so
+       without this note a card reads as though its engine rows should add up to the header and
+       don't. `counted !== false` keeps older payloads, which carry no flag, exactly as they were. */
     const uncounted = (e.ran && (e as { counted?: boolean }).counted === false)
       ? `<span class="qb-uncounted">not counted in the total above</span>` : '';
     const rivals = e.rivals.length
