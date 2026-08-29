@@ -100,6 +100,9 @@ const COUNTRIES: { value: string; label: string }[] = [
 
 
 interface AuditRow { id: string; business_name: string; business_type: string | null; location_text: string | null; country: string | null; has_website: boolean; created_at: string;
+  /** The client's own site. Selected so the report's "Cited as a source" figure can tell a
+   *  citation of their OWN domain from a citation of somebody else's. May be null. */
+  website?: string | null;
   /** MARKET audit: a trade and a town with no business attached. Its named count is 0 by
    *  construction, so nothing here may render it as a business's result — see isMarketAudit. */
   is_market?: boolean | null;
@@ -189,7 +192,7 @@ const AUDIT_SEARCH_LIMIT = 200;
 /** The columns the landing list needs off ai_audits — shared by the full-list load and the search
  *  query so the two can't drift into hydrating different shapes. */
 const AUDIT_SELECT =
-  'id, business_name, business_type, location_text, country, has_website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted, is_measurement';
+  'id, business_name, business_type, location_text, country, has_website, website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted, is_measurement';
 
 /** Split ids into batches so a `.in(ids)` filter never builds a querystring long enough to hit the
  *  gateway URL limit: 300 ids was already ~11KB and 485 ~18KB, near the edge. 150 keeps every read
@@ -1528,6 +1531,10 @@ const AiAudit = () => {
       locationText: audit.location_text ?? '',
       specialisms: '',
       isAggregatorUrl,
+      /* Needed for the report's "Cited as a source" figure: without it the domain half of the
+         citation test is disabled, and this preview would show a lower `cited` count than the live
+         client report, which does pass it (render-audit-report). */
+      ownWebsite: audit.website ?? '',
     });
     if (!data) { toast({ title: 'No completed results to report yet', variant: 'destructive' }); return; }
     data.internal = true; // snapshot default — OVERRIDDEN at render/print by AiAuditReport's Client/Internal toggle (showInternal); Client is what shows unless the operator switches
@@ -1647,6 +1654,9 @@ const AiAudit = () => {
       locationText,
       specialisms,
       isAggregatorUrl,
+      // Same expression as `ownWebsite` further down (schema value, else the wizard URL).
+      // scanTargetUrl is computed earlier in this render, so reading it here is safe.
+      ownWebsite: scanTargetUrl,
     });
     if (rd) rd.internal = true; // snapshot default — OVERRIDDEN at render/print by AiAuditReport's Client/Internal toggle (showInternal)
     return rd;
