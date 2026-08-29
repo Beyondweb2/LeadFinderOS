@@ -15,6 +15,7 @@ import { classifyKnownEntity } from './knownEntities.ts';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from './competitorCleaning.ts';
 import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
+import { nameMatches } from './nameMatch.ts';
 
 // Engines shown in results (queue targets chatgpt+gemini; the actor also returns
 // AI Overview + Google organic, shown for context). mention_rate is over chatgpt+gemini.
@@ -719,6 +720,27 @@ export function citationDomain(raw: string): string {
   } catch { return ''; }
 }
 
+/* ⛔ IS THIS CITATION THE CLIENT'S OWN? Two independent tests, either sufficient:
+   the source TITLE names the business, or the source URL is on the business's own domain.
+   The title half is what the stored `named` flag already uses (ai-search.ts matches the title, NOT
+   the domain — a page titled "Home | Accountants" on the client's own site does not trip it). The
+   domain half is what an operator actually means by "we were cited", so both are needed and
+   neither alone is enough.
+   ⚠️ ownDomain may be '' — the SPA preview did not pass ownWebsite until this change, and an audit
+   may genuinely have no website. An empty domain simply disables the domain half; it never matches
+   everything, which an unguarded `endsWith('')` would (the absent-value rule). */
+function citationIsClient(
+  c: { title?: string; url?: string } | null | undefined,
+  businessName: string,
+  ownDomain: string,
+): boolean {
+  if (!c) return false;
+  if (nameMatches(c.title ?? '', businessName)) return true;
+  if (!ownDomain) return false;
+  const host = citationDomain(unwrapCitationUrl(c.url ?? ''));
+  return !!host && (host === ownDomain || host.endsWith(`.${ownDomain}`));
+}
+
 export type WinnabilityLabel = 'named' | 'wide_open' | 'locked' | 'informational' | 'unclear';
 
 /* ⛔ THE CLIENT'S OWN RESULT OUTRANKS EVERY COMPETITOR SIGNAL. Named in at least this share of the
@@ -818,6 +840,11 @@ export function buildReportData(
      it degrades to "we measured what AI said about you" instead of naming nonsense.
      ⚠️ The verdict is DERIVED from the names, not read from a stamp — every audit before
      2026-08-28 has no stamp, and absence must not read as clean (competitorCleaning.ts). */
+  /* Shared by every per-engine recommended/cited derivation below. matchCtx mirrors what the
+     SCANNER passed when it set `named`, so a prose match here means the same thing it meant then;
+     ownDomain is the client's own host, used only for the citation test. */
+  const matchCtx = { trade: ctx.businessType || null, town: ctx.locationText || null };
+  const ownDomain = citationDomain(unwrapCitationUrl(ctx.ownWebsite ?? ''));
   const cleanliness = assessCompetitorCleanliness(collectCompetitorNames(queueRows), run?.results,
     { answeredCells: countAnsweredCells(queueRows) });
   /* ⚠️ `suppressNames`, NOT `verdict === 'dirty'`. The verdict is also dirty when the run holds NO
@@ -974,12 +1001,24 @@ export function buildReportData(
 
     // Per display-engine, across runs: how many of the runs it named you in, plus its rivals/sources.
     const perEngine = (['chatgpt', 'gemini', 'ai_overview'] as const).map((engine) => {
-      let ranCount = 0; let named = 0;
+      let ranCount = 0; let named = 0; let recommended = 0; let cited = 0;
       const seenR = new Set<string>(); const engRivals: string[] = [];
       const cm = new Map<string, string>();
       for (const r of rows) {
         const er = r.result![engine]; if (!er) continue;
         ranCount++; if (er.named) named++;
+        /* ⛔ RECOMMENDED vs CITED — DERIVED HERE, NOT STORED, AND `named` IS UNTOUCHED.
+           The stored `named` is `prose OR a matching source title` (ai-search.ts), so a reader
+           could not tell a real recommendation from a citation of the client's own site. Both
+           halves are recoverable from data already on the row — answer_text and citations are
+           stored per engine — so they are split at RENDER time: no re-audit, no spend, and every
+           historical audit gains the breakdown.
+           ⚠️ `named` deliberately still drives the header and the hero. This ADDS a figure; it does
+           not redefine the metric. Measured before building: for ABLM, recommended = 22 and
+           citation-only = 0, so nothing moves — but that is a fact about this audit, not a
+           guarantee, which is exactly why both numbers are now shown. */
+        if (nameMatches(er.answer_text ?? '', ctx.businessName, matchCtx)) recommended++;
+        if ((er.citations ?? []).some((c) => citationIsClient(c, ctx.businessName, ownDomain))) cited++;
         for (const c of er.competitors ?? []) { if (!keepRival(c)) continue; const t = c.trim(); const k = t.toLowerCase(); if (!k || seenR.has(k)) continue; seenR.add(k); engRivals.push(t); }
         for (const c of er.citations ?? []) { const url = unwrapCitationUrl(c?.url ?? ''); const dom = citationDomain(url); if (!dom || cm.has(dom)) continue; cm.set(dom, url); }
       }
@@ -995,7 +1034,7 @@ export function buildReportData(
            claim it is "no longer scraped"; they are stale. The flag is what makes the card
            reconcile: an engine outside SCORED_ENGINES says so on its own row. */
         counted: (SCORED_ENGINES as readonly string[]).includes(engine),
-        ran: ranCount > 0, ranCount, runs: rows.length, named,
+        ran: ranCount > 0, ranCount, runs: rows.length, named, recommended, cited,
         rivals: engRivals, citations: [...cm.entries()].slice(0, 8).map(([domain, url]) => ({ domain, url })),
       };
     });

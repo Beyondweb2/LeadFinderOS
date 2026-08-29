@@ -87,7 +87,7 @@ export interface AiAuditReportData {
        ranCount = how many runs the engine answered in; named = how many of those it named you in
        (a count now; older payloads carried a boolean, handled in the renderer). ran=false → the
        engine never returned an answer. */
-    perEngine?: { label: string; ran: boolean; ranCount?: number; runs?: number; named: number | boolean; rivals: string[]; citations: { domain: string; url: string }[] }[];
+    perEngine?: { label: string; ran: boolean; ranCount?: number; runs?: number; named: number | boolean; recommended?: number; cited?: number; rivals: string[]; citations: { domain: string; url: string }[] }[];
     /* INTERNAL winnability signal (rendered only when `internal` is true — never on the client doc).
        Structural match for QuestionWinnability in auditReport.ts (kept inline to avoid a circular
        type import between this file and auditReport.ts). */
@@ -217,52 +217,61 @@ function inWords(n: number): string {
 
    ⚠️ THE NUMBERS ARE PASSED IN, NOT JUST THE PERCENTAGE. "once in six answers" is checkable and
    unarguable; "17%" is neither, and a percentage of six is false precision anyway. */
+/* ⛔ THE FRONT-PAGE VERDICT IS BANDED ON THE NAMED RATE (Paul's wording, 2026-08-29). It used to
+   assert "Your competitors are in nearly all of them" at any rate under a third — a fixed claim the
+   measurement does not support once a client is genuinely being named somewhere, which is exactly
+   ABLM's position (22 of 120 = 18%, named well on the towns that have pages).
+   ⚠️ BOUNDARIES ARE INCLUSIVE AT THE TOP and read off the percentage, so 15% is "rarely", 16% is
+   "not yet consistently", and there is no gap a rate can fall through: the final band is the
+   fallthrough, not a fourth test. `questionsAsked` is the number of DISTINCT questions, which is
+   what "ways customers ask" means — not the answer count. */
+export function verdictBand(named: number, total: number): { band: "crit" | "low" | "mid" | "high"; key: 'rare' | 'inconsistent' | 'many' | 'default' } {
+  const pct = total > 0 ? (named / total) * 100 : 0;
+  if (pct <= 15) return { band: "crit", key: 'rare' };
+  if (pct <= 40) return { band: "low", key: 'inconsistent' };
+  if (pct <= 70) return { band: "mid", key: 'many' };
+  return { band: "high", key: 'default' };
+}
+
+/* ⚠️ `hasRivals` WAS REMOVED, NOT LEFT UNUSED. The old bands hedged their competitor clauses on it;
+   the new wording never mentions competitors, so the parameter had no reader. The gut-punch block
+   below still gates its own competitor line on the same fact, so nothing about that claim changed. */
 function heroVerdict(
   named: number,
   total: number,
-  hasRivals: boolean,
-): { band: "crit" | "low" | "mid" | "high"; punch: string } {
-  const of = `${total} answer${total === 1 ? "" : "s"}`;
-
-  // Never named. States what was measured, never what AI does or does not know.
-  if (named === 0) {
+  questionsAsked: number,
+): { band: "crit" | "low" | "mid" | "high"; punch: string; sub: string } {
+  const { band, key } = verdictBand(named, total);
+  const N = questionsAsked > 0 ? questionsAsked : total;
+  /* ⚠️ HEADLINE AND SUB ARE PAUL'S EXACT WORDING (2026-08-29). [X] [Y] [N] are the real figures —
+     X = answers naming the client, Y = counted answers, N = distinct questions asked. Do not
+     paraphrase these; they were written to be read by a client. */
+  if (key === 'rare') {
     return {
-      band: "crit",
-      punch: hasRivals
-        ? `AI never named you in ${of}. It named your competitors instead.`
-        : `AI never named you in ${of}.`,
+      band,
+      punch: `AI rarely names you yet.`,
+      sub: `Across ${N} way${N === 1 ? "" : "s"} customers ask, you were named in ${named} of ${total} answers. This is the starting point, and it is fixable.`,
     };
   }
-
-  /* NAMED, BUT RARELY — the band this rewrite exists for, and the better pitch. Being occasionally
-     present and usually beaten is more uncomfortable than being invisible, and more obviously
-     fixable: the gap is the product. Threshold unchanged at a third, so only the 0 case moved out. */
-  if (named / total < 1 / 3) {
+  if (key === 'inconsistent') {
     return {
-      band: "low",
-      punch: hasRivals
-        ? `AI named you ${inWords(named)} in ${of}. Your competitors are in nearly all of them.`
-        : `AI named you ${inWords(named)} in ${of}.`,
+      band,
+      punch: `You&rsquo;re being named, but not yet consistently.`,
+      sub: `You were named in ${named} of ${total} answers. Where we have built pages you show up well; where we have not, you are still invisible. That gap is the opportunity.`,
     };
   }
-
-  if (named / total < 2 / 3) {
+  if (key === 'many') {
     return {
-      band: "mid",
-      punch: hasRivals
-        ? `AI names you ${inWords(named)} in ${of} — your competitors get the rest.`
-        : `AI names you ${inWords(named)} in ${of}.`,
+      band,
+      punch: `You&rsquo;re being named across many of the questions that matter.`,
+      sub: `You were named in ${named} of ${total} answers, ahead of most local competitors. The job now is to hold these and win the rest.`,
     };
   }
-
-  // Already in every answer: nothing to make "every time".
-  if (named === total) {
-    return { band: "high", punch: `AI named you in all ${of}. The job now is keeping it that way.` };
-  }
-
-  /* Bare digits here, NOT inWords: "in five times of 6 answers" is what the word form produces in
-     this construction. "in 5 of 6 answers" is the one that reads. */
-  return { band: "high", punch: `AI names you in ${named} of ${of} — let’s make it every time.` };
+  return {
+    band,
+    punch: `You&rsquo;re one of the names AI reaches for.`,
+    sub: `You were named in ${named} of ${total} answers. You are already a default recommendation across most of these questions.`,
+  };
 }
 
 /** De-duplicate competitor names (case-insensitive), preserving first-seen order. */
@@ -551,7 +560,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   const type = d.businessType.trim() || "business like yours";
   /* hasRivals gates every clause that mentions competitors: with no rival names measured, saying
      they "get the rest" is a claim about data we do not have. */
-  const v = heroVerdict(d.named, d.total, dedupeNames(d.competitors ?? []).length > 0);
+  const v = heroVerdict(d.named, d.total, d.questionsAsked ?? 0);
 
   // ── Gut-punch: a clean SUMMARY of the worst answer, with the competitors AI named
   //    instead. Never the raw AI paragraph.
@@ -652,6 +661,19 @@ export function renderReportHtml(d: AiAuditReportData): string {
     const state = namedN > 0
       ? `<span class="qb-badge yes sm">Named you ${namedN} of ${outOf}</span>`
       : `<span class="qb-badge no sm">Not named${outOf > 1 ? ` (0 of ${outOf})` : ''}</span>`;
+    /* ⛔ TWO FIGURES, BECAUSE THEY ARE TWO DIFFERENT THINGS. The stored `named` is "recommended in
+       the prose OR cited in a matching source title", so one number hid the difference between AI
+       actually recommending the business and AI merely citing its website. Both are derived from
+       stored data (auditReport.ts), so they cost nothing and exist on every historical audit.
+       ⚠️ CITED IS PRINTED EVEN WHEN IT IS ZERO. "Cited as a source in 0 of 3" is a real finding —
+       hiding it would let a reader assume it was simply not measured. Older payloads carry neither
+       field; those fall back to the single badge exactly as before. */
+    const split = (e.recommended != null || e.cited != null)
+      ? `<div class="qb-eng-line qb-split">`
+        + `<span class="qb-split-i"><b>Recommended</b> in ${e.recommended ?? 0} of ${outOf}</span>`
+        + `<span class="qb-split-i"><b>Cited as a source</b> in ${e.cited ?? 0} of ${outOf}</span>`
+        + `</div>`
+      : '';
     /* An engine that RAN but does not feed the question total is said so plainly, so its count can
        never look like it should have been added to the header.
        🔴 THIS RENDERS ON REAL REPORTS: AI Overview IS being scraped again — measured live
@@ -673,7 +695,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     const sources = e.citations.length
       ? `<div class="qb-eng-line"><span class="qb-slabel">Sources:</span> ${e.citations.map((c) => `<a class="qb-cite" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(c.domain)}</a>`).join(" ")}</div>`
       : `<div class="qb-eng-line"><span class="qb-none">No sources cited.</span></div>`;
-    return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span>${state}${uncounted}</div>${rivals}${sources}</div>`;
+    return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span>${state}${uncounted}</div>${split}${rivals}${sources}</div>`;
   };
 
   // INTERNAL-ONLY winnability chip + the numbers behind it. Rendered only when d.internal === true,
@@ -788,6 +810,7 @@ ${REPORT_CHROME_CSS_CORE}
   .hero-rule{ width:1px; background:var(--line); align-self:stretch; }
   .hero-verdict{ flex:1; display:flex; flex-direction:column; justify-content:center; }
   .hero-verdict .vk{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:700; margin-bottom:8px; }
+  .punch-sub{ font-size:13px; line-height:1.45; color:var(--ink); margin-top:6px; font-weight:500; }
   .punch{ font-size:22px; line-height:1.2; font-weight:900; letter-spacing:-.01em; color:var(--ink); }
 
   /* GUT-PUNCH &mdash; a written summary of the worst answer (never the raw AI text) */
@@ -822,6 +845,8 @@ ${REPORT_CHROME_CSS_CORE}
   .qb-badge.yes{ background:#e7f6ee; color:var(--green); }
   .qb-badge.no{ background:#fdeaea; color:var(--red); }
   .qb-line{ margin-top:8px; font-size:13px; color:var(--muted); line-height:1.9; }
+  .qb-split{ display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--ink); margin:2px 0 1px; }
+  .qb-split-i b{ font-weight:800; }
   .qb-uncounted{ font-size:10px; color:var(--muted); font-style:italic; margin-left:6px; }
   .qb-rlabel{ font-weight:700; color:var(--ink); font-size:12px; margin-right:2px; }
   .qb-chip{ display:inline-block; background:var(--paper); border:1px solid var(--line); border-radius:999px;
@@ -1029,6 +1054,7 @@ ${REPORT_CHROME_CSS_PRINT}
       <div class="hero-verdict">
         <div class="vk">The verdict</div>
         <div class="punch">${v.punch}</div>
+        <div class="punch-sub">${v.sub}</div>
       </div>
     </div>
 ${gutbox}
