@@ -91,7 +91,7 @@ export interface AiAuditReportData {
     /* INTERNAL winnability signal (rendered only when `internal` is true — never on the client doc).
        Structural match for QuestionWinnability in auditReport.ts (kept inline to avoid a circular
        type import between this file and auditReport.ts). */
-    winnability?: { label: 'wide_open' | 'locked' | 'informational' | 'unclear'; reason: string; distinctFirms: number; topFirmCells: number; totalCells: number; sourceMix: { authority: number; business: number; other: number; total: number } };
+    winnability?: { label: 'named' | 'wide_open' | 'locked' | 'informational' | 'unclear'; reason: string; distinctFirms: number; topFirmCells: number; totalCells: number; sourceMix: { authority: number; business: number; other: number; total: number } };
   }[];
   /** How many times each question was asked (per engine) — the "× N asks each" in the working-out. */
   measurementRuns?: number;
@@ -652,6 +652,12 @@ export function renderReportHtml(d: AiAuditReportData): string {
     const state = namedN > 0
       ? `<span class="qb-badge yes sm">Named you ${namedN} of ${outOf}</span>`
       : `<span class="qb-badge no sm">Not named${outOf > 1 ? ` (0 of ${outOf})` : ''}</span>`;
+    /* An engine that RAN but does not feed the question total is said so plainly, so its count can
+       never look like it should have been added to the header. Renders nothing today (AI Overview
+       is no longer scraped, so it never runs); `counted !== false` keeps older payloads, which
+       carry no flag, exactly as they were. */
+    const uncounted = (e.ran && (e as { counted?: boolean }).counted === false)
+      ? `<span class="qb-uncounted">not counted in the total above</span>` : '';
     const rivals = e.rivals.length
       /* ⛔ "OTHERS NAMED", NOT "NAMED" — the list is competitors-ONLY and the client is removed from
          it upstream, by extract-competitors (its prompt plus the cleanNames self-filter), so this
@@ -664,12 +670,14 @@ export function renderReportHtml(d: AiAuditReportData): string {
     const sources = e.citations.length
       ? `<div class="qb-eng-line"><span class="qb-slabel">Sources:</span> ${e.citations.map((c) => `<a class="qb-cite" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(c.domain)}</a>`).join(" ")}</div>`
       : `<div class="qb-eng-line"><span class="qb-none">No sources cited.</span></div>`;
-    return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span>${state}</div>${rivals}${sources}</div>`;
+    return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span>${state}${uncounted}</div>${rivals}${sources}</div>`;
   };
 
   // INTERNAL-ONLY winnability chip + the numbers behind it. Rendered only when d.internal === true,
   // so it can never appear on the client's report (render-audit-report never sets internal).
-  const WIN_LABEL: Record<string, string> = { wide_open: 'WIDE OPEN', locked: 'LOCKED', informational: 'INFORMATIONAL', unclear: 'UNCLEAR' };
+  /* ⛔ 'ALREADY NAMED' leads this map because it now outranks every other verdict: a question the
+     client already wins is reported as won, never graded as a content target. */
+  const WIN_LABEL: Record<string, string> = { named: 'ALREADY NAMED', wide_open: 'WIDE OPEN', locked: 'LOCKED', informational: 'INFORMATIONAL', unclear: 'UNCLEAR' };
   const winBlock = (w: NonNullable<(typeof qb)[number]['winnability']>): string => {
     const mix = w.sourceMix;
     const mixStr = mix.total > 0 ? `sources ${mix.authority} info / ${mix.business} business${mix.other ? ` / ${mix.other} other` : ''}` : 'no sources';
@@ -684,10 +692,15 @@ export function renderReportHtml(d: AiAuditReportData): string {
     // Overall badge (headline-consistent): "Named you X of Y" sums to the "named X of Y" figure.
     const nc = q.namedCount;
     const outOf = q.answers;
+    /* ⛔ "NAMED IN X OF Y ANSWERS" — a COMBINED total across the engines below, and it has to say so.
+       As "Named you 2 of 6" it sat directly above rows reading "0 of 3" and "2 of 3" and read as a
+       contradiction, because nothing on the line said the 6 was the two engines added together.
+       The arithmetic was always right: Y counts only SCORED engines that actually returned
+       (auditReport.ts skips an absent engine), so 3 + 3 = 6 and 0 + 2 = 2. Wording only. */
     const badge = nc != null
       ? (nc > 0
-          ? `<span class="qb-badge yes">Named you ${nc}${outOf ? ` of ${outOf}` : '&times;'}</span>`
-          : `<span class="qb-badge no">Not named${outOf ? ` (0 of ${outOf})` : ''}</span>`)
+          ? `<span class="qb-badge yes">Named in ${nc}${outOf ? ` of ${outOf} answers` : '&times;'}</span>`
+          : `<span class="qb-badge no">Not named${outOf ? ` in any of ${outOf} answers` : ''}</span>`)
       : (q.namedYou ? `<span class="qb-badge yes">Named you</span>` : `<span class="qb-badge no">Not named</span>`);
     // Per-engine breakdown when present; older payloads fall back to the folded rivals/sources.
     let body: string;
@@ -806,6 +819,7 @@ ${REPORT_CHROME_CSS_CORE}
   .qb-badge.yes{ background:#e7f6ee; color:var(--green); }
   .qb-badge.no{ background:#fdeaea; color:var(--red); }
   .qb-line{ margin-top:8px; font-size:13px; color:var(--muted); line-height:1.9; }
+  .qb-uncounted{ font-size:10px; color:var(--muted); font-style:italic; margin-left:6px; }
   .qb-rlabel{ font-weight:700; color:var(--ink); font-size:12px; margin-right:2px; }
   .qb-chip{ display:inline-block; background:var(--paper); border:1px solid var(--line); border-radius:999px;
     padding:2px 9px; font-size:12px; font-weight:600; color:var(--ink); }
@@ -831,6 +845,7 @@ ${REPORT_CHROME_CSS_CORE}
     background:#f8fafc; display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; }
   .qb-win-chip{ font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
     padding:2px 8px; border-radius:999px; color:#fff; }
+  .win-named .qb-win-chip{ background:var(--green); }
   .win-wide_open .qb-win-chip{ background:var(--green); }
   .win-locked .qb-win-chip{ background:var(--red); }
   .win-informational .qb-win-chip{ background:var(--blue-2); }
@@ -1057,7 +1072,7 @@ ${d.hidePitch ? "" : `
            two sections above, said the business was named once. Three places in one document
            disagreeing about whether the business exists in AI answers is the same fault three times,
            and it is the one a sceptical reader notices first. -->
-      <div class="sec-title">${d.named > 0 ? "Why you&rsquo;re named so rarely" : "Why you&rsquo;re not in the answer"}</div>
+      <div class="sec-title">${d.named > 0 ? "Where you show up, and where you don&rsquo;t yet" : "Why you&rsquo;re not in the answer"}</div>
       <div class="dowe-panel">
         <p class="dowe-lead">${d.named > 0
         ? "Being named occasionally rather than consistently is not bad luck."
