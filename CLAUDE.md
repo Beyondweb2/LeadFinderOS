@@ -1384,7 +1384,8 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
     - ⛔ **THE SAFETY PROPERTY IS UNCHANGED, ONLY ITS SHAPE.** Structured mode's guarantee was that
       the model *cannot* emit a fact. Advice mode's is that a fact *cannot get out unconfirmed*:
       every sentence of model prose passes `renderGuarded` **on the way out**, and anything matching
-      `FIGURE_RE` (any digit/£/$/€/%), `PRICE_RE` (money words with no number), `CREDENTIAL_RE`
+      `FIGURE_RE` (any digit/£/$/€/%), `isOwnedPriceClaim` (a money word **plus** a first-person
+      marker — see the narrowing below), `CREDENTIAL_RE`
       (registered/chartered/accredited/insured/member of/guaranteed) or `COMMITMENT_RE` (a
       first-person promise — **the PRONOUN is the boundary**: "an accountant files your return"
       publishes, "we file your return" does not) becomes
@@ -1396,9 +1397,28 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
       corrects a suggested number rather than meeting an empty blank.
     - ⚠️ Sources render **only when the model actually named one** — an empty Sources heading
       invites an invented citation. No reviewer line on the advice path.
-    - `scripts/qa-answer-guard.test.ts` (77 assertions) pins both absent cases, the word-boundary
-      substring traps ('vet' in "private", 'gp' in "gps", 'care' in "careful"), six real accountancy
-      sentences that MUST publish, and the property that no figure ever publishes unconfirmed.
+    - 🔴 **PRICE WAS NARROWED THE SAME DAY, AFTER A MEASURED OVER-FLAG — and the lesson generalises
+      beyond this file.** It first matched the money word ALONE, which held three sentences on a
+      real "what does an accountant do" page that carry no number and make no claim about the
+      client: *"identifying cost-saving opportunities"* (on `cost`) and *"avoid penalties and
+      interest charges"* (on `charges`). **Money vocabulary is ordinary English in this trade** — an
+      accountancy page cannot say what an accountant does without "cost" and "charges" — so the bare
+      word carried no signal. ⛔ **A guard that flags the unremarkable trains the operator to stop
+      reading it, which costs more safety than it buys.** Price now requires a money word **and** a
+      first-person marker in the same sentence (`isOwnedPriceClaim`), exactly as COMMITMENT already
+      keys on the pronoun: "most accountants charge by the hour" publishes, "we charge by the hour"
+      is held. FIGURE is **pronoun-blind and tested first**, so every real number is still held
+      whoever it belongs to.
+      ⚠️ Accepted gap: a third-person self-description ("the firm's fees are competitive") would
+      publish. These pages are written as "we"; widening to catch it re-admits the general sentences.
+      ⚠️ Paul reported a third sentence, *"improving overall profitability"*, as held on `profit` —
+      **it was not, and `profit` has never been a trigger word.** Measured before changing anything;
+      it must have been held by another word in the same sentence. **Reproduce a reported over-flag
+      against the real predicate before removing the rule someone believes caused it.**
+    - `scripts/qa-answer-guard.test.ts` (90 assertions) pins both absent cases, the word-boundary
+      substring traps ('vet' in "private", 'gp' in "gps", 'care' in "careful"), the abstract-money
+      sentences that MUST publish, the first-person ones that must not, and the property that no
+      figure ever publishes unconfirmed.
   - ⚠️ SPA: `mode` toggle (persisted); Q&A picks a client + a question (baseline list or free-type).
     `activeClientId` = qa audit id or service lead id (different id spaces → one cache serves both).
     Draft pages carry no naturalness/applied badges; `renderDone` is shared by both modes.

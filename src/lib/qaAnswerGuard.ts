@@ -71,10 +71,42 @@ export type ConfirmReason = 'figure' | 'price' | 'credential' | 'commitment';
 export const FIGURE_RE =
   /[0-9£$€%]|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|twelve)\b\s+(?:working\s+)?(?:days?|weeks?|months?|years?|hours?)\b/i;
 
-/** 2. PRICE — money vocabulary with no number attached ("our fees are competitive", "we charge by
- *  the hour"). A price claim with the figure left out is still a price claim. */
-export const PRICE_RE =
+/* 2. PRICE — a money claim about THIS BUSINESS with the number left out ("our fees are
+   competitive", "we charge by the hour"). A price claim with the figure omitted is still a price
+   claim, so it is still held — but it must be THEIR price.
+
+   🔴 NARROWED 2026-08-29 AFTER MEASURING A REAL OVER-FLAG. The first version matched the money
+   word ALONE, which held three sentences on a "what does an accountant do" page that contain no
+   number and make no claim about the client:
+     "…identifying cost-saving opportunities."       held on `cost`
+     "…avoid penalties and interest charges."        held on `charges`
+   Money vocabulary is ordinary English in this trade — an accountancy page cannot discuss what an
+   accountant does without saying "cost" and "charges" — so the bare word carried no signal and the
+   page filled with confirmations a human would only ever wave through. A guard that flags the
+   unremarkable trains the operator to stop reading it, which costs more safety than it buys.
+
+   ⛔ SO PRICE NOW KEYS ON THE PRONOUN, exactly as COMMITMENT already does: the money word must sit
+   in the same sentence as a first-person marker. "Most accountants charge by the hour" is a fact
+   about the profession and publishes; "we charge by the hour" is a fact about this firm and is
+   held. Nothing else is relaxed — FIGURE still catches every real number regardless of pronoun, so
+   "we charge £600" and "the late-filing penalty is £100" are both still held.
+   ⚠️ Known gap, accepted: a third-person self-description ("the firm's fees are competitive")
+   carries no first-person marker and would publish. It is not a phrasing these pages use — they
+   are written as "we" — and widening to catch it would re-admit the general sentences above. */
+
+/** A first-person marker. `\bwe\b` also covers "we're"/"we'll"/"we've" — the apostrophe is a
+ *  non-word character, so the boundary matches inside the contraction. */
+export const FIRST_PERSON_RE = /\b(?:we|our|ours|us|my|mine|i)\b/i;
+
+/** Money vocabulary. Only meaningful when FIRST_PERSON_RE also matches the same sentence. */
+export const MONEY_WORD_RE =
   /\b(?:fees?|pricing|prices?|priced|costs?|charges?|charged|rates?|quotes?|quoted|retainers?|deposits?|discounts?|refunds?|free|per hour|hourly|fixed fee|no obligation)\b/i;
+
+/** A money claim the business is making about itself. Both halves required. */
+export function isOwnedPriceClaim(sentence: string): boolean {
+  const s = String(sentence ?? '');
+  return FIRST_PERSON_RE.test(s) && MONEY_WORD_RE.test(s);
+}
 
 /** 3. CREDENTIAL — registrations, memberships, regulators, insurance, guarantees. The same class of
  *  trust-and-safety claim the service+area generator forbids the model from writing at all. */
@@ -97,8 +129,10 @@ export const COMMITMENT_RE =
 export function confirmReason(sentence: string): ConfirmReason | null {
   const s = String(sentence ?? '');
   if (!s.trim()) return null;
+  /* ⛔ FIGURE IS TESTED FIRST AND IS DELIBERATELY PRONOUN-BLIND — a real number is held whoever it
+     belongs to. The narrowing below applies ONLY to the number-less money claim. */
   if (FIGURE_RE.test(s)) return 'figure';
-  if (PRICE_RE.test(s)) return 'price';
+  if (isOwnedPriceClaim(s)) return 'price';
   if (CREDENTIAL_RE.test(s)) return 'credential';
   if (COMMITMENT_RE.test(s)) return 'commitment';
   return null;

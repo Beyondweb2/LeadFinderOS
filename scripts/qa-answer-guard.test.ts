@@ -65,13 +65,44 @@ for (const s of [
   "The VAT threshold changed in 2024.",
 ]) ok(confirmReason(s) === "figure", `figure caught: "${s.slice(0, 48)}…"`);
 
-console.log("\n── Price vocabulary with no number is still a price claim ──");
+console.log("\n── A number-less price claim is held ONLY when it is about THIS business ──");
 for (const s of [
   "Our fees are competitive for a firm of this size.",
-  "Most accountants charge by the hour.",
   "We offer a free initial consultation.",
+  "our monthly fee is competitive",
+  "We charge by the hour rather than a fixed fee.",
+  "Ask us for a quote before work begins.",
+]) ok(confirmReason(s) !== null, `first-person price claim HELD: "${s.slice(0, 46)}…"`);
+
+ok(confirmReason("we charge £600") === "figure",
+  "⛔ a real number is held whoever it belongs to — FIGURE is pronoun-blind and tested first");
+
+/* 🔴 THE OVER-FLAG THIS NARROWING FIXED (Paul, 2026-08-29). Money vocabulary is ordinary English
+   in this trade — an accountancy page cannot describe what an accountant does without saying
+   "cost" and "charges" — so the bare word carried no signal and the page filled with confirmations
+   a human would only wave through. A guard that flags the unremarkable trains the operator to stop
+   reading it, which costs more safety than it buys. These three came off a real generated page. */
+console.log("\n── ⛔ MONEY WORDS IN THE ABSTRACT PUBLISH — no number, no first person, no claim ──");
+for (const s of [
+  "They also advise on identifying cost-saving opportunities.",
+  "An accountant helps with improving overall profitability.",
+  "Filing on time helps you avoid penalties and interest charges.",
+  // Statements about the PROFESSION, not this firm — flipped by this narrowing, deliberately.
+  "Most accountants charge by the hour.",
   "Ask for a fixed fee before work begins.",
-]) ok(confirmReason(s) !== null, `price-ish caught: "${s.slice(0, 44)}…"`);
+  "Late filing charges are worth understanding before you start.",
+  "Good bookkeeping keeps costs down over the year.",
+]) ok(confirmReason(s) === null, `abstract money word PUBLISHES: "${s.slice(0, 52)}…"`);
+
+console.log("\n── The narrowing did NOT touch the other three groups ──");
+ok(confirmReason("The penalty for late filing is £100.") === "figure",
+  "a number with no pronoun is still held");
+ok(confirmReason("Late filing costs you 5% of the tax due.") === "figure",
+  "a percentage with no pronoun is still held");
+ok(confirmReason("The firm is ACCA registered.") === "credential",
+  "a credential with no first-person marker is still held");
+ok(confirmReason("We always deal with HMRC on your behalf.") === "commitment",
+  "a commitment carrying no money word is still held");
 
 console.log("\n── Credentials and guarantees are held back ──");
 for (const s of [
