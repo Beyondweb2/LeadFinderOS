@@ -1369,6 +1369,36 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   - ⛔ Every draft carries a review banner (UI + an HTML comment in the body) and Sources +
     "Reviewed by [CLIENT INPUT]" blanks. **Do not weaken this into free-writing medical content** —
     that was examined and rejected; the human/clinician is the accuracy gate.
+  - 🔴 **NARROWED 2026-08-29, AND THE RULE ABOVE STILL HOLDS FOR THE TRADES IT WAS WRITTEN FOR.**
+    An accountancy Q&A page came out as nothing but blanks under health framing, so `qa_generate`
+    now has **TWO MODES, chosen in code by the client's trade** — `src/lib/qaAnswerGuard.ts`,
+    `qaModeFor(business_type)`, never by the model and **never by a request parameter** (a caller
+    must not be able to ask for the permissive mode).
+    - **`structured` — UNCHANGED, and it is what health/clinical/legal/mortgage/insurance/
+      financial-advice trades get.** All-blanks, sources, named reviewer. `REGULATED_TRADE_PATTERNS`
+      is the list; Paul tunes it, and adding a trade only ever makes its pages MORE cautious.
+    - **`advice`** — accountancy, trades, everything else: real drafted answers.
+    - ⛔ **A BLANK OR UNRECOGNISED `business_type` GETS `structured`.** Absence is never permission
+      (instance fourteen). A useless page of blanks for an accountant is a complaint; free-writing
+      clinical copy for a client whose trade we could not read is a real harm.
+    - ⛔ **THE SAFETY PROPERTY IS UNCHANGED, ONLY ITS SHAPE.** Structured mode's guarantee was that
+      the model *cannot* emit a fact. Advice mode's is that a fact *cannot get out unconfirmed*:
+      every sentence of model prose passes `renderGuarded` **on the way out**, and anything matching
+      `FIGURE_RE` (any digit/£/$/€/%), `PRICE_RE` (money words with no number), `CREDENTIAL_RE`
+      (registered/chartered/accredited/insured/member of/guaranteed) or `COMMITMENT_RE` (a
+      first-person promise — **the PRONOUN is the boundary**: "an accountant files your return"
+      publishes, "we file your return" does not) becomes
+      `[CLIENT CONFIRM — reason: <the drafted wording>]`. The prompt asks for the same restraint;
+      the prompt is the polite request and the guard is the guarantee.
+    - ⚠️ **Guarding is SENTENCE-level, never paragraph-level** — flagging a whole paragraph over one
+      clause rebuilds the all-blanks page this change exists to fix.
+    - ⚠️ **The draft value stays INSIDE the marker** (Paul's requirement): a human approves or
+      corrects a suggested number rather than meeting an empty blank.
+    - ⚠️ Sources render **only when the model actually named one** — an empty Sources heading
+      invites an invented citation. No reviewer line on the advice path.
+    - `scripts/qa-answer-guard.test.ts` (77 assertions) pins both absent cases, the word-boundary
+      substring traps ('vet' in "private", 'gp' in "gps", 'care' in "careful"), six real accountancy
+      sentences that MUST publish, and the property that no figure ever publishes unconfirmed.
   - ⚠️ SPA: `mode` toggle (persisted); Q&A picks a client + a question (baseline list or free-type).
     `activeClientId` = qa audit id or service lead id (different id spaces → one cache serves both).
     Draft pages carry no naturalness/applied badges; `renderDone` is shared by both modes.
