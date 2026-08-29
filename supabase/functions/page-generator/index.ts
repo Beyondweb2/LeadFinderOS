@@ -3,6 +3,7 @@ import { buildPagePlan, stuffingCheck, enforceNaturalness, enforceCatchmentHones
 import { classifyWinnability, unwrapCitationUrl, SCORED_ENGINES, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
 import { sourceMix, classifySource } from "../../../src/lib/sourceType.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { qaModeFor, renderGuarded, confirmCount, confirmReason, confirmMark, type QaMode } from "../../../src/lib/qaAnswerGuard.ts";
 import { preMergeQuestions, validateClusters, buildQueue, topSources, enforceTownSplit, majorityVerdict, AUTHORITY_LOCK_SHARE, AUTHORITY_LOCK_MIN_CITES, type ClusterProposal, type QuestionSignals, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
 
 // page-generator — service-plus-town delivery pages, from the OVERLAP of the client's
@@ -145,6 +146,62 @@ const QA_TOOL = {
     },
   },
 };
+
+/* ── ADVICE MODE (non-regulated trades) — the model DRAFTS real answers. ────────────────────────
+   ⛔ THE SAFETY PROPERTY IS UNCHANGED, ONLY ITS SHAPE. In structured mode the model cannot emit a
+   fact because code writes every specific as a blank. In advice mode it may write prose, and
+   qaAnswerGuard inspects every sentence ON THE WAY OUT: anything carrying a figure, a price, a
+   credential or a first-person promise becomes a [CLIENT CONFIRM] item with its draft wording
+   inside. So the model is still not TRUSTED with facts — it is merely allowed to propose them,
+   and a human approves each one. The prompt below asks for the same behaviour, but the prompt is
+   the polite request and the guard is the guarantee. ─────────────────────────────────────────── */
+const QA_ANSWER_TOOL = {
+  type: "function",
+  function: {
+    name: "return_qa_answer",
+    description: "Return a genuinely useful drafted answer to the question, in structured parts.",
+    parameters: {
+      type: "object",
+      properties: {
+        intro: { type: "string", description: "1-2 sentences framing the question in plain English." },
+        answer: { type: "string", description: "The direct answer, 2-4 sentences of real, useful, general professional guidance. Plain text, no markup." },
+        points: { type: "array", items: { type: "string" }, description: "3-5 short practical points that genuinely help a reader decide or act. Plain sentences." },
+        subQuestions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              question: { type: "string", description: "A related question a reader would also ask." },
+              answer: { type: "string", description: "A real, useful answer of 1-3 sentences." },
+            },
+            required: ["question", "answer"],
+            additionalProperties: false,
+          },
+          description: "3-5 related questions, each with a genuine answer.",
+        },
+        meta: { type: "string", description: "Meta description <=155 chars, plain and specific." },
+        sources: { type: "array", items: { type: "string" }, description: "Only the sources you actually relied on for a general fact (e.g. 'GOV.UK self assessment guidance'). Empty array if none — do not invent citations." },
+      },
+      required: ["intro", "answer", "points", "subQuestions", "meta", "sources"],
+      additionalProperties: false,
+    },
+  },
+};
+
+function systemPromptQAAnswer(businessName: string, businessType: string, mustNotSay: string): string {
+  return `You write ONE informational Q&A page for ${businessName}${businessType ? `, a UK ${businessType} business` : ", a UK business"}, to publish on their own website. The page exists so that AI assistants reading the site can learn this business genuinely understands the subject. You return the page via return_qa_answer.
+
+WRITE A REAL ANSWER. This is general professional information of the kind any competent practitioner would give — how the thing works, what to look for, what to ask, what usually happens. Be specific, plain and genuinely useful. UK English. Never padding, never a sales pitch.
+
+⛔ WHAT YOU MUST NOT STATE AS FACT — these are checked automatically after you write, and anything matching is pulled out for a human to approve, so writing them costs the page its flow:
+- PRICES, FEES OR ANY FIGURE: no amounts, no percentages, no thresholds, no deadlines by date, no "within X days". If a figure is genuinely essential to the answer, write your best draft of it in a sentence of its OWN so it can be checked without breaking the paragraph around it.
+- CREDENTIALS: never say this business is registered, chartered, accredited, regulated, insured, a member of any body, or award-winning — even if it seems likely.
+- PROMISES ABOUT THIS BUSINESS: do not write what "we" offer, include, guarantee or how fast we are. Describe what the PROFESSION does ("an accountant files…"), not what this firm commits to.
+Prefer the general, timeless statement over the specific current one: "the filing deadline is set by HMRC and worth diarising" is publishable, a date is not.
+
+INVENT NOTHING ELSE: no testimonials, no client names, no statistics, no local facts you were not given. If you did not rely on a source, return an empty sources array — never invent a citation.
+${mustNotSay ? `\nTHE CLIENT'S OWN HARD RULE — never claim or imply: "${mustNotSay}".` : ""}`;
+}
 
 function systemPromptQA(businessType: string, mustNotSay: string): string {
   return `You draft the STRUCTURE ONLY of an informational Q&A page for ${businessType || "a UK business"}'s own website. A qualified expert fills in every fact afterwards — you never do.
@@ -502,7 +559,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ── qa_generate: scaffold ONE Q&A page for a question (from the list OR free-typed). ──
+      /* ── qa_generate: ONE Q&A page for a question (from the list OR free-typed).
+         ⛔ TWO MODES, CHOSEN BY THE CLIENT'S TRADE IN CODE (src/lib/qaAnswerGuard.ts), never by the
+         model and never by a request parameter — a caller must not be able to ask for the
+         permissive mode. `structured` keeps the original all-blanks safety model for health and
+         regulated-advice trades; `advice` drafts real answers for ordinary professional ones and
+         holds back only the sentences the guard flags. A BLANK OR UNRECOGNISED TRADE GETS
+         `structured` — absence is never permission (CLAUDE.md §6). ─────────────────────────── */
       const question = typeof body.question === "string" ? body.question.trim() : "";
       if (!question) return json({ ok: false, error: "question_required" }, 400);
       const qaContactUrl = httpUrl(typeof body.contact_url === "string" ? body.contact_url : "");
@@ -510,6 +573,103 @@ Deno.serve(async (req) => {
       const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
       if (!OPENAI_API_KEY) return json({ ok: false, error: "openai_not_configured" }, 500);
 
+      const qaMode: QaMode = qaModeFor(qaAudit.business_type);
+
+      /* ── ADVICE MODE — drafted answers, guarded sentence by sentence on the way out. ───────── */
+      if (qaMode === "advice") {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: MODEL, temperature: 0.5,
+            messages: [
+              { role: "system", content: systemPromptQAAnswer(qaAudit.business_name, qaAudit.business_type ?? "", "") },
+              { role: "user", content: `The question this page answers: "${question}". Write the page via return_qa_answer.` },
+            ],
+            tools: [QA_ANSWER_TOOL], tool_choice: { type: "function", function: { name: "return_qa_answer" } },
+          }),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          if (res.status === 429 || /insufficient_quota|credit_balance_exhausted|no credits/i.test(txt)) return json({ ok: false, error: "no_credits" }, 200);
+          return json({ ok: false, error: `openai_http_${res.status}`, detail: txt.slice(0, 200) }, 502);
+        }
+        const data = await res.json();
+        const raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+        if (typeof raw !== "string") return json({ ok: false, error: "model_no_tool_output" }, 502);
+        let parsed: {
+          intro?: unknown; answer?: unknown; points?: unknown; subQuestions?: unknown;
+          meta?: unknown; sources?: unknown;
+        };
+        try { parsed = JSON.parse(raw); } catch { return json({ ok: false, error: "model_bad_json" }, 502); }
+
+        const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+        const strArr = (v: unknown) => (Array.isArray(v) ? v.map((s) => str(s)).filter(Boolean) : []);
+        const aIntro = str(parsed.intro);
+        const aAnswer = str(parsed.answer);
+        const aPoints = strArr(parsed.points).slice(0, 6);
+        const aSources = strArr(parsed.sources).slice(0, 5);
+        const aSubs = (Array.isArray(parsed.subQuestions) ? parsed.subQuestions : [])
+          .map((s) => ({ question: str((s as { question?: unknown })?.question), answer: str((s as { answer?: unknown })?.answer) }))
+          .filter((s) => s.question && s.answer)
+          .slice(0, 5);
+        if (!aAnswer) return json({ ok: false, error: "model_incomplete_page" }, 502);
+
+        /* ⛔ EVERY PIECE OF MODEL PROSE GOES THROUGH THE GUARD — the intro, the answer, each point
+           and each sub-answer. renderGuarded keeps clean sentences verbatim and wraps a flagged one
+           as [CLIENT CONFIRM — reason: <draft>], so the operator approves a suggested value rather
+           than filling an empty blank. Nothing bypasses this; there is no "trusted" field. */
+        const guarded = (s: string) => escHtml(renderGuarded(s));
+        /* A whole BULLET is short enough to treat as one claim: if any part of it needs checking,
+           the bullet is marked once rather than mid-sentence. */
+        const guardedPoint = (s: string) => {
+          const r = confirmReason(s);
+          return escHtml(r ? confirmMark(s, r) : s);
+        };
+        const totalConfirms = confirmCount(aIntro) + confirmCount(aAnswer)
+          + aPoints.filter((p) => confirmReason(p) !== null).length
+          + aSubs.reduce((n, s) => n + confirmCount(s.answer), 0);
+
+        const parts: string[] = [
+          `<!-- DRAFT FOR CLIENT APPROVAL — the answers below are drafted for review. Check every [CLIENT CONFIRM] item (${totalConfirms} on this page) before publishing; the rest is general professional information. -->`,
+        ];
+        if (aIntro) parts.push(`<p>${guarded(aIntro)}</p>`);
+        parts.push(`<h2>The short answer</h2>`);
+        parts.push(`<p>${guarded(aAnswer)}</p>`);
+        if (aPoints.length) parts.push(`<ul>${aPoints.map((p) => `<li>${guardedPoint(p)}</li>`).join("")}</ul>`);
+        if (aSubs.length) {
+          parts.push(`<h2>Related questions</h2>`);
+          for (const s of aSubs) parts.push(`<h3>${escHtml(s.question)}</h3><p>${guarded(s.answer)}</p>`);
+        }
+        /* ⛔ NO MEDICAL FRAMING ON THIS PATH: no "unverified medical claims" warning, no NHS/NICE
+           source prompt, no "Reviewed by a qualified expert" line. Sources appear ONLY when the
+           model actually named one — an empty Sources heading invites an invented citation. */
+        if (aSources.length) {
+          parts.push(`<h2>Sources</h2><ul>${aSources.map((s) => `<li>${escHtml(s)}</li>`).join("")}</ul>`);
+        }
+        parts.push(`<h2>Speak to the team</h2><p>For advice specific to your situation, get in touch${qaContactUrl ? ` — <a href="${escHtml(qaContactUrl)}">get in touch here</a>` : ""}.</p>`);
+
+        const aTitle = question.length <= 60 ? question : (() => {
+          let t = ""; for (const w of question.split(/\s+/)) { if (`${t} ${w}`.trim().length > 60) break; t = `${t} ${w}`.trim(); } return t || question.slice(0, 60);
+        })();
+        /* The meta description is guarded like everything else, then capped. */
+        const aMeta = (renderGuarded(str(parsed.meta)) || `${qaAudit.business_name} answers "${question}".`).slice(0, 200);
+        const aSlug = question.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
+
+        return json({
+          ok: true,
+          page: {
+            key: `qa:${aSlug}`, question, queries: [question], slug: aSlug,
+            title: aTitle, meta_description: aMeta, h1: question, body_html: parts.join("\n"), draft: true,
+          },
+          qa: {
+            mode: "advice", subQuestionCount: aSubs.length, pointCount: aPoints.length,
+            confirmCount: totalConfirms, sourceCount: aSources.length,
+          },
+        });
+      }
+
+      /* ── STRUCTURED MODE — unchanged: health and regulated-advice trades, all facts as blanks. ── */
       const callQA = async () => {
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
@@ -588,7 +748,7 @@ Deno.serve(async (req) => {
           key: `qa:${slug}`, question, queries: [question], slug,
           title, meta_description: metaSafe, h1: question, body_html: body_parts.join("\n"), draft: true,
         },
-        qa: { subQuestionCount: subs.length, factSlotCount: slots.length, introFromModel: !!factFree(qa.intro) },
+        qa: { mode: "structured", subQuestionCount: subs.length, factSlotCount: slots.length, introFromModel: !!factFree(qa.intro) },
       });
     }
 

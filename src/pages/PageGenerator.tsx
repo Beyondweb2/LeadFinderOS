@@ -424,7 +424,12 @@ const PageGenerator = () => {
       {g.draft && (
         <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span><strong>Draft for client review.</strong> Fill every <code>[CLIENT INPUT]</code> blank with verified information before publishing. Do not publish unverified medical or factual claims.</span>
+          {/* Wording covers BOTH Q&A modes without needing to know which produced this page: an
+              advice-mode draft carries [CLIENT CONFIRM] items (a drafted value to approve), a
+              structured-mode one carries [CLIENT INPUT] blanks (nothing drafted). Naming both is
+              what lets the medical-specific wording go — the regulated path keeps its own warning
+              inside the page HTML, where it belongs. */}
+          <span><strong>Draft for client review.</strong> Approve or correct every <code>[CLIENT CONFIRM]</code> item, and fill any <code>[CLIENT INPUT]</code> blank, before publishing. Anything involving a price, a figure or a claim the business must stand behind is marked for a human on purpose.</span>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -781,10 +786,15 @@ const PageGenerator = () => {
         <>
           <Card className="border-amber-500/40 bg-amber-500/5">
             <CardContent className="p-3 text-xs text-amber-700 dark:text-amber-400">
-              <strong>Draft mode — safety.</strong> Q&amp;A drafts contain the structure only. Every specific
-              fact, price, dose, eligibility rule or medical claim is left as a <code>[CLIENT INPUT: …]</code>
-              blank for a qualified expert to fill and verify. Nothing factual is generated. Do not publish
-              until every blank is filled and a clinician/expert has reviewed it.
+              <strong>Draft mode — safety.</strong> How much is drafted depends on the client&rsquo;s trade,
+              decided in code, not by the model. For <strong>health, clinical, legal, mortgage, insurance and
+              financial-advice</strong> clients — and for any client whose trade we can&rsquo;t read — nothing
+              factual is generated at all: every fact, price, dose or eligibility rule is a{' '}
+              <code>[CLIENT INPUT: …]</code> blank for a qualified expert to fill, and the page asks for
+              sources and a named reviewer. For <strong>other professional clients</strong> (accountancy,
+              trades) the general guidance is drafted for you, and only prices, figures, credentials and
+              promises about the business are held back as <code>[CLIENT CONFIRM: …]</code> items carrying a
+              suggested value to approve. Either way, a human signs off every number.
             </CardContent>
           </Card>
 
