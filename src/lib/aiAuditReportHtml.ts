@@ -653,7 +653,13 @@ export function renderReportHtml(d: AiAuditReportData): string {
       ? `<span class="qb-badge yes sm">Named you ${namedN} of ${outOf}</span>`
       : `<span class="qb-badge no sm">Not named${outOf > 1 ? ` (0 of ${outOf})` : ''}</span>`;
     const rivals = e.rivals.length
-      ? `<div class="qb-eng-line"><span class="qb-rlabel">Named:</span> ${e.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}</div>`
+      /* ⛔ "OTHERS NAMED", NOT "NAMED" — the list is competitors-ONLY and the client is removed from
+         it upstream, by extract-competitors (its prompt plus the cleanNames self-filter), so this
+         renderer never receives the client's own name and could not show it. Labelled "Named:" it
+         read as "everyone AI named", which contradicts the badge beside it: a client saw
+         "Named you 2 of 3" next to a list they were absent from. Label only — the counts, the data
+         and the exclusion itself are unchanged. */
+      ? `<div class="qb-eng-line"><span class="qb-rlabel">Others named:</span> ${e.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}</div>`
       : `<div class="qb-eng-line"><span class="qb-none">No businesses named.</span></div>`;
     const sources = e.citations.length
       ? `<div class="qb-eng-line"><span class="qb-slabel">Sources:</span> ${e.citations.map((c) => `<a class="qb-cite" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(c.domain)}</a>`).join(" ")}</div>`
@@ -689,7 +695,10 @@ export function renderReportHtml(d: AiAuditReportData): string {
       body = `<div class="qb-engines">${q.perEngine.map(engineRow).join("")}</div>`;
     } else {
       const rivals = q.rivals.length
-        ? `<span class="qb-rlabel">AI named:</span> ${q.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}`
+        /* The pre-perEngine fallback path, folded across engines — same competitors-only list and
+           the same client exclusion, so it carries the same label. Kept identical to the per-engine
+           row above on purpose: two labels for one meaning is how they drift apart. */
+        ? `<span class="qb-rlabel">Others named:</span> ${q.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}`
         : `<span class="qb-none">No specific businesses named.</span>`;
       const cites = q.citations ?? [];
       const sources = cites.length
