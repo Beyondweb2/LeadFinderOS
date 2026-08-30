@@ -53,7 +53,17 @@ function internalHeadersFor(keys: any): Record<string, string> {
    Leads triaged "cannot" are reported and carried on the job as already-terminal rows, but they are
    not work and must not consume the budget: a selection of 40 where 20 are already in Instantly is a
    20-item job, not a refusal. */
-const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50, audit: 25, audit_and_push: 25 };
+/* ⛔ `audit` RAISED 25 -> 100 (Paul, 2026-08-30). SIZED AGAINST THE MONEY, NOT PICKED: the binding
+   limit on a batch is process-ai-audit-queue's DAILY_CAP_USD ($12 rolling-24h, per user), not
+   concurrency — over-ceiling rows are pushed back to pending with nothing spent, so a bigger job
+   only drains slower. At the dearest shape this job can take (5 questions + an SEO scan on every
+   lead) 100 leads is 100 x (5 x $0.0104 + $0.04) = $9.20, which sits inside $12 with headroom. 300
+   would be ~$27.60 and would trip the cap mid-run, leaving half-finished audits — and a lead whose
+   audit FAILS is then excluded from this button's eligible set, so the damage hides itself.
+   ⚠️ audit_and_push is UNCHANGED at 25: it emails people, and its cap counts ACTIONABLE items.
+   ⚠️ This is a REFUSAL above the cap, not a slice (see the create branch) — the dialog now says so
+   before the press rather than letting the server reject it. */
+const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50, audit: 100, audit_and_push: 25 };
 
 /** ⛔ TRY THE TOWN'S MARKET AUDIT BEFORE BUYING A PER-BUSINESS ONE. £0 against ~8p a lead, and every
  *  refusal falls through to the paid audit unchanged — see the call site in phase A.
