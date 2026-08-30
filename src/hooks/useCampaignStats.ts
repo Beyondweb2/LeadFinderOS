@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCampaigns, type Campaign } from '@/hooks/useCampaigns';
 import { looksAutomated, isDecline } from '@/lib/inboundClassify';
 import { isRealSend } from '@/lib/realSend';
+import { isPaidLead } from '@/lib/leadPayment';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 
 /* ============================================================
@@ -215,10 +216,13 @@ export function useCampaignStats() {
 
     if (outTemplated.some((m) => SIGNUP_TEMPLATES.has(m.template_name!))) b.signupSent += 1;
     if (startedLeadIds.has(l.id)) b.started += 1;
-    /* amount_paid only, so `paid` and `moneyIn` below can no longer disagree on the same card — the
-       status half used to let a £0 lead in in_delivery count as paid while contributing £0. */
-    if (Number(l.amount_paid ?? 0) > 0) b.paid += 1;
-    b.moneyIn += Number(l.amount_paid ?? 0);
+    /* ⛔ BOTH THROUGH isPaidLead, so `paid` and `moneyIn` cannot disagree on the same card — and so
+       a REFUNDED customer leaves the count and the "£X in" figure TOGETHER. Summing the amount
+       independently of the count is exactly how a refund would have stayed in the money while
+       leaving the headcount. `amount_paid` is still the amount; isPaidLead only decides whether it
+       counts. (The older comment here warned about the reverse failure — a £0 lead dragged to
+       in_delivery counting as paid while contributing £0 — which this preserves.) */
+    if (isPaidLead(l)) { b.paid += 1; b.moneyIn += Number(l.amount_paid ?? 0); }
 
     // Per-template rows: distinct leads, plus that template's own receipts.
     let byT = tmplSets.get(key);

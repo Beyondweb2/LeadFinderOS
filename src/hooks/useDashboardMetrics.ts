@@ -7,6 +7,7 @@ import { buildDashTasks, foldMessageTimes, type DashTask, type LeadMessageTimes,
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { looksAutomated } from '@/lib/inboundClassify';
 import { isRealSend } from '@/lib/realSend';
+import { isPaidLead } from '@/lib/leadPayment';
 
 /**
  * One channel's outreach performance.
@@ -368,7 +369,7 @@ export function useDashboardMetrics(isAdmin = false) {
     for (const l of funnelLeads) {
       const ms = msgsByLeadId.get(l.id);
       if (!ms) {
-        if ((l.amount_paid ?? 0) > 0) funnelPaid += 1;
+        if (isPaidLead(l)) funnelPaid += 1;
         continue;
       }
       /* isRealSend: a rejected (failed) or test-mode (simulated) send is not a contact. 38 unarchived
@@ -386,11 +387,13 @@ export function useDashboardMetrics(isAdmin = false) {
         if (newestInboundAt && newestInboundAt > lastPitchAt) {
           pitchReplied += 1;
           // Hook reply -> money: of the leads who answered the hook, how many actually paid.
-          if ((l.amount_paid ?? 0) > 0) pitchRepliedPaid += 1;
+          if (isPaidLead(l)) pitchRepliedPaid += 1;
         }
       }
-      // Money in the bank, and nothing else. A status someone moved by hand is not a payment.
-      if ((l.amount_paid ?? 0) > 0) funnelPaid += 1;
+      /* Money in the bank, and nothing else. A status someone moved by hand is not a payment —
+         EXCEPT `refunded`, the one status that can subtract, because the money went back out.
+         isPaidLead owns that rule so the funnel, the campaign card and the Inbox cannot disagree. */
+      if (isPaidLead(l)) funnelPaid += 1;
       /* A FOUNDER PRICE EXACTLY, within a penny — the current one or any historical one. amount_paid
          is the real charged amount (stripe-webhook writes amount_total / 100), so this counts places
          actually taken at a founder price — not every paid lead, and not everything below full price.
@@ -398,8 +401,11 @@ export function useDashboardMetrics(isAdmin = false) {
          made RG Locksmiths' £19.99 sale vanish when the price moved to £49.99 (the tile read 1 with
          two paying customers). "Places taken at the founder offer" means across every price the
          offer has charged, so the list, not the single constant, is what a sale is matched against. */
+      /* ⚠️ GATED ON isPaidLead FIRST: a refunded founder sale is no longer a place taken. Without
+         the guard the tile would keep counting a customer who has had their money back — the same
+         "still reads as paid" fault this status exists to fix. */
       const paidAmt = l.amount_paid ?? 0;
-      if ([FOUNDER_PRICE_GBP, ...FOUNDER_PRICES_HISTORICAL_GBP].some((p) => Math.abs(paidAmt - p) < 0.01)) founderSales += 1;
+      if (isPaidLead(l) && [FOUNDER_PRICE_GBP, ...FOUNDER_PRICES_HISTORICAL_GBP].some((p) => Math.abs(paidAmt - p) < 0.01)) founderSales += 1;
     }
     const auditFunnel: AuditFunnel = {
       contacted, replied, pitched, pitchReplied, pitchRepliedPaid, paid: funnelPaid,

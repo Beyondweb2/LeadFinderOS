@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2 } from 'lucide-react';
+import { isPaidLead } from '@/lib/leadPayment';
 
 // Shared style for the compact thread-header quick-action icon buttons/links.
 const HEADER_ICON_BTN = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
@@ -855,8 +856,11 @@ const Inbox = () => {
         key, phone: norm, userId: user.id, leadId: lead.id,
         campaignId: lead.campaign_id ?? null,
         leadStatus: lead.status ?? null,
-        /* Same rule as the fetched conversations: money, not status. LeadLite carries amount_paid. */
-        isPaid: (lead.amount_paid ?? 0) > 0,
+        /* ⛔ THE SAME PREDICATE the fetched conversations use (useInbox's paidLeadIds), not a
+           second copy of the rule. A hand-rolled `amount_paid > 0` here would have kept calling a
+           REFUNDED lead paid, so opening their thread from a lead row would have contradicted the
+           very same thread in the list beside it. LeadLite carries amount_paid AND status. */
+        isPaid: isPaidLead(lead),
         label: lead.business_name || `+${norm}`, unassigned: false,
         lastMessage: undefined as never, lastMessageAt: new Date(0).toISOString(), lastInboundAt: null,
       };

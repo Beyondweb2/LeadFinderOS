@@ -14,6 +14,15 @@ export type LeadStatus =
   | 'opted_out'         // system-written by the suppression paths (drainer/triage) — NOT operator-pickable
   | 'replied'
   | 'payment_received'  // "Paid" — Outreach pipeline terminal (also Track Leads marker)
+  /* ⛔ REFUNDED — MONEY IN, THEN MONEY BACK OUT. The ONLY status that removes a lead from the
+     paying-customer count and every revenue total, via isPaidLead (src/lib/leadPayment.ts).
+     `amount_paid` is DELIBERATELY LEFT ON THE ROW: it is the record of what was charged, and
+     zeroing it would destroy that history and make the refund indistinguishable from a lead that
+     never paid. "Refunded" means we still hold the amount; it just stops counting.
+     ⚠️ NOT a pre-payment loss — that is already `not_interested` / `closed` / `opted_out`. And NOT
+     "paid, delivery stopped, money kept", which must STAY in revenue and would need its own value
+     if it ever happens (Paul's call, 2026-08-29: one value, not two). */
+  | 'refunded'
   | 'completed'
   | 'no_whatsapp'        // number isn't on WhatsApp (permanent — reach via SMS/call/email)
   | 'no_whatsapp_needs_sms' // offline line-type gate: not a mobile → never queued; pick up for SMS
@@ -239,6 +248,10 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'payment_received', label: 'Paid' },
   { value: 'in_delivery', label: 'In Delivery' },
   { value: 'completed', label: 'Completed' },
+  /* Sits AFTER the money statuses because that is the order it happens in. Its label is UNIQUE, so
+     OUTREACH_STATUS_FILTER_OPTIONS (derived from this list) gives it its own filter group for free
+     — and status-constants.test.ts asserts no two filter options share a label. */
+  { value: 'refunded', label: 'Refunded' },
 ];
 
 /* ══ THE STATUS FILTER, WHICH IS NOT THE STATUS LIST ═════════════════════════════════════
@@ -401,6 +414,7 @@ export type PipelineStatus =
   | 'price_given'
   | 'in_delivery'
   | 'completed'
+  | 'refunded'     // money returned — the one status that removes a lead from revenue (isPaidLead)
   | 'opted_out';   // render-only (system-written); not in the pickable options below
 
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
@@ -417,6 +431,9 @@ export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[]
   { value: 'payment_received', label: 'Paid' },
   { value: 'in_delivery', label: 'In Delivery' },
   { value: 'completed', label: 'Completed' },
+  /* The Inbox's own pickable list. Present in BOTH lists on purpose: a status the operator can set
+     on one screen but not the other is exactly the drift that makes two screens disagree. */
+  { value: 'refunded', label: 'Refunded' },
 ];
 
 // ── Status semantics shared by the dashboard (Outreach status = source of truth) ──

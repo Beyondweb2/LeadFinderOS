@@ -28,7 +28,31 @@ export function parseAmountPaid(raw: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** The one test for "is this a paying customer". Tolerates a missing/undefined column. */
-export function isPaidLead(lead: { amount_paid?: number | null } | null | undefined): boolean {
-  return (lead?.amount_paid ?? 0) > 0;
+/** The status that means the money went back. Exported so nothing has to re-type the string. */
+export const REFUNDED_STATUS = 'refunded';
+
+/**
+ * The one test for "is this a paying customer". Tolerates a missing/undefined column.
+ *
+ * ⛔ REFUNDED IS THE ONE STATUS THAT CAN OVERRIDE THE AMOUNT, AND IT IS STILL NOT "paid FROM the
+ * status". The rule stays `amount_paid > 0` — the status can only ever SUBTRACT, never add, so an
+ * operator dragging a £0 lead to `payment_received` still counts as nothing. Before this, a
+ * refunded customer kept `amount_paid > 0` and went on inflating the paid count, the funnel and
+ * every revenue total, because nothing here could see the refund.
+ *
+ * ⚠️ `amount_paid` IS DELIBERATELY LEFT ON THE ROW. It is the record of what was charged; zeroing
+ * it would destroy that history and make a refund indistinguishable from a lead that never paid.
+ * Refunded means "we still hold the amount, it just stops counting".
+ *
+ * ⚠️ A CALLER THAT DOES NOT SELECT `status` GETS THE OLD BEHAVIOUR — undefined is not 'refunded',
+ * so the lead still counts as paid. That is the safe direction (a refund is rare and visible; a
+ * silently un-paid customer is not), but it means every money caller must select the column.
+ * All five do; scripts/lead-payment.test.ts pins the absent-status case so a new caller that
+ * forgets is a known, tested behaviour rather than a surprise.
+ */
+export function isPaidLead(
+  lead: { amount_paid?: number | null; status?: string | null } | null | undefined,
+): boolean {
+  if ((lead?.amount_paid ?? 0) <= 0) return false;
+  return lead?.status !== REFUNDED_STATUS;
 }

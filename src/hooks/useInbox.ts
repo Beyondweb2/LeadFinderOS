@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { isPaidLead } from '@/lib/leadPayment';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
 // (operators read their own; admin reads all incl. Unassigned).
@@ -244,11 +245,15 @@ export function useInbox() {
      already selects amount_paid. Keyed on `amount_paid > 0` and never on the status: `paid` means
      that everywhere (CLAUDE.md §6), and reading `payment_received` instead would drop a customer the
      moment they moved on to `in_delivery` — i.e. the moment work started.
+     ⛔ THE ONE STATUS THAT DOES SUBTRACT IS `refunded`, and it is applied by isPaidLead rather than
+     tested here, so the Inbox exemption, the funnel and the campaign card drop a refunded customer
+     together. A refunded thread stops being exempt from the status filter, which is right: they are
+     no longer a paying customer.
      ⚠️ A lead absent from this set is NOT "not paid" by inference — it is simply not in the read.
      That is fine here because the set is derived from the same rows the conversations are, so a lead
      that is missing has no conversation either. */
   const paidLeadIds = useMemo(
-    () => new Set(leads.filter((l) => (l.amount_paid ?? 0) > 0).map((l) => l.id)),
+    () => new Set(leads.filter((l) => isPaidLead(l)).map((l) => l.id)),
     [leads],
   );
 
