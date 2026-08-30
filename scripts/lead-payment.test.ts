@@ -60,4 +60,43 @@ console.log("\n── ⛔ AND THE ROUND TRIP THAT IS THE ACTUAL BUG ──");
   ok(isPaidLead({ amount_paid: cleared }) === false, "  and the lead reads as not paid, from null not 0");
 }
 
+console.log("\n── ⛔ REFUNDED: THE ONE STATUS THAT SUBTRACTS ──");
+/* Money in, then money back out. Before this, a refunded customer kept amount_paid > 0 and went on
+   inflating the paid count, the funnel, the founder tile and every revenue total, because nothing
+   in this predicate could see the refund. The status may only ever SUBTRACT — it can never make an
+   unpaid lead count. */
+ok(isPaidLead({ amount_paid: 19.99, status: "refunded" }) === false,
+  "paid then refunded -> NOT a paying customer");
+ok(isPaidLead({ amount_paid: 19.99, status: "payment_received" }) === true,
+  "paid, not refunded -> still paying");
+ok(isPaidLead({ amount_paid: 19.99, status: "in_delivery" }) === true,
+  "⛔ in_delivery is STILL PAID — the original divergence must survive this change");
+ok(isPaidLead({ amount_paid: 19.99, status: "completed" }) === true, "completed -> still paying");
+ok(isPaidLead({ amount_paid: 0, status: "refunded" }) === false, "£0 + refunded -> not paid");
+ok(isPaidLead({ amount_paid: null, status: "refunded" }) === false, "null + refunded -> not paid");
+
+console.log("\n   the status can only SUBTRACT, never add:");
+ok(isPaidLead({ amount_paid: 0, status: "payment_received" }) === false,
+  "£0 dragged to payment_received is STILL not paid — the status never creates a customer");
+
+console.log("\n   ⚠️ AN ABSENT STATUS KEEPS THE OLD BEHAVIOUR (the safe direction):");
+/* A caller that forgets to select `status` must not silently un-pay every customer. undefined is
+   not 'refunded', so they still count. Pinned so a future caller that forgets the column meets a
+   tested behaviour rather than a surprise. */
+ok(isPaidLead({ amount_paid: 19.99 }) === true, "status column not selected -> still reads as paid");
+ok(isPaidLead({ amount_paid: 19.99, status: null }) === true, "status null -> still reads as paid");
+ok(isPaidLead({ amount_paid: 19.99, status: "" }) === true, "status empty string -> still reads as paid");
+ok(isPaidLead({ amount_paid: 19.99, status: "Refunded" }) === true,
+  "⚠️ case-sensitive by design: the app only ever writes the exact lowercase value");
+
+console.log("\n   ⛔ THE AMOUNT SURVIVES THE REFUND — history is not destroyed:");
+{
+  /* Marking a lead refunded must NOT zero amount_paid. The row still records what was charged; it
+     simply stops counting. A build that cleared the amount would pass every assertion above and
+     still lose the record of the sale. */
+  const lead = { amount_paid: parseAmountPaid("19.99"), status: "refunded" };
+  ok(lead.amount_paid === 19.99, "the charged amount is still on the row after the refund");
+  ok(isPaidLead(lead) === false, "  and the lead does not count as paying");
+}
+
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");

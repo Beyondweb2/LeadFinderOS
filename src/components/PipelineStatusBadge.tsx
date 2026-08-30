@@ -134,6 +134,16 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Paid',
     className: 'bg-green-500/20 text-green-400 border-transparent font-semibold',
   },
+  /* ⛔ MONEY IN, THEN BACK OUT. Deliberately a MUTED red-grey, not the bright red of `bounced` or
+     `opted_out`: a refund is a closed, settled outcome to be read calmly on a list, not an alarm.
+     It must also be clearly distinct from the green `payment_received` directly above, because the
+     whole point of this status is that the two are no longer the same thing — a refunded lead is
+     excluded from every paid count and revenue total by isPaidLead (src/lib/leadPayment.ts). */
+  refunded: {
+    label: 'Refunded',
+    shortLabel: 'Refund',
+    className: 'bg-rose-500/15 text-rose-300/90 border-transparent font-semibold',
+  },
   // Terminal stage of the live pipeline (after in_delivery) — operator-pickable.
   completed: {
     label: 'Completed',

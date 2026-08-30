@@ -114,7 +114,15 @@ export interface TaskInputs {
 }
 
 /* Statuses where there is nothing to chase: they said no, opted out, or it is closed. */
-const DEAD = new Set(['not_interested', 'opted_out', 'closed']);
+/* ⛔ `refunded` IS DEAD FOR TASK PURPOSES — added 2026-08-29 with the status. A refunded customer
+   is a settled, finished outcome: there is nothing to chase and nothing to fix, and surfacing them
+   would be worse than noise on a card whose whole job is "what should I do next".
+   ⛔ AND THE LOCAL isPaid BELOW IS DELIBERATELY *NOT* MADE REFUND-AWARE. It gates the CHASE tasks,
+   so teaching it about refunds would flip a refunded lead to "not paid" and start asking Paul to
+   chase someone he has just given the money back to — the exact opposite of the intent. Excluding
+   them here is what makes that safe; the money predicate (src/lib/leadPayment.ts) is a different
+   question and is refund-aware there. */
+const DEAD = new Set(['not_interested', 'opted_out', 'closed', 'refunded']);
 /* Statuses the card must never surface (see the "what should NOT be on it" list):
    - no_whatsapp / no_whatsapp_needs_sms: unreachable on WhatsApp, and the SMS pipeline is off, so
      there is no action available at all;
