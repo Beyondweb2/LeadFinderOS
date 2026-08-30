@@ -1702,7 +1702,18 @@ export function OutreachTable({
     finding: findingEmails,
     progress: emailProgress,
     withWebsiteCount,
-  } = useOutreachFindEmails(filteredAndSortedLeads, onUpdateLead ?? (async () => null), crawlStatuses);
+    usingSelection: crawlUsingSelection,
+    /* ⛔ `leads`, NOT `filteredAndSortedLeads`, WHEN RESOLVING A SELECTION. Rows are ticked from the
+       visible list, but the filter can change afterwards — resolving against the filtered view would
+       silently drop the ticked leads that are no longer on screen, crawl fewer than the button said,
+       and look like the crawl having failed on exactly the leads the operator cared about. The hook
+       intersects with selectedIds itself, so passing the full list cannot widen the set. */
+  } = useOutreachFindEmails(
+    selectedIds.size > 0 ? leads : filteredAndSortedLeads,
+    onUpdateLead ?? (async () => null),
+    crawlStatuses,
+    selectedIds,
+  );
 
   const newestLeadId = useMemo(() => {
     if (leads.length === 0) return null;
@@ -2050,12 +2061,21 @@ export function OutreachTable({
                     onClick={findEmails}
                     disabled={!withWebsiteCount}
                     className="bg-background text-xs h-8"
+                    /* ⛔ THE LABEL NAMES THE SET. "Crawl 187 leads" was true and useless: it never
+                       said WHICH 187, so a ticked row that fell outside the status allow-list looked
+                       like a crawl that had failed rather than one that never included it. */
                     title={withWebsiteCount
-                      ? `Crawl ${withWebsiteCount} lead${withWebsiteCount === 1 ? '' : 's'} for a contact email — free. Targeting: ${crawlStatuses.join(', ')}. Archived and suppressed leads are never crawled.`
-                      : `No leads to crawl in: ${crawlStatuses.join(', ')}`}
+                      ? (crawlUsingSelection
+                          ? `Crawl the ${withWebsiteCount} ticked lead${withWebsiteCount === 1 ? '' : 's'} that ha${withWebsiteCount === 1 ? 's' : 've'} a website and no email — free. A selection overrides the status filter and re-crawls even if checked recently. Archived leads are never crawled.`
+                          : `Crawl ${withWebsiteCount} lead${withWebsiteCount === 1 ? '' : 's'} in the current view for a contact email — free. Targeting: ${crawlStatuses.join(', ')}. Skips anything checked in the last 30 days. Archived and suppressed leads are never crawled. Tick rows to crawl exactly those instead.`)
+                      : (crawlUsingSelection
+                          ? 'None of the ticked leads need crawling — they have no website, already have an email, or are archived.'
+                          : `Nothing left to crawl in: ${crawlStatuses.join(', ')} — everything with a website either has an email or was checked in the last 30 days.`)}
                   >
                     <Mail className="h-3.5 w-3.5 mr-1.5" />
-                    Crawl {withWebsiteCount} lead{withWebsiteCount === 1 ? '' : 's'} for emails
+                    {crawlUsingSelection
+                      ? <>Crawl {withWebsiteCount} selected</>
+                      : <>Crawl {withWebsiteCount} in view</>}
                   </Button>
                 )
               )}
