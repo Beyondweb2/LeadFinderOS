@@ -7,6 +7,7 @@
 // with; frequency-aggregate fallback (US-marker-filtered for UK audits) when there's no gutPunch.
 import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
+import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competitorCleaning.ts";
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
 /* ⛔ THE PROSPECT-FACING ORIGIN. findable.live/report/<auditId> — a Pages Function proxy that forces
@@ -77,6 +78,22 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     .select("id, question, status, result")
     .eq("run_id", run.id)
     .order("created_at", { ascending: true });
+  /* ⛔ A CAPPED RUN IS NOT AUTOMATICALLY A FINISHED AUDIT — the SAME check bulk-jobs already makes,
+     ported here so the two paths cannot disagree about the same lead.
+     THE BUG THIS FIXES: a capped run that never answered a single question passed the run test above
+     and then failed below with "The audit named no competitors yet" — a TRUE statement about a FALSE
+     premise. It happened for real on 2026-08-08 (ten leads, 30 queue rows, all failed, zero answers,
+     $0.0000 spent) and sent Paul looking at competitor extraction when the cause was queue
+     concurrency two layers up. bulk-jobs was fixed then; this path was not.
+     ⚠️ ONLY A CAPPED RUN IS QUESTIONED, exactly as bulk-jobs does it — "a complete run is not
+     questioned, it is complete by definition". A FAILED run never reaches here at all: the selector
+     above accepts only complete|capped, so a failed audit already returns the no-completed-audit
+     reason and is never described as a competitor problem. */
+  const answered = countAnsweredCells((qrows ?? []) as Parameters<typeof countAnsweredCells>[0]);
+  if (run.status === "capped" && answered === 0) {
+    return { ok: false, reason: "The audit didn't answer any questions — re-run it." };
+  }
+
   const data = buildReportData((qrows ?? []) as QueueRow[], run as RunRow, {
     businessName: audit.business_name ?? "",
     businessType: audit.business_type ?? "",
@@ -111,8 +128,26 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     if (cc === "UK" || cc === "GB") pool = pool.filter((c: string) => !US_MARKERS.test(c));
   }
   const competitors = formatCompetitors(pool);
-  // {{2}} is a REQUIRED Meta var — refuse rather than send an empty/broken template.
-  if (!competitors) return { ok: false, reason: "The audit named no competitors yet." };
+  /* {{2}} is a REQUIRED Meta var — refuse rather than send an empty/broken template. But SAY WHICH
+     REFUSAL IT IS: one message used to cover three different situations, which is why a block felt
+     random.
+     ⛔ EMPTY IS USUALLY NOT "AI NAMED NOBODY". Since the regex scraper was deleted (2026-08-28),
+     `competitors` is written ONLY by the extract-competitors LLM, so an empty list means either the
+     cleaner never ran (OpenAI out of credit, or the invoke failed) or it ran and found none. The run
+     carries a receipt that tells them apart — results.competitor_cleaning — and this path was not
+     reading it.
+     ⚠️ ABSENCE OF A RECEIPT IS NOT PROOF THE CLEANER FAILED: every audit finalised before
+     2026-08-28 has no stamp. That is why the wording says "haven't been extracted yet" rather than
+     asserting a failure — it is honest for both the old-audit and the never-ran cases, and it still
+     sends the operator somewhere useful. Only a stamp that says `complete` earns the original
+     sentence. Refusal wording only: what actually sends is unchanged. */
+  if (!competitors) {
+    const stamp = readCleaningStamp((run as { results?: unknown }).results);
+    if (stamp?.complete !== true) {
+      return { ok: false, reason: "Competitor names haven't been extracted yet — the cleaner hasn't run on this audit." };
+    }
+    return { ok: false, reason: "The audit named no competitors yet." };
+  }
 
   const trade = (audit.business_type ?? "").trim();
   const business = (audit.business_name ?? "").trim();

@@ -740,6 +740,12 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   // non-null whatsapp_outreach_state.audit_complete_template. The lead_id UNIQUE index gives
   // first-trigger-wins vs the first-reply rule (23505 → skip, one send per lead ever).
   const completionSendJobs: { auditId: string }[] = [];
+  /* ⛔ RUNS THAT FINISHED NON-COMPLETE, so a parked auto-reply can be SURFACED instead of stalling.
+     The upgrade below only fires for COMPLETE runs, so a reply-triggered pitch parked as
+     'awaiting_audit' whose audit ended capped or failed sat on that status forever — invisible, with
+     nothing to fire it and nothing saying so. The operator's experience was "the auto-audit just
+     doesn't run sometimes", and the only way to see it was querying the table. */
+  const stalledAutoReplyJobs: { auditId: string; runStatus: string; reason: string }[] = [];
   // PAID BASELINE: a finished run of a multi-run baseline either triggers the next repeat run
   // or finalises the averaged snapshot. Capped runs count too (they produced partial data and
   // advanceBaseline treats them as usable), so a capped run cannot stall the chain forever.
@@ -990,6 +996,18 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       // D2 — completion auto-send candidates (COMPLETE only, like audit_reply/auto-report). The
       // heavier checks (setting, lead, phone, suppression) run once, after the loop.
       if (!isCapped && !allFailed && runRow?.audit_id) completionSendJobs.push({ auditId: runRow.audit_id as string });
+      /* The mirror of the line above: this run will NEVER arm its parked pitch, so record it for the
+         flag pass after the loop. `dominantError` is the queue's own reason when every question
+         failed, so the operator is told WHY rather than just that it stopped. */
+      if ((isCapped || allFailed) && runRow?.audit_id) {
+        stalledAutoReplyJobs.push({
+          auditId: runRow.audit_id as string,
+          runStatus,
+          reason: allFailed
+            ? `auto-audit failed (${String(dominantError ?? "all questions failed")})`
+            : `auto-audit capped — ${doneQuestions} of ${rows.length} questions answered`,
+        });
+      }
       // Baseline chain runs for capped runs as well — see baselineJobs above.
       // An all-failed run must never count toward a paid baseline.
       if (!allFailed && runRow?.audit_id) baselineJobs.push({ auditId: runRow.audit_id as string });
@@ -1080,6 +1098,38 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   // which applies the send-time guards: decline-since, opted_out/not_interested, suppression, and
   // flagged_no_link for url-templates without a claim link). Everything here is defensive: missing
   // column/table (SQL not run yet) or a null setting → the whole feature is dormant, nothing throws.
+  /* ⛔ SURFACE THE STALLED PITCHES. A reply-triggered pitch parked as 'awaiting_audit' is only ever
+     armed by the COMPLETE-run upgrade below; a capped or failed audit left it on that status forever,
+     with nothing to fire it and nothing to say so. Flagging it is the whole fix: the row becomes
+     visible with a reason instead of silently waiting for an event that can never happen.
+     ⛔ REUSES THE EXISTING `flagged_error` STATUS ON PURPOSE. whatsapp_auto_replies is not defined in
+     any migration, so a CHECK constraint on `status` cannot be ruled out from the repo — and a new
+     value rejected by one would fail the update silently, leaving exactly the invisible stall this
+     removes. flagged_error is already written to this column by the inbound chain, so it is
+     guaranteed accepted and needs no SQL. The `reason` carries which it was.
+     ⚠️ SCOPED TO 'awaiting_audit' ROWS ONLY. A row that is pending, sent or already flagged is not
+     touched, so this can never overwrite a real outcome or re-flag something a human has dealt with.
+     ⚠️ NOT gated on autoReplyEnvOn(): the kill-switch governs SENDING. A row already parked must
+     still be told the truth even if auto-replies were turned off after it was parked.
+     ⚠️ Own try/catch per job — a missing table must never break queue finalisation. */
+  for (const job of stalledAutoReplyJobs) {
+    try {
+      const { data: audit } = await service
+        .from("ai_audits").select("lead_id").eq("id", job.auditId).maybeSingle();
+      const leadId = (audit?.lead_id as string | null) ?? null;
+      if (!leadId) continue; // manual/market audit — no parked pitch to flag
+      const { data: flagged } = await service.from("whatsapp_auto_replies")
+        .update({ status: "flagged_error", reason: job.reason.slice(0, 300), updated_at: new Date().toISOString() })
+        .eq("lead_id", leadId).eq("status", "awaiting_audit")
+        .select("id");
+      if (Array.isArray(flagged) && flagged.length > 0) {
+        console.log(`[auto-send] audit ${job.auditId} ended ${job.runStatus} → flagged the stalled awaiting_audit pitch for lead ${leadId}: ${job.reason}`);
+      }
+    } catch (e) {
+      console.error(`[auto-send] could not flag stalled pitch for audit ${job.auditId}:`, (e as Error).message);
+    }
+  }
+
   if (completionSendJobs.length && autoReplyEnvOn()) {
     let completeTemplate: string | null = null;
     try {
