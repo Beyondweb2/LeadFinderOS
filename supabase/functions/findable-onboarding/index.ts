@@ -460,7 +460,25 @@ Deno.serve(async (req) => {
         typeof body.source === "string" && SUBMISSION_SOURCES.has(body.source.trim())
           ? body.source.trim()
           : null;
-      if (!incomplete && (!confirmedLocation || !gbpConsent)) {
+      /* ⛔ THE TOWN IS NO LONGER A PRE-PAY REQUIREMENT — IT IS A Q2 QUESTION NOW (2026-08-29).
+         This gate still demanded confirmed_location after the questionnaire split moved the town
+         behind payment: the pre-pay flow is STEPS = 2 and the town lives at case 2, so it is never
+         rendered. A business-specific link only passed because `prefill` silently fills the town
+         from the lead's derived_town — so the GENERIC /onboarding/ form, which has no lead and
+         therefore no prefill, failed every complete submission with `missing_required` and told the
+         customer to "step back" to a question that no longer exists.
+         ⛔ THE TOWN IS STILL ENFORCED, JUST WHERE IT IS ACTUALLY ASKED. Verified before changing
+         this, all three still require it and none was touched:
+           · complete_q2 — hard 400 on !q2Town || !q2Services (this file, ~line 351)
+           · needsQ2     — !(confirmed_location && services)   (src/hooks/useSubmissions.ts:109)
+           · startPaidBaseline — defers `awaiting_questionnaire_2` until town + services exist
+                                 (_shared/audit-baseline.ts:476), so the guarantee's day-0
+                                 measurement still cannot start without it.
+         ⚠️ serveGate is unaffected: ServeGateRow is the four website fields and reads
+         confirmed_location nowhere.
+         ⚠️ gbp_consent STAYS REQUIRED. It is asked at case 0, inside the pre-pay flow, so it is
+         both reachable and answerable — the two things the town had stopped being. */
+      if (!incomplete && !gbpConsent) {
         return json({ ok: false, error: "missing_required" }, 400);
       }
       const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
