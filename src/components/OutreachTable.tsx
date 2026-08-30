@@ -119,6 +119,20 @@ import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, 
 import { leadStatusLabel } from '@/types/outreach';
 import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
+import { useApifyUsage } from '@/hooks/useApifyUsage';
+import {
+  splitAlreadyAudited, oldestFirst, estimateBatchCost, budgetVerdict, monthlyRemainingUsd,
+  resolveTake,
+} from '@/lib/auditBatchPlan';
+
+/* ⛔ MIRRORS bulk-jobs' JOB_CAPS.audit. Stated here because the SPA cannot import an edge module —
+   and the dialog must be able to SAY "that is over the cap" before the press, since bulk-jobs
+   REFUSES a create above it rather than slicing. Change one, change the other. */
+const AUDIT_JOB_CAP = 100;
+/* ⛔ MIRRORS process-ai-audit-queue's DAILY_CAP_USD — the rolling-24h Apify ceiling per user, and
+   the limit a big batch actually meets first (the monthly cap is far larger). NOT changed here and
+   not changeable from here; this is the figure the warning is measured against. */
+const AUDIT_DAILY_CAP_USD = 12.0;
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { SingleSMSDialog } from '@/components/SingleSMSDialog';
@@ -312,6 +326,9 @@ export function OutreachTable({
   // HARD 3..5 clamp (default 3) — unified across wizard/bulk/auto-chain.
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
   const [auditQuestionCount, setAuditQuestionCount] = useState<number>(3);
+  /* How many to audit THIS run. Empty string = "all eligible" — a blank box must not read as 0 and
+     silently disable the button. Held as a string so the input can be cleared while typing. */
+  const [auditTakeInput, setAuditTakeInput] = useState<string>('');
   /* OFF by default: a business with no website is a different product with a different opening, and
      auditing one buys an answer we already know — Gemini cannot name a business it has nothing of to
      read (measured: MK Plumbing, 0/10 on Gemini). Overridable, because the ChatGPT-via-directories
@@ -1003,14 +1020,56 @@ export function OutreachTable({
      Imported rather than re-typed so they move with the rest of the app.
      The SEO count uses the SAME own-website test as the eligibility above, because a Facebook page no
      longer triggers a scan (see the has_website fix in bulk-jobs). */
-  const auditCostUsd = useMemo(() => {
-    const q = Math.max(3, Math.min(5, auditQuestionCount));
-    const websites = auditEligibleLeads.filter((l) => {
-      const w = (l.website ?? '').trim();
-      return !!w && !isAggregatorUrl(w);
-    }).length;
-    return auditEligibleIds.length * q * AUDIT_EST_USD_PER_QUESTION + websites * SEO_SCAN_USD;
-  }, [auditEligibleLeads, auditEligibleIds, auditQuestionCount]);
+  /* ⚠️ auditCostUsd WAS DELETED HERE (2026-08-30), not left beside its replacement. It priced the
+     WHOLE eligible list; the dialog now prices the SLICE that will actually run (auditBatchCost via
+     estimateBatchCost). Two cost rules in one component is one autocomplete away from a screen that
+     quotes one figure and a press that spends another — the fault the re-audit dialog already had.
+     The measured rates it used are unchanged and still imported below. */
+  /* ══ THE BATCH PREVIEW ═══════════════════════════════════════════════════════════════════════
+     Everything below is DERIVED from data already on screen — no new query, no new endpoint.
+     ⛔ THE ELIGIBILITY RULE IS UNTOUCHED. auditEligibleLeads still excludes every lead that holds
+     ANY audit, exactly as before; the split is shown so the operator can SEE which of the excluded
+     are genuinely done and which merely failed, without changing who gets audited. */
+  const { usage: apifyUsage } = useApifyUsage();
+  const auditAlreadySplit = useMemo(
+    () => splitAlreadyAudited(selectedIds, auditsByLead),
+    [selectedIds, auditsByLead],
+  );
+  /* ⛔ OLDEST-ADDED FIRST, on outreach_leads.created_at. A lead that has sat in the CRM for months
+     is audited before one added this morning — otherwise a capped run always serves the newest and
+     the backlog never moves. */
+  const auditOrdered = useMemo(() => oldestFirst(auditEligibleLeads), [auditEligibleLeads]);
+  const auditTake = useMemo(
+    () => resolveTake(
+      auditTakeInput.trim() === '' ? auditOrdered.length : Number(auditTakeInput),
+      auditOrdered.length,
+      AUDIT_JOB_CAP,
+    ),
+    [auditTakeInput, auditOrdered.length],
+  );
+  /** The leads this press will actually audit — the slice that is priced and sent. */
+  const auditBatch = useMemo(() => auditOrdered.slice(0, auditTake.take), [auditOrdered, auditTake.take]);
+  const auditBatchCost = useMemo(
+    () => estimateBatchCost(
+      auditBatch,
+      Math.max(3, Math.min(5, auditQuestionCount)),
+      { usdPerQuestion: AUDIT_EST_USD_PER_QUESTION, usdPerSeoScan: SEO_SCAN_USD },
+      isAggregatorUrl,
+    ),
+    [auditBatch, auditQuestionCount],
+  );
+  /* Two budgets, and the DAILY one is what a big batch meets first — it is the rolling-24h Apify
+     ceiling in process-ai-audit-queue. Stated as a constant here, not imported: the SPA cannot
+     import an edge module, and a wrong-but-visible figure is worse than none, so it is named. */
+  const auditDailyVerdict = useMemo(
+    () => budgetVerdict(auditBatchCost.totalUsd, AUDIT_DAILY_CAP_USD),
+    [auditBatchCost.totalUsd],
+  );
+  const auditMonthlyVerdict = useMemo(
+    () => budgetVerdict(auditBatchCost.totalUsd, monthlyRemainingUsd(apifyUsage)),
+    [auditBatchCost.totalUsd, apifyUsage],
+  );
+
   /** What holding the no-website leads back is saving, at the same measured rates. */
   const auditNoWebsiteSavingUsd = useMemo(
     () => auditNoWebsiteLeads.length * Math.max(3, Math.min(5, auditQuestionCount)) * AUDIT_EST_USD_PER_QUESTION,
@@ -1234,7 +1293,10 @@ export function OutreachTable({
   // process-ai-audit-queue cron (no direct Apify). Clears the selection on success.
   const confirmBulkAudit = async () => {
     if (!onBulkJob || bulkJobActive) return;
-    const ids = auditEligibleIds;
+    /* ⛔ THE ORDERED SLICE, not auditEligibleIds. auditBatch is oldest-added first and already cut
+       to the typed number and the job cap, so the ids sent are exactly the ones the dialog priced.
+       Sending the full eligible list would spend more than the screen said. */
+    const ids = auditBatch.map((l) => l.id);
     if (!ids.length) { setAuditDialogOpen(false); return; }
     const q = Math.max(3, Math.min(5, auditQuestionCount));
     const res = await onBulkJob('audit', ids, { question_count: q });
@@ -2967,16 +3029,96 @@ export function OutreachTable({
               </span>
             </label>
           )}
+          {/* ══ THE PREVIEW — what is selected, what is already done, and what this press spends,
+              before it is pressed. Every number is derived from data already on screen. */}
+          <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-xs">
+            <div className="flex justify-between"><span>Selected</span><span className="font-semibold tabular-nums">{selectedIds.size}</span></div>
+            {auditAlreadySplit.total > 0 && (
+              <>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>· already audited</span><span className="tabular-nums">{auditAlreadySplit.total}</span>
+                </div>
+                {/* Split so "already audited" is not one lump: a FAILED audit is not a finished one,
+                    and the two were previously indistinguishable. Both stay EXCLUDED — the
+                    eligibility rule is unchanged — but which is which is now visible. */}
+                <div className="pl-3 text-[11px] text-muted-foreground">
+                  {auditAlreadySplit.completed} completed
+                  {auditAlreadySplit.failed > 0 && <> · <span className="text-amber-600">{auditAlreadySplit.failed} failed</span></>}
+                  {auditAlreadySplit.inProgress > 0 && <> · {auditAlreadySplit.inProgress} in progress</>}
+                </div>
+              </>
+            )}
+            <div className="mt-1 flex justify-between border-t border-border/60 pt-1">
+              <span className="font-medium">Eligible to audit</span>
+              <span className="font-semibold tabular-nums">{auditOrdered.length}</span>
+            </div>
+          </div>
+
+          {/* HOW MANY THIS RUN. Blank = all eligible; an empty box must not read as 0 and disable
+              the button. The cost below updates live from this number. */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              How many this run — oldest-added first
+            </label>
+            <Input
+              type="number" min={1} max={AUDIT_JOB_CAP} inputMode="numeric"
+              placeholder={`All ${Math.min(auditOrdered.length, AUDIT_JOB_CAP)} (max ${AUDIT_JOB_CAP})`}
+              value={auditTakeInput}
+              onChange={(e) => setAuditTakeInput(e.target.value)}
+              className="h-8 text-xs"
+            />
+            {auditTake.overCap && (
+              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px]">
+                <span className="font-semibold">Over the {AUDIT_JOB_CAP}-lead cap</span> — this run takes {AUDIT_JOB_CAP}.
+                Run it again afterwards for the rest.
+              </p>
+            )}
+            {!auditTake.overCap && auditTake.overEligible && (
+              <p className="text-[11px] text-muted-foreground">
+                Only {auditOrdered.length} eligible — auditing all of them.
+              </p>
+            )}
+          </div>
+
+          {/* ⛔ THE DAILY CAP IS THE PROMINENT ONE: it is the rolling-24h Apify ceiling and what a
+              large batch meets first. Tripping it mid-run leaves half-finished audits — and a lead
+              whose audit FAILED is excluded from this button's eligible set, so the damage hides
+              itself. That is why this warns rather than merely informing. */}
+          {auditDailyVerdict.exceeds && (
+            <p className="rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs">
+              <span className="font-semibold">Over the ${AUDIT_DAILY_CAP_USD.toFixed(2)} daily Apify cap.</span>{' '}
+              This run is ~${auditBatchCost.totalUsd.toFixed(2)}. Questions will start failing part-way
+              through and leave half-finished audits. Lower the number above, or run the rest tomorrow.
+            </p>
+          )}
+          {auditMonthlyVerdict.exceeds && (
+            <p className="rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs">
+              <span className="font-semibold">Over the remaining monthly Apify budget</span> — about
+              {' '}${(auditMonthlyVerdict.remainingUsd ?? 0).toFixed(2)} left this cycle, this run is
+              {' '}~${auditBatchCost.totalUsd.toFixed(2)}. Hitting the account cap stops every audit AND
+              every SEO scan, not just this batch.
+            </p>
+          )}
+          {/* ⚠️ AN UNREADABLE BUDGET SAYS SO. Rendering nothing would imply headroom nobody checked —
+              the absent-value fault on a spend guard. Nothing is blocked by it. */}
+          {auditMonthlyVerdict.unknown && (
+            <p className="text-[11px] text-muted-foreground">
+              Couldn&rsquo;t read the Apify monthly usage, so the monthly budget isn&rsquo;t checked here.
+              The daily cap check above still applies.
+            </p>
+          )}
+
           <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
-            Audit <span className="font-semibold">{auditEligibleIds.length}</span> business{auditEligibleIds.length === 1 ? '' : 'es'}
+            Audit <span className="font-semibold">{auditBatchCost.leads}</span> business{auditBatchCost.leads === 1 ? '' : 'es'}
             {' '}× <span className="font-semibold">{auditQuestionCount}</span> question{auditQuestionCount === 1 ? '' : 's'}
-            {' '}(~<span className="font-semibold">${auditCostUsd.toFixed(2)}</span>). Proceed?
+            {' '}(~<span className="font-semibold">${auditBatchCost.totalUsd.toFixed(2)}</span>
+            {auditBatchCost.withWebsite > 0 && <>, incl. {auditBatchCost.withWebsite} site scan{auditBatchCost.withWebsite === 1 ? '' : 's'}</>}). Proceed?
           </p>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setAuditDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" onClick={confirmBulkAudit} disabled={bulkJobActive || !auditEligibleIds.length}>
+            <Button size="sm" onClick={confirmBulkAudit} disabled={bulkJobActive || !auditBatchCost.leads}>
               <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
-              Audit {auditEligibleIds.length}
+              Audit {auditBatchCost.leads}
             </Button>
           </DialogFooter>
         </DialogContent>
