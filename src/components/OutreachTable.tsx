@@ -1758,6 +1758,23 @@ export function OutreachTable({
      the button and the set actually crawled can never disagree. */
   const [crawlStatuses, setCrawlStatuses] = useState<LeadStatus[]>([...CRAWLABLE_STATUSES_DEFAULT]);
 
+  /* ⛔ THE SAME TEST THE PUSH TRIAGE USES. bulk-jobs' triageForPush refuses a lead on
+     `!String(l.email ?? "").trim()`, so this selection must trim too — otherwise a whitespace-only
+     address would be TICKED here and then refused there as "no email address", which is exactly the
+     row-says-yes/push-says-no mismatch this pair of changes closes. One rule, both ends.
+     ⚠️ Scoped to filteredAndSortedLeads: it selects what is IN VIEW, never the whole book.
+     ⚠️ DECLARED HERE, BELOW filteredAndSortedLeads — it cannot sit with the other selection
+     handlers further up, because that is above the list it reads (TS2448). */
+  const leadsWithEmail = useMemo(
+    () => filteredAndSortedLeads.filter((l) => !!(l.email ?? '').trim()),
+    [filteredAndSortedLeads],
+  );
+  /* Replaces the selection rather than adding to it: "select all with email" is a statement about
+     what should be ticked, not an increment. Pressing it twice is idempotent. */
+  const handleSelectAllWithEmail = () => {
+    setSelectedIds(new Set(leadsWithEmail.map((l) => l.id)));
+  };
+
   const {
     findEmails,
     cancel: cancelFindEmails,
@@ -2091,6 +2108,24 @@ export function OutreachTable({
                     </Button>
                   )}
                 </>
+              )}
+              {/* ⛔ OUTSIDE the selectedIds.size > 0 gate, deliberately: its whole job is to CREATE a
+                  selection, so a control that only appears once you already have one is useless.
+                  Sits with Export/Import, the other always-visible row-2 items. */}
+              {!readOnly && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAllWithEmail}
+                  disabled={!leadsWithEmail.length}
+                  className="bg-background text-xs h-8"
+                  title={leadsWithEmail.length
+                    ? `Tick the ${leadsWithEmail.length} lead${leadsWithEmail.length === 1 ? '' : 's'} in this view that have an email address — the same test Push to Instantly uses. Replaces the current selection.`
+                    : 'No leads in this view have an email address yet — run the email crawl first.'}
+                >
+                  <Mail className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
+                  Select {leadsWithEmail.length} with email
+                </Button>
               )}
               <Button
                 variant="outline"

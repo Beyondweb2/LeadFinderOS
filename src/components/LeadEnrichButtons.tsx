@@ -76,7 +76,11 @@ export function LeadEnrichButtons({
 
   // Real, stored contacts only — no constructed URLs.
   const contacts = [
-    lead.email ? { key: 'email', Icon: Mail, href: `mailto:${lead.email}`, color: 'text-blue-500 hover:text-blue-400', title: `Email: ${lead.email}`, external: false } : null,
+    /* ⛔ TRIMMED, to match bulk-jobs' triageForPush (`!String(l.email ?? "").trim()`). A bare
+       truthiness test called a whitespace-only address an email and showed this icon, while the push
+       refused the same lead as "no email address" — the row and the push disagreeing about one
+       column. The icon is the cheap half of that fix; the selection helper is the other. */
+    (lead.email ?? '').trim() ? { key: 'email', Icon: Mail, href: `mailto:${(lead.email ?? '').trim()}`, color: 'text-blue-500 hover:text-blue-400', title: `Email: ${(lead.email ?? '').trim()}`, external: false } : null,
     lead.facebook_url ? { key: 'facebook', Icon: Facebook, href: absoluteHref(lead.facebook_url), color: 'text-blue-600 hover:text-blue-500', title: `Facebook: ${lead.facebook_url}`, external: true } : null,
     lead.instagram_url ? { key: 'instagram', Icon: Instagram, href: absoluteHref(lead.instagram_url), color: 'text-pink-500 hover:text-pink-400', title: `Instagram: ${lead.instagram_url}`, external: true } : null,
     websiteItem,
