@@ -27,6 +27,7 @@ import {
 import type { Country } from '@/types/outreach';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AiAuditReport } from '@/components/AiAuditReport';
+import { ReportBeforeAfter } from '@/components/ReportBeforeAfter';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
@@ -475,6 +476,10 @@ const AiAudit = () => {
   // Which run's report is currently open (null = not viewing a report). Replaces the old
   // boolean so we can open a SPECIFIC run's persisted report snapshot.
   const [reportRunId, setReportRunId] = useState<string | null>(null);
+  /* BEFORE/AFTER MODE for the open report. Deliberately NOT persisted and reset whenever a report
+     opens or closes: it is a way of LOOKING at the open report, not a place, and a comparison
+     springing up over a report you opened to send would be the wrong thing on screen. */
+  const [compareOpen, setCompareOpen] = useState(false);
   // Generated report snapshots, keyed by run id. Persisted (per-user, survives navigation
   // AND tab close) so a report that's been generated is shown as-is on return — it is only
   // rebuilt by the explicit Regenerate action, never silently re-derived.
@@ -2090,13 +2095,38 @@ const AiAudit = () => {
 
   // Client-facing report is a separate view (replaces results while open).
   if (reportRunId && openReportData) {
+    /* BEFORE / AFTER — the same report, twice, side by side and scaled down. The builder is passed
+       IN so both sides use the identical buildReportData options this page already uses for the
+       single report; three views, one rule. `auditId` may be null on a live run that has not been
+       persisted yet, in which case there is nothing to compare against and the button is absent. */
+    if (compareOpen && auditId) {
+      return (
+        <ReportBeforeAfter
+          auditId={auditId}
+          businessName={resultsBusinessName || businessName}
+          ownWebsite={ownWebsite}
+          buildData={(rows, run) => buildReportData(rows, run, {
+            businessName: resultsBusinessName || businessName,
+            businessType: resultsType,
+            locationText: resultsLoc,
+            specialisms,
+            isAggregatorUrl,
+            ownWebsite,
+          })}
+          onBack={() => setCompareOpen(false)}
+        />
+      );
+    }
     return (
       <AiAuditReport
         /* key per report: remounting on open resets the Client/Internal toggle to Client (safety —
            an internal selection never carries into the next report). */
         key={reportRunId}
         data={openReportData}
-        onBack={() => setReportRunId(null)}
+        onBack={() => { setCompareOpen(false); setReportRunId(null); }}
+        /* Only offered when there IS an audit to look for earlier runs in — a button that opens an
+           empty comparison is worse than no button. */
+        onCompare={auditId ? () => setCompareOpen(true) : undefined}
         /* Print follows the current view: the toggle hands us its choice; Client is the default and
            downloadReportHtml also fails safe to Client if internal is unset. */
         onDownload={(internal) => downloadReportHtml({ ...openReportData, internal })}
