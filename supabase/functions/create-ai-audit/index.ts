@@ -375,6 +375,24 @@ Deno.serve(async (req) => {
        stable and seed-driven, and two businesses in one market getting different questions is right
        for mapping a market and wrong for measuring a client. */
     const isMarket: boolean = body.purpose === "market";
+    /* ⛔ ONE PREDICATE GOVERNS BOTH ENDS — the preview the operator reviews and the run that
+       actually happens. Money questions are for the ordinary per-business audit only.
+
+       WHY IT IS A NAMED CONST AND NOT THE BRANCH POSITION IT USED TO BE. The run's opt-in sat in
+       the `else` after the marketOnly branch, on the reasoning that a market audit takes its own
+       path. That was WRONG for one caller: bulk-jobs sends `purpose: "market"` WITHOUT
+       `market_only` (index.ts ~536), so a market PANEL BATCH had isMarket true, marketOnly false,
+       fell through to the else, and was getting money questions — exactly the audits Coverage
+       grades a town from. Branch position is not a predicate; this is.
+
+       ⛔ AND IT IS WHAT MAKES PREVIEW == RUN. The wizard previews with `preview: true` (no money
+       count before this) and then confirms by sending `questions` VERBATIM, so whatever the preview
+       generated is what runs. With the preview generic and the run opted in, the feature was
+       invisible on the one path an operator uses by hand. Both now read this same value, so the
+       questions reviewed, edited and asked cannot differ.
+       ⚠️ isBaseline: a paid baseline is the guarantee's day-0 and must not change character under a
+       client mid-contract. isMarket: a town's grade is calibrated on head terms. */
+    const moneyQuestionCount = (!isMarket && !isBaseline) ? questionCount : 0;
     /* ── A STANDALONE MARKET AUDIT: a trade and a town, NO business, NO CRM row ────────────────
        The market view used to populate a town by adding 5 businesses to the CRM and auditing each
        — leads the operator never chose to contact, in a town they were only assessing. This is the
@@ -630,11 +648,16 @@ Deno.serve(async (req) => {
     // made a 10-question audit look like $10 when it is about 2.5 cents.
     const estimate = (n: number) => Number((n * estCost).toFixed(4));
 
-    // Preview: return questions + cost estimate only (no DB writes).
+    /* Preview: return questions + cost estimate only (no DB writes).
+       ⛔ OPTED INTO MONEY QUESTIONS VIA THE SHARED PREDICATE. This is the set the operator READS
+       and EDITS in the wizard's review step, and confirming sends it back VERBATIM — so a generic
+       preview meant the feature could never appear on the path used by hand, however the run was
+       configured. Passing "" for coverage keeps that argument exactly as it was (the preview has
+       never had a coverage hint; it is market-audit-only steering). */
     if (preview) {
       const qs = providedQuestions && providedQuestions.length
         ? providedQuestions
-        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country);
+        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, "", moneyQuestionCount);
       return json({
         ok: true,
         preview: true,
@@ -838,7 +861,7 @@ Deno.serve(async (req) => {
           ? providedQuestions
           : await generateQuestions(
               businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
-              businessScope, country, coverage, questionCount,
+              businessScope, country, coverage, moneyQuestionCount,
             );
       }
       const auditRow: Record<string, unknown> = {
