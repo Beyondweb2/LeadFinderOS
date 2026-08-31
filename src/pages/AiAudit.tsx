@@ -250,6 +250,7 @@ interface PersistedWizard {
   auditMode?: 'quick' | 'full';
   questionCount: number;
   questions: string[];
+  previewMoney?: string[];
   unitCost: number;
   engineCount: number;
 }
@@ -353,7 +354,7 @@ const AiAudit = () => {
   const switchAuditMode = useCallback((next: 'quick' | 'full') => {
     setAuditMode(next);
     setQuestionCount(next === 'full' ? FULL_DEFAULT_QUESTIONS : DEFAULT_QUESTION_COUNT);
-    setQuestions([]);
+    setQuestions([]); setPreviewMoney([]);
   }, []);
 
   // Existing-lead picker + saved audits
@@ -376,6 +377,14 @@ const AiAudit = () => {
   // Review (questions) state
   const [previewing, setPreviewing] = useState(false);
   const [questions, setQuestions] = useState<string[]>(persisted?.questions ?? []);
+  /* ⛔ WHICH OF `questions` ARE MONEY (buying-moment) QUESTIONS, as reported by the preview. A Full
+     Measurement generates at PREVIEW time and confirms with the questions verbatim, so this list is
+     the only thing that can tell the server which strings were money questions — it is posted back
+     on confirm and stored as the flag (see create-ai-audit).
+     ⚠️ Persisted with the draft: without it, resuming a draft would keep the questions and silently
+     lose the flag. An EDITED question stops matching and is correctly no longer flagged — an edited
+     question is a different question. */
+  const [previewMoney, setPreviewMoney] = useState<string[]>(persisted?.previewMoney ?? []);
   // "Paste your own questions" box (review step). Session-only scratch — not persisted; once applied
   // it REPLACES the questions list, and that list is what persists and runs.
   const [pasteQuestions, setPasteQuestions] = useState('');
@@ -548,7 +557,7 @@ const AiAudit = () => {
   useEffect(() => {
     try {
       localStorage.setItem(wizardKey(user?.id), JSON.stringify({
-        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, unitCost, engineCount,
+        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, previewMoney, unitCost, engineCount,
       }));
       /* A draft now EXISTS on disk. Tracked in state (rather than re-reading storage at render time)
          so the "Resume draft" button below can appear and disappear truthfully. React bails out when
@@ -556,7 +565,7 @@ const AiAudit = () => {
       setDraftSaved(true);
     } catch { /* storage unavailable — persistence is best-effort */ }
     // `step` is deliberately NOT a dependency: this effect no longer branches on it (see above).
-  }, [revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, unitCost, engineCount, user?.id]);
+  }, [revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, previewMoney, unitCost, engineCount, user?.id]);
 
   /* SETTLED-QUESTION COUNTS for a set of runs — the ONE implementation of "2 of 3 done".
      The queue's terminal statuses are 'done' and 'failed' (NOT 'complete', which is a RUN
@@ -908,7 +917,7 @@ const AiAudit = () => {
     setMode(null); setLeadId(null); setBusinessName(''); setBusinessType('');
     setLocationText(''); setCountry(''); setHasWebsite(null); setWebsite(''); setSpecialisms('');
     setAuditMode('quick'); setQuestionCount(DEFAULT_QUESTION_COUNT);
-    setQuestions([]); setUnitCost(0); setEngineCount(SCORED_ENGINES.length);
+    setQuestions([]); setPreviewMoney([]); setUnitCost(0); setEngineCount(SCORED_ENGINES.length);
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
     setOpenRunId(null); setShowDetails(false);
     setRevealed(0); setStep('source');
@@ -1092,6 +1101,7 @@ const AiAudit = () => {
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'preview failed');
       setQuestions(Array.isArray(data.questions) ? data.questions : []);
+      setPreviewMoney(Array.isArray(data.money_questions) ? (data.money_questions as string[]) : []);
       setUnitCost(typeof data.unit_cost_usd === 'number' ? data.unit_cost_usd : 0);
       setEngineCount(Array.isArray(data.engines) ? data.engines.length : SCORED_ENGINES.length);
     } catch (e) {
@@ -1132,6 +1142,11 @@ const AiAudit = () => {
           specialisms: specialisms || undefined,
           question_count: questionCount,
           questions: clean,
+          /* The money flag for the set being sent. Filtered to `clean` here as well as server-side,
+             so an edited or removed question cannot arrive flagged. */
+          ...(previewMoney.length
+            ? { money_questions: previewMoney.filter((q) => clean.includes(q)) }
+            : {}),
           // Full measurement: the deliberate bulk gather. Server clamps to the measurement ceiling,
           // forces SEO off, and creates its OWN audit (not a run on an existing one) so start vs
           // re-measure stay comparable. The queue paces the run — this never fires all at once.

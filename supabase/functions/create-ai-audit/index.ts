@@ -655,13 +655,29 @@ Deno.serve(async (req) => {
        configured. Passing "" for coverage keeps that argument exactly as it was (the preview has
        never had a coverage hint; it is market-audit-only steering). */
     if (preview) {
-      const qs = providedQuestions && providedQuestions.length
-        ? providedQuestions
-        : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, "", moneyQuestionCount);
+      /* ⛔ THE WIZARD'S FULL MEASUREMENT GENERATES HERE AND NOWHERE ELSE. Confirming sends the
+         reviewed questions back VERBATIM, so this preview IS the generation step for that path — and
+         the money list has to travel back with them, because the operator may edit the set in
+         between and nothing downstream could re-identify which strings were money questions.
+         Returned as `money_questions`; the SPA holds it and posts it on confirm. */
+      let qs: string[];
+      let previewMoney: string[] = [];
+      if (providedQuestions && providedQuestions.length) {
+        qs = providedQuestions;
+      } else if (isBaseline || isMeasurement) {
+        const mixed = await generateWithMoney(
+          businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country,
+        );
+        qs = mixed.questions;
+        previewMoney = mixed.money;
+      } else {
+        qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, "", moneyQuestionCount);
+      }
       return json({
         ok: true,
         preview: true,
         questions: qs,
+        ...(previewMoney.length ? { money_questions: previewMoney } : {}),
         question_count: qs.length,
         estimated_cost_usd: estimate(qs.length),
         unit_cost_usd: estCost,
@@ -707,6 +723,16 @@ Deno.serve(async (req) => {
        down, then stored in ai_audit_runs.results.money_questions and returned to the caller so
        audit-baseline can freeze it into BaselineContract.moneyQuestions. Empty on every other path. */
     let moneyGenerated: string[] = [];
+    /* ⛔ THE FLAG CARRIED BACK FROM A PREVIEW. The wizard generates at preview time and confirms with
+       the questions verbatim, so without this a hand-run Full Measurement would store no flag at all.
+       ⚠️ IT IS CALLER-SUPPLIED, AND THAT IS SAFE FOR EXACTLY ONE REASON: it only LABELS questions for
+       later analysis. It cannot change which questions are asked, and it cannot reach the refund test
+       — BaselineContract.scoredQuestions is derived server-side from the SEEDS, never from this. It is
+       also intersected with the questions actually queued further down, so it can only ever name
+       strings that are in the run. Anything else in the array is discarded silently. */
+    if (Array.isArray(body.money_questions)) {
+      moneyGenerated.push(...(body.money_questions as unknown[]).filter((q): q is string => typeof q === "string" && !!q.trim()));
+    }
     let seededQuestions: string[] = [];
     let rejectedSeeds: Array<{ question: string; reason: string }> = [];
 
