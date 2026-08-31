@@ -6,6 +6,7 @@ import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanc
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { applySeed, dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
+import { moneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
 import {
   OUTREACH_HOOK_QUESTIONS,
@@ -144,7 +145,7 @@ function hasUsableTown(loc: string): boolean {
  *  audience-qualified "[service] for [audience] [country]" with NO broad best/top head-terms.
  *  Grounded in "known for" when given.
  *  Sliced to `count`. */
-function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number, scope: BusinessScope, country: string | null): string[] {
+function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number, scope: BusinessScope, country: string | null, moneyCount = 0): string[] {
   const t = type || "business";
   // UK LOCAL audits: UNCONDITIONALLY disambiguate the town in question text ("Stamford UK") —
   // town names shared with bigger non-UK places (Stamford CT, Peterborough Ontario, Boston MA…)
@@ -197,7 +198,16 @@ function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, speci
   /* De-dupe (a niche can echo a template), ban near-me, slice to the requested count.
      CASE-INSENSITIVE: keyed on q.trim() this let "... in hastings uk" and "... in Hastings UK"
      both through as separate questions. */
-  const out = dedupeQuestions(base).questions;
+  /* ⛔ MONEY QUESTIONS LEAD THE FALLBACK, so the slice below cannot drop them. This set is used on
+     ANY generation failure and the audit still COMPLETES — so without them an OpenAI outage would
+     silently revert to purely generic questions with nothing on screen saying so.
+     ⚠️ moneyCount DEFAULTS TO 0, so every caller that has not opted in produces the byte-identical
+     set it produced before. Generic by necessity: a deterministic template cannot know a trade's
+     real pain points (moneyQuestions.ts says so) — it is a floor, not the model's per-business work. */
+  const money = moneyCount > 0
+    ? moneyFallbackQuestions(type || "business", national ? "" : ukTown(loc), moneyCount)
+    : [];
+  const out = dedupeQuestions([...money, ...base]).questions;
   return stripNearMe(out).slice(0, Math.min(out.length, Math.max(1, count)));
 }
 
@@ -809,9 +819,27 @@ Deno.serve(async (req) => {
         }
         console.log(`[create-ai-audit] baseline seeded with ${outcome.seeded.length} of ${providedQuestions!.length} outreach questions, topped up to ${questions.length}`);
       } else {
+        /* ⛔ THE ONLY CALL SITE THAT ASKS FOR MONEY QUESTIONS — the ordinary per-business NEW audit.
+           Eight call sites reach generateQuestions; the other seven pass nothing and are therefore
+           byte-identical to before. Excluded deliberately, each for its own reason:
+             · marketOnly (its own branch above) — a market audit grades a TOWN, and Coverage's
+               verdicts are calibrated on head terms. Changing its question mix would change what
+               "measured" means at the same time as changing what a report measures.
+             · isBaseline / isSeeding — a paid baseline is the guarantee's day-0. Its character must
+               not shift under a client mid-contract.
+             · the multi-area baseline branch — same reason.
+             · the reuse/top-up path (~line 717) — that is a paid baseline's repeat.
+             · preview — mirrors whatever the real call will do; left alone so the preview cannot
+               promise a mix the run does not produce. (Worth revisiting: see the report.)
+           ⛔ AND A VERBATIM REPEAT NEVER GETS HERE AT ALL. advanceBaseline sends the stored
+           questions and `providedQuestions` short-circuits above, so RG's and ABLM's re-measures
+           cannot acquire a money question. That is structural, not a guard I added. */
         questions = providedQuestions && providedQuestions.length
           ? providedQuestions
-          : await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, coverage);
+          : await generateQuestions(
+              businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
+              businessScope, country, coverage, questionCount,
+            );
       }
       const auditRow: Record<string, unknown> = {
         user_id: userId,
@@ -1010,6 +1038,12 @@ async function generateQuestions(
   /** MARKET AUDITS ONLY: what this trade+town has already been asked, so the generator covers new
    *  ground instead of repeating the same five intents. Empty for every other caller. */
   coverage = "",
+  /* ⛔ OPT-IN, DEFAULT 0. How many buying-moment ("money") questions this audit should include.
+   *  ONLY the ordinary per-business NEW audit passes a value. Market audits grade a town off head
+   *  terms and a paid baseline is a guarantee's day-0 measurement, so neither is changed — and
+   *  every verbatim repeat never reaches this function at all (advanceBaseline passes its stored
+   *  questions straight through). That is what keeps existing before/after comparisons valid. */
+  moneyCount = 0,
 ): Promise<string[]> {
   // The CALLER has already applied the right POLICY ceiling: MAX_QUESTION_COUNT for the outreach
   // hook, BASELINE_MAX_QUESTION_COUNT for a paid baseline. Re-clamping here with clampCount's
@@ -1017,7 +1051,10 @@ async function generateQuestions(
   // for 10 got exactly 5. Keep an ABSOLUTE upper bound so an absurd value is still refused, but
   // never re-apply the outreach policy to a baseline.
   const n = clampCount(count, MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT);
-  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n, scope, country);
+  /* ⛔ HOW MANY BUYING-MOMENT QUESTIONS THIS AUDIT GETS. 0 unless the caller opted in, which is
+     what keeps market audits, paid baselines and every verbatim repeat byte-identical. */
+  const moneyN = moneyCount > 0 ? moneyQuestionShare(n) : 0;
+  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n, scope, country, moneyN);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) return fallback;
   // 'local'/'national' hard-force the prompt's scope block; 'hybrid'/null let the model classify.
@@ -1031,6 +1068,15 @@ async function generateQuestions(
   // place as "<town> UK" so engines can't resolve an ambiguous town to a non-UK city.
   const isUK = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
   const locQ = isUK && locationText && !/(uk|united kingdom|england|scotland|wales)/i.test(locationText) ? `${locationText} UK` : loc;
+  /* ⛔ THE MONEY-QUESTION BLOCK — EMPTY STRING WHEN OFF, so a caller that did not opt in gets a
+     prompt byte-identical to the one it got before this existed. The text lives in
+     src/lib/moneyQuestions.ts rather than inline here: it is the part Paul tunes, it has to be
+     reviewable in one place, and it is the part a test can assert forbids the phrasings the
+     existing guards would silently delete (near-me, "how to", qualifications/courses).
+     ⚠️ The place is passed as locQ — the SAME disambiguated string the rest of the prompt pins
+     ("Wisbech UK", never a bare town) — so a money question cannot be the one query that comes
+     back answered about Wisbech, Massachusetts. National audits pass '' and get no place line. */
+  const moneyDirective = moneyQuestionDirective(moneyN, n, forceNational ? "" : locQ);
   // has_website branches the framing: website/service-page angles vs presence/directory.
   const framing = hasWebsite
     ? "The business HAS a website, so it's fine to include questions about services, service pages, online booking, or comparing providers' websites."
@@ -1097,7 +1143,7 @@ Location as given: ${loc}
 ${specialismLine}
 
 ${scopeGuidance}
-
+${moneyDirective}
 ${coverage ? `${coverage}
 
 ` : ""}Return EXACTLY ${n} questions (lowercase), spread across the business's services/niches under the matching rule set. ${framing}
