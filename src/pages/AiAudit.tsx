@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList } from 'lucide-react';
+  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
@@ -302,6 +302,9 @@ const AiAudit = () => {
   const [persisted] = useState<PersistedWizard | null>(() => loadWizard(user?.id));
   const [step, setStep] = useState<Step>('source');
   const [revealed, setRevealed] = useState<number>(() => initialRevealed(persisted));
+  /* Whether a saved draft exists for this user. Seeded from the same read that restores the wizard,
+     kept in step by the save effect and by dropDraft() — the ONLY two things that write the key. */
+  const [draftSaved, setDraftSaved] = useState<boolean>(() => persisted !== null);
 
   /* ── THE NEW-AUDIT DIALOG ─────────────────────────────────────────────────────────────────────
      The source picker, the business-details form and the question-review step all live in a modal
@@ -429,6 +432,23 @@ const AiAudit = () => {
   const [resultsBusinessName, setResultsBusinessName] = useState('');
   // Whether the run's audit has a website — gates the "Add SEO data" paste feature.
   const [resultsHasWebsite, setResultsHasWebsite] = useState(false);
+  /* ⛔ THE OPEN RUN'S OWN TRADE + TOWN, MIRRORED RATHER THAN SHARED. Both loaders below
+     (rehydrateOpenRun, reopenAudit) used to write the WIZARD's `businessType`/`locationText`
+     directly, so returning to the page with a run remembered (openRunId is persisted, by design)
+     silently overwrote the details of an audit you were part-way through composing. The results view
+     genuinely needs these — the competitor filter, question scoring and the header all read them —
+     so the fix is the mirror pattern already used by resultsBusinessName, not removal.
+     Read as `resultsBusinessType || businessType` (see resultsType/resultsLoc below): empty while
+     the wizard is the only source, populated once a stored run is loaded. */
+  const [resultsBusinessType, setResultsBusinessType] = useState('');
+  const [resultsLocationText, setResultsLocationText] = useState('');
+  /* What the RESULTS view should use: the loaded run's own values, falling back to the wizard's for
+     an audit launched in this session before the mirrors were set. Same shape, and the same reason,
+     as `resultsBusinessName || businessName` throughout the results half of this page.
+     ⚠️ The WIZARD must keep reading the bare fields (its inputs, canGenerate, preview and submit) —
+     these two are for displaying and scoring a run, never for composing one. */
+  const resultsType = resultsBusinessType || businessType;
+  const resultsLoc = resultsLocationText || locationText;
   // Automated SEO scan (run-seo-scan) state + the opt-in in-depth view toggle.
   const [seoScanning, setSeoScanning] = useState(false);
   const [showSeoDetail, setShowSeoDetail] = useState(false);
@@ -517,16 +537,26 @@ const AiAudit = () => {
   // Reveal the next step (monotonic — earlier answers stay revealed/editable).
   const reveal = (i: number) => setRevealed((r) => Math.max(r, i));
 
-  // Persist wizard state on change so it survives unmount/remount + refresh. Once the
-  // audit is running (step 'results'), drop the key so the next visit starts clean.
+  /* Persist wizard state on change so it survives unmount/remount + refresh.
+     ⛔ DO NOT REINTRODUCE A `step === 'results'` CLEAR HERE. It was the cause of the draft loss
+     fixed 2026-08-31: `openRunId` is persisted on purpose, so returning to this page rehydrates the
+     last run and sets step 'results' — which made this effect DELETE the draft on arrival, and
+     suppress every save while the results view was showing. The guard conflated "this wizard was
+     spent" with "the page happens to be showing an old run"; those are unrelated facts.
+     Clearing is owned by the two places that actually spend a draft, and both do it explicitly:
+     a successful submit (search `audit created successfully`) and resetWizard ("New audit"). */
   useEffect(() => {
-    if (step === 'results') { clearWizard(user?.id); return; }
     try {
       localStorage.setItem(wizardKey(user?.id), JSON.stringify({
         revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, unitCost, engineCount,
       }));
+      /* A draft now EXISTS on disk. Tracked in state (rather than re-reading storage at render time)
+         so the "Resume draft" button below can appear and disappear truthfully. React bails out when
+         the value is unchanged, so this does not re-render on every keystroke. */
+      setDraftSaved(true);
     } catch { /* storage unavailable — persistence is best-effort */ }
-  }, [step, revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, unitCost, engineCount, user?.id]);
+    // `step` is deliberately NOT a dependency: this effect no longer branches on it (see above).
+  }, [revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, unitCost, engineCount, user?.id]);
 
   /* SETTLED-QUESTION COUNTS for a set of runs — the ONE implementation of "2 of 3 done".
      The queue's terminal statuses are 'done' and 'failed' (NOT 'complete', which is a RUN
@@ -756,8 +786,11 @@ const AiAudit = () => {
     setAuditId(audit.id);
     setResultsBusinessName(audit.business_name);
     setResultsHasWebsite(audit.has_website === true);
-    setBusinessType(audit.business_type ?? '');
-    setLocationText(audit.location_text ?? '');
+    /* ⛔ MIRRORS, NOT THE WIZARD'S FIELDS. This function runs on ARRIVAL at the page (the persisted
+       openRunId restore), so writing setBusinessType/setLocationText here overwrote the details of
+       an audit the operator was still composing. */
+    setResultsBusinessType(audit.business_type ?? '');
+    setResultsLocationText(audit.location_text ?? '');
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
     // (Was: hydrate the LLM playbook snapshot from results.playbook — nothing reads it now.)
@@ -866,8 +899,12 @@ const AiAudit = () => {
     rehydrateOpenRun(rid).then((ok) => { if (!ok) setOpenRunId(null); });
   }, [user, openRunId, runId, step, rehydrateOpenRun, setOpenRunId, searchParams]);
 
+  /** Drop the saved draft AND the flag that advertises it, together. Every clear goes through here
+   *  so "Resume draft" can never offer a draft that is no longer on disk. */
+  const dropDraft = () => { clearWizard(user?.id); setDraftSaved(false); };
+
   const resetWizard = () => {
-    clearWizard(user?.id); // drop the saved draft too, so "start fresh" is truly fresh
+    dropDraft(); // drop the saved draft too, so "start fresh" is truly fresh
     setMode(null); setLeadId(null); setBusinessName(''); setBusinessType('');
     setLocationText(''); setCountry(''); setHasWebsite(null); setWebsite(''); setSpecialisms('');
     setAuditMode('quick'); setQuestionCount(DEFAULT_QUESTION_COUNT);
@@ -884,6 +921,26 @@ const AiAudit = () => {
    *  Matches what this button did before the form became a modal (reset → back to the source step),
    *  with the dialog standing in for the form that used to be sitting on the page. */
   const startNewAudit = () => { resetWizard(); setFormOpen(true); };
+
+  /* ── RESUMING AN IN-PROGRESS DRAFT ────────────────────────────────────────────────────────────
+     The results view is where you LAND when you come back to this page (openRunId is persisted), so
+     it needs a way back to a half-composed audit. "New audit" beside it is the deliberate wipe and
+     must stay that way — the two intents are different and neither should be guessed.
+
+     ⛔ THE LABEL NAMES WHAT THE DRAFT HOLDS, and that is the anti-stale measure. A draft can outlive
+     its relevance (the lead deleted, the price moved), so it is never restored silently: the operator
+     reads what they are resuming and decides. Returns null when there is nothing worth offering, so
+     an empty draft — the save effect writes one on a fresh page — shows no button. */
+  const draftSummary = (() => {
+    if (!draftSaved) return null;                    // spent by a submit, or by "New audit"
+    const name = businessName.trim();
+    const nQ = questions.length;
+    if (!nQ && !name && mode === null) return null;  // nothing meaningful in it
+    const what = nQ ? `${nQ} question${nQ === 1 ? '' : 's'}` : 'details';
+    return name ? `${what} for ${name}` : what;
+  })();
+  /** Reopen the dialog WITHOUT resetting: the preserving path, same as the list header's button. */
+  const resumeDraft = () => setFormOpen(true);
 
   // Delete an audit + all its children (ai_audit_runs / ai_audit_queue cascade from the FK).
   // Owner RLS lets the browser delete its own row. Mirrors AdminSitesList: confirm → delete →
@@ -1110,12 +1167,17 @@ const AiAudit = () => {
           }
         } catch { /* non-fatal — the audit itself is already running */ }
       }
-      clearWizard(user?.id); // audit created successfully → next visit starts clean
+      dropDraft(); // audit created successfully → the draft is spent, next visit starts clean
       setAuditId(data.audit_id);
       setRunId(data.run_id);
       setOpenRunId(data.run_id);
       setResultsBusinessName(data.business_name ?? businessName);
       setResultsHasWebsite(hasWebsite === true);
+      /* Mirror the trade + town for the results view too, so this just-launched audit's header,
+         competitor filter and scoring read the same values the loaders below supply for a stored
+         run — and do not depend on the wizard fields staying populated behind it. */
+      setResultsBusinessType(businessType);
+      setResultsLocationText(locationText);
       setRun(null); setQueueRows([]);
       setFormOpen(false);   // the audit is away — close the dialog so the results view is not behind it
       setStep('results');
@@ -1491,8 +1553,9 @@ const AiAudit = () => {
     setAuditId(audit.id);
     setResultsBusinessName(audit.business_name);
     setResultsHasWebsite(audit.has_website === true);
-    setBusinessType(audit.business_type ?? ''); // so the report's "what this means" line is populated for reopened audits
-    setLocationText(audit.location_text ?? ''); // so the competitor filter can drop the location for reopened audits
+    // Mirrors, not the wizard's own fields — reopening a past audit must not overwrite a draft.
+    setResultsBusinessType(audit.business_type ?? ''); // so the report's "what this means" line is populated for reopened audits
+    setResultsLocationText(audit.location_text ?? ''); // so the competitor filter can drop the location for reopened audits
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
     setOpenRunId((latest as RunRow).id);
@@ -1628,7 +1691,7 @@ const AiAudit = () => {
         if (!er) continue;
         if (engine === 'google_organic') continue; // organic result TITLES aren't AI-named firms
         for (const c of er.competitors) {
-          if (!isRealCompetitor(c, locationText)) continue; // drop stopwords / location / fragments
+          if (!isRealCompetitor(c, resultsLoc)) continue; // drop stopwords / location / fragments
           const key = c.trim().toLowerCase();
           if (!key) continue;
           const cur = counts.get(key);
@@ -1650,8 +1713,8 @@ const AiAudit = () => {
        while draining / before the all-runs load — where a single-run live view is the correct thing. */
     const rd = buildReportData(reportRows.length ? reportRows : queueRows, run, {
       businessName: resultsBusinessName || businessName,
-      businessType,
-      locationText,
+      businessType: resultsType,
+      locationText: resultsLoc,
       specialisms,
       isAggregatorUrl,
       // Same expression as `ownWebsite` further down (schema value, else the wizard URL).
@@ -1669,7 +1732,7 @@ const AiAudit = () => {
   // (band winnable/named, score ≥ 6). Recomputed live from the queue rows.
   const winnableCount = queueRows.filter((r) => {
     if (r.status !== 'done' || !r.result) return false;
-    const s = scoreQuestion(r.result, resultsBusinessName || businessName, locationText, ownWebsite);
+    const s = scoreQuestion(r.result, resultsBusinessName || businessName, resultsLoc, ownWebsite);
     return (s.band === 'winnable' || s.band === 'named') && (s.score ?? 0) >= 6;
   }).length;
 
@@ -1815,8 +1878,8 @@ const AiAudit = () => {
     const rows = aId ? await loadAuditRows(aId) : await loadRunRows(runId);
     const data = buildReportData(rows, run, {
       businessName: resultsBusinessName || businessName,
-      businessType,
-      locationText,
+      businessType: resultsType,
+      locationText: resultsLoc,
       specialisms,
       isAggregatorUrl,
       ownWebsite,
@@ -1840,8 +1903,8 @@ const AiAudit = () => {
       const rows = aId ? await loadAuditRows(aId) : await loadRunRows(rid); // ALL runs — aggregate
       const data = buildReportData(rows, freshRun ?? run, {
         businessName: resultsBusinessName || businessName,
-        businessType,
-        locationText,
+        businessType: resultsType,
+        locationText: resultsLoc,
         specialisms,
         isAggregatorUrl,
         ownWebsite,
@@ -1881,9 +1944,9 @@ const AiAudit = () => {
   const schemaCode = `<script type="application/ld+json">\n${JSON.stringify(buildSchema({
     name: resultsBusinessName || businessName,
     url: schemaWebsite || (resultsHasWebsite ? website : ''),
-    businessType,
+    businessType: resultsType,
     businessScope: schemaBusinessScope,
-    locationText,
+    locationText: resultsLoc,
     country,
     phone: schemaNap.phone,
     address: schemaNap.address,
@@ -2788,9 +2851,22 @@ const AiAudit = () => {
                       {reextracting ? 'Re-extracting…' : 'Re-extract competitors'}
                     </Button>
                   )}
+                  {/* RESUME DRAFT — only when one exists, and labelled with its contents so it is
+                      never a silent restore. Reopens the dialog exactly where it was left. */}
+                  {draftSummary && (
+                    <Button variant="secondary" size="sm" onClick={resumeDraft}
+                      title="Reopen the audit you were part-way through composing. Nothing is regenerated and your edits are kept.">
+                      <Undo2 className="mr-2 h-4 w-4" />
+                      Resume draft — {draftSummary}
+                    </Button>
+                  )}
                   {/* startNewAudit = resetWizard (what this did before) + open the dialog, since the
-                      form it used to reveal on the page is now in the modal. */}
-                  <Button variant="outline" size="sm" onClick={startNewAudit}>New audit</Button>
+                      form it used to reveal on the page is now in the modal.
+                      ⚠️ This DISCARDS the draft above, on purpose — that is what "new" means here. */}
+                  <Button variant="outline" size="sm" onClick={startNewAudit}
+                    title={draftSummary ? 'Start fresh — this discards the draft beside it' : undefined}>
+                    New audit
+                  </Button>
                   {/* RE-AUDIT — a NEW audit row, prefilled. The measurement you want at week 8:
                       "Re-run" would add runs to THIS row and mix the after into the before. */}
                   {!isDraining && auditId && (
@@ -3013,12 +3089,12 @@ const AiAudit = () => {
                   screen which one is open. Full year: a before/after can straddle a year boundary. */}
               <div>
                 <h2 className="text-2xl font-bold tracking-tight leading-tight">{resultsBusinessName || 'Audit'}</h2>
-                {(businessType || locationText || openAuditRow) && (
+                {(resultsType || resultsLoc || openAuditRow) && (
                   <div className="mt-0.5 text-sm text-muted-foreground">
-                    {[businessType, locationText].filter(Boolean).join(' · ')}
+                    {[resultsType, resultsLoc].filter(Boolean).join(' · ')}
                     {openAuditRow && (
                       <>
-                        {(businessType || locationText) && ' · '}
+                        {(resultsType || resultsLoc) && ' · '}
                         <span className="font-medium text-foreground/80">
                           audit of {new Date(openAuditRow.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
@@ -3392,7 +3468,7 @@ const AiAudit = () => {
                   key={row.id}
                   row={row}
                   businessName={resultsBusinessName}
-                  locationText={locationText}
+                  locationText={resultsLoc}
                   ownWebsite={ownWebsite}
                   /* So an Apify cap failure can say WHEN it clears rather than just that it happened. */
                   apifyCycleEnd={apifyUsage?.cycleEnd ?? null}
