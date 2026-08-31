@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Target, RefreshCw } from 'lucide-react';
+import { Loader2, Target, RefreshCw, ArrowLeftRight } from 'lucide-react';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -171,6 +171,18 @@ export default function Baseline() {
               named in {view.namedCells} of {view.answeredCells} answers
             </p>
           </div>
+        </div>
+
+        {/* BEFORE AND AFTER. Free — it re-reads runs that already exist and spends nothing, so it is
+            a plain link rather than a priced action. Always offered: which runs are the "before" is
+            the operator's call, and the comparison itself refuses honestly when there is nothing to
+            compare rather than being hidden behind a guess made here. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to={`/compare/${auditId}`}>
+              <ArrowLeftRight className="mr-2 h-4 w-4" /> Before and after · free
+            </Link>
+          </Button>
         </div>
 
         {/* Re-run this measurement — full 3-run re-measure of THIS baseline, via the shared helper.

@@ -30,6 +30,7 @@ const Outreach = lazy(() => import("./pages/Outreach"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Templates = lazy(() => import("./pages/Templates"));
 const BaselinePage = lazy(() => import("./pages/Baseline"));
+const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
 const PlaybookPage = lazy(() => import("./pages/Playbook"));
 const HowToUse = lazy(() => import("./pages/HowToUse"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
@@ -280,6 +281,9 @@ const App = () => {
               operator page - deliberately NOT public: the client gets a week-8 before-and-after,
               not the working detail. */}
               <Route path="/baseline/:auditId" element={<BaselinePage />} />
+              {/* BEFORE/AFTER. Operator-side like the baseline it hangs off: the noise band and the
+              unproven markings are part of the document, so it is shown WITH them or not at all. */}
+              <Route path="/compare/:auditId" element={<ComparePage />} />
               {/* OPERATOR delivery checklist. Same shell as /baseline/:auditId and for the same reason:
               WHO'S WINNING is the client's competitor list, which is working intelligence, not
               something the client is shown. The id resolves as an AUDIT id first — see usePlaybook. */}

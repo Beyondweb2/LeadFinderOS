@@ -584,7 +584,7 @@ function firmKey(name: string): string {
 }
 
 /** Domain of a URL, lowercased + www-stripped; '' on parse failure. */
-function domainOfSafe(url: string): string {
+export function domainOfSafe(url: string): string {
   try { return new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname.replace(/^www\./, '').toLowerCase(); }
   catch { return ''; }
 }
@@ -729,7 +729,7 @@ export function citationDomain(raw: string): string {
    ⚠️ ownDomain may be '' — the SPA preview did not pass ownWebsite until this change, and an audit
    may genuinely have no website. An empty domain simply disables the domain half; it never matches
    everything, which an unguarded `endsWith('')` would (the absent-value rule). */
-function citationIsClient(
+export function citationIsClient(
   c: { title?: string; url?: string } | null | undefined,
   businessName: string,
   ownDomain: string,
