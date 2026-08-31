@@ -661,16 +661,34 @@ export function renderReportHtml(d: AiAuditReportData): string {
     const state = namedN > 0
       ? `<span class="qb-badge yes sm">Named you ${namedN} of ${outOf}</span>`
       : `<span class="qb-badge no sm">Not named${outOf > 1 ? ` (0 of ${outOf})` : ''}</span>`;
-    /* ⛔ TWO FIGURES, BECAUSE THEY ARE TWO DIFFERENT THINGS. The stored `named` is "recommended in
-       the prose OR cited in a matching source title", so one number hid the difference between AI
-       actually recommending the business and AI merely citing its website. Both are derived from
-       stored data (auditReport.ts), so they cost nothing and exist on every historical audit.
+    /* ⛔ TWO FIGURES, BECAUSE THEY ARE TWO DIFFERENT THINGS. The stored `named` is "in the answer
+       prose OR in a matching source title", so one number hid the difference between AI writing
+       about the business and AI merely citing its website. Both are derived from stored data
+       (auditReport.ts), so they cost nothing and exist on every historical audit.
+
+       🔴 THIS LABEL SAID "RECOMMENDED" UNTIL 2026-08-30, AND THAT WAS AN OVERCLAIM ON A
+       CLIENT-FACING DOCUMENT. The number it prints is `nameMatches(answer_text, businessName)` —
+       presence of the name in the answer text. NOTHING in the codebase judges tone, endorsement or
+       whether a competitor was preferred in the same sentence: there is no such signal on
+       AiEngineResult, and the only tone-ish code (`isDamningSentence`) picks which sentence to QUOTE
+       and makes no judgement about the client. So a business listed neutrally, or listed and then
+       passed over in favour of a rival, was reported to that business as "Recommended".
+       ⛔ THE COUNT IS UNCHANGED — this is the label only. `e.recommended` still comes from the same
+       derivation and the header total still comes from the stored `named`. Renaming was the whole
+       fix: the measurement was always honest, the word on top of it was not.
+       ⚠️ A REAL endorsement measure needs an LLM judgement per answer and is deliberately NOT built
+       here. If it is ever added it must be a NEW field with its own name — never by quietly
+       re-pointing this label at a different number, which is how the overclaim happened.
+
+       ⚠️ The connector "in" is dropped from this half only: "Named in the answer in 2 of 3" reads
+       as a stutter. The cited half keeps its wording verbatim, as asked.
        ⚠️ CITED IS PRINTED EVEN WHEN IT IS ZERO. "Cited as a source in 0 of 3" is a real finding —
        hiding it would let a reader assume it was simply not measured. Older payloads carry neither
-       field; those fall back to the single badge exactly as before. */
+       field; those fall back to the single badge exactly as before, so there is no second label
+       path to keep in step (unlike the "Others named:" rename, which had two). */
     const split = (e.recommended != null || e.cited != null)
       ? `<div class="qb-eng-line qb-split">`
-        + `<span class="qb-split-i"><b>Recommended</b> in ${e.recommended ?? 0} of ${outOf}</span>`
+        + `<span class="qb-split-i"><b>Named in the answer</b> &mdash; ${e.recommended ?? 0} of ${outOf}</span>`
         + `<span class="qb-split-i"><b>Cited as a source</b> in ${e.cited ?? 0} of ${outOf}</span>`
         + `</div>`
       : '';
