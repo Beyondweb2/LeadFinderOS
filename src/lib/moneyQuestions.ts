@@ -15,19 +15,48 @@
 
 /** Share of an audit that may be money questions. 0.4 keeps them a minority at every count. */
 export const MONEY_QUESTION_SHARE = 0.4;
+/* ⛔ THE PAID BASELINE GETS A SMALLER SHARE THAN THE HOOK, AND THE TWO MUST NOT BE MERGED.
+   0.25 is Paul's number (2026-08-31): 5 of a 20-question baseline. The hook is a PITCH — it wants
+   the questions that provoke a reply, so a heavier money share earns its place. The baseline is the
+   guarantee's day-0 MEASUREMENT: money questions can be authority-locked by directories, so a
+   heavier share would load the before/after with questions that are harder to move. A quarter is
+   enough to measure commercial intent without the measurement becoming about it.
+   ⚠️ It interacts with MONEY_QUESTION_MIN_COUNT below, and that is deliberate: an extra AREA in a
+   multi-area baseline gets AREA_MIN_QUESTIONS (2), which is under the floor, so small areas get
+   NO money questions automatically rather than by a special case. */
+export const BASELINE_MONEY_QUESTION_SHARE = 0.25;
 /** Below this, an audit is too small to spend one of its questions on a buying-moment query. */
 export const MONEY_QUESTION_MIN_COUNT = 3;
 
 /**
- * How many of `count` questions should be money questions.
- * Paul's target was "about 2 money and 3 standard" at 5 — this returns exactly that, and scales.
+ * How many of `count` questions should be money questions, at a given share.
  * ⛔ ALWAYS A STRICT MINORITY: capped at count-1 so a standard question can never be squeezed out
- * entirely, and 0.4 keeps it under half at every size.
+ * entirely, and every share this is called with is under half.
+ */
+export function moneyQuestionShareAt(count: number, share: number): number {
+  const n = Math.floor(Number(count) || 0);
+  const s = Number(share);
+  if (!Number.isFinite(s) || s <= 0) return 0;
+  if (n < MONEY_QUESTION_MIN_COUNT) return 0;
+  return Math.max(1, Math.min(Math.floor(n * s), n - 1));
+}
+
+/**
+ * How many of `count` questions should be money questions on the HOOK path.
+ * Paul's target was "about 2 money and 3 standard" at 5 — this returns exactly that, and scales.
  */
 export function moneyQuestionShare(count: number): number {
-  const n = Math.floor(Number(count) || 0);
-  if (n < MONEY_QUESTION_MIN_COUNT) return 0;
-  return Math.max(1, Math.min(Math.floor(n * MONEY_QUESTION_SHARE), n - 1));
+  return moneyQuestionShareAt(count, MONEY_QUESTION_SHARE);
+}
+
+/**
+ * How many of `count` questions should be money questions on the PAID BASELINE path.
+ * ⚠️ `count` must be the number of slots the GENERATOR will fill, not the audit's whole size: a
+ * seeded baseline's seeds are the refund test (BaselineContract.scoredQuestions) and must never be
+ * displaced by a money question. The caller passes share-minus-seeds.
+ */
+export function baselineMoneyQuestionShare(count: number): number {
+  return moneyQuestionShareAt(count, BASELINE_MONEY_QUESTION_SHARE);
 }
 
 /* ⛔ PHRASINGS THAT THE EXISTING GUARDS WOULD DESTROY, so the prompt must forbid them explicitly:

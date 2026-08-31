@@ -6,7 +6,7 @@ import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanc
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { applySeed, dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
-import { moneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
+import { moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
 import {
   OUTREACH_HOOK_QUESTIONS,
@@ -392,7 +392,7 @@ Deno.serve(async (req) => {
        questions reviewed, edited and asked cannot differ.
        ⚠️ isBaseline: a paid baseline is the guarantee's day-0 and must not change character under a
        client mid-contract. isMarket: a town's grade is calibrated on head terms. */
-    const moneyQuestionCount = (!isMarket && !isBaseline) ? questionCount : 0;
+    const moneyQuestionCount = (!isMarket && !isBaseline && !isMeasurement) ? questionCount : 0;
     /* ── A STANDALONE MARKET AUDIT: a trade and a town, NO business, NO CRM row ────────────────
        The market view used to populate a town by adding 5 businesses to the CRM and auditing each
        — leads the operator never chose to contact, in a town they were only assessing. This is the
@@ -702,6 +702,11 @@ Deno.serve(async (req) => {
        VISIBLE rather than a silent fallback — the whole failure this guards against is a bad
        question entering the guarantee unnoticed, and a guard you cannot see firing is barely a
        guard. Empty arrays here mean "not a seeded call", not "nothing rejected". */
+    /* THE MONEY QUESTIONS THIS AUDIT GENERATED, verbatim. Accumulated across the baseline branches
+       (a multi-area baseline generates per area), intersected with what is actually queued further
+       down, then stored in ai_audit_runs.results.money_questions and returned to the caller so
+       audit-baseline can freeze it into BaselineContract.moneyQuestions. Empty on every other path. */
+    let moneyGenerated: string[] = [];
     let seededQuestions: string[] = [];
     let rejectedSeeds: Array<{ question: string; reason: string }> = [];
 
@@ -809,8 +814,13 @@ Deno.serve(async (req) => {
         for (const area of areaAllocation) {
           if (area.isMain) continue;
           try {
-            const qs = await generateQuestions(businessName, businessType, area.town, hasWebsite, specialisms, area.questions, "local", country);
-            perArea.push(...qs.slice(0, area.questions));
+            const mixed = await generateWithMoney(businessName, businessType, area.town, hasWebsite, specialisms, area.questions, "local", country);
+            perArea.push(...mixed.questions.slice(0, area.questions));
+            /* Only the ones that SURVIVED the slice are flagged. An area whose allocation is under
+               MONEY_QUESTION_MIN_COUNT gets none at all (baselineMoneyQuestionShare returns 0), so
+               small areas are excluded by the floor rather than by a special case here. */
+            const keptArea = new Set(mixed.questions.slice(0, area.questions));
+            moneyGenerated.push(...mixed.money.filter((q) => keptArea.has(q)));
           } catch (e) {
             console.error(`[create-ai-audit] area "${area.town}" generation failed, area NOT measured:`, e instanceof Error ? e.message : e);
           }
@@ -818,8 +828,17 @@ Deno.serve(async (req) => {
         const mainShare = areaAllocation.find((a) => a.isMain)?.questions ?? questionCount;
         let mainQs: string[];
         if (providedQuestions?.length && providedQuestions.length < mainShare) {
-          const generated = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, mainShare, businessScope, country);
+          /* Pool is mainShare long so applySeed can still reach target if seeds are rejected, but the
+             money share is taken on the TOP-UP only — the seeds keep their slots. */
+          const mixed = await generateWithMoney(
+            businessName, businessType, locationText, hasWebsite, specialisms, mainShare, businessScope, country,
+            Math.max(0, mainShare - providedQuestions.length),
+          );
+          const generated = mixed.questions;
           const outcome = applySeed(providedQuestions, generated, mainShare, businessType, locationText);
+          // Flag only what applySeed actually kept — a money question beyond target is not in the run.
+          const keptMain = new Set(outcome.questions);
+          moneyGenerated.push(...mixed.money.filter((q) => keptMain.has(q)));
           mainQs = outcome.questions;
           seededQuestions = outcome.seeded;
           rejectedSeeds = outcome.rejected;
@@ -827,13 +846,22 @@ Deno.serve(async (req) => {
           mainQs = providedQuestions.slice(0, mainShare);
           seededQuestions = mainQs;
         } else {
-          mainQs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, mainShare, businessScope, country);
+          const mixed = await generateWithMoney(businessName, businessType, locationText, hasWebsite, specialisms, mainShare, businessScope, country);
+          mainQs = mixed.questions;
+          moneyGenerated.push(...mixed.money);
         }
         questions = [...mainQs, ...perArea];
         console.log(`[create-ai-audit] multi-area baseline: ${mainQs.length} for "${locationText}" (${seededQuestions.length} seeded) + ${perArea.length} across ${areaAllocation.length - 1} other areas = ${questions.length}`);
       } else if (isSeeding) {
-        const generated = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country);
+        // Same split as the multi-area main town: pool at full size, money share on the top-up only.
+        const mixed = await generateWithMoney(
+          businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country,
+          Math.max(0, questionCount - providedQuestions!.length),
+        );
+        const generated = mixed.questions;
         const outcome = applySeed(providedQuestions!, generated, questionCount, businessType, locationText);
+        const keptSeeded = new Set(outcome.questions);
+        moneyGenerated.push(...mixed.money.filter((q) => keptSeeded.has(q)));
         questions = outcome.questions;
         seededQuestions = outcome.seeded;
         rejectedSeeds = outcome.rejected;
@@ -857,12 +885,23 @@ Deno.serve(async (req) => {
            ⛔ AND A VERBATIM REPEAT NEVER GETS HERE AT ALL. advanceBaseline sends the stored
            questions and `providedQuestions` short-circuits above, so RG's and ABLM's re-measures
            cannot acquire a money question. That is structural, not a guard I added. */
-        questions = providedQuestions && providedQuestions.length
-          ? providedQuestions
-          : await generateQuestions(
-              businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
-              businessScope, country, coverage, moneyQuestionCount,
-            );
+        if (providedQuestions && providedQuestions.length) {
+          questions = providedQuestions;
+        } else if (isBaseline || isMeasurement) {
+          /* THE UNSEEDED PAID BASELINE / FULL MEASUREMENT. Flagged money questions via the two-call
+             generator, so the week-eight before/after can include or exclude them by choice. */
+          const mixed = await generateWithMoney(
+            businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
+            businessScope, country,
+          );
+          questions = mixed.questions;
+          moneyGenerated.push(...mixed.money);
+        } else {
+          questions = await generateQuestions(
+            businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
+            businessScope, country, coverage, moneyQuestionCount,
+          );
+        }
       }
       const auditRow: Record<string, unknown> = {
         user_id: userId,
@@ -931,22 +970,6 @@ Deno.serve(async (req) => {
        Only the CALLER decides this - default is unchanged, so every existing path still scans. */
     /* A market audit has no website by definition, so the SEO scan is unreachable for it — the
        skip is structural rather than a flag. skipSeo still applies to the per-business batch. */
-    const runResults: Record<string, unknown> = (skipSeo || marketOnly)
-      ? { seo: { skipped: "seo_scan_not_requested", checked_at: new Date().toISOString() } }
-      : {};
-    /* Tag full-measurement runs so the start-vs-re-measure before/after can find them later,
-       WITHOUT a schema change (results is jsonb). Inert to everything downstream: the queue's SEO
-       step keys on results.seo and the report on results.seo.categories — neither reads this. */
-    if (isMeasurement) runResults.measurement = true;
-    const { data: run, error: runErr } = await service
-      .from("ai_audit_runs")
-      .insert({ audit_id: auditId, user_id: userId, run_number: runNumber, status: "pending", results: runResults })
-      .select("id")
-      .single();
-    if (runErr || !run) return json({ ok: false, error: runErr?.message ?? "run_insert_failed" }, 500);
-    const runId = run.id;
-
-    // ── Enqueue one row per question ──────────────────────────────────────────
     /* THE FINAL GATE. Whatever path produced `questions` — LLM, templates, a verbatim repeat, a
        seed top-up, or the multi-area concatenation — no two rows may be the same question in
        different capitals. There was no dedupe here at all, which is how one audit could queue both
@@ -956,6 +979,37 @@ Deno.serve(async (req) => {
       console.warn(`[create-ai-audit] ${finalQ.duplicates.length} case-duplicate question(s) dropped before queueing: ${finalQ.duplicates.join(" | ")}`);
     }
     questions = finalQ.questions;
+    /* ⛔ THE MONEY FLAG, INTERSECTED WITH WHAT IS ACTUALLY QUEUED. dedupeQuestions above can drop a
+       money question that collided with a standard one, and the guards can reject one earlier — so a
+       flag taken straight from the generator could name a question that is not in this run. Matched
+       case-insensitively for the same reason scoredQuestions is (a re-cased question is the same
+       question), and the stored strings are the ones AS QUEUED.
+       ⚠️ Stored ONLY when non-empty. An empty array would assert "this run has no money questions",
+       which is a different claim from "nothing recorded it" — and every run created before today is
+       in the second state. Absence must stay readable as absence. */
+    const queuedKeys = new Map(questions.map((q) => [q.trim().toLowerCase(), q]));
+    const moneyQueued = Array.from(new Set(
+      moneyGenerated.map((q) => queuedKeys.get(q.trim().toLowerCase())).filter((q): q is string => !!q),
+    ));
+    const runResults: Record<string, unknown> = (skipSeo || marketOnly)
+      ? { seo: { skipped: "seo_scan_not_requested", checked_at: new Date().toISOString() } }
+      : {};
+    /* Tag full-measurement runs so the start-vs-re-measure before/after can find them later,
+       WITHOUT a schema change (results is jsonb). Inert to everything downstream: the queue's SEO
+       step keys on results.seo and the report on results.seo.categories — neither reads this. */
+    if (isMeasurement) runResults.measurement = true;
+    /* Same schema-free mechanism as `measurement` above (results is jsonb — no migration). Inert
+       downstream: the queue keys on results.seo and the report on results.seo.categories. */
+    if (moneyQueued.length) runResults.money_questions = moneyQueued;
+    const { data: run, error: runErr } = await service
+      .from("ai_audit_runs")
+      .insert({ audit_id: auditId, user_id: userId, run_number: runNumber, status: "pending", results: runResults })
+      .select("id")
+      .single();
+    if (runErr || !run) return json({ ok: false, error: runErr?.message ?? "run_insert_failed" }, 500);
+    const runId = run.id;
+
+    // ── Enqueue one row per question ──────────────────────────────────────────
     const queueRows = questions.map((q) => ({
       audit_id: auditId,
       run_id: runId,
@@ -1019,6 +1073,10 @@ Deno.serve(async (req) => {
       business_name: auditBusinessName,
       questions,
       question_count: questions.length,
+      /* THE FLAGGED MONEY QUESTIONS, as queued. Absent when there are none — same convention as
+         truncationReport below, so a caller cannot learn to ignore a permanently-present empty list.
+         audit-baseline reads this to freeze BaselineContract.moneyQuestions. */
+      ...(moneyQueued.length ? { money_questions: moneyQueued } : {}),
       // Estimate: question_count × engines × per-question source cost (see sources.ts).
       estimated_cost_usd: estimate(questions.length),
       unit_cost_usd: estCost,
@@ -1041,6 +1099,76 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: e instanceof Error ? e.message : "unknown_error" }, 500);
   }
 });
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   THE PAID BASELINE'S MIXED SET — standard questions plus a flagged minority of money questions.
+
+   ⛔ WHY TWO CALLS AND NOT ONE. generateQuestions asks the model for `n` questions of which `moneyN`
+   must be buying-moment ones, and the model returns an UNLABELLED array of strings. There is no way
+   to look at "emergency locksmith in Huntingdon who can come now" and know whether the model
+   produced it as a money question or a standard one — and guessing with a keyword test would be the
+   substring trap on the one field the guarantee analysis depends on. Asking for the money questions
+   in their OWN call means the flag is a fact about which call produced the string, not an inference.
+   The extra gpt-4o-mini call is noise next to the Apify question runs.
+
+   ⛔ SEEDS ARE NEVER DISPLACED. The caller passes the number of slots the GENERATOR will fill
+   (share minus seeds), so a seeded baseline's seeds — which are BaselineContract.scoredQuestions,
+   the refund test — cannot lose a slot to a money question.
+
+   ⚠️ OVER-REQUEST THEN SLICE, on both halves. generateQuestions clamps to MIN_QUESTION_COUNT (3), so
+   asking for 1 returns 3. The money half asks for max(3, moneyN) with moneyExact set to that SAME
+   number, so every question it returns is a money question and slicing keeps only money questions.
+   Slicing a mixed set would have flagged whatever happened to be first.
+
+   ⚠️ RETURNS THE MONEY LIST BEFORE DEDUPE. The caller intersects it with what was actually queued
+   (dedupeQuestions can drop a collision), so the stored flag can never name a question that is not
+   in the run. */
+async function generateWithMoney(
+  businessName: string,
+  businessType: string,
+  locationText: string,
+  hasWebsite: boolean,
+  specialisms: string,
+  count: number,
+  scope: BusinessScope,
+  country: string | null,
+  /* ⛔ THE SLOTS THE GENERATOR WILL ACTUALLY FILL, for the share calculation only — `count` is still
+   *  how many questions to produce. On a SEEDED baseline the pool must be `count` long (applySeed
+   *  needs enough to reach target if seeds are rejected) while the money share must be a quarter of
+   *  the TOP-UP, not of the whole audit, or the seeds' slots would be counted twice.
+   *  Defaults to `count`, so an unseeded caller behaves the obvious way. */
+  moneySlots: number = count,
+): Promise<{ questions: string[]; money: string[] }> {
+  const total = Math.max(0, Math.floor(Number(count) || 0));
+  const moneyN = Math.min(total, baselineMoneyQuestionShare(moneySlots));
+  if (moneyN <= 0) {
+    // Too small to spend a slot on a buying-moment query — byte-identical to the old behaviour.
+    const only = await generateQuestions(
+      businessName, businessType, locationText, hasWebsite, specialisms, total, scope, country,
+    );
+    return { questions: only.slice(0, total), money: [] };
+  }
+  const standardN = total - moneyN;
+  const standard = standardN > 0
+    ? (await generateQuestions(
+        businessName, businessType, locationText, hasWebsite, specialisms,
+        Math.max(MIN_QUESTION_COUNT, standardN), scope, country,
+      )).slice(0, standardN)
+    : [];
+  const askMoney = Math.max(MIN_QUESTION_COUNT, moneyN);
+  const money = (await generateQuestions(
+    businessName, businessType, locationText, hasWebsite, specialisms,
+    askMoney, scope, country, "", askMoney, askMoney,
+  )).slice(0, moneyN);
+  /* ⛔ MONEY FIRST, AND IT IS LOAD-BEARING ON THE SEEDED PATHS. applySeed keeps the seeds, then
+     fills the remaining slots from this pool IN ORDER and stops at target. With money last, a
+     baseline whose seeds filled most of the target would generate money questions and then discard
+     every one of them — the feature silently absent on exactly the audits that carry a seed.
+     Order is otherwise cosmetic: queue rows are read back by created_at and every consumer reads
+     the whole set. */
+  console.log(`[create-ai-audit] baseline mixed set: ${money.length} money + ${standard.length} standard of ${total} requested (share taken on ${moneySlots} slot(s))`);
+  return { questions: [...money, ...standard], money };
+}
 
 /**
  * Generate `count` audit questions via OpenAI (gpt-4o-mini, tool-calling). `count` is
@@ -1067,6 +1195,13 @@ async function generateQuestions(
    *  every verbatim repeat never reaches this function at all (advanceBaseline passes its stored
    *  questions straight through). That is what keeps existing before/after comparisons valid. */
   moneyCount = 0,
+  /* ⛔ EXACT OVERRIDE, FOR THE MONEY-ONLY CALL. When set, EVERY question asked for is a money
+   *  question and the derived share is bypassed. It exists because the model returns an UNLABELLED
+   *  array: the only way to know exactly which questions are money ones is to ask for them in their
+   *  own call, so the caller can flag the result with certainty rather than inferring it.
+   *  ⚠️ Only generateWithMoney() sets this. Passing it does NOT make money questions a majority of
+   *  an audit — the CALLER splits the count and keeps the money half a minority. */
+  moneyExact: number | null = null,
 ): Promise<string[]> {
   // The CALLER has already applied the right POLICY ceiling: MAX_QUESTION_COUNT for the outreach
   // hook, BASELINE_MAX_QUESTION_COUNT for a paid baseline. Re-clamping here with clampCount's
@@ -1076,7 +1211,9 @@ async function generateQuestions(
   const n = clampCount(count, MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT);
   /* ⛔ HOW MANY BUYING-MOMENT QUESTIONS THIS AUDIT GETS. 0 unless the caller opted in, which is
      what keeps market audits, paid baselines and every verbatim repeat byte-identical. */
-  const moneyN = moneyCount > 0 ? moneyQuestionShare(n) : 0;
+  const moneyN = typeof moneyExact === "number" && moneyExact > 0
+    ? Math.min(Math.floor(moneyExact), n)
+    : (moneyCount > 0 ? moneyQuestionShare(n) : 0);
   const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n, scope, country, moneyN);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) return fallback;

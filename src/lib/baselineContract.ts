@@ -60,6 +60,23 @@ export interface BaselineContract {
   /** The audit the scored set came from, so week eight can compare against the exact measurement
    *  that was sold rather than re-deriving a "before". Outcome clients only. */
   scoredFromAuditId?: string | null;
+  /** THE MONEY QUESTIONS IN THIS MEASUREMENT, verbatim as queued — the buying-moment queries the
+   *  generator was asked to add (moneyQuestions.ts). Present only for baselines created after
+   *  2026-08-31; ABSENT on every earlier contract, and absent must be read as "not recorded", NOT
+   *  as "there were none" (the absent-value rule — an old baseline genuinely has none, but a
+   *  consumer cannot tell those two apart from this field alone, so it should say which it means).
+   *
+   *  ⛔ WHY IT IS RECORDED AT ALL: money questions can be authority-locked by directories, so they
+   *  may be harder to move than a head term. Flagging them lets the week-eight before/after be
+   *  computed on ALL questions or on STANDARD QUESTIONS ONLY — a decision deliberately NOT made
+   *  here. Nothing in the guarantee reads this field.
+   *  ⛔ AND IT IS NOT THE REFUND TEST. `scoredQuestions` below is, and money questions cannot enter
+   *  it by construction: it is seedQuestions ∩ askedQuestions, and money questions are GENERATED,
+   *  never seeded. This field and that one are disjoint by the way each is built, not by a filter
+   *  that could later be edited away.
+   *  ⚠️ Intersected with the questions ACTUALLY QUEUED, using the same askedKeys pass that builds
+   *  scoredQuestions — so it can never name a question the guards rejected. */
+  moneyQuestions?: string[];
   /** The town that audit measured. May differ from mainTown: RG Locksmiths was sold on a Wisbech
    *  audit and has since asked for Huntingdon, St Neots and Peterborough. Recorded so nobody has to
    *  remember that the refund test lives in a different town from the delivery areas. */

@@ -682,6 +682,21 @@ export async function startPaidBaseline(
       const scored = seedQuestions
         .map((q) => askedKeys.get(q.trim().toLowerCase()))
         .filter((q): q is string => !!q);
+      /* ⛔ THE MONEY QUESTIONS, THROUGH THE SAME askedKeys PASS AS `scored` ABOVE — deliberately the
+         same intersection, so the two lists are built by one rule and neither can name a question
+         that was not queued. create-ai-audit reports them; they are re-checked here rather than
+         trusted, because this is the frozen document the week-eight comparison reads.
+         ⛔ DISJOINT FROM `scored` BY CONSTRUCTION, not by a filter: `scored` is the SEEDS and these
+         are GENERATED, so a money question can never be part of the refund test. Nothing below
+         subtracts one from the other, and nothing should — if they ever overlapped it would mean a
+         seed had been generated as a money question, which is a bug to surface, not to hide.
+         ⚠️ Recorded so the before/after can be computed on all questions OR standard-only. That
+         choice is NOT made here. */
+      const moneyAsked = Array.isArray((out as { money_questions?: unknown }).money_questions)
+        ? ((out as { money_questions: unknown[] }).money_questions
+            .map((q) => (typeof q === "string" ? askedKeys.get(q.trim().toLowerCase()) : undefined))
+            .filter((q): q is string => !!q))
+        : [];
       const contract: BaselineContract = {
         version: 1,
         guarantee,
@@ -692,6 +707,9 @@ export async function startPaidBaseline(
         areasDropped: dropped,
         ceiling: MULTI_AREA_CEILING,
         seededQuestions: seedQuestions,
+        // Omitted when empty: absent means "not recorded", which is what every pre-2026-08-31
+        // contract is, and that is a different claim from "there were none".
+        ...(moneyAsked.length ? { moneyQuestions: moneyAsked } : {}),
         // OUTCOME clients only. The main town's share is what was sold and what the refund reads.
         ...(guarantee === "outcome"
           ? { scoredQuestions: scored, scoredFromAuditId: seedAuditId, scoredTown: seedTown }
@@ -702,7 +720,14 @@ export async function startPaidBaseline(
         .update({ baseline_contract: contract }).eq("id", out.audit_id);
       if (cErr) console.warn(`[baseline] baseline_contract not stored (${cErr.message}) — baseline unaffected`);
       else {
-        console.log(`[baseline] contract frozen for audit ${out.audit_id}: guarantee=${guarantee}, ${allocation.length} town(s), ${contract.scoredQuestions?.length ?? 0} scored`);
+        console.log(`[baseline] contract frozen for audit ${out.audit_id}: guarantee=${guarantee}, ${allocation.length} town(s), ${contract.scoredQuestions?.length ?? 0} scored, ${moneyAsked.length} money question(s) flagged`);
+        /* A money question that is ALSO a seed would mean the refund test had acquired a
+           buying-moment question. Cannot happen the way the two are built — logged loudly rather
+           than silently tolerated if it ever does. */
+        const overlap = moneyAsked.filter((q) => scored.some((sq) => sq.trim().toLowerCase() === q.trim().toLowerCase()));
+        if (overlap.length) {
+          console.error(`[baseline] MONEY/SCORED OVERLAP on audit ${out.audit_id} — the refund set contains ${overlap.length} money question(s): ${overlap.join(" | ")}`);
+        }
         if (guarantee === "outcome") {
           console.log(`[baseline] LEGACY OUTCOME CLIENT: refund test is ${scored.length} of ${seedQuestions.length} seeded question(s)`
             + ` from audit ${seedAuditId ?? "(none)"} in "${seedTown ?? "(unknown town)"}"; delivery areas are ${allocation.map((a) => a.town).join(", ")}`);
