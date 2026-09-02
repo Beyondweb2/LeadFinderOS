@@ -432,7 +432,8 @@ function pickGutPunch(
       if (!er || er.named) continue;
       const text = (er.answer_text || '').trim();
       if (!text || isJunkAnswer(text)) continue;         // skip map/image/URL junk outright
-      const rivals = er.competitors.filter((c) => isRealCompetitor(c, locationText));
+      /* Stored names are final (see keepRival in buildReportData) — this only drops blanks. */
+      const rivals = er.competitors.filter((c) => !!String(c).trim());
       const rival = rivals[0];
       // Gate on extraction: only lead with an answer that is genuinely damning (competitor
       // named / business or category absent / recommendations). The report writes its own
@@ -894,7 +895,24 @@ export function buildReportData(
      names and no cleaning receipt — nothing to withhold there, and blanking on it would strip the
      gut-punch from historic reports whose regex list happened to be empty. */
   const rivalsSuppressed = cleanliness.suppressNames;
-  const keepRival = (c: string) => !rivalsSuppressed && isRealCompetitor(c, ctx.locationText);
+/* 🔴 NO PER-NAME FILTERING AT RENDER ANY MORE — the names were cleaned when the audit ran
+     (extract-competitors' cleanNames), and what is stored is what the client reads.
+     It used to be `!rivalsSuppressed && isRealCompetitor(c, ctx.locationText)`, and that second half
+     rejected 151 of the 2,065 stored names (7%) across the 60 newest audits. Every sampled rejection
+     was a real firm: isRealCompetitor drops a short name containing the town, which is exactly how a
+     local trade is named — "Keytek Ashby-de-la-Zouch", "LockFit Bournemouth", "Locksmith
+     Christchurch". On Hazlewood Locksmiths it hid 6 of 19 real rivals and emptied three engine
+     blocks that sat beside a positive named count.
+     What it was guarding against had already been handled upstream: of those 2,065 stored names,
+     0 were known directories, 0 contained the client's own name, 1 was provable junk.
+
+     ⛔ SUPPRESSION STAYS, AND IT IS A DIFFERENT MECHANISM. It is run-level and fires only when the
+     stored list is provably junk (competitorCleaning.ts) — that is "we hold names we cannot trust",
+     not "this name looks wrong". Removing it would put the pre-cleaner regex output back on historic
+     reports.
+     ⚠️ DO NOT REINTRODUCE A PER-NAME TEST HERE. If a bad name ever reaches a report, it got stored,
+     so it is cleanNames that needs the rule — one place, at audit time, or the two disagree again. */
+  const keepRival = (c: string) => !rivalsSuppressed && !!c.trim();
 
   let done = 0;
   let liveNamed = 0;
