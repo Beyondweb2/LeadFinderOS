@@ -1160,6 +1160,12 @@ export function buildReportData(
        rival name (keepRival returns false for all of them), but the renderer only saw the empty
        result and asserted "No businesses named" - turning "we hold names we do not trust" into
        "AI named nobody", which is a different claim and not one we had evidence for. */
+    /* The town, for copy only. It was never on the payload - the renderer had businessName and
+       businessType and nothing else - so the CTA could not say where. Same source the audit itself
+       used (ctx.locationText, already resolved by create-ai-audit as
+       confirmed_location || derived_town || search_location), so the sentence names the town the
+       questions were actually asked about rather than a second guess at it. */
+    locationText: ctx.locationText ?? "",
     namesWithheld: rivalsSuppressed,
     gutPunch: rivalsSuppressed ? null : pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
     // The date the AUDIT WAS MEASURED, not the date someone happened to open the link.
