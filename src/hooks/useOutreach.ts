@@ -718,6 +718,42 @@ export function useOutreach() {
 
     const updatedLead = data as OutreachLead;
 
+    /* ⛔ MARKING SOMEONE NOT INTERESTED NOW ACTUALLY STOPS CONTACT.
+       🔴 UNTIL 2026-09-02 IT DID NOTHING BEYOND RELABELLING THE ROW. The app has never written a
+       contact_suppressions row - it only read that table, and blindly (the RLS-with-no-policies
+       trap, CLAUDE.md §8). Every one of the 28 suppressions on file came from whatsapp-inbound
+       auto-detecting a decline in a reply; not one came from an operator. So four numbers whose
+       leads said not_interested were sent audit_result_hook that afternoon, and the send-time
+       suppression guard had nothing to match on.
+
+       ⚠️ ROUTED THROUGH THE EDGE FUNCTION BECAUSE THE SPA PHYSICALLY CANNOT WRITE THIS TABLE.
+       A direct insert would return 200 and create nothing - the same silent no-op being fixed.
+
+       ⚠️ FIRED ONLY WHEN THE STATUS IS ACTUALLY BEING SET, not on every update that happens to
+       carry a lead whose status is already not_interested. `updates.status` is the operator's
+       intent; `updatedLead.status` is just the row.
+
+       ⚠️ NOT AWAITED INTO THE RETURN VALUE, and never fatal. Suppression is a promise about future
+       contact, not part of saving this row - if the endpoint is down, the status change must still
+       land. It is logged loudly instead, because a suppression that silently failed is precisely the
+       bug above. The send-time guards remain the enforcement; this only supplies what they read. */
+    if (updates.status === 'not_interested' || updates.status === 'closed') {
+      const reason = updates.status;
+      void supabase.functions
+        .invoke('process-whatsapp-queue', { body: { mode: 'suppress_lead', lead_id: leadId, reason } })
+        .then(({ data: sd, error: se }) => {
+          const okRow = (sd as { ok?: boolean } | null)?.ok === true;
+          if (se || !okRow) {
+            console.error(`[useOutreach] suppression write FAILED for lead ${leadId} (${reason}) - this business is not yet protected from future contact`, se ?? sd);
+            toast({
+              title: 'Status saved, but contact block failed',
+              description: 'The lead is marked, but nothing is stopping future outreach to this number yet. Try again or check the queue panel.',
+              variant: 'destructive',
+            });
+          }
+        });
+    }
+
     // Update in correct list based on archived status
     if (updatedLead.is_archived) {
       setArchivedLeads((prev) => prev.map((l) => (l.id === leadId ? updatedLead : l)));
