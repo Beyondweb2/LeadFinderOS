@@ -76,6 +76,9 @@ export interface AiAuditReportData {
   // competitors AI recommended in that answer. The report writes a clean summary of
   // this — it never dumps the raw AI paragraph.
   gutPunch: { question: string; engineLabel: string; rivals: string[] } | null;
+  /** True when competitor names are withheld because the run's list could not be trusted.
+   *  Absent on older payloads -> false, which is exactly what those documents already showed. */
+  namesWithheld?: boolean;
   /* The full question-by-question detail — the client-facing "page 2". Each completed question,
      whether AI named the business (on any scored engine), and the real rival firms it named in
      that answer. Optional so a payload built before this existed still renders — absent means the
@@ -87,7 +90,7 @@ export interface AiAuditReportData {
        ranCount = how many runs the engine answered in; named = how many of those it named you in
        (a count now; older payloads carried a boolean, handled in the renderer). ran=false → the
        engine never returned an answer. */
-    perEngine?: { label: string; ran: boolean; ranCount?: number; runs?: number; named: number | boolean; recommended?: number; cited?: number; rivals: string[]; citations: { domain: string; url: string }[] }[];
+    perEngine?: { label: string; ran: boolean; ranCount?: number; runs?: number; named: number | boolean; recommended?: number; cited?: number; rivals: string[]; rivalsRaw?: number; citations: { domain: string; url: string }[] }[];
     /* INTERNAL winnability signal (rendered only when `internal` is true — never on the client doc).
        Structural match for QuestionWinnability in auditReport.ts (kept inline to avoid a circular
        type import between this file and auditReport.ts). */
@@ -754,7 +757,24 @@ export function renderReportHtml(d: AiAuditReportData): string {
          "Named you 2 of 3" next to a list they were absent from. Label only — the counts, the data
          and the exclusion itself are unchanged. */
       ? `<div class="qb-eng-line"><span class="qb-rlabel">Others named:</span> ${e.rivals.map((r) => `<span class="qb-chip">${esc(r)}</span>`).join(" ")}</div>`
-      : `<div class="qb-eng-line"><span class="qb-none">No businesses named.</span></div>`;
+      /* 🔴 THREE CAUSES, THREE SENTENCES. This was one line - "No businesses named." - for every
+         empty rival list, and on a real prospect's document it sat directly under "Named in the
+         answer - 1 of 1" (Hazlewood Locksmiths, 2026-09-02: two of its three occurrences). The report
+         claimed the business was named and then that nobody was.
+         The list is competitors-ONLY and always has been, so this sentence was never about "all
+         businesses" - the POSITIVE label was corrected to "Others named:" for exactly this reason and
+         the empty state was left behind. The same overclaim, in the opposite direction.
+         ⛔ AND IT MUST NOT ASSERT WHAT WE DO NOT KNOW. An empty kept-list means one of:
+           · names withheld because the run's list could not be trusted (namesWithheld),
+           · AI returned names and every one was filtered out as junk (rivalsRaw > 0),
+           · AI genuinely named nobody else (rivalsRaw === 0).
+         Only the third is "nobody else was named". Older payloads carry no rivalsRaw and fall back to
+         the scoped wording without claiming a cause. */
+      : d.namesWithheld
+        ? `<div class="qb-eng-line"><span class="qb-none">Competitor names withheld &mdash; this run&rsquo;s list could not be verified.</span></div>`
+        : (e.rivalsRaw ?? 0) > 0
+          ? `<div class="qb-eng-line"><span class="qb-none">No other businesses we could verify.</span></div>`
+          : `<div class="qb-eng-line"><span class="qb-none">No other businesses named.</span></div>`;
     const sources = e.citations.length
       ? `<div class="qb-eng-line"><span class="qb-slabel">Sources:</span> ${e.citations.map((c) => `<a class="qb-cite" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(c.domain)}</a>`).join(" ")}</div>`
       : `<div class="qb-eng-line"><span class="qb-none">No sources cited.</span></div>`;
