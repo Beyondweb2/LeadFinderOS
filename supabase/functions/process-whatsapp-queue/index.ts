@@ -177,6 +177,8 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   // received booking_page_intro — a barber booking pitch. No lead was ever queued with it, so
   // nothing mis-sent, but the gap was live.
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
+  // audit_result_hook - the outreach hook. MIRRORS whatsapp-send.ts; change both together.
+  audit_result_hook: { lang: "en", vars: ["name", "trade", "town", "audit_url"] },
   // Follow-up to a warm lead after the 24h window: {{1}} business name, {{2}} onboarding URL.
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
   /* Re-engage a lead who went quiet: {{1}} = business name, {{2}} = that lead's onboarding URL.
@@ -624,8 +626,20 @@ Deno.serve(async (req) => {
             // audit_reply-class: needs the lead's own completed audit.
             const vars = await resolveAuditReplyVars(service, row.lead_id);
             if (!vars.ok) { await finish("flagged_no_audit", vars.reason); results[row.lead_id] = "flagged_no_audit"; continue; }
-            payload = claimTemplatePayload(templateName, tmpl.lang, vars.business, vars.link, { trade: vars.trade, competitors: vars.competitors });
-            renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors);
+            /* ⛔ THE EXTRA IS BUILT FROM WHAT THE TEMPLATE DECLARES, NOT FROM A GUESSED CLASS.
+               This branch is entered on `vars.includes("trade") || vars.includes("competitors")` and
+               used to hand over `{ trade, competitors }` unconditionally - right while audit_reply
+               was its only member. audit_result_hook also declares `trade`, so it lands here too and
+               would have been sent with `town` and `audit_url` ABSENT: templateBodyParams throws on
+               an empty audit_url, so the row would have failed flagged_error for every lead, however
+               good its data. Safe, but permanently broken. Keying on the declared vars fills the
+               next audit-class template correctly by construction. */
+            const auditExtra: Record<string, string> = { trade: vars.trade };
+            if (tmpl.vars.includes("competitors")) auditExtra.competitors = vars.competitors;
+            if (tmpl.vars.includes("town")) auditExtra.town = vars.town;
+            if (tmpl.vars.includes("audit_url")) auditExtra.auditUrl = vars.link;
+            payload = claimTemplatePayload(templateName, tmpl.lang, vars.business, vars.link, auditExtra);
+            renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors, undefined, vars.town);
             businessName = vars.business;
             claimUrl = vars.link;
           } else if (tmpl.vars.includes("onboarding_url")) {

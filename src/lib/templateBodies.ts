@@ -45,6 +45,15 @@ We ran a full report on your business for AI and SEO visibility: ${u}
 We could get you showing up in those results - it's mostly stuff we handle at our end.
 Want me to explain?`;
 
+/* audit_result_hook - the outreach hook (approved 2026-09-02). Mirrors the Deno-side body in
+   _shared/whatsapp-send.ts; both are DISPLAY ONLY, since Meta renders what the prospect reads.
+   Only reached for a legacy row whose body was never stored - a real send stores its own text. */
+const auditResultHookBody = (b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
+  `Hi, is this ${b || 'your business'}? We ran a free AI visibility audit for you.
+When people ask ChatGPT or Google's AI for a ${trade || 'provider'} in ${town || 'your area'}, it's naming other firms, not you.
+Here's your result: ${u}
+More on how we can fix it, and how to get started: https://findable.live`;
+
 const bookCallBody = (b: string, _u: string) =>
   `Hi ${b},
 Paul here from Findable.
@@ -90,7 +99,7 @@ const barberFreshaBooksyBody = (b: string, u: string) =>
  *  WA_TEMPLATE_BODIES so the parity test can compare them one-to-one. */
 export const READABLE_TEMPLATE_BODIES: Record<
   string,
-  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string) => string
+  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string) => string
 > = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
@@ -106,6 +115,7 @@ export const READABLE_TEMPLATE_BODIES: Record<
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
   audit_reply: auditReplyBody,
+  audit_result_hook: auditResultHookBody,
 };
 
 export interface ReadableBodyOpts {
@@ -114,6 +124,8 @@ export interface ReadableBodyOpts {
   trade?: string | null;
   competitors?: string | null;
   firstName?: string | null;
+  /** audit_result_hook's {{3}}. Only this body reads it; the rest ignore the extra argument. */
+  town?: string | null;
 }
 
 /** True when a stored body is NOT real filled text: empty, a bracketed slug like
@@ -145,5 +157,6 @@ export function readableTemplateBody(
     opts.trade ?? undefined,
     opts.competitors ?? undefined,
     opts.firstName ?? undefined,
+    opts.town ?? undefined,
   ).trim();
 }

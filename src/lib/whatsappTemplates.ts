@@ -28,6 +28,9 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },
+  // audit_result_hook - the outreach hook. Same shape as audit_reply: its link IS the report link,
+  // so it needs the lead's completed audit and never a share_token.
+  audit_result_hook:      { needsUrl: false, needsAudit: true,  group: 'audit' },
   // Follow-up after the 24h window. needsUrl is FALSE: its link is the onboarding URL, built
   // from the lead id server-side, so it must not be gated on a generated site's share_token.
   // needsAudit is FALSE too — it pitches the flow, not a report. The only real requirement is a

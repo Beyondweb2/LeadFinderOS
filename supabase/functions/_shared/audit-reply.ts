@@ -45,7 +45,10 @@ export function formatCompetitors(list: string[]): string {
 }
 
 export type AuditReplyVars =
-  | { ok: true; trade: string; competitors: string; business: string; link: string; auditId: string }
+  /* `town` is carried because audit_result_hook names it ({{3}}) while audit_reply does not.
+     The resolver has always SELECTED location_text; it simply never returned it. Deriving it here
+     rather than at each call site keeps one answer to "which town is this lead's audit about". */
+  | { ok: true; trade: string; competitors: string; business: string; link: string; town: string; auditId: string }
   | { ok: false; reason: string };
 
 /**
@@ -186,5 +189,5 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
      document; it does not need to be in the address bar. */
   const link = `${REPORT_SITE_ORIGIN}/report/${audit.id}`;
 
-  return { ok: true, trade, competitors, business, link, auditId: audit.id };
+  return { ok: true, trade, competitors, business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id };
 }

@@ -368,6 +368,7 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   { value: 'barber_fresha_booksy', label: 'Fresha/Booksy switch' },
   { value: 'initial_contact', label: 'Initial contact (opener)' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
+  { value: 'audit_result_hook', label: 'Audit result hook (outreach)' },
   { value: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
   /* The OPENER follow-up: a business that got the initial_contact opener and never replied. Bulk-
      queued from Outreach into its OWN drain lane (contact_followup_queued_at), NOT the status=queued
