@@ -1759,13 +1759,17 @@ by the single account below.** §6's paginate rule, caught in this file's own no
   v23 + process-ai-audit-queue v98 + check-directory-listings v7. ⚠️ Findings are STORED per scan —
   the fix reaches NEW scans only; old reports keep their stored wording until re-scanned.
 - 🔴 **THE WHATSAPP DAILY CAP IS ALMOST OUT OF ROAD, AND REPLIES SPEND IT WITHOUT BEING LIMITED BY
-  IT.** `DAILY_CAP` in `process-whatsapp-queue` — **120** since 2026-08-12 (40 → 60 → 100 → 120, each
+  IT.** `DAILY_CAP` in `process-whatsapp-queue` — **200**, and `SEND_GAP_FLOOR_MIN` is **3** (both read from the live file 2026-09-02; this line said 120/10 for weeks). Raised 40 → 60 → 100 → 120 → 200, each
   raise on a Green quality rating). Two facts neither file reveals on its own:
   - ⛔ **RAISING IT PAST ~140 DOES NOTHING.** Simulated 5,000 days on the measured cron grid (ticks
     every 10 min, one send per tick — 441 of 619 real sends land on a +0 minute-of-10 mark):
     **100 → 77.4/day, 120 → 84.4, 140 → 87.0, 200 → 87.0.** Above cap 60 the target gap
     (`minutesUntilWindowEnd()/(DAILY_CAP - sentToday)`, 870/119 ≈ 7.3 min at 120) is already **below
-    `SEND_GAP_FLOOR_MIN` (10)**, so the FLOOR sets the rate and the cap only decides how far into the
+    `SEND_GAP_FLOOR_MIN`**, so the FLOOR sets the rate and the cap only decides how far into the
+    ⚠️ **THE ~87/day CEILING BELOW WAS MODELLED AT A 10-MINUTE FLOOR AND NO LONGER HOLDS: the
+    floor is 3, so the queue drains ~4x faster than every figure in this section implies.** That is
+    why 16 hook sends went out inside an hour on 2026-09-02 — re-run the simulation before
+    quoting any rate here.
     evening the floor keeps being hit. **~87/day is the ceiling.** Next levers in order:
     `SEND_GAP_FLOOR_MIN`, then the cron schedule (DB-only, above). The model reproduces both figures
     previously recorded in the file (60 → 54.4, 100 → 77.4), which is what makes it trustworthy.
@@ -1972,6 +1976,49 @@ by the single account below.** §6's paginate rule, caught in this file's own no
       → refuse) and `scripts/targeting-straggler.test.ts` drives **720 baseline shapes, including
       `is_market: true`, and asserts none reaches the drop.** Proven separate in live data: 333
       audits, 44 market, 5 baseline, **zero overlap either way**, no market audit with a `lead_id`.
+- 🔴 **IT HAPPENED AGAIN ON 2026-09-02, THROUGH THE ONE GAP THE AUG-18 FIX LEFT: THE SEATBELT WAS
+  KEYED TO A TEMPLATE NAME.** 16 `audit_result_hook` sends, **12 to numbers already in
+  conversation**, 9 of those had replied, **4 were marked `not_interested`**. Nothing was deleted
+  and no guard was bypassed — the audit-first flow simply started queueing a DIFFERENT template,
+  and `if (templateName === "initial_contact")` stopped applying to the traffic that had replaced
+  the opener. **A guard written as a name expires silently the day the product moves.**
+  - ⛔ **THE PREDICATE IS NOW `isColdOutreachTemplate` (`src/lib/coldOutreach.ts`), READ BY ALL
+    THREE PLACES THAT DECIDE** — the drip's guard, the enqueue filter and send-whatsapp-message.
+    **UNKNOWN AND BLANK ARE COLD** (the absent-value law pointed the safe way): a new template is
+    covered the moment it is registered, and a new FOLLOW-UP must be named in
+    `CONTINUATION_TEMPLATES` before it can reach an existing conversation. It fails safe and loud.
+  - ⚠️ **CONTINUATIONS ARE EXEMPT AND MUST STAY SO.** `re_engage` is the case that looks wrong and
+    is right — it exists to restart a conversation that went quiet, so guarding it would block its
+    only audience. ⛔ **Do NOT merge this with `TemplateGroup`** in `whatsappTemplates.ts`: that
+    field says of itself "for optional visual labelling only", and it calls re_engage an 'opener'.
+  - 🔴 **11 OF THE 12 ARRIVED ON A SECOND LEAD ROW FOR THE SAME PHONE, so every per-lead guard
+    correctly saw a fresh lead.** Measured that day: **101 numbers carry 234 unarchived rows.** Two
+    classes — same `place_id`/name (pre-dating the Aug-18 add-path fix, catchable today) and
+    **different place_id, different name, same phone** (two genuine Google listings for one
+    operator: 'Luna Locksmiths' vs 'Luna Locksmiths key cutting and engraving'). **No name or
+    place_id dedupe can EVER catch the second class**, and a pool add carries no phone at add time,
+    so the phone rung cannot either. That class is the entire reason the per-phone guard exists.
+    `SQL_FOR_PAUL_duplicate_leads.sql` archives the 91 never-messaged duplicates; the 42 with their
+    own message history are deliberately left for per-row judgement.
+  - ⛔ **THE 12th WAS A MANUAL SEND, AND `pitchEverSent` CANNOT CATCH IT — IT IS PER-TEMPLATE.**
+    SJA Locksmiths had `whatsapp_ever_delivered = true`, so the DRIP's `already_sent` guard would
+    have refused it; send-whatsapp-message never runs that guard, and per-template means
+    `initial_contact != audit_result_hook`. It now runs the per-phone check **above every branch**,
+    because writing it inside them is how the two functions drifted apart in the first place.
+  - 🔴 **AND MARKING SOMEONE `not_interested` DID NOTHING AT ALL. The app has never written a
+    `contact_suppressions` row** — all 28 on file came from `whatsapp-inbound` auto-detecting a
+    decline in a reply, none from an operator. It only ever READ that table, and blindly: RLS with
+    no policies returns **200 + `[]`**, so the enqueue filter's suppression check has never
+    excluded anyone since the day it was written (§8 records the read as a "UX filter"; it was a
+    no-op). Both now go through admin-gated `process-whatsapp-queue` modes — **`contact_check`**
+    (which **fails closed**: no check, nothing queued) and **`suppress_lead`** (reason restricted
+    to `not_interested`/`closed`, because a status is a workflow position and a suppression is a
+    promise). The suppression row carries phone AND email AND lead_id — a lead-id-only row would
+    not stop the duplicate row being messaged.
+  - ⚠️ **The lasting rule, and it generalises past WhatsApp: a guard must test the PROPERTY that
+    makes something dangerous, never the identifier of today's instance of it.** Ask, as §8 already
+    says elsewhere, not only "is the guard correct?" but "can the case it guards still reach it?" —
+    and re-ask it whenever the flow that feeds the guard changes.
 - 🔴 **THE DUPLICATE-OPENERS INCIDENT (15–17 Aug, fixed 2026-08-18) — 25 duplicate
   `initial_contact` sends, 11 to phones that had already REPLIED. Read this before touching
   addLead's dedupe or the queue's guards.**
