@@ -54,6 +54,7 @@ export interface AiAuditSeo {
 export interface AiAuditReportData {
   businessName: string;
   businessType: string;          // for copy; may be ""
+  locationText?: string;         // for copy; may be "" or absent on older payloads
   named: number;                 // AI answers that named the business
   total: number;                 // AI answers tested
   /* How the total is made up, so the headline can SHOW ITS WORKING rather than assert a number.
@@ -413,6 +414,14 @@ function noWebsiteSection(): string {
      charge £99. No lead, no link, no button.
    Visual language is the existing .cta band — navy ground, yellow accent, the .cta-btn shape. No new
    colours and no new components. */
+/* 🔴 NOT RENDERED SINCE 2026-09-02 - the CTA above no longer calls this. Kept, not deleted, as
+   the record of what the offer said, because reinstating it is a PRICE decision and not a layout
+   one: it carried "first 10 at £49.99", "normally £99", the What's included list, the guarantee box
+   and the week-eight framing, none of which is the current model.
+   ⛔ AND IT WAS THE ONLY PLACE THE PER-LEAD ONBOARDING LINK APPEARED. offerPriceForLead returns the
+   FULL price for `no_lead`, so that button was how a prospect reached the founder price at all.
+   Nothing on the report carries ?lead= now. If a priced offer ever returns to this document, that
+   link has to come back with it - a bare site URL is a different funnel. */
 function founderOfferSection(offerUrl?: string | null): string {
   const url = (offerUrl ?? "").trim();
   /* Only http(s). A relative or javascript: value in that constant would be a link nobody intended;
@@ -674,6 +683,44 @@ export function renderReportHtml(d: AiAuditReportData): string {
   // apostrophe, &), then esc() for HTML-attribute safety. Single-param each → no & separator.
   // Addresses come from REPORT_CONTACT_* at the top of this file — one place to change.
   const emailHref = esc(`mailto:${REPORT_CONTACT_EMAIL}?subject=${encodeURIComponent(`AI Visibility - ${d.businessName}`)}`);
+  /* ⛔ THE SENTENCE DEGRADES, IT NEVER PRINTS A GAP. businessType "may be \"\"" by its own type
+     comment and locationText is absent on every payload built before today, so all four
+     combinations are written out rather than interpolated hopefully. The generic tail is a real
+     sentence, not a placeholder: "a business like yours" is the wording this file already uses
+     elsewhere for exactly this case.
+     ⚠️ "an" before a vowel - "an electrician", not "a electrician". A one-character tell that the
+     document was generated carelessly, on the line that asks for the sale. */
+  const ctaTrade = (d.businessType ?? "").trim();
+  const ctaTown = (d.locationText ?? "").trim();
+  /* ⚠️ REUSES THE FILE'S OWN `article()` (line ~182) RATHER THAN A LOCAL COPY. My first version
+     declared `const article = ...` here and SHADOWED that function, which broke `article(type)` in
+     the explainer above with "This expression is not callable" - a duplicate helper that also
+     disabled the original. One a/an rule in this file. */
+  /* ⛔ NO ARTICLE BEFORE A PLURAL TRADE, AND THIS IS THE COMMON CASE NOT AN EDGE ONE. Measured over
+     the 778 audits that carry a trade: 649 of them - 83% - are stored plural ("Locksmiths",
+     "Plumbers", "Accountants", "Driving instructors"). So `${article(trade)} ${trade}` printed
+     "a Locksmiths in Ashby-de-la-Zouch" on four reports out of five, on the one line that asks for
+     the sale. Dropping the article reads correctly either way: "for Locksmiths in X", "for a
+     plumber in X".
+     ⚠️ `ss` is excluded so a singular like "business" keeps its article; a genuinely singular word
+     ending in one s ("gas") loses it, which reads oddly but never ungrammatically. */
+  /* Plural, or a gerund used as a mass noun. Measured over the 129 non-plural trades: 114 are
+     countable singulars ("plumber" 53, "accountant" 43, "electrician" 12) where the article is
+     right, and 9 are "mobile valeting"/"mobile valeting and detailing" where "a mobile valeting" is
+     wrong. The `ing$` clause fixes those and any future "plumbing"/"roofing" without a curated
+     list.
+     ⚠️ RESIDUAL, STATED: "hospitality" and "shoe repairs & watch battery replacement" still take an
+     article - 2 of 778 audits. A mass-noun list is not worth carrying for that, but if a real
+     client ever reads badly here, this is the line to widen. */
+  const pluralTrade = /[^s]s$/i.test(ctaTrade) || /ing$/i.test(ctaTrade);
+  const tradePhrase = pluralTrade ? esc(ctaTrade) : `${article(ctaTrade)} ${esc(ctaTrade)}`;
+  const ctaSubject = ctaTrade && ctaTown
+    ? `${tradePhrase} in ${esc(ctaTown)}`
+    : ctaTrade
+      ? tradePhrase
+      : ctaTown
+        ? `a business in ${esc(ctaTown)}`
+        : "a business like yours";
   const waHref = esc(`https://wa.me/${REPORT_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
 
   // ── QUESTION-BY-QUESTION DETAIL (page 2) — every question asked, whether AI named the business,
@@ -1226,24 +1273,30 @@ ${d.hidePitch ? "" : `
     <!-- CTA -->
     <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
 ${d.hidePitch ? "" : `
+    <!-- 🔴 STRIPPED BACK TO A HEADING, ONE LINE AND TWO BUTTONS (2026-09-02, Paul's call). What
+         was here: "Ready to get started?", three paragraphs, Email us / WhatsApp us / Who we are,
+         and directly below it the whole founder-offer block - "first 10 at £49.99", "normally £99",
+         a What's included list, the guarantee box and week-eight references. All of it described a
+         model that is no longer the offer, on the document a prospect reads first.
+
+         ⛔ THE OFFER BLOCK IS NO LONGER RENDERED AT ALL - founderOfferSection() is not called. Read
+         the note above that function before reinstating anything: the report was the only surface
+         carrying the per-lead onboarding link, and that link is what made the founder price
+         reachable. A bare findable.live URL cannot carry ?lead=, so a visitor arriving this way
+         gets the standard funnel. That is the intended trade here - a short honest CTA over a stale
+         price - but it IS a funnel change, not just copy.
+
+         ⚠️ Email us and Who we are went with it. WhatsApp keeps the same wa.me href it always had,
+         prefilled with the business name, so the one route that was actually used is unchanged. -->
     <section class="cta">
-      <h3>Ready to get <span class="y">started</span>?</h3>
-      <!-- "READS", NOT "SAYS", and it matters twice over. It is more accurate — AI reads sources
-           and produces answers, and what we change is the sources — and it is the exact wording
-           findable-site's onboarding flow uses ("We fix what AI reads about you"), so the two
-           surfaces a prospect sees describe the product identically. -->
-      <p><b>This is your starting point.</b> We fix what AI reads about you.</p>
-      <div class="close">Let&rsquo;s give AI something to find about ${esc(d.businessName)}.</div>
+      <h3>Want us to <span class="y">fix this</span>?</h3>
+      <p>We&rsquo;ll get you showing up when people ask AI for ${ctaSubject}.</p>
       <div class="cta-actions">
-        <a class="cta-btn email" href="${emailHref}" target="_blank" rel="noopener noreferrer">Email us</a>
+        <a class="cta-btn site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">See how it works</a>
         <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp us</a>
-        <!-- Deliberately the QUIETEST of the three: it is not the action we want, it is the
-             reassurance that makes the other two thinkable. Outline rather than filled. -->
-        <a class="cta-btn site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">Who we are</a>
       </div>
     </section>`}
 
-${d.showFounderOffer === true ? founderOfferSection(d.founderOfferUrl) : ""}
     ${siteFooter}
   </div>
 ${questionDetail}
