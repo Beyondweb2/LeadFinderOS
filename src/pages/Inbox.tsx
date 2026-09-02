@@ -76,6 +76,14 @@ function templateLabel(name: string | null): string {
   return `📄 ${t ? t.label : name}`;
 }
 
+/* ⛔ TWO TEMPLATES PUT A REPORT IN FRONT OF A PROSPECT NOW. `audit_reply` was the only one for
+   months, so three places compared against that single string; `free_check_result` (the free-check
+   lane) carries the same report link and matched none of them, so the Inbox believed no report had
+   ever been sent to a free-check prospect - it drives the "report sent" badge and the
+   report-vs-reply ordering. A Set, because the next template carrying a report must join one list
+   rather than three string comparisons. */
+const REPORT_TEMPLATES = new Set(['audit_reply', 'free_check_result']);
+
 // Clean display names for templates (incl. the legacy pre-rename name). Unknown → "Template".
 const TEMPLATE_DISPLAY: Record<string, string> = {
   booking_page_intro: 'Booking page intro',
@@ -85,6 +93,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   booking_switch_barbers: 'Booking switch (no commission)',
   barber_fresha_booksy: 'Fresha/Booksy switch',
   audit_reply: 'Audit reply (report)', // was falling through to a bare "Template" in the thread
+  free_check_result: 'Free check result (report)', // same reason: it showed as a bare "Template"
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage: 'Re-engage (gone quiet)',
@@ -326,7 +335,7 @@ const Inbox = () => {
       if (m.direction === 'inbound') {
         latestInboundAt.set(key, Math.max(latestInboundAt.get(key) ?? 0, t));
       } else if (m.status !== 'failed') {
-        if (m.template_name === 'audit_reply') latestReportAt.set(key, Math.max(latestReportAt.get(key) ?? 0, t));
+        if (m.template_name && REPORT_TEMPLATES.has(m.template_name)) latestReportAt.set(key, Math.max(latestReportAt.get(key) ?? 0, t));
         else if (m.template_name === 'hook_followup') hookSent.add(key);
       }
     }
@@ -367,7 +376,7 @@ const Inbox = () => {
         everInbound.add(key);
       } else if (m.status !== 'failed') {
         if (m.template_name === 'initial_contact') latestOpenerAt.set(key, Math.max(latestOpenerAt.get(key) ?? 0, t));
-        else if (m.template_name === 'audit_reply') reportSent.add(key);
+        else if (m.template_name && REPORT_TEMPLATES.has(m.template_name)) reportSent.add(key);
         else if (m.template_name === 'contact_followup') contactSent.add(key);
       }
     }
@@ -539,7 +548,7 @@ const Inbox = () => {
    * unchanged. Competitors aren't available in the inbox, so audit_reply degrades to "other firms". */
   const bubbleReadable = (m: { body: string | null; template_name: string | null }): string => {
     const businessName = activeBusinessName ?? active?.label ?? '';
-    const url = m.template_name === 'audit_reply'
+    const url = m.template_name && REPORT_TEMPLATES.has(m.template_name)
       ? (reportUrl ?? '')
       : (activeLead ? onboardingUrl(activeLead.id, activeLead.business_name) : '');
     const trade = activeLead?.search_keyword ?? activeLead?.category ?? undefined;
