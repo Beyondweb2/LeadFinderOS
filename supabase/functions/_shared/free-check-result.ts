@@ -359,9 +359,26 @@ export async function maybeSendFreeCheckResult(
               message_type: "template", template_name: FREE_CHECK_TEMPLATE,
               status: "sent", wa_message_id: sent.messageId,
             });
-            await service.from("whatsapp_sends").insert({
-              lead_id: lead.id, user_id: lead.user_id ?? null, template_name: FREE_CHECK_TEMPLATE, phone: to,
+            /* 🔴 THE COLUMN IS `template`, NOT `template_name`, AND THIS FAILED SILENTLY FOR THE
+               FIRST REAL SEND (fixed 2026-09-02). Two mistakes compounded: the wrong column name,
+               and relying on the try/catch to surface it — supabase-js `.insert()` RETURNS an
+               error object, it does not THROW, so the catch never ran and the console.error never
+               printed. The whatsapp_messages row above landed, this one did not, and nothing said
+               so. Mirrors send-whatsapp-message's own insert (index.ts:311).
+               ⚠️ WHY IT MATTERS BEYOND TIDINESS: process-whatsapp-queue's `sentToday` counts
+               whatsapp_sends rows against DAILY_CAP, so a missing row means a free-check send
+               spends Meta quota without being counted — the same class of gap as the reply path
+               being exempt from the cap while still consuming it. */
+            const { error: sendLogErr } = await service.from("whatsapp_sends").insert({
+              lead_id: lead.id,
+              user_id: lead.user_id ?? null,
+              template: FREE_CHECK_TEMPLATE,
+              phone: to,
+              message_id: sent.messageId ?? null,
             });
+            if (sendLogErr) {
+              console.error(`[free-check-result] whatsapp_sends log failed: ${sendLogErr.message}`);
+            }
           } catch (e) {
             console.error("[free-check-result] send logged badly:", e instanceof Error ? e.message : String(e));
           }
