@@ -66,25 +66,38 @@ export const FREE_CHECK_TEMPLATE = "free_check_result";
 import { reportPublicUrl } from "../../../src/lib/findableOffer.ts";
 
 const ADMIN_EMAIL = "paul@move37.fun";
-/* 🔴 REVERTED TO THE OLD DOMAIN 2026-09-02, BECAUSE RESEND REFUSED THE NEW ONE. The switch to
-   `@findable.live` was made, deployed, and produced HTTP 403 on every send:
-     "The findable.live domain is not verified. Please, add and verify your domain on
-      https://resend.com/domains"
-   Three real operator notifications failed before it was caught, and a prospect result email would
-   have failed identically - Resend does not degrade, it refuses.
+/* 🔴 THE SENDER. ON findable.live SINCE 2026-09-02, AND IT TOOK TWO ATTEMPTS TO GET HERE.
+   Both addresses were `@lead-finder-app.com`, the OLD product's domain, so a Findable prospect got a
+   cold automated email from a brand they had never heard of on a domain unrelated to the site they
+   had just used. That is the strongest spam signal a first-contact email can carry, and this email
+   IS the free check's whole deliverable.
 
-   ⚠️ AND THE DNS CHECK THAT AUTHORISED THE SWITCH WAS NOT ENOUGH. findable.live genuinely carries
-   the complete Resend record set - resend._domainkey has a DKIM key, send.findable.live has
-   `v=spf1 include:amazonses.com ~all` and an MX to feedback-smtp.ap-northeast-1.amazonses.com - and
-   Resend STILL reports it unverified. Published records are a precondition, not the verification:
-   Resend has to observe them and mark the domain verified in the account THE API KEY BELONGS TO.
-   A domain verified on a different Resend account or team is invisible to this key.
-   ⛔ SO THE ONLY TRUSTWORTHY CHECK IS A SEND. DNS proves the records exist; the 403 proves what
-   Resend thinks. Do not switch these two constants again on the strength of DNS, a dashboard
-   screenshot, or anyone's recollection - flip them, send one operator email, and read notify_error.
-   Flipping is one line each, on purpose. */
-const FROM_PROSPECT = "Findable <noreply@lead-finder-app.com>";
-const FROM_OPERATOR = "LeadFinder Pro <noreply@lead-finder-app.com>";
+   ⛔ THE FIRST ATTEMPT FAILED AND THE FAILURE MODE IS TOTAL, NOT COSMETIC. Resend answered every
+   send with HTTP 403 "The findable.live domain is not verified" - it does not degrade, it refuses -
+   and three operator notifications were lost before it was caught. The cause was NOT the DNS:
+   findable.live already published the complete Resend record set (resend._domainkey DKIM key,
+   send.findable.live SPF `v=spf1 include:amazonses.com ~all`, MX to
+   feedback-smtp.ap-northeast-1.amazonses.com). The domain was verified on a DIFFERENT Resend
+   account from the one RESEND_API_KEY belonged to, and a domain verified elsewhere is invisible to
+   the key. Paul replaced the key with one from the right account.
+
+   ⛔ SO THE RULE, AND IT IS THE WHOLE LESSON: ONLY A REAL SEND PROVES A SENDER. Published DNS is a
+   precondition, not the verification - it was fully in place while every send 403'd, and checking
+   it is exactly what gave false confidence the first time. Never switch these constants on DNS, a
+   dashboard screenshot or anyone's recollection. Flip them, trigger one operator notification, and
+   read `onboarding_responses.notify_error`. Both addresses below were proven that way before this
+   was committed.
+
+   ⚠️ NOT `noreply@`, DELIBERATELY. A no-reply From on a first-contact email is a deliverability
+   penalty at the big providers and throws away the warmest outcome there is - a prospect replying.
+   The reply-to is the operator's real working mailbox rather than a findable.live address that may
+   not have one: a bounced reply is worse than a reply on the wrong domain. stripe-webhook already
+   does exactly this for the barber receipt.
+   ⚠️ STILL MISSING, AND IT IS THE REMAINING SPAM LEVER: no DMARC on findable.live
+   (_dmarc.findable.live resolves to nothing). DKIM+SPF clears Resend's bar; DMARC is what the
+   bulk-sender rules at Gmail and Yahoo expect. A DNS change, not a code one. */
+const FROM_PROSPECT = "Findable <reports@findable.live>";
+const FROM_OPERATOR = "Findable alerts <alerts@findable.live>";
 
 
 // deno-lint-ignore no-explicit-any
