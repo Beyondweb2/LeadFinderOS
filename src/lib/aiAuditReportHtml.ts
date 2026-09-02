@@ -106,6 +106,20 @@ export interface AiAuditReportData {
   /** False when the business has no website at all. The SEO slot then shows what we will BUILD
    *  them instead of rendering nothing: a site is part of the setup, and silence sells nothing. */
   hasWebsite?: boolean;
+  /* ⛔ HOW THE WEBSITE SLOT IS PRESENTED. 'graded' (the DEFAULT) is the original: grade circles,
+     /100 scores and a lead sentence naming the grade. 'issues' drops all of that and prints the
+     findings alone under a plain heading.
+
+     WHY, Paul's call 2026-09-01: a letter grade is REASSURING, and a business that AI never names
+     reading "your overall SEO grade is B" is being told the wrong thing about the wrong problem —
+     the grade measures how the pages are built, not whether an engine mentions them. Before a
+     client has paid, that misdirection costs the sale it is meant to win.
+
+     ⛔ THE DEFAULT IS 'graded' ON PURPOSE. Every caller that does not set this keeps today's
+     output byte-for-byte, so the PAID BASELINE — the only place the grade is still wanted — is
+     untouched by construction rather than by a filter someone has to remember. Only callers that
+     KNOW they are not a paid baseline opt into 'issues'. */
+  seoStyle?: 'graded' | 'issues';
   /** Render the founder offer at the bottom. DEFAULTS TO FALSE — a renderer that shows a price
    *  unless told not to is the wrong default, because the callers that forget are the in-app preview
    *  and the download, and a client must never open their own report to a cheaper offer.
@@ -472,6 +486,37 @@ function seoSection(seo: AiAuditSeo | undefined): string {
         </div>
         ${findings ? `<ul class="seo-findings">${findings}
         </ul>` : ""}
+      </div>
+    </section>`;
+}
+
+/** THE PRE-PAYMENT VERSION: the findings, and nothing that grades them.
+ *
+ *  ⛔ NO GRADE LANGUAGE ABOVE THE LIST. seoSection's lead sentence names the letter grade and then
+ *  branches on it ("that is a good result" / "here's what's holding it back") — carrying any of that
+ *  over would reintroduce exactly the reassurance this version exists to remove. The heading states
+ *  the offer instead: these are things we can fix.
+ *
+ *  ⚠️ AN EMPTY LIST STILL RENDERS A LINE, never a bare heading over nothing. It is deliberately not
+ *  reassuring: it says the sample was small and points back at the AI result, which is the finding
+ *  that actually matters. Wording is Paul's, verbatim. */
+function seoIssuesSection(seo: AiAuditSeo | undefined): string {
+  if (!seo) return "";
+  const findings = (seo.leadFindings ?? []).map((f) => `
+          <li class="find">
+            <span class="find-dot" style="background:${SEV_COLOUR[f.severity] ?? "var(--faint)"}"></span>
+            <span class="find-body"><b class="find-title">${esc(f.title)}</b> <span class="find-detail">${esc(f.detail)}</span></span>
+          </li>`).join("");
+  return `
+    <!-- WEBSITE ISSUES &mdash; the findings alone. No grade, no score: see seoStyle. -->
+    <section class="seo">
+      <div class="sec-eyebrow">Your website</div>
+      <div class="sec-title">Website issues we can fix</div>
+      <div class="seo-body">
+        ${findings
+          ? `<ul class="seo-findings">${findings}
+        </ul>`
+          : `<p class="seo-intro">We didn&rsquo;t flag any page-level issues on the pages we checked. That&rsquo;s a small sample and separate from whether AI names you, which the results above cover.</p>`}
       </div>
     </section>`;
 }
@@ -1081,7 +1126,7 @@ ${gutbox}
          category grades + a radar of the three scores + the lead findings). Renders
          nothing when d.seo is absent, so AI-only audits (e.g. the bar) don't break.
          ============================================================================ -->
-${d.seo ? seoSection(d.seo) : d.hasWebsite === false ? noWebsiteSection() : siteCheckPendingSection()}
+${d.seo ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : seoSection(d.seo)) : d.hasWebsite === false ? noWebsiteSection() : siteCheckPendingSection()}
 
     <!-- WHY THIS MATTERS (stakes) -->
     <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->

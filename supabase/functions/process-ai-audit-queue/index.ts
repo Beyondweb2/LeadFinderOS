@@ -14,7 +14,7 @@ import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/w
 import { autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 // Automation B: reuse the SHARED report aggregation (same buildReportData the SPA + public
 // renderer use) so the WhatsApp {{2}} competitor list matches the report exactly.
-import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
+import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { buildReportSlug } from "../../../src/lib/reportSlug.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
@@ -1251,7 +1251,7 @@ async function insertAuditReportRow(service: any, businessName: string, auditId:
 async function maybeSendAuditReply(service: any, runId: string, auditId: string): Promise<void> {
   // 1) Lead gate — a manually-run audit (no lead) has nobody to message.
   const { data: audit } = await service.from("ai_audits")
-    .select("id, lead_id, business_name, business_type, location_text, specialism")
+    .select("id, lead_id, business_name, business_type, location_text, specialism, baseline_target_runs")
     .eq("id", auditId).maybeSingle();
   if (!audit?.lead_id) return;
 
@@ -1271,6 +1271,7 @@ async function maybeSendAuditReply(service: any, runId: string, auditId: string)
     locationText: audit.location_text ?? "",
     specialisms: audit.specialism ?? "",
     isAggregatorUrl,
+    seoStyle: seoStyleForAudit((audit as { baseline_target_runs?: unknown }).baseline_target_runs),
   });
   if (!data) return; // no completed questions (e.g. all-failed) → nothing to report/send
 
