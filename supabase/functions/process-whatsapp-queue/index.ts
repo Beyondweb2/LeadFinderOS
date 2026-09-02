@@ -1092,7 +1092,19 @@ Deno.serve(async (req) => {
       }, 200);
     }
 
-    const templateExtra: { trade?: string; competitors?: string; onboardingUrl?: string } = {};
+    /* ⛔ `auditUrl` AND `town` BELONG HERE TOO, AND LEAVING THEM OUT COST A REAL SEND. This type
+       carried only trade/competitors/onboardingUrl, so when audit_result_hook (vars: name, trade,
+       town, audit_url) came through this path, templateBodyParams found audit_url empty and threw
+       "refusing to send a result with no link". Measured live 2026-09-02 13:08 on Nabars Locksmith:
+       failed_temporary, nothing delivered.
+       🔴 THIS IS THE THIRD SEND PATH AND IT WAS THE ONE THAT MATTERED. The payload build was made
+       var-driven in the auto-reply lane and in send-whatsapp-message; THIS drip - the one that
+       actually sends outreach - was missed, which is CLAUDE.md's recorded "three callers build it
+       themselves" trap landing on a fourth thing. When a template's variables change, grep for
+       EVERY builder of its payload and count them before believing you have them all.
+       ⚠️ The guard did its job: it refused rather than sending a message with a missing link, and
+       failed_temporary means the lead retries rather than being burned. */
+    const templateExtra: { trade?: string; competitors?: string; onboardingUrl?: string; town?: string; auditUrl?: string } = {};
     // The url actually sent: the claim link by default, overridden by a resolver that owns it.
     let resolvedUrl = claimUrl;
     if (tvars.includes("onboarding_url")) {
@@ -1141,8 +1153,12 @@ Deno.serve(async (req) => {
           lead_id: lead.id, business: lead.business_name, ...statusPayload, auditAhead,
         }, 200);
       }
+      /* FROM THE TEMPLATE'S DECLARED VARS, matching the other two builders exactly - so a template
+         that declares town/audit_url is filled, and one that does not is byte-identical to before. */
       templateExtra.trade = ar.trade;
-      templateExtra.competitors = ar.competitors;
+      if (tvars.includes("competitors")) templateExtra.competitors = ar.competitors;
+      if (tvars.includes("town")) templateExtra.town = ar.town;
+      if (tvars.includes("audit_url")) templateExtra.auditUrl = ar.link;
       // Its "url" var is the AUDIT REPORT link, so it replaces the claim link for this send.
       // Sending the site claim link under audit_reply's copy ("we ran a full report … <link>")
       // would point the prospect at the wrong page entirely.
@@ -1322,7 +1338,9 @@ Deno.serve(async (req) => {
           user_id: (lead.user_id as string | null) ?? null, // the lead's owner (inbox ownership + reply attribution)
           lead_id: lead.id,
           phone: toNumber,                                   // the number actually messaged (E.164 digits)
-          body: renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors),
+          // town is the 6th positional arg (see renderTemplateBody) - without it the operator
+          // transcript would read "in your area" while the prospect's message named their town.
+          body: renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town),
           message_type: "template",
           template_name: templateName,
           wa_message_id: messageId,                          // null on a simulated (TEST_MODE) send
