@@ -1044,7 +1044,7 @@ export function buildReportData(
 
     // Per display-engine, across runs: how many of the runs it named you in, plus its rivals/sources.
     const perEngine = (['chatgpt', 'gemini', 'ai_overview'] as const).map((engine) => {
-      let ranCount = 0; let named = 0; let recommended = 0; let cited = 0;
+      let ranCount = 0; let named = 0; let recommended = 0; let cited = 0; let rawRivals = 0;
       const seenR = new Set<string>(); const engRivals: string[] = [];
       const cm = new Map<string, string>();
       for (const r of rows) {
@@ -1062,7 +1062,20 @@ export function buildReportData(
            guarantee, which is exactly why both numbers are now shown. */
         if (nameMatches(er.answer_text ?? '', ctx.businessName, matchCtx)) recommended++;
         if ((er.citations ?? []).some((c) => citationIsClient(c, ctx.businessName, ownDomain))) cited++;
-        for (const c of er.competitors ?? []) { if (!keepRival(c)) continue; const t = c.trim(); const k = t.toLowerCase(); if (!k || seenR.has(k)) continue; seenR.add(k); engRivals.push(t); }
+        /* ⛔ COUNT WHAT AI ACTUALLY RETURNED, BEFORE FILTERING. `engRivals` is the KEPT list, and an
+           empty kept list has three completely different causes: AI named nobody else, every name it
+           did return was filtered out as junk, or names are being withheld because the run is dirty.
+           The report printed ONE sentence for all three - "No businesses named." - which on a real
+           prospect's document sat directly under "Named in the answer - 1 of 1" (Hazlewood Locksmiths,
+           2026-09-02: two of its three occurrences). The renderer cannot tell the cases apart from an
+           empty array, so the raw count travels with it. */
+        for (const c of er.competitors ?? []) {
+          const t = c.trim(); if (!t) continue;
+          rawRivals++;
+          if (!keepRival(c)) continue;
+          const k = t.toLowerCase(); if (seenR.has(k)) continue;
+          seenR.add(k); engRivals.push(t);
+        }
         for (const c of er.citations ?? []) { const url = unwrapCitationUrl(c?.url ?? ''); const dom = citationDomain(url); if (!dom || cm.has(dom)) continue; cm.set(dom, url); }
       }
       return {
@@ -1078,7 +1091,10 @@ export function buildReportData(
            reconcile: an engine outside SCORED_ENGINES says so on its own row. */
         counted: (SCORED_ENGINES as readonly string[]).includes(engine),
         ran: ranCount > 0, ranCount, runs: rows.length, named, recommended, cited,
-        rivals: engRivals, citations: [...cm.entries()].slice(0, 8).map(([domain, url]) => ({ domain, url })),
+        rivals: engRivals,
+        /* How many names AI returned for this engine BEFORE filtering - see the loop above. */
+        rivalsRaw: rawRivals,
+        citations: [...cm.entries()].slice(0, 8).map(([domain, url]) => ({ domain, url })),
       };
     });
 
@@ -1140,6 +1156,11 @@ export function buildReportData(
     /* Suppressed alongside every other rival list — the gut-punch LEADS the report, so an
        uncleaned run must not open with "AI recommended Testosterone instead of you". With no
        gutPunch the report falls back to its measured-verdict opening. */
+    /* ⛔ EXPOSED SO THE DOCUMENT CAN SAY WHY A LIST IS EMPTY. Suppression already blanked every
+       rival name (keepRival returns false for all of them), but the renderer only saw the empty
+       result and asserted "No businesses named" - turning "we hold names we do not trust" into
+       "AI named nobody", which is a different claim and not one we had evidence for. */
+    namesWithheld: rivalsSuppressed,
     gutPunch: rivalsSuppressed ? null : pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
     // The date the AUDIT WAS MEASURED, not the date someone happened to open the link.
     // render-audit-report rebuilds this on every request, so new Date() re-dated a three-week-old
