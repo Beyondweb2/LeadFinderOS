@@ -4,6 +4,11 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { OutreachLead } from '@/types/outreach';
+import {
+  auditStatusFor, AUDIT_STATUS_PRESENTATION,
+  type AuditRowForStatus, type QueueAuditStatus,
+} from '@/lib/queueAuditStatus';
+import { WA_TEMPLATE_REQS } from '@/lib/whatsappTemplates';
 
 interface QueueStatus {
   testMode: boolean;
@@ -59,6 +64,55 @@ export function WhatsAppQueuePanel({
       .sort((a, b) => (a.queued_at ?? '').localeCompare(b.queued_at ?? '')),
     [leads],
   );
+
+  /* ══ AUDIT STATUS PER QUEUED LEAD ═════════════════════════════════════════════════════════════
+     🔴 WHY THIS IS ON SCREEN AT ALL. A lead queued for an audit-class template cannot send until its
+     audit completes — the message carries the report link and templateBodyParams refuses to build it
+     without one. That guard is right, but from this panel a lead WAITING on its audit looked exactly
+     like a lead that was stuck: same row, same position, no explanation. Sixteen sat like that.
+
+     ⚠️ READ ONLY FOR THE LEADS THAT NEED IT. Only audit-class templates get a pill, so the query is
+     scoped to those lead ids — a queue full of openers issues no request at all. RLS scopes
+     ai_audits to the operator; useInbox reads the same shape for its own audit guard.
+     ⚠️ NOT PAGINATED, DELIBERATELY, AND BOUNDED BY CONSTRUCTION: `.in()` over the queued audit-class
+     leads only. If the queue ever holds hundreds of them this needs fetchAllRows like useInbox —
+     the failure mode would be leads showing "no audit" while an audit exists, i.e. the pill lying. */
+  const auditLeadIds = useMemo(
+    () => queued.filter((l) => l.whatsapp_template && WA_TEMPLATE_REQS[l.whatsapp_template]?.needsAudit)
+      .map((l) => l.id),
+    [queued],
+  );
+  const [auditRows, setAuditRows] = useState<AuditRowForStatus[]>([]);
+  const auditKey = auditLeadIds.join(',');
+  useEffect(() => {
+    if (!auditLeadIds.length) { setAuditRows([]); return; }
+    let alive = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from('ai_audits')
+        .select('lead_id, ai_audit_runs(status)')
+        .in('lead_id', auditLeadIds)
+        .order('created_at', { ascending: false });
+      /* An error leaves the previous rows alone rather than blanking them to "no audit" — a pill
+         that goes wrong under a failed refresh is worse than a slightly stale one. */
+      if (alive && !error) setAuditRows((data ?? []) as unknown as AuditRowForStatus[]);
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auditKey]);
+
+  const auditStatusByLead = useMemo(() => {
+    const byLead = new Map<string, AuditRowForStatus[]>();
+    for (const r of auditRows) {
+      if (!r.lead_id) continue;
+      const list = byLead.get(r.lead_id) ?? [];
+      list.push(r);
+      byLead.set(r.lead_id, list);
+    }
+    const out = new Map<string, QueueAuditStatus>();
+    for (const l of queued) out.set(l.id, auditStatusFor(l.whatsapp_template, byLead.get(l.id) ?? []));
+    return out;
+  }, [auditRows, queued]);
 
   /* The contact_followup (no-reply opener follow-up) lane. SEPARATE from `queued` because it drains
      off its own marker column (contact_followup_queued_at), not status='queued' — so these leads
@@ -265,6 +319,16 @@ export function WhatsAppQueuePanel({
                         <span className="w-5 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground/50">{i + 1}</span>
                         <span className="truncate text-foreground/90">{l.business_name}</span>
                         {l.whatsapp_template && <span className="shrink-0 text-[10px] text-muted-foreground/50">{l.whatsapp_template}</span>}
+                        {(() => {
+                          const st = auditStatusByLead.get(l.id);
+                          if (!st || st === 'not_needed') return null;
+                          const p = AUDIT_STATUS_PRESENTATION[st];
+                          return (
+                            <span className={`shrink-0 text-[10px] ${p.className}`} title={p.title}>
+                              {p.label}
+                            </span>
+                          );
+                        })()}
                       </span>
                       <button
                         type="button"
