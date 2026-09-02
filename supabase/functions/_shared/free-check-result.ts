@@ -44,10 +44,26 @@ export const FREE_CHECK_RESULT_MAX_WAIT_MS = 45 * 60 * 1000;
 
 export const FREE_CHECK_TEMPLATE = "free_check_result";
 
-/** Where the prospect's report is served from. /a/<auditId> is rendered LIVE by
- *  render-audit-report straight off the audit — no stored business_reports row is needed, which is
- *  why the email can go the moment the audit finalises. Same origin the WhatsApp lane already uses. */
-const REPORT_ORIGIN = "https://yoursites.uk";
+/* 🔴 THIS FILE USED TO BUILD `https://yoursites.uk/a/<auditId>` AND IT REACHED A REAL PROSPECT
+   (fixed 2026-09-02). Two independent faults in one line, and BOTH were already written down:
+
+     · THE HOST. yoursites.uk is the BARBER product's origin. findableOffer.ts says so in as many
+       words — "Deliberately NOT PUBLIC_SITE_ORIGIN: that is the barber product's yoursites.uk, and
+       coupling the AI-visibility report to it is what left the share link pointing at a dead route."
+       A leftover domain from another product line must never appear in Findable prospect-facing copy.
+     · THE PATH. `/a/<id>` is RETIRED. On findable.live it is a deliberate 404 (findable-site
+       functions/a/[id].ts) precisely because it used to fall through to the SPA and serve the HOME
+       PAGE with HTTP 200 — CLAUDE.md §4's worst failure shape. The live shape is `/report/<id>`.
+
+   ⚠️ AND THE COMMENT THAT SAT HERE ASSERTED IT WAS FINE: "Same origin the WhatsApp lane already
+   uses." That was false — audit-reply.ts builds findable.live/report/. I inherited a claim instead
+   of checking the layer it was about, which is the stale-comment lesson in §4 applied to my own
+   comment. If a comment explains why a value is safe, verify it.
+
+   ⛔ SO THIS IMPORTS THE CANONICAL BUILDER rather than holding a corrected copy. findableOffer.ts is
+   a zero-import leaf and four edge functions already read values from it, so a local constant here
+   would only have been a fourth place for the origin to drift. */
+import { reportPublicUrl } from "../../../src/lib/findableOffer.ts";
 
 const ADMIN_EMAIL = "paul@move37.fun";
 
@@ -259,7 +275,7 @@ export async function maybeSendFreeCheckResult(
   /* 4 — THE LINKS. The onboarding link MUST carry ?lead= — offerPriceForLead returns the FULL £99
      for `no_lead`, so a bare /onboarding/ URL would quietly charge this prospect the standard price
      instead of the founder price. onboardingUrl builds the only correct shape. */
-  const reportLink = `${REPORT_ORIGIN}/a/${auditId}`;
+  const reportLink = reportPublicUrl(auditId);
   const origin = resolveSiteOrigin();
   const onboardLink = origin ? onboardingUrl(origin, lead.id, audit.business_name ?? null) : null;
   if (!onboardLink) {
