@@ -141,6 +141,7 @@ import { TRADES } from '@/lib/trades';
 import { AiOpenerModal } from '@/components/AiOpenerModal';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/hooks/useOutreachFindEmails';
+import { isColdOutreachTemplate } from '@/lib/coldOutreach';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -1414,28 +1415,64 @@ export function OutreachTable({
     // Canonical E.164 ("+…") for a lead, matching the drainer + twilio-inbound suppression key.
     const e164 = (l?: OutreachLead) => (l?.phone ? `+${formatPhoneForWhatsApp(l.phone)}` : '');
 
-    // Cross-channel suppression (one-no-forever): pull any suppressed phones in the selection.
-    // Best-effort — a query failure just defers to the drainer's authoritative suppression check.
+    /* ⛔ PRIOR CONTACT AND SUPPRESSION BOTH COME FROM THE SERVER NOW, AND THAT IS A BUG FIX, NOT
+       A REFACTOR. This block used to read contact_suppressions directly - a table with RLS enabled
+       and NO POLICIES, which returns HTTP 200 and an empty array to the anon key (CLAUDE.md §8), so
+       `suppressed` was structurally always empty and this filter has never excluded a single
+       suppressed number since it was written. It read like a guard and did nothing.
+
+       🔴 AND IT COULD NOT SEE THE REAL PROBLEM ANYWAY. On 2026-09-02, 12 of 16 audit_result_hook
+       sends went to numbers already in conversation - 11 on a SECOND lead row for the same phone.
+       Every test here was per-lead-row (`l.status`, `l.whatsapp_delivery_status`), and a fresh
+       duplicate row has a null delivery status, so it sailed through. 104 numbers currently have more
+       than one unarchived lead row. 'Has this NUMBER been messaged' cannot be answered from the row
+       in front of you, and the SPA's own RLS scope cannot answer it either.
+
+       ⛔ IT FAILS CLOSED. If the check cannot be made, NOTHING is queued and the operator is told.
+       Every other client-side guard here is a best-effort UX filter deferring to the drip - right for
+       cosmetics, wrong for this: the drip is the backstop for a number it can SEE, and queueing blind
+       is what put the messages out. */
+    const wantsColdGuard = isColdOutreachTemplate(template);
     const phones = [...new Set(ids.map((id) => e164(leadOf(id))).filter(Boolean))];
     let suppressed = new Set<string>();
+    let contacted = new Set<string>();
     if (phones.length) {
-      const { data: supp } = await (supabase as unknown as SupabaseClient)
-        .from('contact_suppressions').select('phone_e164').in('phone_e164', phones);
-      suppressed = new Set(((supp ?? []) as { phone_e164: string }[]).map((r) => r.phone_e164));
+      const { data: chk, error: chkErr } = await supabase.functions.invoke('process-whatsapp-queue', {
+        body: { mode: 'contact_check', phones },
+      });
+      const res = chk as { ok?: boolean; contacted?: string[]; suppressed?: string[] } | null;
+      if (chkErr || !res?.ok) {
+        toast({
+          title: 'Could not check contact history',
+          description: 'Nothing was queued. This check is what stops a business being messaged twice, so the queue will not run without it.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      /* Compared on bare digits - the endpoint normalises both conventions, so nothing here needs to
+         know that whatsapp_messages stores '447…' and contact_suppressions stores '+447…'. */
+      const bare = (v: string) => v.replace(/\D/g, '');
+      suppressed = new Set((res.suppressed ?? []).map(bare));
+      contacted = new Set((res.contacted ?? []).map(bare));
     }
     // A SUCCESSFUL prior WhatsApp = already contacted → never re-queue (Decision 1: only a real
-    // success blocks; 'simulated'/failed don't). UX filter with an honest count; the drainer is the
-    // authoritative guard for anything this misses (e.g. a send whose delivery webhook never landed).
+    // success blocks; 'simulated'/failed don't).
     const SENT_OK = new Set(['sent', 'delivered', 'read']);
-    // Exclude: not-on-WhatsApp (permanent), already queued (in-flight), already successfully sent, or
-    // suppressed. What remains goes through the existing mobile line-type gate below.
+    // Exclude: not-on-WhatsApp (permanent), already queued (in-flight), already successfully sent,
+    // suppressed, or - for a COLD template - a number with any prior conversation on ANY lead row.
+    let blockedContacted = 0;
     const queueable = ids.filter((id) => {
       const l = leadOf(id);
       if (!l) return false;
       if (l.status === 'no_whatsapp') return false;
       if (l.status === 'queued') return false;
       if (SENT_OK.has((l.whatsapp_delivery_status ?? '') as string)) return false;
-      if (suppressed.has(e164(l))) return false;
+      const digits = e164(l).replace(/\D/g, '');
+      if (digits && suppressed.has(digits)) return false;
+      /* ⚠️ ONLY for cold templates. re_engage and the follow-ups EXIST to reach a number with
+         history, so blocking them here would make them unqueueable for their only audience - the
+         same reasoning as the drip's guard, reading the same leaf. */
+      if (wantsColdGuard && digits && contacted.has(digits)) { blockedContacted++; return false; }
       return true;
     });
     const skipped = ids.length - queueable.length;
@@ -1469,13 +1506,18 @@ export function OutreachTable({
     setSelectedIds(new Set());
     setQueueDialogOpen(false);
     const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
+    /* ⚠️ THE NUMBER-LEVEL BLOCK GETS ITS OWN LINE. Folded into `skipped` it would read as
+       "already contacted", which an operator takes to mean THIS lead - hiding the fact that the
+       block came from a DIFFERENT lead row carrying the same phone. That distinction is the whole
+       finding of 2026-09-02, and it is what tells you a duplicate row exists. */
     const notes = [
-      skipped ? `${skipped} skipped (already contacted, queued or suppressed).` : '',
+      blockedContacted ? `${blockedContacted} skipped — that number is already in a conversation (probably a duplicate lead row).` : '',
+      skipped - blockedContacted > 0 ? `${skipped - blockedContacted} skipped (already contacted, queued or suppressed).` : '',
       blockedNonMobile ? `${blockedNonMobile} not a mobile → flagged for SMS.` : '',
     ].filter(Boolean).join(' ');
     toast({
       title: `Queued ${queuedCount} for WhatsApp`,
-      description: `Template: ${tmplLabel}. ${notes ? notes + ' ' : ''}Sends within the daily 7am–9:30pm UK window, capped at 40/day.`,
+      description: `Template: ${tmplLabel}. ${notes ? notes + ' ' : ''}Sends within the daily 7am–9:30pm UK window, at the queue's daily cap (shown live on the queue panel).`,
     });
   };
 

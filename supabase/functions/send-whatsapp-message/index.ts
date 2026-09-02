@@ -13,6 +13,7 @@ import {
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
+import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
@@ -155,6 +156,38 @@ Deno.serve(async (req) => {
 
     if (templateName) {
       if (!WA_TEMPLATES[templateName]) return json({ ok: false, error: "unknown_template" }, 400);
+      /* ⛔ THE PHONE-HISTORY SEATBELT, SAME RULE AS THE DRIP. The comment in the opener branch
+         below used to say "openers are guarded in the queue, not here" - and that was the hole.
+         Measured 2026-09-02: a manual audit_result_hook went to SJA Locksmiths a day after their
+         opener. Its whatsapp_ever_delivered was already true, so the QUEUE would have refused it at
+         the already_sent guard; this path never runs that guard, and pitchEverSent could not help
+         because it is per-TEMPLATE (initial_contact != audit_result_hook).
+
+         ⛔ IT SITS ABOVE EVERY BRANCH ON PURPOSE. Placed inside them it would need writing three
+         times - opener, audit, contact_followup - which is how the queue and this function drifted
+         apart in the first place. One check, before anything is built.
+
+         ⚠️ A FREE-FORM MESSAGE IS EXEMPT, AND THAT IS NOT THE ABSENT-VALUE TRAP. No templateName
+         means the operator typed a reply into an open thread: prior contact is the PRECONDITION for
+         that, not a hazard. The guard is about cold TEMPLATE sends, and `isColdOutreachTemplate`
+         treats an unknown NAME as cold - it is only reached when a name was actually given.
+
+         ⚠️ OVERRIDABLE BY allow_resend, matching the audit_reply guard below rather than the
+         drip. The drip is a machine draining a list and must never be talked round; here a human is
+         looking at the thread and can have a good reason (they asked again, the first went to a dead
+         handset). The UI sends allow_resend only after an explicit confirm, so an ACCIDENTAL repeat -
+         the actual failure mode - is still refused. */
+      if (!allowResend && isColdOutreachTemplate(templateName)) {
+        const { data: priorAny } = await service
+          .from("whatsapp_messages")
+          .select("id, lead_id")
+          .eq("phone", to)
+          .neq("status", "failed")
+          .limit(1);
+        if (Array.isArray(priorAny) && priorAny.length > 0) {
+          return json({ ok: false, error: "phone_already_contacted", template: templateName }, 200);
+        }
+      }
       const tvars = WA_TEMPLATES[templateName].vars;
       const lang = WA_TEMPLATES[templateName].lang;
       /* Refuse before building anything: this template greets by name, so a blank name would send

@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
+import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { hookFollowupEligible } from "../_shared/hook-followup-eligibility.ts";
 import { contactFollowupEligible } from "../_shared/contact-followup-eligibility.ts";
@@ -503,6 +504,81 @@ Deno.serve(async (req) => {
         .eq("id", 1);
       if (sErr) return json({ ok: false, error: "setting_failed", detail: sErr.message }, 500);
       return json({ ok: true, ...statusPayload, firstReplyTemplate: next });
+    }
+
+    /* ══ mode 'contact_check' — WHICH OF THESE NUMBERS HAVE WE ALREADY CONTACTED? ═══════════════
+       Read-only. Exists because the SPA CANNOT ANSWER THIS ITSELF: contact_suppressions has RLS
+       enabled with no policies, so an anon-key read returns HTTP 200 and an EMPTY ARRAY (CLAUDE.md
+       §8). The enqueue filter in OutreachTable has been 'checking' suppression that way since it was
+       written and has therefore never excluded anyone - a silent no-op, exactly the failure that
+       section records. whatsapp_messages is readable but only under the operator's own RLS scope,
+       and the whole point is to catch a number that belongs to a DIFFERENT lead row.
+
+       ⚠️ IT REPORTS, IT DOES NOT DECIDE. The authoritative refusals stay at send time in the drip
+       and in send-whatsapp-message; this makes the queue dialog honest before an operator commits.
+       A caller that cannot reach this endpoint must fail towards NOT queueing - see the SPA side. */
+    if (mode === "contact_check") {
+      const raw: unknown[] = Array.isArray(body.phones) ? body.phones : [];
+      /* Bare digits for whatsapp_messages, "+" E.164 for contact_suppressions - two conventions for
+         the same number, and mixing them up is why the key is normalised in exactly one place. */
+      const digits: string[] = [];
+      for (const x of raw) {
+        const d = String(x ?? "").replace(/\D/g, "");
+        if (d && !digits.includes(d)) digits.push(d);
+      }
+      if (digits.length === 0) return json({ ok: true, mode, contacted: [], suppressed: [] });
+      if (digits.length > 500) return json({ ok: false, error: "too_many_phones", limit: 500 }, 400);
+      const { data: msgs, error: mErr } = await service
+        .from("whatsapp_messages").select("phone").in("phone", digits).neq("status", "failed");
+      const { data: sup, error: sErr } = await service
+        .from("contact_suppressions").select("phone_e164").in("phone_e164", digits.map((d: string) => `+${d}`));
+      /* ⛔ FAILS CLOSED, like suppression itself. A read that errored tells us nothing about who is
+         contactable, so it must not come back as an empty 'all clear' - that is the shape of the bug
+         being fixed. The SPA refuses to queue on this error rather than queueing blind. */
+      if (mErr || sErr) {
+        return json({ ok: false, error: "contact_check_failed", detail: (mErr ?? sErr)?.message ?? null }, 200);
+      }
+      return json({
+        ok: true, mode,
+        contacted: [...new Set(((msgs ?? []) as Array<{ phone: string }>).map((r) => String(r.phone ?? "").replace(/\D/g, "")))],
+        suppressed: [...new Set(((sup ?? []) as Array<{ phone_e164: string }>).map((r) => String(r.phone_e164 ?? "").replace(/\D/g, "")))],
+      });
+    }
+
+    /* ══ mode 'suppress_lead' — MARKING SOMEONE NOT INTERESTED NOW ACTUALLY STOPS CONTACT ════════
+       🔴 THE GAP THIS CLOSES (measured 2026-09-02): the SPA writes lead statuses but has never
+       written a single contact_suppressions row - it only ever READ that table, and blindly (see
+       above). So `not_interested` set by hand was a label and nothing more. Four numbers marked
+       not_interested were sent audit_result_hook that afternoon, and the suppression guard had
+       nothing to match on. 28 suppression rows existed at the time, every one written by
+       whatsapp-inbound's isDecline auto-detection - none by an operator.
+
+       ⚠️ SUPPRESSION IS FOREVER AND CROSS-CHANNEL ('one no anywhere means suppressed everywhere').
+       That is why this takes an explicit reason from a closed set rather than mirroring whatever
+       status the UI happens to write next: a status is a workflow position and can be corrected, a
+       suppression is a promise. Only the two statuses that MEAN 'do not contact this business' may
+       write one, and any other value is refused rather than quietly accepted.
+       ⚠️ Phone AND email AND lead id all go on the row - the phone is what stops a duplicate lead
+       row being messaged, which a lead-id-only suppression would not. */
+    if (mode === "suppress_lead") {
+      const leadId = typeof body.lead_id === "string" ? body.lead_id.trim() : "";
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (!leadId) return json({ ok: false, error: "lead_id_required" }, 400);
+      if (reason !== "not_interested" && reason !== "closed") {
+        return json({ ok: false, error: "unsupported_reason", reason }, 400);
+      }
+      const { data: l, error: lErr } = await service
+        .from("outreach_leads").select("id, phone, email, country, business_name").eq("id", leadId).maybeSingle();
+      if (lErr) return json({ ok: false, error: "lead_read_failed", detail: lErr.message }, 200);
+      if (!l) return json({ ok: false, error: "lead_not_found" }, 404);
+      const lead = l as { id: string; phone: string | null; email: string | null; country: string | null; business_name: string | null };
+      /* toWhatsAppNumber gives bare digits; suppress() canonicalises to '+' itself via toE164, so the
+         row lands on the same key twilio-inbound and checkSuppressed use. */
+      const digits = lead.phone ? toWhatsAppNumber(lead.phone, lead.country) : "";
+      const wrote = await suppress(service, {
+        phone: digits || null, email: lead.email ?? null, leadId: lead.id,
+      }, { reason, source: "operator_status" });
+      return json({ ok: wrote, mode, lead_id: lead.id, business: lead.business_name, suppressed: wrote });
     }
 
     // ── mode 'auto_replies': drain due whatsapp_auto_replies rows (its own every-minute cron) ──
@@ -1190,12 +1266,22 @@ Deno.serve(async (req) => {
        raced an in-memory cache), and every per-LEAD guard here correctly saw a fresh lead. This
        gate is per-PHONE, at the last exit: a cold opener NEVER goes to a number that already has a
        WhatsApp conversation — whatever lead row it arrives on. 11 of the 25 had already REPLIED.
-       - initial_contact only: every other template is a follow-up whose own guards key on history.
+       🔴 IT WAS `templateName === "initial_contact"` UNTIL 2026-09-02, AND THAT NAME IS WHY IT
+            FAILED. When it was written, initial_contact was the only cold opener the queue could carry.
+            The audit-first flow then began queueing `audit_result_hook`, and a guard keyed to a NAME
+            rather than to a PROPERTY stopped applying to the traffic that had replaced it. Nothing was
+            deleted or bypassed - 16 hook sends walked past it, 12 to numbers already in conversation,
+            9 of those had replied and 4 were marked not_interested.
+            `isColdOutreachTemplate` (src/lib/coldOutreach.ts) answers it as a property, treats an
+            UNKNOWN template as COLD, and is the same predicate the enqueue filter and
+            send-whatsapp-message read - so the three cannot drift apart again.
+          - Continuations are exempt because guarding them would make them unsendable to their only
+            audience (re_engage exists FOR leads with history). That list lives in the leaf, not here.
        - .neq(status,'failed') mirrors pitchEverSent: a failed attempt is not a conversation, so a
          legitimate retry of THIS lead's own failed opener still passes.
        - Same drop-out-of-the-queue shape as every guard above (the drip must never stall), with
          its own delivery status so the row says WHY — counted in the status payload, never silent. */
-    if (templateName === "initial_contact") {
+    if (isColdOutreachTemplate(templateName)) {
       const { data: prior } = await service
         .from("whatsapp_messages")
         .select("id, lead_id")
