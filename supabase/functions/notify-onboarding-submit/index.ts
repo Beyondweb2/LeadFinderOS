@@ -35,6 +35,12 @@ const json = (body: unknown, status = 200) =>
  *  deliberately left alone here — claim-site emails CUSTOMERS and is not worth the risk. */
 const ADMIN_EMAIL = "paul@move37.fun";
 
+/* 🔴 REVERTED 2026-09-02: Resend answered HTTP 403 "The findable.live domain is not verified"
+   on every send from @findable.live, and three operator notifications were lost before it was
+   caught. The DNS records are all published and Resend still refuses - see free-check-result.ts for
+   the full reasoning and the rule: only a real send proves a sender works. One line to flip. */
+const FROM_OPERATOR = "LeadFinder Pro <noreply@lead-finder-app.com>";
+
 /** How long after submission before we conclude they did not pay. See the note above. */
 const DELAY_MINUTES = 20;
 /** Rows per sweep. Cron runs every minute, so a backlog drains quickly without a long request. */
@@ -352,7 +358,7 @@ Deno.serve(async (req) => {
           method: "POST",
           headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            from: "LeadFinder Pro <noreply@lead-finder-app.com>",
+            from: FROM_OPERATOR,
             to: [ADMIN_EMAIL],
             subject: isFreeCheck
               ? `FREE CHECK — ${name}`

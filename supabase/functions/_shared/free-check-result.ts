@@ -66,6 +66,26 @@ export const FREE_CHECK_TEMPLATE = "free_check_result";
 import { reportPublicUrl } from "../../../src/lib/findableOffer.ts";
 
 const ADMIN_EMAIL = "paul@move37.fun";
+/* 🔴 REVERTED TO THE OLD DOMAIN 2026-09-02, BECAUSE RESEND REFUSED THE NEW ONE. The switch to
+   `@findable.live` was made, deployed, and produced HTTP 403 on every send:
+     "The findable.live domain is not verified. Please, add and verify your domain on
+      https://resend.com/domains"
+   Three real operator notifications failed before it was caught, and a prospect result email would
+   have failed identically - Resend does not degrade, it refuses.
+
+   ⚠️ AND THE DNS CHECK THAT AUTHORISED THE SWITCH WAS NOT ENOUGH. findable.live genuinely carries
+   the complete Resend record set - resend._domainkey has a DKIM key, send.findable.live has
+   `v=spf1 include:amazonses.com ~all` and an MX to feedback-smtp.ap-northeast-1.amazonses.com - and
+   Resend STILL reports it unverified. Published records are a precondition, not the verification:
+   Resend has to observe them and mark the domain verified in the account THE API KEY BELONGS TO.
+   A domain verified on a different Resend account or team is invisible to this key.
+   ⛔ SO THE ONLY TRUSTWORTHY CHECK IS A SEND. DNS proves the records exist; the 403 proves what
+   Resend thinks. Do not switch these two constants again on the strength of DNS, a dashboard
+   screenshot, or anyone's recollection - flip them, send one operator email, and read notify_error.
+   Flipping is one line each, on purpose. */
+const FROM_PROSPECT = "Findable <noreply@lead-finder-app.com>";
+const FROM_OPERATOR = "LeadFinder Pro <noreply@lead-finder-app.com>";
+
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -85,7 +105,7 @@ async function flagToOperator(subject: string, lines: string[]): Promise<void> {
       method: "POST",
       headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "LeadFinder Pro <noreply@lead-finder-app.com>",
+        from: FROM_OPERATOR,
         to: [ADMIN_EMAIL],
         subject,
         html: lines.map((l) => `<p>${l}</p>`).join(""),
@@ -307,7 +327,9 @@ export async function maybeSendFreeCheckResult(
         method: "POST",
         headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          from: "Findable <noreply@lead-finder-app.com>",
+          from: FROM_PROSPECT,
+          // A reply is the warmest outcome this email can have; it must reach a real inbox.
+          reply_to: ADMIN_EMAIL,
           to: [email],
           subject: `Your AI visibility check — ${name}`,
           html: [
