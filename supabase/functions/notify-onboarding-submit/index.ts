@@ -20,6 +20,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 /* The SAME decision function findable-checkout refuses payment with, so this email and that block
    can never disagree about who could be served. Relative path with the .ts extension — Deno cannot
    resolve the Vite "@/" alias. */
+import { normaliseTrade } from "../../../src/lib/freeCheckTrade.ts";
 import { serveDecision, serveInputFromRow, platformLabel, type ServeGateRow } from "../../../src/lib/serveGate.ts";
 
 const corsHeaders = {
@@ -68,6 +69,7 @@ interface Row {
   business_name: string | null;
   status: string | null;
   contact_email: string | null;
+  confirmed_phone: string | null;
   confirmed_location: string | null;
   created_at: string;
   /* THE THREE WEBSITE ANSWERS. A prospect who was BLOCKED from paying looks, to the query above,
@@ -130,7 +132,7 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // ONE STRING LITERAL, not a concatenation. supabase-js types the select on the literal, so
       // splitting it across two lines makes `data` GenericStringError[] and the cast below a TS2352.
-      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete, notify_attempts, source, services")
+      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete, notify_attempts, source, services, confirmed_phone")
       /* ⛔ THE GATE IS notify_sent_at, NOT notified_at. notified_at is the CLAIM stamp, written
          before the attempt — gating on it is what made a failed send permanent and invisible.
          Gating on delivery, bounded by attempts, is what lets a failure come back. */
@@ -182,13 +184,34 @@ Deno.serve(async (req) => {
          and the payment notification is what tells you about them. */
       const isFreeCheck = row.source === "free_check";
       let paid = row.status === "paid";
-      let phone: string | null = null;
+      /* ⛔ THE PHONE THE PERSON TYPED, NOT THE ONE WE HOLD FOR THE BUSINESS. Same fault the result
+         sender carried until today (free-check-result.ts): on a MATCHED lead, lead.phone is whatever
+         prospecting found for that business, so printing it as "Phone:" states that the submitter
+         gave us a number they never gave us. Measured on the live rows: the submission carried
+         "+66 83 993 3726" and the alert printed the lead's "+66 95 096 1230".
+         ⚠️ THE STORED NUMBER IS STILL WORTH SEEING, SO IT GETS ITS OWN LABEL. A submitter whose
+         number differs from the one on file may not be the owner — that is operator signal, and
+         labelling it is the only way to keep it without letting it pass as what was typed.
+         ⛔ AND IT NEVER FILLS IN FOR A BLANK. A submission with no phone prints no phone; falling
+         back to the stored one under this label is the same bug, just quieter. */
+      const submittedPhone = (row.confirmed_phone ?? "").trim() || null;
+      let storedPhone: string | null = null;
       /* THE ROW'S OWN `services` IS THE FALLBACK, AND FOR A FREE CHECK IT IS THE ONLY SOURCE.
          This used to read the trade exclusively off a linked lead, so a generic submission — which
          has no lead at the moment the row is written — produced an email with no trade in it at
          all. The lead still wins when there is one: its category/search_keyword is operator-curated
          and beats a self-typed word. */
       let trade: string | null = (row.services ?? "").trim() || null;
+      /* Respelled with the audit's OWN function, so the alert names what was actually measured.
+         ⚠️ And it shows the correction rather than hiding it: "hospitality (typed \"hospitalty\")"
+         says both what was asked and what the visitor wrote. A silent respell would leave you
+         unable to tell a typo from a trade you had not expected to see. */
+      if (isFreeCheck && trade) {
+        const spelled = normaliseTrade(trade);
+        if (spelled.trade) {
+          trade = spelled.corrected ? `${spelled.trade} (typed "${spelled.submitted}")` : spelled.trade;
+        }
+      }
       if (row.lead_id) {
         const { data: lead } = await service
           .from("outreach_leads")
@@ -197,8 +220,17 @@ Deno.serve(async (req) => {
         if (lead) {
           const l = lead as Record<string, unknown>;
           paid = paid || Number(l.amount_paid ?? 0) > 0 || PAID_STATUSES.has(String(l.status ?? ""));
-          phone = (l.phone as string | null) ?? null;
-          trade = ((l.category as string) || (l.search_keyword as string) || "").trim() || trade;
+          storedPhone = ((l.phone as string | null) ?? "").trim() || null;
+          /* ⛔ A FREE CHECK IS ALWAYS REPORTED ON THE TRADE THAT WAS TYPED — because that is the
+             trade it was MEASURED on. free-check-audit.ts runs `normaliseTrade(submitted.trade)`
+             unconditionally, so preferring the lead's curated category here prints one trade on the
+             alert and audits a different one. Live proof: the 09:30 submission typed "hospitalty"
+             while the lead's search_keyword says "bar".
+             The lead still wins for a PAID questionnaire, where the curated category is the better
+             answer and no audit is keyed to the typed word. */
+          if (!isFreeCheck) {
+            trade = ((l.category as string) || (l.search_keyword as string) || "").trim() || trade;
+          }
         }
       }
       /* ⛔ RETIRED EXPLICITLY, NOT LEFT TO THE CLAIM. Under the old gate this row simply never came
@@ -300,7 +332,8 @@ Deno.serve(async (req) => {
       const text =
         opening +
         (verdictLabel ? `  ${verdictLabel}\n  ${gate!.reason}\n\n` : "") +
-        line("Trade:", trade) + line("Town:", town) + line("Phone:", phone) + line("Email:", row.contact_email) +
+        line("Trade:", trade) + line("Town:", town) + line("Phone:", submittedPhone) + line("Email:", row.contact_email) +
+        (storedPhone && storedPhone !== submittedPhone ? line("On file:", `${storedPhone} (from prospecting, not typed)`) : "") +
         (gate ? line("Site:", siteLine) : "") +
         line("Profile:", gbpExistsLine) + line("Verified:", gbpVerifiedLine) + line("Added us:", gbpStatusLine) + line("Photos:", photosLine) +
         (mustNotSay ? line("Must not say:", mustNotSay) : "") +
@@ -326,7 +359,10 @@ Deno.serve(async (req) => {
           : "") +
         (trade ? `<p style="margin:0 0 2px"><strong>Trade:</strong> ${escapeHtml(trade)}</p>` : "") +
         (town ? `<p style="margin:0 0 2px"><strong>Town:</strong> ${escapeHtml(town)}</p>` : "") +
-        (phone ? `<p style="margin:0 0 2px"><strong>Phone:</strong> ${escapeHtml(phone)}</p>` : "") +
+        (submittedPhone ? `<p style="margin:0 0 2px"><strong>Phone:</strong> ${escapeHtml(submittedPhone)}</p>` : "") +
+        (storedPhone && storedPhone !== submittedPhone
+          ? `<p style="margin:0 0 2px;color:#64748b"><strong>On file:</strong> ${escapeHtml(storedPhone)} <span style="font-size:12px">(from prospecting, not typed)</span></p>`
+          : "") +
         (row.contact_email ? `<p style="margin:0 0 2px"><strong>Email:</strong> ${escapeHtml(row.contact_email)}</p>` : "") +
         (siteLine ? `<p style="margin:0 0 2px"><strong>Site:</strong> ${escapeHtml(siteLine)}</p>` : "") +
         (gbpExistsLine ? `<p style="margin:0 0 2px"><strong>Profile:</strong> ${escapeHtml(gbpExistsLine)}</p>` : "") +
