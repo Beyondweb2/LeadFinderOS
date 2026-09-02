@@ -834,9 +834,27 @@ export function computeWinnability(
  * likely to be an ordinary audit than a paid baseline (2 baselines against ~460 audits), and the
  * safe direction is to withhold a grade rather than to show one we cannot justify.
  */
-export function seoStyleForAudit(baselineTargetRuns: unknown): 'graded' | 'issues' {
+export function seoStyleForAudit(
+  baselineTargetRuns: unknown,
+  isMeasurement?: unknown,
+): 'graded' | 'issues' {
   const n = typeof baselineTargetRuns === 'number' ? baselineTargetRuns : Number(baselineTargetRuns);
-  return Number.isFinite(n) && n > 1 ? 'graded' : 'issues';
+  const multiRun = Number.isFinite(n) && n > 1;
+  /* 🔴 `baseline_target_runs > 1` STOPPED MEANING "PAID BASELINE" ON 2026-09-02, and this predicate
+     had to learn the difference. The free-check lane now runs 5 questions x 3 runs for accuracy, so
+     it writes the same column a paid baseline does — and every one of these call sites would have
+     started showing a stranger the graded website block that was deliberately split off the
+     pre-payment lanes. The run count is a measurement decision; the grade is a commercial one, and
+     they are no longer the same fact.
+
+     The distinction that DOES hold is the one audit-baseline.ts:457 already relies on to protect a
+     paying client's day-0: a paid baseline is multi-run AND NOT marked `is_measurement`. Reusing it
+     here keeps one meaning for one column rather than adding a second, lane-specific test.
+     ⚠️ ABSENT is_measurement -> treated as a baseline, i.e. graded. That is the SAFER direction of
+     the two: a free check whose marker we cannot read shows a graded panel with no scan behind it,
+     which renders as the "check comes when we start work" line anyway, whereas the other default
+     would withhold grades from a paying client's real baseline. */
+  return multiRun && isMeasurement !== true ? 'graded' : 'issues';
 }
 
 export function buildReportData(

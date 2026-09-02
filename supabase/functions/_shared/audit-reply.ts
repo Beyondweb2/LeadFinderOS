@@ -58,7 +58,7 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
   // 1) The lead's newest audit that has a COMPLETE (or capped) run — strictly by lead_id.
   const { data: audits } = await service
     .from("ai_audits")
-    .select("id, business_name, business_type, location_text, specialism, country, created_at, baseline_target_runs, ai_audit_runs(id, run_number, status, mention_rate, results, created_at)")
+    .select("id, business_name, business_type, location_text, specialism, country, created_at, baseline_target_runs, ai_audit_runs(id, run_number, status, mention_rate, results, created_at), is_measurement")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false });
   const list = Array.isArray(audits) ? audits : [];
@@ -101,7 +101,10 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     specialisms: audit.specialism ?? "",
     isAggregatorUrl,
     // The WhatsApp hook is pre-payment by definition — plain issues, never a grade.
-    seoStyle: seoStyleForAudit((audit as { baseline_target_runs?: unknown }).baseline_target_runs),
+    seoStyle: seoStyleForAudit(
+      (audit as { baseline_target_runs?: unknown }).baseline_target_runs,
+      (audit as { is_measurement?: unknown }).is_measurement,
+    ),
   });
   // {{2}} competitor names — PREFER the report's HEADLINE rivals (data.gutPunch.rivals: the one
   // curated best question+engine answer the report leads with), so the pitch and the report agree

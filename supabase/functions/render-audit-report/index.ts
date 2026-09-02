@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
       // cheaper founder offer.
       // baseline_target_runs decides the website section: graded for a paid baseline, plain issues
       // for everything a prospect sees before paying (seoStyleForAudit).
-      .select("id, business_name, business_type, location_text, specialism, website, is_market, lead_id, baseline_target_runs")
+      .select("id, business_name, business_type, location_text, specialism, website, is_market, lead_id, baseline_target_runs, is_measurement")
       .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
     /* ⛔ THE PUBLIC RENDERER REFUSES MARKET AUDITS. This is the one an outsider could reach with a
@@ -188,7 +188,10 @@ Deno.serve(async (req) => {
       isAggregatorUrl,
       ownWebsite: audit.website ?? "",
       /* Graded only for a paid baseline; every prospect-facing report gets the plain issues list. */
-      seoStyle: seoStyleForAudit((audit as { baseline_target_runs?: unknown }).baseline_target_runs),
+      seoStyle: seoStyleForAudit(
+        (audit as { baseline_target_runs?: unknown }).baseline_target_runs,
+        (audit as { is_measurement?: unknown }).is_measurement,
+      ),
     });
     if (!data) return unavailable("This audit hasn’t completed yet — check back shortly.");
 
