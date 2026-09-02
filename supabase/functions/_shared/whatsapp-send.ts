@@ -338,7 +338,11 @@ export function templateBodyParams(
          reads without it, and a free-check submitter who left the town vague is not a reason to
          withhold their result. */
       case "town": return (extra?.town ?? "").trim();
-      /* free_check_result's report link — /a/<auditId>. Same contract as onboarding_url: the whole
+      /* free_check_result's report link — findable.live/report/<auditId>, built by reportPublicUrl.
+         It said "/a/<auditId>" until 2026-09-02: a path that is now a deliberate 404 on
+         findable.live, and on a leftover barber domain before that. The caller was fixed and this
+         comment was not, which is how a comment starts asserting something false.
+         Same contract as onboarding_url: the whole
          message is "here is your result", so sending it with an empty link is worse than not
          sending. Throws rather than degrading. */
       case "audit_url": {
