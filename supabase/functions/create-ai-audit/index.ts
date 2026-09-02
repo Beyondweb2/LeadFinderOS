@@ -328,10 +328,21 @@ Deno.serve(async (req) => {
        as the paid baseline — which is why is_measurement below is load-bearing: it marks the audit so
        startPaidBaseline can NEVER mistake a measurement for a paid baseline and skip a paying client's
        guarantee measurement. MEASUREMENT_RUNS is the one number to tune. */
+    /* ⛔ `target_runs` — REPEAT RUNS ON AN ORDINARY AUDIT, INTERNAL CALLERS ONLY (2026-09-02, for
+       the free-check lane). Both existing routes to multi-run change the QUESTIONS as a side
+       effect: isBaseline clamps to BASELINE_MAX_QUESTION_COUNT and takes the seeded paid-baseline
+       character, and isMeasurement sets moneyQuestionCount to 0 (the money predicate below). A free
+       check wants three asks of the SAME five money-question-bearing questions, so it needs the run
+       count without either of those.
+       ⚠️ Internal-only and clamped to the same 1-5 as the baseline route: this multiplies spend, so
+       it is a cost ceiling, not a preference. */
+    const internalTargetRuns = isInternal && typeof body.target_runs === "number"
+      ? Math.min(5, Math.max(1, Math.round(body.target_runs)))
+      : 0;
     const baselineTargetRuns = isBaseline
       ? Math.min(5, Math.max(1, typeof body.baseline_target_runs === "number" ? Math.round(body.baseline_target_runs) : 1))
       : isMeasurement ? MEASUREMENT_RUNS
-      : 0;
+      : internalTargetRuns;
     /* SILENT TRUNCATION WAS THE REAL BUG, not the number. The cap is a cost ceiling and stays, but
        quietly returning fewer questions than were asked for is how a before/after ends up built on a
        subset with nothing to say so. Whatever falls off the end is captured, logged, and reported on
@@ -962,7 +973,13 @@ Deno.serve(async (req) => {
          column is missing the insert retries without it — but then it is UNMARKED, so the guarantee
          guard would not fire, which is exactly why create-ai-audit is deployed only AFTER the column
          exists (SQL-first). */
-      if (isMeasurement) auditRow.is_measurement = true;
+      /* 🔴 AND THE SAME MARK IS REQUIRED FOR ANY multi-run NON-baseline AUDIT, not only a
+         purpose:"measurement" one. audit-baseline.ts:457 skips a paid baseline when the lead
+         already has an audit with `baseline_target_runs > 1 && is_measurement !== true` — so an
+         UNMARKED 3-run free-check audit would make a prospect who later PAYS never receive their
+         day-0 guarantee measurement. That prospect converting is the funnel's success case, which
+         is exactly why this must not be left keyed to the purpose flag. */
+      if (isMeasurement || baselineTargetRuns > 1) auditRow.is_measurement = true;
       let { data: audit, error: insErr } = await service
         .from("ai_audits").insert(auditRow).select("id, business_name").single();
       // Shed a missing new column (either one) and retry, longest-name-first so one miss can't mask another.

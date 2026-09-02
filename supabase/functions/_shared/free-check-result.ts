@@ -38,6 +38,10 @@ import { checkSuppressed } from "./suppression.ts";
 
 /** The Meta template carrying the result. 5 vars, in this order:
  *  {{1}} business name · {{2}} trade · {{3}} town · {{4}} audit link · {{5}} onboarding link. */
+/** How long to wait for an in-flight run before sending with what completed. Well beyond
+ *  MAX_RUN_AGE_MS (12 min) plus a retry, so it only ever releases a genuinely abandoned run. */
+export const FREE_CHECK_RESULT_MAX_WAIT_MS = 45 * 60 * 1000;
+
 export const FREE_CHECK_TEMPLATE = "free_check_result";
 
 /** Where the prospect's report is served from. /a/<auditId> is rendered LIVE by
@@ -89,10 +93,19 @@ export async function maybeSendFreeCheckResult(
 ): Promise<ResultOutcome> {
   /* 1 — THE LANE. enrichment_source is stamped by createFreeCheckLead and is the only thing that
      makes this audit ours; every other audit in the system must fall straight through. */
-  const { data: audit } = await service
+  let { data: audit } = await service
     .from("ai_audits")
-    .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs")
+    .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, free_check_result")
     .eq("id", auditId).maybeSingle();
+  /* ⚠️ free_check_result may not exist yet (SQL pending). PostgREST fails the WHOLE select on an
+     unknown column, so retry without it rather than reading "no audit" and never sending. */
+  if (!audit) {
+    const { data: legacy } = await service
+      .from("ai_audits")
+      .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs")
+      .eq("id", auditId).maybeSingle();
+    audit = legacy as typeof audit;
+  }
   if (!audit?.lead_id) return { kind: "skipped", reason: "no lead on this audit" };
 
   const { data: lead } = await service
@@ -102,14 +115,71 @@ export async function maybeSendFreeCheckResult(
   if (!lead) return { kind: "skipped", reason: "lead row missing" };
   if (lead.enrichment_source !== "free_check") return { kind: "skipped", reason: "not a free-check lead" };
 
-  /* 2 — THE CLAIM, BEFORE THE SEND. Read the run's results, check the stamp, write the stamp. */
-  const { data: run } = await service
+  /* == 2 - IS THE MEASUREMENT ACTUALLY FINISHED? ==============================================
+     🔴 THIS USED TO BE A PER-RUN STAMP, AND AT THREE RUNS IT WOULD HAVE MESSAGED A STRANGER
+     THREE TIMES. process-ai-audit-queue pushes a free-check job on EVERY run finalisation, and the
+     guard read `results.free_check_result` on THAT run - so each of the three runs found its own
+     slate clean and sent its own email and WhatsApp, ~6 minutes apart, each carrying a partial
+     result. The per-run stamp was correct while a free check was one run; the moment
+     FREE_CHECK_RUNS went above 1 it became a spam bug. Found before shipping 5x3, not after.
+
+     ⛔ SO: WAIT FOR THE LAST RUN, AND CLAIM ON THE AUDIT. Two separate properties and both are
+     needed - waiting alone still double-sends if two runs finalise in one tick, and an audit-level
+     stamp alone would send a 1-run result and then correctly refuse the fuller ones. */
+  const { data: allRuns } = await service
     .from("ai_audit_runs")
     .select("id, audit_id, run_number, status, mention_rate, results, created_at")
-    .eq("id", runId).maybeSingle();
-  if (!run) return { kind: "skipped", reason: "run row missing" };
-  const results = (run.results && typeof run.results === "object" ? run.results : {}) as Record<string, unknown>;
-  if (results.free_check_result) return { kind: "skipped", reason: "already sent for this run" };
+    .eq("audit_id", auditId).order("run_number", { ascending: true });
+  const runs = (allRuns ?? []) as Array<
+    RunRow & { id: string; status: string; run_number: number | null; created_at: string; results: unknown }
+  >;
+  const thisRun = runs.find((r) => r.id === runId);
+  if (!thisRun) return { kind: "skipped", reason: "run row missing" };
+
+  /* ⛔ SETTLED IS A POSITIVE LIST, and anything unrecognised counts as STILL IN FLIGHT. Measured
+     over 847 live runs the statuses are complete / failed / cancelled / capped, plus the transient
+     pending / running. Treating an unknown status as settled would send early on exactly the state
+     we could not identify; treating it as in-flight means we wait, which is recoverable. */
+  const SETTLED = new Set(["complete", "failed", "cancelled", "capped"]);
+  const target = Math.max(1, Number(audit.baseline_target_runs ?? 1) || 1);
+  const completed = runs.filter((r) => r.status === "complete");
+  const inFlight = runs.filter((r) => !SETTLED.has(String(r.status)));
+
+  /* ⚠️ THE STALE RELEASE EXISTS SO ONE STUCK RUN CANNOT SILENCE THE RESULT FOREVER. Waiting on
+     in-flight runs is right, but a run wedged in `running` would mean the prospect never hears back
+     at all. Set well beyond MAX_RUN_AGE_MS (12 min) and its retry, so it only fires on a genuinely
+     abandoned run - the queue's own stall sweep normally settles these first. */
+  const oldestInFlightMs = inFlight.length
+    ? Math.max(...inFlight.map((r) => Date.now() - new Date(r.created_at).getTime()))
+    : 0;
+  const stalled = oldestInFlightMs > FREE_CHECK_RESULT_MAX_WAIT_MS;
+  if (completed.length < target && inFlight.length > 0 && !stalled) {
+    return {
+      kind: "skipped",
+      reason: `waiting for the measurement to finish (${completed.length} of ${target} runs done)`,
+    };
+  }
+  if (!completed.length) return { kind: "skipped", reason: "no run completed - nothing to send" };
+
+  /* ⛔ REPORT ON THE LAST COMPLETED RUN, not on whichever run happened to trigger this tick. With
+     three runs the trigger can be run 2 finalising after run 3, and the email must never describe
+     an earlier ask than the best one we hold. */
+  const run = completed[completed.length - 1];
+
+  /* THE AUDIT-LEVEL STAMP. Tried on `ai_audits.free_check_result` first; if that column is not there
+     yet the claim falls back to the FIRST run's results, which is still exactly one location per
+     audit. Column-shed tolerance is the house pattern (findable-onboarding, plan_build) and is what
+     lets this deploy before the SQL runs instead of failing every send until it does.
+     ⚠️ BOTH LOCATIONS ARE READ before sending, or the upgrade itself would re-send once for every
+     audit that had already been claimed on a run. */
+  const claimRun = runs.find((r) => (r.run_number ?? 1) === 1) ?? runs[0] ?? thisRun;
+  const claimRunResults = (claimRun?.results && typeof claimRun.results === "object"
+    ? claimRun.results
+    : {}) as Record<string, unknown>;
+  const auditStamped = (audit as { free_check_result?: unknown }).free_check_result;
+  if (auditStamped || claimRunResults.free_check_result) {
+    return { kind: "skipped", reason: "already sent for this audit" };
+  }
 
   /* 3 — IS THERE ACTUALLY A RESULT? The same test render-audit-report applies before serving the
      page. Null means every question failed or nothing was answered. */
@@ -123,7 +193,11 @@ export async function maybeSendFreeCheckResult(
     specialisms: audit.specialism ?? "",
     isAggregatorUrl,
     ownWebsite: audit.website ?? "",
-    seoStyle: seoStyleForAudit(audit.baseline_target_runs),
+    /* ⛔ THE LANE DECIDES THIS, NOT THE RUN COUNT. seoStyleForAudit returns 'graded' for anything
+       above one run, so turning FREE_CHECK_RUNS up to 3 would silently have flipped every free
+       check back to the graded website block that was deliberately split off the hook lane. A free
+       check is always the issues list: it is the same document whether it took one ask or three. */
+    seoStyle: "issues",
   });
   if (!data) {
     await flagToOperator(
@@ -148,12 +222,29 @@ export async function maybeSendFreeCheckResult(
     return { kind: "flagged", reason: "no contact email on the lead" };
   }
 
-  // Claim it now. A stamp after the send re-sends on the next 30-second tick if anything crashes.
-  const stamp = { at: new Date().toISOString(), email, template: FREE_CHECK_TEMPLATE };
-  const { error: claimErr } = await service
-    .from("ai_audit_runs")
-    .update({ results: { ...results, free_check_result: stamp } })
-    .eq("id", runId);
+  /* Claim it now. A stamp written AFTER the send re-sends on the next 30-second tick if anything in
+     between crashes, so the claim goes first: a crash then costs a missing email rather than a
+     duplicate one, the same trade-off every send in this project makes.
+     ⛔ ON THE AUDIT, so it is one claim per measurement however many runs it has. */
+  const stamp = {
+    at: new Date().toISOString(),
+    email,
+    template: FREE_CHECK_TEMPLATE,
+    runs_completed: completed.length,
+    runs_target: target,
+  };
+  let claimErr: { message?: string } | null = null;
+  ({ error: claimErr } = await service
+    .from("ai_audits").update({ free_check_result: stamp }).eq("id", auditId));
+  if (claimErr && /free_check_result/i.test(claimErr.message ?? "")) {
+    /* The column is not there yet. Fall back to run 1's results - still ONE location per audit, so
+       the send-once property holds; the read above already checks both places. */
+    console.warn("[free-check-result] ai_audits.free_check_result missing - claiming on run 1");
+    ({ error: claimErr } = await service
+      .from("ai_audit_runs")
+      .update({ results: { ...claimRunResults, free_check_result: stamp } })
+      .eq("id", claimRun.id));
+  }
   if (claimErr) return { kind: "skipped", reason: `could not claim the send: ${claimErr.message}` };
 
   /* 4 — THE LINKS. The onboarding link MUST carry ?lead= — offerPriceForLead returns the FULL £99
@@ -171,7 +262,12 @@ export async function maybeSendFreeCheckResult(
     return { kind: "flagged", reason: "no site origin — cannot build the founder-price link" };
   }
 
-  const trade = (audit.business_type ?? lead.search_keyword ?? "").trim();
+  /* ⛔ NO `?? lead.search_keyword` HERE EITHER. That fallback is the other half of the 2026-09-02
+     bug: on a matched lead it reaches the old prospecting trade, which is the literal string
+     ("Locksmiths") a real prospect was emailed. audit.business_type IS the submitted trade now -
+     fireFreeCheckAudit is handed it - and if it were somehow blank the sentence says "business"
+     rather than naming a trade nobody claimed. */
+  const trade = (audit.business_type ?? "").trim();
   const town = (audit.location_text ?? lead.search_location ?? "").trim();
   const name = (audit.business_name ?? lead.business_name ?? "your business").trim();
 
