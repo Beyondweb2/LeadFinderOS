@@ -671,12 +671,21 @@ Deno.serve(async (req) => {
               } else {
                 const { data: fresh } = await service
                   .from("outreach_leads")
-                  .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website")
+                  /* ⛔ search_keyword / category ARE NOT SELECTED, ON PURPOSE. The trade and town
+                     come from THIS submission (just below), never from the lead - on a `matched`
+                     lead those columns hold an old prospecting guess, which is how a visitor who
+                     typed "plummer" got an audit and a result email about "Locksmiths"
+                     (2026-09-02). Not selecting them keeps the temptation out of reach. */
+                  .select("id, user_id, business_name, search_location, address, country, website")
                   .eq("id", outcome.leadId).maybeSingle();
                 if (!fresh) {
                   console.warn(`[findable-onboarding] free_check audit skipped: lead ${outcome.leadId} not readable`);
                 } else {
-                  const fired = await fireFreeCheckAudit(fresh);
+                  const fired = await fireFreeCheckAudit(fresh, {
+                    // The visitor's own words about their own business; spell-checked, never swapped.
+                    trade: clip(a.services, 200) ?? "",
+                    town: confirmedLocation ?? "",
+                  });
                   console.log(`[findable-onboarding] free_check audit ${fired.ok ? `started (audit ${fired.auditId})` : `FAILED: ${fired.error}`} for lead ${outcome.leadId}`);
                 }
               }
