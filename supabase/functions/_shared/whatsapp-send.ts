@@ -59,6 +59,16 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
   // Reply-to-a-reply: 4 vars — {{1}} trade, {{2}} competitors, {{3}} business name, {{4}} report link.
   // Vars resolved server-side per-lead from the lead's own completed audit (see resolveAuditReplyVars).
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
+  /* audit_result_hook — the OUTREACH hook, approved at Meta 2026-09-02. Registered from the
+     variable order in WhatsApp Manager, NOT inferred: {{1}} business name, {{2}} trade, {{3}} town,
+     {{4}} audit link.
+     ⛔ ITS SAMPLE IN WHATSAPP MANAGER SHOWS {{4}} AS findable.live/a/<id> AND THAT PATH IS DEAD —
+     a deliberate 404 on findable.live. The sample is illustrative text at Meta and does not
+     constrain what we send; every caller fills {{4}} from resolveAuditReplyVars' `link`, which is
+     findable.live/report/<auditId>. Do not "match the sample".
+     ⚠️ It shares `trade` with audit_reply, which is what both send paths used to KEY ON to decide
+     the payload shape - see the var-driven build in each. */
+  audit_result_hook: { lang: "en", vars: ["name", "trade", "town", "audit_url"] },
   // Follow-up once the 24h window has closed: points a warm lead at the onboarding flow.
   // {{1}} business name, {{2}} that lead's onboarding URL. Vars resolved server-side per-lead by
   // resolveOnboardingFollowupVars — never from a caller-supplied link.
@@ -200,6 +210,14 @@ We ran a full report on your business for AI and SEO visibility: ${u}
 We could get you showing up in those results - it's mostly stuff we handle at our end.
 Want me to explain?`;
 
+/* audit_result_hook - the approved outreach hook. Display-only (Meta renders what the prospect
+   actually reads); kept close to the registered body so the operator transcript matches. */
+const auditResultHookBody = (b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
+  `Hi, is this ${b || "your business"}? We ran a free AI visibility audit for you.
+When people ask ChatGPT or Google's AI for a ${trade || "provider"} in ${town || "your area"}, it's naming other firms, not you.
+Here's your result: ${u}
+More on how we can fix it, and how to get started: https://findable.live`;
+
 /* onboarding_followup - the APPROVED wording, supplied 2026-07-28. Display-only, like every body
    in this map: Meta renders what the customer actually reads from the approved template, so the
    whitespace here cannot affect a send. It only decides what the Inbox thread shows for a
@@ -262,7 +280,7 @@ We'll get started and be back to you within a few days to get your Google profil
 
 Anything in the meantime, just reply here.`;
 
-export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string) => string> = {
+export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string) => string> = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
   payment_recieved: paymentRecievedBody,
@@ -285,13 +303,18 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
   audit_reply: auditReplyBody,
+  audit_result_hook: auditResultHookBody,
 };
 
 /** Render the display copy of a template body with its variables filled. `trade`/`competitors`
  *  are used only by audit_reply; the other (2-var) bodies ignore them. */
-export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string): string {
+export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string): string {
   const fn = WA_TEMPLATE_BODIES[templateName];
-  return fn ? fn(businessName, claimUrl, trade, competitors, contactFirstName) : `[${templateName}]`;
+  /* `town` is a 6th positional rather than a new object: every existing body function ignores extra
+     arguments, so adding it cannot change a single stored transcript. audit_result_hook is the only
+     body that reads it - without it the transcript would say "in your area" while the message the
+     prospect received named their town, which is the display drift 11 already records for re_engage. */
+  return fn ? fn(businessName, claimUrl, trade, competitors, contactFirstName, town) : `[${templateName}]`;
 }
 
 /** Body params for a template, filled STRICTLY in the template's declared `vars`

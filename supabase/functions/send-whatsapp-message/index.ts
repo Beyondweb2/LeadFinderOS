@@ -223,10 +223,18 @@ Deno.serve(async (req) => {
         }
         const a = await resolveAuditReplyVars(service, resolvedLeadId);
         if (!a.ok) return json({ ok: false, error: "audit_reply_unavailable", reason: a.reason }, 200);
-        payload = claimTemplatePayload(templateName, lang, a.business, a.link, { trade: a.trade, competitors: a.competitors });
+        /* ⛔ BUILT FROM THE TEMPLATE'S DECLARED VARS - see the identical note in
+           process-whatsapp-queue. `needsAudit` is `trade || competitors`, so audit_result_hook
+           enters here as well, and a fixed `{ trade, competitors }` would leave its `town` and
+           `audit_url` empty (templateBodyParams throws on the latter). */
+        const auditExtra: Record<string, string> = { trade: a.trade };
+        if (tvars.includes("competitors")) auditExtra.competitors = a.competitors;
+        if (tvars.includes("town")) auditExtra.town = a.town;
+        if (tvars.includes("audit_url")) auditExtra.auditUrl = a.link;
+        payload = claimTemplatePayload(templateName, lang, a.business, a.link, auditExtra);
         auditBusinessName = a.business;
         auditClaimUrl = a.link;
-        storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors);
+        storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors, undefined, a.town);
       } else {
         /* ⛔ contact_followup — a MANUAL follow-up, so ONE PER LEAD, NO OVERRIDE. It is a ["name"]
            template and would otherwise fall through this opener branch with no history guard at all
