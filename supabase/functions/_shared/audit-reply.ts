@@ -5,7 +5,7 @@
 // business_reports row needed). Competitors come from the SHARED buildReportData output — the
 // report's HEADLINE rivals (gutPunch) first, so the pitch names exactly what the report leads
 // with; frequency-aggregate fallback (US-marker-filtered for UK audits) when there's no gutPunch.
-import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
+import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
 import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competitorCleaning.ts";
 
@@ -58,7 +58,7 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
   // 1) The lead's newest audit that has a COMPLETE (or capped) run — strictly by lead_id.
   const { data: audits } = await service
     .from("ai_audits")
-    .select("id, business_name, business_type, location_text, specialism, country, created_at, ai_audit_runs(id, run_number, status, mention_rate, results, created_at)")
+    .select("id, business_name, business_type, location_text, specialism, country, created_at, baseline_target_runs, ai_audit_runs(id, run_number, status, mention_rate, results, created_at)")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false });
   const list = Array.isArray(audits) ? audits : [];
@@ -100,6 +100,8 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     locationText: audit.location_text ?? "",
     specialisms: audit.specialism ?? "",
     isAggregatorUrl,
+    // The WhatsApp hook is pre-payment by definition — plain issues, never a grade.
+    seoStyle: seoStyleForAudit((audit as { baseline_target_runs?: unknown }).baseline_target_runs),
   });
   // {{2}} competitor names — PREFER the report's HEADLINE rivals (data.gutPunch.rivals: the one
   // curated best question+engine answer the report leads with), so the pitch and the report agree

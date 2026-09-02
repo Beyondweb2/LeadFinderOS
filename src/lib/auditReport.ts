@@ -820,6 +820,25 @@ export function computeWinnability(
   return { label, reason, distinctFirms, topFirmCells, totalCells, sourceMix: mix };
 }
 
+/**
+ * Which website presentation an audit gets, from the ONE fact that decides it.
+ *
+ * ⛔ THE PAID BASELINE IS THE ONLY GRADED REPORT. `baseline_target_runs > 1` is what marks a paid
+ * baseline (audit-baseline writes it; a hook audit, a wizard one-off and a bulk audit all leave it
+ * null). Everything else is pre-payment, and a letter grade shown to someone who has not bought yet
+ * reassures them about the wrong thing — see AiAuditReportData.seoStyle.
+ *
+ * ⛔ ONE RULE, EVERY CALLER. Six call sites decide this; restating the comparison at each is how the
+ * public link and the in-app preview end up disagreeing about what the client is looking at.
+ * ⚠️ ABSENT / UNREADABLE → 'issues', NOT 'graded'. A row whose marker we cannot read is far more
+ * likely to be an ordinary audit than a paid baseline (2 baselines against ~460 audits), and the
+ * safe direction is to withhold a grade rather than to show one we cannot justify.
+ */
+export function seoStyleForAudit(baselineTargetRuns: unknown): 'graded' | 'issues' {
+  const n = typeof baselineTargetRuns === 'number' ? baselineTargetRuns : Number(baselineTargetRuns);
+  return Number.isFinite(n) && n > 1 ? 'graded' : 'issues';
+}
+
 export function buildReportData(
   queueRows: QueueRow[],
   run: RunRow | null,
@@ -828,6 +847,12 @@ export function buildReportData(
     // Injected so the shared winnability rule runs in both the SPA and Deno (see classifyWinnability).
     isAggregatorUrl: (url: string) => boolean;
     ownWebsite?: string;
+    /* ⛔ HOW THE WEBSITE SLOT IS PRESENTED — see AiAuditReportData.seoStyle. Passed straight
+       through, never derived here: this module has the RUN and the queue rows, not the audit row
+       that says whether this is a paid baseline. The CALLER knows; deriving it from run count
+       would guess (a 3-run measurement is not the same fact as baseline_target_runs > 1).
+       ⚠️ Absent → 'graded', the pre-existing output. */
+    seoStyle?: 'graded' | 'issues';
   },
 ): AiAuditReportData | null {
   /* ⛔ A RUN WE CANNOT PROVE WAS CLEANED PRINTS NO RIVAL NAMES AT ALL. Paul's rule, 2026-08-28:
@@ -1107,6 +1132,7 @@ export function buildReportData(
     // Only carry a GRADED seo; drop failure/cap markers so the report never crashes on them.
     // Findings are folded here, at the one point BOTH the report renderer and the onboarding
     // results screen read them, so the two can't drift and stored payloads are fixed too.
+    seoStyle: ctx.seoStyle,
     seo: (() => {
       const s = (run?.results as { seo?: unknown } | null)?.seo;
       if (!isRenderableSeo(s)) return undefined;

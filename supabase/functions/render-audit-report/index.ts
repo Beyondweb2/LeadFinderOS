@@ -11,7 +11,7 @@
 // Reuses the SAME TS the SPA uses (single source of truth) by importing src/lib across the repo —
 // those modules are pure (no React/DOM), so Deno runs them (proven by `deno check`).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
+import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 import { showFounderOffer } from "../../../src/lib/founderOffer.ts";
@@ -145,7 +145,9 @@ Deno.serve(async (req) => {
       .from("ai_audits")
       // lead_id joins the payment check below: a client must never open their own report to a
       // cheaper founder offer.
-      .select("id, business_name, business_type, location_text, specialism, website, is_market, lead_id")
+      // baseline_target_runs decides the website section: graded for a paid baseline, plain issues
+      // for everything a prospect sees before paying (seoStyleForAudit).
+      .select("id, business_name, business_type, location_text, specialism, website, is_market, lead_id, baseline_target_runs")
       .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
     /* ⛔ THE PUBLIC RENDERER REFUSES MARKET AUDITS. This is the one an outsider could reach with a
@@ -185,6 +187,8 @@ Deno.serve(async (req) => {
       specialisms: audit.specialism ?? "",
       isAggregatorUrl,
       ownWebsite: audit.website ?? "",
+      /* Graded only for a paid baseline; every prospect-facing report gets the plain issues list. */
+      seoStyle: seoStyleForAudit((audit as { baseline_target_runs?: unknown }).baseline_target_runs),
     });
     if (!data) return unavailable("This audit hasn’t completed yet — check back shortly.");
 

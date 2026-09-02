@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
+import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { createFreeCheckLead } from "../_shared/free-check-lead.ts";
 
@@ -123,6 +123,7 @@ async function buildReportPayload(service: any, audit: any, run: RunRow): Promis
     specialisms: audit.specialism ?? "",
     isAggregatorUrl,
     ownWebsite: audit.website ?? "",
+    seoStyle: seoStyleForAudit(audit.baseline_target_runs),
   });
   if (!data) return null;
 

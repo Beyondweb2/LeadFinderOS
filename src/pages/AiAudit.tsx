@@ -33,7 +33,7 @@ import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
 import {
-  DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, classifyWinnability,
+  DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, seoStyleForAudit, classifyWinnability,
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
 } from '@/lib/auditReport';
 import { tradeWord } from '@/lib/trade';
@@ -109,7 +109,11 @@ interface AuditRow { id: string; business_name: string; business_type: string | 
   is_market?: boolean | null;
   /** Full Measurement (3-run, full question set). Re-audit reads this to reproduce a LIKE-FOR-LIKE
    *  re-measure — a measurement re-audits as a measurement, a quick audit stays quick. */
-  is_measurement?: boolean | null }
+  is_measurement?: boolean | null;
+  /** > 1 marks a PAID BASELINE — the only report that still shows SEO grades (seoStyleForAudit).
+   *  Optional because the market/report list selects vary; absent reads as "not a baseline", which
+   *  is the safe direction (withhold the grade rather than show one we cannot justify). */
+  baseline_target_runs?: number | null }
 
 /* ── The audit book, grouped ────────────────────────────────────────────────────
    The list used to be one flat row per AUDIT, which reads as duplicates because the
@@ -1614,6 +1618,7 @@ const AiAudit = () => {
       locationText: audit.location_text ?? '',
       specialisms: '',
       isAggregatorUrl,
+      seoStyle: seoStyleForAudit(audit.baseline_target_runs),
       /* Needed for the report's "Cited as a source" figure: without it the domain half of the
          citation test is disabled, and this preview would show a lower `cited` count than the live
          client report, which does pass it (render-audit-report). */
@@ -1723,6 +1728,11 @@ const AiAudit = () => {
     return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 4).map((x) => x.name);
   })();
 
+  /* WHICH WEBSITE SECTION THE OPEN AUDIT GETS. One lookup, so the preview, the download and the
+     regenerate paths cannot disagree with each other — or with the public link, which derives the
+     same thing server-side from the same column (seoStyleForAudit). */
+  const openSeoStyle = seoStyleForAudit(savedAudits.find((a) => a.id === auditId)?.baseline_target_runs);
+
   // Live report data derived from the loaded rows (all runs once a report is opened; results.seo
   // passed straight through). Recomputed each render; snapshotted into `reports` on generate/
   // regenerate. internal:true — this is the OPERATOR preview, so it shows the winnability signal;
@@ -1740,6 +1750,7 @@ const AiAudit = () => {
       // Same expression as `ownWebsite` further down (schema value, else the wizard URL).
       // scanTargetUrl is computed earlier in this render, so reading it here is safe.
       ownWebsite: scanTargetUrl,
+      seoStyle: openSeoStyle,
     });
     if (rd) rd.internal = true; // snapshot default — OVERRIDDEN at render/print by AiAuditReport's Client/Internal toggle (showInternal)
     return rd;
@@ -1903,6 +1914,7 @@ const AiAudit = () => {
       specialisms,
       isAggregatorUrl,
       ownWebsite,
+      seoStyle: openSeoStyle,
     });
     if (!data) { toast({ title: 'No completed results to report yet', variant: 'destructive' }); return; }
     data.internal = true; // operator preview — winnability shown here, never on the client doc
@@ -1928,6 +1940,7 @@ const AiAudit = () => {
         specialisms,
         isAggregatorUrl,
         ownWebsite,
+        seoStyle: openSeoStyle,
       });
       if (!data) {
         toast({ title: 'Nothing to rebuild yet', description: 'This run has no completed results.', variant: 'destructive' });
@@ -2112,6 +2125,7 @@ const AiAudit = () => {
             specialisms,
             isAggregatorUrl,
             ownWebsite,
+            seoStyle: openSeoStyle,
           })}
           onBack={() => setCompareOpen(false)}
         />
