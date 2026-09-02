@@ -39,7 +39,7 @@ export function resolveWhatsAppEnv() {
 // campaign path gates those templates on the lead having a share_token; the onboarding link is built
 // from the lead id alone and must NOT be blocked by a missing site. Reusing 'url' would have made
 // onboarding_followup unsendable to exactly the leads it is for.
-export type TemplateVar = "name" | "url" | "trade" | "competitors" | "onboarding_url" | "contact_first_name";
+export type TemplateVar = "name" | "url" | "trade" | "competitors" | "onboarding_url" | "contact_first_name" | "town" | "audit_url";
 
 /** Approved template allowlist — mirrors process-whatsapp-queue. `vars` is the BODY
  *  variable order for THIS template ({{1}} = vars[0], {{2}} = vars[1], …). The four
@@ -114,6 +114,16 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
      process-whatsapp-queue carries the same []. locale "en" (NOT en_GB) — `lang` must match Meta.
      ⛔ ONE PER LEAD. send-whatsapp-message enforces pitchEverSent for it in the name-only branch. */
   contact_followup: { lang: "en", vars: [] },
+  /* ⛔ THE FREE-CHECK RESULT. Submitted to Meta 2026-09-02, IN REVIEW at the time of writing.
+     {{1}} business name · {{2}} trade · {{3}} town · {{4}} report link · {{5}} onboarding link.
+     ⚠️ REGISTERED HERE BEFORE APPROVAL ON PURPOSE. If the name were absent, the send would fail
+     `unknown_template` in OUR code and approval alone would not start it — Paul's requirement is
+     that it begins sending with no code change. Registered, the send reaches Meta, which refuses an
+     unapproved template with its own error; free-check-result.ts reports that as a pending state
+     and still sends the email. The day Meta approves it, the same call succeeds. Nothing to flip.
+     ⚠️ NOT in TEMPLATES_NEEDING_REAL_NAME: the caller already refuses a nameless lead before it
+     gets here, and this one is sent to someone who typed their own business name into a form. */
+  free_check_result: { lang: "en", vars: ["name", "trade", "town", "audit_url", "onboarding_url"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -293,7 +303,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; onboardingUrl?: string; templateName?: string; contactName?: string },
+  extra?: { trade?: string; competitors?: string; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -322,6 +332,18 @@ export function templateBodyParams(
       case "onboarding_url": {
         const u = (extra?.onboardingUrl ?? "").trim();
         if (!u) throw new Error("onboarding_url variable is empty — refusing to send a follow-up with no link");
+        return u;
+      }
+      /* free_check_result's town. Blank is allowed to degrade rather than throw: the sentence still
+         reads without it, and a free-check submitter who left the town vague is not a reason to
+         withhold their result. */
+      case "town": return (extra?.town ?? "").trim();
+      /* free_check_result's report link — /a/<auditId>. Same contract as onboarding_url: the whole
+         message is "here is your result", so sending it with an empty link is worse than not
+         sending. Throws rather than degrading. */
+      case "audit_url": {
+        const u = (extra?.auditUrl ?? "").trim();
+        if (!u) throw new Error("audit_url variable is empty — refusing to send a result with no link");
         return u;
       }
       default: return businessName || "your business"; // "name"
@@ -364,7 +386,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; onboardingUrl?: string; contactName?: string },
+  extra?: { trade?: string; competitors?: string; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got

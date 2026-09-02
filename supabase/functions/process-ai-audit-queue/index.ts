@@ -10,6 +10,7 @@ import {
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
 import { refreshApifyUsage } from "../_shared/enrichment/apify-usage.ts";
 import { advanceBaseline, sweepStalledBaselines, ensureBaselinesForPaidOnboardings } from "../_shared/audit-baseline.ts";
+import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
 import { autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 // Automation B: reuse the SHARED report aggregation (same buildReportData the SPA + public
@@ -731,6 +732,13 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   // WhatsApp AFTER extraction finishes (so {{2}} competitors are the CLEANED list). Collected in the
   // loop, processed after the extraction await below.
   const auditReplyJobs: { runId: string; auditId: string }[] = [];
+  /* ⛔ ITS OWN LIST, NOT auditReplyJobs, AND THAT IS THE WHOLE POINT. auditReplyJobs is gated on
+     AUTO_REPLY_FLOW_ENABLED — a legacy flag that is off — so anything hung off it never runs.
+     A free-check result must not inherit an unrelated kill switch: the visitor asked for this
+     result thirty seconds ago and is waiting for it.
+     Same SUCCESS conditions though: COMPLETE and not capped. maybeSendFreeCheckResult does its own
+     lane check (enrichment_source = 'free_check'), so every other audit falls straight through. */
+  const freeCheckJobs: { runId: string; auditId: string }[] = [];
   // Auto-report: audits that just finalised → generate their public /r/ report AFTER extraction (so
   // the report reflects the cleaned competitor list). Collected in the loop; deduped + fired below.
   const reportJobs: { auditId: string }[] = [];
@@ -993,6 +1001,9 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       // the manual button. No lead-id gate; skipped when AUTO_REPORT_ENABLED is off. Existing-report
       // guard + fail-safe wrapping live in the processor below.
       if (autoReportEnabled && !isCapped && !allFailed && runRow?.audit_id) reportJobs.push({ auditId: runRow.audit_id as string });
+      /* The free-check result. Success only: a capped run has partial data and a failed one has
+         none, and a stranger must never receive either. */
+      if (!isCapped && !allFailed && runRow?.audit_id) freeCheckJobs.push({ runId, auditId: runRow.audit_id as string });
       // D2 — completion auto-send candidates (COMPLETE only, like audit_reply/auto-report). The
       // heavier checks (setting, lead, phone, suppression) run once, after the loop.
       if (!isCapped && !allFailed && runRow?.audit_id) completionSendJobs.push({ auditId: runRow.audit_id as string });
@@ -1033,6 +1044,20 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       await maybeSendAuditReply(service, job.runId, job.auditId);
     } catch (e) {
       console.error(`[process-ai-audit-queue] audit_reply error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
+  /* THE FREE-CHECK RESULT — after competitor cleaning, for the same reason the audit_reply and the
+     auto-report wait: the prospect's report names rival firms, and sending before the cleaner has
+     run would mail a stranger a list of scraped junk. Wrapped like every other send here: a
+     failure must never break finalisation. */
+  for (const job of freeCheckJobs) {
+    try {
+      const r = await maybeSendFreeCheckResult(service, job.runId, job.auditId);
+      if (r.kind !== "skipped") {
+        console.log(`[process-ai-audit-queue] free_check result for audit ${job.auditId}: ${JSON.stringify(r)}`);
+      }
+    } catch (e) {
+      console.error(`[process-ai-audit-queue] free_check result error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
     }
   }
 
