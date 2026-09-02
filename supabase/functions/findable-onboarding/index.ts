@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { createFreeCheckLead } from "../_shared/free-check-lead.ts";
+import { shouldAutoAudit, fireFreeCheckAudit } from "../_shared/free-check-audit.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Actions:
@@ -565,6 +566,11 @@ Deno.serve(async (req) => {
         photos_status: photosStatus,
         contact_email: contactEmail,
         business_name: clip(a.business_name, 200),
+        /* ⛔ ADDED TO ALL THREE LISTS AT ONCE (answers / NEWER_COLS / optional). This builder is an
+           EXPLICIT key list, so a field the client sends and the column accepts still vanishes if
+           it is missing here — proven 2026-08-05 by willing_to_migrate, which saved as HTTP 200
+           with a null and let a Squarespace customer reach Stripe. The free check sends this. */
+        confirmed_phone: clip(a.confirmed_phone, 40),
         source: submissionSource,
         incomplete,
       };
@@ -579,7 +585,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "source"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "source"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -595,7 +601,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "business_address", "source"];
+        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
@@ -630,6 +636,9 @@ Deno.serve(async (req) => {
             // `services` is the trade field the rest of the system reads (the form sends one word).
             trade: clip(a.services, 200) ?? "",
             email: contactEmail,
+            // Optional. Normalised and deduped inside createFreeCheckLead; a repeat submitter who
+            // gives their number matches for free, before any Google spend.
+            phone: clip(a.confirmed_phone, 40),
           });
           /* LINK THE ROW TO THE LEAD, for `matched` as well as `created`. The lead card's
              Questionnaire section, the dashboard and the notifier all key off lead_id, so a
@@ -642,6 +651,39 @@ Deno.serve(async (req) => {
             if (linkErr) console.warn(`[findable-onboarding] free_check lead link failed for ${row.id}: ${linkErr.message}`);
           }
           console.log(`[findable-onboarding] free_check ${outcome.kind}: ${JSON.stringify(outcome)}`);
+
+          /* ── THE AUTO-AUDIT ────────────────────────────────────────────────────────────────────
+             ⛔ LAST, AND UNABLE TO AFFECT ANYTHING BEFORE IT. The questionnaire row is saved, the
+             lead exists and is linked; everything below is best-effort. The visitor sees success
+             either way, because they have done nothing wrong and a form that appears to fail is
+             worse than one that quietly does less.
+             ⛔ AND IT IS GATED BEFORE IT SPENDS. shouldAutoAudit enforces the two guards the 10/day
+             LEAD cap does not: that cap sits after the `matched` return, so without these a repeat
+             submission would fire an uncapped audit and email every time. See free-check-audit.ts.
+             ⚠️ Fires for `matched` as well as `created` — a business already in the book asking for
+             a check should still get one, which is exactly why the repeat guard is per-LEAD rather
+             than "did we just create this lead". */
+          if (outcome.kind === "created" || outcome.kind === "matched") {
+            try {
+              const decision = await shouldAutoAudit(service, outcome.leadId);
+              if (!decision.fire) {
+                console.log(`[findable-onboarding] free_check audit SKIPPED for lead ${outcome.leadId}: ${decision.reason}`);
+              } else {
+                const { data: fresh } = await service
+                  .from("outreach_leads")
+                  .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website")
+                  .eq("id", outcome.leadId).maybeSingle();
+                if (!fresh) {
+                  console.warn(`[findable-onboarding] free_check audit skipped: lead ${outcome.leadId} not readable`);
+                } else {
+                  const fired = await fireFreeCheckAudit(fresh);
+                  console.log(`[findable-onboarding] free_check audit ${fired.ok ? `started (audit ${fired.auditId})` : `FAILED: ${fired.error}`} for lead ${outcome.leadId}`);
+                }
+              }
+            } catch (e) {
+              console.error("[findable-onboarding] free_check auto-audit threw:", e instanceof Error ? e.message : String(e));
+            }
+          }
           /* The visitor gets a plain success either way — they asked for a free check, not for a
              report on our lead plumbing. The outcome rides along for the operator surfaces. */
           return json({ ok: true, onboarding_id: row.id, audit_id: null, lead: outcome.kind });

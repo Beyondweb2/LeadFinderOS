@@ -36,6 +36,8 @@
 import { resolvePlaceId } from "./place-resolve.ts";
 import { resolveDerivedTown } from "./place-town.ts";
 import { ENTERPRISE_FIELDS, fetchPlaceDetails } from "./place-details.ts";
+// The SAME normaliser the send path uses, so a stored number is always one we can dial.
+import { toWhatsAppNumber } from "./whatsapp-send.ts";
 
 /** How many free-check leads may enrich themselves per rolling 24h. Paul's number, 2026-08-19.
  *  Generic mode has no rate limit of its own and each submission now costs real pence, so this is
@@ -47,6 +49,10 @@ export interface FreeCheckInput {
   town: string;
   trade: string;
   email: string | null;
+  /** OPTIONAL, and typed by the visitor. Normalised to WhatsApp form before it is used for anything
+   *  — a typed "07700 900123" and a stored "+447700900123" are the same number, and an unnormalised
+   *  compare would miss every duplicate and store a number the send path cannot dial. */
+  phone?: string | null;
 }
 
 export type FreeCheckOutcome =
@@ -173,14 +179,42 @@ export async function createFreeCheckLead(
       }
     }
 
+    /* ── 4b. THE PHONE THEY TYPED — CHECKED BEFORE WE SPEND ANYTHING ─────────────────────────
+       ⛔ ORDERED BEFORE PLACE DETAILS ON PURPOSE, and it is a saving rather than a nicety: a
+       supplied phone can match an existing lead for FREE, where discovering the same number through
+       Google costs the $0.020 Enterprise call first. A repeat submitter who gives their number
+       therefore costs nothing at all.
+       ⚠️ Normalised through the same toWhatsAppNumber the send path uses, so what is compared and
+       what is stored are the form the rest of the system dials. An unparseable number is dropped
+       rather than stored raw — a number we cannot dial is not a phone, and storing it would make
+       the lead look contactable when it is not. */
+    const typedPhone = toWhatsAppNumber(input.phone ?? "", null);
+    if (typedPhone) {
+      try {
+        const byTyped = await findBy(service, "phone", typedPhone);
+        if (byTyped) {
+          return {
+            kind: "matched",
+            leadId: String(byTyped.id),
+            matchedOn: "phone",
+            existingName: String(byTyped.business_name ?? businessName),
+            archived: byTyped.is_archived === true,
+          };
+        }
+      } catch { /* a failed lookup must not stop the lead being created — the later guards remain */ }
+    }
+
     // ── 5. THE PHONE (Place Details Enterprise; rating + reviews ride along free) ────────────
-    let phone: string | null = null;
+    let phone: string | null = typedPhone;
     let rating: number | null = null;
     let reviewCount: number | null = null;
     let website: string | null = null;
     if (placeId && apiKey) {
       const d = await fetchPlaceDetails(placeId, apiKey, ENTERPRISE_FIELDS);
-      phone = d?.phone ?? null;
+      /* ⚠️ THEIRS WINS. They typed this number minutes ago asking us to contact them; Google's
+         listing may be a switchboard, an old number, or an agency's. Only fall back to Google when
+         they gave us nothing. */
+      phone = phone ?? d?.phone ?? null;
       rating = d?.rating ?? null;
       reviewCount = d?.reviewCount ?? null;
       website = d?.website ?? null;
