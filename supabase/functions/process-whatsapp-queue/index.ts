@@ -6,6 +6,9 @@ import { hookFollowupEligible } from "../_shared/hook-followup-eligibility.ts";
 import { contactFollowupEligible } from "../_shared/contact-followup-eligibility.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
+import {
+  runOutreachAuditAhead, decideOutreachAudit, readAuditStates, templateNeedsAudit,
+} from "../_shared/outreach-audit.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
@@ -738,7 +741,30 @@ Deno.serve(async (req) => {
     // Pause guard FIRST — a paused queue sends nothing, even on a forced manual tick.
     if (paused) return json({ ok: true, skipped: "paused", ...statusPayload });
     if (!windowOpen && !force) return json({ ok: true, skipped: "outside_window", ...statusPayload });
-    if ((sentToday ?? 0) >= DAILY_CAP) return json({ ok: true, skipped: "cap_reached", ...statusPayload });
+    /* == AUDIT AHEAD OF THE SEND =============================================================
+       audit_result_hook's {{4}} is the lead's report link, so the audit must exist before the
+       message can be built. This starts the audits the drip is about to need, capped at
+       OUTREACH_AUDIT_CONCURRENCY in flight, at 3 questions x 1 run.
+
+       ⛔ IT SITS ABOVE THE CAP AND PACING GATES ON PURPOSE. `next_send_at` paces MESSAGES - it
+       returns "not_due" on most ticks, so an audit pass below it would almost never run and a batch
+       would warm up at one audit per send-interval, taking days. An audit is not a send: it is not
+       rate-limited by Meta, does not count against DAILY_CAP, and the prospect never sees it.
+       ⚠️ It IS below `paused` and `windowOpen`, because those two mean "we are not contacting
+       anyone right now" - starting paid audits for messages that cannot go out for twelve hours is
+       spend with no recipient.
+       ⚠️ Never fatal: a failure here must not stop a tick sending something it already could. */
+    let auditAhead: Awaited<ReturnType<typeof runOutreachAuditAhead>> | null = null;
+    try {
+      auditAhead = await runOutreachAuditAhead(service, (name) => TEMPLATES[name ?? ""]?.vars);
+      if (auditAhead.started || auditAhead.waiting) {
+        console.log(`[outreach-audit] started=${auditAhead.started} waiting=${auditAhead.waiting} inFlight=${auditAhead.inFlight} skipped=${auditAhead.skipped} considered=${auditAhead.considered}`);
+      }
+    } catch (e) {
+      console.error("[outreach-audit] audit-ahead pass threw:", e instanceof Error ? e.message : String(e));
+    }
+
+    if ((sentToday ?? 0) >= DAILY_CAP) return json({ ok: true, skipped: "cap_reached", ...statusPayload, auditAhead });
     if (nextSendAt && new Date(nextSendAt) > new Date() && !force && !sendNow) {
       return json({ ok: true, skipped: "not_due", ...statusPayload });
     }
@@ -1082,15 +1108,37 @@ Deno.serve(async (req) => {
       }
       templateExtra.onboardingUrl = ob.url;
     }
-    if (tvars.includes("trade") || tvars.includes("competitors")) {
+    if (templateNeedsAudit(tvars)) {
       const ar = await resolveAuditReplyVars(service, lead.id as string);
       if (!ar.ok) {
+        /* 🔴 NO COMPLETED AUDIT. THIS USED TO DEQUEUE UNCONDITIONALLY, AND THAT WAS THE BUG.
+           `status: "not_contacted"` is right for a lead that can NEVER be audited - a gated lead
+           must not stall a one-send-per-tick drip - and wrong for one that simply has not been
+           audited YET. Measured 2026-09-02: 16 leads sat queued on audit_result_hook with zero
+           completed audits, and every one would have been silently un-queued, one per tick, having
+           received nothing.
+           The two cases are now told apart: an audit in flight (or startable) leaves the lead
+           QUEUED and skips this tick; only a lead that genuinely cannot be served is dropped, with
+           its reason. decideOutreachAudit owns that distinction and is unit-tested on it.
+           ⚠️ The wait is BOUNDED (OUTREACH_AUDIT_STALE_MS) - a wedged audit falls through to the
+           old dequeue rather than stalling the queue for everyone behind it. */
+        const st = (await readAuditStates(service, [lead.id as string])).get(lead.id as string);
+        // deno-lint-ignore no-explicit-any
+        const decision = st ? decideOutreachAudit(lead as any, st) : ({ start: false, wait: false, reason: ar.reason } as const);
+        if (decision.start || decision.wait) {
+          return json({
+            ok: true, skipped: "awaiting_audit",
+            reason: `${lead.business_name ?? "That lead"} is queued for ${templateName} and its audit is not ready yet - it stays in the queue and sends as soon as the audit completes.`,
+            lead_id: lead.id, business: lead.business_name, ...statusPayload, auditAhead,
+          });
+        }
         await service.from("outreach_leads").update({
           status: "not_contacted", whatsapp_delivery_status: "audit_reply_unavailable", contact_method: null,
         }).eq("id", lead.id);
         return json({
-          ok: false, error: "audit_reply_unavailable", reason: ar.reason,
-          lead_id: lead.id, business: lead.business_name, ...statusPayload,
+          ok: false, error: "audit_reply_unavailable",
+          reason: `${ar.reason} (${decision.reason})`,
+          lead_id: lead.id, business: lead.business_name, ...statusPayload, auditAhead,
         }, 200);
       }
       templateExtra.trade = ar.trade;
