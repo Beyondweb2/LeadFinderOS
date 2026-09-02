@@ -173,6 +173,33 @@ export async function maybeSendFreeCheckResult(
   if (!lead) return { kind: "skipped", reason: "lead row missing" };
   if (lead.enrichment_source !== "free_check") return { kind: "skipped", reason: "not a free-check lead" };
 
+  /* ══ THE SUBMITTED CONTACT DETAILS — NOT THE LEAD'S ═════════════════════════════════════════════
+     🔴 THE RESULT WENT TO THE WRONG PHONE (2026-09-02, reported after a real test). The sender read
+     `lead.phone` and `lead.email`, which on a MATCHED lead are whatever WE had on file for that
+     business from prospecting — not what the person filling the form typed. Measured on the live
+     row: the submission carried confirmed_phone "839933726" while the lead's stored phone was
+     "+66 95 096 1230", and the WhatsApp went to the stored one.
+
+     ⛔ THAT IS A REAL DISCLOSURE RISK, NOT A COSMETIC ONE. Anyone can type any business name into a
+     public form. If we answer to the number ON FILE for that business, a stranger's enquiry sends
+     that business's audit — or worse, someone else's details — to a third party who never asked.
+     The result goes to whoever filled the form in, every time, on new AND matched leads.
+
+     ⚠️ Same class as the trade bug two days ago: the flow read stored lead data instead of the
+     submitted answers. The submission row IS the record of what was typed, so it is the source of
+     truth for anything about the person, and the lead row stays the source of truth for the
+     BUSINESS (its name, town, website — what the audit is about). */
+  const { data: sub } = await service
+    .from("onboarding_responses")
+    .select("id, contact_email, confirmed_phone, created_at")
+    .eq("lead_id", lead.id)
+    .eq("source", "free_check")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const submittedEmail = ((sub?.contact_email as string | null) ?? "").trim();
+  const submittedPhone = ((sub?.confirmed_phone as string | null) ?? "").trim();
+
   /* == 2 - IS THE MEASUREMENT ACTUALLY FINISHED? ==============================================
      🔴 THIS USED TO BE A PER-RUN STAMP, AND AT THREE RUNS IT WOULD HAVE MESSAGED A STRANGER
      THREE TIMES. process-ai-audit-queue pushes a free-check job on EVERY run finalisation, and the
@@ -263,21 +290,26 @@ export async function maybeSendFreeCheckResult(
       [
         `The audit finalised but buildReportData returned null, so <b>nothing was sent to the prospect</b>.`,
         `Audit <code>${auditId}</code>, run <code>${runId}</code>.`,
-        `Lead <code>${lead.id}</code>${lead.email ? `, they gave ${lead.email}` : ""}.`,
+        `Lead <code>${lead.id}</code>${submittedEmail ? `, they gave ${submittedEmail}` : ""}.`,
         `Every question probably failed. Their report link would have shown "hasn't completed yet".`,
       ],
     );
     return { kind: "flagged", reason: "buildReportData returned null — nothing sent" };
   }
 
-  const email = (lead.email ?? "").trim();
+  /* ⛔ THE SUBMITTED ADDRESS, WITH NO FALLBACK TO THE STORED ONE. On this business they happen to
+     match, which is exactly why the phone bug was the one that got noticed — the same fault was
+     sitting on the email, masked. A free check is answered to the person who asked for it. */
+  const email = submittedEmail;
   if (!email) {
     await flagToOperator(
       `FREE CHECK — no email to send to for ${audit.business_name ?? "(unnamed)"}`,
-      [`The audit is good but the lead has no email address, so nothing could be sent.`,
-       `Audit <code>${auditId}</code>, lead <code>${lead.id}</code>.`],
+      /* Says SUBMISSION, not lead: the address now comes from the form, so "the lead has no
+         email" would send whoever reads this looking at the wrong record. */
+      [`The audit is good but the submission carried no email address, so nothing could be sent.`,
+       `Audit <code>${auditId}</code>, lead <code>${lead.id}</code>, submission <code>${sub?.id ?? "none found"}</code>.`],
     );
-    return { kind: "flagged", reason: "no contact email on the lead" };
+    return { kind: "flagged", reason: "no contact email on the submission" };
   }
 
   /* Claim it now. A stamp written AFTER the send re-sends on the next 30-second tick if anything in
@@ -378,9 +410,25 @@ export async function maybeSendFreeCheckResult(
      spoken to. */
   let texted = false;
   let textPending: string | null = null;
-  const phone = (lead.phone ?? "").trim();
+  /* ⛔ THE SUBMITTED NUMBER ONLY — never lead.phone. See the block above. */
+  const phone = submittedPhone;
   const wa = resolveWhatsAppEnv();
-  const to = phone ? toWhatsAppNumber(phone, lead.country ?? null) : null;
+  /* ⛔ AND ONLY IF IT CAN BE DIALLED WITH CONFIDENCE. toWhatsAppNumber falls back to the LEAD's
+     country for a number with no international prefix, and that fallback is safe for a leading-0
+     national number (the submitter is the business, so its country is a fair assumption) and
+     DANGEROUS for bare digits. Measured: "839933726" (what was actually typed — a Thai mobile
+     without its 0 or +66) returns unchanged, and had the lead's country been UK a leading-0 Thai
+     number would have become a real UK number belonging to a stranger.
+     So: an international prefix (+ / 00) is always accepted, a leading 0 is normalised with the
+     lead's country as before, and anything else is REFUSED — the email still goes and the operator
+     is told. Absence of a country signal is not permission to guess a recipient.
+     ⚠️ The form's placeholder ("07700 900123") already steers UK users to the leading-0 form, so
+     this refuses the ambiguous case rather than the common one. */
+  const dialable = /^\s*(\+|00)/.test(phone) || /^\s*0/.test(phone);
+  const to = phone && dialable ? toWhatsAppNumber(phone, lead.country ?? null) : null;
+  if (phone && !dialable) {
+    console.warn(`[free-check-result] submitted phone ${JSON.stringify(phone)} has no country prefix — WhatsApp skipped, email only`);
+  }
   if (!phone) {
     textPending = "no phone on the lead";
   } else if (!to) {

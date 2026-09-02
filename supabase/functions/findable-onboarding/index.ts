@@ -663,6 +663,15 @@ Deno.serve(async (req) => {
              ⚠️ Fires for `matched` as well as `created` — a business already in the book asking for
              a check should still get one, which is exactly why the repeat guard is per-LEAD rather
              than "did we just create this lead". */
+          /* ⛔ DOES A RESULT ACTUALLY FOLLOW? The confirmation screen promises "we email you the report",
+             and that is only true if an audit runs. Often it does not: the repeat guard refuses a business
+             audited within FREE_CHECK_AUDIT_REPEAT_DAYS, and the daily cap refuses the rest of a busy day.
+             🔴 Both are CORRECT refusals that produced a WRONG PROMISE (2026-09-02, found by submitting the
+             same bar a seventh time: ONE audit exists, six submissions got the "check your email" screen
+             and nothing was ever coming). The answer now travels back so the site can word it honestly.
+             ⚠️ It reports WHETHER, never WHY. The reason is operator detail - "we audited this business
+             four days ago" tells a stranger what is in our database. */
+          let resultComing = false;
           if (outcome.kind === "created" || outcome.kind === "matched") {
             try {
               const decision = await shouldAutoAudit(service, outcome.leadId);
@@ -687,6 +696,8 @@ Deno.serve(async (req) => {
                     town: confirmedLocation ?? "",
                   });
                   console.log(`[findable-onboarding] free_check audit ${fired.ok ? `started (audit ${fired.auditId})` : `FAILED: ${fired.error}`} for lead ${outcome.leadId}`);
+                  /* Only a STARTED audit promises a result. A failed start is not a maybe. */
+                  resultComing = fired.ok;
                 }
               }
             } catch (e) {
@@ -695,7 +706,9 @@ Deno.serve(async (req) => {
           }
           /* The visitor gets a plain success either way — they asked for a free check, not for a
              report on our lead plumbing. The outcome rides along for the operator surfaces. */
-          return json({ ok: true, onboarding_id: row.id, audit_id: null, lead: outcome.kind });
+          /* `result_coming` is what the confirmation copy keys on. An older site bundle ignores the
+             field and keeps the previous wording, so deploy order does not matter. */
+          return json({ ok: true, onboarding_id: row.id, audit_id: null, lead: outcome.kind, result_coming: resultComing });
         }
 
         return json({ ok: true, onboarding_id: row.id, audit_id: null });
