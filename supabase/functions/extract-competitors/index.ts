@@ -1,4 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+/* ⛔ THE SAME TWO PREDICATES THE REPORT USED TO APPLY AT RENDER - now applied HERE, once, before
+   storing. Relative imports with the .ts extension because `@/` does not resolve for Deno
+   (CLAUDE.md 4); both files are pure and pull in nothing Deno-hostile. */
+import { isProvableJunkName } from "../../../src/lib/competitorCleaning.ts";
+import { classifyKnownEntity } from "../../../src/lib/knownEntities.ts";
 
 // extract-competitors — AI-judged competitor extraction from a run's ALREADY-STORED answer
 // text (no new Apify scrape). For each engine answer on the run, an OpenAI call reads the
@@ -53,9 +58,21 @@ const ANSWER_ENGINES: Record<string, string> = {
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
-/** Light final backstop on the AI's names: trim, drop empties/over-long, drop the audited
- *  business (self), dedupe case-insensitively, cap. The AI is the primary judge; this only
- *  guards against obvious slips. (The frontend isRealCompetitor is a further display backstop.) */
+/** THE FINAL WORD ON WHAT GETS STORED. Trim, drop empties/over-long, drop the audited business
+ *  (self), drop known DIRECTORIES and provable junk, dedupe case-insensitively, cap.
+ *
+ *  🔴 THERE IS NO LONGER A DISPLAY BACKSTOP, AND THAT IS THE POINT (2026-09-02). The report used
+ *  to re-filter this list through isRealCompetitor when it rendered, and that filter rejected 151 of
+ *  the 2,065 stored names (7%) across the 60 newest audits - every sampled rejection a real firm,
+ *  because its "basically the location" clause drops a short name containing the town, which is how
+ *  a local trade is normally named ("Keytek Ashby-de-la-Zouch", "LockFit Bournemouth"). On one report
+ *  it emptied three engine blocks that sat beside a positive named count.
+ *  Measured across those same 2,065 names, what the filter guarded against had already been handled
+ *  here: 0 known directories, 0 containing the client's own name, 1 provable junk string.
+ *
+ *  ⛔ SO WHAT THIS FUNCTION RETURNS IS WHAT THE CLIENT READS. Anything added here must be a fact
+ *  about the NAME (it is a directory; it is not a name at all), never a heuristic about towns, word
+ *  counts, capitalisation or trade vocabulary - those are what threw real competitors away. */
 function cleanNames(names: unknown, businessName: string): string[] {
   const self = businessName.trim().toLowerCase();
   const seen = new Set<string>();
@@ -66,6 +83,13 @@ function cleanNames(names: unknown, businessName: string): string[] {
     const k = name.toLowerCase();
     if (seen.has(k)) continue;
     if (self && (k === self || k.includes(self) || self.includes(k))) continue; // never list self
+    /* A known DIRECTORY is a SOURCE, not a rival a customer hires instead - Checkatrade printing as
+       a client's competitor is the failure this prevents. Known NATIONALS stay: Able Group really is
+       a rival (knownEntities.ts). */
+    if (classifyKnownEntity(name)?.kind === "directory") continue;
+    /* Not a name at all: a single English function word, or a code-like token. Structural, so it
+       needs no per-trade vocabulary - the medical-nouns lesson (CLAUDE.md 8). */
+    if (isProvableJunkName(name)) continue;
     seen.add(k);
     out.push(name);
     if (out.length >= MAX_PER_ENGINE) break;

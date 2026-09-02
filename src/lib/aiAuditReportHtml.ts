@@ -819,8 +819,13 @@ export function renderReportHtml(d: AiAuditReportData): string {
          the scoped wording without claiming a cause. */
       : d.namesWithheld
         ? `<div class="qb-eng-line"><span class="qb-none">Competitor names withheld &mdash; this run&rsquo;s list could not be verified.</span></div>`
-        : (e.rivalsRaw ?? 0) > 0
-          ? `<div class="qb-eng-line"><span class="qb-none">No other businesses we could verify.</span></div>`
+        /* 🔴 "COULD NOT BE VERIFIED" IS GONE AND CANNOT RECUR (2026-09-02). It existed because the
+           renderer re-filtered the stored names and could end up with none, so it had to say why without
+           claiming nobody was named. That filter is removed: `rivals` IS the stored list, cleaned once
+           when the audit ran, so "AI returned names and we rejected them all" is no longer a state this
+           document can be in.
+           ⚠️ Withholding remains, because it is a different fact: a run whose stored list is provably junk
+           has its names suppressed wholesale (competitorCleaning.ts), and saying so is honest. */
           : `<div class="qb-eng-line"><span class="qb-none">No other businesses named.</span></div>`;
     const sources = e.citations.length
       ? `<div class="qb-eng-line"><span class="qb-slabel">Sources:</span> ${e.citations.map((c) => `<a class="qb-cite" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(c.domain)}</a>`).join(" ")}</div>`

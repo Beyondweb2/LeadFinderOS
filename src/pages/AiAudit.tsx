@@ -1716,7 +1716,10 @@ const AiAudit = () => {
         if (!er) continue;
         if (engine === 'google_organic') continue; // organic result TITLES aren't AI-named firms
         for (const c of er.competitors) {
-          if (!isRealCompetitor(c, resultsLoc)) continue; // drop stopwords / location / fragments
+          /* No per-name filter: the stored list is final, cleaned at audit time by
+             extract-competitors. The operator view and the client report must show the SAME
+             names — filtering here and not there is how they drifted apart. */
+          if (!String(c).trim()) continue;
           const key = c.trim().toLowerCase();
           if (!key) continue;
           const cur = counts.get(key);
@@ -3992,7 +3995,9 @@ function QuestionCard({ row, businessName, locationText, ownWebsite, apifyCycleE
 function EngineRow({ engine, er, businessName, locationText }: { engine: string; er: EngineResult; businessName: string; locationText: string }) {
   // Belt-and-braces: filter raw stored competitors through isRealCompetitor before display, matching
   // the scorecard + buildReportData, so regex-scraped junk can't show even pre re-extraction.
-  const shownCompetitors = er.competitors.filter((c) => isRealCompetitor(c, locationText));
+  /* The stored list, as stored. It used to be re-filtered through isRealCompetitor "belt-and-
+     braces", which rejected 7% of real firms — see keepRival in auditReport.ts. */
+  const shownCompetitors = er.competitors.filter((c) => !!String(c).trim());
   return (
     <div className="rounded-lg border border-border/50 p-2.5">
       <div className="flex items-center gap-2 flex-wrap">
