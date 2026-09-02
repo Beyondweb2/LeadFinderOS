@@ -95,14 +95,14 @@ export async function maybeSendFreeCheckResult(
      makes this audit ours; every other audit in the system must fall straight through. */
   let { data: audit } = await service
     .from("ai_audits")
-    .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, free_check_result")
+    .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, free_check_result, is_measurement")
     .eq("id", auditId).maybeSingle();
   /* ⚠️ free_check_result may not exist yet (SQL pending). PostgREST fails the WHOLE select on an
      unknown column, so retry without it rather than reading "no audit" and never sending. */
   if (!audit) {
     const { data: legacy } = await service
       .from("ai_audits")
-      .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs")
+      .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, is_measurement")
       .eq("id", auditId).maybeSingle();
     audit = legacy as typeof audit;
   }
@@ -110,7 +110,16 @@ export async function maybeSendFreeCheckResult(
 
   const { data: lead } = await service
     .from("outreach_leads")
-    .select("id, enrichment_source, contact_email, phone, country, business_name, search_keyword, search_location")
+    /* 🔴 THE COLUMN IS `email`, NOT `contact_email` — AND THIS SELECT SILENTLY BROKE THE WHOLE
+       FEATURE (found 2026-09-02 by running the flow end to end). `contact_email` is the
+       ONBOARDING_RESPONSES column name; on outreach_leads it is `email` (written by
+       createFreeCheckLead alongside email_method/email_status). PostgREST fails the ENTIRE select on
+       one unknown column, so `lead` came back null and the function returned "lead row missing" —
+       a plausible-looking skip reason, logged and ignored, for every free check ever run. No email
+       could ever have been sent.
+       ⚠️ `deno check` cannot see this and neither can any local test: the column list is a string.
+       The only thing that catches it is a real submission, which is why one was run. */
+    .select("id, enrichment_source, email, phone, country, business_name, search_keyword, search_location")
     .eq("id", audit.lead_id).maybeSingle();
   if (!lead) return { kind: "skipped", reason: "lead row missing" };
   if (lead.enrichment_source !== "free_check") return { kind: "skipped", reason: "not a free-check lead" };
@@ -193,11 +202,11 @@ export async function maybeSendFreeCheckResult(
     specialisms: audit.specialism ?? "",
     isAggregatorUrl,
     ownWebsite: audit.website ?? "",
-    /* ⛔ THE LANE DECIDES THIS, NOT THE RUN COUNT. seoStyleForAudit returns 'graded' for anything
-       above one run, so turning FREE_CHECK_RUNS up to 3 would silently have flipped every free
-       check back to the graded website block that was deliberately split off the hook lane. A free
-       check is always the issues list: it is the same document whether it took one ask or three. */
-    seoStyle: "issues",
+    /* ⛔ THROUGH THE SHARED PREDICATE, NOT A LOCAL "issues" LITERAL. A hardcoded value here would
+       have been right for this one email and left render-audit-report — the document the prospect
+       actually opens — still deriving 'graded' from the 3-run count. seoStyleForAudit now takes
+       is_measurement, so the lane is decided in one place for all six callers. */
+    seoStyle: seoStyleForAudit(audit.baseline_target_runs, (audit as { is_measurement?: unknown }).is_measurement),
   });
   if (!data) {
     await flagToOperator(
@@ -205,18 +214,18 @@ export async function maybeSendFreeCheckResult(
       [
         `The audit finalised but buildReportData returned null, so <b>nothing was sent to the prospect</b>.`,
         `Audit <code>${auditId}</code>, run <code>${runId}</code>.`,
-        `Lead <code>${lead.id}</code>${lead.contact_email ? `, they gave ${lead.contact_email}` : ""}.`,
+        `Lead <code>${lead.id}</code>${lead.email ? `, they gave ${lead.email}` : ""}.`,
         `Every question probably failed. Their report link would have shown "hasn't completed yet".`,
       ],
     );
     return { kind: "flagged", reason: "buildReportData returned null — nothing sent" };
   }
 
-  const email = (lead.contact_email ?? "").trim();
+  const email = (lead.email ?? "").trim();
   if (!email) {
     await flagToOperator(
       `FREE CHECK — no email to send to for ${audit.business_name ?? "(unnamed)"}`,
-      [`The audit is good but the lead has no contact_email, so nothing could be sent.`,
+      [`The audit is good but the lead has no email address, so nothing could be sent.`,
        `Audit <code>${auditId}</code>, lead <code>${lead.id}</code>.`],
     );
     return { kind: "flagged", reason: "no contact email on the lead" };

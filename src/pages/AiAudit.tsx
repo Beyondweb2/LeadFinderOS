@@ -1618,7 +1618,7 @@ const AiAudit = () => {
       locationText: audit.location_text ?? '',
       specialisms: '',
       isAggregatorUrl,
-      seoStyle: seoStyleForAudit(audit.baseline_target_runs),
+      seoStyle: seoStyleForAudit(audit.baseline_target_runs, audit.is_measurement),
       /* Needed for the report's "Cited as a source" figure: without it the domain half of the
          citation test is disabled, and this preview would show a lower `cited` count than the live
          client report, which does pass it (render-audit-report). */
@@ -1731,7 +1731,9 @@ const AiAudit = () => {
   /* WHICH WEBSITE SECTION THE OPEN AUDIT GETS. One lookup, so the preview, the download and the
      regenerate paths cannot disagree with each other — or with the public link, which derives the
      same thing server-side from the same column (seoStyleForAudit). */
-  const openSeoStyle = seoStyleForAudit(savedAudits.find((a) => a.id === auditId)?.baseline_target_runs);
+  /* is_measurement is passed because baseline_target_runs alone no longer identifies a paid
+     baseline - the free-check lane is multi-run too. See seoStyleForAudit. */
+  const openSeoStyle = seoStyleForAudit(openAuditRow?.baseline_target_runs, openAuditRow?.is_measurement);
 
   // Live report data derived from the loaded rows (all runs once a report is opened; results.seo
   // passed straight through). Recomputed each render; snapshotted into `reports` on generate/

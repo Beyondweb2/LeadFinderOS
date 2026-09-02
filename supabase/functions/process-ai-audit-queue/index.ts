@@ -1276,7 +1276,7 @@ async function insertAuditReportRow(service: any, businessName: string, auditId:
 async function maybeSendAuditReply(service: any, runId: string, auditId: string): Promise<void> {
   // 1) Lead gate — a manually-run audit (no lead) has nobody to message.
   const { data: audit } = await service.from("ai_audits")
-    .select("id, lead_id, business_name, business_type, location_text, specialism, baseline_target_runs")
+    .select("id, lead_id, business_name, business_type, location_text, specialism, baseline_target_runs, is_measurement")
     .eq("id", auditId).maybeSingle();
   if (!audit?.lead_id) return;
 
@@ -1296,7 +1296,10 @@ async function maybeSendAuditReply(service: any, runId: string, auditId: string)
     locationText: audit.location_text ?? "",
     specialisms: audit.specialism ?? "",
     isAggregatorUrl,
-    seoStyle: seoStyleForAudit((audit as { baseline_target_runs?: unknown }).baseline_target_runs),
+    seoStyle: seoStyleForAudit(
+      (audit as { baseline_target_runs?: unknown }).baseline_target_runs,
+      (audit as { is_measurement?: unknown }).is_measurement,
+    ),
   });
   if (!data) return; // no completed questions (e.g. all-failed) → nothing to report/send
 

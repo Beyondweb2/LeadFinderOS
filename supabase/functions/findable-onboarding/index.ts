@@ -124,7 +124,7 @@ async function buildReportPayload(service: any, audit: any, run: RunRow): Promis
     specialisms: audit.specialism ?? "",
     isAggregatorUrl,
     ownWebsite: audit.website ?? "",
-    seoStyle: seoStyleForAudit(audit.baseline_target_runs),
+    seoStyle: seoStyleForAudit(audit.baseline_target_runs, (audit as { is_measurement?: unknown }).is_measurement),
   });
   if (!data) return null;
 
