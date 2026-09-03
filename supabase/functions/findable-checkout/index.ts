@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // The three website answers come back too: they decide whether we can serve this customer at
       // all, and that has to be settled BEFORE a Stripe session exists. See the gate below.
-      .select("id, lead_id, status, website_platform, website_platform_other, website_manager, willing_to_migrate")
+      .select("id, lead_id, status, website_platform, website_platform_other, website_manager, willing_to_migrate, website_addon")
       .eq("id", onboardingId).maybeSingle();
     if (!ob) return json({ ok: false, error: "unknown_onboarding" }, 404);
 
@@ -215,7 +215,46 @@ Deno.serve(async (req) => {
     const back = `${origin}/onboarding/${effectiveLeadId ? `${backSegment}?lead=${effectiveLeadId}` : ""}`;
 
     const form = new URLSearchParams();
-    form.set("mode", "payment"); // ONE-OFF — not a subscription
+    /* ══ THE WEBSITE ADD-ON ══════════════════════════════════════════════════════════════════
+       ⛔ READ FROM THE ROW, NEVER FROM THE REQUEST. `body` is not consulted for this and must not
+       be: the standing rule on this endpoint is that the browser never decides money (see the
+       price note below - there is no parameter through which a discount can be asked for, and there
+       must be none through which a £59.98 upsell can be either). The tick was saved server-side at
+       submit; this reads it back.
+       ⚠️ STRICTLY `=== true`. Absent (a pre-migration row, or a submit that predates the field),
+       null, "false", 0 - every one of them means NOT ticked. Absence is never a purchase.
+       ⚠️ AND IT DEGRADES IF THE PRICE IDS ARE MISSING. The two Stripe prices live in secrets; if
+       either is unset we charge the AI line ALONE rather than guessing an amount or refusing the
+       payment outright. A customer who ticked the box and got only the audit is a phone call; a
+       customer charged for a subscription we cannot name a price for is a refund and a chargeback. */
+    const wantsWebsite = (ob as { website_addon?: unknown }).website_addon === true;
+    const websitePriceId = (Deno.env.get("FINDABLE_WEBSITE_PRICE_ID") ?? "").trim();
+    const hostingPriceId = (Deno.env.get("FINDABLE_HOSTING_PRICE_ID") ?? "").trim();
+    const addOnReady = wantsWebsite && !!websitePriceId && !!hostingPriceId;
+    if (wantsWebsite && !addOnReady) {
+      console.error(`[findable-checkout] ${onboardingId} ticked the website add-on but ${!websitePriceId ? "FINDABLE_WEBSITE_PRICE_ID" : "FINDABLE_HOSTING_PRICE_ID"} is unset - charging the AI line only`);
+      await recordRefusal("checkout_addon_unconfigured", {
+        onboarding_id: onboardingId, lead_id: effectiveLeadId,
+        website_price_id_set: !!websitePriceId, hosting_price_id_set: !!hostingPriceId,
+      });
+    }
+
+    /* ⛔ THE MODE IS DECIDED BY THE ADD-ON, AND `payment` CANNOT CARRY A RECURRING PRICE - that is
+       the whole reason this is not just an extra line item. In `subscription` mode Stripe bills the
+       one-time lines on the FIRST INVOICE alongside the first month, so the customer enters a card
+       once and pays £109.97 today, then £9.99 a month.
+       ⚠️ Subscription mode always creates a Stripe CUSTOMER; payment mode may not. That id is new
+       durable state and the webhook stores it - without it we could never cancel or answer "is this
+       customer still paying". */
+    form.set("mode", addOnReady ? "subscription" : "payment");
+    /* Metadata rides on the SUBSCRIPTION too, not just the session: customer.subscription.* and
+       invoice.* events carry the subscription, and without this a churn event could not be traced
+       back to a lead. The session metadata below covers checkout.session.completed. */
+    if (addOnReady) {
+      form.set("subscription_data[metadata][onboarding_id]", onboardingId);
+      if (effectiveLeadId) form.set("subscription_data[metadata][lead_id]", effectiveLeadId);
+      form.set("subscription_data[metadata][product]", "findable_hosting");
+    }
     form.set("success_url", `${back}${back.includes("?") ? "&" : "?"}paid=1`);
     // The cancel URL carries the onboarding row, the success URL deliberately does not.
     //
@@ -255,6 +294,26 @@ Deno.serve(async (req) => {
       form.set("line_items[0][price_data][product_data][name]", "Findable — 8-week AI visibility sprint");
       form.set("line_items[0][price_data][product_data][description]", FINDABLE_GUARANTEE);
       form.set("line_items[0][quantity]", "1");
+    }
+
+    /* ══ THE ADD-ON LINES ═════════════════════════════════════════════════════════════════════
+       ⛔ THE GUARANTEE IS ON THE AI LINE AND NOWHERE ELSE (Paul's decision, 2026-09-03). The
+       £49.99 audit is guaranteed - the work, the re-measurement, or the money back. The website
+       build is a DELIVERED PRODUCT and hosting is an ongoing service they can cancel; attaching
+       "or a full refund" to either would promise something we never agreed. So these two lines
+       carry their own plain descriptions, and FINDABLE_GUARANTEE is not referenced here.
+       ⛔ AND THE AI LINE MUST STAY INLINE price_data. A dashboard Price ID has no description
+       field of ours, so moving it would DROP the guarantee text from the Stripe page silently -
+       the FINDABLE_SETUP_PRICE_ID trap CLAUDE.md §11 records. These two use Price IDs precisely
+       because they carry no guarantee to lose.
+       ⚠️ If the guarantee is ever claimed: refund the £49.99 AI portion and cancel the hosting
+       subscription. The website build is NOT refunded. Written here because this is the file that
+       decides what the customer agreed to. */
+    if (addOnReady) {
+      form.set("line_items[1][price]", websitePriceId);
+      form.set("line_items[1][quantity]", "1");
+      form.set("line_items[2][price]", hostingPriceId);
+      form.set("line_items[2][quantity]", "1");
     }
 
     const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {

@@ -579,6 +579,16 @@ Deno.serve(async (req) => {
            with a null and let a Squarespace customer reach Stripe. The free check sends this. */
         confirmed_phone: clip(a.confirmed_phone, 40),
         source: submissionSource,
+        /* ⛔ THE WEBSITE ADD-ON TICK, AND THIS ROW IS THE ONLY PLACE IT IS TRUSTED FROM. Added
+           2026-09-03 with the £49.99 build + £9.99/mo hosting option. findable-checkout reads the
+           tick from THIS COLUMN, never from its own request body: the standing rule is that the
+           browser never decides money, and it is also what makes the row the record of what the
+           customer actually bought (delivery reads it, and a Stripe line-up has to be reproducible
+           from our own data months later).
+           ⚠️ STRICTLY BOOLEAN. `=== true` rather than truthy, so a string "false", a 0 or a stray
+           "on" from some future form library cannot silently sell someone a website. Absent → null
+           → shed by NEWER_COLS below → reads as not ticked, which is the safe direction. */
+        website_addon: a.website_addon === true ? true : (a.website_addon === false ? false : null),
         incomplete,
       };
 
@@ -592,7 +602,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "source"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "source", "website_addon"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -608,7 +618,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source"];
+        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
