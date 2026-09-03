@@ -38,7 +38,7 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
-import { offerPriceForLead } from "../_shared/offer-price.ts";
+import { offerPrice } from "../_shared/offer-price.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
@@ -195,13 +195,14 @@ Deno.serve(async (req) => {
          ⚠️ SAFE TO EXPOSE. It reveals only what the customer is about to be shown anyway, and it is
          advisory: the flow renders it, but the charge is re-derived server-side at checkout, so a
          tampered response buys nothing. */
-      const offer = await offerPriceForLead(service as never, leadId);
+      const offer = offerPrice();
       // SAFE subset only — never expose phone/email/notes/owner to the public page.
       return json({
         ok: true,
         price_gbp: offer.gbp,
         price_label: offer.label,
-        is_founder: offer.isFounder,
+        /* `is_founder` went with the price split (2026-09-03). The page never read it - it renders
+           price_label only - so nothing visible changes. */
         business_name: lead.business_name ?? "",
         business_type: ((lead.category as string) || (lead.search_keyword as string) || "").trim(),
         /* ⛔ derived_town FIRST, AND THAT ORDER IS THE WHOLE POINT NOW. This used to be
@@ -457,7 +458,13 @@ Deno.serve(async (req) => {
          flow itself, has no source. Only the free check names itself.
          ⛔ ABSENCE IS NEVER "free_check". The lead-creation branch below tests for the POSITIVE
          value, never for `!== something`, so a new source added later joins the safe side. */
-      const SUBMISSION_SOURCES = new Set(["free_check"]);
+      /* 'signup' added 2026-09-03 with the flat price: someone who reached the onboarding flow with
+         NO ?lead= tag and is on their way to pay. Until today that was impossible - the price was
+         derived per-lead, so a lead-less arrival could not be charged and findable-checkout refused
+         it outright. One flat price removes the reason for the refusal; the only thing still needed
+         is a trade + town so the week-eight guarantee has something to measure, which the pre-payment
+         screen now asks for in exactly this case. */
+      const SUBMISSION_SOURCES = new Set(["free_check", "signup"]);
       const submissionSource =
         typeof body.source === "string" && SUBMISSION_SOURCES.has(body.source.trim())
           ? body.source.trim()
@@ -628,6 +635,45 @@ Deno.serve(async (req) => {
       if (!leadId) {
         const { data: row, error: insErr } = await saveAnswers({ status: "submitted" });
         if (insErr || !row) return json({ ok: false, error: "save_failed" }, 500);
+
+        /* ⛔ BOTH SOURCES CREATE A LEAD, AND THE DIFFERENCE IS WHAT HAPPENS AFTER. A free check
+           gets a free audit fired at it (below); a signup does NOT - its measurement is the paid
+           BASELINE that startPaidBaseline runs once Stripe confirms, and firing a free audit here
+           would spend Apify money on a question the baseline is about to ask properly.
+           ⚠️ The lead itself is created by the SAME function either way, deliberately: the dedupe,
+           its fail-closed behaviour and the three-guard place resolution are exactly what a signup
+           needs too, and a second copy of that is how two paths drift. */
+        if (submissionSource === "signup") {
+          const outcome = await createFreeCheckLead(service, {
+            businessName: clip(a.business_name, 200) ?? "",
+            town: confirmedLocation ?? "",
+            // The pre-payment screen asks for this when there is no lead tag; `services` is the
+            // trade field every audit entry point already reads.
+            trade: clip(a.services, 200) ?? "",
+            email: contactEmail,
+            phone: clip(a.confirmed_phone, 40),
+            /* Not subject to the free-check daily cap - see free-check-lead.ts. */
+            purpose: "signup",
+          });
+          /* ⛔ LINKING IS WHAT MAKES THE PAYMENT POSSIBLE, not just tidy. findable-checkout reads the
+             onboarding row's lead_id; without it the session is refused for no attribution and the
+             visitor cannot pay. So a failure here is reported loudly rather than shrugged off as it
+             is on the free-check path, where an orphaned row only costs operator convenience. */
+          if (outcome.kind === "created" || outcome.kind === "matched") {
+            const { error: linkErr } = await service
+              .from("onboarding_responses").update({ lead_id: outcome.leadId }).eq("id", row.id);
+            if (linkErr) console.error(`[findable-onboarding] SIGNUP lead link FAILED for ${row.id}: ${linkErr.message} - this visitor cannot check out`);
+          } else {
+            console.error(`[findable-onboarding] SIGNUP made no lead (${outcome.kind}: ${outcome.reason ?? ""}) - this visitor cannot check out`);
+          }
+          console.log(`[findable-onboarding] signup ${outcome.kind}: ${JSON.stringify(outcome)}`);
+          return json({
+            ok: true, onboarding_id: row.id, audit_id: null,
+            lead: outcome.kind,
+            /* The flow needs the id to check out, exactly as a lead-linked submit returns it. */
+            lead_id: (outcome.kind === "created" || outcome.kind === "matched") ? outcome.leadId : null,
+          });
+        }
 
         if (submissionSource === "free_check") {
           const outcome = await createFreeCheckLead(service, {

@@ -14,7 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
-import { showFounderOffer } from "../../../src/lib/founderOffer.ts";
+import { showOffer } from "../../../src/lib/buyOffer.ts";
 import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
 
 import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
 
     /* ── DOES THIS READER GET THE FOUNDER OFFER? ────────────────────────────────────────────────
        Not a client, and the offer still running. `amount_paid > 0` is the app-wide definition of
-       paid (CLAUDE.md §6); the audit-id list in founderOffer.ts covers the two audits with NO lead
+       paid (CLAUDE.md §6); the audit-id list in buyOffer.ts covers the two audits with NO lead
        row, where there is structurally no payment to read — ABLM being the one that matters.
        One extra query, and only when a lead is attached. Fully guarded: if it fails we treat the
        reader as UNPAID, which shows the offer. That is the right way round — a prospect seeing no
@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
         .from("outreach_leads").select("amount_paid").eq("id", leadId).maybeSingle();
       amountPaid = Number((lead as { amount_paid?: unknown } | null)?.amount_paid ?? 0) || 0;
     }
-    data.showFounderOffer = showFounderOffer({ auditId: audit.id, amountPaid });
+    data.showOffer = showOffer({ auditId: audit.id, amountPaid });
 
     /* ── WHERE THE OFFER BUTTON GOES ────────────────────────────────────────────────────────────
        ⛔ THE ONBOARDING FLOW, NOT STRIPE. It used to be a raw Stripe Payment Link, which skipped the
@@ -221,17 +221,17 @@ Deno.serve(async (req) => {
        ⛔ NO LEAD, NO LINK, AND THAT IS THE PRICE GUARD. offerPriceForLead charges the FULL £99 for
        `no_lead`, so a button without one would advertise £19.99 and charge £99. Same for an
        unconfigured origin: a relative or wrong-host link is worse than no button, which is why
-       resolveSiteOrigin() has no fallback. Either missing → founderOfferUrl stays null → the offer
+       resolveSiteOrigin() has no fallback. Either missing → offerUrl stays null → the offer
        renders its copy and guarantee with no button, and Email us / WhatsApp us still work.
 
        ⚠️ SAME BUILDER AS THE LIVE onboarding_followup TEMPLATE (_shared/onboarding-followup.ts), so
        the URL shape lives in exactly one place — and that shape is proven: three of those links were
        sent and opened on 28 July. */
     const offerOrigin = resolveSiteOrigin();
-    data.founderOfferUrl = leadId && offerOrigin
+    data.offerUrl = leadId && offerOrigin
       ? onboardingUrl(offerOrigin, leadId, audit.business_name ?? null)
       : null;
-    if (data.showFounderOffer === true && !data.founderOfferUrl) {
+    if (data.showOffer === true && !data.offerUrl) {
       console.warn(
         `[render-audit-report] audit ${audit.id}: offer shown WITHOUT a button — `
         + `${!leadId ? "no lead_id on the audit" : `${ORIGIN_ENV} not configured`}`,

@@ -16,10 +16,6 @@
    render-audit-report and apply-seo-paste, and Deno cannot resolve the Vite alias. Both are
    dependency-free constant files, so nothing heavy joins those bundles. */
 import { FINDABLE_GUARANTEE } from './findableOffer.ts';
-import {
-  FOUNDER_OFFER_AFTER_PAYMENT, FOUNDER_OFFER_COUNT, FOUNDER_OFFER_NORMAL_LABEL,
-  FOUNDER_OFFER_PRICE_LABEL,
-} from './founderOffer.ts';
 
 export interface ReportEngineRow {
   label: string;   // "ChatGPT", "Gemini", "AI Overview", "Google"
@@ -127,9 +123,9 @@ export interface AiAuditReportData {
   /** Render the founder offer at the bottom. DEFAULTS TO FALSE — a renderer that shows a price
    *  unless told not to is the wrong default, because the callers that forget are the in-app preview
    *  and the download, and a client must never open their own report to a cheaper offer.
-   *  Decided by showFounderOffer() in founderOffer.ts; render-audit-report (the route a prospect
+   *  Decided by showOffer() in buyOffer.ts; render-audit-report (the route a prospect
    *  actually opens) is what passes it. */
-  showFounderOffer?: boolean;
+  showOffer?: boolean;
   /**
    * Drop the three SELLING sections — "Why this matters" (the 45% stat), the three-step "why you're
    * named so rarely", and the "Ready to get started" CTA — leaving the measurement itself intact.
@@ -154,7 +150,7 @@ export interface AiAuditReportData {
    * £19.99 and charge £99. Undefined/null/blank all render the offer text with no button — the
    * Email us / WhatsApp us buttons above are still a route.
    */
-  founderOfferUrl?: string | null;
+  offerUrl?: string | null;
   /* NO PER-TERM WINNABILITY HERE, DELIBERATELY.
      This is the CUSTOMER report's data contract, and a "winnable" verdict is not something we can
      evidence. Measured over all 402 stored answered questions: 77.6% came back "open" (winnable)
@@ -406,7 +402,7 @@ function noWebsiteSection(): string {
      comparison, never that it will be favourable — the same work-based framing as the guarantee.
    · THE GUARANTEE IS FINDABLE_GUARANTEE, VERBATIM. Not paraphrased, not shortened. The price above it
      is temporary and the guarantee must not drift when the price changes.
-   · NO BUTTON WITHOUT A REAL LINK. An absent founderOfferUrl renders no button at all rather than a
+   · NO BUTTON WITHOUT A REAL LINK. An absent offerUrl renders no button at all rather than a
      dead or placeholder one; the Email us / WhatsApp us buttons in the CTA above are still a route,
      which is why omitting it leaves the report perfectly usable.
      ⛔ AND HERE THAT RULE IS ALSO THE PRICE GUARD. The link carries the lead, and offerPriceForLead
@@ -414,51 +410,11 @@ function noWebsiteSection(): string {
      charge £99. No lead, no link, no button.
    Visual language is the existing .cta band — navy ground, yellow accent, the .cta-btn shape. No new
    colours and no new components. */
-/* 🔴 NOT RENDERED SINCE 2026-09-02 - the CTA above no longer calls this. Kept, not deleted, as
-   the record of what the offer said, because reinstating it is a PRICE decision and not a layout
-   one: it carried "first 10 at £49.99", "normally £99", the What's included list, the guarantee box
-   and the week-eight framing, none of which is the current model.
-   ⛔ AND IT WAS THE ONLY PLACE THE PER-LEAD ONBOARDING LINK APPEARED. offerPriceForLead returns the
-   FULL price for `no_lead`, so that button was how a prospect reached the founder price at all.
-   Nothing on the report carries ?lead= now. If a priced offer ever returns to this document, that
-   link has to come back with it - a bare site URL is a different funnel. */
-function founderOfferSection(offerUrl?: string | null): string {
-  const url = (offerUrl ?? "").trim();
-  /* Only http(s). A relative or javascript: value in that constant would be a link nobody intended;
-     with no button the offer still reads and the CTA above still works. */
-  const button = /^https:\/\//i.test(url)
-    ? `<div class="cta-actions">
-        <a class="cta-btn email" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Get started &mdash; ${esc(FOUNDER_OFFER_PRICE_LABEL)}</a>
-      </div>
-      <p class="offer-after">${esc(FOUNDER_OFFER_AFTER_PAYMENT)}</p>`
-    : "";
-  return `
-    <!-- FOUNDER OFFER &mdash; temporary; see src/lib/founderOffer.ts -->
-    <section class="cta offer">
-      <div class="sec-eyebrow offer-eyebrow">The offer</div>
-      <h3>The first ${FOUNDER_OFFER_COUNT} at <span class="y">${esc(FOUNDER_OFFER_PRICE_LABEL)}</span></h3>
-      <p>Normally ${esc(FOUNDER_OFFER_NORMAL_LABEL)}. We&rsquo;re running the first ${FOUNDER_OFFER_COUNT} at ${esc(FOUNDER_OFFER_PRICE_LABEL)} because we want honest feedback from them &mdash; what worked and what didn&rsquo;t.</p>
-      <!-- FOUR BULLETS, NOT FIVE, AND EACH ONE LEADS WITH ITS NOUN. This is the point of decision:
-           five bullets, a three-sentence guarantee, a button and a closing note was more than anyone
-           reads at the moment they are deciding to pay. The bolded lead phrase means a skimmer takes
-           away four nouns - pages, profile, fixes, re-measurement - without reading the qualifiers.
-           DROPPED: "The audit you've just read, and the baseline it sets." They are holding the
-           audit; listing it as an inclusion at the bottom of it is filler. The baseline is not lost -
-           "the same questions re-run at week eight, both reports side by side" is what a baseline IS.
-           The detail lives on findable.live and in the client request sheet. This is the ask. -->
-      <div class="offer-gets">
-        <div class="offer-h">What&rsquo;s included</div>
-        <ul>
-          <li><b>A page for every service you offer, in every town you work</b> &mdash; written the way customers actually ask.</li>
-          <li><b>Your Google Business Profile completed properly</b>, and your name, address, phone and services made consistent everywhere AI reads them.</li>
-          <li><b>The technical fixes listed above</b>, plus structured data and a review link for your email signature.</li>
-          <li><b>The same questions re-run at week eight</b> &mdash; both reports, side by side.</li>
-        </ul>
-      </div>
-      <div class="offer-gtee">${esc(FINDABLE_GUARANTEE)}</div>
-      ${button}
-    </section>`;
-}
+/* ⛔ THE OFFER PITCH BLOCK IS DELETED (2026-09-03). It was unrendered on 2026-09-02 and its four
+   constants ("the first 10 at £49.99", "normally £99") described a tier that no longer exists -
+   there is one flat price now. Keeping a function that cannot compile against the current
+   constants would have been worse than deleting it; git holds the copy. The buy CTA lives in the
+   .cta section below and gets its price, when it needs one, from offerPrice().*/
 
 /** Build the whole SEO section, or "" when there's no seo data (slot renders nothing). */
 function seoSection(seo: AiAuditSeo | undefined): string {
@@ -715,12 +671,12 @@ export function renderReportHtml(d: AiAuditReportData): string {
   const pluralTrade = /[^s]s$/i.test(ctaTrade) || /ing$/i.test(ctaTrade);
   const tradePhrase = pluralTrade ? esc(ctaTrade) : `${article(ctaTrade)} ${esc(ctaTrade)}`;
   /* ⛔ THE GET-STARTED BUTTON, AND IT IS A PRICE GUARD AS MUCH AS A LINK (wired 2026-09-03).
-     `founderOfferUrl` is /onboarding/<slug>/?lead=<leadId>, and the `?lead=` is what makes
+     `offerUrl` is /onboarding/<slug>/?lead=<leadId>, and the `?lead=` is what makes
      offerPriceForLead quote the FOUNDER price - without it that same flow charges the full price.
      So an absent url renders NO BUTTON rather than falling back to the bare site: a button that
      silently costs the customer more is worse than no button. Same rule the old offer block had.
 
-     ⛔ `showFounderOffer === true`, STRICTLY. It is false once amount_paid > 0, so a paying
+     ⛔ `showOffer === true`, STRICTLY. It is false once amount_paid > 0, so a paying
      customer is never invited to start again, and undefined (a caller that does not set it, e.g.
      an operator preview) shows nothing rather than guessing.
 
@@ -729,11 +685,11 @@ export function renderReportHtml(d: AiAuditReportData): string {
      lands, so this is the door for them, and it needs no change to the Meta-approved template.
      ⚠️ It does NOT name a price. The pitch block was deliberately stripped from this document on
      2026-09-02; the price belongs on the onboarding page, which states it. */
-  const startUrl = (d.founderOfferUrl ?? "").trim();
-  const startBtn = d.showFounderOffer === true && startUrl
+  const startUrl = (d.offerUrl ?? "").trim();
+  const startBtn = d.showOffer === true && startUrl
     ? `<a class="cta-btn start" href="${esc(startUrl)}" target="_blank" rel="noopener noreferrer">Get started</a>`
     : "";
-  if (d.showFounderOffer === true && !startUrl) {
+  if (d.showOffer === true && !startUrl) {
     console.warn("[report] get-started button omitted: no per-lead onboarding url (no lead_id, or the site origin is not configured)");
   }
 
