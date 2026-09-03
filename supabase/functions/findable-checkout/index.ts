@@ -228,14 +228,31 @@ Deno.serve(async (req) => {
        payment outright. A customer who ticked the box and got only the audit is a phone call; a
        customer charged for a subscription we cannot name a price for is a refund and a chargeback. */
     const wantsWebsite = (ob as { website_addon?: unknown }).website_addon === true;
-    const websitePriceId = (Deno.env.get("FINDABLE_WEBSITE_PRICE_ID") ?? "").trim();
-    const hostingPriceId = (Deno.env.get("FINDABLE_HOSTING_PRICE_ID") ?? "").trim();
+    /* ⛔ IT MUST BE A PRICE ID, NOT A PRODUCT ID, AND THAT IS NOT A THEORETICAL MISTAKE — IT IS THE
+       ONE THAT ACTUALLY HAPPENED (2026-09-03, first live test). FINDABLE_WEBSITE_PRICE_ID was set
+       to `prod_VBse8QguSes2Zr` and Stripe answered
+         400 resource_missing on line_items[1][price]: No such price: 'prod_...'
+       so the whole checkout failed. The dashboard shows a product's id far more prominently than
+       its price's, and the two look alike, so a paste error here is the expected failure — and
+       without this guard it lands as a dead Buy button at the exact moment someone decides to pay.
+       ⚠️ AN UNUSABLE ID IS TREATED AS AN UNSET ONE, deliberately: the add-on drops and the AI line
+       still sells. A customer who wanted a website and got only the audit is a phone call; a
+       customer who could not pay at all is gone. Both cases are recorded with the reason. */
+    const PRICE_ID_RE = /^price_[A-Za-z0-9]+$/;
+    const rawWebsitePriceId = (Deno.env.get("FINDABLE_WEBSITE_PRICE_ID") ?? "").trim();
+    const rawHostingPriceId = (Deno.env.get("FINDABLE_HOSTING_PRICE_ID") ?? "").trim();
+    const websitePriceId = PRICE_ID_RE.test(rawWebsitePriceId) ? rawWebsitePriceId : "";
+    const hostingPriceId = PRICE_ID_RE.test(rawHostingPriceId) ? rawHostingPriceId : "";
     const addOnReady = wantsWebsite && !!websitePriceId && !!hostingPriceId;
     if (wantsWebsite && !addOnReady) {
-      console.error(`[findable-checkout] ${onboardingId} ticked the website add-on but ${!websitePriceId ? "FINDABLE_WEBSITE_PRICE_ID" : "FINDABLE_HOSTING_PRICE_ID"} is unset - charging the AI line only`);
+      /* Names the offending value's SHAPE, never the value: a secret's contents do not belong in an
+         error table, but "you pasted a prod_ id" is exactly what the operator needs to read. */
+      const shapeOf = (v: string) => !v ? "unset" : (v.startsWith("prod_") ? "a PRODUCT id (prod_) - needs the PRICE id (price_)" : `unrecognised (starts "${v.slice(0, 6)}")`);
+      console.error(`[findable-checkout] ${onboardingId} ticked the website add-on but the price ids are unusable - website: ${shapeOf(rawWebsitePriceId)}, hosting: ${shapeOf(rawHostingPriceId)} - charging the AI line only`);
       await recordRefusal("checkout_addon_unconfigured", {
         onboarding_id: onboardingId, lead_id: effectiveLeadId,
-        website_price_id_set: !!websitePriceId, hosting_price_id_set: !!hostingPriceId,
+        website_price_id: websitePriceId ? "ok" : shapeOf(rawWebsitePriceId),
+        hosting_price_id: hostingPriceId ? "ok" : shapeOf(rawHostingPriceId),
       });
     }
 
@@ -324,6 +341,24 @@ Deno.serve(async (req) => {
     const session = await res.json();
     if (!res.ok) {
       console.error("[findable-checkout] Stripe error:", session?.error?.message ?? session);
+      /* ⛔ RECORDED, NOT JUST LOGGED. A refused Stripe session used to leave a single console line
+         in the edge logs and a bare "checkout_failed" at the client - so a payment that Stripe
+         rejected was undiagnosable after the fact, which is CLAUDE.md §4's "a catch-all error
+         message is worse than no message" on the one path that carries all the revenue. It now
+         lands in client_error_reports beside every other refusal on this endpoint.
+         ⚠️ THE MESSAGE IS STORED, NEVER RETURNED. Stripe's text names parameters and ids; the
+         client still gets the opaque code it always got. */
+      const se = (session as { error?: { message?: string; code?: string; param?: string; type?: string } })?.error;
+      await recordRefusal("checkout_stripe_rejected", {
+        lead_id: effectiveLeadId,
+        stripe_message: se?.message ?? null,
+        stripe_code: se?.code ?? null,
+        stripe_param: se?.param ?? null,
+        stripe_type: se?.type ?? null,
+        http_status: res.status,
+        mode: addOnReady ? "subscription" : "payment",
+        website_addon: wantsWebsite,
+      });
       return json({ ok: false, error: "checkout_failed" }, 502);
     }
     return json({ ok: true, url: session.url });
