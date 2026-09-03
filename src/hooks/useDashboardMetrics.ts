@@ -102,6 +102,27 @@ const FOUNDER_PRICE_GBP = 49.99;
    customers in the bank, the exact kind of false number this dashboard is being purged of.
    Append here when the founder price moves again; never remove an entry a sale was taken at. */
 const FOUNDER_PRICES_HISTORICAL_GBP = [19.99];
+/* ⛔ THE WEBSITE ADD-ON MADE AN EXACT-AMOUNT MATCH UNWORKABLE (2026-09-03). A customer who ticks
+   "add a new website" pays the AI price PLUS a £49.99 build PLUS their first £9.99 of hosting in
+   one session, so amount_paid lands at £109.97 and an exact match against [49.99, 19.99] would
+   have dropped them from this tile entirely - a paying customer reading as no sale, which is the
+   exact class of false number this dashboard has been purged of twice.
+   ⛔ SO THE TEST IS NOW "AT LEAST THE PRICE", NOT "EQUAL TO IT". A sale is a sale whatever they
+   added on top. The floor is the SMALLEST price ever charged, because a £19.99 founder-era sale is
+   still a sale; anything at or above it counts.
+   ⚠️ WHY NOT ENUMERATE THE VALID TOTALS (49.99, 99.98, 109.97, …)? Because every future add-on,
+   discount or proration would silently fall outside the list, and the failure mode is invisible -
+   a customer simply stops being counted. A floor cannot rot that way.
+   ⚠️ THE FLOOR IS DERIVED, never typed: add a historical price and it adjusts itself. */
+const PAYING_FLOOR_GBP = Math.min(FOUNDER_PRICE_GBP, ...FOUNDER_PRICES_HISTORICAL_GBP);
+/* ⛔ A CANCELLED CUSTOMER IS NOT A PAYING CUSTOMER. `paid = amount_paid > 0` is a single scalar and
+   cannot express "bought once, hosting since cancelled" - CLAUDE.md §11 flagged this before any
+   subscription existed and the £9.99/mo hosting makes it real. These are the two Stripe statuses
+   that mean the money has actually stopped, as opposed to `past_due`, where Smart Retries is still
+   trying and the customer has a card problem rather than having left.
+   ⚠️ ABSENT IS NOT CANCELLED. A one-off customer has no subscription and no status at all, and must
+   keep counting - so the test is a POSITIVE match on the two dead statuses, never `!== 'active'`. */
+const DEAD_SUBSCRIPTION_STATUSES = new Set(["canceled", "incomplete_expired"]);
 const FOUNDER_PLACES = 10;
 
 const getDateRanges = () => {
@@ -394,9 +415,10 @@ export function useDashboardMetrics(isAdmin = false) {
          EXCEPT `refunded`, the one status that can subtract, because the money went back out.
          isPaidLead owns that rule so the funnel, the campaign card and the Inbox cannot disagree. */
       if (isPaidLead(l)) funnelPaid += 1;
-      /* A FOUNDER PRICE EXACTLY, within a penny — the current one or any historical one. amount_paid
-         is the real charged amount (stripe-webhook writes amount_total / 100), so this counts places
-         actually taken at a founder price — not every paid lead, and not everything below full price.
+      /* A REAL SALE, STILL LIVE: paid at or above the lowest price ever charged, and not a churned
+         subscription. amount_paid is the real charged amount (stripe-webhook writes
+         amount_total / 100), so an add-on customer at £109.97 counts once, exactly like a £49.99 one.
+         🔴 IT USED TO BE AN EXACT MATCH and the website add-on broke it - see PAYING_FLOOR_GBP.
          ⛔ HISTORICAL PRICES INCLUDED — Paul's decision 2026-08-19. The current-price-only version
          made RG Locksmiths' £19.99 sale vanish when the price moved to £49.99 (the tile read 1 with
          two paying customers). "Places taken at the founder offer" means across every price the
@@ -405,7 +427,11 @@ export function useDashboardMetrics(isAdmin = false) {
          the guard the tile would keep counting a customer who has had their money back — the same
          "still reads as paid" fault this status exists to fix. */
       const paidAmt = l.amount_paid ?? 0;
-      if (isPaidLead(l) && [FOUNDER_PRICE_GBP, ...FOUNDER_PRICES_HISTORICAL_GBP].some((p) => Math.abs(paidAmt - p) < 0.01)) founderSales += 1;
+      /* At-or-above the floor, and not a churned subscription. The 1p tolerance survives from the
+         exact-match version: it costs nothing and floating-point money deserves it. */
+      const subStatus = String((l as { subscription_status?: string | null }).subscription_status ?? "");
+      const churned = DEAD_SUBSCRIPTION_STATUSES.has(subStatus);
+      if (isPaidLead(l) && !churned && paidAmt >= PAYING_FLOOR_GBP - 0.01) founderSales += 1;
     }
     const auditFunnel: AuditFunnel = {
       contacted, replied, pitched, pitchReplied, pitchRepliedPaid, paid: funnelPaid,

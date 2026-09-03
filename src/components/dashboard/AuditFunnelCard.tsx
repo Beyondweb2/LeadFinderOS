@@ -108,7 +108,7 @@ export function AuditFunnelCard({ funnel, compact = false }: { funnel: AuditFunn
             label="Founder places"
             color="text-amber-500"
             sub={`${funnel.founderSales} of ${funnel.founderPlaces} taken`}
-            title="Leads that paid the founder price exactly, counted from the real charged amount. Nothing closes the offer automatically — FOUNDER_OFFER_LIVE is a manual switch, so a webhook lag or a refund can never silently change what the next person pays."
+            title="Paying customers, counted from the real charged amount: at or above the lowest price ever charged, refunds excluded, and a cancelled hosting subscription no longer counted. An add-on customer paying £109.97 counts once, the same as a £49.99 one — an exact-amount match used to drop them entirely. Nothing closes the offer automatically; OFFER_LIVE is a manual switch."
           />
         </div>
       </CardContent>

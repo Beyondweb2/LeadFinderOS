@@ -445,6 +445,62 @@ Deno.serve(async (req) => {
     console.log(`[stripe-webhook] ${what} ok (${table} ${id})`);
   };
 
+  /** A lead id has to look like one before it is used as a filter: metadata is free text set at
+   *  checkout, and a malformed value would otherwise become a PostgREST error at event time. */
+  const SUB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  /* ══ FINDABLE HOSTING SUBSCRIPTIONS ═══════════════════════════════════════════════════════
+     🔴 BEFORE 2026-09-03 A FINDABLE SUBSCRIPTION EVENT WAS INVISIBLE. This function handled three
+     events, and the two subscription ones read `metadata.generated_site_id` and wrote
+     generated_sites.is_paid - the BARBER product. A Findable event arrives without that id, so
+     setPaid's own empty-id guard logged "skipped" and nothing happened: a renewal, a failed card
+     and a cancellation were all silent, and `paid = amount_paid > 0` kept reading a churned
+     customer as paying forever.
+
+     ⛔ THE LEAD IS RESOLVED BY stripe_subscription_id, NOT BY METADATA. Metadata is set on the
+     subscription at checkout, but an INVOICE does not inherit it - so keying on metadata would work
+     for customer.subscription.* and silently fail for the renewals, which are the events that
+     matter most. The stored id is the one identifier every event carries.
+     ⚠️ Falls back to metadata.lead_id when the id lookup finds nothing, which covers the window
+     between a checkout and its own id-storing write, and any subscription created by hand. */
+  const findableLeadForSubscription = async (
+    subscriptionId: string | null,
+    metaLeadId: string | null,
+  ): Promise<string | null> => {
+    if (subscriptionId) {
+      try {
+        const { data } = await service
+          .from("outreach_leads").select("id").eq("stripe_subscription_id", subscriptionId).maybeSingle();
+        const id = (data as { id?: string } | null)?.id ?? null;
+        if (id) return id;
+      } catch (e) {
+        console.error(`[stripe-webhook] lead lookup by subscription ${subscriptionId} failed:`, (e as Error).message);
+      }
+    }
+    return metaLeadId && SUB_UUID_RE.test(metaLeadId) ? metaLeadId : null;
+  };
+
+  /** Record the hosting subscription's state on the lead. Never fatal: a status we failed to write
+   *  is a reporting gap, and throwing would make Stripe retry an event that already succeeded. */
+  const setFindableSubscription = async (
+    leadId: string,
+    patch: { subscription_status?: string; subscription_renews_at?: string | null; stripe_customer_id?: string },
+    why: string,
+  ) => {
+    const { error } = await service.from("outreach_leads").update(patch).eq("id", leadId);
+    if (error) {
+      console.error(`[stripe-webhook] ${why}: could not update lead ${leadId}: ${error.message}`);
+    } else {
+      console.log(`[stripe-webhook] ${why}: lead ${leadId} -> ${JSON.stringify(patch)}`);
+    }
+  };
+
+  /** Stripe's subscription statuses, passed through as-is rather than mapped to our own words: the
+   *  vocabulary is Stripe's and inventing a parallel one guarantees they drift. `past_due` and
+   *  `unpaid` are the two that mean "the money stopped" without the customer having cancelled. */
+  const idFrom = (v: unknown): string | null =>
+    typeof v === "string" ? v : (v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string" ? (v as { id: string }).id : null);
+
   const setPaid = async (siteId: string, paid: boolean, ownerId?: string | null) => {
     if (!siteId) {
       console.warn(`[stripe-webhook] ${event.type} (${event.id}) had no generated_site_id — skipped`);
@@ -568,6 +624,23 @@ Deno.serve(async (req) => {
                 console.error("[stripe-webhook] pre-payment read failed (non-blocking):", (e as Error).message);
               }
             }
+            /* ══ THE WEBSITE ADD-ON ═══════════════════════════════════════════════════════════
+               A session in `subscription` mode carries a subscription id; a one-off does not. That
+               is the only reliable tell that the add-on was bought, and it comes from STRIPE rather
+               than from our own row - so it records what was actually charged, which is what a
+               receipt has to agree with months later.
+               ⚠️ `customer` and `subscription` are id-or-object depending on expansion. Read both
+               shapes rather than assuming: an unexpanded string is what this endpoint gets today,
+               and an expanded object would silently stringify to "[object Object]". */
+            const idOf = (v: unknown): string | null =>
+              typeof v === "string" ? v : (v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string" ? (v as { id: string }).id : null);
+            const stripeCustomerId = idOf(s.customer);
+            const stripeSubscriptionId = idOf(s.subscription);
+            const boughtWebsite = !!stripeSubscriptionId;
+            const paidForLabel = boughtWebsite
+              ? "Findable - AI visibility (first cycle) + website build + hosting"
+              : "Findable - AI visibility, first cycle";
+
             if (findableLeadId) {
               await mustWrite(
                 "outreach_leads",
@@ -575,11 +648,32 @@ Deno.serve(async (req) => {
                   status: "payment_received",
                   amount_paid: amountGbp,
                   payment_date: new Date().toISOString(),
-                  paid_for: "Findable - AI visibility, first cycle",
+                  paid_for: paidForLabel,
                 },
                 findableLeadId,
                 "findable lead -> payment_received",
               );
+              /* ⛔ THE STRIPE IDS GO IN A SEPARATE, NON-FATAL WRITE, AND THAT SPLIT IS DELIBERATE.
+                 mustWrite above is the one that must not fail - it is the money landing. These
+                 columns are newer than some rows and newer than this function's own history, so a
+                 PostgREST 400 on a pre-migration database must not be able to lose a payment.
+                 Without them we cannot cancel a subscription or answer "is this customer still
+                 paying", so they are worth writing - just never at the payment's expense. */
+              if (stripeCustomerId || stripeSubscriptionId) {
+                const subPatch: Record<string, unknown> = {};
+                if (stripeCustomerId) subPatch.stripe_customer_id = stripeCustomerId;
+                if (stripeSubscriptionId) {
+                  subPatch.stripe_subscription_id = stripeSubscriptionId;
+                  subPatch.subscription_status = "active";
+                }
+                const { error: subErr } = await service
+                  .from("outreach_leads").update(subPatch).eq("id", findableLeadId);
+                if (subErr) {
+                  console.error(`[stripe-webhook] could not store the Stripe ids for lead ${findableLeadId}: ${subErr.message} - the payment IS recorded; hosting will be untrackable until this is fixed`);
+                } else {
+                  console.log(`[stripe-webhook] stored stripe ids for lead ${findableLeadId}: customer=${stripeCustomerId ?? "(none)"} subscription=${stripeSubscriptionId ?? "(none)"}`);
+                }
+              }
             } else {
               // No lead id on the session: the payment lands on the onboarding row but nothing
               // links it to the CRM. Worth recording rather than shrugging at.
@@ -595,7 +689,7 @@ Deno.serve(async (req) => {
               await notifyOfFindablePayment({
                 businessName: ((leadForEmail?.business_name as string) ?? "").trim(),
                 amountGbp,
-                paidFor: "Findable - AI visibility, first cycle",
+                paidFor: paidForLabel,
                 trade: (((leadForEmail?.category as string) || (leadForEmail?.search_keyword as string) || "").trim()) || null,
                 town: ((leadForEmail?.search_location as string) ?? "").trim() || null,
                 phone: ((leadForEmail?.phone as string) ?? "").trim() || null,
@@ -688,9 +782,64 @@ Deno.serve(async (req) => {
         }
         break;
       }
+      /* ══ THE HOSTING RENEWALS ═════════════════════════════════════════════════════════════
+         Added 2026-09-03 with the £9.99/mo website hosting. Stripe already handled the MONEY -
+         invoicing, Smart Retries, dunning emails - so none of this is needed for a payment to
+         arrive. What it is for is VISIBILITY: without it a churn or a dead card is invisible to us
+         and `paid = amount_paid > 0` keeps reading a cancelled customer as paying.
+         ⚠️ An invoice carries no subscription METADATA, so the lead is resolved from the stored
+         stripe_subscription_id. See findableLeadForSubscription. */
+      case "invoice.paid": {
+        const inv = event.data.object as Stripe.Invoice;
+        const subId = idFrom((inv as { subscription?: unknown }).subscription);
+        /* ⛔ ONLY SUBSCRIPTION INVOICES. A one-off Findable payment produces no subscription, and
+           the FIRST invoice of a new subscription is also handled by checkout.session.completed -
+           writing "active" twice is harmless and idempotent, which is why this needs no dedupe. */
+        if (!subId) break;
+        const leadId = await findableLeadForSubscription(subId, null);
+        if (!leadId) {
+          console.log(`[stripe-webhook] invoice.paid for subscription ${subId} matched no Findable lead - ignored (likely the barber product or a hand-made subscription)`);
+          break;
+        }
+        const periodEnd = (inv as { period_end?: number }).period_end;
+        await setFindableSubscription(leadId, {
+          subscription_status: "active",
+          subscription_renews_at: typeof periodEnd === "number" ? new Date(periodEnd * 1000).toISOString() : null,
+        }, "invoice.paid");
+        break;
+      }
+      case "invoice.payment_failed": {
+        const inv = event.data.object as Stripe.Invoice;
+        const subId = idFrom((inv as { subscription?: unknown }).subscription);
+        if (!subId) break;
+        const leadId = await findableLeadForSubscription(subId, null);
+        if (!leadId) break;
+        /* ⛔ `past_due` IS NOT CANCELLED, AND THE DIFFERENCE MATTERS. Stripe is still retrying at
+           this point (Smart Retries runs for days), so the customer has not left - they have a card
+           problem. Writing "canceled" here would cut off a customer who is about to pay, and it is
+           customer.subscription.deleted that says they are actually gone. */
+        await setFindableSubscription(leadId, { subscription_status: "past_due" }, "invoice.payment_failed");
+        break;
+      }
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
         const siteId = (sub.metadata?.generated_site_id as string) || "";
+        /* ⛔ FINDABLE FIRST, AND ONLY WHEN THIS IS NOT A BARBER SUBSCRIPTION. The barber path below
+           is untouched: it keys on generated_site_id, and a Findable subscription never has one.
+           Two products share this endpoint and the discriminator is which metadata is present. */
+        if (!siteId) {
+          const leadId = await findableLeadForSubscription(sub.id, (sub.metadata?.lead_id as string) ?? null);
+          if (leadId) {
+            const renews = (sub as { current_period_end?: number }).current_period_end;
+            await setFindableSubscription(leadId, {
+              subscription_status: sub.status,
+              subscription_renews_at: typeof renews === "number" ? new Date(renews * 1000).toISOString() : null,
+            }, `customer.subscription.updated (${sub.status})`);
+          } else {
+            console.log(`[stripe-webhook] customer.subscription.updated ${sub.id} matched neither a site nor a Findable lead - ignored`);
+          }
+          break;
+        }
         if (sub.status === "active" || sub.status === "trialing") {
           await setPaid(siteId, true);
         } else if (
@@ -705,7 +854,20 @@ Deno.serve(async (req) => {
       }
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
-        await setPaid((sub.metadata?.generated_site_id as string) || "", false);
+        const siteId = (sub.metadata?.generated_site_id as string) || "";
+        if (!siteId) {
+          /* THE CUSTOMER IS GONE. This is the event that ends the hosting - not
+             invoice.payment_failed, which is only a card that needs replacing. */
+          const leadId = await findableLeadForSubscription(sub.id, (sub.metadata?.lead_id as string) ?? null);
+          if (leadId) {
+            await setFindableSubscription(leadId, {
+              subscription_status: "canceled",
+              subscription_renews_at: null,
+            }, "customer.subscription.deleted");
+          }
+          break;
+        }
+        await setPaid(siteId, false);
         break;
       }
       default:
