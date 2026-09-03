@@ -316,8 +316,91 @@ Deno.serve(async (req) => {
          for a check and are waiting on it; they have not gone cold, and there is no payment screen
          they stopped at. That distinction is the difference between a queue of work and a list of
          people who lost interest. */
+
+      /* ══ DID AN AUDIT ACTUALLY FIRE? ═══════════════════════════════════════════════════════════
+         🔴 THIS EMAIL USED TO SAY "nothing has been sent to them automatically... add them to the
+         WhatsApp queue when you are ready" ON EVERY FREE CHECK — including the ones where an audit
+         was running and a result was already on its way. It was standing copy from before the
+         auto-audit existed, and it did real harm: on 2026-09-03 it convinced Paul the whole funnel
+         was broken when it was working, and the half-hour that went into disproving that is the
+         cost of an email asserting something it never checked.
+
+         ⛔ SO IT READS THE STATE RATHER THAN ASSUMING ONE. Three outcomes, three sentences:
+           · an audit exists and its result has been sent      -> say so, and name the address
+           · an audit exists and no result yet                 -> it is measuring; the email follows
+           · no audit                                          -> genuinely manual, WITH THE REASON
+         ⚠️ AND THE MANUAL CASE NAMES WHY. findable-onboarding records free_check_audit_skipped /
+         free_check_audit_failed to client_error_reports, so "nothing ran" can say whether that was
+         the repeat guard, the daily cap or a failure — the difference between "fine, ignore it" and
+         "the lane is broken again".
+         ⚠️ EVERY READ HERE IS BEST-EFFORT. This is a notification: a lookup that fails must degrade
+         to the cautious wording, never lose the email. */
+      let freeCheckTail =
+        "They asked for a free AI check on findable.live. They are waiting on a report from you, and nothing has been sent to them automatically. Their lead is in Outreach; add them to the WhatsApp queue when you are ready.";
+      if (isFreeCheck && row.lead_id) {
+        try {
+          const { data: auditRows } = await service
+            .from("ai_audits")
+            .select("id, created_at, free_check_result")
+            .eq("lead_id", row.lead_id)
+            .order("created_at", { ascending: false })
+            .limit(1);
+          const audit = ((auditRows ?? []) as Array<{ id: string; created_at: string; free_check_result: unknown }>)[0];
+          if (audit?.free_check_result) {
+            const sentTo = (audit.free_check_result as { email?: string })?.email ?? null;
+            freeCheckTail = `They asked for a free AI check on findable.live, the audit ran, and their result has already been sent${sentTo ? ` to ${sentTo}` : ""}. Nothing needs doing — their lead is in Outreach if you want to follow up.`;
+          } else if (audit) {
+            /* Age is worth printing: a measurement is three runs and takes minutes, so "started
+               2 minutes ago" is healthy and "started 90 minutes ago" is a stall worth a look. */
+            const mins = Math.max(0, Math.round((Date.now() - new Date(audit.created_at).getTime()) / 60000));
+            /* ⛔ "RUNNING" AND "FINISHED BUT NOT SENT" ARE DIFFERENT THINGS, AND CALLING THE SECOND
+               ONE "running" would be the same lie this whole change exists to remove. An audit whose
+               runs have all settled and which still has no result stamp is stranded: the send only
+               fires from the tick that finalises a run, so nothing will retry it on its own.
+               Measured 2026-09-03: SUPREME PLUMBERS sat in exactly this state — 3 of 3 runs and 15
+               of 15 questions complete, no result, because the send path was gating on the LEAD's
+               enrichment_source and that submission had matched an existing prospect. */
+            let unsettled = 0;
+            try {
+              const { data: runRows } = await service
+                .from("ai_audit_runs").select("status").eq("audit_id", audit.id);
+              unsettled = ((runRows ?? []) as Array<{ status: string }>)
+                .filter((r) => r.status === "pending" || r.status === "running").length;
+            } catch { unsettled = 1; /* unknown -> assume it is still going, the softer claim */ }
+            if (unsettled > 0) {
+              freeCheckTail = `They asked for a free AI check on findable.live and the audit is RUNNING (started ${mins} minute${mins === 1 ? "" : "s"} ago, ${unsettled} run${unsettled === 1 ? "" : "s"} still going). Their result is emailed automatically when the measurement finishes — nothing to do unless this is still running in an hour.`;
+            } else {
+              freeCheckTail = `They asked for a free AI check on findable.live. The audit FINISHED (started ${mins} minute${mins === 1 ? "" : "s"} ago) but no result has been sent. Their lead is in Outreach — send the report by hand.`;
+              needsYou.push("Their free check audit finished but the result was never sent — they are waiting and nothing is coming automatically.");
+            }
+          } else {
+            /* No audit. Say so, and say why if we recorded a reason. */
+            let why: string | null = null;
+            try {
+              const { data: recs } = await service
+                .from("client_error_reports")
+                .select("error_id, context, created_at")
+                .in("error_id", ["free_check_audit_skipped", "free_check_audit_failed"])
+                .order("created_at", { ascending: false })
+                .limit(20);
+              const hit = ((recs ?? []) as Array<{ error_id: string; context: Record<string, unknown> }>)
+                .find((r) => r.context?.onboarding_id === row.id || r.context?.lead_id === row.lead_id);
+              if (hit) why = String(hit.context?.reason ?? hit.context?.error ?? hit.error_id);
+            } catch { /* best effort — the wording below still tells the truth without it */ }
+            freeCheckTail = `They asked for a free AI check on findable.live and NO AUDIT RAN${why ? `: ${why}` : ""}. Nothing has been sent to them automatically. Their lead is in Outreach; audit them by hand or add them to the WhatsApp queue.`;
+            /* ⛔ AND IT GOES IN THE RED BOX, not only in the grey line at the foot. This is the one
+               free-check state that needs a human, and the tail is small print at the bottom of the
+               email — the same place the old misleading sentence sat unread. `needsYou` is built
+               above and rendered below, so pushing here lands it in the box that gets looked at. */
+            needsYou.push(`Their free check produced NO AUDIT${why ? ` (${why})` : ""} — they are waiting and nothing is coming automatically.`);
+          }
+        } catch (e) {
+          console.error("[notify-onboarding-submit] could not read the audit state:", e instanceof Error ? e.message : e);
+        }
+      }
+
       const tail = isFreeCheck
-        ? "They asked for a free AI check on findable.live. They are waiting on a report from you, and nothing has been sent to them automatically. Their lead is in Outreach; add them to the WhatsApp queue when you are ready."
+        ? freeCheckTail
         : gate?.verdict === "block"
         ? "They were blocked before Stripe, so no payment was possible. They saw the honest refusal screen with your email address on it. Some of these are worth a call anyway."
         : "They reached the payment screen and stopped. Nothing has been sent to them automatically.";

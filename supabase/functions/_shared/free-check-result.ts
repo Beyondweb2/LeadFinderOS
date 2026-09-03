@@ -140,8 +140,9 @@ export async function maybeSendFreeCheckResult(
   runId: string,
   auditId: string,
 ): Promise<ResultOutcome> {
-  /* 1 — THE LANE. enrichment_source is stamped by createFreeCheckLead and is the only thing that
-     makes this audit ours; every other audit in the system must fall straight through. */
+  /* 1 — THE LANE. A free-check SUBMISSION linked to this audit's lead is what makes the audit ours;
+     every other audit in the system must fall straight through. (It used to be the lead's
+     enrichment_source column — see the note further down for why that was wrong and what it cost.) */
   let { data: audit } = await service
     .from("ai_audits")
     .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, free_check_result, is_measurement")
@@ -171,7 +172,18 @@ export async function maybeSendFreeCheckResult(
     .select("id, enrichment_source, email, phone, country, business_name, search_keyword, search_location")
     .eq("id", audit.lead_id).maybeSingle();
   if (!lead) return { kind: "skipped", reason: "lead row missing" };
-  if (lead.enrichment_source !== "free_check") return { kind: "skipped", reason: "not a free-check lead" };
+  /* 🔴 THE enrichment_source GATE THAT USED TO BE HERE SILENTLY KILLED EVERY MATCHED LEAD'S RESULT.
+     It read `lead.enrichment_source !== "free_check"` and skipped — but createFreeCheckLead only
+     stamps that column on the INSERT path, so a submission that MATCHED an existing prospect kept
+     whatever the lead already had (usually null) and was refused as "not a free-check lead".
+     Measured 2026-09-03: SUPREME PLUMBERS asked for a check, the audit ran all three runs and all
+     fifteen questions, and the result was never sent — enrichment_source was null because we
+     already had them in the book. We spent the measurement and told them nothing.
+     ⛔ SO THE GATE MOVED ONTO THE SUBMISSION, which is the fact that actually matters: did somebody
+     fill in the free-check form for this lead? That is true for matched and created alike, and it
+     is the same row this function already has to read for the contact details. The lead's
+     provenance column was never the right question — it describes how the lead got into the book,
+     not why we are emailing today. */
 
   /* ══ THE SUBMITTED CONTACT DETAILS — NOT THE LEAD'S ═════════════════════════════════════════════
      🔴 THE RESULT WENT TO THE WRONG PHONE (2026-09-02, reported after a real test). The sender read
@@ -197,6 +209,11 @@ export async function maybeSendFreeCheckResult(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  /* ⛔ NO SUBMISSION, NO SEND — and this is the gate now. It fails closed for the right reason: a
+     result email must only ever go to somebody who asked for one, and the submission row is the
+     record of the asking. An audit with no free-check submission behind it (a prospecting audit, a
+     baseline) must never trigger this. */
+  if (!sub) return { kind: "skipped", reason: "no free-check submission for this lead" };
   const submittedEmail = ((sub?.contact_email as string | null) ?? "").trim();
   const submittedPhone = ((sub?.confirmed_phone as string | null) ?? "").trim();
 
