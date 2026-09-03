@@ -377,7 +377,7 @@ ${docBand('What we need from you')}
         </div>
         <p class="seo-frame">This is a score for <b>your website</b>, not for whether AI names you.
         The two are separate, and we are careful about which one we promise: the site score is work
-        we do and you can hold us to it, and we re-score it at week eight alongside the AI
+        we do and you can hold us to it, and we re-score it at week four alongside the AI
         measurement. Our own research is that a better site does not by itself get you named &mdash;
         it is what gives AI something of yours worth quoting.</p>
       </div>
@@ -404,7 +404,7 @@ ${docBand('What we need from you')}
       easier for these engines to find, and we measure it before and after so you can see exactly what
       changed. What nobody can do is promise what an engine will say next, which is why our promise
       below is on the work rather than on the outcome. You get the measurement, the work, and the same
-      measurement again at week eight, whatever it says.</p>
+      measurement again at week four, whatever it says.</p>
       <p class="note"><b>Our promise.</b> ${FINDABLE_GUARANTEE}</p>
     </section>
 

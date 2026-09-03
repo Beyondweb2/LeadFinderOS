@@ -2,13 +2,28 @@
    DELIVERY COCKPIT — pure logic for the client cockpit in LeadDetailDialog (2026-08-18).
 
    Kept free of React/Supabase so the date maths and the re-measure clock are unit-tested in
-   scripts/delivery-cockpit.test.ts. The 8-week re-measure date is the guarantee clock — the whole
+   scripts/delivery-cockpit.test.ts. The re-measure date is the guarantee clock — the whole
    business turns on it not being missed — so its arithmetic and its amber/red thresholds are pinned
    by tests, not eyeballed.
    ============================================================ */
 
-/** 8 weeks. The re-measure is due this many days after the baseline was taken. */
-export const REMEASURE_OFFSET_DAYS = 56;
+/** 4 weeks. The re-measure is due this many days after the baseline was taken.
+ *
+ *  🔴 WAS 56 (8 weeks) UNTIL 2026-09-03. The product moved to a 4-week cycle and the site now says
+ *  so everywhere, including the guarantee sentence a customer agrees to at checkout — so this had
+ *  to move with it or the operator tool would schedule a date the customer was never promised.
+ *
+ *  ⛔ IT ONLY SETS THE DEFAULT FOR A LEAD WITH NO STORED remeasure_due_date, WHICH IS WHY RG
+ *  LOCKSMITHS NEEDED PINNING BY HAND. Ronnie's row already carries 2026-10-13, so his date is
+ *  unaffected. RG's was null and therefore DERIVED, so this change would have silently moved his
+ *  re-measure four weeks earlier — and he is the one LEGACY OUTCOME-GUARANTEE client, sold on
+ *  "named in more AI answers after 8 weeks than today". Moving his date would change what he was
+ *  sold. His +56 date is stored explicitly instead (SQL handed to Paul 2026-09-03).
+ *
+ *  ⚠️ SO A PROMISE ALREADY MADE LIVES IN THE COLUMN, NOT IN THIS CONSTANT. Anyone changing this
+ *  again must check for paying customers whose date is still null before assuming it is only a
+ *  default. */
+export const REMEASURE_OFFSET_DAYS = 28;
 /** Amber this many days out or fewer (still upcoming); red once overdue. Paul's spec 2026-08-18. */
 export const REMEASURE_AMBER_DAYS = 7;
 

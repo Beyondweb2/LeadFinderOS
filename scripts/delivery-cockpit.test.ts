@@ -14,16 +14,18 @@ let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`).getTime();
 
-console.log('── The 8-week default ──');
-ok(REMEASURE_OFFSET_DAYS === 56, 'offset is 56 days (8 weeks)');
-ok(defaultRemeasureDue('2026-08-11') === '2026-10-06', 'RG: baseline 11 Aug → due 6 Oct');
-ok(addDaysISO('2026-08-11', 56) === '2026-10-06', 'addDaysISO 56d');
+console.log('── The 4-week default ──');
+/* 🔴 WAS 56. The product moved to a 4-week cycle on 2026-09-03; the guarantee sentence and the
+   whole site changed with it, so the clock had to as well. */
+ok(REMEASURE_OFFSET_DAYS === 28, 'offset is 28 days (4 weeks)');
+ok(defaultRemeasureDue('2026-08-11') === '2026-09-08', 'baseline 11 Aug → due 2026-09-08');
+ok(addDaysISO('2026-08-11', 28) === '2026-09-08', 'addDaysISO 28d');
 
 console.log('── UTC, no BST drift (the end-of-day-UTC bug) ──');
 // 25 Oct 2026 is the BST→GMT switch; adding days across it must not shift the day.
 ok(addDaysISO('2026-10-20', 10) === '2026-10-30', 'crossing the DST boundary keeps the day exact');
 ok(addDaysISO('2026-02-28', 1) === '2026-03-01', 'month boundary (2026 not a leap year)');
-ok(addDaysISO('2026-08-11T15:00:00Z', 56) === '2026-10-06', 'a full-ISO baseline still yields a clean date');
+ok(addDaysISO('2026-08-11T15:00:00Z', 28) === '2026-09-08', 'a full-ISO baseline still yields a clean date');
 
 console.log('── The traffic light (amber ≤7, red overdue) ──');
 const at = (dueISO: string, nowISO: string) => remeasureStatus(dueISO, day(nowISO));

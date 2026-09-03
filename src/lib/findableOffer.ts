@@ -56,13 +56,13 @@ export const FINDABLE_SETUP_PRICE_GBP = 49.99;
    ⛔ NEVER MAKE THEM DIVERGE IN CONTENT. If the marketing line needs different words, the
    contractual one changes first and the marketing one extends it. The sync check fails otherwise. */
 export const FINDABLE_GUARANTEE =
-  "We guarantee the audit, the work, and the re-measurement at week eight with " +
+  "We guarantee the audit, the work, and the re-measurement at week four with " +
   "before-and-after evidence, or a full refund. We do not promise you will be named.";
 
 /** The site's version: the contractual sentence plus the line that makes the point rather than the
  *  promise. Byte-identical to findable-site's GUARANTEE, asserted by the sync check. */
 export const FINDABLE_GUARANTEE_FULL =
-  "We guarantee the audit, the work, and the re-measurement at week eight with " +
+  "We guarantee the audit, the work, and the re-measurement at week four with " +
   "before-and-after evidence, or a full refund. We do not promise you will be " +
   "named. The engines decide that, and anyone who promises it is guessing.";
 

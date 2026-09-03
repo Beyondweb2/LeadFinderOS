@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
 
          Without a trade on the LEAD, startPaidBaseline returns skipped:"no_business_type" and no
          baseline is ever created — so the week-eight re-measurement this payment guarantees has
-         nothing to measure against, and that only surfaces at week eight in front of the customer. Refusing
+         nothing to measure against, and that only surfaces at week four in front of the customer. Refusing
          a payment is recoverable in a minute; selling an unmeasurable guarantee is not.
 
          MIRRORS audit-baseline.ts's own bizType line character for character, deliberately:
@@ -308,7 +308,8 @@ Deno.serve(async (req) => {
       form.set("line_items[0][price_data][unit_amount]", String(Math.round(offer.gbp * 100)));
       // The name is what the payer sees on their Stripe receipt; the description carries
       // the guarantee VERBATIM from findableOffer.ts — the wording the sale is made on.
-      form.set("line_items[0][price_data][product_data][name]", "Findable — 8-week AI visibility sprint");
+      /* ⚠️ THE CUSTOMER READS THIS ON THEIR STRIPE RECEIPT, so it moved with the cycle (2026-09-03). */
+      form.set("line_items[0][price_data][product_data][name]", "Findable — 4-week AI visibility cycle");
       form.set("line_items[0][price_data][product_data][description]", FINDABLE_GUARANTEE);
       form.set("line_items[0][quantity]", "1");
     }

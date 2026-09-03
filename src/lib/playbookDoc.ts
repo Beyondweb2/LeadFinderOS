@@ -329,7 +329,7 @@ export function renderPlaybookDoc(
       + `(${topSource.citations} citations across ${topSource.audits} of ${pb.tradeAudits} audits).`);
   }
   summaryBits.push(`${now.length} task${now.length === 1 ? '' : 's'} I can complete now, about ${nowMinutes} minutes of work; `
-    + `${blocked.length} need${blocked.length === 1 ? 's' : ''} the client before week 8.`);
+    + `${blocked.length} need${blocked.length === 1 ? 's' : ''} the client before week 4.`);
   // Counted separately and named, so the drop in the numbers above is explained rather than mysterious.
   if (alreadyListed.length) {
     summaryBits.push(`${alreadyListed.length} already listed and excluded from those counts.`);
@@ -363,7 +363,7 @@ export function renderPlaybookDoc(
 ${docBand('Delivery Playbook · Operator copy')}
     <div class="internal-flag">Internal — execution copy, not for the client. Contains the client’s competitors</div>
     <div class="head">
-      <div class="for">8-week Sprint · prepared for</div>
+      <div class="for">4-week cycle · prepared for</div>
       <h1>${esc(pb.businessName)}</h1>
       ${vert ? `<div class="vert">${esc(vert)}</div>` : ''}
     </div>
@@ -377,7 +377,7 @@ ${pb.missingAddress ? `    <div class="warn">No address on file — every signup
       </div>
       ${group('AI Visibility — I can complete these now', `Start to finish without the client, in this order. About ${nowMinutes} minutes.`, now, pb)
         || '<p class="wk-client">Nothing is currently actionable without the client.</p>'}
-      ${group('AI Visibility — the client must do these', 'Goes in the client pack. None of it moves until they act, and week 8 measures whether it did.', blocked, pb)}
+      ${group('AI Visibility — the client must do these', 'Goes in the client pack. None of it moves until they act, and week 4 measures whether it did.', blocked, pb)}
       ${group('AI Visibility — no website', 'Gemini builds answers from businesses’ own sites. With no site there is nothing of theirs to read.', noWebsite, pb)}
       ${alreadyListed.length ? `
       <div class="act-group">
@@ -472,7 +472,7 @@ ${pb.missingAddress ? `    <div class="warn">No address on file — every signup
       <p class="note"><b>Which sources appear</b> is derived only from citations in completed audits.
       What each host <i>is</i>, and who is allowed to action it, is hand-maintained per host and never
       per trade. No model wrote any part of this sheet.</p>
-      <p class="note"><b>Timeline &amp; re-audit.</b> We re-measure at eight weeks on the same
+      <p class="note"><b>Timeline &amp; re-audit.</b> We re-measure at four weeks on the same
       questions, so the comparison is like for like. We are not going to put a date on when an engine
       starts naming this business: a directory listing is read when it is read. Repeated runs of the
       same question also disagree with each other, which is why the re-audit repeats the whole set
