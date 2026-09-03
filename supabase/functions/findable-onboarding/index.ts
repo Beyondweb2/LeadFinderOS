@@ -161,6 +161,26 @@ async function buildReportPayload(service: any, audit: any, run: RunRow): Promis
   };
 }
 
+/** Record why a free-check audit did not run. client_error_reports is the same table
+ *  findable-checkout writes its refusals to, so every "the funnel did nothing" reason lands in
+ *  one readable place. Never throws: the visitor has already had their answer. */
+async function recordAuditOutcome(
+  // deno-lint-ignore no-explicit-any
+  service: any,
+  errorId: string,
+  context: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const { error } = await service.from("client_error_reports").insert({
+      error_id: errorId,
+      context: { ...context, at: new Date().toISOString() },
+    });
+    if (error) console.error(`[findable-onboarding] could not record ${errorId}: ${error.message}`);
+  } catch (e) {
+    console.error(`[findable-onboarding] could not record ${errorId}:`, e instanceof Error ? e.message : e);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
@@ -733,6 +753,14 @@ Deno.serve(async (req) => {
               const decision = await shouldAutoAudit(service, outcome.leadId);
               if (!decision.fire) {
                 console.log(`[findable-onboarding] free_check audit SKIPPED for lead ${outcome.leadId}: ${decision.reason}`);
+                /* ⛔ RECORDED, NOT JUST LOGGED. This whole lane was silently dead for two days and
+                   the reason existed only in an edge log nobody can read - the CLI has no
+                   `functions logs`, so diagnosing it meant inferring from which leads had audits.
+                   A free check that produces no result is the funnel failing; it belongs in a table.
+                   Non-fatal: the visitor has already been answered. */
+                await recordAuditOutcome(service, "free_check_audit_skipped", {
+                  lead_id: outcome.leadId, onboarding_id: row.id, reason: decision.reason,
+                });
               } else {
                 const { data: fresh } = await service
                   .from("outreach_leads")
@@ -752,6 +780,11 @@ Deno.serve(async (req) => {
                     town: confirmedLocation ?? "",
                   });
                   console.log(`[findable-onboarding] free_check audit ${fired.ok ? `started (audit ${fired.auditId})` : `FAILED: ${fired.error}`} for lead ${outcome.leadId}`);
+                  if (!fired.ok) {
+                    await recordAuditOutcome(service, "free_check_audit_failed", {
+                      lead_id: outcome.leadId, onboarding_id: row.id, error: fired.error ?? null,
+                    });
+                  }
                   /* Only a STARTED audit promises a result. A failed start is not a maybe. */
                   resultComing = fired.ok;
                 }

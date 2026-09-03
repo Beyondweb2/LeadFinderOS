@@ -202,6 +202,12 @@ export async function fireFreeCheckAudit(
         business_name: lead.business_name,
         business_type: businessType,
         location_text: locationText,
+        /* ⛔ THE VISITOR TYPED THIS TOWN, so create-ai-audit's town gate must not refuse the
+           audit on the LEAD's derived-town verdict. Without this the whole free check was dead
+           for any business Google could not resolve: no place_id -> no derived town -> settled
+           unverifiable -> 409 town_unverified, before location_text was read. Honoured only on
+           the internal path, which this is (CRON_SECRET). */
+        town_confirmed: true,
         country: lead.country ?? null,
         website: lead.website ?? null,
         has_website: !!(lead.website ?? "").trim(),

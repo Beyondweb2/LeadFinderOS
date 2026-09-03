@@ -294,6 +294,14 @@ Deno.serve(async (req) => {
        the question ceiling below is explicit rather than inherited. */
     const marketOnly: boolean = body.market_only === true;
     const isBaseline = isInternal && body.purpose === "baseline";
+    /* ⛔ THE CALLER HAS A TOWN THE CUSTOMER TYPED. Exempts the town gate below, on exactly the same
+       principle the baseline exemption already rests on: the gate exists to stop an audit running
+       against an INFERRED town, and a town somebody typed for their own business is not inferred.
+       ⚠️ INTERNAL ONLY, mirroring isBaseline. Every other caller that passes location_text builds
+       it from `search_location || address` — inferred — so a flag any caller could set would
+       disable the gate everywhere (CLAUDE.md §8 lists bulk-jobs and the whatsapp-inbound chain
+       doing exactly that). A browser cannot reach this. */
+    const townConfirmed = isInternal && body.town_confirmed === true;
     /* FULL MEASUREMENT — operator-callable (NOT gated on isInternal, exactly like market_only): a
        deliberate bulk gather the operator triggers from the AI Audit page. Its higher ceiling is
        explicit below, so a public caller still cannot exceed it. */
@@ -715,8 +723,20 @@ Deno.serve(async (req) => {
          never reach here — they carry no lead_id.
          ⚠️ UNCHECKED PASSES. Only the settled-unverifiable verdict gates; absence is never an
          answer (CLAUDE.md §6). The error string is raw and self-explaining — explainAuditFailure
-         renders it verbatim. */
-      if (lead && !isBaseline && townGated(lead)) {
+         renders it verbatim.
+
+         🔴 AND `townConfirmed` IS EXEMPT TOO, WHICH IS WHY THE FREE CHECK WAS SILENTLY DEAD.
+         Measured 2026-09-03: every free-check submission whose business name Google could not
+         resolve got NO audit at all. "Test plumber" and a real visitor called "richard" both landed
+         with derived_town null and town_fetch_note 'no_place_id' — settled-unverifiable — so this
+         gate refused with 409 before location_text was even read. Two of two resolved businesses
+         got their audit; two of two unresolved ones got nothing and an operator email saying to do
+         it by hand.
+         The gate was right about prospecting and wrong here: a free-check visitor TYPES their trade
+         and their town, and that is better evidence than a derived one, not worse. A business
+         Google has never heard of is precisely the customer who most needs telling that AI cannot
+         find them. */
+      if (lead && !isBaseline && !townConfirmed && townGated(lead)) {
         return json({ ok: false, error: `town_unverified: ${TOWN_GATE_REASON}` }, 409);
       }
     }
