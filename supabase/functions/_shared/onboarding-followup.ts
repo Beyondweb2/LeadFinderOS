@@ -20,23 +20,61 @@ import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
    constant to findable-site's SITE_URL; when the domain ever moves again, change the secret AND
    run that script.
 
-   FINDABLE_SITE_ORIGIN is preferred; FINDABLE_ALLOWED_ORIGINS (already read by findable-checkout for
-   its Stripe return URLs, first entry canonical) is accepted as a second source so the two cannot
-   disagree about where the site lives once it is set. */
+   FINDABLE_SITE_ORIGIN is preferred; FINDABLE_ALLOWED_ORIGINS is accepted as a second source.
+
+   🔴 AND THAT FALLBACK PUT A PREVIEW DOMAIN IN FRONT OF PROSPECTS. Measured 2026-09-03 across all
+   47 onboarding links ever sent: 27 used `findable-site.pages.dev` and every single one of them was
+   SERVER-BUILT (re_engage x19, onboarding_followup x3, plus 5 others); the 20 that read
+   `findable.live` were all `type=text`, typed by the operator by hand. The most recent server-built
+   link, a re_engage to a real prospect on 2026-08-31, went out on pages.dev.
+
+   ⛔ THE CAUSE IS A CATEGORY ERROR, NOT A TYPO. FINDABLE_ALLOWED_ORIGINS is findable-checkout's
+   CORS ALLOWLIST - it answers "who may call us", and it legitimately contains preview and staging
+   hosts. Taking its FIRST ENTRY as "where the site lives" reads an answer out of a list that was
+   never asked that question, and the order of a CORS allowlist is nobody's deliberate decision.
+   The comment that used to sit here called that entry "canonical", which is exactly the belief that
+   cost us this.
+
+   ⛔ SO THE FALLBACK NOW SKIPS HOSTS THAT CANNOT BE A PUBLIC HOME (see NON_CANONICAL_HOST) and
+   REFUSES rather than guessing when nothing in the list qualifies. A refusal is loud - the senders
+   already report "The onboarding link base is not configured" and decline to send - whereas a
+   plausible-looking preview URL is silent and reaches a customer. Absence of a known-good origin
+   must never resolve to whatever happens to be first. */
 export const ORIGIN_ENV = "FINDABLE_SITE_ORIGIN";
 export const ORIGIN_ENV_FALLBACK = "FINDABLE_ALLOWED_ORIGINS";
 
-/** The configured site origin, with any trailing slashes removed so joining is unambiguous.
- *  null when neither variable is set or the value is not an http(s) origin. */
-export function resolveSiteOrigin(): string | null {
-  const raw = (Deno.env.get(ORIGIN_ENV) ?? "").trim() ||
-    (Deno.env.get(ORIGIN_ENV_FALLBACK) ?? "").split(",")[0].trim();
-  if (!raw) return null;
-  const origin = raw.replace(/\/+$/, "");
+/** Hosts that can never be the product's public home, so they are never taken from the CORS
+ *  allowlist. Deliberately narrow: a Cloudflare Pages preview (the one that actually shipped),
+ *  local development, and Supabase's own function host. Anything else in the list is trusted -
+ *  this is a guard against a known accident, not an attempt to validate a domain. */
+const NON_CANONICAL_HOST = /(^|\.)pages\.dev$|(^|\.)workers\.dev$|(^|\.)supabase\.co$|^localhost(:\d+)?$|^127\.0\.0\.1(:\d+)?$/i;
+
+/** True for an absolute http(s) origin whose host could be a real public home. */
+function usableOrigin(raw: string): string | null {
+  const origin = raw.trim().replace(/\/+$/, "");
   // Must be an absolute http(s) origin: a bare host would produce a relative link in WhatsApp,
   // which is not clickable and not fixable after the fact.
   if (!/^https?:\/\/[^\s/]+$/i.test(origin)) return null;
+  const host = origin.replace(/^https?:\/\//i, "");
+  if (NON_CANONICAL_HOST.test(host)) return null;
   return origin;
+}
+
+/** The configured site origin, with any trailing slashes removed so joining is unambiguous.
+ *  null when nothing configured can be a public home - see the note above. */
+export function resolveSiteOrigin(): string | null {
+  /* ⚠️ THE PRIMARY IS TRUSTED AS SET, INCLUDING ITS HOST. If an operator deliberately points
+     FINDABLE_SITE_ORIGIN at a preview to test something, that is a decision, and overriding it
+     would make the variable a lie. The host filter exists for the list we INFER from. */
+  const primary = (Deno.env.get(ORIGIN_ENV) ?? "").trim().replace(/\/+$/, "");
+  if (primary) return /^https?:\/\/[^\s/]+$/i.test(primary) ? primary : null;
+  /* The fallback is a CORS allowlist, so take the first entry that could be a public home rather
+     than the first entry full stop. Nothing qualifying → null, and the callers refuse to send. */
+  for (const part of (Deno.env.get(ORIGIN_ENV_FALLBACK) ?? "").split(",")) {
+    const ok = usableOrigin(part);
+    if (ok) return ok;
+  }
+  return null;
 }
 
 /** The onboarding link for a lead. Kept separate so the URL shape lives in exactly one place.
