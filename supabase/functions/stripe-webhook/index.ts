@@ -575,7 +575,7 @@ Deno.serve(async (req) => {
                   status: "payment_received",
                   amount_paid: amountGbp,
                   payment_date: new Date().toISOString(),
-                  paid_for: "Findable - Setup + first 2 months",
+                  paid_for: "Findable - AI visibility, first cycle",
                 },
                 findableLeadId,
                 "findable lead -> payment_received",
@@ -595,7 +595,7 @@ Deno.serve(async (req) => {
               await notifyOfFindablePayment({
                 businessName: ((leadForEmail?.business_name as string) ?? "").trim(),
                 amountGbp,
-                paidFor: "Findable - Setup + first 2 months",
+                paidFor: "Findable - AI visibility, first cycle",
                 trade: (((leadForEmail?.category as string) || (leadForEmail?.search_keyword as string) || "").trim()) || null,
                 town: ((leadForEmail?.search_location as string) ?? "").trim() || null,
                 phone: ((leadForEmail?.phone as string) ?? "").trim() || null,

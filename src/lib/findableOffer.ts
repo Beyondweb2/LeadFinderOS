@@ -15,8 +15,23 @@
 // It reads the other repo off disk and exits non-zero on any byte difference. The
 // PRICE is still guarded by nothing but this comment.
 
-/** The one-off price of the eight-week sprint, in GBP. £49.99 until 2026-08-04. */
-export const FINDABLE_SETUP_PRICE_GBP = 99;
+/** 🔴 THE ONE PRICE EVERYONE PAYS, in GBP. One-off, not recurring.
+ *
+ *  History: £49.99 → £99 (2026-08-04) → **£49.99 flat (2026-09-03)**.
+ *
+ *  ⛔ THERE IS NO LONGER A SECOND PRICE, AND THAT IS THE POINT OF THIS CHANGE. Until today the
+ *  product had a FOUNDER price (£49.99, for a lead with a completed audit) and a FULL price (£99,
+ *  for everyone else), derived per-lead by offer-price.ts. Removed on Paul's instruction, approved
+ *  by Rich: one flat price, whether they arrive from their report, the homepage, or a cold link.
+ *
+ *  ⚠️ AND REMOVING THE SPLIT IS WHAT UNBLOCKS SIGN-UP WITHOUT A ?lead= TAG. The tag used to decide
+ *  the PRICE as well as the identity, so a lead-less arrival could not be charged correctly and the
+ *  checkout refused it. With one price there is nothing for the tag to decide about money, and the
+ *  only remaining requirement is a trade + town so the week-eight guarantee has something to
+ *  measure against — which the pre-payment screen now asks for when there is no tag.
+ *
+ *  ⛔ £99 IS NOT CHARGED TO ANYBODY. If a £99 figure appears anywhere in copy, it is stale. */
+export const FINDABLE_SETUP_PRICE_GBP = 49.99;
 
 /* The guarantee, WORK-based: we promise the audit, the work and the re-measurement, never the
    outcome. Anywhere this sentence is shown to a client must render it from this constant, not a

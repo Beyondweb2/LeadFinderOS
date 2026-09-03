@@ -131,14 +131,20 @@ const LFOS_ROOT = path.join(LFOS, '..', '..');
 
 const SAME_REPO_GROUPS = [
   {
-    what: 'the founder price',
-    why: 'The report advertises it, findable-checkout charges it, and the dashboard counts places by matching it exactly. Any two disagreeing means an advertised price nobody is charged, or a tile that counts nothing.',
+    what: 'the one price',
+    why: 'findable-checkout charges it and the dashboard counts customers by matching it exactly. Disagreement means a tile that counts nothing, or a price nobody is charged. Until 2026-09-03 this guarded a FOUNDER price against a separate full price; there is one price now.',
     /* LFOS is <repo>/src/lib, so the repo root is two up. The first attempt joined one level and
        looked for src/supabase/... — it failed loudly with ENOENT rather than quietly finding
        nothing, which is the behaviour a check like this has to have. */
     places: [
-      { file: path.join(LFOS_ROOT, 'supabase', 'functions', '_shared', 'offer-price.ts'), name: 'FOUNDER_PRICE_GBP', kind: 'number', role: 'CHARGED' },
-      { file: path.join(LFOS_ROOT, 'src', 'lib', 'founderOffer.ts'), name: 'FOUNDER_OFFER_PRICE_LABEL', kind: 'money-label', role: 'displayed on the report' },
+      /* offer-price.ts and founderOffer.ts no longer declare a price of their own: the first returns
+         FINDABLE_SETUP_PRICE_GBP and the second is gone (now buyOffer.ts, which carries no money). So
+         the remaining drift risk is the DASHBOARD's copy against the charged figure, and that is what
+         this pins. The cross-repo pair above already pins the charged figure against findable-site.
+         ⚠️ FOUNDER_PRICE_GBP keeps its NAME in useDashboardMetrics deliberately - CLAUDE.md 6h records
+         that this parser reads it as a bare number and that moving it broke the guard once already. It
+         now means "the price customers actually paid", with the historical list beside it. */
+      { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_SETUP_PRICE_GBP', kind: 'number', role: 'CHARGED' },
       { file: path.join(LFOS_ROOT, 'src', 'hooks', 'useDashboardMetrics.ts'), name: 'FOUNDER_PRICE_GBP', kind: 'number', role: 'counted on the dashboard' },
     ],
   },

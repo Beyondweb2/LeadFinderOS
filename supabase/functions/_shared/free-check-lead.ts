@@ -53,6 +53,15 @@ export interface FreeCheckInput {
    *  — a typed "07700 900123" and a stored "+447700900123" are the same number, and an unnormalised
    *  compare would miss every duplicate and store a number the send path cannot dial. */
   phone?: string | null;
+  /* ⛔ WHY THE VISITOR IS HERE, AND IT CHANGES ONE THING ONLY: WHETHER THE DAILY CAP APPLIES.
+     'free_check' (the default) is someone asking for a free audit, and the cap exists because each
+     one costs real pence and nothing else rate-limits that form. 'signup' is someone ON THEIR WAY
+     TO PAY with no ?lead= tag, and refusing them because ten strangers wanted a free check first
+     would turn a spend guard into a lost sale. A paying customer is worth 4.5p unconditionally.
+     ⚠️ Everything else - the dedupe, its fail-closed behaviour, the three-guard place resolution,
+     the town derivation - is IDENTICAL for both. This flag must never grow into a second code path;
+     the day it decides anything but the cap and the provenance label, split the function instead. */
+  purpose?: "free_check" | "signup";
 }
 
 export type FreeCheckOutcome =
@@ -106,6 +115,7 @@ export async function createFreeCheckLead(
     const businessName = input.businessName.trim();
     const town = input.town.trim();
     const trade = input.trade.trim();
+    const purpose = input.purpose ?? "free_check";   // absent = the capped free-check path
     if (!businessName) return { kind: "refused", reason: "no business name given" };
 
     const userId = await resolveOwnerUserId(service);
@@ -128,7 +138,9 @@ export async function createFreeCheckLead(
       };
     }
 
-    // ── 2. THE DAILY CAP, checked BEFORE the first paid call ─────────────────────────────────
+    /* ── 2. THE DAILY CAP, checked BEFORE the first paid call ─────────────────────────────────
+       ⛔ SKIPPED ENTIRELY FOR A SIGNUP. See `purpose` on the input: the cap protects a free form
+          from costing money at volume, and a signup is not that. It still runs for free checks. */
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { count: spentToday, error: capErr } = await service
       .from("onboarding_responses")
@@ -137,7 +149,7 @@ export async function createFreeCheckLead(
       .not("lead_id", "is", null)
       .gte("created_at", since);
     if (capErr) return { kind: "refused", reason: `could not read the daily cap: ${capErr.message}` };
-    if ((spentToday ?? 0) >= FREE_CHECK_DAILY_LEAD_CAP) {
+    if (purpose !== "signup" && (spentToday ?? 0) >= FREE_CHECK_DAILY_LEAD_CAP) {
       return {
         kind: "skipped",
         reason: `daily cap reached (${spentToday} free-check leads in 24h, cap ${FREE_CHECK_DAILY_LEAD_CAP}) — the answers are saved and nothing was spent`,
@@ -251,8 +263,10 @@ export async function createFreeCheckLead(
       status: "not_contacted",
       list_type: "no_website",
       country: "UK",
-      enrichment_source: "free_check",
-      notes: `Came in through the free AI check on findable.live${trade ? ` — asked about ${trade}` : ""}${town ? ` in ${town}` : ""}.`,
+      enrichment_source: purpose === "signup" ? "signup" : "free_check",
+      notes: purpose === "signup"
+        ? `Signed up directly on findable.live${trade ? ` — ${trade}` : ""}${town ? ` in ${town}` : ""}. No prospecting; they arrived with no lead link.`
+        : `Came in through the free AI check on findable.live${trade ? ` — asked about ${trade}` : ""}${town ? ` in ${town}` : ""}.`,
     };
     if (placeId) row.place_id = placeId;
     if (phone) row.phone = phone;

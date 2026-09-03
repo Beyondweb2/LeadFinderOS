@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
-import { offerPriceForLead } from "../_shared/offer-price.ts";
+import { offerPrice } from "../_shared/offer-price.ts";
 import { serveDecision, serveInputFromRow, type ServeGateRow } from "../../../src/lib/serveGate.ts";
 
 // findable-checkout — Stripe Checkout for the Findable onboarding plan (verify_jwt = false;
@@ -194,7 +194,9 @@ Deno.serve(async (req) => {
     }
 
     /* Derived after the lead checks above, so `effectiveLeadId` is the one that passed them. */
-    const offer = await offerPriceForLead(service as never, effectiveLeadId ?? null);
+    /* ONE PRICE FOR EVERYONE since 2026-09-03 - no lead lookup, nothing per-customer. Still the
+       same function the plan card calls, so display and charge cannot diverge. */
+    const offer = offerPrice();
     console.log(`[findable-checkout] price for lead ${effectiveLeadId}: £${offer.gbp} (${offer.reason})`);
 
     const reqOrigin = req.headers.get("origin") ?? "";
