@@ -361,7 +361,35 @@ Deno.serve(async (req) => {
       });
       return json({ ok: false, error: "checkout_failed" }, 502);
     }
-    return json({ ok: true, url: session.url });
+
+    /* ⛔ WHAT STRIPE SAYS IT WILL CHARGE, RECORDED. The create-session RESPONSE carries
+       amount_total, and until now it was thrown away - the function read `url` and nothing else.
+       So there was no record anywhere of what a session was created for: only a completed payment
+       ever produced a number, and a session that was never paid left nothing at all.
+       ⚠️ THIS IS ALSO THE ONLY WAY TO VERIFY AN ITEMISATION FROM HERE. The hosted page is a
+       JS-rendered shell - fetching it yields no amount_total, no line_items, not even the product
+       name (CLAUDE.md §6 records the same finding when the guarantee length was checked). Stripe
+       is the only source, and this is its answer.
+       Non-fatal and after the session exists: a failed audit write must never lose a checkout. */
+    try {
+      const created = session as { amount_total?: number; currency?: string; mode?: string; subscription?: unknown; id?: string };
+      await service.from("client_error_reports").insert({
+        error_id: "checkout_session_created",
+        context: {
+          onboarding_id: onboardingId,
+          lead_id: effectiveLeadId,
+          session_id: created.id ?? null,
+          mode: created.mode ?? null,
+          amount_total_minor: created.amount_total ?? null,
+          currency: created.currency ?? null,
+          website_addon: wantsWebsite,
+          addon_charged: addOnReady,
+          ai_line_gbp: offer.gbp,
+        },
+      });
+    } catch (e) {
+      console.error("[findable-checkout] could not record the created session:", (e as Error).message);
+    }    return json({ ok: true, url: session.url });
   } catch (e) {
     console.error("[findable-checkout] error:", e instanceof Error ? e.message : e);
     return json({ ok: false, error: "internal" }, 500);
