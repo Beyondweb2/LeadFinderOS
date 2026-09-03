@@ -714,6 +714,29 @@ export function renderReportHtml(d: AiAuditReportData): string {
      client ever reads badly here, this is the line to widen. */
   const pluralTrade = /[^s]s$/i.test(ctaTrade) || /ing$/i.test(ctaTrade);
   const tradePhrase = pluralTrade ? esc(ctaTrade) : `${article(ctaTrade)} ${esc(ctaTrade)}`;
+  /* ⛔ THE GET-STARTED BUTTON, AND IT IS A PRICE GUARD AS MUCH AS A LINK (wired 2026-09-03).
+     `founderOfferUrl` is /onboarding/<slug>/?lead=<leadId>, and the `?lead=` is what makes
+     offerPriceForLead quote the FOUNDER price - without it that same flow charges the full price.
+     So an absent url renders NO BUTTON rather than falling back to the bare site: a button that
+     silently costs the customer more is worse than no button. Same rule the old offer block had.
+
+     ⛔ `showFounderOffer === true`, STRICTLY. It is false once amount_paid > 0, so a paying
+     customer is never invited to start again, and undefined (a caller that does not set it, e.g.
+     an operator preview) shows nothing rather than guessing.
+
+     🔴 WHY IT IS HERE AT ALL: outreach's audit_result_hook sends people to their report, and all
+     16 leads it has been sent to opened it - 16 of 16. The report is where a clicker actually
+     lands, so this is the door for them, and it needs no change to the Meta-approved template.
+     ⚠️ It does NOT name a price. The pitch block was deliberately stripped from this document on
+     2026-09-02; the price belongs on the onboarding page, which states it. */
+  const startUrl = (d.founderOfferUrl ?? "").trim();
+  const startBtn = d.showFounderOffer === true && startUrl
+    ? `<a class="cta-btn start" href="${esc(startUrl)}" target="_blank" rel="noopener noreferrer">Get started</a>`
+    : "";
+  if (d.showFounderOffer === true && !startUrl) {
+    console.warn("[report] get-started button omitted: no per-lead onboarding url (no lead_id, or the site origin is not configured)");
+  }
+
   const ctaSubject = ctaTrade && ctaTown
     ? `${tradePhrase} in ${esc(ctaTown)}`
     : ctaTrade
@@ -1102,6 +1125,8 @@ ${REPORT_CHROME_CSS_CORE}
     padding:13px 22px; border-radius:10px; font-size:15px; font-weight:700; line-height:1;
     text-decoration:none; border:1px solid transparent; }
   .cta-btn.email{ background:var(--yellow); color:var(--blue); }
+  /* The primary action. Own class, not .email - that name meant "Email us" and the button is gone. */
+  .cta-btn.start{ background:var(--yellow); color:var(--blue); }
   .cta-btn.wa{ background:#fff; color:var(--blue); }
   .cta-btn.site{ background:transparent; color:#fff; box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.45); }
 
@@ -1297,6 +1322,7 @@ ${d.hidePitch ? "" : `
       <h3>Want us to <span class="y">fix this</span>?</h3>
       <p>We&rsquo;ll get you showing up when people ask AI for ${ctaSubject}.</p>
       <div class="cta-actions">
+        ${startBtn}
         <a class="cta-btn site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">See how it works</a>
         <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp us</a>
       </div>
