@@ -519,29 +519,102 @@ Deno.serve(async (req) => {
        A caller that cannot reach this endpoint must fail towards NOT queueing - see the SPA side. */
     if (mode === "contact_check") {
       const raw: unknown[] = Array.isArray(body.phones) ? body.phones : [];
-      /* Bare digits for whatsapp_messages, "+" E.164 for contact_suppressions - two conventions for
-         the same number, and mixing them up is why the key is normalised in exactly one place. */
-      const digits: string[] = [];
+      const asked: string[] = [];
       for (const x of raw) {
         const d = String(x ?? "").replace(/\D/g, "");
-        if (d && !digits.includes(d)) digits.push(d);
+        if (d && !asked.includes(d)) asked.push(d);
       }
-      if (digits.length === 0) return json({ ok: true, mode, contacted: [], suppressed: [] });
-      if (digits.length > 500) return json({ ok: false, error: "too_many_phones", limit: 500 }, 400);
-      const { data: msgs, error: mErr } = await service
-        .from("whatsapp_messages").select("phone").in("phone", digits).neq("status", "failed");
-      const { data: sup, error: sErr } = await service
-        .from("contact_suppressions").select("phone_e164").in("phone_e164", digits.map((d: string) => `+${d}`));
-      /* ⛔ FAILS CLOSED, like suppression itself. A read that errored tells us nothing about who is
-         contactable, so it must not come back as an empty 'all clear' - that is the shape of the bug
-         being fixed. The SPA refuses to queue on this error rather than queueing blind. */
-      if (mErr || sErr) {
-        return json({ ok: false, error: "contact_check_failed", detail: (mErr ?? sErr)?.message ?? null }, 200);
+      if (asked.length === 0) return json({ ok: true, mode, contacted: [], suppressed: [] });
+
+      /* 🔴 THIS USED TO REFUSE ANY BATCH OVER 500 PHONES, AND THAT BROKE ALL OUTREACH (2026-09-03).
+         Queueing 909 leads returned 400 too_many_phones, the SPA fails closed on a non-ok answer, and
+         nothing could be queued at all. The cap was mine, added the day before out of caution about a
+         long `.in()` URL - measured since: 909 phones is an 11,924-character URL and PostgREST serves
+         it without complaint, so the cap was guarding against nothing and blocking everything.
+
+         🔴 BUT REMOVING THE CAP ALONE WOULD HAVE MADE THE CHECK SILENTLY WRONG, WHICH IS WORSE THAN
+         BLOCKING. Measured on the same run: `.in()` over 909 phones came back with EXACTLY 1000 rows -
+         PostgREST's db-max-rows truncation (CLAUDE.md §6). One phone can carry forty messages, so the
+         1000-row budget is exhausted long before every phone is represented, and the phones that fall
+         off the end read as NEVER CONTACTED. A guard against double-messaging that quietly returns
+         "clean" for a contacted number is the exact bug it exists to prevent.
+
+         ⛔ SO IT NO LONGER FILTERS BY PHONE AT ALL. It reads the DISTINCT set of contacted numbers
+         once, paginated to exhaustion, and intersects in memory. Measured today: 2,916 non-failed
+         messages = 1,047 distinct phones in 3 reads, and the cost does not grow with the size of the
+         batch being queued - only with the message log, which is the thing that actually bounds it.
+         A 909-lead queue and a 9-lead queue now do identical work.
+
+         ⚠️ AND AN EXHAUSTED PAGE BUDGET FAILS CLOSED. A partial set is indistinguishable from a clean
+         one, so if the log ever outgrows MAX_PAGES this reports an error rather than an answer. */
+      const PAGE = 1000;
+      const MAX_PAGES = 80;               // 80k messages before this needs revisiting
+
+      /** Every phone with a non-failed message, as bare digits. null = could not be read in full. */
+      const readContactedPhones = async (): Promise<Set<string> | null> => {
+        const out = new Set<string>();
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const from = page * PAGE;
+          const { data, error } = await service
+            .from("whatsapp_messages")
+            .select("phone")
+            .neq("status", "failed")
+            /* ⚠️ ORDERED BY id. Without a stable unique order, paging can repeat or skip rows and the
+               set would be quietly incomplete - the same reason fetchAllRows exists in the SPA. */
+            .order("id", { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (error) {
+            console.error(`[contact_check] message page ${page} failed: ${error.message}`);
+            return null;
+          }
+          const rows = (data ?? []) as Array<{ phone: string | null }>;
+          for (const r of rows) {
+            const d = String(r.phone ?? "").replace(/\D/g, "");
+            if (d) out.add(d);
+          }
+          if (rows.length < PAGE) return out;      // a short page is the end
+        }
+        console.error(`[contact_check] message log exceeded ${MAX_PAGES} pages - refusing rather than answering from a partial set`);
+        return null;
+      };
+
+      /** Suppressed numbers. Stored as "+447…", compared as bare digits. */
+      const readSuppressedPhones = async (): Promise<Set<string> | null> => {
+        const out = new Set<string>();
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const from = page * PAGE;
+          const { data, error } = await service
+            .from("contact_suppressions")
+            .select("phone_e164")
+            .order("id", { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (error) {
+            console.error(`[contact_check] suppression page ${page} failed: ${error.message}`);
+            return null;
+          }
+          const rows = (data ?? []) as Array<{ phone_e164: string | null }>;
+          for (const r of rows) {
+            const d = String(r.phone_e164 ?? "").replace(/\D/g, "");
+            if (d) out.add(d);
+          }
+          if (rows.length < PAGE) return out;
+        }
+        return null;
+      };
+
+      const [contactedAll, suppressedAll] = await Promise.all([readContactedPhones(), readSuppressedPhones()]);
+      /* ⛔ FAILS CLOSED, and the SPA refuses to queue on this. A read we could not complete tells us
+         nothing about who is contactable, and answering "nobody" would queue the whole book. */
+      if (!contactedAll || !suppressedAll) {
+        return json({ ok: false, error: "contact_check_failed", detail: "could not read the contact history in full" }, 200);
       }
+      /* Only the intersection travels back - the caller asked about these numbers, and returning 1,047
+         phones it never mentioned would be both wasteful and a small disclosure. */
       return json({
         ok: true, mode,
-        contacted: [...new Set(((msgs ?? []) as Array<{ phone: string }>).map((r) => String(r.phone ?? "").replace(/\D/g, "")))],
-        suppressed: [...new Set(((sup ?? []) as Array<{ phone_e164: string }>).map((r) => String(r.phone_e164 ?? "").replace(/\D/g, "")))],
+        checked: asked.length,
+        contacted: asked.filter((d) => contactedAll.has(d)),
+        suppressed: asked.filter((d) => suppressedAll.has(d)),
       });
     }
 
