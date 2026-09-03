@@ -2,6 +2,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
+/* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
+   "where does the public site live" was settled after the pages.dev incident, and it applies the
+   host filter that keeps a preview domain out of a customer-facing URL. A second copy of that
+   decision here is exactly the drift that put 27 of 47 onboarding links on the wrong host. */
+import { resolveSiteOrigin } from "../_shared/onboarding-followup.ts";
 import { serveDecision, serveInputFromRow, type ServeGateRow } from "../../../src/lib/serveGate.ts";
 
 // findable-checkout — Stripe Checkout for the Findable onboarding plan (verify_jwt = false;
@@ -31,11 +36,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const PAID_OR_BEYOND = new Set(["payment_received", "in_delivery", "completed"]);
 // Origins a payer may be bounced back to. Never an attacker-supplied origin.
 //
-// The production domain is CONFIGURABLE, not hardcoded: set FINDABLE_ALLOWED_ORIGINS to a
-// comma-separated list and the FIRST entry becomes canonical (used when a request arrives
-// with no origin, or one we do not trust). That way the real domain can be switched on with
-//   npx supabase secrets set FINDABLE_ALLOWED_ORIGINS=https://findable.uk,https://www.findable.uk
-// the moment it clears registration lock, with no code change and no redeploy of anything else.
+// ⛔ FINDABLE_ALLOWED_ORIGINS IS A PERMISSION LIST, NOT AN ADDRESS BOOK. It answers "may a payer be
+// returned here", and nothing else. The comment that stood here said its FIRST ENTRY "becomes
+// canonical" — that sentence was the bug, not a description of one, and it is the same belief that
+// sent 27 onboarding links to a preview domain. Where the site LIVES is FINDABLE_SITE_ORIGIN; see
+// CONFIGURED_ORIGIN below.
+//
+// To move the production domain: set FINDABLE_SITE_ORIGIN (the address) and add the new host to
+// FINDABLE_ALLOWED_ORIGINS (the permission). Both, and in that order — a new address that is not
+// yet permitted still works here, because CONFIGURED_ORIGIN is folded into the allowlist.
 //
 // The Pages project URL and local dev are always allowed so the flow works before the domain
 // lands. Per-commit preview subdomains (<hash>.findable-site.pages.dev) are deliberately NOT
@@ -45,8 +54,41 @@ const ENV_ORIGINS = (Deno.env.get("FINDABLE_ALLOWED_ORIGINS") ?? "")
   .split(",")
   .map((o) => o.trim().replace(/\/+$/, ""))
   .filter(Boolean);
-const ALLOWED_ORIGINS = new Set([...ENV_ORIGINS, ...BUILT_IN_ORIGINS]);
-const CANONICAL_ORIGIN = ENV_ORIGINS[0] ?? BUILT_IN_ORIGINS[0];
+/* 🔴 THE SAME CATEGORY ERROR THAT PUT PROSPECTS ON pages.dev, IN THE ONE PLACE IT WAS NOT FIXED
+   (found 2026-09-03 by sweeping every onboarding link in the product). This used to read
+   `CANONICAL_ORIGIN = ENV_ORIGINS[0]`, i.e. it took the FIRST ENTRY OF THE CORS ALLOWLIST as "where
+   the site lives" — the exact mistake onboarding-followup.ts documents at length: the order of an
+   allowlist is nobody's deliberate decision, and that list legitimately contains preview hosts.
+   Here the stakes are higher than a link in a message, because this origin becomes Stripe's
+   success_url and cancel_url — so a PAYING CUSTOMER could be returned to a preview domain the
+   moment they finished paying.
+
+   ⛔ AND CORS DOES NOT PROTECT US FROM IT. `Access-Control-Allow-Origin` above is `*`, so the
+   browser POST succeeds whatever the origin — which means "payments work from findable.live" was
+   never evidence that findable.live is in FINDABLE_ALLOWED_ORIGINS. If it is absent from that list,
+   `ALLOWED_ORIGINS.has(reqOrigin)` was false for every real payer and EVERY ONE of them fell through
+   to this constant. The secret's value cannot be read (the CLI returns hashes), so that was
+   unfalsifiable from here — which is itself the reason not to depend on it.
+
+   ⛔ SO THE CONFIGURED ORIGIN IS NOW THE ANSWER, AND THE ALLOWLIST IS ONLY A PERMISSION.
+   FINDABLE_SITE_ORIGIN is the variable whose one job is to say where the site lives (proven
+   https://findable.live, 2026-09-03, by hashing candidates against the stored digest), and
+   resolveSiteOrigin applies the non-preview host filter to anything it infers. It is also folded
+   into ALLOWED_ORIGINS, so a findable.live payer now matches at the first test regardless of what
+   the CORS list happens to contain.
+
+   ⚠️ THE REQUEST ORIGIN STILL WINS WHEN IT IS TRUSTED. That is what lets a payer testing on
+   localhost:4321 or the Pages URL return to where they actually are; the fallback is only for a
+   request that arrives with no origin, or one we do not trust. BUILT_IN_ORIGINS[0] survives as the
+   last resort for the case where nothing at all is configured — and then pages.dev genuinely is the
+   only place the site is. */
+const CONFIGURED_ORIGIN = resolveSiteOrigin();
+const ALLOWED_ORIGINS = new Set([
+  ...(CONFIGURED_ORIGIN ? [CONFIGURED_ORIGIN] : []),
+  ...ENV_ORIGINS,
+  ...BUILT_IN_ORIGINS,
+]);
+const CANONICAL_ORIGIN = CONFIGURED_ORIGIN ?? ENV_ORIGINS[0] ?? BUILT_IN_ORIGINS[0];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
