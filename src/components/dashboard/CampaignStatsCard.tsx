@@ -126,6 +126,50 @@ export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide }
           />
         </div>
 
+        {/* ── REPORT OPENED ──────────────────────────────────────────────────────────────────────
+            ⚠️ IT IS BACK, AND ONLY BECAUSE THE REASON IT WENT IS NOW FIXED. This card's own header
+            note still records why it was pulled: "Report opened could not tell the operator's own
+            opens from a prospect's". True of the raw ai_audits.open_count, which the operator's
+            previews increment through the same URL — and measurably wrong as a reason to have no
+            metric at all. useCampaignStats now attributes each open against the moment the report
+            link was sent, which separates the two for every row (measured live: 371 opens after the
+            send, ONE before). The header note above is left as written, because it is the record of
+            what was wrong, and this comment is the record of what changed.
+            ⚠️ ONLY RENDERED ONCE A LINK HAS GONE OUT. A "0 · 0% of 0" row on a campaign that has
+            never sent a report says nothing and reads as a broken tile — the same rule the
+            conversion row below already follows.
+            ⚠️ The unattributed count is shown, not hidden. Those are opens on leads we never sent a
+            link to, so they are almost certainly the operator's own; dropping them silently would
+            make the row look cleaner than the data is. */}
+        {stat.reportLinksSent > 0 && (
+          <div
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/50 pt-2.5 text-[11px] text-muted-foreground"
+            title={
+              'Leads who opened the audit report we sent them. Counted only when the report was first opened AFTER the link went out, '
+              + 'so your own previews are excluded — the report URL is the same one you open from the Inbox, so the raw counter cannot tell them apart. '
+              + 'Unique leads, never total views: there is no per-open log, so repeat views cannot be attributed to anyone.'
+            }
+          >
+            <span>
+              Report opened{' '}
+              <span className="font-bold tabular-nums text-foreground/90">{stat.reportOpened}</span>
+            </span>
+            <span className="text-muted-foreground/40">·</span>
+            <span>
+              <span className="font-bold tabular-nums text-foreground/90">{stat.reportOpenRatePct}%</span>
+              {' '}of {stat.reportLinksSent} link{stat.reportLinksSent === 1 ? '' : 's'} sent
+            </span>
+            {stat.reportOpensUnattributed > 0 && (
+              <span
+                className="text-muted-foreground/50"
+                title="Audits opened on leads we never sent a report link to — so almost certainly your own previews. Excluded from the count above."
+              >
+                (+{stat.reportOpensUnattributed} not attributable)
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Money row — the end of the funnel in real numbers, not a percentage. */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/50 pt-2.5 text-[11px] text-muted-foreground">
           <span>Sign-up sent <span className="font-bold tabular-nums text-foreground/90">{stat.signupSent}</span></span>
