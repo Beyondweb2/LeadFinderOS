@@ -31,6 +31,27 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 const PITCH_TEMPLATES = new Set(['audit_reply']);
 /** The sign-up link. */
 const SIGNUP_TEMPLATES = new Set(['onboarding_followup']);
+
+/* ⛔ EVERY TEMPLATE THAT CARRIES THE REPORT LINK — NOT JUST THE PITCH, AND THE DIFFERENCE IS
+   MEASURABLE. Report opens can only be attributed against the moment the link went out, so this
+   set decides both the denominator and which opens count. Taken from the variable registry in
+   _shared/whatsapp-send.ts, where each of these carries a report URL: audit_reply has `url`,
+   audit_result_hook and free_check_result have `audit_url`.
+   ⚠️ IT IS DELIBERATELY WIDER THAN PITCH_TEMPLATES. The first version of this used audit_reply
+   alone, because that is the pitch. Measured against the live table, that was wrong in a way that
+   mattered: links sent 577 -> 653, opened 366 -> 408, and the opens we could not attribute at all
+   fell from 55 to 13 — because most of those "unexplained" opens were leads sent their report by
+   audit_result_hook, which became the outreach hook and never got added here.
+   ⚠️ SO: IF A NEW TEMPLATE EVER CARRIES A REPORT LINK, ADD IT HERE. Forgetting does not throw; it
+   silently moves real prospect opens into the unattributed bucket and understates the rate. */
+const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'audit_result_hook', 'free_check_result']);
+
+/* A minute of slack when comparing an open against the send. The two timestamps come from
+   different systems (Meta's send receipt and our own render), and a prospect who taps the link the
+   instant it arrives can legitimately record an open a few seconds "before" it. Without the slack
+   those genuine opens fall into the operator bucket. */
+const OPEN_ATTRIBUTION_SLACK_MS = 60_000;
+
 /* ⛔ THIS LINE USED TO READ "Paid = payment_received-or-beyond in the forward-only pipeline
    ordering." IT DESCRIBED A CONSTANT THAT NO LONGER EXISTS AND A RULE THAT IS WRONG. `paid` means
    `amount_paid > 0`, everywhere (CLAUDE.md §6) — which is what this file already does, ~170 lines
@@ -75,8 +96,20 @@ export interface CampaignStats {
   paid: number;
   /** Sum of amount_paid, in pounds. */
   moneyIn: number;
+  /** Leads sent a message carrying their report link (REPORT_LINK_TEMPLATES). The denominator for
+   *  report opens: you cannot open a report you were never sent. */
+  reportLinksSent: number;
+  /** Of `reportLinksSent`, leads whose audit was first opened AFTER we sent them the link.
+   *  ⛔ THE "AFTER" IS THE WHOLE POINT — see the fold below for why this is a prospect open and the
+   *  raw open_count is not. */
+  reportOpened: number;
+  /** Audits with opens on leads we never sent a report link to. NOT counted as opens — surfaced so
+   *  the excluded rows are visible rather than quietly dropped. */
+  reportOpensUnattributed: number;
   replyRatePct: number | null;       // replied / reached — null when nothing reached
   pitchReplyRatePct: number | null;  // pitchReplied / pitched — null when nothing pitched
+  /** reportOpened / reportLinksSent — null when no link has been sent. */
+  reportOpenRatePct: number | null;
   /** Of the leads who REPLIED, how many paid — the niche's conversion. null when nobody replied. */
   repliedToPaidPct: number | null;
   /** Of the leads actually REACHED, how many paid — end-to-end. null when nobody reached. */
@@ -90,6 +123,13 @@ interface LeadRow {
 interface MsgRow {
   lead_id: string | null; direction: string | null; template_name: string | null;
   status: string | null; created_at: string; body: string | null;
+}
+/* ai_audits carries the open-tracking written by render-audit-report via the bump_audit_open()
+   RPC: first_opened_at set once (coalesced), open_count incremented. There is no per-open log and
+   no viewer, so only the FIRST open can ever be attributed — which is why the metric below counts
+   AUDITS OPENED (unique prospects) and never the 933 raw opens. */
+interface AuditRow {
+  id: string; lead_id: string | null; open_count: number | null; first_opened_at: string | null;
 }
 
 const pct = (num: number, den: number): number | null =>
@@ -105,6 +145,7 @@ export function useCampaignStats() {
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [messages, setMessages] = useState<MsgRow[]>([]);
   const [startedLeadIds, setStartedLeadIds] = useState<Set<string>>(new Set());
+  const [audits, setAudits] = useState<AuditRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -112,7 +153,7 @@ export function useCampaignStats() {
     setIsLoading(true);
     try {
       const client = supabase as unknown as SupabaseClient;
-      const [leadsRes, msgsRes] = await Promise.all([
+      const [leadsRes, msgsRes, auditsRes] = await Promise.all([
         fetchAllRows<LeadRow>('Campaign stats (leads)', (from, to) =>
           client.from('outreach_leads').select('id, campaign_id, status, amount_paid')
             .eq('is_archived', false).order('id', { ascending: true }).range(from, to)),
@@ -126,9 +167,15 @@ export function useCampaignStats() {
         fetchAllRows<MsgRow>('Campaign stats (messages)', (from, to) =>
           client.from('whatsapp_messages').select('lead_id, direction, template_name, status, created_at, body')
             .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)),
+        /* Report opens. Only the four columns the attribution needs — this table is 870 rows and
+           carries whole audit payloads, so selecting * would pull megabytes for a counter. */
+        fetchAllRows<AuditRow>('Campaign stats (audit opens)', (from, to) =>
+          client.from('ai_audits').select('id, lead_id, open_count, first_opened_at')
+            .order('id', { ascending: true }).range(from, to)),
       ]);
       setLeads(leadsRes.rows);
       setMessages(msgsRes.rows);
+      setAudits(auditsRes.rows);
     } catch (e) {
       console.error('Campaign stats fetch failed (non-blocking):', e);
     }
@@ -160,12 +207,23 @@ export function useCampaignStats() {
     if (arr) arr.push(m); else msgsByLead.set(m.lead_id, [m]);
   }
 
+  /* Audits per lead. A lead can have several (re-audits mint a new row), so the open test below
+     asks whether ANY of them was opened after the link went out. */
+  const auditsByLead = new Map<string, AuditRow[]>();
+  for (const a of audits) {
+    if (!a.lead_id) continue;
+    const arr = auditsByLead.get(a.lead_id);
+    if (arr) arr.push(a); else auditsByLead.set(a.lead_id, [a]);
+  }
+
   // Seed one bucket per campaign, plus an Unassigned bucket.
   const buckets = new Map<string | null, CampaignStats>();
   const seed = (campaign: Campaign | null): CampaignStats => ({
     campaign, leadCount: 0, reached: 0, delivered: 0, read: 0, replied: 0, declined: 0,
     pitched: 0, pitchReplied: 0, signupSent: 0, started: 0, paid: 0, moneyIn: 0,
+    reportLinksSent: 0, reportOpened: 0, reportOpensUnattributed: 0,
     replyRatePct: null, pitchReplyRatePct: null, repliedToPaidPct: null, reachedToPaidPct: null,
+    reportOpenRatePct: null,
     byTemplate: {},
   });
   for (const c of campaigns) buckets.set(c.id, seed(c));
@@ -214,6 +272,36 @@ export function useCampaignStats() {
       if (newestInboundAt && newestInboundAt > lastPitchAt) b.pitchReplied += 1;
     }
 
+    /* ── REPORT OPENED ────────────────────────────────────────────────────────────────────────
+       ⛔ ATTRIBUTED AGAINST THE SEND, WHICH IS THE ONLY THING THAT MAKES THIS NUMBER HONEST. The
+       raw ai_audits.open_count cannot be used: the operator opens the SAME URL as the prospect
+       (LeadDeliveryCockpit and the Inbox both link to findable.live/report/<auditId>), so a preview
+       increments the same counter, and first_opened_at is coalesced so a preview permanently owns
+       the "first open". This tile was REMOVED from the dashboard twice for exactly that reason.
+       ⚠️ AND THE REASON IT COULD COME BACK IS THAT THE PESSIMISM WAS MEASURABLY WRONG. Comparing
+       first_opened_at against the moment the link was sent separates them for every row: measured
+       live 2026-09-04 across 427 opened audits, 371 opened AFTER the send, ONE before, and the
+       rest belonged to leads never sent a link at all. Paul almost never previews via that URL.
+       ⛔ SO AN OPEN ONLY COUNTS IF WE SENT THE LINK FIRST. No link sent means the open is ours (or
+       arrived by a channel we do not track), and it is excluded and surfaced rather than dropped
+       silently — see reportOpensUnattributed.
+       ⚠️ UNIQUE AUDITS OPENED, NEVER open_count. There is no per-open log, so repeat views cannot
+       be attributed; 933 raw opens across 433 audits would be counted as people if summed. */
+    const reportLinks = outTemplated.filter((m) => REPORT_LINK_TEMPLATES.has(m.template_name!));
+    const leadAudits = auditsByLead.get(l.id) ?? [];
+    const openedAudits = leadAudits.filter((a) => (a.open_count ?? 0) > 0 && a.first_opened_at);
+    if (reportLinks.length > 0) {
+      b.reportLinksSent += 1;
+      /* The EARLIEST link send, not the newest. The question is "have they ever opened the report
+         we sent them", so re-sending must not invalidate an open that already happened. */
+      const firstLinkAt = new Date(reportLinks[0].created_at).getTime();
+      if (openedAudits.some((a) => new Date(a.first_opened_at!).getTime() >= firstLinkAt - OPEN_ATTRIBUTION_SLACK_MS)) {
+        b.reportOpened += 1;
+      }
+    } else if (openedAudits.length > 0) {
+      b.reportOpensUnattributed += 1;
+    }
+
     if (outTemplated.some((m) => SIGNUP_TEMPLATES.has(m.template_name!))) b.signupSent += 1;
     if (startedLeadIds.has(l.id)) b.started += 1;
     /* ⛔ BOTH THROUGH isPaidLead, so `paid` and `moneyIn` cannot disagree on the same card — and so
@@ -251,6 +339,7 @@ export function useCampaignStats() {
     b.pitchReplyRatePct = pct(b.pitchReplied, b.pitched);
     b.repliedToPaidPct = pct(b.paid, b.replied);
     b.reachedToPaidPct = pct(b.paid, b.reached);
+    b.reportOpenRatePct = pct(b.reportOpened, b.reportLinksSent);
   }
 
   // Campaigns first (creation order), Unassigned last and only if it has activity.
