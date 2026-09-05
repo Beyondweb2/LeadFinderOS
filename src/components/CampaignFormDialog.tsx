@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { SALE_TYPES, type SaleType } from '@/lib/saleType';
 import { CAMPAIGN_METHOD_OPTIONS } from '@/lib/campaign';
-import { WHATSAPP_TEMPLATES } from '@/types/outreach';
+import { WHATSAPP_TEMPLATES, ALL_WHATSAPP_TEMPLATES, isLegacyTemplate, templateLabel } from '@/types/outreach';
 import { CAMPAIGN_TYPE_OPTIONS, type Campaign, type CampaignInput, type CampaignType } from '@/hooks/useCampaigns';
 
 interface CampaignFormDialogProps {
@@ -56,8 +56,16 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
     setDescription(campaign?.description ?? '');
     setMethod(campaign?.method ?? NO_METHOD);
     setSaleType((campaign?.default_sale_type as SaleType) ?? 'website');
+    /* ⛔ A STORED TEMPLATE THIS PICKER NO LONGER OFFERS IS KEPT, NOT SILENTLY RESET (2026-09-05).
+       WHATSAPP_TEMPLATES shrank to Findable-only when the barber-era entries were split out, and
+       two live campaigns still store booking_switch_barbers. The old line reset any unrecognised
+       value to "Not set", so merely OPENING this dialog and pressing Save would have rewritten
+       their default to null — a data change nobody asked for, made by a dialog they opened to edit
+       something else. It is now kept and shown as legacy; only a genuinely unknown key falls back.
+       ⚠️ This was already the behaviour for any key missing from the list; the split is what would
+       have made it bite. Widening the check to ALL_WHATSAPP_TEMPLATES is the whole fix. */
     const t = campaign?.default_template;
-    setDefaultTemplate(t && WHATSAPP_TEMPLATES.some((o) => o.value === t) ? t : NO_TEMPLATE);
+    setDefaultTemplate(t && ALL_WHATSAPP_TEMPLATES.some((o) => o.value === t) ? t : NO_TEMPLATE);
     /* ⛔ VALIDATED AGAINST TRADES, so a slug removed from trades.ts shows as "not set" rather than
        as a value the picker cannot display. */
     const ts = campaign?.trade_slug;
@@ -69,9 +77,10 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
   const handleSave = async () => {
     if (!name.trim()) return;
     setSaving(true);
-    // Constrain to a WHATSAPP_TEMPLATES key or null (matches the edge allowlist), same
-    // as method / sale type are constrained to their option sets.
-    const templateValid = defaultTemplate !== NO_TEMPLATE && WHATSAPP_TEMPLATES.some((o) => o.value === defaultTemplate);
+    // Constrain to a known template key or null (matches the edge allowlist), same as method /
+    // sale type are constrained to their option sets. ALL_ rather than the sendable list, so
+    // saving an old barber campaign preserves the template it already had.
+    const templateValid = defaultTemplate !== NO_TEMPLATE && ALL_WHATSAPP_TEMPLATES.some((o) => o.value === defaultTemplate);
     const result = await onSubmit({
       name,
       description,
@@ -194,6 +203,11 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, onSubmit }: C
                 {WHATSAPP_TEMPLATES.map((t) => (
                   <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                 ))}
+                {/* Only when this campaign ALREADY stores a legacy template: the option exists so
+                    the picker can display what is saved, never to offer it as a new choice. */}
+                {isLegacyTemplate(defaultTemplate) && (
+                  <SelectItem value={defaultTemplate}>{templateLabel(defaultTemplate)} (legacy)</SelectItem>
+                )}
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground/60 mt-1">Leads in this campaign default to this template in manage-sites; you can still change it per send.</p>

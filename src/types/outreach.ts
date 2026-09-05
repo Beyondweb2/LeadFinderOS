@@ -357,15 +357,27 @@ export function canonicalFilterValue(value: StatusFilterValue): StatusFilterValu
     .find((o) => o.value === value || o.statuses.includes(value as LeadStatus))?.value ?? value;
 }
 
-/** Approved WhatsApp outreach templates (Meta). value = template name; both carry
- *  {{1}} business name + {{2}} claim URL. Keep in sync with the edge function's
- *  TEMPLATES allowlist in process-whatsapp-queue. */
+/* ⛔ TWO LISTS NOW, AND THE SPLIT IS THE POINT (2026-09-05, Paul: strip the barber-era leftovers).
+   WHATSAPP_TEMPLATES is what an operator may CHOOSE TO SEND — Findable only. LEGACY_WHATSAPP_
+   TEMPLATES is the old barber-sites product: still sent 71 times historically, so its rows must
+   still be LABELLED, but it must never again be offered in a send picker for a product we do not
+   sell. Presence in a picker is a decision about the future; presence in the label map is a fact
+   about the past, and conflating them is why booking_page_intro was the DEFAULT-SELECTED template
+   on two send screens (both already carry a comment about that hazard).
+   ⚠️ 70 of those 71 sends are on ARCHIVED leads, so almost nothing surfaces — but "almost" is
+   why the label map exists rather than a deletion.
+   ⚠️ AND THE SEND PICKERS ARE NOT THE ONLY CONSUMER: CampaignFormDialog VALIDATES a stored
+   default_template against this list. Two barber campaigns still store booking_switch_barbers, so
+   that dialog now preserves an unrecognised stored value instead of silently resetting it — see
+   the note there. Shrinking an allowlist that something validates against is how a value gets
+   quietly rewritten to null on the next save.
+   ⚠️ AdminSiteManage (the old barber-site admin page) deliberately keeps the FULL list via
+   ALL_WHATSAPP_TEMPLATES: it is the one screen whose job IS that product, and taking its templates
+   away would break a working page rather than tidy it. */
+
+/** Approved WhatsApp outreach templates (Meta) an operator may send. Findable only.
+ *  Keep in sync with the edge function's TEMPLATES allowlist in process-whatsapp-queue. */
 export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
-  { value: 'booking_page_intro', label: 'Booking page intro' },
-  { value: 'no_website_barbers', label: 'Free website intro' },
-  { value: 'barber_poor_website', label: 'Updated website intro' },
-  { value: 'booking_switch_barbers', label: 'Booking switch (no commission)' },
-  { value: 'barber_fresha_booksy', label: 'Fresha/Booksy switch' },
   { value: 'initial_contact', label: 'Initial contact (opener)' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
   { value: 'audit_result_hook', label: 'Audit result hook (outreach)' },
@@ -381,6 +393,51 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      and audit_reply carries four. Left as-is rather than rewritten mid-task, but do not trust it. */
   { value: 're_engage', label: 'Re-engage (gone quiet)' },
 ];
+
+/** The old barber-sites product. NOT sendable — label-only, so historic rows read as words rather
+ *  than raw keys and can be marked as what they are. */
+export const LEGACY_WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
+  { value: 'booking_page_intro', label: 'Booking page intro' },
+  { value: 'no_website_barbers', label: 'Free website intro' },
+  { value: 'barber_poor_website', label: 'Updated website intro' },
+  { value: 'booking_switch_barbers', label: 'Booking switch (no commission)' },
+  { value: 'barber_fresha_booksy', label: 'Fresha/Booksy switch' },
+  { value: 'free_website_intro', label: 'Free website intro (early)' },
+];
+
+/* ⚠️ FINDABLE TEMPLATES THAT ARE SENT BY THE SERVER AND MUST NOT BE HAND-SENDABLE. Each has real
+   rows in whatsapp_messages and, before this list existed, printed on the dashboard as its raw key:
+   hook_followup (9 sends), payment_recieved (2 — and that misspelling is the LIVE template name at
+   Meta, do not "fix" it here), free_check_result (1). They are labels only, deliberately absent
+   from WHATSAPP_TEMPLATES: payment_recieved fires from stripe-webhook on payment, free_check_result
+   from the free-check flow, hook_followup from its own queue. An operator sending one by hand would
+   be claiming something the system has not done. */
+const SERVER_ONLY_TEMPLATE_LABELS: Record<string, string> = {
+  hook_followup: 'Hook follow-up (chase the hook)',
+  payment_recieved: 'Payment received',
+  free_check_result: 'Free check result',
+};
+
+/** Every template that can appear anywhere, for pickers that legitimately span both products. */
+export const ALL_WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
+  ...WHATSAPP_TEMPLATES,
+  ...LEGACY_WHATSAPP_TEMPLATES,
+];
+
+const LEGACY_TEMPLATE_VALUES = new Set(LEGACY_WHATSAPP_TEMPLATES.map((t) => t.value));
+
+/** True for a template belonging to the old barber-sites product. */
+export const isLegacyTemplate = (name: string): boolean => LEGACY_TEMPLATE_VALUES.has(name);
+
+const TEMPLATE_LABELS: Record<string, string> = {
+  ...Object.fromEntries(ALL_WHATSAPP_TEMPLATES.map((t) => [t.value, t.label])),
+  ...SERVER_ONLY_TEMPLATE_LABELS,
+};
+
+/** A readable name for any template ever sent. Falls back to the raw key, which is the honest
+ *  answer for a template nobody has registered here yet — never a blank and never "Unknown", both
+ *  of which hide that a real message went out. */
+export const templateLabel = (name: string): string => TEMPLATE_LABELS[name] ?? name;
 
 // Contact method options (how the business was contacted)
 export type ContactMethod = 'call' | 'sms' | 'whatsapp' | 'facebook_msg' | 'email';
