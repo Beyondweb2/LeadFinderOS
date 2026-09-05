@@ -7,7 +7,7 @@ import { looksAutomated, isDecline } from '@/lib/inboundClassify';
 import { isRealSend } from '@/lib/realSend';
 import { isPaidLead } from '@/lib/leadPayment';
 import { fetchAllRows } from '@/lib/fetchAllRows';
-import { creditRepliesByTemplate, creditOpenToTemplate, OPEN_ATTRIBUTION_SLACK_MS } from '@/lib/templateAttribution';
+import { creditRepliesByTemplate, creditOpenToTemplate, creditEventToTemplate, OPEN_ATTRIBUTION_SLACK_MS } from '@/lib/templateAttribution';
 
 /* ============================================================
    CAMPAIGN METRICS, DERIVED FROM MESSAGES
@@ -47,6 +47,18 @@ const SIGNUP_TEMPLATES = new Set(['onboarding_followup']);
    silently moves real prospect opens into the unattributed bucket and understates the rate. */
 const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'audit_result_hook', 'free_check_result']);
 
+/* ⛔ THE DAY PAGE-HIT LOGGING WENT LIVE. Every site-visit rate is measured from here, because a
+   send that predates it had no way to be counted and would drag its template's rate to a meaningless
+   0%. Set once, when findable-onboarding's prefill hook was deployed — do not "refresh" it, and do
+   not derive it from the earliest row in the table: an empty first week would then silently move the
+   start date forward and inflate every rate. */
+const SITE_TRACKING_START = Date.parse('2026-09-05T00:00:00Z');
+
+/* A questionnaire submission whose source is the FREE CHECK form is not a sign-up start. 12 of the
+   22 onboarding rows on file are free checks (measured 2026-09-05), and counting them credited our
+   outreach with people who found the website on their own. */
+const FREE_CHECK_SOURCE = 'free_check';
+
 /* ⛔ THIS LINE USED TO READ "Paid = payment_received-or-beyond in the forward-only pipeline
    ordering." IT DESCRIBED A CONSTANT THAT NO LONGER EXISTS AND A RULE THAT IS WRONG. `paid` means
    `amount_paid > 0`, everywhere (CLAUDE.md §6) — which is what this file already does, ~170 lines
@@ -78,6 +90,18 @@ export interface TemplateStats {
   reportLinksSent: number;
   /** Of `reportLinksSent`, leads whose report was first opened after THIS template sent the link. */
   reportOpened: number;
+  /* ── THE CLICK FUNNEL ──────────────────────────────────────────────────────────────
+     ⛔ `sentSinceTracking` IS THE DENOMINATOR FOR siteVisits AND IT IS NOT THE SAME AS `leads`.
+     Page-hit logging began on SITE_TRACKING_START; a template sent 400 times BEFORE that date could
+     not have produced a single recorded visit, so dividing by its lifetime sends would print a
+     confident 0% for a message that was never measured. Rates over an unmeasured period are the
+     fake zeros this card exists to avoid. */
+  sentSinceTracking: number;
+  /** Of `sentSinceTracking`, leads who then landed on the sign-up page. */
+  siteVisits: number;
+  /** Leads who SUBMITTED the questionnaire after this template. Free-check form submissions are
+   *  excluded — they are a different form, reached from the website rather than driven by us. */
+  signupStarted: number;
 }
 
 export interface CampaignStats {
@@ -139,6 +163,10 @@ interface MsgRow {
 interface AuditRow {
   id: string; lead_id: string | null; open_count: number | null; first_opened_at: string | null;
 }
+/** One recorded landing on the sign-up page. Written by findable-onboarding's prefill hook. */
+interface HitRow { lead_id: string | null; created_at: string }
+/** A questionnaire submission, from the submissions endpoint (the table is RLS-no-policy). */
+interface StartedRow { lead_id: string | null; created_at: string; source: string | null }
 
 const pct = (num: number, den: number): number | null =>
   den > 0 ? Math.round((num / den) * 100) : null;
@@ -152,7 +180,11 @@ export function useCampaignStats() {
   const { campaigns, isLoading: campaignsLoading } = useCampaigns();
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [messages, setMessages] = useState<MsgRow[]>([]);
-  const [startedLeadIds, setStartedLeadIds] = useState<Set<string>>(new Set());
+  const [startedRows, setStartedRows] = useState<StartedRow[]>([]);
+  const [hits, setHits] = useState<HitRow[]>([]);
+  /* ⛔ THREE STATES, NOT TWO: tracking can be UNAVAILABLE (the table is not there yet), or live
+     with genuinely no visits. Rendering both as 0% would be the fake zero this card refuses. */
+  const [siteTrackingReady, setSiteTrackingReady] = useState(false);
   const [audits, setAudits] = useState<AuditRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -188,6 +220,24 @@ export function useCampaignStats() {
       console.error('Campaign stats fetch failed (non-blocking):', e);
     }
 
+    /* ── SITE VISITS ─────────────────────────────────────────────────────────────────
+       ⛔ A FAILURE HERE MUST MEAN "UNKNOWN", NEVER "ZERO VISITS". Until the SQL is run the table
+       does not exist and PostgREST answers 404/PGRST205; owner RLS could also (in the failure this
+       project keeps hitting) answer 200 with an empty array. Only an ACTUAL SUCCESSFUL READ sets
+       siteTrackingReady, so the card can say "not tracked yet" instead of printing 0% against every
+       template — which would read as "nobody clicked" and is the opposite of the truth. */
+    try {
+      const client = supabase as unknown as SupabaseClient;
+      const res = await fetchAllRows<HitRow>('Campaign stats (page hits)', (from, to) =>
+        client.from('lead_page_hits').select('lead_id, created_at')
+          .order('id', { ascending: true }).range(from, to));
+      setHits(res.rows);
+      setSiteTrackingReady(true);
+    } catch (e) {
+      setSiteTrackingReady(false);
+      console.warn('Site-visit tracking unavailable (shows as not tracked):', e instanceof Error ? e.message : e);
+    }
+
     /* Questionnaire starts — THROUGH THE submissions ENDPOINT. The old direct read of
        onboarding_responses hit RLS-with-no-policies and returned 200 [] for every browser session,
        so `started` was structurally 0 on every campaign card since the day it shipped (proven live
@@ -196,8 +246,7 @@ export function useCampaignStats() {
     try {
       const { data: res, error } = await supabase.functions.invoke('submissions', { body: { action: 'lead_statuses' } });
       if (error || !res?.ok) throw new Error(error?.message ?? res?.error ?? 'lead_statuses failed');
-      const rows = (res.rows ?? []) as { lead_id: string | null }[];
-      setStartedLeadIds(new Set(rows.map((r) => r.lead_id).filter((v): v is string => !!v)));
+      setStartedRows((res.rows ?? []) as StartedRow[]);
     } catch (e) {
       console.warn('Onboarding starts unavailable (started shows 0):', e instanceof Error ? e.message : e);
     }
@@ -217,6 +266,25 @@ export function useCampaignStats() {
 
   /* Audits per lead. A lead can have several (re-audits mint a new row), so the open test below
      asks whether ANY of them was opened after the link went out. */
+  /* Earliest recorded landing per lead. Earliest, not latest: the question a template is credited
+     with is "did this message get them to the site", and a later return visit does not un-happen it. */
+  const firstHitByLead = new Map<string, number>();
+  for (const h of hits) {
+    if (!h.lead_id) continue;
+    const t = Date.parse(h.created_at);
+    const cur = firstHitByLead.get(h.lead_id);
+    if (cur === undefined || t < cur) firstHitByLead.set(h.lead_id, t);
+  }
+
+  /* Questionnaire submissions per lead. Free-check rows are kept in `startedByLead` (the
+     campaign-level count wants them) and filtered out of the per-template credit below. */
+  const startedByLead = new Map<string, StartedRow[]>();
+  for (const r of startedRows) {
+    if (!r.lead_id) continue;
+    const arr = startedByLead.get(r.lead_id);
+    if (arr) arr.push(r); else startedByLead.set(r.lead_id, [r]);
+  }
+
   const auditsByLead = new Map<string, AuditRow[]>();
   for (const a of audits) {
     if (!a.lead_id) continue;
@@ -246,6 +314,7 @@ export function useCampaignStats() {
     leads: Set<string>; delivered: Set<string>; read: Set<string>;
     replied: Set<string>; repliedAmbiguous: Set<string>;
     reportLinksSent: Set<string>; reportOpened: Set<string>;
+    sentSinceTracking: Set<string>; siteVisits: Set<string>; signupStarted: Set<string>;
   };
   const tmplSets = new Map<string | null, Map<string, TmplSets>>();
 
@@ -316,7 +385,11 @@ export function useCampaignStats() {
     }
 
     if (outTemplated.some((m) => SIGNUP_TEMPLATES.has(m.template_name!))) b.signupSent += 1;
-    if (startedLeadIds.has(l.id)) b.started += 1;
+    /* Campaign-level `started` keeps counting EVERY submission including free checks: at campaign
+       level the question is "did anyone fill anything in", and the free-check form is a real signal
+       of interest. The PER-TEMPLATE figure is the one that excludes them, because there it would be
+       crediting a template with a visitor who arrived on their own. */
+    if (startedByLead.has(l.id)) b.started += 1;
     /* ⛔ BOTH THROUGH isPaidLead, so `paid` and `moneyIn` cannot disagree on the same card — and so
        a REFUNDED customer leaves the count and the "£X in" figure TOGETHER. Summing the amount
        independently of the count is exactly how a refund would have stayed in the money while
@@ -333,7 +406,8 @@ export function useCampaignStats() {
       if (!sets) {
         sets = { leads: new Set(), delivered: new Set(), read: new Set(),
                  replied: new Set(), repliedAmbiguous: new Set(),
-                 reportLinksSent: new Set(), reportOpened: new Set() };
+                 reportLinksSent: new Set(), reportOpened: new Set(),
+                 sentSinceTracking: new Set(), siteVisits: new Set(), signupStarted: new Set() };
         byT!.set(tmpl, sets);
       }
       return sets;
@@ -344,6 +418,9 @@ export function useCampaignStats() {
       if (isDeliveredStatus(m.status)) sets.delivered.add(l.id);
       if (m.status === 'read') sets.read.add(l.id);
       if (REPORT_LINK_TEMPLATES.has(m.template_name!)) sets.reportLinksSent.add(l.id);
+      /* The measurable denominator for site visits: only sends that happened while the hook that
+         records a landing was actually running. */
+      if (Date.parse(m.created_at) >= SITE_TRACKING_START) sets.sentSinceTracking.add(l.id);
     }
 
     /* ── PER-TEMPLATE REPLY AND OPEN ─────────────────────────────────────────────
@@ -365,6 +442,40 @@ export function useCampaignStats() {
       : null;
     const openCredit = creditOpenToTemplate(ms, REPORT_LINK_TEMPLATES, firstOpenAt);
     if (openCredit) setsFor(openCredit).reportOpened.add(l.id);
+
+    /* ── SITE VISIT ────────────────────────────────────────────────────────────────
+       ⚠️ NO restrictTo, UNLIKE THE REPORT OPEN. A report open can only belong to a template that
+       carried a report link; a site visit can follow ANY message — they may have tapped the report
+       link and then the offer button, or an onboarding link, or gone to the site after reading the
+       opener. Last touch answers the only question available: which message was in front of them.
+       ⚠️ A visit with NO send before it earns nothing (creditEventToTemplate returns null). Those
+       are people who found the site themselves; crediting them to a later template would invent a
+       click out of a coincidence. */
+    const visitCredit = creditEventToTemplate(ms, firstHitByLead.get(l.id) ?? null);
+    /* ⛔ THE NUMERATOR IS GATED BY THE SAME WINDOW AS THE DENOMINATOR, OR THE RATE CAN EXCEED
+       100%. Caught before shipping: a lead sent audit_reply LAST MONTH who lands on the site
+       tomorrow is credited to audit_reply, but that send is not in `sentSinceTracking` (it predates
+       the hook), so the visit would have been divided by a denominator it was never part of.
+       Requiring the credited lead to be in that template's tracked-send set makes the numerator a
+       subset of the denominator by construction rather than by arithmetic that happens to agree. */
+    if (visitCredit && setsFor(visitCredit).sentSinceTracking.has(l.id)) {
+      setsFor(visitCredit).siteVisits.add(l.id);
+    }
+
+    /* ── SIGN-UP STARTED ──────────────────────────────────────────────────────────
+       ⛔ "STARTED" IS A SUBMISSION, NOT A PAGE VIEW, AND THE LABEL MUST NOT PRETEND OTHERWISE. An
+       onboarding_responses row is written by exactly one thing: action:"submit" (the finish button
+       or the bail-out). Landing on the questionnaire writes nothing — that is what the site-visit
+       column above now covers. The two together are the funnel; either alone is half of it.
+       ⚠️ Free-check submissions are excluded HERE and only here. They are a different form on the
+       website, so crediting one to a template would credit outreach with a visitor who arrived on
+       their own. The campaign-level `started` above deliberately still counts them. */
+    const firstStart = (startedByLead.get(l.id) ?? [])
+      .filter((r) => r.source !== FREE_CHECK_SOURCE)
+      .map((r) => Date.parse(r.created_at))
+      .sort((a, z) => a - z)[0];
+    const startCredit = creditEventToTemplate(ms, firstStart ?? null);
+    if (startCredit) setsFor(startCredit).signupStarted.add(l.id);
   }
 
   for (const [key, byT] of tmplSets) {
@@ -374,6 +485,8 @@ export function useCampaignStats() {
         leads: sets.leads.size, delivered: sets.delivered.size, read: sets.read.size,
         replied: sets.replied.size, repliedAmbiguous: sets.repliedAmbiguous.size,
         reportLinksSent: sets.reportLinksSent.size, reportOpened: sets.reportOpened.size,
+        sentSinceTracking: sets.sentSinceTracking.size, siteVisits: sets.siteVisits.size,
+        signupStarted: sets.signupStarted.size,
       };
     }
   }
@@ -394,5 +507,8 @@ export function useCampaignStats() {
   const unassigned = buckets.get(null);
   if (unassigned && (unassigned.leadCount > 0 || unassigned.reached > 0)) stats.push(unassigned);
 
-  return { stats, isLoading: isLoading || campaignsLoading, refetch: fetchData };
+  /* siteTrackingReady travels with the stats so the card can tell "no visits" from "no tracking".
+     Deriving it in the component from `siteVisits === 0` would be exactly the conflation the flag
+     exists to prevent. */
+  return { stats, siteTrackingReady, isLoading: isLoading || campaignsLoading, refetch: fetchData };
 }

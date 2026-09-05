@@ -202,9 +202,40 @@ Deno.serve(async (req) => {
            bookkeeping: `lead.derived_town` on a row that never fetched the column is undefined, so
            the precedence below would have fallen straight through to search_location and the change
            would have looked applied while doing nothing. Verified present on outreach_leads. */
-        .select("id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid")
+        /* ⚠️ user_id IS SELECTED FOR THE PAGE-HIT LOG BELOW, nothing else reads it here. It is
+           copied onto the hit row because lead_page_hits is owner-scoped by RLS — without it the
+           dashboard read would return an empty array rather than an error, which is this project's
+           most expensive recurring failure. */
+        .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid")
         .eq("id", leadId).maybeSingle();
       if (!lead) return json({ ok: false, error: "unknown_lead" }, 404);
+
+      /* ── THE PAGE HIT ───────────────────────────────────────────────────────────
+         ⛔ THIS IS THE ONLY RECORD ANYWHERE THAT A PROSPECT REACHED THE SITE. Report opens are on
+         ai_audits, questionnaire SUBMISSIONS are onboarding_responses rows — the landing between
+         them was invisible, so no template could ever be credited with driving a click. prefill is
+         the right hook because it is called once per page load with the lead id from ?lead=, and it
+         is a read: nothing else about this request changes.
+
+         ⛔ IT IS LOGGED BEFORE THE already_client GATE, DELIBERATELY. A paid customer returning to
+         the page is still a real visit, and gating the log on the response would make the metric
+         mean "visits by people who had not yet paid" while being labelled "visits".
+
+         ⚠️ FIRE-AND-FORGET, AND IT CAN NEVER FAIL THE REQUEST. Wrapped so that a missing table (the
+         SQL not yet run), an RLS surprise or any Postgres error costs nothing: the visitor still
+         gets their prefill. Deploy order therefore does not matter — before the SQL runs this is a
+         silent no-op, after it the rows simply start appearing.
+         ⚠️ ONE ROW PER PAGE LOAD, NOT PER VISITOR. A reload writes a second row on purpose: every
+         consumer counts DISTINCT LEADS, so duplicates cost nothing, and deduping here would need a
+         read on the hot path to save a few bytes. */
+      try {
+        await service.from("lead_page_hits").insert({
+          lead_id: lead.id,
+          user_id: (lead as Record<string, unknown>).user_id,
+          page: "onboarding",
+        });
+      } catch { /* never blocks the prefill — see above */ }
+
       if (PAID_OR_BEYOND.has(lead.status as string) || ((lead.amount_paid as number) ?? 0) > 0) {
         return json({ ok: false, error: "already_client" }, 403);
       }
