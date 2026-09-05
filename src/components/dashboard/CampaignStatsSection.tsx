@@ -34,7 +34,7 @@ function saveHidden(ids: Set<string>): void {
  * the campaign itself is untouched) with a "Show hidden (N)" reveal.
  */
 export function CampaignStatsSection() {
-  const { stats, isLoading, refetch } = useCampaignStats();
+  const { stats, isLoading, refetch, siteTrackingReady } = useCampaignStats();
   const { updateCampaign } = useCampaigns();
   const [editing, setEditing] = useState<Campaign | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -82,7 +82,7 @@ export function CampaignStatsSection() {
     <>
       <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((s) => (
-          <CampaignStatsCard key={keyOf(s)} stat={s} onEdit={handleEdit} onToggleHide={toggleHide} />
+          <CampaignStatsCard key={keyOf(s)} stat={s} onEdit={handleEdit} onToggleHide={toggleHide} siteTrackingReady={siteTrackingReady} />
         ))}
       </div>
 
@@ -99,7 +99,7 @@ export function CampaignStatsSection() {
           {showHidden && (
             <div className="mt-3 grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 opacity-70">
               {hidden.map((s) => (
-                <CampaignStatsCard key={keyOf(s)} stat={s} onEdit={handleEdit} onToggleHide={toggleHide} hidden />
+                <CampaignStatsCard key={keyOf(s)} stat={s} onEdit={handleEdit} onToggleHide={toggleHide} hidden siteTrackingReady={siteTrackingReady} />
               ))}
             </div>
           )}

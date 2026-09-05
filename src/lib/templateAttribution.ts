@@ -115,11 +115,35 @@ export function creditOpenToTemplate(
   reportTemplates: ReadonlySet<string>,
   firstOpenedAt: number | null,
 ): string | null {
-  if (firstOpenedAt === null) return null;
+  return creditEventToTemplate(msgs, firstOpenedAt, reportTemplates);
+}
+
+/**
+ * Credit a dated EVENT (a site visit, a questionnaire submission, a report open) to the newest real
+ * templated send that preceded it.
+ *
+ * `restrictTo` narrows the candidates — a report open can only belong to a template that carried a
+ * report link. Omit it and ANY template can take the credit, which is right for a site visit: a
+ * prospect who lands on the sign-up page may have got there from the report link, from an
+ * onboarding link, or by typing the address after reading any message at all. Last touch is the
+ * honest answer to "which message was in front of them when they went".
+ *
+ * ⛔ RETURNS null WHEN NOTHING PRECEDED THE EVENT, AND THAT IS NOT THE SAME AS ZERO. A visit with
+ * no send before it was not driven by outreach; crediting it to whatever template came LATER would
+ * invent a click. Callers must keep those out of the numerator rather than defaulting them
+ * somewhere convenient.
+ */
+export function creditEventToTemplate(
+  msgs: AttributableMsg[],
+  atMs: number | null,
+  restrictTo?: ReadonlySet<string>,
+): string | null {
+  if (atMs === null) return null;
   let credited: string | null = null;
   for (const m of msgs) {
-    if (!isTemplatedSend(m) || !reportTemplates.has(m.template_name!)) continue;
-    if (new Date(m.created_at).getTime() - OPEN_ATTRIBUTION_SLACK_MS <= firstOpenedAt) {
+    if (!isTemplatedSend(m)) continue;
+    if (restrictTo && !restrictTo.has(m.template_name!)) continue;
+    if (new Date(m.created_at).getTime() - OPEN_ATTRIBUTION_SLACK_MS <= atMs) {
       credited = m.template_name!;   // keep walking: the NEWEST qualifying send wins
     }
   }

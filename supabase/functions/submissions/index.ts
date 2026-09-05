@@ -101,7 +101,12 @@ Deno.serve(async (req) => {
     if (body.action === "lead_statuses") {
       const { data: rows, error: lsErr } = await service
         .from("onboarding_responses")
-        .select("lead_id, status, created_at")
+        /* ⚠️ source IS SELECTED SO THE DASHBOARD CAN TELL TWO DIFFERENT FORMS APART. A
+           source='free_check' row is the FREE CHECK form on findable.live, not the sign-up
+           questionnaire — 12 of the 22 rows on file are those. Counting them as questionnaire
+           starts (which is what the campaign card did) conflates an inbound website visitor with a
+           prospect our outreach drove to sign up. */
+        .select("lead_id, status, created_at, source")
         .not("lead_id", "is", null)
         .order("created_at", { ascending: true })
         .limit(2000);

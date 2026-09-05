@@ -67,21 +67,28 @@ function Cell({ rate, detail, title, muted = false }: {
   rate: string; detail?: string | null; title?: string; muted?: boolean;
 }) {
   return (
-    <td className="py-1 pl-2 text-right align-top tabular-nums" title={title}>
+    /* ⚠️ whitespace-nowrap ON THE CELL, and the table scrolls instead. Without it "none sent
+       since" wrapped to three lines and dragged every row in the table to that height, which made a
+       five-row table look like a wall. Horizontal scroll inside the card is the cheaper trade. */
+    <td className="whitespace-nowrap py-1 pl-2 text-right align-top tabular-nums" title={title}>
       <span className={muted ? 'text-muted-foreground/50' : 'font-semibold text-foreground/90'}>{rate}</span>
       {detail && <span className="block text-[10px] leading-tight text-muted-foreground/60">{detail}</span>}
     </td>
   );
 }
 
-function TemplateRow({ name, t }: { name: string; t: TemplateStats }) {
+function TemplateRow({ name, t, siteTrackingReady }: { name: string; t: TemplateStats; siteTrackingReady: boolean }) {
   const legacy = isLegacyTemplate(name);
   /* A template that has never carried a report link has no open rate to have. "—" says that; 0%
      would claim we sent reports through it and nobody opened them. */
   const carriesReport = t.reportLinksSent > 0;
   return (
     <tr className="border-t border-border/30">
-      <th scope="row" className="max-w-0 py-1 pr-2 text-left font-medium">
+      {/* ⚠️ min-w, NOT max-w-0. The first draft let the label column collapse, and at a normal card
+          width "Audit reply" and "Audit result hook" BOTH truncated to "Audit re…" — the two
+          templates this table exists to compare, rendered indistinguishable. The table scrolls
+          horizontally inside the card, so the space costs nothing. */}
+      <th scope="row" className="min-w-[132px] py-1 pr-2 text-left font-medium">
         <span className="block truncate text-[11px] text-foreground/90" title={name}>
           {templateLabel(name)}
         </span>
@@ -116,14 +123,36 @@ function TemplateRow({ name, t }: { name: string; t: TemplateStats }) {
             detail={`${t.reportOpened} of ${t.reportLinksSent}`}
             title="Leads who opened the audit report AFTER this template sent them the link. Your own previews are excluded because they predate the send; unique leads, never total views." />
         : <Cell rate="—" muted title="This template carries no report link, so there is no open rate to measure. Not zero — nothing to count." />}
-      <Cell rate="—" muted
-        title="Website clicks are not tracked yet: there is no click-logging table or redirect endpoint, so nobody can say whether a link was followed. Shown as unknown rather than 0, which would read as 'nobody clicked'." />
+      {/* ── SITE VISITS ──────────────────────────────────────────────────────────────────────
+          ⛔ THREE OUTCOMES, THREE DIFFERENT MARKS, BECAUSE THEY ARE THREE DIFFERENT FACTS:
+            · tracking not available at all → "—" + "not tracked"
+            · tracking live but this template has not been sent since it started → "—" + "not sent since"
+            · tracking live and the template has been sent → a real rate, 0% included
+          The middle one is the subtle one and the reason sentSinceTracking exists: audit_reply has
+          577 lifetime sends, nearly all of them before any landing could be recorded, so dividing by
+          the lifetime figure would print ~0% for a template nobody has measured. */}
+      {!siteTrackingReady
+        ? <Cell rate="—" muted detail="not tracked"
+            title="Landing on the sign-up page is not being recorded yet — the lead_page_hits table has not been created. Shown as unknown rather than 0, which would read as 'nobody clicked'." />
+        : t.sentSinceTracking === 0
+          ? <Cell rate="—" muted detail="none sent since"
+              title="This template has not been sent since visit tracking started, so there is nothing it could have been measured on. Its older sends predate the tracking and cannot be counted either way." />
+          : <Cell rate={pct(t.siteVisits, t.sentSinceTracking)}
+              detail={`${t.siteVisits} of ${t.sentSinceTracking}`}
+              title="Leads who landed on the sign-up page after this message, out of those sent it since tracking began. Credited to the newest message before the visit; a visitor with no message before them earns no template any credit." />}
+      {/* Sign-up is a SUBMISSION, and unlike visits it has always been recorded, so its denominator
+          is the template's full send count and a 0% here is a real measured zero. */}
+      <Cell rate={pct(t.signupStarted, t.leads)}
+        detail={t.signupStarted > 0 ? `${t.signupStarted} started` : null}
+        title="Leads who submitted the questionnaire after this message. A submission, not a page view — landing on the form is the Site column. Free-check form submissions are excluded: that is a different form, reached from the website rather than driven by this message." />
     </tr>
   );
 }
 
-export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide }: {
+export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide, siteTrackingReady = false }: {
   stat: CampaignStats;
+  /** False until a real read of lead_page_hits succeeds — see the Site column. */
+  siteTrackingReady?: boolean;
   onEdit?: (s: CampaignStats) => void;
   /** True when this card is currently hidden (rendered via "Show hidden"). */
   hidden?: boolean;
@@ -228,27 +257,29 @@ export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide }
             </button>
             {expanded && (
               <div className="mt-1.5 overflow-x-auto">
-                <table className="w-full min-w-[360px] border-collapse text-[11px]">
+                <table className="w-full min-w-[500px] border-collapse text-[11px]">
                   <thead>
                     <tr className="text-[9px] uppercase tracking-wide text-muted-foreground/60">
                       <th scope="col" className="pb-1 pr-2 text-left font-medium">Message</th>
-                      <th scope="col" className="pb-1 pl-2 text-right font-medium">Sent</th>
-                      <th scope="col" className="pb-1 pl-2 text-right font-medium">Read</th>
-                      <th scope="col" className="pb-1 pl-2 text-right font-medium">Replied</th>
-                      <th scope="col" className="pb-1 pl-2 text-right font-medium">Report</th>
-                      <th scope="col" className="pb-1 pl-2 text-right font-medium" title="Not tracked yet — no click logging exists.">Clicks</th>
+                      <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-medium">Sent</th>
+                      <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-medium">Read</th>
+                      <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-medium">Replied</th>
+                      <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-medium">Report</th>
+                      <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-medium" title="Landed on the sign-up page after this message.">Site</th>
+                      <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-medium" title="Submitted the questionnaire after this message.">Sign-up</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {templateRows.map(([key, t]) => <TemplateRow key={key} name={key} t={t} />)}
+                    {templateRows.map(([key, t]) => <TemplateRow key={key} name={key} t={t} siteTrackingReady={siteTrackingReady} />)}
                   </tbody>
                 </table>
                 {/* ⚠️ SAID ONCE, PLAINLY, RATHER THAN AS A 0 IN EVERY ROW. The whole Clicks column is
                     unknown, so stating it once under the table is honest and quiet; a per-row "0"
                     would be a measurement nobody has taken. */}
                 <p className="pt-1.5 text-[10px] leading-snug text-muted-foreground/50">
-                  Clicks aren’t tracked yet — links carry no click logging, so a follow can’t be
-                  counted either way.
+                  {siteTrackingReady
+                    ? 'Site = landed on the sign-up page; Sign-up = submitted it. Both credited to the message sent most recently before it.'
+                    : 'Site visits aren’t being recorded yet, so that column reads as unknown rather than zero.'}
                   {stat.reportOpensUnattributed > 0 && (
                     <> {stat.reportOpensUnattributed} report open
                       {stat.reportOpensUnattributed === 1 ? ' was' : 's were'} on leads never sent a
