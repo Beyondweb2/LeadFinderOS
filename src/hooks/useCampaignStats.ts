@@ -51,8 +51,17 @@ const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'audit_result_hook', 'free
    send that predates it had no way to be counted and would drag its template's rate to a meaningless
    0%. Set once, when findable-onboarding's prefill hook was deployed — do not "refresh" it, and do
    not derive it from the earliest row in the table: an empty first week would then silently move the
-   start date forward and inflate every rate. */
-const SITE_TRACKING_START = Date.parse('2026-09-05T00:00:00Z');
+   start date forward and inflate every rate.
+   ⚠️ IT IS THE MIDNIGHT AFTER THE DEPLOY, NOT THE DEPLOY MINUTE, AND THAT IS THE CONSERVATIVE
+   DIRECTION ON PURPOSE. The hook went live mid-afternoon on 2026-09-05 with the table not yet
+   created, so part of that day's sends could not have produced a hit however fast the SQL was run.
+   Counting them would divide real sends by a period the tracking was not running and print a low
+   rate on day one — the first number anyone looks at. Excluding the partial day costs one day of
+   history and buys a figure that is right from the moment it first appears. The card shows
+   "none sent since" until a template is sent inside the tracked window, which is the honest state.
+   ⚠️ London is UTC+1 in September and the outreach window is 07:00–21:30 London, so a UTC-midnight
+   boundary lands over an hour before any send day begins. No day is ever split by it. */
+const SITE_TRACKING_START = Date.parse('2026-09-06T00:00:00Z');
 
 /* A questionnaire submission whose source is the FREE CHECK form is not a sign-up start. 12 of the
    22 onboarding rows on file are free checks (measured 2026-09-05), and counting them credited our
