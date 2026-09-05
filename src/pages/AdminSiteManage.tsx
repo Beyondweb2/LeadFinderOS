@@ -16,7 +16,11 @@ import { publicSiteUrl, barberSiteUrl } from "@/config/publicSite";
 import { bookingUrl } from "@/lib/subdomain";
 import { useTemplates } from "@/hooks/useTemplates";
 import { useCampaigns } from "@/hooks/useCampaigns";
-import { WHATSAPP_TEMPLATES } from "@/types/outreach";
+/* ⛔ ALL_WHATSAPP_TEMPLATES, NOT the Findable-only send list (2026-09-05). This page IS the old
+   barber-sites admin screen, so its picker is the ONE place the legacy templates are still a
+   legitimate choice. Taking them away here would have broken a working page in the name of tidying
+   a different one. If the barber product is ever retired properly, retire the page with it. */
+import { ALL_WHATSAPP_TEMPLATES as WHATSAPP_TEMPLATES } from "@/types/outreach";
 import { classifyLineType } from "@/lib/lineType";
 import type { BarberSiteContent } from "@/templates/barber/types";
 

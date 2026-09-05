@@ -7,6 +7,7 @@ import { looksAutomated, isDecline } from '@/lib/inboundClassify';
 import { isRealSend } from '@/lib/realSend';
 import { isPaidLead } from '@/lib/leadPayment';
 import { fetchAllRows } from '@/lib/fetchAllRows';
+import { creditRepliesByTemplate, creditOpenToTemplate, OPEN_ATTRIBUTION_SLACK_MS } from '@/lib/templateAttribution';
 
 /* ============================================================
    CAMPAIGN METRICS, DERIVED FROM MESSAGES
@@ -46,12 +47,6 @@ const SIGNUP_TEMPLATES = new Set(['onboarding_followup']);
    silently moves real prospect opens into the unattributed bucket and understates the rate. */
 const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'audit_result_hook', 'free_check_result']);
 
-/* A minute of slack when comparing an open against the send. The two timestamps come from
-   different systems (Meta's send receipt and our own render), and a prospect who taps the link the
-   instant it arrives can legitimately record an open a few seconds "before" it. Without the slack
-   those genuine opens fall into the operator bucket. */
-const OPEN_ATTRIBUTION_SLACK_MS = 60_000;
-
 /* ⛔ THIS LINE USED TO READ "Paid = payment_received-or-beyond in the forward-only pipeline
    ordering." IT DESCRIBED A CONSTANT THAT NO LONGER EXISTS AND A RULE THAT IS WRONG. `paid` means
    `amount_paid > 0`, everywhere (CLAUDE.md §6) — which is what this file already does, ~170 lines
@@ -66,10 +61,23 @@ export interface TemplateStats {
   leads: number;
   delivered: number;
   read: number;
-  /* NO `replied` field, deliberately. The old one was "has this lead replied, ever", which is not a
-     property of this template — it made every row claim the same replies. A per-template reply count
-     is only meaningful send-attributed, and for the opener that is ambiguous when several openers
-     went to one lead. The campaign-level Pitch reply is the send-attributed number that matters. */
+  /* ⛔ `replied` IS BACK, AND IT IS A DIFFERENT NUMBER FROM THE ONE THAT WAS REMOVED. The removed
+     one was "has this lead replied, ever", intersected with the template's lead set — not a
+     property of this template at all, which is why every row claimed the same replies. This one is
+     LAST-TOUCH: the reply is credited to the newest real send before it, and an inbound closes the
+     run (src/lib/templateAttribution.ts carries the measurements). Distinct leads, never messages. */
+  replied: number;
+  /** Of `replied`, how many followed 2+ DIFFERENT templates with no reply in between — so which
+   *  one earned it is unknowable and last-touch decided it by rule.
+   *  ⛔ NEVER RENDER `replied` WITHOUT THIS AVAILABLE. contact_followup scores 20 of 20 contested
+   *  by construction (a chase only exists because the opener got no answer), and a 26% chase rate
+   *  shown as cleanly as a 52% opener rate is the misleading half of an honest metric. */
+  repliedAmbiguous: number;
+  /** Leads sent this template when it carried a report link. 0 for templates that carry none — the
+   *  card must show nothing rather than a 0% open rate for a message with no report in it. */
+  reportLinksSent: number;
+  /** Of `reportLinksSent`, leads whose report was first opened after THIS template sent the link. */
+  reportOpened: number;
 }
 
 export interface CampaignStats {
@@ -234,7 +242,12 @@ export function useCampaignStats() {
   };
 
   // Per-template DISTINCT-lead sets, per campaign.
-  const tmplSets = new Map<string | null, Map<string, { leads: Set<string>; delivered: Set<string>; read: Set<string> }>>();
+  type TmplSets = {
+    leads: Set<string>; delivered: Set<string>; read: Set<string>;
+    replied: Set<string>; repliedAmbiguous: Set<string>;
+    reportLinksSent: Set<string>; reportOpened: Set<string>;
+  };
+  const tmplSets = new Map<string | null, Map<string, TmplSets>>();
 
   for (const l of leads) {
     const b = bucketFor(l.campaign_id ?? null);
@@ -315,19 +328,53 @@ export function useCampaignStats() {
     // Per-template rows: distinct leads, plus that template's own receipts.
     let byT = tmplSets.get(key);
     if (!byT) { byT = new Map(); tmplSets.set(key, byT); }
+    const setsFor = (tmpl: string): TmplSets => {
+      let sets = byT!.get(tmpl);
+      if (!sets) {
+        sets = { leads: new Set(), delivered: new Set(), read: new Set(),
+                 replied: new Set(), repliedAmbiguous: new Set(),
+                 reportLinksSent: new Set(), reportOpened: new Set() };
+        byT!.set(tmpl, sets);
+      }
+      return sets;
+    };
     for (const m of outTemplated) {
-      let sets = byT.get(m.template_name!);
-      if (!sets) { sets = { leads: new Set(), delivered: new Set(), read: new Set() }; byT.set(m.template_name!, sets); }
+      const sets = setsFor(m.template_name!);
       sets.leads.add(l.id);
       if (isDeliveredStatus(m.status)) sets.delivered.add(l.id);
       if (m.status === 'read') sets.read.add(l.id);
+      if (REPORT_LINK_TEMPLATES.has(m.template_name!)) sets.reportLinksSent.add(l.id);
     }
+
+    /* ── PER-TEMPLATE REPLY AND OPEN ─────────────────────────────────────────────
+       Both folds run over the lead's FULL message list, in both directions, because the whole
+       method is sequence: which send came last before the reply, and which link went out before the
+       open. Passing only the outbound templated rows would erase the inbound messages that close a
+       run, and every reply after the first would be credited to the wrong template.
+       ⚠️ The campaign-level replied/reportOpened above are NOT derived from these. They ask a
+       different question ("did this lead ever answer us"), so a lead whose only reply predates any
+       templated send counts there and nowhere here. Keeping them independent is why the two can be
+       compared: the per-template replies sum to at most the campaign figure, never more. */
+    for (const credit of creditRepliesByTemplate(ms)) {
+      const sets = setsFor(credit.template);
+      sets.replied.add(l.id);
+      if (credit.ambiguous) sets.repliedAmbiguous.add(l.id);
+    }
+    const firstOpenAt = openedAudits.length
+      ? Math.min(...openedAudits.map((a) => new Date(a.first_opened_at!).getTime()))
+      : null;
+    const openCredit = creditOpenToTemplate(ms, REPORT_LINK_TEMPLATES, firstOpenAt);
+    if (openCredit) setsFor(openCredit).reportOpened.add(l.id);
   }
 
   for (const [key, byT] of tmplSets) {
     const b = bucketFor(key);
     for (const [tmpl, sets] of byT) {
-      b.byTemplate[tmpl] = { leads: sets.leads.size, delivered: sets.delivered.size, read: sets.read.size };
+      b.byTemplate[tmpl] = {
+        leads: sets.leads.size, delivered: sets.delivered.size, read: sets.read.size,
+        replied: sets.replied.size, repliedAmbiguous: sets.repliedAmbiguous.size,
+        reportLinksSent: sets.reportLinksSent.size, reportOpened: sets.reportOpened.size,
+      };
     }
   }
 
