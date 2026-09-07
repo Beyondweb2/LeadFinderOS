@@ -8,6 +8,7 @@ import { isRealSend } from '@/lib/realSend';
 import { isPaidLead } from '@/lib/leadPayment';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { creditRepliesByTemplate, creditOpenToTemplate, creditEventToTemplate, OPEN_ATTRIBUTION_SLACK_MS } from '@/lib/templateAttribution';
+import { foldArmComparison, type ArmComparison, type ArmLeadInput } from '@/lib/armComparison';
 
 /* ============================================================
    CAMPAIGN METRICS, DERIVED FROM MESSAGES
@@ -159,6 +160,12 @@ export interface CampaignStats {
   /** Of the leads actually REACHED, how many paid — end-to-end. null when nobody reached. */
   reachedToPaidPct: number | null;
   byTemplate: Record<string, TemplateStats>;
+  /* ⛔ COLD vs WARM, AND IT IS A DIFFERENT QUESTION FROM byTemplate. The per-template rows credit
+     LAST TOUCH ("which message earned this click"); this credits the arm the LEAD was sent
+     ("does warm convert better than cold"), so a follow-up going out in between cannot take a
+     click off the template under test. Both are honest; they answer different things, and the card
+     labels which is which. See src/lib/armComparison.ts. */
+  armComparison: ArmComparison;
 }
 
 interface LeadRow {
@@ -304,6 +311,10 @@ export function useCampaignStats() {
     if (arr) arr.push(a); else auditsByLead.set(a.lead_id, [a]);
   }
 
+  /* Per-campaign A/B input, gathered in the same pass as everything else. Keyed the same way the
+     buckets are, so a lead lands in the comparison for the campaign it belongs to. */
+  const armRows = new Map<string | null, ArmLeadInput[]>();
+
   // Seed one bucket per campaign, plus an Unassigned bucket.
   const buckets = new Map<string | null, CampaignStats>();
   const seed = (campaign: Campaign | null): CampaignStats => ({
@@ -313,6 +324,9 @@ export function useCampaignStats() {
     replyRatePct: null, pitchReplyRatePct: null, repliedToPaidPct: null, reachedToPaidPct: null,
     reportOpenRatePct: null,
     byTemplate: {},
+    armComparison: { arms: { audit_result_hook: { leads: 0, leadsTracked: 0, reportOpened: 0, siteVisits: 0, signups: 0 },
+                             audit_reply_warm: { leads: 0, leadsTracked: 0, reportOpened: 0, siteVisits: 0, signups: 0 } },
+                     bothArms: 0, hasData: false },
   });
   for (const c of campaigns) buckets.set(c.id, seed(c));
   const bucketFor = (campaignId: string | null): CampaignStats => {
@@ -488,6 +502,19 @@ export function useCampaignStats() {
       .sort((a, z) => a - z)[0];
     const startCredit = creditEventToTemplate(ms, firstStart ?? null);
     if (startCredit) setsFor(startCredit).signupStarted.add(l.id);
+
+    /* ── THE A/B ROW ──────────────────────────────────────────────────────────────
+       Built from the SAME facts the columns above use, so the two views cannot disagree about what
+       happened — only about which template to credit for it. `sends` is every real templated send
+       in time order; the fold picks the arm out of it. */
+    if (!armRows.has(key)) armRows.set(key, []);
+    armRows.get(key)!.push({
+      leadId: l.id,
+      sends: outTemplated.map((m) => ({ template: m.template_name!, at: Date.parse(m.created_at) })),
+      firstVisitAt: firstHitByLead.get(l.id) ?? null,
+      firstSignupAt: firstStart ?? null,
+      firstReportOpenAt: firstOpenAt,
+    });
   }
 
   for (const [key, byT] of tmplSets) {
@@ -512,6 +539,12 @@ export function useCampaignStats() {
     b.repliedToPaidPct = pct(b.paid, b.replied);
     b.reachedToPaidPct = pct(b.paid, b.reached);
     b.reportOpenRatePct = pct(b.reportOpened, b.reportLinksSent);
+  }
+
+  /* The A/B fold, per campaign. Runs over the rows gathered above rather than re-reading anything,
+     so it costs one pass and cannot drift from the per-template numbers beside it. */
+  for (const [key, rows] of armRows) {
+    bucketFor(key).armComparison = foldArmComparison(rows, SITE_TRACKING_START);
   }
 
   // Campaigns first (creation order), Unassigned last and only if it has activity.
