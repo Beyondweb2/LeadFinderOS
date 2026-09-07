@@ -48,9 +48,21 @@ export interface FreeCheckProgressInput {
   /** Queue rows for the audit: total and how many have settled. */
   questions_total: number;
   questions_done: number;
-  /** The result-send stamp written when the prospect's result actually went out. */
-  result_sent_at: string | null;
+  /* ── THE RESULT SEND: A CLAIM AND AN OUTCOME, NEVER ONE FIELD ─────────────────────────────
+     ⛔ `result_claimed_at` USED TO BE CALLED result_sent_at AND THE CARD PRINTED "Result sent".
+     It is written BEFORE the Resend call (claiming first is what makes the send happen at most
+     once), so it only ever meant "we decided to send" — the same overclaim as the operator alert
+     that announced a result nobody had sent. The outcome now travels beside it. */
+  result_claimed_at: string | null;
   result_sent_to: string | null;
+  /** 'accepted' = Resend returned 2xx. 'failed' = it did not. 'attempting' = the outcome write
+   *  never landed, so we genuinely do not know. null = older rows, written before this existed. */
+  result_email_status: string | null;
+  /** Resend's own id, so "did it actually go" is answerable without opening their dashboard. */
+  result_provider_id: string | null;
+  result_email_error: string | null;
+  /** How many times an operator has resent it by hand. */
+  result_resend_count: number | null;
   /** Recorded reason no audit ran, from client_error_reports. */
   no_audit_reason: string | null;
   /** WhatsApp result send, if the lead had a number: the row's own delivery status. */
@@ -63,7 +75,11 @@ export type FreeCheckStage =
   | 'running'          // at least one run still pending/running
   | 'stranded'         // every run settled, no result sent. Needs a human.
   | 'failed'           // every run failed
-  | 'complete'         // result sent
+  | 'complete'         // the send was claimed and is not known to have failed
+  /* The two stages that exist because a CLAIM is not a SEND. Both used to be folded into
+     'complete', so an email Resend refused rendered as a green "Result sent". */
+  | 'send_failed'      // claimed, and Resend refused it
+  | 'send_unknown'     // claimed, and the outcome was never recorded
   | 'unknown';         // the inputs did not establish a stage
 
 export interface FreeCheckProgress {
@@ -154,9 +170,28 @@ export function progressFor(i: FreeCheckProgressInput): FreeCheckProgress {
         : 'No audit ran, and no reason was recorded. Audit them by hand.',
     };
   }
-  if (i.result_sent_at) {
-    return { ...base, stage: 'complete', needsYou: false,
-      detail: `Result sent${i.result_sent_to ? ` to ${i.result_sent_to}` : ''}.` };
+  /* ⛔ A CLAIMED SEND THAT FAILED IS NOT COMPLETE, AND IT IS THE STATE MOST WORTH SEEING. The old
+     code returned 'complete' on the claim alone, so an email Resend refused read as delivered. */
+  if (i.result_claimed_at && i.result_email_status === 'failed') {
+    return { ...base, stage: 'send_failed', needsYou: true,
+      detail: `The result email FAILED${i.result_email_error ? `: ${i.result_email_error}` : ''}. It will not retry — resend it.` };
+  }
+  if (i.result_claimed_at && i.result_email_status === 'attempting') {
+    /* Claimed, and the outcome write never landed. Honestly unknown rather than either word. */
+    return { ...base, stage: 'send_unknown', needsYou: true,
+      detail: 'The result send was claimed but its outcome was never recorded, so whether the email went is unknown. Check Resend, or resend it.' };
+  }
+  if (i.result_claimed_at) {
+    const accepted = i.result_email_status === 'accepted';
+    const resent = (i.result_resend_count ?? 0) > 0;
+    return {
+      ...base, stage: 'complete', needsYou: false,
+      /* ⚠️ "accepted by Resend", never "delivered". Arrival is not in this database. An older row
+         with no status at all says exactly that rather than borrowing the good news. */
+      detail: `Result ${accepted ? 'accepted by Resend' : 'claimed (outcome not recorded — older row)'}`
+        + `${i.result_sent_to ? ` for ${i.result_sent_to}` : ''}`
+        + `${resent ? ` · resent ${i.result_resend_count}x by hand` : ''}.`,
+    };
   }
   if (unsettled > 0) {
     return { ...base, stage: 'running', needsYou: false,

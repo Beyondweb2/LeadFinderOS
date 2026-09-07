@@ -1,4 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+/* 🔴 THIS MAKES submissions THE SECOND CONSUMER OF free-check-result.ts, AND THAT MATTERS FOR
+   DEPLOYS. Changing that module now requires redeploying BOTH this function AND
+   process-ai-audit-queue. Getting that wrong is exactly what hid the broken result email for four
+   days: the fix was committed, only one of its two consumers was redeployed, and the live code
+   kept refusing every matched lead. Deploy list for _shared/free-check-result.ts:
+     · process-ai-audit-queue   (the automatic send, on run finalisation)
+     · submissions              (the operator resend, below) */
+import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WHO FILLED IN MY FORM? — the questionnaire submissions, for the operator dashboard.
@@ -113,6 +121,56 @@ Deno.serve(async (req) => {
        already carry older audits. Anything read per submission must be scoped to that submission or
        a four-day-old audit gets reported as this one's. Same 60s backward tolerance, same reason as
        notify-onboarding-submit: the row is saved before the audit is created, never after. */
+    /* ── RESEND A RESULT, ON PURPOSE ─────────────────────────────────────────────
+       ⛔ THIS SENDS A REAL EMAIL TO A REAL PROSPECT ADDRESS, so it is deliberately awkward to reach
+       by accident: an operator session, an explicit action name, an explicit audit id, and a
+       confirm in the UI. It exists because the once-per-audit guard makes delivery UNTESTABLE —
+       there was no way to send a second copy and watch whether it arrived, which is precisely the
+       question we spent a day unable to answer.
+
+       ⛔ IT DOES NOT WEAKEN THE GUARD, IT OVERRIDES IT ONCE. `force` is set only here, the previous
+       stamp is left in place, and the automatic path keeps reading it — so an audit that has been
+       resent by hand is still refused by the queue for ever after. The property that stopped a
+       stranger being emailed three times is untouched.
+
+       ⚠️ AND THE RESEND CARRIES A DIFFERENT SUBJECT (see free-check-result.ts). Gmail threads
+       identical subjects from one sender into a single conversation, so a second identical copy
+       collapses under the first and reads as never arriving. That is the symptom that sent us
+       hunting a Message-ID dedup bug that did not exist.
+
+       ⚠️ IT NEEDS A runId because the module reports on a specific run's questions. The newest
+       COMPLETE run is the right one — the same choice the automatic path makes. */
+    if (body.action === "resend_free_check_result") {
+      const auditId = String(body.audit_id ?? "");
+      if (!UUID_RE.test(auditId)) return json({ ok: false, error: "audit_id must be a uuid" }, 400);
+
+      const { data: runRows, error: runErr } = await service
+        .from("ai_audit_runs")
+        .select("id, status, run_number, created_at")
+        .eq("audit_id", auditId)
+        .order("run_number", { ascending: true });
+      if (runErr) return json({ ok: false, error: runErr.message }, 500);
+      const complete = ((runRows ?? []) as Array<{ id: string; status: string }>)
+        .filter((r) => r.status === "complete");
+      /* ⛔ NO COMPLETE RUN, NO SEND. A resend must never invent a result: an audit that failed or is
+         still measuring has nothing to tell the prospect, and mailing them a half-measurement is
+         worse than the silence we are trying to fix. */
+      if (!complete.length) {
+        return json({ ok: false, error: "no completed run on this audit — nothing to send" }, 409);
+      }
+      const runId = complete[complete.length - 1].id;
+
+      try {
+        const r = await maybeSendFreeCheckResult(service, runId, auditId, { force: true });
+        console.log(`[submissions] operator resend for audit ${auditId} by ${u.user.id}: ${JSON.stringify(r)}`);
+        return json({ ok: true, outcome: r });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[submissions] resend threw for audit ${auditId}:`, msg);
+        return json({ ok: false, error: msg }, 500);
+      }
+    }
+
     if (body.action === "free_check_progress") {
       const limit = Math.min(Number(body.limit) || 15, 50);
       const { data: rows, error: rErr } = await service
@@ -187,7 +245,10 @@ Deno.serve(async (req) => {
         const a = auditFor(r.lead_id as string | null, String(r.created_at));
         const aid = a ? (a.id as string) : null;
         const myQueue = aid ? queue.filter((q) => q.audit_id === aid) : [];
-        const fcr = (a ? a.free_check_result : null) as { at?: string; email?: string } | null;
+        const fcr = (a ? a.free_check_result : null) as {
+          at?: string; email?: string; email_status?: string;
+          provider_message_id?: string; email_error?: string; resend_count?: number;
+        } | null;
         const hit = reasons.find((x) => x.context?.onboarding_id === r.id || x.context?.lead_id === r.lead_id);
         return {
           onboarding_id: r.id,
@@ -208,8 +269,14 @@ Deno.serve(async (req) => {
              is stored as failed. Counting only 'done' would leave a finished audit showing 7 of 8
              for ever and read as stuck. */
           questions_done: myQueue.filter((q) => q.status === "done" || q.status === "failed").length,
-          result_sent_at: (fcr && fcr.at) ? fcr.at : null,
+          /* CLAIM and OUTCOME, separately. A single "sent" field is what let the dashboard
+             announce an email that Resend had refused. */
+          result_claimed_at: (fcr && fcr.at) ? fcr.at : null,
           result_sent_to: (fcr && fcr.email) ? fcr.email : null,
+          result_email_status: (fcr && fcr.email_status) ? fcr.email_status : null,
+          result_provider_id: (fcr && fcr.provider_message_id) ? fcr.provider_message_id : null,
+          result_email_error: (fcr && fcr.email_error) ? fcr.email_error : null,
+          result_resend_count: (fcr && typeof fcr.resend_count === "number") ? fcr.resend_count : null,
           no_audit_reason: aid ? null : (hit ? String(hit.context?.reason ?? hit.context?.error ?? hit.error_id) : null),
           whatsapp_status: r.lead_id ? ((wa.find((w) => w.lead_id === r.lead_id) || {}).status ?? null) : null,
         };

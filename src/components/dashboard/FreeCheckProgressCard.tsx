@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, ExternalLink, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { RefreshCw, ExternalLink, Loader2, Send } from 'lucide-react';
 import { useFreeCheckProgress, type FreeCheckRow } from '@/hooks/useFreeCheckProgress';
 import { emailStateFor, whatsappStateFor, type FreeCheckStage, type SendState } from '@/lib/freeCheckProgress';
 
@@ -32,6 +33,11 @@ const STAGE: Record<FreeCheckStage, { label: string; className: string }> = {
   failed: { label: 'AUDIT FAILED', className: 'bg-red-500/15 text-red-600 border-red-500/30' },
   no_audit: { label: 'No audit ran', className: 'bg-amber-500/15 text-amber-700 border-amber-500/30' },
   no_lead: { label: 'No lead created', className: 'bg-red-500/15 text-red-600 border-red-500/30' },
+  /* ⛔ THESE TWO ARE THE WHOLE POINT OF SPLITTING CLAIM FROM OUTCOME. Both used to render as
+     "Result sent" — a green badge over an email Resend had refused, or over one whose fate was
+     never recorded. */
+  send_failed: { label: 'EMAIL FAILED', className: 'bg-red-500/15 text-red-600 border-red-500/30' },
+  send_unknown: { label: 'SEND UNKNOWN', className: 'bg-amber-500/20 text-amber-700 border-amber-500/40' },
   unknown: { label: 'Never started', className: 'bg-amber-500/15 text-amber-700 border-amber-500/30' },
 };
 
@@ -45,10 +51,25 @@ const sendTone = (s: SendState) =>
 const shortTime = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-function Row({ r }: { r: FreeCheckRow }) {
+function Row({ r, onResendRow }: { r: FreeCheckRow; onResendRow: (auditId: string, to: string) => Promise<string> }) {
   const s = STAGE[r.progress.stage];
   const email = emailStateFor(r);
   const wa = whatsappStateFor(r.whatsapp_status);
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+  /* Only where a measurement finished: complete, stranded, failed-send or unknown-send. A running
+     audit has no result yet and a submission with no audit has nothing to send. */
+  const canResend = !!r.audit_id && ['complete', 'stranded', 'send_failed', 'send_unknown'].includes(r.progress.stage);
+  const onResend = async () => {
+    setBusy(true); setSaid(null);
+    try {
+      setSaid(await onResendRow(r.audit_id!, r.contact_email ?? ''));
+    } catch (e) {
+      setSaid(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="border-t border-border/40 py-2.5 first:border-t-0">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -86,15 +107,42 @@ function Row({ r }: { r: FreeCheckRow }) {
         <span title="The operator alert to you. 'Accepted' means Resend took the message — arrival is not recorded in our database, only in Resend's delivery events.">
           alert email <span className={`font-semibold ${sendTone(email)}`}>{SEND[email]}</span>
         </span>
-        <span title="The prospect's result email. Its stamp is written when the send path runs; like the alert, acceptance is not proof of arrival.">
-          result <span className={`font-semibold ${r.result_sent_at ? 'text-foreground/80' : 'text-muted-foreground/60'}`}>
-            {r.result_sent_at ? `sent ${shortTime(r.result_sent_at)}` : 'not sent'}
+        {/* ⛔ CLAIMED AND ACCEPTED ARE TWO WORDS BECAUSE THEY ARE TWO FACTS. The stamp is written
+            BEFORE the Resend call, so "claimed" is all it proves on its own; the outcome sits
+            beside it. This used to read "sent", which is what let a refused email look delivered. */}
+        <span title={
+          !r.result_claimed_at
+            ? 'No result send has been claimed for this audit yet.'
+            : `Claimed ${shortTime(r.result_claimed_at)}. `
+              + (r.result_email_status === 'accepted'
+                ? 'Resend returned 2xx and took the message — that is acceptance, not arrival, which is not recorded in this database.'
+                : r.result_email_status === 'failed'
+                ? `Resend refused it: ${r.result_email_error ?? 'no reason recorded'}`
+                : r.result_email_status === 'attempting'
+                ? 'The outcome write never landed, so whether the email went is genuinely unknown.'
+                : 'Written before the outcome was recorded (an older row) — acceptance is unknown.')
+              + (r.result_provider_id ? ` Resend id ${r.result_provider_id}` : '')
+        }>
+          result{' '}
+          <span className={`font-semibold ${
+            r.result_email_status === 'accepted' ? 'text-foreground/80'
+              : r.result_email_status === 'failed' ? 'text-red-600'
+              : 'text-muted-foreground/60'}`}>
+            {!r.result_claimed_at ? 'not sent'
+              : r.result_email_status === 'accepted' ? `accepted ${shortTime(r.result_claimed_at)}`
+              : r.result_email_status === 'failed' ? 'FAILED'
+              : r.result_email_status === 'attempting' ? 'unknown'
+              : `claimed ${shortTime(r.result_claimed_at)}`}
           </span>
+          {(r.result_resend_count ?? 0) > 0 && (
+            <span className="text-muted-foreground/50"> · resent {r.result_resend_count}x</span>
+          )}
         </span>
         <span title="WhatsApp DOES report real delivery, unlike email — this is a genuine receipt from Meta.">
           whatsapp <span className={`font-semibold ${sendTone(wa)}`}>{SEND[wa]}</span>
         </span>
         {r.contact_email && <span className="truncate">{r.contact_email}</span>}
+        {said && <span className="w-full text-[10px] text-foreground/70">{said}</span>}
         {r.progress.reportUrl && (
           <a
             href={r.progress.reportUrl}
@@ -105,14 +153,49 @@ function Row({ r }: { r: FreeCheckRow }) {
             report <ExternalLink className="h-2.5 w-2.5" />
           </a>
         )}
+        {/* ⛔ IT SENDS A REAL EMAIL TO A REAL PROSPECT, so it confirms with the address in the
+            prompt and only appears where there is something to send: an audit whose measurement
+            actually finished. A running audit has no result yet, and a submission with no audit
+            has nothing at all — offering the button there would be offering to send nothing.
+            ⚠️ The subject carries the send time on a resend (see free-check-result.ts), so Gmail
+            cannot thread the second copy under the first and hide it. */}
+        {canResend && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onResend}
+            className="inline-flex items-center gap-1 font-medium text-foreground/80 underline decoration-foreground/25 underline-offset-2 transition-colors hover:decoration-foreground/60 disabled:opacity-50"
+            title={`Send the result email again to ${r.contact_email ?? 'the submitted address'}. This is a real send; the subject carries the time so it cannot be threaded under the first copy.`}
+          >
+            {busy ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Send className="h-2.5 w-2.5" />}
+            {busy ? 'sending' : 'resend result'}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 export function FreeCheckProgressCard() {
-  const { rows, isLoading, error, live, refetch } = useFreeCheckProgress();
+  const { rows, isLoading, error, live, refetch, resendResult } = useFreeCheckProgress();
   const needing = rows.filter((r) => r.progress.needsYou).length;
+
+  /* ⛔ THE CONFIRM NAMES THE ADDRESS, because that is the fact worth checking before a real email
+     leaves. A resend to a prospect who did not ask twice is a nuisance we cannot take back. */
+  const onResendRow = async (auditId: string, to: string): Promise<string> => {
+    const ok = window.confirm(
+      `Send the result email again to ${to || 'the submitted address'}?\n\n`
+      + 'This is a real send. The subject will carry the time so it cannot be threaded under the first copy.',
+    );
+    if (!ok) return 'cancelled';
+    const outcome = await resendResult(auditId);
+    if (outcome.kind === 'sent') {
+      return outcome.emailed
+        ? 'Resent — Resend accepted it. Acceptance is not arrival; check the inbox.'
+        : 'The send was attempted and Resend did NOT accept it. See the result field for the reason.';
+    }
+    return `Not sent: ${outcome.reason ?? outcome.kind}`;
+  };
 
   return (
     <Card>
@@ -151,7 +234,7 @@ export function FreeCheckProgressCard() {
             No free checks submitted yet.
           </p>
         ) : (
-          <div>{rows.map((r) => <Row key={r.onboarding_id} r={r} />)}</div>
+          <div>{rows.map((r) => <Row key={r.onboarding_id} r={r} onResendRow={onResendRow} />)}</div>
         )}
       </CardContent>
     </Card>

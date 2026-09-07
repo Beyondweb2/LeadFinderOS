@@ -24,7 +24,8 @@ const base: FreeCheckProgressInput = {
   audit_id: 'a1', audit_created_at: '2026-09-07T04:21:00Z',
   run_statuses: [], runs_target: 3,
   questions_total: 15, questions_done: 0,
-  result_sent_at: null, result_sent_to: null,
+  result_claimed_at: null, result_sent_to: null, result_email_status: null,
+  result_provider_id: null, result_email_error: null, result_resend_count: null,
   no_audit_reason: null, whatsapp_status: null,
 };
 const P = (o: Partial<FreeCheckProgressInput>) => progressFor({ ...base, ...o });
@@ -91,15 +92,50 @@ console.log('\n── THE STATE THAT LOOKS FINISHED AND IS NOT ──');
 console.log('\n── COMPLETE MEANS THE RESULT WENT ──');
 {
   const p = P({ run_statuses: ['complete', 'complete', 'complete'],
-    result_sent_at: '2026-09-07T04:40:00Z', result_sent_to: 'x@y.com' });
-  ok(p.stage === 'complete', 'a result stamp is what makes it complete');
+    result_claimed_at: '2026-09-07T04:40:00Z', result_sent_to: 'x@y.com', result_email_status: 'accepted' });
+  ok(p.stage === 'complete', 'a claim with an accepted outcome is complete');
   ok(p.detail.includes('x@y.com'), 'and it names the address');
+  ok(p.detail.includes('accepted by Resend'), 'and says ACCEPTED, never delivered');
+  ok(!p.detail.toLowerCase().includes('delivered'), 'the word delivered never appears for email');
   ok(!p.needsYou, 'complete needs nobody');
 }
 {
-  // A result stamp outranks unsettled runs: the prospect has their answer either way.
-  const p = P({ run_statuses: ['complete', 'pending'], result_sent_at: '2026-09-07T04:40:00Z' });
-  ok(p.stage === 'complete', 'a sent result is complete even if a run is still settling');
+  // A claim outranks unsettled runs: the prospect has their answer either way.
+  const p = P({ run_statuses: ['complete', 'pending'], result_claimed_at: '2026-09-07T04:40:00Z',
+    result_email_status: 'accepted' });
+  ok(p.stage === 'complete', 'an accepted result is complete even if a run is still settling');
+}
+
+console.log('\n── THE CLAIM IS NOT THE SEND ──');
+{
+  /* The bug this split exists for: the stamp is written BEFORE the Resend call, so a claim alone
+     never meant an email went. It used to render as "Result sent". */
+  const p = P({ run_statuses: ['complete', 'complete', 'complete'],
+    result_claimed_at: '2026-09-07T04:40:00Z', result_email_status: 'failed',
+    result_email_error: 'resend HTTP 403: domain not verified' });
+  ok(p.stage === 'send_failed', 'a claimed send that Resend refused is NOT complete');
+  ok(p.needsYou, 'a failed send needs a person');
+  ok(p.detail.includes('403'), 'the provider error is printed, not summarised away');
+}
+{
+  const p = P({ run_statuses: ['complete', 'complete', 'complete'],
+    result_claimed_at: '2026-09-07T04:40:00Z', result_email_status: 'attempting' });
+  ok(p.stage === 'send_unknown', 'claimed with no recorded outcome is UNKNOWN, not complete');
+  ok(p.needsYou, 'unknown needs a person');
+}
+{
+  /* Rows written before the outcome field existed. They must not borrow the good news. */
+  const p = P({ run_statuses: ['complete', 'complete', 'complete'],
+    result_claimed_at: '2026-09-03T12:01:44Z', result_sent_to: 'paul@move37.fun',
+    result_email_status: null });
+  ok(p.stage === 'complete', 'an older row is still complete');
+  ok(p.detail.includes('outcome not recorded'), 'but it says the outcome was never recorded');
+  ok(!p.detail.includes('accepted by Resend'), 'and does not claim acceptance it cannot know');
+}
+{
+  const p = P({ run_statuses: ['complete', 'complete', 'complete'],
+    result_claimed_at: '2026-09-07T04:40:00Z', result_email_status: 'accepted', result_resend_count: 2 });
+  ok(p.detail.includes('resent 2x'), 'hand resends are counted on the face of it');
 }
 
 console.log('\n── THE REPORT LINK ──');
