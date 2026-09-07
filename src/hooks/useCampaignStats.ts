@@ -45,7 +45,10 @@ const SIGNUP_TEMPLATES = new Set(['onboarding_followup']);
    audit_result_hook, which became the outreach hook and never got added here.
    ⚠️ SO: IF A NEW TEMPLATE EVER CARRIES A REPORT LINK, ADD IT HERE. Forgetting does not throw; it
    silently moves real prospect opens into the unattributed bucket and understates the rate. */
-const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'audit_result_hook', 'free_check_result']);
+/* ⚠️ audit_reply_warm ADDED 2026-09-07 WITH THE TEMPLATE ITSELF. Its {{3}} is the report link, so
+   forgetting it here does not throw — it silently moves real prospect opens into the unattributable
+   bucket and understates the open rate, which is the failure this set's own comment records. */
+const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'audit_result_hook', 'free_check_result', 'audit_reply_warm']);
 
 /* ⛔ THE DAY PAGE-HIT LOGGING WENT LIVE. Every site-visit rate is measured from here, because a
    send that predates it had no way to be counted and would drag its template's rate to a meaningless

@@ -54,6 +54,20 @@ When people ask ChatGPT or Google's AI for a ${trade || 'provider'} in ${town ||
 Here's your result: ${u}
 More on how we can fix it, and how to get started: https://findable.live`;
 
+/* audit_reply_warm — the WARM audit message (Meta 1509669747584736, approved 2026-09-07). It is
+   audit_result_hook MINUS the "is this the right number" opening, because it only ever goes to a
+   lead who has already answered the opener, so asking again reads as though we were not listening.
+   ⛔ THREE VARIABLES, NOT FOUR, AND THE BUSINESS NAME IS NOT ONE OF THEM. Registered at Meta as
+   {{1}} trade, {{2}} town, {{3}} audit link. audit_result_hook's {{1}} is the business name; this
+   body never says it. Copying the hook's var list across would have shifted every parameter by one
+   and sent the trade where Meta expects a name.
+   ⚠️ DISPLAY ONLY, like every body here — Meta renders what the prospect reads from its own
+   registered copy. This decides what the OPERATOR sees in the Inbox transcript. */
+const auditReplyWarmBody = (_b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
+  `We ran a free AI visibility audit for you. When people ask ChatGPT or Google's AI for a ${trade || 'provider'} in ${town || 'your area'}, it's naming other firms, not you.
+Here's your result: ${u}
+More on how we can fix it, and how to get started: https://findable.live`;
+
 const bookCallBody = (b: string, _u: string) =>
   `Hi ${b},
 Paul here from Findable.
@@ -116,6 +130,7 @@ export const READABLE_TEMPLATE_BODIES: Record<
   initial_contact: initialContactBody,
   audit_reply: auditReplyBody,
   audit_result_hook: auditResultHookBody,
+  audit_reply_warm: auditReplyWarmBody,
 };
 
 export interface ReadableBodyOpts {

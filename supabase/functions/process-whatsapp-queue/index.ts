@@ -183,6 +183,9 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
   // audit_result_hook - the outreach hook. MIRRORS whatsapp-send.ts; change both together.
   audit_result_hook: { lang: "en", vars: ["name", "trade", "town", "audit_url"] },
+  // audit_reply_warm - the WARM audit message. MIRRORS whatsapp-send.ts; change both together.
+  // THREE vars and NO name: {{1}} trade, {{2}} town, {{3}} audit link.
+  audit_reply_warm: { lang: "en", vars: ["trade", "town", "audit_url"] },
   // Follow-up to a warm lead after the 24h window: {{1}} business name, {{2}} onboarding URL.
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
   /* Re-engage a lead who went quiet: {{1}} = business name, {{2}} = that lead's onboarding URL.
