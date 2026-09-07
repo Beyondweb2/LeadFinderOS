@@ -98,6 +98,125 @@ Deno.serve(async (req) => {
        reproduced by its own consumers. Returns EVERY lead-linked row (not just the newest per
        lead): paid is sticky across rows and the client folds that rule — one implementation,
        in the hooks that already had it. */
+    /* ── FREE-CHECK PROGRESS ─────────────────────────────────────────────────────
+       ⛔ BUILT BECAUSE THERE WAS NOWHERE TO LOOK (Paul, 2026-09-07): submitting a free check left
+       him blind — no way to tell whether the audit was running, done or failed, so every test was
+       guesswork. Every fact was already stored, across five tables, and shown on no screen. The
+       glue-pot incident was the cost: an operator email narrating a state nobody could check.
+
+       ⛔ IT RETURNS FACTS, NOT A STAGE. The stage is derived by src/lib/freeCheckProgress.ts, which
+       is pure and tested — the same rule as the coverage endpoint and lead_statuses below, so the
+       card and the test cannot drift apart. Do not compute a verdict here.
+
+       ⚠️ THE AUDIT IS MATCHED BY TIME, NOT ONLY BY LEAD, and that is the glue-pot bug's fix
+       generalised: the free-check lane DEDUPES, so a repeat submission lands on a lead that may
+       already carry older audits. Anything read per submission must be scoped to that submission or
+       a four-day-old audit gets reported as this one's. Same 60s backward tolerance, same reason as
+       notify-onboarding-submit: the row is saved before the audit is created, never after. */
+    if (body.action === "free_check_progress") {
+      const limit = Math.min(Number(body.limit) || 15, 50);
+      const { data: rows, error: rErr } = await service
+        .from("onboarding_responses")
+        .select("id, lead_id, business_name, contact_email, created_at, notify_sent_at, notify_attempts, notify_error")
+        .eq("source", "free_check")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (rErr) return json({ ok: false, error: rErr.message }, 500);
+      const subs = (rows ?? []) as Array<Record<string, unknown>>;
+      const leadIds = [...new Set(subs.map((r) => r.lead_id).filter(Boolean))] as string[];
+      const empty = { data: [] as Array<Record<string, unknown>> };
+
+      /* One read per table, folded in memory. Fifteen submissions must not become sixty round
+         trips — this card is polled while an operator watches a test run. */
+      const [leadsRes, auditsRes, reasonsRes] = await Promise.all([
+        leadIds.length
+          ? service.from("outreach_leads").select("id, business_name").in("id", leadIds)
+          : Promise.resolve(empty),
+        leadIds.length
+          ? service.from("ai_audits")
+              .select("id, lead_id, created_at, baseline_target_runs, free_check_result")
+              .in("lead_id", leadIds)
+          : Promise.resolve(empty),
+        service.from("client_error_reports")
+          .select("error_id, context, created_at")
+          .in("error_id", ["free_check_audit_skipped", "free_check_audit_failed"])
+          .order("created_at", { ascending: false })
+          .limit(60),
+      ]);
+      const leads = (leadsRes.data ?? []) as Array<{ id: string; business_name: string | null }>;
+      const audits = (auditsRes.data ?? []) as Array<Record<string, unknown>>;
+      const reasons = (reasonsRes.data ?? []) as Array<{ error_id: string; context: Record<string, unknown> }>;
+      const leadName = new Map(leads.map((l) => [l.id, l.business_name]));
+
+      /* Each submission's OWN audit: same lead, created at or after the row. */
+      const auditFor = (leadId: string | null, submittedAt: string) => {
+        if (!leadId) return null;
+        const floor = new Date(submittedAt).getTime() - 60_000;
+        const mine = audits
+          .filter((a) => a.lead_id === leadId && new Date(String(a.created_at)).getTime() >= floor)
+          .sort((x, y) => new Date(String(y.created_at)).getTime() - new Date(String(x.created_at)).getTime());
+        return mine[0] ?? null;
+      };
+
+      const auditIds = subs
+        .map((r) => auditFor(r.lead_id as string | null, String(r.created_at)))
+        .filter((a): a is Record<string, unknown> => !!a)
+        .map((a) => a.id as string);
+
+      const [runsRes, queueRes, waRes] = await Promise.all([
+        auditIds.length
+          ? service.from("ai_audit_runs").select("audit_id, status").in("audit_id", auditIds)
+          : Promise.resolve(empty),
+        auditIds.length
+          ? service.from("ai_audit_queue").select("audit_id, status").in("audit_id", auditIds)
+          : Promise.resolve(empty),
+        /* The prospect-facing WhatsApp result, when their number was known. Its status is a REAL
+           delivery receipt, unlike the email stamp — see freeCheckProgress.ts on that difference. */
+        leadIds.length
+          ? service.from("whatsapp_messages")
+              .select("lead_id, template_name, status, created_at")
+              .in("lead_id", leadIds).eq("template_name", "free_check_result")
+              .order("created_at", { ascending: false })
+          : Promise.resolve(empty),
+      ]);
+      const runs = (runsRes.data ?? []) as Array<{ audit_id: string; status: string }>;
+      const queue = (queueRes.data ?? []) as Array<{ audit_id: string; status: string }>;
+      const wa = (waRes.data ?? []) as Array<{ lead_id: string; status: string | null }>;
+
+      const out = subs.map((r) => {
+        const a = auditFor(r.lead_id as string | null, String(r.created_at));
+        const aid = a ? (a.id as string) : null;
+        const myQueue = aid ? queue.filter((q) => q.audit_id === aid) : [];
+        const fcr = (a ? a.free_check_result : null) as { at?: string; email?: string } | null;
+        const hit = reasons.find((x) => x.context?.onboarding_id === r.id || x.context?.lead_id === r.lead_id);
+        return {
+          onboarding_id: r.id,
+          business_name: (r.business_name as string | null) ?? null,
+          contact_email: (r.contact_email as string | null) ?? null,
+          submitted_at: String(r.created_at),
+          notify_sent_at: (r.notify_sent_at as string | null) ?? null,
+          notify_attempts: (r.notify_attempts as number | null) ?? 0,
+          notify_error: (r.notify_error as string | null) ?? null,
+          lead_id: (r.lead_id as string | null) ?? null,
+          lead_name: r.lead_id ? (leadName.get(r.lead_id as string) ?? null) : null,
+          audit_id: aid,
+          audit_created_at: a ? String(a.created_at) : null,
+          run_statuses: aid ? runs.filter((x) => x.audit_id === aid).map((x) => x.status) : [],
+          runs_target: a ? ((a.baseline_target_runs as number | null) ?? null) : null,
+          questions_total: myQueue.length,
+          /* SETTLED, not "done": the queue uses done/failed, and a deliberately dropped straggler
+             is stored as failed. Counting only 'done' would leave a finished audit showing 7 of 8
+             for ever and read as stuck. */
+          questions_done: myQueue.filter((q) => q.status === "done" || q.status === "failed").length,
+          result_sent_at: (fcr && fcr.at) ? fcr.at : null,
+          result_sent_to: (fcr && fcr.email) ? fcr.email : null,
+          no_audit_reason: aid ? null : (hit ? String(hit.context?.reason ?? hit.context?.error ?? hit.error_id) : null),
+          whatsapp_status: r.lead_id ? ((wa.find((w) => w.lead_id === r.lead_id) || {}).status ?? null) : null,
+        };
+      });
+      return json({ ok: true, rows: out });
+    }
+
     if (body.action === "lead_statuses") {
       const { data: rows, error: lsErr } = await service
         .from("onboarding_responses")
