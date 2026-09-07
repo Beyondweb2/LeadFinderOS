@@ -6,6 +6,7 @@ import { Eye, EyeOff, Pencil, ChevronRight, ChevronDown } from 'lucide-react';
 import { CAMPAIGN_METHOD_LABELS } from '@/lib/campaign';
 import { templateLabel, isLegacyTemplate } from '@/types/outreach';
 import type { CampaignStats, TemplateStats } from '@/hooks/useCampaignStats';
+import { AB_ARMS, ARM_LABELS, armRate } from '@/lib/armComparison';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    ONE CAMPAIGN'S CARD — a top line you can read in a second, and a per-template table underneath.
@@ -149,6 +150,93 @@ function TemplateRow({ name, t, siteTrackingReady }: { name: string; t: Template
   );
 }
 
+/* ════ COLD vs WARM ═══════════════════════════════════════════════════════════════════════════
+   ⛔ A SEPARATE BLOCK, LABELLED AS A DIFFERENT MEASURE, NOT EXTRA COLUMNS IN THE TABLE ABOVE. The
+   table credits LAST TOUCH — which message was in front of them when they clicked. This credits
+   the arm the LEAD was sent, so a follow-up going out in between cannot take a click off the
+   template under test. Putting intent-to-treat numbers in a last-touch table would make two
+   different measures look like one, and the first person to compare a row against this block would
+   find they disagree with no way to know why.
+   ⚠️ ONLY RENDERS ONCE AN ARM HAS A LEAD. Two rows of dashes on every campaign that has never sent
+   either template is noise, and a 0% on an unsent arm reads as "warm does not work".
+   ⚠️ THE VISIT DENOMINATOR IS DIFFERENT FROM THE OTHER TWO and the header says so: opens and
+   sign-ups have always been recorded, a landing on the sign-up page only since the prefill hook
+   shipped. One denominator would understate visits by every send that predates it. */
+function ArmComparisonBlock({ stat }: { stat: CampaignStats }) {
+  const c = stat.armComparison;
+  if (!c.hasData) return null;
+  const cell = (num: number, den: number) => {
+    const r = armRate(num, den);
+    return r === null
+      ? <span className="text-muted-foreground/50">—</span>
+      : <><span className="font-semibold text-foreground/90">{r}%</span>
+         <span className="block text-[10px] leading-tight text-muted-foreground/60">{num} of {den}</span></>;
+  };
+  return (
+    <div className="border-t border-border/50 pt-2">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+        Cold vs warm
+        <span className="ml-1.5 normal-case tracking-normal text-muted-foreground/50">
+          credited to the template the lead was sent, not the last one
+        </span>
+      </p>
+      <div className="mt-1.5 overflow-x-auto">
+        <table className="w-full min-w-[420px] border-collapse text-[11px]">
+          <thead>
+            <tr className="text-[9px] uppercase tracking-wide text-muted-foreground/60">
+              <th scope="col" className="min-w-[150px] pb-1 pr-2 text-left font-medium">Arm</th>
+              <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-medium">Leads</th>
+              <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-medium">Report</th>
+              <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-medium">Site</th>
+              <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-medium">Sign-up</th>
+            </tr>
+          </thead>
+          <tbody>
+            {AB_ARMS.map((arm) => {
+              const t = c.arms[arm];
+              return (
+                <tr key={arm} className="border-t border-border/30">
+                  <th scope="row" className="min-w-[150px] py-1 pr-2 text-left font-medium">
+                    <span className="block truncate text-[11px] text-foreground/90">{ARM_LABELS[arm]}</span>
+                  </th>
+                  <td className="whitespace-nowrap py-1 pl-2 text-right align-top tabular-nums">
+                    <span className="font-semibold text-foreground/90">{t.leads}</span>
+                    {t.leadsTracked !== t.leads && (
+                      <span className="block text-[10px] leading-tight text-muted-foreground/60"
+                        title="Leads whose arm send happened while site-visit tracking was running — the denominator for the Site column only.">
+                        {t.leadsTracked} tracked
+                      </span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap py-1 pl-2 text-right align-top tabular-nums"
+                    title="Opened the audit report at any point after this arm reached them.">
+                    {cell(t.reportOpened, t.leads)}
+                  </td>
+                  <td className="whitespace-nowrap py-1 pl-2 text-right align-top tabular-nums"
+                    title="Landed on the sign-up page after this arm reached them. Divided by the leads whose arm send is inside the tracking window, so the rate can never exceed 100%.">
+                    {cell(t.siteVisits, t.leadsTracked)}
+                  </td>
+                  <td className="whitespace-nowrap py-1 pl-2 text-right align-top tabular-nums"
+                    title="Submitted the questionnaire after this arm reached them. Free-check submissions are excluded.">
+                    {cell(t.signups, t.leads)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {c.bothArms > 0 && (
+          <p className="pt-1.5 text-[10px] leading-snug text-amber-700 dark:text-amber-500"
+            title="A lead sent both templates is in both populations, so it can answer neither question. Assigning it to the newer arm would flatter whichever template was introduced second — which is always the one being tested.">
+            {c.bothArms} lead{c.bothArms === 1 ? ' was' : 's were'} sent BOTH templates and{' '}
+            {c.bothArms === 1 ? 'is' : 'are'} excluded from both arms.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide, siteTrackingReady = false }: {
   stat: CampaignStats;
   /** False until a real read of lead_page_hits succeeds — see the Site column. */
@@ -240,6 +328,8 @@ export function CampaignStatsCard({ stat, onEdit, hidden = false, onToggleHide, 
             )}
           </div>
         )}
+
+        <ArmComparisonBlock stat={stat} />
 
         {/* ── PER TEMPLATE ─────────────────────────────────────────────────────────────────────
             Open by default: this is the reason to look at the card, and a collapsed section holding
