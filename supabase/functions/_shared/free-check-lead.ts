@@ -36,6 +36,15 @@
 import { resolvePlaceId } from "./place-resolve.ts";
 import { resolveDerivedTown } from "./place-town.ts";
 import { ENTERPRISE_FIELDS, fetchPlaceDetails } from "./place-details.ts";
+/* The dedupe's judgement lives in its own pure module, with the measured collisions as its tests.
+   ⛔ ANY CHANGE THERE NEEDS BOTH CONSUMERS OF THIS FILE REDEPLOYED — findable-onboarding is the
+   only entry point today, but that is a fact to check, not to assume (the four-day result-email
+   outage was one undeployed consumer of one shared module). */
+import {
+  pickSameBusiness, pickByPlaceId,
+  type SameBusinessCandidate, type SameBusinessVerdict,
+} from "./same-business.ts";
+
 // The SAME normaliser the send path uses, so a stored number is always one we can dial.
 import { toWhatsAppNumber } from "./whatsapp-send.ts";
 
@@ -87,17 +96,41 @@ async function resolveOwnerUserId(service: any): Promise<string | null> {
   return String(data.user_id);
 }
 
-/** One keyed dedupe read. Throws on error so the caller can fail CLOSED. */
+/**
+ * One keyed dedupe read — EVERY match, not the first one.
+ *
+ * ⛔ IT USED TO BE `.limit(1).maybeSingle()`, AND THAT WAS THE BUG. Seven leads share the name
+ * "Timpson Locksmiths and Safe Engineers" and fifteen share Timpson's national phone number; the
+ * old read took whichever row Postgres happened to return, so which business a prospect got
+ * attributed to was a coin toss. The caller can only apply a town rule if it can see all the
+ * candidates, so the read has to return them.
+ * ⚠️ Still throws on error so the caller fails CLOSED. A dedupe that cannot prove a lead is new
+ * must not create one.
+ * ⚠️ The cap is generous rather than absent: the largest real group is 15, and a key matching
+ * hundreds of leads is a data problem this function should not try to resolve.
+ */
 // deno-lint-ignore no-explicit-any
-async function findBy(service: any, column: string, value: string) {
+async function findAllBy(service: any, column: string, value: string): Promise<SameBusinessCandidate[]> {
   const { data, error } = await service
     .from("outreach_leads")
-    .select("id, business_name, is_archived")
+    /* derived_town FIRST, search_location as the fallback: the derived town is what Google says the
+       business's address is in, and the search location is only where we were looking when we found
+       it. Preferring the search would compare a prospect's town against our own search radius. */
+    .select("id, business_name, derived_town, search_location, address, place_id, is_archived, created_at")
     .eq(column, value)
-    .limit(1)
-    .maybeSingle();
+    .limit(50);
   if (error) throw new Error(`dedupe read on ${column} failed: ${error.message}`);
-  return data ?? null;
+  // deno-lint-ignore no-explicit-any
+  return ((data ?? []) as any[]).map((r) => ({
+    id: String(r.id),
+    business_name: r.business_name ?? null,
+    town: (r.derived_town ?? null) as string | null,
+    searchLocation: (r.search_location ?? null) as string | null,
+    address: (r.address ?? null) as string | null,
+    place_id: r.place_id ?? null,
+    is_archived: r.is_archived ?? null,
+    created_at: r.created_at ?? null,
+  }));
 }
 
 /**
@@ -121,21 +154,44 @@ export async function createFreeCheckLead(
     const userId = await resolveOwnerUserId(service);
     if (!userId) return { kind: "refused", reason: "could not resolve the owning account from existing leads" };
 
+    /* ⛔ EVERY REFUSED MATCH IS COLLECTED, NOT DISCARDED. A new lead created because the name hit a
+       chain in another town is a DIFFERENT event from one created because nothing matched at all,
+       and the operator needs to be able to tell them apart — that is the whole lesson of the alert
+       that narrated a state nobody had checked. These end up in the created lead's note. */
+    const nearMisses: string[] = [];
+    const matchFrom = (
+      v: SameBusinessVerdict,
+      candidates: SameBusinessCandidate[],
+      on: "place_id" | "phone" | "name",
+    ): FreeCheckOutcome | null => {
+      if (v.kind === "match") {
+        const hit = candidates.find((c) => c.id === v.leadId)!;
+        return {
+          kind: "matched",
+          leadId: v.leadId,
+          matchedOn: on,
+          existingName: String(hit.business_name ?? businessName),
+          archived: hit.is_archived === true,
+        };
+      }
+      /* Only a genuine near miss is worth recording. "no lead has this name" is the normal case and
+         would be noise on every single new lead. */
+      if (candidates.length > 0) nearMisses.push(v.reason);
+      return null;
+    };
+
     // ── 1. NAME DEDUPE — free, so it goes first ──────────────────────────────────────────────
-    let existing;
+    /* ⛔ AND IT IS NO LONGER TOWN-BLIND. An exact business_name matched a chain across towns and
+       took an arbitrary one of them: "Timpson" exists in Blyth AND Wisbech, and "Timpson Locksmiths
+       and Safe Engineers" on seven leads in three towns. Measured 2026-09-07 over 3,192 leads: 87
+       exact names are shared and 4 are provably different businesses. The town now has to agree,
+       and two candidates in the SAME town refuse rather than guess. */
     try {
-      existing = await findBy(service, "business_name", businessName);
+      const byName = await findAllBy(service, "business_name", businessName);
+      const hit = matchFrom(pickSameBusiness(byName, town, "business name"), byName, "name");
+      if (hit) return hit;
     } catch (e) {
       return { kind: "refused", reason: (e as Error).message };
-    }
-    if (existing) {
-      return {
-        kind: "matched",
-        leadId: String(existing.id),
-        matchedOn: "name",
-        existingName: String(existing.business_name ?? businessName),
-        archived: existing.is_archived === true,
-      };
     }
 
     /* ── 2. THE DAILY CAP, checked BEFORE the first paid call ─────────────────────────────────
@@ -176,16 +232,13 @@ export async function createFreeCheckLead(
     // ── 4. place_id DEDUPE — the moment that key exists ──────────────────────────────────────
     if (placeId) {
       try {
-        const byPlace = await findBy(service, "place_id", placeId);
-        if (byPlace) {
-          return {
-            kind: "matched",
-            leadId: String(byPlace.id),
-            matchedOn: "place_id",
-            existingName: String(byPlace.business_name ?? businessName),
-            archived: byPlace.is_archived === true,
-          };
-        }
+        /* ⛔ place_id IS EXEMPT FROM THE TOWN RULE, DELIBERATELY. It identifies the business
+           itself, so two leads sharing one are duplicates of a single shop rather than two shops —
+           and it is the ONLY thing that separates Fletcher Lock & Safe Co's two Sunderland
+           branches. Ties resolve to the OLDEST lead, deterministically. */
+        const byPlace = await findAllBy(service, "place_id", placeId);
+        const hit = matchFrom(pickByPlaceId(byPlace), byPlace, "place_id");
+        if (hit) return hit;
       } catch (e) {
         return { kind: "refused", reason: (e as Error).message };
       }
@@ -203,16 +256,14 @@ export async function createFreeCheckLead(
     const typedPhone = toWhatsAppNumber(input.phone ?? "", null);
     if (typedPhone) {
       try {
-        const byTyped = await findBy(service, "phone", typedPhone);
-        if (byTyped) {
-          return {
-            kind: "matched",
-            leadId: String(byTyped.id),
-            matchedOn: "phone",
-            existingName: String(byTyped.business_name ?? businessName),
-            archived: byTyped.is_archived === true,
-          };
-        }
+        /* ⛔ THE PHONE RUNG IS THE RISKIEST OF THE THREE, so it gets the same town rule. Measured
+           2026-09-07: 105 numbers are shared across leads and 29 of those sit on DIFFERENT business
+           names. The worst is 448000187187 — Timpson's national switchboard — on fifteen leads
+           across eight towns; Toolstation's 443303333303 spans March, Hampshire and Bath. Matching
+           on that alone attributed a prospect to an arbitrary branch. */
+        const byTyped = await findAllBy(service, "phone", typedPhone);
+        const hit = matchFrom(pickSameBusiness(byTyped, town, "phone"), byTyped, "phone");
+        if (hit) return hit;
       } catch { /* a failed lookup must not stop the lead being created — the later guards remain */ }
     }
 
@@ -235,16 +286,10 @@ export async function createFreeCheckLead(
     // ── 6. PHONE DEDUPE — catches the same operator trading under a different name ───────────
     if (phone) {
       try {
-        const byPhone = await findBy(service, "phone", phone);
-        if (byPhone) {
-          return {
-            kind: "matched",
-            leadId: String(byPhone.id),
-            matchedOn: "phone",
-            existingName: String(byPhone.business_name ?? businessName),
-            archived: byPhone.is_archived === true,
-          };
-        }
+        /* The phone Google gave us, same rule as the typed one. */
+        const byPhone = await findAllBy(service, "phone", phone);
+        const hit = matchFrom(pickSameBusiness(byPhone, town, "phone"), byPhone, "phone");
+        if (hit) return hit;
       } catch (e) {
         return { kind: "refused", reason: (e as Error).message };
       }
@@ -268,6 +313,15 @@ export async function createFreeCheckLead(
         ? `Signed up directly on findable.live${trade ? ` — ${trade}` : ""}${town ? ` in ${town}` : ""}. No prospecting; they arrived with no lead link.`
         : `Came in through the free AI check on findable.live${trade ? ` — asked about ${trade}` : ""}${town ? ` in ${town}` : ""}.`,
     };
+    /* ⛔ A NEW LEAD CREATED DESPITE A NEAR MISS SAYS SO ON THE ROW. Otherwise the two reasons for
+       creating one — "nothing matched" and "a chain matched in another town and we refused to
+       guess" — are indistinguishable, and the second is the one an operator may want to look at
+       (it can mean a genuine duplicate, or a chain worth knowing about). Appended rather than
+       replacing the provenance line, because both facts matter. */
+    if (nearMisses.length > 0) {
+      row.notes = `${row.notes} Created as a NEW lead rather than reusing an existing one: `
+        + `${nearMisses.join("; ")}.`;
+    }
     if (placeId) row.place_id = placeId;
     if (phone) row.phone = phone;
     if (website) row.website = website;
