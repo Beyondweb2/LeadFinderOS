@@ -51,7 +51,13 @@ export interface SubmissionRow {
 }
 
 /** How the notification for a submission actually ended up. Derived, never stored. */
-export type NotifyState = 'delivered' | 'pending' | 'failed' | 'retired';
+/* ⛔ 'accepted', NOT 'delivered' (renamed 2026-09-07). notify_sent_at is written on a 2xx from
+   Resend — the provider TOOK the message. Whether a mailbox received it is a different fact that
+   lives only in Resend's delivery events and is not in this database. Measured that day: 19 rows
+   carry the stamp and not one carries a provider error, so from our side every send "worked",
+   which is precisely why the word must not overclaim. Same class of error as the operator alert
+   that announced a result had been sent when none had. */
+export type NotifyState = 'accepted' | 'pending' | 'failed' | 'retired';
 
 /** Rows the notifier retired on purpose. They are NOT failures and must not be shown as such. */
 const RETIRED_PREFIXES = ['not sent:', 'outcome not recorded'];
@@ -66,7 +72,7 @@ const RETIRED_PREFIXES = ['not sent:', 'outcome not recorded'];
  */
 export function notifyStateFor(r: Pick<SubmissionRow, 'notify_sent_at' | 'notify_attempts' | 'notify_error'>,
                                maxAttempts = 3): NotifyState {
-  if (r.notify_sent_at) return 'delivered';
+  if (r.notify_sent_at) return 'accepted';
   const err = (r.notify_error ?? '').trim().toLowerCase();
   if (err && RETIRED_PREFIXES.some((p) => err.startsWith(p))) return 'retired';
   if ((r.notify_attempts ?? 0) >= maxAttempts) return 'failed';

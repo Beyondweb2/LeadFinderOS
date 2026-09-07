@@ -44,7 +44,7 @@ import {
 const NOTIFY_BADGE: Record<NotifyState, { label: string; className: string } | null> = {
   /* The happy path gets NO badge. A row per submission all saying "emailed" is noise that hides
      the one that says otherwise. */
-  delivered: null,
+  accepted: null,
   pending: { label: 'email pending', className: 'bg-muted text-muted-foreground border-transparent' },
   failed: { label: 'EMAIL FAILED', className: 'bg-red-500/15 text-red-600 border-red-500/30' },
   retired: { label: 'no email needed', className: 'bg-muted text-muted-foreground border-transparent' },

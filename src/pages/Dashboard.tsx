@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { PipelineCard } from '@/components/dashboard/PipelineCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
 import { SubmissionsCard } from '@/components/dashboard/SubmissionsCard';
+import { FreeCheckProgressCard } from '@/components/dashboard/FreeCheckProgressCard';
 import { ChannelPerformanceCard } from '@/components/dashboard/ChannelPerformanceCard';
 import { AuditFunnelCard } from '@/components/dashboard/AuditFunnelCard';
 import { CampaignStatsSection } from '@/components/dashboard/CampaignStatsSection';
@@ -130,6 +131,11 @@ const Dashboard = () => {
           {/* Beside Next Actions on purpose: its chase task is keyed on a LEAD and only fires after
               a day, so a lead-less submission never appears there at all. */}
           <SubmissionsCard />
+          {/* ⛔ ABOVE THE FOLD OF THIS SECTION AND NOT BEHIND A TOGGLE (2026-09-07). It is the screen
+              that answers "where has my test got to", and the whole reason it exists is that the
+              answer was unavailable while an operator sat waiting. A collapsed panel would put it
+              back one click from useless. It polls only while something is mid-flight. */}
+          <FreeCheckProgressCard />
         </div>
       </section>
 
