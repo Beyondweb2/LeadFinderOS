@@ -339,10 +339,35 @@ Deno.serve(async (req) => {
         "They asked for a free AI check on findable.live. They are waiting on a report from you, and nothing has been sent to them automatically. Their lead is in Outreach; add them to the WhatsApp queue when you are ready.";
       if (isFreeCheck && row.lead_id) {
         try {
+          /* ⛔ SCOPED TO THIS SUBMISSION, NOT TO THE LEAD. THE BUG THIS FIXES, MEASURED
+             2026-09-07: "the glue pot" (a bar in Castletown) asked for a free check at 04:20:30.
+             Its lead creation DEDUPED onto an existing lead — the phone matched a test lead called
+             "Test plumber" — and the audit was then correctly skipped ("already audited within 7
+             days", recorded at 04:20:33). But this lookup asked only "what is the newest audit on
+             that lead", found the 3 SEPTEMBER audit for Test plumber / Locksmith / Newcastle,
+             read its free_check_result stamp, and emailed: "the audit ran, and their result has
+             already been sent to paul@move37.fun". Every clause of that was true of a four-day-old
+             audit for a different business and false of the submission it described.
+             ⚠️ AND THE HANDLING FOR THE REAL STATE ALREADY EXISTED. The no-audit branch below reads
+             the skip reason out of client_error_reports and puts it in the red box; it would have
+             said "NO AUDIT RAN: already audited within 7 days", which is exactly the truth. It was
+             never reached, because an old audit outranked the absence of a new one. A guard is no
+             use if the case it guards cannot arrive at it.
+             ⛔ A LEAD IS NOT A SUBMISSION, AND THE FREE-CHECK LANE DEDUPES ON PURPOSE, so a repeat
+             visitor's row will KEEP landing on a lead that carries older audits. Anything read here
+             must therefore be tied to this row, never to the lead alone.
+             ⚠️ THE ORDER IS GUARANTEED, WHICH IS WHY A TIMESTAMP IS ENOUGH: findable-onboarding
+             saves this row FIRST, then creates or matches the lead, then fires the audit. So an
+             audit belonging to this submission is always created after row.created_at. The 60s of
+             backward tolerance covers only same-request clock jitter — it is deliberately tiny,
+             because the thing it must exclude is four days old, and a generous window would let the
+             next stale audit straight back in. */
+          const scopeFrom = new Date(new Date(row.created_at).getTime() - 60_000).toISOString();
           const { data: auditRows } = await service
             .from("ai_audits")
             .select("id, created_at, free_check_result")
             .eq("lead_id", row.lead_id)
+            .gte("created_at", scopeFrom)
             .order("created_at", { ascending: false })
             .limit(1);
           const audit = ((auditRows ?? []) as Array<{ id: string; created_at: string; free_check_result: unknown }>)[0];
@@ -387,7 +412,18 @@ Deno.serve(async (req) => {
                 .find((r) => r.context?.onboarding_id === row.id || r.context?.lead_id === row.lead_id);
               if (hit) why = String(hit.context?.reason ?? hit.context?.error ?? hit.error_id);
             } catch { /* best effort — the wording below still tells the truth without it */ }
-            freeCheckTail = `They asked for a free AI check on findable.live and NO AUDIT RAN${why ? `: ${why}` : ""}. Nothing has been sent to them automatically. Their lead is in Outreach; audit them by hand or add them to the WhatsApp queue.`;
+            /* ⚠️ NAME THE MATCHED LEAD WHEN THE SUBMISSION LANDED ON AN EXISTING ONE. The skip
+               reason ("already audited within 7 days") is about a lead the visitor has never heard
+               of, and without the name it reads as though THEY were audited last week. Best effort:
+               a failed lookup just omits it. */
+            let matched: string | null = null;
+            try {
+              const { data: lr } = await service
+                .from("outreach_leads").select("business_name").eq("id", row.lead_id).maybeSingle();
+              const ln = (lr as { business_name?: string } | null)?.business_name ?? null;
+              if (ln && ln.trim().toLowerCase() !== (row.business_name ?? "").trim().toLowerCase()) matched = ln;
+            } catch { /* omit it */ }
+            freeCheckTail = `They asked for a free AI check on findable.live and NO AUDIT RAN${why ? `: ${why}` : ""}.${matched ? ` Their details matched an existing lead ("${matched}"), which is why the audit was skipped — the guard is about that lead, not about them.` : ""} Nothing has been sent to them automatically. Their lead is in Outreach; audit them by hand or add them to the WhatsApp queue.`;
             /* ⛔ AND IT GOES IN THE RED BOX, not only in the grey line at the foot. This is the one
                free-check state that needs a human, and the tail is small print at the bottom of the
                email — the same place the old misleading sentence sat unread. `needsYou` is built
