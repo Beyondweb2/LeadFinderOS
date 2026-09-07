@@ -135,11 +135,22 @@ async function flagToOperator(subject: string, lines: string[]): Promise<void> {
  * Called from process-ai-audit-queue's finalisation loop for runs that finished COMPLETE and not
  * capped. Never throws.
  */
+/** Options for the OPERATOR resend. Absent on the automatic path, which must keep its guard. */
+export interface ResendOpts {
+  /* ⛔ THE ONLY WAY PAST THE ONCE-PER-AUDIT GUARD, AND IT IS OPERATOR-INITIATED BY CONSTRUCTION.
+     The automatic path never sets it, so the property that stopped a stranger being emailed three
+     times (once per run, six minutes apart) is untouched. A resend is a person deciding to send a
+     second copy to an address they can see on screen. */
+  force?: boolean;
+}
+
 export async function maybeSendFreeCheckResult(
   service: Client,
   runId: string,
   auditId: string,
+  opts?: ResendOpts,
 ): Promise<ResultOutcome> {
+  const forced = opts?.force === true;
   /* 1 — THE LANE. A free-check SUBMISSION linked to this audit's lead is what makes the audit ours;
      every other audit in the system must fall straight through. (It used to be the lead's
      enrichment_source column — see the note further down for why that was wrong and what it cost.) */
@@ -279,7 +290,11 @@ export async function maybeSendFreeCheckResult(
     ? claimRun.results
     : {}) as Record<string, unknown>;
   const auditStamped = (audit as { free_check_result?: unknown }).free_check_result;
-  if (auditStamped || claimRunResults.free_check_result) {
+  /* ⛔ THE GUARD STANDS FOR THE AUTOMATIC PATH AND IS EXPLICITLY OVERRIDDEN FOR A RESEND. It is
+     not weakened: `forced` can only be true when an operator asked, and the previous stamp is
+     deliberately LEFT IN PLACE below so the automatic path stays refused for ever after. */
+  const alreadySent = !!(auditStamped || claimRunResults.free_check_result);
+  if (alreadySent && !forced) {
     return { kind: "skipped", reason: "already sent for this audit" };
   }
 
@@ -333,13 +348,42 @@ export async function maybeSendFreeCheckResult(
      between crashes, so the claim goes first: a crash then costs a missing email rather than a
      duplicate one, the same trade-off every send in this project makes.
      ⛔ ON THE AUDIT, so it is one claim per measurement however many runs it has. */
-  const stamp = {
-    at: new Date().toISOString(),
+  /* ── THE STAMP ──────────────────────────────────────────────────────────────────
+     ⛔ IT IS WRITTEN BEFORE THE SEND, AND THAT ORDER IS DELIBERATE — claiming first is what makes
+     the send happen at most once. But until 2026-09-07 it was ALSO the only record, so a stamp
+     meant "we decided to send", not "an email went", and the dashboard read it as "Result sent".
+     Exactly the overclaim that made the glue-pot alert wrong: a state announced without being
+     checked. The claim still goes first; the OUTCOME is now patched on afterwards.
+     ⚠️ `email_status` IS THE HONEST WORD: 'accepted' means Resend returned 2xx and took the
+     message. Whether a mailbox received it is not in this database, and nothing here may claim it.
+     ⚠️ `provider_message_id` IS WHY A RESEND LOOKUP NO LONGER NEEDS THE DASHBOARD. It is the id
+     Resend assigns; with it, "did this actually go" is answerable from our own row.
+     ⚠️ AND ON A RESEND THE ORIGINAL `at` SURVIVES. The first send is the fact the automatic guard
+     keys on; overwriting it with today's date would make an old audit look freshly sent. */
+  const priorStamp = (typeof auditStamped === "object" && auditStamped
+    ? auditStamped
+    : (typeof claimRunResults.free_check_result === "object" && claimRunResults.free_check_result
+      ? claimRunResults.free_check_result
+      : null)) as Record<string, unknown> | null;
+  const nowIso = new Date().toISOString();
+  const stamp: Record<string, unknown> = {
+    at: (priorStamp?.at as string | undefined) ?? nowIso,
     email,
     template: FREE_CHECK_TEMPLATE,
     runs_completed: completed.length,
     runs_target: target,
+    /* Starts as the honest unknown. Patched to accepted/failed after the call below. */
+    email_status: "attempting",
+    provider_message_id: null as string | null,
+    email_error: null as string | null,
   };
+  if (forced) {
+    stamp.resend_count = Number(priorStamp?.resend_count ?? 0) + 1;
+    stamp.last_resent_at = nowIso;
+  } else if (priorStamp?.resend_count) {
+    stamp.resend_count = priorStamp.resend_count;
+    stamp.last_resent_at = priorStamp.last_resent_at ?? null;
+  }
   let claimErr: { message?: string } | null = null;
   ({ error: claimErr } = await service
     .from("ai_audits").update({ free_check_result: stamp }).eq("id", auditId));
@@ -380,6 +424,8 @@ export async function maybeSendFreeCheckResult(
 
   /* 5 — EMAIL. Plain, short, and it states what was measured rather than selling. */
   let emailed = false;
+  let providerMessageId: string | null = null;
+  let emailError: string | null = null;
   const resendKey = Deno.env.get("RESEND_API_KEY");
   if (!resendKey) {
     console.error("[free-check-result] RESEND_API_KEY not set — cannot email the prospect");
@@ -393,7 +439,14 @@ export async function maybeSendFreeCheckResult(
           // A reply is the warmest outcome this email can have; it must reach a real inbox.
           reply_to: ADMIN_EMAIL,
           to: [email],
-          subject: `Your AI visibility check — ${name}`,
+          /* ⛔ A RESEND CARRIES A DISTINGUISHING SUFFIX, AND IT IS NOT COSMETIC. Gmail groups
+             messages with the SAME subject from the same sender into one conversation, so a second
+             identical copy collapses under the first and reads as "it never arrived" — the exact
+             symptom that sent us hunting a dedup bug that did not exist. The date makes each copy
+             its own conversation. Only on a resend: the first email should look like what it is. */
+          subject: forced
+            ? `Your AI visibility check — ${name} (resent ${nowIso.slice(0, 16).replace("T", " ")} UTC)`
+            : `Your AI visibility check — ${name}`,
           html: [
             `<p>Hi,</p>`,
             `<p>We asked ChatGPT and Gemini the questions your customers ask when they're looking for a ${trade || "business"}${town ? ` in ${town}` : ""}, and recorded who came up.</p>`,
@@ -405,9 +458,45 @@ export async function maybeSendFreeCheckResult(
         }),
       });
       emailed = res.ok;
-      if (!res.ok) console.error(`[free-check-result] resend HTTP ${res.status} for ${email}`);
+      /* The provider's own id, read from the 2xx body. Best effort: a body we cannot parse leaves
+         the id null rather than failing a send that already happened. */
+      if (res.ok) {
+        try {
+          const j = await res.json();
+          providerMessageId = (j?.id as string | undefined) ?? null;
+        } catch { /* id unavailable — the accepted status is still true */ }
+      } else {
+        emailError = `resend HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`;
+        console.error(`[free-check-result] ${emailError} for ${email}`);
+      }
     } catch (e) {
-      console.error("[free-check-result] email failed:", e instanceof Error ? e.message : String(e));
+      emailError = `send threw: ${e instanceof Error ? e.message : String(e)}`;
+      console.error("[free-check-result] email failed:", emailError);
+    }
+  }
+
+  /* ⛔ THE OUTCOME GOES BACK ONTO THE STAMP. Best effort and never throwing: the email has already
+     been sent or not, and a failed bookkeeping write must not turn a delivered result into an
+     error. But without this the row says "attempting" for ever, which is at least honestly wrong
+     rather than falsely reassuring — the state it replaced claimed success unconditionally. */
+  {
+    const outcome = {
+      ...stamp,
+      email_status: emailed ? "accepted" : "failed",
+      provider_message_id: providerMessageId,
+      email_error: emailError,
+    };
+    try {
+      const { error: upErr } = await service
+        .from("ai_audits").update({ free_check_result: outcome }).eq("id", auditId);
+      if (upErr && /free_check_result/i.test(upErr.message ?? "")) {
+        await service.from("ai_audit_runs")
+          .update({ results: { ...claimRunResults, free_check_result: outcome } })
+          .eq("id", claimRun.id);
+      }
+    } catch (e) {
+      console.error("[free-check-result] could not record the email outcome:",
+        e instanceof Error ? e.message : String(e));
     }
   }
 

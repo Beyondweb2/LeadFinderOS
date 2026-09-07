@@ -60,5 +60,17 @@ export function useFreeCheckProgress() {
     return () => { if (timer.current) { window.clearInterval(timer.current); timer.current = null; } };
   }, [live, fetchData]);
 
-  return { rows, isLoading, error, live, refetch: fetchData };
+  /* ⛔ THE RESEND SENDS A REAL EMAIL TO A REAL PROSPECT, so it returns its outcome rather than
+     firing and forgetting: the caller confirms first and shows what happened after. It refetches on
+     success so the row's new outcome and resend count appear immediately. */
+  const resendResult = useCallback(async (auditId: string) => {
+    const { data, error: e } = await supabase.functions.invoke('submissions', {
+      body: { action: 'resend_free_check_result', audit_id: auditId },
+    });
+    if (e || !data?.ok) throw new Error(e?.message ?? data?.error ?? 'resend failed');
+    await fetchData();
+    return data.outcome as { kind: string; emailed?: boolean; reason?: string };
+  }, [fetchData]);
+
+  return { rows, isLoading, error, live, refetch: fetchData, resendResult };
 }
