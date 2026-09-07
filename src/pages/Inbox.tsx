@@ -82,7 +82,7 @@ function templateLabel(name: string | null): string {
    ever been sent to a free-check prospect - it drives the "report sent" badge and the
    report-vs-reply ordering. A Set, because the next template carrying a report must join one list
    rather than three string comparisons. */
-const REPORT_TEMPLATES = new Set(['audit_reply', 'free_check_result', 'audit_result_hook']);
+const REPORT_TEMPLATES = new Set(['audit_reply', 'free_check_result', 'audit_result_hook', 'audit_reply_warm']);
 
 // Clean display names for templates (incl. the legacy pre-rename name). Unknown → "Template".
 const TEMPLATE_DISPLAY: Record<string, string> = {
@@ -95,6 +95,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   audit_reply: 'Audit reply (report)', // was falling through to a bare "Template" in the thread
   free_check_result: 'Free check result (report)', // same reason: it showed as a bare "Template"
   audit_result_hook: 'Audit result hook (outreach)',
+  audit_reply_warm: 'Audit reply — warm (after the opener)',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage: 'Re-engage (gone quiet)',

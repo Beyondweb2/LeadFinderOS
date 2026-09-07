@@ -69,6 +69,16 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
      ⚠️ It shares `trade` with audit_reply, which is what both send paths used to KEY ON to decide
      the payload shape - see the var-driven build in each. */
   audit_result_hook: { lang: "en", vars: ["name", "trade", "town", "audit_url"] },
+  /* audit_reply_warm — the WARM audit message, approved at Meta 2026-09-07 (id 1509669747584736).
+     Same job as audit_result_hook but for a lead who has ALREADY answered the opener, so it drops
+     the "is this the right number" line.
+     ⛔ THREE VARS AND NO `name`, TAKEN FROM WHATSAPP MANAGER RATHER THAN INFERRED FROM ITS SIBLING:
+     {{1}} trade, {{2}} town, {{3}} audit link. audit_result_hook leads with the business name and
+     this one does not, so reusing its var list would put the trade in {{1}} where Meta expects a
+     name and shift every parameter by one — a message that sends "200 OK" and reads as gibberish.
+     ⚠️ {{3}} is findable.live/report/<auditId>, from resolveAuditReplyVars' `link`, exactly as the
+     hook's {{4}} is. Never /a/<id> (a deliberate 404) and never yoursites.uk. */
+  audit_reply_warm: { lang: "en", vars: ["trade", "town", "audit_url"] },
   // Follow-up once the 24h window has closed: points a warm lead at the onboarding flow.
   // {{1}} business name, {{2}} that lead's onboarding URL. Vars resolved server-side per-lead by
   // resolveOnboardingFollowupVars — never from a caller-supplied link.
@@ -280,6 +290,20 @@ We'll get started and be back to you within a few days to get your Google profil
 
 Anything in the meantime, just reply here.`;
 
+/* audit_reply_warm — the WARM audit message (Meta 1509669747584736, approved 2026-09-07). It is
+   audit_result_hook MINUS the "is this the right number" opening, because it only ever goes to a
+   lead who has already answered the opener, so asking again reads as though we were not listening.
+   ⛔ THREE VARIABLES, NOT FOUR, AND THE BUSINESS NAME IS NOT ONE OF THEM. Registered at Meta as
+   {{1}} trade, {{2}} town, {{3}} audit link. audit_result_hook's {{1}} is the business name; this
+   body never says it. Copying the hook's var list across would have shifted every parameter by one
+   and sent the trade where Meta expects a name.
+   ⚠️ DISPLAY ONLY, like every body here — Meta renders what the prospect reads from its own
+   registered copy. This decides what the OPERATOR sees in the Inbox transcript. */
+const auditReplyWarmBody = (_b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
+  `We ran a free AI visibility audit for you. When people ask ChatGPT or Google's AI for a ${trade || 'provider'} in ${town || 'your area'}, it's naming other firms, not you.
+Here's your result: ${u}
+More on how we can fix it, and how to get started: https://findable.live`;
+
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string) => string> = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
@@ -304,6 +328,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   initial_contact: initialContactBody,
   audit_reply: auditReplyBody,
   audit_result_hook: auditResultHookBody,
+  audit_reply_warm: auditReplyWarmBody,
 };
 
 /** Render the display copy of a template body with its variables filled. `trade`/`competitors`

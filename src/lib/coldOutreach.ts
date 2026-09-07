@@ -33,6 +33,12 @@
 export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
   // The reply chain: all four are answers to, or chases of, a live thread.
   "audit_reply",
+  /* ⛔ audit_reply_warm IS THE WARM VERSION AND MUST BE NAMED HERE, which is exactly what this
+     file's header demands of a new follow-up. It is defined by going to a lead who has ALREADY
+     answered the opener — so leaving it unlisted would make it COLD by default (correct, safe
+     default) and the phone-history seatbelt would refuse it for every single lead it is written
+     for. It would be selectable, appear to send, and be dropped as phone_already_contacted. */
+  "audit_reply_warm",
   "hook_followup",
   "contact_followup",
   "report_followup",
