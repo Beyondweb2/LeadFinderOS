@@ -75,6 +75,18 @@ export interface QuestionMovement {
   thin: boolean;
   /** Ready-to-read summary, e.g. "named 0 of 8 → 2 of 2". */
   label: string;
+  /* ⛔ THE ORDER THE QUESTION WAS ASKED IN, so a row can be put back where it belongs.
+     The fold used to return questions sorted by MOVEMENT only, which is the right order for a
+     client reading their wins and the wrong one for analysis: the row order changed every time
+     the numbers changed, so two viewings of the same audit could not be read against each other,
+     and it never matched the order the questions appear anywhere else in the product.
+     ⚠️ DERIVED FROM ROW ORDER, NOT FROM A TIMESTAMP — ai_audit_queue rows carry no created_at in
+     QueueRowLite, and buildBaselineView re-sorts its own questions by BAND, so neither is a source
+     of ask order. Both callers fetch `.order('id', { ascending: true })`, and queue rows are
+     inserted in question order, so first appearance in the rows array IS the asked order. A
+     caller that fetches unordered gets a stable but arbitrary order, which is still better than
+     one that moves with the results. BEFORE decides; a question only asked after is appended. */
+  askIndex: number;
 }
 
 export interface OverallSide {
@@ -148,6 +160,18 @@ function citedByQuestion(
   return out;
 }
 
+/** First appearance of each question key in the rows as given — the asked order (see askIndex). */
+function askOrder(rows: QueueRowLite[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const row of rows) {
+    const q = (row.question ?? '').trim();
+    if (!q) continue;
+    const key = qKey(q);
+    if (!out.has(key)) out.set(key, out.size);
+  }
+  return out;
+}
+
 /** Fold one side into per-question counts, reusing buildBaselineView for named/answered/runs. */
 function sideCounts(
   rows: QueueRowLite[],
@@ -201,6 +225,47 @@ function fmtSide(s: SideCounts | null): string {
   return `${s.named} of ${s.answered || s.cells}`;
 }
 
+/** How a comparison's rows may be ordered. `asked` is the analysis default; `movement` is the
+ *  client-reading order (wins first) the fold used to hardcode. */
+export const MEASUREMENT_ORDERS = ['asked', 'movement'] as const;
+export type MeasurementOrder = typeof MEASUREMENT_ORDERS[number];
+
+export const MEASUREMENT_ORDER_LABELS: Record<MeasurementOrder, string> = {
+  asked: 'As asked',
+  movement: 'Biggest movers',
+};
+
+/** Client-reading rank: improved, then unproven/unchanged, then dropped, then the unmatched. */
+const MOVEMENT_RANK: Record<Movement, number> = {
+  improved: 0, within_noise: 1, unchanged: 2, dropped: 3, only_after: 4, only_before: 5,
+};
+
+/**
+ * Order a comparison's questions for display or export. PURE — returns a new array, so the same
+ * comparison can be rendered in one order and exported in another without either mutating it.
+ *
+ * ⚠️ EVERY ORDER IS TOTAL. Ties fall through to askIndex and then to the question text, so the
+ * same data always yields the same sequence — which is the whole point of the 'asked' order: two
+ * exports of one measurement must be diffable, and a sort that leaves ties to the engine's
+ * discretion is not.
+ */
+export function sortMeasurementQuestions(
+  questions: QuestionMovement[],
+  order: MeasurementOrder = 'asked',
+): QuestionMovement[] {
+  const out = [...questions];
+  if (order === 'movement') {
+    out.sort((x, y) =>
+      MOVEMENT_RANK[x.movement] - MOVEMENT_RANK[y.movement]
+      || Math.abs(y.ratePpDelta ?? 0) - Math.abs(x.ratePpDelta ?? 0)
+      || x.askIndex - y.askIndex
+      || x.question.localeCompare(y.question));
+    return out;
+  }
+  out.sort((x, y) => x.askIndex - y.askIndex || x.question.localeCompare(y.question));
+  return out;
+}
+
 /**
  * Compare two measurements of the same business.
  *
@@ -219,6 +284,16 @@ export function compareMeasurements(
   const ownWebsite = (opts.ownWebsite ?? '').trim();
   const b = sideCounts(beforeRows, businessName, ownWebsite);
   const a = sideCounts(afterRows, businessName, ownWebsite);
+  /* BEFORE's order is the spine — it is the measurement the after side is being compared against,
+     so its questions keep their positions and anything new is appended after them. */
+  const bOrder = askOrder(beforeRows);
+  const aOrder = askOrder(afterRows);
+  const askIndexOf = (key: string): number => {
+    const bi = bOrder.get(key);
+    if (bi !== undefined) return bi;
+    const ai = aOrder.get(key);
+    return ai === undefined ? Number.MAX_SAFE_INTEGER : bOrder.size + ai;
+  };
 
   const keys = new Set<string>([...b.byQuestion.keys(), ...a.byQuestion.keys()]);
   const questions: QuestionMovement[] = [];
@@ -236,6 +311,7 @@ export function compareMeasurements(
         question, before: bs, after: null, namedDelta: null, ratePpDelta: null, citedDelta: null,
         movement: 'only_before', thin: true,
         label: `${fmtSide(bs)} → not asked again`,
+        askIndex: askIndexOf(key),
       });
       continue;
     }
@@ -245,6 +321,7 @@ export function compareMeasurements(
         question, before: null, after: as, namedDelta: null, ratePpDelta: null, citedDelta: null,
         movement: 'only_after', thin: true,
         label: `not asked before → ${fmtSide(as)}`,
+        askIndex: askIndexOf(key),
       });
       continue;
     }
@@ -264,19 +341,16 @@ export function compareMeasurements(
       movement: gradeDelta(ppDelta, !thin),
       thin,
       label: `named ${fmtSide(bs)} → ${fmtSide(as)}`,
+      askIndex: askIndexOf(key),
     });
   }
 
-  /* Worst-first within each group is the wrong order for evidence: a client reads the wins. Sort
-     by movement (improved, then noise/unchanged, then dropped, then unmatched), then by the size
-     of the change. */
-  const rank: Record<Movement, number> = {
-    improved: 0, within_noise: 1, unchanged: 2, dropped: 3, only_after: 4, only_before: 5,
-  };
-  questions.sort((x, y) => {
-    if (rank[x.movement] !== rank[y.movement]) return rank[x.movement] - rank[y.movement];
-    return Math.abs(y.ratePpDelta ?? 0) - Math.abs(x.ratePpDelta ?? 0);
-  });
+  /* ⛔ THE FOLD RETURNS ASKED ORDER. It used to return movement order, which meant every consumer
+     inherited a client-reading sequence whether or not it wanted one, and a caller that needed
+     like-for-like rows had no way back to the original order (the information was thrown away).
+     Ordering is a PRESENTATION choice now: sortMeasurementQuestions applies it, and the default
+     for reading a comparison is the order the questions were asked. */
+  questions.sort((x, y) => x.askIndex - y.askIndex || x.question.localeCompare(y.question));
 
   const ratePpDelta = b.overall.ratePct === null || a.overall.ratePct === null
     ? null

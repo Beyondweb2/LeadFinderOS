@@ -27,6 +27,7 @@ import type { QueueRowLite } from '@/lib/baselineView';
 import {
   compareMeasurements, NOISE_BAND_PP, type MeasurementComparison, type Movement,
 } from '@/lib/measurementCompare';
+import { MeasurementCompareTable } from '@/components/MeasurementCompareTable';
 
 interface RunLite {
   id: string;
@@ -153,6 +154,13 @@ export default function CompareMeasurements() {
   const assign = (id: string, side: 'before' | 'after' | 'none') => {
     setBeforeIds((prev) => { const n = new Set(prev); side === 'before' ? n.add(id) : n.delete(id); return n; });
     setAfterIds((prev) => { const n = new Set(prev); side === 'after' ? n.add(id) : n.delete(id); return n; });
+  };
+
+  /* Earliest run on a side = when that measurement was taken. The fold cannot know this: it is
+     handed queue rows, which carry no date. See MeasurementCompareTable's props. */
+  const measuredAtOf = (ids: Set<string>): string | null => {
+    const picked = runs.filter((r) => ids.has(r.id)).map((r) => r.created_at).sort();
+    return picked[0] ?? null;
   };
 
   const comparison: MeasurementComparison | null = useMemo(() => {
@@ -300,56 +308,14 @@ export default function CompareMeasurements() {
           </Card>
 
           {/* ── SIDE BY SIDE, PER QUESTION ───────────────────────────────────────── */}
-          <Card className="p-4 sm:p-5">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Question by question</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              A single question answered only a few times cannot prove a change on its own — those rows are marked
-              <span className="font-medium"> unproven</span>. The claim is the overall figure above.
-            </p>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="py-2 pr-3">Question</th>
-                    <th className="py-2 pr-3">Before</th>
-                    <th className="py-2 pr-3">After</th>
-                    <th className="py-2 pr-3">Change</th>
-                    <th className="py-2 pr-3">Own site cited</th>
-                    <th className="py-2">Verdict</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comparison.questions.map((q) => (
-                    <tr key={q.question} className="border-b last:border-0 align-top">
-                      <td className="py-2.5 pr-3 max-w-[280px]">{q.question}</td>
-                      <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">
-                        {q.before ? `${q.before.named} of ${q.before.answered}` : '—'}
-                      </td>
-                      <td className="py-2.5 pr-3 tabular-nums font-medium">
-                        {q.after ? `${q.after.named} of ${q.after.answered}` : '—'}
-                      </td>
-                      <td className="py-2.5 pr-3 tabular-nums">
-                        {q.namedDelta === null ? '—' : (
-                          <>
-                            {q.namedDelta > 0 ? '+' : ''}{q.namedDelta}
-                            {q.ratePpDelta !== null && (
-                              <span className="ml-1 text-xs text-muted-foreground">
-                                ({q.ratePpDelta > 0 ? '+' : ''}{q.ratePpDelta.toFixed(0)}pp)
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">
-                        {q.before && q.after ? `${q.before.cited} → ${q.after.cited}` : '—'}
-                      </td>
-                      <td className="py-2"><MoveChip movement={q.movement} thin={q.thin} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          {/* THE ALIGNED TABLE — shared with the AI Audit before/after view. It used to be
+              written out inline here, which is why the other view had no table at all. */}
+          <MeasurementCompareTable
+            comparison={comparison}
+            businessName={businessName}
+            beforeMeasuredAt={measuredAtOf(beforeIds)}
+            afterMeasuredAt={measuredAtOf(afterIds)}
+          />
 
           <p className="pb-6 text-center text-xs text-muted-foreground">
             Movement smaller than ±{NOISE_BAND_PP} points is not presented as improvement. Repeat measurements with no
