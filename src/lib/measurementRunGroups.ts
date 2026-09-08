@@ -148,3 +148,76 @@ export function sideCellsPerQuestion(groups: MeasurementGroup[]): number {
 export function pruneSelection(saved: readonly string[], available: ReadonlySet<string>): string[] {
   return saved.filter((id) => available.has(id));
 }
+
+/* ── THE DEFAULT SELECTION ────────────────────────────────────────────────────────────────────
+   ⛔ OLDEST DAY vs NEWEST DAY IS THE WRONG DEFAULT, AND RG IS THE PROOF. His oldest day is a
+   1-run, 3-QUESTION prospecting audit from 29 Jul and his newest is a single run appended on
+   8 Sep — so the default compared a 3-question probe against one run, which shares only some
+   questions and can prove nothing. The two real measurements (11 Aug and 26 Aug, both 12
+   questions × 3 runs) sat in the middle and were never picked.
+
+   So the default prefers COMPLETE MEASUREMENTS: groups that repeat as their audit intended.
+   Between two of those, oldest is before and newest is after. Everything else is a fallback, and
+   the screen says which rule was applied — a default nobody can explain is one nobody trusts. */
+
+export type DefaultSelectionReason = 'measurements' | 'largest_question_set' | 'oldest_newest' | 'none';
+
+export interface DefaultSelection {
+  before: string[];
+  after: string[];
+  reason: DefaultSelectionReason;
+  /** One line for the screen, so the operator can see WHY these runs are ticked. */
+  note: string;
+}
+
+const EMPTY: DefaultSelection = { before: [], after: [], reason: 'none', note: 'No two measurements to compare yet.' };
+
+/**
+ * Which runs to tick when the operator has made no choice.
+ *
+ * ⚠️ NEVER SPENDS AND NEVER NARROWS SILENTLY. It only pre-ticks; every group stays reassignable,
+ * and the note names the rule so a surprising pair can be corrected rather than puzzled over.
+ */
+export function defaultSelection(groups: MeasurementGroup[]): DefaultSelection {
+  if (groups.length < 2) return EMPTY;
+
+  /* 1. Complete measurements — a group that made all the runs its audit was configured for, and
+        was configured to repeat at all. This is what a before/after is supposed to compare. */
+  const complete = groups.filter((g) => g.isMeasurement && !g.shortfall && g.runCount > 1);
+  if (complete.length >= 2) {
+    const before = complete[0], after = complete[complete.length - 1];
+    return {
+      before: before.runIds,
+      after: after.runIds,
+      reason: 'measurements',
+      note: `Comparing the oldest complete measurement (${before.day}, ${before.runCount} runs) `
+        + `against the newest (${after.day}, ${after.runCount} runs).`,
+    };
+  }
+
+  /* 2. No two complete measurements: fall back to the biggest QUESTION SET, since a comparison can
+        only move on questions asked both times, and a 3-question probe against a 12-question
+        measurement is mostly unmatched rows. Ties keep the more-repeated group. */
+  const maxQ = Math.max(...groups.map((g) => g.questions));
+  const biggest = groups.filter((g) => g.questions === maxQ);
+  if (maxQ > 0 && biggest.length >= 2) {
+    const before = biggest[0], after = biggest[biggest.length - 1];
+    return {
+      before: before.runIds,
+      after: after.runIds,
+      reason: 'largest_question_set',
+      note: `No two complete measurements yet, so comparing the oldest and newest ${maxQ}-question runs `
+        + `(${before.day}, ${before.runCount} run${before.runCount === 1 ? '' : 's'} → ${after.day}, `
+        + `${after.runCount} run${after.runCount === 1 ? '' : 's'}).`,
+    };
+  }
+
+  /* 3. Last resort, the old behaviour, stated as such. */
+  const before = groups[0], after = groups[groups.length - 1];
+  return {
+    before: before.runIds,
+    after: after.runIds,
+    reason: 'oldest_newest',
+    note: `Comparing the oldest measured day (${before.day}) against the newest (${after.day}).`,
+  };
+}
