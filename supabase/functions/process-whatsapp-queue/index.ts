@@ -11,7 +11,7 @@ import {
   runOutreachAuditAhead, decideOutreachAudit, readAuditStates, templateNeedsAudit,
 } from "../_shared/outreach-audit.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
-import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
+import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
@@ -453,8 +453,40 @@ Deno.serve(async (req) => {
           return stErr ? null : ((st?.audit_complete_template as string | null) ?? null);
         } catch { return null; }
       })(),
-      // The reply-trigger template (null = default audit_reply). Defensive like the others.
+      // The reply-trigger template (null = the shared default). Defensive like the others.
       firstReplyTemplate: await firstReplyTemplate(service),
+      /* The three-way reply MODE. Absent column / failed read → 'audit_only' (never 'send'), so
+         the panel can render before the SQL has been run and never shows a sending state that
+         is not real. */
+      firstReplyMode: await firstReplyMode(service),
+      /* ⛔ HOW MANY LEADS ARE ACTUALLY WAITING FOR THE OPERATOR, not how many rows exist. An
+         audit_only row is written the moment the reply lands, while its audit is still running —
+         counting rows would tell Paul "3 ready to send" about audits that have not finished. So
+         this counts only rows whose lead HAS a completed run, which is the same test the send
+         path's resolver uses. Best-effort: any failure returns null and the panel says nothing
+         rather than a wrong number. */
+      auditOnlyReadyCount: await (async () => {
+        try {
+          const { data: rows, error: rErr } = await service
+            .from("whatsapp_auto_replies").select("lead_id").eq("status", AUDIT_ONLY_STATUS).limit(500);
+          if (rErr || !Array.isArray(rows) || rows.length === 0) return rErr ? null : 0;
+          const leadIds = [...new Set(rows.map((r: { lead_id: string }) => r.lead_id).filter(Boolean))];
+          if (leadIds.length === 0) return 0;
+          const { data: auds, error: aErr } = await service
+            .from("ai_audits").select("id, lead_id").in("lead_id", leadIds);
+          if (aErr || !Array.isArray(auds) || auds.length === 0) return aErr ? null : 0;
+          const { data: done, error: dErr } = await service
+            .from("ai_audit_runs").select("audit_id")
+            .in("audit_id", auds.map((a: { id: string }) => a.id))
+            .in("status", ["complete", "capped"]);
+          if (dErr || !Array.isArray(done)) return null;
+          const doneAuditIds = new Set(done.map((r: { audit_id: string }) => r.audit_id));
+          const readyLeads = new Set(
+            auds.filter((a: { id: string; lead_id: string }) => doneAuditIds.has(a.id)).map((a: { lead_id: string }) => a.lead_id),
+          );
+          return readyLeads.size;
+        } catch { return null; }
+      })(),
     };
 
     // Status-only probe (the dashboard panel).
@@ -480,6 +512,33 @@ Deno.serve(async (req) => {
         .eq("id", 1);
       if (tErr) return json({ ok: false, error: "toggle_failed", detail: tErr.message }, 500);
       return json({ ok: true, ...statusPayload, autoReplyEnabled: enabled });
+    }
+
+    /* Set the three-way reply MODE (admin-gated like pause). Validated against the shared list so
+       a typo cannot store a value the trigger would then have to guess at — and the guess would be
+       'audit_only', which would silently ignore an operator who asked for sending. */
+    if (mode === "set_first_reply_mode") {
+      const raw = typeof body.value === "string" ? body.value.trim() : "";
+      if (!(FIRST_REPLY_MODES as readonly string[]).includes(raw)) {
+        return json({ ok: false, error: "unknown_mode", detail: `expected one of ${FIRST_REPLY_MODES.join(", ")}` }, 400);
+      }
+      const next = parseFirstReplyMode(raw);
+      /* ⛔ THE MODE AND THE ON/OFF BOOLEAN MOVE TOGETHER, because the UI is ONE three-way control
+         and two fields behind it. 'off' clears the boolean; either working mode sets it. Writing
+         only the mode would leave a control that says "Run audit only" over a rule the trigger
+         still reads as off — the screen and the behaviour disagreeing, which is the failure this
+         whole panel exists to prevent. The chosen behaviour is REMEMBERED across an off period:
+         first_reply_mode keeps its value so turning the rule back on restores what it was doing. */
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (next === "off") patch.auto_reply_enabled = false;
+      else { patch.auto_reply_enabled = true; patch.first_reply_mode = next; }
+      const { error: mErr } = await service.from("whatsapp_outreach_state").update(patch).eq("id", 1);
+      if (mErr) return json({ ok: false, error: "mode_failed", detail: mErr.message }, 500);
+      return json({
+        ok: true, ...statusPayload,
+        autoReplyEnabled: next !== "off",
+        firstReplyMode: next === "off" ? statusPayload.firstReplyMode : next,
+      });
     }
 
     // D2 — set the completion auto-send template (admin-gated like pause). Pass template: null (or
@@ -668,6 +727,14 @@ Deno.serve(async (req) => {
       // LEFT pending (rule paused, resumes if re-enabled) — never silently dropped.
       if (!autoReplyEnvOn()) return json({ ok: true, mode, skipped: "env_off", processed: 0 });
       const replyToggleOn = await autoReplyToggleOn(service);
+      /* ⛔ THE SECOND LINE ON SENDING, AND IT IS DELIBERATELY REDUNDANT. An audit_only arm writes a
+         TERMINAL status this drain never selects, so a send is already impossible — this refuses
+         first_reply rows by MODE as well, which covers the rows that predate the mode (there were
+         18 such rows when this shipped) and any row a future code path parks as 'pending' without
+         consulting the mode. Same shape as the paying-customer guard: refused at arm time AND at
+         send time, because the two can be reached independently. */
+      const replyMode = await firstReplyMode(service);
+      const replyModeSends = modeSends(replyMode);
       let completeTemplateOn = false;
       try {
         const { data: st, error: stErr } = await service
@@ -678,7 +745,9 @@ Deno.serve(async (req) => {
       const nowIso = new Date().toISOString();
       const { data: due, error: dueErr } = await service
         .from("whatsapp_auto_replies")
-        .select("id, lead_id, phone, created_at, trigger, template_name")
+        // fire_after rides along for the staleness guard below - selecting it is load-bearing:
+        // without it every row reads as undated, i.e. stale, and nothing would ever send.
+        .select("id, lead_id, phone, created_at, trigger, template_name, fire_after")
         .eq("status", "pending")
         .lt("fire_after", nowIso)
         .order("fire_after", { ascending: true })
@@ -687,11 +756,31 @@ Deno.serve(async (req) => {
 
       let processed = 0;
       const results: Record<string, string> = {};
-      for (const row of (due ?? []) as Array<{ id: string; lead_id: string; phone: string; created_at: string; trigger?: string | null; template_name?: string | null }>) {
+      for (const row of (due ?? []) as Array<{ id: string; lead_id: string; phone: string; created_at: string; trigger?: string | null; template_name?: string | null; fire_after?: string | null }>) {
         // Per-trigger switch (see above). Default trigger (pre-SQL rows / null) = first_reply.
         const trigger = row.trigger || "first_reply";
         if (trigger === "first_reply" && !replyToggleOn) continue;
+        /* Mode says audit-only → the first_reply rule sends NOTHING. Left pending rather than
+           finished, exactly like the toggle-off case above: the rule is paused, not cancelled, and
+           switching to send mode resumes it. */
+        if (trigger === "first_reply" && !replyModeSends) continue;
         if (trigger === "audit_complete" && !completeTemplateOn) continue;
+        /* ⛔ AND A ROW THAT WENT STALE WHILE THE RULE WAS OFF IS RETIRED, NOT SENT. Measured
+           2026-09-08: 18 first_reply rows were parked past their fire_after — four for leads
+           already at status `report_sent` — waiting on a toggle. Turning the rule on would have
+           sent all of them days late. Retiring them is terminal and says why, so the pile cannot
+           rebuild itself over the next long off period. */
+        if (isStaleAutoReply(row.fire_after, Date.parse(nowIso))) {
+          await service.from("whatsapp_auto_replies")
+            .update({
+              status: "skipped_stale",
+              reason: `parked since ${String(row.fire_after ?? "unknown")} — too old to send automatically`.slice(0, 300),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", row.id).eq("status", "pending");
+          results[row.lead_id] = "skipped_stale";
+          continue;
+        }
         // Atomic per-row claim — overlapping ticks can't double-send. (A crash after claiming
         // leaves the row 'processing', which fails SAFE — it never sends — and is visible in the
         // table for a manual nudge; volumes are tiny by design.)
@@ -759,7 +848,7 @@ Deno.serve(async (req) => {
           //    audit_reply via the per-lead-safe resolver the Inbox uses; audit_complete rows may
           //    carry any allowlisted template. url-templates need the lead's claim link — missing
           //    → flagged_no_link, NEVER a broken send.
-          const templateName = row.template_name || "audit_reply";
+          const templateName = row.template_name || DEFAULT_FIRST_REPLY_TEMPLATE;
           // DURABLE once-ever (send time): the MESSAGE LOG is the authoritative "this pitch
           // already went out" marker — it survives queue-row deletion and covers pitches sent
           // OUTSIDE this machinery (manual Inbox sends). This is exactly the Jack/Ben duplicate:

@@ -12,7 +12,7 @@ import { refreshApifyUsage } from "../_shared/enrichment/apify-usage.ts";
 import { advanceBaseline, sweepStalledBaselines, ensureBaselinesForPaidOnboardings } from "../_shared/audit-baseline.ts";
 import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
-import { autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
+import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 // Automation B: reuse the SHARED report aggregation (same buildReportData the SPA + public
 // renderer use) so the WhatsApp {{2}} competitor list matches the report exactly.
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
@@ -1143,12 +1143,19 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         .from("ai_audits").select("lead_id").eq("id", job.auditId).maybeSingle();
       const leadId = (audit?.lead_id as string | null) ?? null;
       if (!leadId) continue; // manual/market audit — no parked pitch to flag
+      /* ⛔ AUDIT_ONLY ROWS ARE FLAGGED TOO, AND THIS IS THE ONE PLACE THEY MUST BE TOUCHED. An
+         audit_only row says "the audit is running, send it by hand when it lands". If the audit
+         ends capped or failed it is never landing, and a row still reading audit_only would sit in
+         the Inbox count as a lead ready to quote — the operator opening a thread to send a result
+         that does not exist. Flagging is not sending, so widening the scope here cannot put a
+         message on the wire; completionSendJobs (the ARMING path) stays scoped to awaiting_audit
+         alone, which is what keeps audit_only unsendable. */
       const { data: flagged } = await service.from("whatsapp_auto_replies")
         .update({ status: "flagged_error", reason: job.reason.slice(0, 300), updated_at: new Date().toISOString() })
-        .eq("lead_id", leadId).eq("status", "awaiting_audit")
+        .eq("lead_id", leadId).in("status", ["awaiting_audit", AUDIT_ONLY_STATUS])
         .select("id");
       if (Array.isArray(flagged) && flagged.length > 0) {
-        console.log(`[auto-send] audit ${job.auditId} ended ${job.runStatus} → flagged the stalled awaiting_audit pitch for lead ${leadId}: ${job.reason}`);
+        console.log(`[auto-send] audit ${job.auditId} ended ${job.runStatus} → flagged the stalled parked pitch for lead ${leadId}: ${job.reason}`);
       }
     } catch (e) {
       console.error(`[auto-send] could not flag stalled pitch for audit ${job.auditId}:`, (e as Error).message);

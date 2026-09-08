@@ -4,7 +4,7 @@ import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
-import { firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
+import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { applySeed, dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
 import { moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
@@ -1105,7 +1105,7 @@ Deno.serve(async (req) => {
           pitchNote = "lead_archived";
         } else if (!to) {
           pitchNote = "no_usable_phone";
-        } else if (await pitchEverSent(service, leadId, parkTemplate ?? "audit_reply")) {
+        } else if (await pitchEverSent(service, leadId, parkTemplate ?? DEFAULT_FIRST_REPLY_TEMPLATE)) {
           // DURABLE once-ever: the pitch already went to this lead (message log — covers manual
           // Inbox sends and survives queue-row deletion). Never park a second one.
           pitchNote = "pitch_already_sent";
