@@ -47,6 +47,8 @@ import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS } 
 import { buildSchema, normalizeUrl } from '@/lib/schemaType';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';
+import { useMeasurementLock } from '@/hooks/useMeasurementLock';
+import { describeLock, diffAgainstLock } from '@/lib/measurementLock';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
 // and answering one reveals the next below it (no per-step Next). Generates search
@@ -1690,6 +1692,14 @@ const AiAudit = () => {
      when a real measurement is being downgraded to a single run. */
   const reAuditSourceIsMeasurement = isMeasurementSource(openAuditRow);
   const reAuditRuns = runsForReAuditMode(reAuditMode, openAuditRow?.baseline_target_runs ?? null);
+  /* ⛔ THE PRE-SPEND CHECK. Re-measures already reuse the exact questions - create-ai-audit takes
+     a supplied list verbatim and otherwise repeats the previous run's set, and the generator has no
+     randomness. What was missing is a way to see, BEFORE paying, that the list about to run is the
+     one the baseline was measured on. The list in this dialog is editable (deliberately: a client
+     can stop serving a town), so the only way it drifts is by hand - and this is what makes that
+     visible instead of surfacing later as unmatched rows in the comparison. */
+  const reAuditLock = useMeasurementLock(openAuditRow?.business_name ?? '', null);
+  const reAuditDiff = diffAgainstLock(reAuditLock.lock, reAuditQuestions);
   const reAuditEstUsd = reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION * reAuditRuns;
 
   // The re-run editor is open only for the run it was opened for (persisted flag is run-scoped),
@@ -3059,6 +3069,38 @@ const AiAudit = () => {
                       </div>
                     )}
                   </div>
+                  {/* The locked baseline, and whether this list still matches it. */}
+                  {reAuditLock.lock && (
+                    <div className={`rounded-md border px-2.5 py-2 text-xs ${
+                      reAuditDiff.identical
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                        : 'border-amber-300 bg-amber-50 text-amber-900'
+                    }`}>
+                      <div className="font-medium">
+                        {reAuditDiff.identical ? 'Matches the locked baseline' : 'Differs from the locked baseline'}
+                      </div>
+                      <div className="mt-0.5">{reAuditDiff.summary}</div>
+                      <div className="mt-0.5 text-[11px] opacity-80">Locked: {describeLock(reAuditLock.lock)}</div>
+                      {reAuditDiff.missing.length > 0 && (
+                        <ul className="mt-1 list-disc pl-4 text-[11px]">
+                          {reAuditDiff.missing.slice(0, 6).map((q) => <li key={q}>dropped: {q}</li>)}
+                          {reAuditDiff.missing.length > 6 && <li>and {reAuditDiff.missing.length - 6} more</li>}
+                        </ul>
+                      )}
+                      {reAuditDiff.added.length > 0 && (
+                        <ul className="mt-1 list-disc pl-4 text-[11px]">
+                          {reAuditDiff.added.slice(0, 6).map((q) => <li key={q}>new: {q}</li>)}
+                          {reAuditDiff.added.length > 6 && <li>and {reAuditDiff.added.length - 6} more</li>}
+                        </ul>
+                      )}
+                      {/* The run count is part of like-for-like too, not just the wording. */}
+                      {reAuditRuns !== reAuditLock.lock.runs && (
+                        <div className="mt-1 text-[11px] font-medium">
+                          This will run {reAuditRuns} run{reAuditRuns === 1 ? '' : 's'}; the baseline was measured over {reAuditLock.lock.runs}.
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="space-y-2">
                     {reAuditQuestions.map((q, i) => (
                       <div key={i} className="flex items-center gap-2">
