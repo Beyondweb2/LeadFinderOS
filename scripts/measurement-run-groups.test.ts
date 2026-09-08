@@ -17,6 +17,7 @@ import {
   sideProvable,
   type AuditForGrouping,
   type RunForGrouping,
+  defaultSelection,
 } from '../src/lib/measurementRunGroups.ts';
 import { MIN_CELLS_FOR_QUESTION_CLAIM } from '../src/lib/measurementCompare.ts';
 
@@ -120,6 +121,55 @@ ok(groupMeasurementRuns([{ id: '', audit_id: 'a', run_number: 1, created_at: '20
   'a run with no id is skipped rather than grouped under a blank key');
 ok(groupMeasurementRuns([{ id: 'r', audit_id: '', run_number: 1, created_at: '2026-01-01' }], audits).length === 0,
   'so is one with no audit');
+
+console.log('\n── THE DEFAULT SELECTION: RG\'S REAL SHAPE ──');
+{
+  const d = defaultSelection(groups);
+  console.log('   ' + d.note);
+  ok(d.reason === 'measurements', 'it picks COMPLETE MEASUREMENTS, not the oldest and newest days');
+  /* The whole point: the old default took the 29 Jul 3-question probe and the 8 Sep single run. */
+  ok(JSON.stringify(d.before) === JSON.stringify(['b1', 'b2', 'b3']), 'BEFORE = all three 11 Aug baseline runs');
+  ok(JSON.stringify(d.after) === JSON.stringify(['m1', 'm2', 'm3']), 'AFTER = all three 26 Aug measurement runs');
+  ok(!d.before.includes('p1') && !d.before.includes('p2'), 'the 3-question prospecting runs are NOT in the before side');
+  ok(!d.after.includes('m4') && !d.after.includes('m5'), 'nor the 1 Sep / 8 Sep single appended runs in the after side');
+  ok(d.before.length === 3 && d.after.length === 3, 'three runs each side — a clean 3-vs-3');
+}
+
+console.log('\n── THE DEFAULT DEGRADES HONESTLY ──');
+{
+  const thin = groupMeasurementRuns([
+    run('x1', PROSPECT, 1, '2026-07-29T09:46:00Z', 3),
+    run('y1', MEASURE, 4, '2026-09-01T03:09:00Z', 12),
+    run('y2', MEASURE, 5, '2026-09-08T05:50:00Z', 12),
+  ], audits);
+  const d = defaultSelection(thin);
+  ok(d.reason === 'largest_question_set', 'with no complete measurement it uses the biggest question set');
+  ok(JSON.stringify(d.before) === JSON.stringify(['y1']) && JSON.stringify(d.after) === JSON.stringify(['y2']),
+    'the two 12-question runs, not the 3-question probe');
+  ok(/No two complete measurements/.test(d.note), 'and the note says so rather than implying a measurement');
+}
+{
+  const one = groupMeasurementRuns([run('z1', MEASURE, 1, '2026-09-01T00:00:00Z', 12)], audits);
+  const d = defaultSelection(one);
+  ok(d.reason === 'none' && d.before.length === 0 && d.after.length === 0,
+    'a single group ticks NOTHING — never one side against itself');
+}
+ok(defaultSelection([]).reason === 'none', 'no groups, no selection');
+{
+  const flat = groupMeasurementRuns([
+    run('q1', 'audit-a', 1, '2026-01-01T00:00:00Z', 0),
+    run('q2', 'audit-b', 1, '2026-02-01T00:00:00Z', 0),
+  ], []);
+  const d = defaultSelection(flat);
+  ok(d.reason === 'oldest_newest', 'falls back to oldest vs newest as the last resort');
+  ok(/oldest measured day/.test(d.note), 'and says that is what it did');
+}
+{
+  for (const gs of [groups, groupMeasurementRuns([run('a', MEASURE, 1, '2026-01-01T00:00:00Z', 12), run('b', MEASURE, 2, '2026-02-01T00:00:00Z', 12)], audits)]) {
+    const d = defaultSelection(gs);
+    ok(typeof d.note === 'string' && d.note.length > 10, `reason '${d.reason}' carries a readable note`);
+  }
+}
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILED`);
 process.exit(fails === 0 ? 0 : 1);

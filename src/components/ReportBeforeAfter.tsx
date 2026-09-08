@@ -32,6 +32,7 @@ import { compareMeasurements, type MeasurementComparison, type Movement } from '
 import { MeasurementCompareTable } from '@/components/MeasurementCompareTable';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import {
+  defaultSelection,
   groupMeasurementRuns,
   pruneSelection,
   sideCellsPerQuestion,
@@ -165,6 +166,9 @@ export function ReportBeforeAfter({
      last visit rather than from the default, or they cannot tell the feature is working. State,
      not a ref - a ref would not re-render. */
   const [restoredSelection, setRestoredSelection] = useState(false);
+  /* Which rule pre-ticked these runs. Shown in the picker: a default nobody can explain is one
+     nobody trusts, and this one deliberately skips the oldest day. */
+  const [defaultNote, setDefaultNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -233,14 +237,16 @@ export function ReportBeforeAfter({
         return;
       }
 
-      /* Default: the oldest measured day against the newest, usable runs only. */
-      const days = Array.from(new Set(usable.map((r) => dayOf(r.created_at)))).sort();
-      if (days.length >= 2) {
-        const first = days[0];
-        const last = days[days.length - 1];
-        setBeforeIds(new Set(usable.filter((r) => dayOf(r.created_at) === first).map((r) => r.id)));
-        setAfterIds(new Set(usable.filter((r) => dayOf(r.created_at) === last).map((r) => r.id)));
-      }
+      /* ⛔ DEFAULT TO THE COMPLETE MEASUREMENTS, NOT THE OLDEST AND NEWEST DAYS. RG is the proof:
+         his oldest day is a 1-run, 3-QUESTION prospecting probe and his newest is a single run
+         appended to a measurement audit, so the old default compared a 3-question probe against
+         one run and could prove nothing — while the two real 12-question 3-run measurements sat in
+         the middle, never picked. defaultSelection prefers groups that repeated as their audit
+         intended, and returns a note naming the rule it used. */
+      const preset = defaultSelection(groupMeasurementRuns(usable, sibRows));
+      setBeforeIds(new Set(preset.before));
+      setAfterIds(new Set(preset.after));
+      setDefaultNote(preset.before.length > 0 ? preset.note : null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the runs for this business.');
     } finally {
@@ -418,7 +424,7 @@ export function ReportBeforeAfter({
             measurement as Before or After.{' '}
             {restoredSelection
               ? 'Showing the selection you left last time.'
-              : 'Defaulted to the oldest measured day against the newest.'}{' '}
+              : (defaultNote ?? 'Nothing pre-selected.')}{' '}
             Cancelled and failed runs are not listed, because they hold no answers.
           </p>
 
