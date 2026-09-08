@@ -10,18 +10,35 @@ Facts and warnings, not prose. Keep it that way. If it grows too long to read, i
 
 ## 1. What the business is
 
-- Paul sells **AI visibility** to local UK businesses. **£99, one-off** (was £49.99 until
-  2026-08-04). Price + guarantee wording live in **`src/lib/findableOffer.ts`** — one constant,
-  shared by the SPA docs and the checkout/webhook edge functions. findable-site (separate repo)
-  carries its own copy; changing either means a matching pass in the other.
+- Paul sells **AI visibility** to local UK businesses. **£49.99, one-off, ONE FLAT PRICE FOR
+  EVERYONE** since 2026-09-03 — the founder-vs-full split is deleted and **£99 is charged to
+  nobody** (§11; history £49.99 → £99 on 2026-08-04 → flat £49.99). Price + guarantee wording live
+  in **`src/lib/findableOffer.ts`** — one constant, shared by the SPA docs and the checkout/webhook
+  edge functions. findable-site (separate repo) carries its own copy; changing either means a
+  matching pass in the other.
+- **There is an OPTIONAL WEBSITE ADD-ON: £49.99 build + £9.99/month hosting** — the product's first
+  recurring charge, live since 2026-09-03. A ticked checkout is `mode: subscription`, £109.97 today
+  and £9.99/month after, confirmed from Stripe's own `amount_total` (§11).
 - Audit whether **ChatGPT and Gemini name them** when a customer asks for their trade in their town.
 - Fix what AI reads: pages on **their own site**, a page per service per town, plus consistency in
   the sources the evidence says matter for that trade.
-- **Re-measure at 8 weeks.** The guarantee is **WORK-based** (audit + work + re-measurement with
-  evidence, or a full refund) — it does NOT promise being named. Never write copy that promises
-  the outcome.
-- **Zero paying customers so far.** Nothing here has been proven on a paying client yet. Do not write copy or
-  code that implies it has.
+- **Re-measure at 4 WEEKS** (since 2026-09-03; it was 8). The guarantee is **WORK-based** (audit +
+  work + re-measurement with evidence, or a full refund) — it does NOT promise being named. Never
+  write copy that promises the outcome.
+  - The functional half is **`REMEASURE_OFFSET_DAYS = 28`** (`src/lib/deliveryCockpit.ts`); the
+    words are `FINDABLE_GUARANTEE` ("the re-measurement at week four"), byte-locked to
+    findable-site's copy by `scripts/check-cross-repo-sync.mjs`.
+  - ⛔ **RG LOCKSMITHS IS PINNED AT 8 WEEKS AND MUST STAY THERE.** He is the one **legacy
+    OUTCOME-guarantee** client ("named in more AI answers after 8 weeks than today"), and the
+    constant only supplies a default for a lead with **no stored `remeasure_due_date`** — his was
+    NULL, so the change would have jumped his re-measure from 6 Oct to **8 Sep, five days after the
+    change**. His +56 date is stored by hand. The 8-week references in `audit-baseline.ts` are
+    **deliberately unchanged**: they describe what he was actually sold, and rewriting them would
+    misrepresent an existing customer's promise. Ronnie already carried a stored date (2026-10-13).
+- **TWO PAYING CUSTOMERS: RG Locksmiths and Ronnie.** (This line read "zero" until 2026-09-08 and
+  was months stale.) Nothing is yet proven at scale — don't write copy implying a track record —
+  but "no paying customer has ever…" is now a false premise. **Re-count before quoting a number**;
+  `paid` is `amount_paid > 0` with two 2026-09-03 refinements (a floor, and churn) — see §11.
 - 🔴 **DELIVERY WORKS EXACTLY TWO WAYS, AND SOME CUSTOMERS CANNOT BE SERVED.** Either their site is
   **WordPress and we can have access** (pages publish automatically), or **they let us move the site
   to our hosting**, copied as-is. Hand-editing Wix/Squarespace is ~15 min a page forever and does not
@@ -309,6 +326,22 @@ breadth detection in the codebase** — the phrase existed only in that JSX stri
 `src/lib/auditErrors.ts` (`explainAuditFailure`), which always prints the raw string too. When a UI
 explains a failure, check the explanation is derived from the failure.
 
+🔴 **AN EDGE FUNCTION'S REFUSAL THAT IS ONLY `console.error`'d IS UNDIAGNOSABLE AFTERWARDS — THE CLI
+HAS NO `functions logs` SUBCOMMAND.** Two lanes were dead for days in September with the reason
+existing only in a log nobody here can read: the free-check auto-audit (silently 409'd by the town
+gate) and a Stripe checkout Stripe itself rejected. **Write the refusal to `client_error_reports`**
+— `findable-checkout`, `findable-onboarding`, `submissions`, `notify-onboarding-submit`,
+`stripe-webhook` and `audit-baseline.ts` all do now. Store the message, **return only the opaque
+code**, and name the SHAPE of a bad secret rather than its contents (§11's `prod_` paste). Without a
+table, diagnosing the free-check lane meant inferring from which leads happened to have audits.
+
+🔴 **AN ALLOWLIST IS NOT AN ADDRESS BOOK, AND THAT CATEGORY ERROR PUT 27 SENT LINKS ON A PREVIEW
+DOMAIN AND STRIPE'S RETURN URL WITH THEM.** Two functions read `FINDABLE_ALLOWED_ORIGINS[0]` as the
+canonical public host. **§12 has the whole record** — including that `Access-Control-Allow-Origin`
+is `*`, so "payments work from findable.live" was never evidence findable.live is in that list. The
+transferable rule: **when a fallback has to guess an outward-facing address, refuse instead** — a
+refusal is loud, a plausible preview URL is silent and reaches a customer.
+
 **An end-of-day-UTC timestamp formats as the NEXT DAY in British Summer Time.** Apify's cycle end is
 `2026-08-03T23:59:59.999+00:00`; `toLocaleDateString('en-GB')` without a `timeZone` rendered
 "4 Aug" — a day late, on the one date the operator was waiting for. Always pass `timeZone: 'UTC'`
@@ -409,6 +442,11 @@ Facts with numbers. These are measured, and several contradict the older docs.
   before/after for the first time: pages on their own site moved the engine that reads their own
   site, and not the one that reads directories.** One measurement of one client — evidence, not
   proof; the wording rules (never promise the outcome) stand unchanged.
+  ✅ **INDEPENDENTLY REPRODUCED 2026-09-08 by the before/after fold** (§17), from the raw queue rows:
+  21 Jul (6 runs, 9 questions) **0 of 52** vs 18 Aug (4 runs) **3 of 18**, +16.7 points, "improved",
+  the three named questions being Whittlesey once and Chatteris twice — matching this note exactly.
+  ⚠️ **And each of those three reads `within_noise` on its OWN row while the overall reads improved.**
+  That is the intended shape: **the claim lives in the overall figure, never in a single question.**
   ⚠️ Re-run mechanics for next time: `create-ai-audit { audit_id }` re-runs the LATEST run's
   questions verbatim; `{ audit_id, questions }` honours a pasted set verbatim; neither passes the
   question filters. **The operator path hard-caps at WIZARD_MAX_QUESTIONS (5)** — a longer set
@@ -877,7 +915,9 @@ record, and a separate page meant leaving the two screens he actually works in t
 **No SQL — every column already existed.** Nothing was migrated; only the editors moved.
 
 - ⛔ **`paid` MEANS `amount_paid > 0`. THE FILTER IS A SENTINEL, NOT A STATUS, AND THAT IS THE WHOLE
-  DESIGN.** `OUTREACH_STATUS_FILTER_OPTIONS` leads with `PAID_FILTER_VALUE` (`'__paid__'`), labelled
+  DESIGN.** ⚠️ **Still true for the FILTER; the dashboard's paying-CUSTOMER count needs two more
+  rules since the £9.99/mo hosting shipped — a price floor and a churn test (§11).** The scalar
+  cannot express "bought once, hosting since cancelled". `OUTREACH_STATUS_FILTER_OPTIONS` leads with `PAID_FILTER_VALUE` (`'__paid__'`), labelled
   **"Paid (money in)"**, which the row filter special-cases against `amount_paid` — the same shape the
   Inbox already uses for `__opened__` / `__claimed__` / `__upsell__`. Filtering on the STATUS
   `payment_received` is wrong in **both** directions and each costs something real: a customer moved on
@@ -1251,7 +1291,11 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
 - ⛔ **FOUNDER TILE COUNTS ACROSS `[FOUNDER_PRICE_GBP, ...FOUNDER_PRICES_HISTORICAL_GBP]`** (Paul's
   call 2026-08-19) — current-price-only made RG's £19.99 sale vanish (tile read 1 with 2 customers
   paid). Append to the historical list when the price moves; never remove an entry a sale was taken
-  at. ⚠️ **check-cross-repo-sync parses `FOUNDER_PRICE_GBP` as a bare number in useDashboardMetrics
+  at. ⛔ **AND SINCE 2026-09-03 IT IS A FLOOR, NOT AN EXACT MATCH AGAINST THAT LIST** — the website
+  add-on lands `amount_paid` at £109.97, which an exact match dropped entirely. `PAYING_FLOOR_GBP`
+  is derived (`Math.min` of the two), and a **churned** subscription stops counting on a POSITIVE
+  match against `canceled`/`incomplete_expired`. **§11 has the rules; `scripts/paying-customer.test.ts`
+  pins them.** ⚠️ **check-cross-repo-sync parses `FOUNDER_PRICE_GBP` as a bare number in useDashboardMetrics
   — keep the name, and NEVER write the declaration pattern in a comment: the regex takes the file's
   FIRST match, comments included** (it broke the guard for ten minutes; so did moving
   MARKET_AUDIT_MIN_AUDITS without repointing BOTH repos' scripts at marketAuditThreshold.ts).
@@ -1501,7 +1545,13 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
 
 ---
 
-## 6j. ✅ BUILT + LIVE: free check → funnel top (MVP shipped 2026-08-20). Phase 2 (auto-audit) still HELD.
+## 6j. ✅ BUILT + LIVE: free check → funnel top (MVP shipped 2026-08-20). ⛔ PHASE 2 IS NOW BUILT — READ §15 FIRST.
+
+🔴 **§15 SUPERSEDES THIS SECTION WHERE THEY DISAGREE (2026-09-03 → 09-07).** The auto-audit shipped,
+the result is emailed to the visitor, and four faults in that lane have been found and fixed since
+(the town gate refusing every unresolvable business, the dedupe merging different businesses, the
+operator email asserting states it never checked, and the result never reaching a MATCHED lead).
+Everything below is still true as the MVP's record.
 
 **PHASE 1 IS LIVE.** Deployed 2026-08-20: `findable-onboarding` v39, `notify-onboarding-submit` v9,
 `backfill-lead-towns` v9, and findable-site. Confirmed live with a ZERO-SPEND probe — a submission
@@ -1516,7 +1566,9 @@ only by code and by `deno check` — not by a live call. Paul is watching for th
 probe row existed for ~60s with the delay bypassed, so the cron may have sent one
 `FREE CHECK — MCR Heating and Plumbing ltd` email; if that arrived, it was the probe, not a prospect.
 
-**⛔ PHASE 2 (AUTO-AUDIT) IS DELIBERATELY NOT BUILT.** Paul: "I want to watch a real submission
+**⛔ PHASE 2 (AUTO-AUDIT) IS DELIBERATELY NOT BUILT.** ⛔ **OUT OF DATE — IT WAS BUILT AND IS LIVE;
+free checks now run an audit and email the visitor their result. §15.** The paragraph below is the
+record of the hold, not the current state. Paul: "I want to watch a real submission
 create a lead first." Generic mode's lockdown #1 (never fires an audit) is UNTOUCHED — nothing in
 this flow queues a question, spends Apify, or sends anything.
 
@@ -1614,6 +1666,25 @@ by the single account below.** §6's paginate rule, caught in this file's own no
 
 ## 8. Known open problems — don't rediscover these
 
+- 🟡 **OPEN AS OF 2026-09-08, from the September work (§12–§17). None is a defect in what shipped;
+  each is a state or a gap somebody has to decide about.**
+  - **Two free checks were STRANDED** (audit complete, result never sent — SUPREME PLUMBERS and one
+    sinners-and-saints). The Free checks card now shows that stage and carries a **resend** button,
+    so this is a "has Paul pressed it" question, not a code one. **Check the card before assuming
+    either way** — a stranded audit never retries itself.
+  - **`FINDABLE_ALLOWED_ORIGINS` may not contain `findable.live` at all, and it is unfalsifiable
+    from here** (the CLI returns secret hashes, and CORS is `*` so nothing observable depends on
+    it). §12 removed the dependency rather than answering the question. Do not re-attempt to read it.
+  - **Website clicks other than the report link are still untracked** — no redirect endpoint, no
+    click table for them. The per-template column **says so** rather than printing 0 (§14).
+  - **A `past_due` hosting subscription counts as paying, by design** (Smart Retries is still
+    running). Nobody has yet decided what to do if it stays there.
+  - ⚠️ **STALE CODE COMMENTS FOUND WHILE WRITING THIS AND DELIBERATELY NOT CHANGED** (flagged to
+    Paul, code untouched): `src/lib/findableOffer.ts:30` still says "week-eight guarantee";
+    `useDashboardMetrics.ts`'s sync note still names `founderOffer.ts` and the deleted
+    `FOUNDER_OFFER_PRICE_LABEL` / `FOUNDER_OFFER_COUNT`; and `baselineContract.ts`'s
+    `decideGuarantee` prose reasons from a £99 current price (§11 has the consequence). §4: a stale
+    comment is a load-bearing bug — fix these next time you are in those files.
 - 🔴 **A 3-RUN MEASUREMENT ONLY REPEATS 20 QUESTIONS. FOUND 2026-08-28, NOT FIXED — PAUL'S CALL
   BECAUSE THE FIX COSTS APIFY.** Solene's 47-question measurement (audit `c2be3e5d`) ran
   **47 questions in run 1 and 20 in runs 2 and 3** — the same 20 both times, all drawn from run 1.
@@ -2015,6 +2086,26 @@ by the single account below.** §6's paginate rule, caught in this file's own no
     to `not_interested`/`closed`, because a status is a workflow position and a suppression is a
     promise). The suppression row carries phone AND email AND lead_id — a lead-id-only row would
     not stop the duplicate row being messaged.
+  - 🔴 **AND THE FIX ITSELF TOOK OUT ALL OUTREACH THE NEXT DAY — THEN NEARLY SHIPPED A WORSE
+    VERSION OF THE BUG IT GUARDS (2026-09-03).** `contact_check` refused any batch over 500 phones
+    with 400 `too_many_phones`, and the SPA correctly fails closed on a non-ok answer — so queueing
+    909 leads gave "Could not check contact history. Nothing was queued." **The double-contact guard
+    was blocking every queue instead of the duplicates.** The cap was guarding against nothing:
+    measured, 909 phones in a `.in()` is an 11,924-character URL and PostgREST serves it fine.
+    - ⛔ **BUT REMOVING THE CAP ALONE WOULD HAVE BEEN WORSE THAN THE OUTAGE.** The same run showed
+      `.in()` over 909 phones returning **EXACTLY 1000 rows** — `db-max-rows` truncation (§6). One
+      phone can carry forty messages, so the row budget is exhausted long before every phone is
+      represented, **and the phones that fall off the end read as NEVER CONTACTED.** A
+      double-messaging guard that silently answers "clean" for a contacted number is precisely the
+      bug it exists to prevent — **and it would have looked like it was working.**
+    - **So it no longer filters by phone at all:** it reads the DISTINCT set of contacted numbers
+      once, **paginated to exhaustion and ordered by id** (an unstable order lets pages skip rows —
+      why `fetchAllRows` exists), and intersects in memory. Measured: 2,916 non-failed messages =
+      **1,047 distinct phones in 3 reads, 1.27s** including suppressions, and **the cost does not
+      grow with the batch** — a 909-lead queue and a 9-lead queue now do identical work. An
+      exhausted page budget still **FAILS CLOSED** past `MAX_PAGES`: a partial set is
+      indistinguishable from a clean one. Only the intersection travels back, not all 1,047 phones
+      the caller never asked about, so the SPA needed no change.
   - ⚠️ **The lasting rule, and it generalises past WhatsApp: a guard must test the PROPERTY that
     makes something dangerous, never the identifier of today's instance of it.** Ask, as §8 already
     says elsewhere, not only "is the guard correct?" but "can the case it guards still reach it?" —
@@ -2757,17 +2848,130 @@ by the single account below.** §6's paginate rule, caught in this file's own no
 
 ---
 
-## 11. 🔴 THE FOUNDER PRICE — £49.99 since 2026-08-12, and the two halves that lag
+## 11. 🔴 THE PRICE — ONE FLAT £49.99 SINCE 2026-09-03, PLUS THE FIRST RECURRING CHARGE
 
-**£19.99 → £49.99. UPFRONT ONE-OFF ONLY.** No subscription was added: `findable-checkout` is still
-`mode: "payment"`, and that line is load-bearing — see the recon below before anyone "adds monthly".
-The £99 anchor (`FINDABLE_SETUP_PRICE_GBP`), the guarantee and `FINDABLE_SETUP_PRICE_ID` (unset) were
-all deliberately untouched.
+🔴 **READ THIS BLOCK BEFORE THE FOUNDER-PRICE HISTORY BELOW IT. Two things this section spent weeks
+asserting are no longer true.** Both changed on 2026-09-03; the older text is kept underneath
+because the reasoning still teaches, but where they disagree, this wins.
+
+**1. THE FOUNDER-VS-FULL SPLIT IS GONE. Everyone pays `FINDABLE_SETUP_PRICE_GBP` = 49.99, one-off,
+whatever they arrive from** — their report, the homepage, or a cold link. £99 is charged to nobody.
+- **What the split used to do, because it is worth knowing it no longer does:** the price was
+  derived PER LEAD — founder when the lead had a **completed audit** and had not paid, full
+  otherwise. That rule was **non-forgeable** (you cannot fake having an audit) and separated warm
+  from cold arrivals for free. It also cost three queries a render, and it is why a **lead-less
+  visitor could not be charged at all** (`no_lead_attribution`).
+- ⛔ **`offerPrice()` SURVIVES EVEN THOUGH IT RETURNS A CONSTANT — DO NOT INLINE IT.** Its value
+  was never the branching: it is that the plan card and the Stripe session call the SAME function,
+  so display and charge cannot diverge. Inlining the constant at both call sites rebuilds the
+  two-constants-in-two-repos drift it exists to end. It is **no longer async and takes no database
+  handle** (a "just in case" async signature would have left three dead queries' plumbing behind
+  and invited someone to put a lookup back without asking why it went).
+- **`founderOffer.ts` IS NOW `src/lib/buyOffer.ts`**, `showFounderOffer` → **`showOffer`**, and the
+  four pitch constants ("the first 10 at £49.99", "normally £99") are deleted along with the report's
+  offer block, which was already unrendered. ⚠️ **Some comments still name the old file and the
+  deleted constants** — `useDashboardMetrics.ts`'s sync note is one. Grep, don't trust the prose.
+- **SIGN-UP NO LONGER NEEDS A `?lead=` TAG.** With no lead the pre-payment screen asks business
+  name, trade and town **and only then** (a tagged visitor already has all three; re-asking implies
+  we lost their details at the moment they decide to pay). `findable-onboarding`'s lead-less branch
+  gained a **`signup` source** that creates the lead through the SAME `createFreeCheckLead` — same
+  dedupe, same fail-closed reads, same three-guard place resolution — **skipping the free-check
+  daily cap**, because refusing someone trying to PAY on a guard against strangers' free checks
+  turns a spend cap into a lost sale. It fires no free audit; the paid baseline measures instead.
+  The **trade is not vanity data**: `startPaidBaseline` refuses with `no_business_type` without one
+  on the lead, so asking after payment would mean selling a guarantee we cannot measure.
+- `paid_for` was "Findable - Setup + first 2 months" (wrong for a one-off) → **"Findable - AI
+  visibility, first cycle"**.
+- ⛔ **DEPLOY ORDER INVERTED ON PURPOSE, AND THE RULE IS THE PRINCIPLE, NOT THE ORDER.** §11's rule
+  below says display before charge — right when a price **RISES**. This one **FELL**, so charge went
+  first and the gap read "shown £99, charged £49.99", a pleasant surprise. Reversed, it would have
+  shown £49.99 and charged £99. **Ask which direction the gap embarrasses you in.**
+
+**2. RECURRING BILLING EXISTS NOW — the website add-on, £49.99 build + £9.99/month hosting.** The
+"scoped but not built" note further down is superseded; what it flagged as the real blocker was
+right and was fixed here.
+- **THE TICK IS READ FROM THE ROW, NEVER THE REQUEST.** `onboarding_responses.website_addon`, saved
+  at submit; `findable-checkout` reads it **from that row** and never from its own body. The
+  standing rule on that endpoint is that **the browser never decides money** — there is no parameter
+  through which a discount can be asked for, and there must be none through which a £59.98 upsell
+  can be either. It is also what makes the row the record of what the customer bought, which
+  delivery reads and a receipt must still agree with months later. **Strictly `=== true`**: null,
+  absent, `"false"` and `0` all mean not ticked — absence is never a purchase.
+- **THE SESSION.** `mode: "payment"` cannot carry a recurring price, so a ticked checkout becomes
+  **`mode: "subscription"`** with three lines — AI £49.99 one-off, build £49.99 one-off, hosting
+  £9.99/month — and Stripe bills the one-offs on the first invoice. One card entry, **£109.97
+  today, £9.99/month after**. Unticked is unchanged.
+- ⛔ **THE AI LINE STAYS INLINE `price_data`, AND THAT IS THE GUARANTEE'S ONLY CARRIER.** It is the
+  only branch with a `description`, and the description is `FINDABLE_GUARANTEE` verbatim — a
+  dashboard Price ID would drop the guarantee text silently (the `FINDABLE_SETUP_PRICE_ID` trap
+  recorded below). The two new lines use **Price IDs precisely because they carry no guarantee to
+  lose**: Paul's decision — the guarantee is AI-visibility only, the build is a delivered product,
+  hosting is a cancellable service. **If it is ever claimed: refund the £49.99 AI portion and cancel
+  the hosting; do not refund the build.**
+- ⛔ **THE ADD-ON PRICES LIVE IN STRIPE, NOT IN THIS REPO** — `FINDABLE_WEBSITE_PRICE_ID` and
+  `FINDABLE_HOSTING_PRICE_ID` are secrets holding Price ids, so **no script can check those two
+  amounts**. They are a third and fourth hand-kept copy alongside the Payment Link.
+- 🔴 **BOTH IDS WERE FIRST SET TO PRODUCT IDS (`prod_…`) AND THE WHOLE CHECKOUT DIED** — Stripe 400
+  `resource_missing`, "No such price", a dead Buy button at the moment someone decides to pay. The
+  dashboard shows a product's id far more prominently than its price's and the two look alike, so
+  **this is the expected paste error, not an unlucky one.** An unusable id is now treated as an
+  **unset** one: the add-on drops and the AI line still sells (a customer who wanted a website and
+  got only the audit is a phone call; one who could not pay at all is gone). The refusal names the
+  **SHAPE** of the bad value ("a PRODUCT id (prod_) — needs the PRICE id") and never its contents.
+- **THE WEBHOOK GAINED THREE EVENTS THAT DID NOT EXIST**: `invoice.paid`,
+  `invoice.payment_failed`, and Findable branches on `customer.subscription.updated/deleted`.
+  Before this a Findable subscription event was **invisible** — both subscription handlers read
+  `metadata.generated_site_id` (the BARBER product) and `setPaid`'s empty-id guard logged "skipped",
+  so a renewal, a dead card and a cancellation were all silent. The barber path is untouched; the
+  discriminator is which metadata is present.
+  - ⛔ **THE LEAD IS RESOLVED BY `stripe_subscription_id`, NEVER BY METADATA. An INVOICE does not
+    inherit subscription metadata**, so keying on metadata would have worked for the subscription
+    events and **silently failed for the renewals — the ones that matter.**
+  - ⚠️ **`past_due` IS DELIBERATELY NOT CANCELLED.** Smart Retries is still running: that customer
+    has a card problem, not a decision.
+  - The Stripe ids are written in a **separate non-fatal update after the payment** — the payment
+    write must never be able to fail on a column newer than itself.
+- ⛔ **`paid` NEEDED TWO REFINEMENTS AND THE OLD EXACT-MATCH TILE WOULD HAVE HIDDEN AN ADD-ON
+  CUSTOMER** (`useDashboardMetrics.ts`, pinned by `scripts/paying-customer.test.ts`):
+  1. **A FLOOR, NOT AN ENUMERATION.** The tile matched `amount_paid` against `[49.99, 19.99]`
+     exactly, so £109.97 vanished — a paying customer reading as no sale. It is now **at or above
+     `PAYING_FLOOR_GBP`**, which is **derived** (`Math.min` of the current and historical prices),
+     never typed. Enumerating valid totals (49.99, 99.98, 109.97, …) fails invisibly the first time
+     an add-on, discount or proration lands outside the list.
+  2. **CHURN IS A POSITIVE MATCH ON `canceled` / `incomplete_expired`** (`DEAD_SUBSCRIPTION_STATUSES`).
+     `paid = amount_paid > 0` is one scalar and cannot express "bought once, hosting since
+     cancelled". ⚠️ **Absent is NOT cancelled** — a one-off customer has no subscription and no
+     status at all and must keep counting, so it is never `!== 'active'`.
+- ⚠️ **`decideGuarantee` NOW COMPARES AGAINST A PRICE THAT HAS FALLEN TO THE EXACT AMOUNT THAT USED
+  TO MEAN "LEGACY".** `src/lib/baselineContract.ts` decides the outcome-vs-work guarantee from
+  `paid < currentPriceGbp`; that was written when the current price was £99, so "below current" meant
+  **the legacy £49.99 sale**. At a flat £49.99 a legacy £49.99 client whose contract is written
+  **from now on** grades as `work` instead of `outcome`. Frozen contracts are unaffected (it is
+  decided ONCE at baseline time, deliberately), and RG at £19.99 still grades `outcome` — so this is
+  a latent fault, not a live one. **Before relying on either paying client's guarantee kind, read
+  the STORED contract rather than re-deriving it.**
+- ✅ **STRIPE'S OWN RESPONSE IS THE ONLY WAY TO VERIFY AN ITEMISATION.** `amount_total` is now
+  recorded from the create-session response (non-fatal, written after the session exists). The
+  hosted page is a JS-rendered shell — fetching it yields no amount, no line items and not even the
+  product name (§6 records the same finding when the guarantee's length was checked). That is how
+  the mixed one-off + subscription shape was finally confirmed: ticked `mode=subscription`
+  `amount_total 10997`, unticked `mode=payment` `4999`. **From Stripe, not from our arithmetic.**
+- ✅ **A REFUSED CHECKOUT IS NOW DIAGNOSABLE: refusals land in `client_error_reports`**, not only
+  `console.error`. **The CLI has no `functions logs` subcommand**, so without a table there is
+  nothing to read afterwards — a payment Stripe rejected left one edge-log line and a bare
+  `checkout_failed` at the client. §4's "a catch-all error message is worse than no message", on
+  the one path carrying all the revenue. The message is **stored, never returned**.
+
+---
+
+<details><summary>THE FOUNDER-PRICE ERA (£19.99 → £49.99, 2026-08-12) — superseded by the flat price above, kept for the reasoning</summary>
 
 - ✅ **THREE CODE CONSTANTS, AND ONE COMMAND PROVES THEY AGREE.** `FOUNDER_PRICE_GBP`
   (`_shared/offer-price.ts`, **CHARGED**), `FOUNDER_OFFER_PRICE_LABEL` (`founderOffer.ts`, what the
   report SAYS), `FOUNDER_PRICE_GBP` (`useDashboardMetrics.ts`, what is COUNTED). Run
   **`node scripts/check-cross-repo-sync.mjs`** — it fails on any drift and passed 8/8 at 49.99.
+  ⚠️ Two of those three have since moved: the label constants are deleted and `founderOffer.ts` is
+  `buyOffer.ts`. The script now runs **9 checks** and still guards the price and the guarantee.
 - ⛔ **TWO COPIES NO SCRIPT CAN REACH, AND BOTH ARE PAUL'S BY HAND:**
   1. **The Stripe Payment Link** (kept for sending manually on WhatsApp) — its amount AND its
      description. A stale amount here means a hand-sent link charges the old price.
@@ -2803,7 +3007,10 @@ all deliberately untouched.
   `whatsapp-status`. Two more — `instantly-push`, `run-seo-scan` — reach `founderOffer.ts` **only
   through `import type`, which is erased at build**, so they carry no values; they were redeployed
   anyway because over-deploying is free and the recorded failure is always the other direction.
-- 🔴 **AND THE MONTHLY IDEA IS SCOPED BUT NOT BUILT.** Recon 2026-08-12: `findable-checkout` creates
+- 🔴 **AND THE MONTHLY IDEA IS SCOPED BUT NOT BUILT.** ⛔ **BUILT 2026-09-03 — the block at the top
+  of §11 is the current record; this bullet is history.** It called the real blocker correctly: the
+  one-scalar `paid` problem is exactly what the floor + churn rules answer.
+  Recon 2026-08-12: `findable-checkout` creates
   a ONE-OFF session (`mode: "payment"`). Subscription code exists but belongs to the BARBER product —
   `customer.subscription.*` reads `metadata.generated_site_id` and flips `generated_sites.is_paid`.
   For Findable there is **no `invoice.paid` handler** (so renewals would be invisible) and **no
@@ -2813,4 +3020,446 @@ all deliberately untouched.
   reads as paying forever. Decide that before any subscription work.
   ⚠️ Also unresolved: `paid_for` is written as **"Findable - Setup + first 2 months"**, so today's
   one-off already claims two months; and the guarantee's "or a full refund" is byte-locked across
-  both repos and becomes ambiguous the moment billing recurs.
+  both repos and becomes ambiguous the moment billing recurs. (`paid_for` was fixed 2026-09-03; the
+  refund ambiguity now has an answer — refund the AI portion, cancel hosting, keep the build.)
+
+</details>
+
+---
+
+## 12. ✅ THE SITE ORIGIN — an allowlist is not an address book (2026-09-03)
+
+🔴 **THE SAME CATEGORY ERROR IN TWO PLACES, AND ONE OF THEM WAS SENDING REAL PROSPECTS TO A PREVIEW
+DOMAIN.** Both read **`FINDABLE_ALLOWED_ORIGINS[0]`** — the first entry of findable-checkout's **CORS
+allowlist** — as the canonical public address. An allowlist answers *who may call us*; **the order of
+its entries is nobody's deliberate decision**, and it legitimately contains preview hosts.
+
+- **Measured across all 47 onboarding links ever sent: 27 went out on `findable-site.pages.dev`, and
+  every one of those was SERVER-BUILT** (re_engage ×19, onboarding_followup ×3, 5 others). The 20
+  reading `findable.live` were all hand-typed by the operator. **The most recent server-built link
+  reached a real prospect on 2026-08-31.**
+- **The second site was worse: `findable-checkout`'s `CANONICAL_ORIGIN`**, which becomes Stripe's
+  `success_url` / `cancel_url` — **a paying customer landing back on a preview domain the instant
+  they finish paying.**
+- ⛔ **AND CORS DID NOT PROTECT IT.** `Access-Control-Allow-Origin` is `*`, so the browser POST
+  succeeds from any origin — meaning **"payments work from findable.live" was never evidence that
+  findable.live is IN the allowlist.** If it is absent, the trusted-origin test failed for every
+  real payer and all of them fell through to the constant. The secret's value cannot be read (the
+  CLI returns hashes), which is the reason not to depend on it at all.
+- **The fix: one shared `resolveSiteOrigin`**, `FINDABLE_SITE_ORIGIN` first — proven to be exactly
+  `https://findable.live` by hashing candidates against the stored digest — folded into the allowed
+  origins so a findable.live payer matches at the first test whatever the CORS list holds. A
+  trusted REQUEST origin still wins, so localhost and Pages testing return where they are.
+- ⛔ **THE FALLBACK REFUSES RATHER THAN GUESSES.** It skips hosts that cannot be a public home
+  (`pages.dev`, `workers.dev`, `supabase.co`, localhost) and **returns null** when nothing
+  qualifies. A refusal is loud — the senders already decline with "the onboarding link base is not
+  configured" — whereas **a plausible preview URL is silent and reaches a customer.** The PRIMARY
+  variable is still trusted as set, including its host: pointing it at a preview deliberately is a
+  decision, and overriding it would make the variable a lie.
+- ⚠️ **THE COMMENT WAS THE BUG.** Both files carried prose asserting the first allowlist entry
+  "becomes canonical". That sentence was not a description of the behaviour, it was the belief that
+  produced it. `scripts/site-origin.test.ts` pins all eleven shapes (**Deno, not tsx** — it reads
+  `Deno.env`); the third case is the exact fault.
+- ⚠️ **Swept at the same time: five onboarding-link builders exist** (three functions + two static
+  hrefs) and four were already correct. When one of these is wrong, check the other four.
+
+---
+
+## 13. ✅ THE REPORT'S "GET STARTED" BUTTON — the only CTA in the document (2026-09-03)
+
+`render-audit-report` had always computed `/onboarding/<slug>/?lead=<leadId>` and **thrown it away**
+since the offer block was stripped on 2026-09-02. The existing "Want us to fix this?" CTA now leads
+with it.
+
+- **This is where outreach clickers actually land: all 16 leads sent `audit_result_hook` opened
+  their report, 16 of 16.** So the button catches them with **no change to the Meta-approved
+  template.**
+- ⛔ **NO URL → NO BUTTON, and it is a price guard as much as a link.** `showOffer === true`
+  strictly, so a paying customer is never invited to start again, and an unset value shows nothing.
+  (Under the old founder split the `?lead=` was what made the report quote the founder price; the
+  flat price has removed that particular hazard but not the rule.)
+- **No price on the button** — the pitch was deliberately removed from this document, and the
+  onboarding page states the price itself.
+- Verified live: Luna Locksmiths (unpaid, hook cohort) renders **Get started** →
+  `findable.live/onboarding/<slug>/?lead=…`, and RG Locksmiths (paid) renders the same CTA with
+  **no button at all**.
+- **Deployed for it:** `render-audit-report`, `process-whatsapp-queue`, `send-whatsapp-message`,
+  `process-ai-audit-queue` — the transitive closure, walked by following relative imports.
+  `apply-seo-paste` and `notify-onboarding-submit` matched a grep **in comments only** (§4).
+
+---
+
+## 14. ✅ THE CAMPAIGN CARD — what each message actually did (2026-09-04 → 09-07)
+
+**One funnel you can read in a second (Reached · Replied · Paid) over a table with ONE ROW PER
+MESSAGE.** `src/hooks/useCampaignStats.ts` + `src/lib/templateAttribution.ts` +
+`src/lib/armComparison.ts`, all pinned by `scripts/template-attribution.test.ts` and
+`scripts/arm-comparison.test.ts`.
+
+- ⛔ **"REPORT OPENED" WAS DELETED TWICE ON A TRUE PREMISE AND A WRONG CONCLUSION.** Both
+  AuditFunnelCard and CampaignStatsCard recorded "our own opens are indistinguishable from a
+  prospect's **and always will be**". The premise holds — the operator opens the SAME URL
+  (`findable.live/report/<auditId>`) so a preview bumps the same counter, and `first_opened_at` is
+  coalesced so a preview permanently owns the first open. **What nobody had done was compare that
+  timestamp against the moment the link was SENT.** Measured over 427 opened audits belonging to a
+  lead: **371 first-opened AFTER the link went out, 1 before, 55 never sent a link.** It separates
+  cleanly, retroactively, with no new tracking. "Always will be" was the only part that did not hold.
+- ⚠️ **MY OWN FIRST DERIVATION OF IT WAS WRONG IN A WAY THAT MATTERED: THREE TEMPLATES CARRY A
+  REPORT LINK, NOT ONE.** `audit_reply` (`url`), `audit_result_hook` and `free_check_result`
+  (`audit_url`) — and `audit_result_hook` is the template that BECAME the outreach hook. Re-derived:
+  links sent **577 → 653**, opened **366 → 408**, unattributable **55 → 13**. Most "unexplained"
+  opens were simply leads sent their report by the newer hook. **`REPORT_LINK_TEMPLATES` (now four
+  entries, with `audit_reply_warm`) does not throw when a new template is missed — it silently
+  understates the rate.**
+- **The open rules, so the denominators agree with the rest of the card:** `isRealSend` on every
+  send (a send Meta refused is not a link sent); the denominator is **links sent, not Reached** (you
+  cannot open a report you were never sent); the **EARLIEST** link send, so re-sending cannot
+  invalidate an open that already happened; **unique audits opened, never `open_count`** (no
+  per-open log exists — summing would report 933 "people" against 433 audits); a **60s slack**
+  because the send receipt is Meta's clock and the open is ours; opens on leads never sent a link
+  are **excluded and surfaced as "(+N not attributable)"**, never dropped; a row renders only once a
+  link has gone out ("0 · 0% of 0" reads as a broken tile); `ai_audits` read through `fetchAllRows`
+  selecting four columns.
+- ⛔ **THE PER-TEMPLATE REPLY METRIC IS LAST-TOUCH, AND THE OLD ONE WAS DELETED FOR A GOOD REASON
+  THAT DOES NOT APPLY TO IT.** The old "replied" meant *has this lead ever replied* intersected with
+  each template's lead set, so **every row claimed the same replies**. Last touch — a reply belongs
+  to the newest real send before it, and any inbound closes the run — measured over the whole book:
+  **757 credited pairs, 725 unambiguous, 32 contested.**
+  - **"Contested" has an exact meaning**: two or more DIFFERENT templates went out with no reply
+    between them, so nobody can know which earned it. It is **concentrated, not spread** —
+    `initial_contact` 0 of 530, `contact_followup` 20 of 20, because a chase only exists when the
+    opener got no answer. So the count sits **on the row that has it**, as a required field on the
+    type: a 26% chase rate shown as cleanly as a 52% opener rate is the misleading half.
+  - Per-template opens are the difference the campaign-level number hid: **`audit_reply` 63% vs
+    `audit_result_hook` 46%.**
+- ⛔ **SITE VISITS AND SIGN-UPS: `lead_page_hits`, and the hook is `prefill`.** Reaching the sign-up
+  page was recorded NOWHERE — report opens are on `ai_audits`, submissions are
+  `onboarding_responses` rows, and the landing between them was invisible, which is the entire gap
+  for a template whose goal is clicks rather than replies. `findable-onboarding`'s `prefill` already
+  fires once per page load with the lead id, and it is a read, so the insert is **fire-and-forget in
+  a try/catch** — a missing table, an RLS surprise or any Postgres error costs the visitor nothing.
+  Logged **BEFORE** the `already_client` gate: a paid customer returning is still a real visit, and
+  gating it would make the metric mean something other than its label.
+  - **`SITE_TRACKING_START = 2026-09-06T00:00:00Z` — the midnight AFTER the hook went live, not the
+    deploy day.** The table does not exist until the SQL runs, so that day's earlier sends could not
+    have produced a hit however fast it happened, and dividing by them prints a confident low rate on
+    day one — the first number anyone looks at. Costs one day of history. (London is UTC+1 in
+    September and the send window is 07:00–21:30 London, so the boundary cannot split a send day.)
+  - ⛔ **THE NUMERATOR IS GATED BY THE SAME WINDOW — caught before shipping.** A lead sent last month
+    who lands tomorrow is credited to that template, but its send is not in the tracked set, so the
+    visit would divide by a denominator it was never part of and **the rate could exceed 100%.**
+  - **Free-check submissions are excluded from per-template sign-up credit** (12 of the 22 onboarding
+    rows on file are free checks — crediting one to a template credits our outreach with a visitor
+    who arrived on their own). The campaign-level "started" deliberately still counts them.
+  - ⛔ **THREE STATES, NOT TWO: tracking unavailable / tracking live but this template not sent since
+    it began / a real measured rate.** Only a genuinely successful read sets the ready flag, so the
+    RLS 200-with-`[]` trap reads as "not tracked" and never as "nobody clicked". Website clicks for
+    other destinations remain untracked and the column **says so once** rather than printing 0.
+- ⛔ **THE COLD-VS-WARM A/B IS INTENT-TO-TREAT, AND IT IS ITS OWN BLOCK, NOT EXTRA COLUMNS.** The
+  per-template columns use **last touch** — the right answer to "which message earned this click" and
+  the **wrong** answer to "does warm convert better", because any message sent in between takes the
+  credit. Measured first: for the two arms it has never yet happened (0 of 124 arm leads got a later
+  template, 0 got both arms), but `audit_reply` shows **30 of 577 (5%)** getting a later template —
+  at A/B sample sizes a 5% leak decides it wrongly.
+  - **The arm is a property of the LEAD**, so every later visit or sign-up counts for the arm it was
+    sent, whatever went out afterwards. **The FIRST exposure defines the arm**, so a resend cannot
+    move the clock past events it already caused.
+  - **A lead sent BOTH arms is excluded from both, and the count is shown** — it is in both
+    populations so it can answer neither, and assigning it to the newer arm would flatter whichever
+    template was introduced second, which is always the one being tested.
+  - **TWO DENOMINATORS, deliberately**: opens and sign-ups have always been recorded, visits only
+    since the prefill hook. One denominator would understate visits by every earlier send.
+  - It renders **only once an arm has a lead** — two rows of dashes is noise, and a 0% on an unsent
+    arm reads as "warm does not work". Both views are honest and answer different questions; merging
+    them into one table would leave the first person who compares them no way to know why they
+    disagree.
+- **Barber-era leftovers removed:** the Site/Audit/Service badge and five barber templates (moved to
+  a **label-only legacy list** — 71 of those messages really were sent, 70 on archived leads).
+  ⚠️ **Shrinking the sendable allowlist had one real hazard, handled:** `CampaignFormDialog`
+  VALIDATES a stored `default_template` against it and two live campaigns still store
+  `booking_switch_barbers`, so opening that dialog and pressing Save **would have rewritten their
+  template to null**. It now preserves an unrecognised stored value and shows it as legacy.
+  `AdminSiteManage` keeps the full list deliberately — it is the old barber admin screen.
+- ⚠️ **The header note on `CampaignStatsCard` still says the open metric could not tell the
+  operator's opens apart. Left exactly as written** — it is the record of what was wrong, and the
+  comment beside the new row is the record of what changed.
+
+---
+
+## 15. ✅ THE FREE-CHECK LANE IS LIVE END TO END — and every fault in it was a lie the operator was told (2026-09-03 → 09-07)
+
+⛔ **§6j's "PHASE 2 (AUTO-AUDIT) IS DELIBERATELY NOT BUILT" IS SUPERSEDED. It is built, it fires, and
+the result is emailed to the visitor.** Read this section over §6j where they disagree.
+
+- 🔴 **THE TOWN GATE REFUSED EVERY AUDIT FOR A BUSINESS GOOGLE CANNOT FIND.** The auto-audit was
+  wired correctly and did fire — it was refused one call later, silently. No place_id → no
+  derived_town → `townVerdict` settled-unverifiable → `create-ai-audit` returns **409
+  `town_unverified` BEFORE it reads `location_text`**. Measured 4 of 4, no exceptions: the two
+  businesses Google resolved got an audit, the two it could not got a lead, an email telling Paul to
+  do it by hand, and nothing else.
+  - ⛔ **THE GATE WAS RIGHT ABOUT PROSPECTING AND WRONG HERE.** It exists because an audit against
+    an INFERRED town cost two prospects (§6b) — but **a free-check visitor TYPES their trade and
+    their town, and that is better evidence than a derived one, not worse.** And a business Google
+    cannot find is precisely the customer who most needs telling that AI cannot find them either.
+  - **The exemption is `town_confirmed`, INTERNAL ONLY**, mirroring `isBaseline`: every other caller
+    that passes `location_text` builds it from `search_location || address`, which is inferred, so a
+    flag any caller could set would disable the gate everywhere. A browser cannot reach it.
+- ⛔ **THE DEDUPE MERGED DIFFERENT BUSINESSES, AND TWO OF ITS THREE RUNGS COLLIDE BY NATURE.**
+  Measured over 3,192 real leads: **87 exact business names are shared** (4 provably different
+  businesses — "Timpson" is in Blyth AND Wisbech; "Fletcher Lock & Safe Co" is two different shops
+  both in Sunderland) and **105 phone numbers are shared, 29 across different names** — worst is
+  Timpson's national switchboard on **15 leads across 8 towns**. And the read was
+  `.limit(1).maybeSingle()`, so **which business a prospect got attributed to was a coin toss.**
+  - **The consequence compounds**: no lead of their own → the per-lead 7-day guard refuses to audit
+    them **because a STRANGER was audited recently** → no report at all → and the Outreach row
+    carries someone else's name.
+  - **Name and phone now require the town to agree AND exactly one candidate to survive**
+    (`_shared/same-business.ts`). Two in the same town **refuses** — that is Fletcher, which the town
+    rule cannot solve and must not guess at. **`place_id` stays exempt**: it identifies the business
+    itself and is the only thing separating Fletcher's two branches; ties resolve to the **oldest**
+    lead deterministically.
+  - **Ambiguity creates a NEW lead** (Paul's rule: for a free check, running fresh beats matching
+    wrongly). ⚠️ **That is only safe because of the phone-history seatbelt** — the queue refuses any
+    cold template for a number with prior history whatever lead row it arrives on. Without it this
+    would trade a mis-attribution bug for a spam bug.
+  - ⚠️ **THE FIRST DRAFT WAS TOO STRICT AND THE REPLAY CAUGHT IT.** Comparing only `derived_town`,
+    "sinners and saints" failed: Google's derived town is **"Muang"** (the district) while
+    `search_location` is "chiang mai". Every genuine repeat would have forked a second lead and paid
+    for a second audit. It now accepts **any town evidence the lead carries** — derived_town,
+    search_location, or the town appearing in the address as a **whole token run, never a bare
+    substring**. Replayed over all 13 real free-check submissions: **3 change, and they are exactly
+    the three wrong ones.**
+- 🔴 **THE OPERATOR EMAIL ASSERTED THINGS IT HAD NEVER CHECKED, TWICE, AND BOTH COST REAL TIME.**
+  1. It said *"nothing has been sent to them automatically… add them to the WhatsApp queue when you
+     are ready"* **on every free check**, including ones where an audit was running and a result was
+     on its way. Standing copy from before the auto-audit existed — **it convinced Paul the funnel
+     was broken when it was working.** It now reads the state and says one of four true things:
+     result sent (naming the address) / audit running (how long, how many runs) / **finished but
+     unsent** / no audit at all **with the recorded reason**. The last two also push into the red
+     "Needs you" box. "Running" and "finished but not sent" are deliberately separate — calling the
+     second one running is the same lie in a new place.
+  2. **It claimed a FOUR-DAY-OLD audit as this submission's** (2026-09-07, "the glue pot"): it read
+     `ai_audits` by lead_id with **no time bound** and took the newest. The lead had deduped onto a
+     test lead, the audit was correctly skipped as "already audited within 7 days" — **and the
+     branch that would have said exactly that was never reached, because an old audit outranked the
+     absence of a new one.** §8's rule again: *a guard is no use if the case it guards cannot arrive
+     at it.* The lookup is now scoped to audits created **at or after this row** (ordering makes a
+     timestamp sufficient — the row is saved before the lead and the audit), with a **60-second**
+     backward tolerance for same-request jitter. The wording also names the matched lead now:
+     without it, "already audited within 7 days" reads as though THEY were audited last week.
+- 🔴 **AND THE RESULT NEVER REACHED A MATCHED LEAD AT ALL.** `maybeSendFreeCheckResult` gated on
+  `lead.enrichment_source !== "free_check"`, but `createFreeCheckLead` only stamps that column on
+  the **INSERT** path — so a submission that MATCHED an existing prospect kept the lead's null and
+  was refused as "not a free-check lead". **Every free check from a business already in the book ran
+  its audit and told them nothing.** The gate moved onto the **SUBMISSION row** (did somebody fill in
+  the free-check form for this lead), which is true for matched and created alike. The lead's
+  provenance column was never the right question — it says how the lead got into the book, not why
+  we are emailing today. **Still fails closed: no submission, no send.**
+- ✅ **THE PROGRESS CARD — `src/lib/freeCheckProgress.ts` (pure, tested) + a `submissions` action.**
+  Every fact needed to answer "is it running, done or failed" was already stored across six tables
+  and surfaced on no screen. The endpoint returns FACTS and computes no verdict (the coverage split).
+  - ⛔ **STRANDED IS ITS OWN STAGE, and it is the one this was worth building for.** An audit whose
+    runs have all settled with no result sent **will never retry** — the send fires only from the
+    tick that finalises a run. It looks finished and is not. Two real submissions were sitting in
+    exactly that state, 3 of 3 runs and 15 of 15 questions, invisible everywhere.
+  - **Absences are named, never defaulted**: no lead ≠ "audit pending"; no audit distinguishes a
+    **recorded** skip from a silent one; an audit with no runs reads "never started". A failed READ
+    says so — an empty array here would otherwise claim the free check has never been used.
+  - Polling is conditional: every 20s **only while something is genuinely mid-flight**.
+- ⛔ **"SENT" IS NOT "DELIVERED", AND THE STAMP USED TO MEAN NEITHER.** `notify_sent_at` was written
+  **BEFORE** the Resend call and never updated, so it only ever meant *we decided to send* — and the
+  dashboard read it as "Result sent". **An email Resend refused rendered green.** The stamp is now
+  patched after the send with `email_status` (accepted / failed / attempting), the provider message
+  id and the error; the claim still goes FIRST, because claiming before sending is what makes the
+  send happen at most once. Two stages came out of "complete": **EMAIL FAILED** and **SEND UNKNOWN**
+  (claimed, outcome never written); an older row with no outcome says "claimed — outcome not
+  recorded" rather than borrowing the good news.
+  - ⚠️ **"ACCEPTED" IS THE HONEST WORD: a 2xx means Resend took the message.** Whether a mailbox
+    received it lives only in Resend's delivery events and **is not in this database.** Measured:
+    19 rows carry the stamp and **not one carries a provider error**, so from our side every email
+    has always "worked" — which is exactly why the word must not overclaim. WhatsApp is different
+    and does carry a real receipt.
+- ✅ **AN OPERATOR RESEND EXISTS, AND IT DOES NOT WEAKEN THE ONCE-PER-AUDIT GUARD.** `force` is set
+  only by that action, the previous stamp is left in place, and the automatic path stays refused for
+  ever after — the property that stopped a stranger being emailed three times six minutes apart is
+  untouched. It refuses an audit with **no completed run**: a resend must never invent a result.
+  - ⚠️ **A RESEND CARRIES THE TIME IN ITS SUBJECT.** Gmail groups identical subjects from one sender
+    into one conversation, so a second identical copy **collapses under the first and reads as never
+    arriving** — the symptom that sent a session hunting a Message-ID dedup bug that does not exist
+    (no Message-ID is set anywhere; Resend assigns them).
+- ⛔ **DEPLOY LISTS FOR THIS LANE, and one of them cost four days:**
+  - `_shared/free-check-result.ts` has **TWO** consumers — `process-ai-audit-queue` (automatic) and
+    `submissions` (the resend). **Redeploy BOTH.** The last time one was missed, the fix sat
+    committed and undeployed while every matched lead was silently refused.
+  - `_shared/free-check-lead.ts` + `_shared/same-business.ts` → **`findable-onboarding` ONLY**
+    (`notify-onboarding-submit` mentions free-check-audit.ts in a **comment** and does not import it).
+- ✅ **REFUSALS ARE RECORDED, NOT LOGGED.** `free_check_audit_skipped` / `free_check_audit_failed`
+  land in **`client_error_reports`** — this lane was dead for two days with the reason existing only
+  in an edge log nobody can read (**the CLI has no `functions logs`**), so diagnosing it meant
+  inferring from which leads happened to have audits.
+
+---
+
+## 16. ✅ THE REPLY RULE IS THREE-WAY NOW: Off / Run audit only / Audit + auto-send (2026-09-08)
+
+**Audit-only is the DEFAULT and Paul's warm-outreach case:** a business replies to the opener, an
+audit runs if they have none, **nothing goes out**, and he sends `audit_reply_warm` by hand once it
+is ready. `src/lib/firstReplyMode.ts` (pure, tested) +
+`whatsapp_outreach_state.first_reply_mode` (SQL applied).
+
+- ⛔ **BUILT AS A MODE ON THE EXISTING RULE, NOT A SECOND PATH.** That chain already carries seven
+  guards that took incidents to learn — the opener gate, the once-per-lead slot, decline detection,
+  auto-responder detection, cross-channel suppression, never-pitch-a-paying-customer,
+  archived-means-stop — and **none of them depends on whether we intend to send.** A parallel
+  "audit only" path would have needed every one again: the duplicate-guard drift this file records
+  four times.
+- 🔴 **THE SAFETY PROPERTY IS STRUCTURAL, NOT A FLAG THE SENDER CONSULTS.** An audit-only arm claims
+  the lead's once-ever slot with status **`audit_only`, which is terminal**: the completion hook only
+  ever upgrades `awaiting_audit` → `pending`, and the drain only ever selects `pending`. **There is
+  no state from which a send can happen.** A mode the send path merely *read* could be got past by a
+  stale row or a later mode flip; **a status it cannot see cannot be sent.** The drain also refuses
+  `first_reply` rows by mode — belt and braces, the way the paying-customer guard is checked at both
+  arm time and send time.
+- ⛔ **ABSENCE IS NEVER PERMISSION, on the field that decides whether a stranger gets a message.** A
+  missing column, a failed read, NULL, an empty string and an unrecognised value **all resolve to
+  `audit_only`** — so deploying before the SQL ran could not turn a silent inbox into a sending one,
+  and a mode added later joins the safe side by default. (Instance fifteen of the absent-value shape,
+  and the first one designed in from the start on a sending path.)
+- 🔴 **18 `pending` first_reply ROWS WERE PARKED PAST THEIR `fire_after`**, held back by nothing but
+  the toggle being off — four of them for leads already at `report_sent`. **Turning the rule on would
+  have sent all eighteen, days late, on the next tick.** The drain now retires anything older than
+  **`AUTO_REPLY_STALE_MS` (6h)** as `skipped_stale` with the reason on the row, so the pile cannot
+  rebuild itself over the next long off period.
+- **A failed or capped audit un-parks an `audit_only` row too** — without it, a lead whose audit died
+  keeps counting as "ready to send" and the operator opens a thread to send a result that does not
+  exist. **Flagging is not sending**, so widening that scope cannot put a message on the wire; the
+  arming path stays scoped to `awaiting_audit` alone.
+- ⛔ **`DEFAULT_FIRST_REPLY_TEMPLATE = 'audit_reply_warm'` IS ONE SHARED CONSTANT.** It was the
+  literal `"audit_reply"` written out at **four** sites — the send-time resolve, two arm-time
+  already-sent checks and the SPA select — so moving the warm test onto a new template meant changing
+  all four in step **or having the arm check one template's history while the sender sent another.**
+- **Untouched on purpose:** `create-ai-audit`'s `queue_pitch_on_complete` path (an operator
+  explicitly asking for a pitch from the Inbox audit button, not the reply trigger), and the legacy
+  `AUTO_REPLY_FLOW_ENABLED` chain.
+
+### `audit_reply_warm` — the warm audit template (Meta 1509669747584736, approved 2026-09-07)
+
+Same job as `audit_result_hook`, for a lead who has **already answered** the opener, so it drops the
+"is this the right number" line. Selectable in both pickers as "Audit reply - warm (after the opener)".
+
+- ⛔ **THREE VARIABLES AND NO BUSINESS NAME: {{1}} trade, {{2}} town, {{3}} audit link — taken from
+  WhatsApp Manager, NOT inferred from its sibling.** `audit_result_hook` leads with the business
+  name and this one does not, so copying its var list across would have put the trade where Meta
+  expects a name and **shifted every parameter by one: a send that returns 200 and reads as
+  gibberish.**
+- ⛔ **IT WOULD HAVE BEEN UNSENDABLE, AND THAT WAS NOT ON THE BRIEF.** Unknown templates are **COLD
+  by default** (`coldOutreach.ts`, since the 2026-09-02 incident), and this template is by
+  definition sent to leads who have already answered — so leaving it unlisted meant the
+  phone-history seatbelt would refuse it **for every single lead it exists for**: selectable,
+  apparently sent, then dropped as `phone_already_contacted`. It is named in
+  **`CONTINUATION_TEMPLATES`**, which is exactly what that file's header demands of a new follow-up.
+- **Three more places, each silent when missed:** `needsAudit` (its {{3}} IS the report link, so the
+  queue must not send it before the audit completes), the report-link set in `Inbox.tsx`, and
+  `REPORT_LINK_TEMPLATES` in `useCampaignStats` — forgetting the last does not throw, it quietly
+  moves real prospect opens into the unattributable bucket.
+- **The Inbox shows real text**, via the mechanism already built: the DB trigger stores only the
+  bracketed slug (`[audit_reply_warm]`) and the SPA renders the approved copy from
+  `src/lib/templateBodies.ts`, mirrored character-for-character and **pinned by
+  `scripts/template-bodies-parity.test.ts`**, which imports both files and asserts identical output.
+- **Deploy list — the nine functions reaching `whatsapp-send.ts` or `coldOutreach.ts`**, walked from
+  each `index.ts`: `create-ai-audit`, `process-ai-audit-queue`, `process-sms-queue`,
+  `process-whatsapp-queue`, `send-whatsapp-message`, `stripe-webhook`, `findable-onboarding` (via
+  free-check-lead), `submissions` (via free-check-result), `whatsapp-status` (via whatsapp-inbound).
+
+---
+
+## 17. ✅ THE BEFORE/AFTER VIEW AND THE LOCKED BASELINE (2026-09-08)
+
+The four commits behind the AI Audit page's before/after panel. Pure folds in
+`src/lib/measurementCompare.ts`, `measurementRunGroups.ts`, `measurementExport.ts`,
+`measurementLock.ts`; tests in the matching `scripts/measurement-*.test.ts`.
+
+- ⛔ **THE QUESTIONS DID NOT LINE UP BECAUSE THERE WAS NO PER-QUESTION TABLE.** That view showed a
+  headline, a run picker and **two whole client reports side by side** — two independently laid-out
+  documents, so their question lists could not correspond. The joined table existed at
+  `/compare/:auditId`, linked from exactly one place, and had probably never been seen. The aligned
+  table is now a **shared component on BOTH views**.
+- ⛔ **ORDER IS A PRESENTATION CHOICE, AND "AS ASKED" IS DERIVED FROM ROW ORDER.** The fold used to
+  sort by movement (wins first) and threw the asked order away, so every consumer inherited a
+  client-reading sequence. Queue rows have **no `created_at`** and `buildBaselineView` re-sorts by
+  band, so neither is a source of ask order — both callers fetch `.order('id')` and rows are inserted
+  in question order, so **first appearance IS the asked order.** The property that matters: **the
+  sequence does not change when the results change**, so two exports of one audit can be read
+  against each other.
+- **CSV, clipboard TSV and PDF are three renderers over ONE `exportRows()`** — not three readings of
+  the comparison, because a discrepancy between the file and the screen would be invisible. **The
+  qualifications travel with the numbers** (per-row verdict, a `proven` flag, both denominators; the
+  header carries the overall figures, the noise band, the matched count and an explicit warning when
+  the two sides sampled unevenly), because a sheet of bare deltas is exactly where a ±5-point
+  sampling swing gets read as improvement. Rates AND counts, each count beside its denominator.
+- ⚠️ **FOUND BY RUNNING IT ON REAL DATA, NOT BY REVIEW: every export said "unknown date" for both
+  sides.** `compareMeasurements` is handed queue rows, which carry no date, and never passed
+  `buildBaselineView` the optional `measuredAt` — so `comparison.before.measuredAt` was
+  **structurally null**. A file that cannot say when it measured is not evidence of a change over
+  time. Dates now come from the caller, the only thing holding the run rows.
+- ⛔ **THE RUN PICKER GROUPS BY AUDIT × DAY. Both simpler choices are wrong on real data.** Grouping
+  by AUDIT: RG's measurement audit `f0aaa9cd` holds **five** runs — three on 26 Aug, then singles
+  appended 1 Sep and 8 Sep — so one block would drag two later runs in and **compare a date against
+  itself.** Grouping by DAY: 11 Aug holds both a 1-run prospecting audit (3 questions) and the 3-run
+  baseline (12 questions), and merging them **joins two different question sets.**
+  - Each group states its run count, its audit's configured target ("3 of 3") and the **answer cells
+    per question** it contributes; a group short of its config is flagged, and each side carries a
+    badge saying whether it has enough cells for a per-question claim at all — the same
+    **`MIN_CELLS_FOR_QUESTION_CLAIM = 4`** rule the fold applies, asked at **SELECTION** time
+    instead of discovered afterwards as "unproven".
+  - **That is the whole reason this was reported as a broken run-count setting. Nothing was
+    misconfigured**: a 3-run day was being compared against a 1-run day and the list gave no way to
+    see it.
+- ⛔ **THE DEFAULT NOW PREFERS COMPLETE MEASUREMENTS, NOT OLDEST-VS-NEWEST DAY.** On RG the old
+  default pre-ticked a 1-run **3-question** probe from 29 Jul against a single run appended 8 Sep —
+  two sides sharing only some questions, proving nothing — while his real 12-question 3-run
+  measurements sat in the middle and were never picked, so **every visit opened on "within noise"**.
+  It now picks 11 Aug (3 runs, 12 questions) vs 8 Sep (3 runs, 12 questions): 6 cells per question
+  both sides, all 12 individually provable. It degrades in **named steps** (largest question set,
+  then oldest-vs-newest), each returning the note the picker prints, and **a single group ticks
+  NOTHING** — one side against itself is a 0.0pp "unchanged" that looks like a measured result.
+  - ✅ Verified against RG's live runs, which also settled a question: **the fold has always pooled
+    every selected run** rather than reading one per side (3 runs → 36 queue rows, 6 cells/question,
+    `before.runs === 3`). Nothing needed fixing there and nothing was changed.
+- **The selection persists per audit in localStorage** (AppLayout remounts on every navigation —
+  §6c), as **one record keyed by audit**, because `usePersistedState` binds its key once for the
+  hook's lifetime and a key built from a changing auditId keeps writing to the first audit's slot.
+  Arrays, not Sets (a Set does not survive JSON). **A restored selection is PRUNED against the runs
+  that actually loaded** — a stale id is dropped, never kept, because keeping it builds a side out of
+  fewer runs than the screen shows ticked; when anything is dropped the picker opens itself, and the
+  screen says whether it is showing a saved selection or the default.
+- ⚠️ **`is_measurement` EXISTS IN THE DATABASE BUT NOT IN THE GENERATED SUPABASE TYPES**, so
+  selecting it fails typecheck. `baseline_target_runs > 1` is the same signal and the grouper infers
+  a measurement from it — ask only for what the types know rather than casting through `unknown`.
+
+### The locked baseline — `measurement_locks` (SQL applied 2026-09-08)
+
+- ⛔ **WHAT IT IS NOT: A FIX FOR DRIFT — THERE IS NO DRIFT.** Re-measures do not regenerate
+  questions: `create-ai-audit` uses a supplied list verbatim and otherwise **reuses the previous
+  run's set**, the generator has no temperature and no shuffle, and baselines deliberately opt out of
+  the cross-audit coverage directive. Verified on live rows: **RG's 11 Aug, 26 Aug and 8 Sep
+  measurements ask the BYTE-IDENTICAL same 12 strings.** No generation code was touched.
+- **What it IS: a guarantee that held by construction, made RECORDED AND CHECKABLE.** The intended
+  set is written down with the audit and date it came from and the run count it was measured over,
+  and **a proposed re-measure is diffed against it BEFORE the money is spent** instead of the
+  mismatch appearing afterwards as unmatched rows. **The client it would actually have protected is
+  ABLM: 28 runs, 10 different question sets, and a 21 Jul vs 28 Aug pair that compares ZERO
+  questions.**
+- **Keyed by BUSINESS NAME**, because a re-measure mints a NEW `ai_audits` row and a lock hung off one
+  audit id would be invisible from the next. RLS **with its policy in the same file** — telling "no
+  lock" from "could not tell" is this table's whole job.
+- ⛔ **AN EMPTY OR MALFORMED STORED LOCK READS AS NO LOCK, NEVER AS AN EMPTY ONE.** A lock validating
+  with zero questions would make every future diff report "identical" and **sign off the exact drift
+  it exists to catch**; `isUsableLock` rejects 13 malformed shapes.
+- **Order is not identity** (the comparison joins on the text) and duplicates collapse, **but a
+  REWORDED question is a different question** — ABLM's real "accountant in wisbech" vs "Best
+  accountants in Wisbech?" reads matched 0. Questions are stored **verbatim, misspellings kept**: a
+  tidied question measures something else.
+- ⛔ **THE LOCK WARNS; IT NEVER REFUSES.** A legitimate reason to change the set exists (a town the
+  client stopped serving), and a tool that blocked would be worked around. **What must not happen is
+  changing it by accident.**
