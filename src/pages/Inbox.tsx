@@ -36,6 +36,15 @@ import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2 } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
+import {
+  DEFAULT_FIRST_REPLY_MODE,
+  DEFAULT_FIRST_REPLY_TEMPLATE,
+  FIRST_REPLY_MODES,
+  FIRST_REPLY_MODE_HINTS,
+  FIRST_REPLY_MODE_LABELS,
+  parseFirstReplyMode,
+  type FirstReplyMode,
+} from '@/lib/firstReplyMode';
 
 // Shared style for the compact thread-header quick-action icon buttons/links.
 const HEADER_ICON_BTN = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
@@ -114,26 +123,38 @@ function listPreview(m: { body: string | null; template_name: string | null }, b
   return `📄 ${friendlyTemplate(m.template_name ?? ((m.body ?? '').trim() || null))}`;
 }
 
-/** The ONE inbox auto-reply rule's on/off switch (reply → delayed audit_reply). Reads/writes
- *  whatsapp_outreach_state.auto_reply_enabled via process-whatsapp-queue (admin-gated modes
- *  'status' / 'set_auto_reply'), so it renders ONLY for admins (a 403 on status hides it).
- *  The AUTO_AUDIT_REPLY_ENABLED env kill-switch must ALSO be on for sends — shown as a hint. */
+/** The reply rule's THREE-WAY control (Off / Run audit only / Audit + auto-send).
+ *
+ *  Reads and writes whatsapp_outreach_state via process-whatsapp-queue (admin-gated modes
+ *  'status' / 'set_first_reply_mode'), so it renders ONLY for admins — a 403 on status hides it.
+ *  The AUTO_AUDIT_REPLY_ENABLED env kill-switch must ALSO be on before anything SENDS; it does
+ *  not gate the audit, so "Run audit only" works whatever the secret says.
+ *
+ *  ⛔ WHY A SEGMENTED CONTROL AND NOT A SWITCH PLUS A MODIFIER. The dangerous state is "sending
+ *  when I thought it was only measuring", and a switch beside a modifier lets the two be read
+ *  separately — the eye takes in "on" and stops. Three buttons where exactly one is lit can only
+ *  be read as one answer, and the lit one either says the word "send" or it does not. */
 function AutoReplyToggle() {
   const { toast } = useToast();
   const [visible, setVisible] = useState(false);
-  const [enabled, setEnabled] = useState(false);
+  const [mode, setMode] = useState<FirstReplyMode>(DEFAULT_FIRST_REPLY_MODE);
   const [envOn, setEnvOn] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [replyTemplate, setReplyTemplate] = useState<string>('audit_reply');
+  const [readyCount, setReadyCount] = useState<number | null>(null);
+  const [replyTemplate, setReplyTemplate] = useState<string>(DEFAULT_FIRST_REPLY_TEMPLATE);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'status' } });
       if (cancelled || error || !data?.ok) return; // non-admin (403) or failure → stay hidden
-      setEnabled(data.autoReplyEnabled === true);
+      /* The rule is OFF unless the boolean says so; the stored mode only chooses between the two
+         working behaviours. Reading it the other way round would paint "Run audit only" over a
+         rule the trigger treats as paused. */
+      setMode(data.autoReplyEnabled === true ? parseFirstReplyMode(data.firstReplyMode) : 'off');
       setEnvOn(data.autoReplyEnvOn === true);
-      setReplyTemplate((data.firstReplyTemplate as string | null) ?? 'audit_reply');
+      setReadyCount(typeof data.auditOnlyReadyCount === 'number' ? data.auditOnlyReadyCount : null);
+      setReplyTemplate((data.firstReplyTemplate as string | null) ?? DEFAULT_FIRST_REPLY_TEMPLATE);
       setVisible(true);
     })();
     return () => { cancelled = true; };
@@ -141,7 +162,7 @@ function AutoReplyToggle() {
 
   if (!visible) return null;
 
-  // Pick the template the reply trigger sends (default audit_reply). Server-validated allowlist.
+  // The template an auto-send uses. Only reachable in send mode; server-validated allowlist.
   const pickTemplate = async (value: string) => {
     const prev = replyTemplate;
     setReplyTemplate(value); // optimistic
@@ -153,46 +174,75 @@ function AutoReplyToggle() {
       toast({ title: "Couldn't set the reply template", description: error?.message ?? data?.detail ?? data?.error ?? 'Failed (has the SQL been run?)', variant: 'destructive' });
       return;
     }
-    toast({ title: 'Reply template set', description: `First replies now get "${value}" (guards + 3-min cancel window unchanged).` });
+    toast({ title: 'Reply template set', description: `Auto-sends now use "${value}" (guards + 3-min cancel window unchanged).` });
   };
 
-  const flip = async (next: boolean) => {
+  const pickMode = async (next: FirstReplyMode) => {
+    if (next === mode) return;
     setSaving(true);
-    const prev = enabled;
-    setEnabled(next); // optimistic
+    const prev = mode;
+    setMode(next); // optimistic
     const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', {
-      body: { mode: 'set_auto_reply', enabled: next },
+      body: { mode: 'set_first_reply_mode', value: next },
     });
     setSaving(false);
     if (error || !data?.ok) {
-      setEnabled(prev);
-      toast({ title: "Couldn't update auto-reply", description: error?.message ?? data?.detail ?? data?.error ?? 'Toggle failed (has the SQL been run?)', variant: 'destructive' });
+      setMode(prev);
+      toast({ title: "Couldn't change the reply mode", description: error?.message ?? data?.detail ?? data?.error ?? 'Failed (has the SQL been run?)', variant: 'destructive' });
       return;
     }
+    /* The confirmation states what WILL happen, and for send mode it leads with the risk. A toast
+       that only says "saved" is how an operator ends up unsure which mode is live. */
     toast({
-      title: next ? 'Auto audit-reply ON' : 'Auto audit-reply OFF',
-      description: next
-        ? (envOn ? 'First replies now get the audit_reply automatically (3-min cancel window).' : 'Toggle saved — but the AUTO_AUDIT_REPLY_ENABLED secret is off, so nothing sends yet.')
-        : 'Replies are back to manual handling.',
+      title: next === 'off' ? 'Reply rule off' : next === 'audit_only' ? 'Reply rule: run audit only' : 'Reply rule: audit + auto-send',
+      description: next === 'send' && !envOn
+        ? 'Saved — but the AUTO_AUDIT_REPLY_ENABLED secret is off, so nothing will actually send yet.'
+        : FIRST_REPLY_MODE_HINTS[next],
+      variant: next === 'send' ? 'destructive' : undefined,
     });
   };
 
+  const sending = mode === 'send';
   return (
-    <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 h-9" title={envOn ? 'Auto-send the chosen template on a lead’s first reply (delayed 3 min; declines cancel it; no completed audit → an audit is run automatically and the pitch sends on completion)' : 'Kill-switch AUTO_AUDIT_REPLY_ENABLED is off — the toggle is saved but nothing sends until it’s set to 1'}>
-      <span className="text-xs font-medium whitespace-nowrap">Auto reply{!envOn && enabled ? ' ⚠' : ''}</span>
-      <Switch checked={enabled} onCheckedChange={flip} disabled={saving} />
-      {enabled && (
-        <>
-          <span className="text-[11px] text-muted-foreground whitespace-nowrap">On reply:</span>
-          <Select value={replyTemplate} onValueChange={pickTemplate}>
-            <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {WHATSAPP_TEMPLATES.map((t) => (
-                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </>
+    <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 h-9">
+      <span className="text-xs font-medium whitespace-nowrap" title="What happens automatically when a business replies to your initial_contact opener">
+        On reply{sending && !envOn ? ' ⚠' : ''}
+      </span>
+      {/* Exactly one lit segment, so the state cannot be half-read. */}
+      <div className="flex items-center rounded-md border border-border/60 overflow-hidden">
+        {FIRST_REPLY_MODES.map((m) => (
+          <button
+            key={m}
+            type="button"
+            disabled={saving}
+            onClick={() => pickMode(m)}
+            title={FIRST_REPLY_MODE_HINTS[m]}
+            className={`px-2 h-7 text-[11px] font-medium transition disabled:opacity-60 ${
+              mode === m
+                ? (m === 'send' ? 'bg-destructive text-destructive-foreground' : 'bg-primary text-primary-foreground')
+                : 'bg-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {FIRST_REPLY_MODE_LABELS[m]}
+          </button>
+        ))}
+      </div>
+      {/* Audit-only mode's whole point: how many leads are measured and waiting for ME to send.
+          Counts leads with a COMPLETED audit, never parked rows — see auditOnlyReadyCount. */}
+      {mode === 'audit_only' && readyCount !== null && readyCount > 0 && (
+        <span className="text-[11px] text-muted-foreground whitespace-nowrap" title="Leads whose audit auto-ran and has finished — send the warm template by hand">
+          {readyCount} ready to send
+        </span>
+      )}
+      {sending && (
+        <Select value={replyTemplate} onValueChange={pickTemplate}>
+          <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {WHATSAPP_TEMPLATES.map((t) => (
+              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
     </div>
   );

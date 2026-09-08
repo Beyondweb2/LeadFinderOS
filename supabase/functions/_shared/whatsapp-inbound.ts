@@ -14,7 +14,7 @@ function ownWebsite(raw: string | null | undefined): string | null {
   return w && !isAggregatorUrl(w) ? w : null;
 }
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
-import { autoReplyEnvOn, autoReplyToggleOn, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, phoneSuppressed, pitchEverSent } from "./auto-reply-rules.ts";
+import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, armStatusFor, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, modeSends, phoneSuppressed, pitchEverSent } from "./auto-reply-rules.ts";
 import { suppress } from "./suppression.ts";
 
 // Inbound WhatsApp message handling — barber replies arriving on the SAME Meta
@@ -362,8 +362,15 @@ export async function handleInboundMessages(
                 });
                 console.log(`[auto-reply] lead ${leadId}: decline detected — flagged for human.`);
               } else {
-                // The reply-trigger template (setting; null → processor defaults to audit_reply).
+                // The reply-trigger template (setting; null → the shared default template).
                 const replyTemplate = await firstReplyTemplate(service);
+                /* ⛔ THE MODE DECIDES THE OUTCOME, NOT THE GUARDS. Everything above this line — the
+                   opener gate, the once-ever slot, decline, bot, suppression, paid, archived — runs
+                   identically in both working modes, because none of those refusals depends on
+                   whether we intend to send. Only what we ARM changes here. Any unreadable or
+                   unknown value resolves to 'audit_only', the mode that sends nothing. */
+                const mode = await firstReplyMode(service);
+                const willSend = modeSends(mode);
                 // Does the lead already have a COMPLETED audit (complete/capped — same set the
                 // audit_reply resolver accepts)? Cheap two-step existence check.
                 let hasCompletedAudit = false;
@@ -377,7 +384,11 @@ export async function handleInboundMessages(
                   hasCompletedAudit = !!doneRun;
                 }
 
-                if (hasCompletedAudit && (await pitchEverSent(service, leadId, replyTemplate ?? "audit_reply"))) {
+                /* ⚠️ THE ALREADY-SENT CHECK IS A SEND-MODE QUESTION. In audit_only mode we are not
+                   proposing to send anything, so whether a pitch went out before decides nothing —
+                   asking it would only mean recording a different reason for the same inaction, and
+                   it costs a query on every reply. */
+                if (willSend && hasCompletedAudit && (await pitchEverSent(service, leadId, replyTemplate ?? DEFAULT_FIRST_REPLY_TEMPLATE))) {
                   // DURABLE once-ever (arm time): the pitch already went out (message log — covers
                   // manual sends and survives queue-row deletion). Burn the slot instead of arming.
                   await service.from("whatsapp_auto_replies").insert({
@@ -387,16 +398,37 @@ export async function handleInboundMessages(
                   });
                   console.log(`[auto-reply] lead ${leadId}: pitch already sent — recorded skipped_already_sent, not re-arming.`);
                 } else if (hasCompletedAudit) {
-                  // Audit ready → queue the delayed pitch as before (template stamped from the setting).
-                  const { error: qErr } = await service.from("whatsapp_auto_replies").insert({
-                    lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
-                    template_name: replyTemplate,
-                    status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString(),
-                  });
-                  if (qErr && (qErr as { code?: string }).code !== "23505") {
-                    console.error(`[auto-reply] queue insert failed for lead ${leadId}:`, (qErr as { message?: string }).message);
-                  } else if (!qErr) {
-                    console.log(`[auto-reply] lead ${leadId}: '${replyTemplate ?? "audit_reply"}' queued (fires in ~3 min).`);
+                  /* They already have a measurement. In SEND mode that arms the delayed pitch as
+                     before; in audit_only mode there is nothing left to do — no audit to run and
+                     nothing to send — so the slot is claimed TERMINALLY and the operator sees a
+                     lead whose audit is ready to quote by hand.
+                     ⛔ armStatusFor owns the choice, so the trigger and the tests cannot disagree
+                     about which status a mode writes. */
+                  const armStatus = armStatusFor(mode, true);
+                  if (!armStatus) {
+                    console.log(`[auto-reply] lead ${leadId}: mode '${mode}' takes no automatic action — nothing armed.`);
+                  } else {
+                    const { error: qErr } = await service.from("whatsapp_auto_replies").insert({
+                      lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
+                      template_name: replyTemplate,
+                      status: armStatus,
+                      /* A terminal audit_only row is due immediately and never read by the drain;
+                         a pending one keeps the 3-minute cancel window that lets a late decline
+                         stop the send. */
+                      fire_after: armStatus === "pending"
+                        ? new Date(Date.now() + 3 * 60_000).toISOString()
+                        : new Date().toISOString(),
+                      ...(armStatus === AUDIT_ONLY_STATUS
+                        ? { reason: "audit already complete — send the template by hand" }
+                        : {}),
+                    });
+                    if (qErr && (qErr as { code?: string }).code !== "23505") {
+                      console.error(`[auto-reply] queue insert failed for lead ${leadId}:`, (qErr as { message?: string }).message);
+                    } else if (!qErr) {
+                      console.log(armStatus === "pending"
+                        ? `[auto-reply] lead ${leadId}: '${replyTemplate ?? DEFAULT_FIRST_REPLY_TEMPLATE}' queued (fires in ~3 min).`
+                        : `[auto-reply] lead ${leadId}: audit already complete and mode is '${mode}' — recorded ${AUDIT_ONLY_STATUS}, NOTHING will send.`);
+                    }
                   }
                 } else {
                   // AUTO CHAIN — no completed audit yet. If the lead has usable audit inputs, fire
@@ -421,17 +453,27 @@ export async function handleInboundMessages(
                     });
                     console.log(`[auto-reply] lead ${leadId}: no completed audit + missing inputs — flagged_no_inputs.`);
                   } else {
-                    // Claim the slot FIRST (row = the intent + the template memory); only start the
-                    // audit if we actually own the slot (a 23505 means another trigger got there).
+                    /* Claim the slot FIRST (row = the intent + the template memory); only start the
+                       audit if we actually own the slot (a 23505 means another trigger got there).
+                       ⛔ AND THE STATUS IS WHERE THE TWO MODES DIVERGE — STRUCTURALLY, NOT BY A FLAG.
+                       'awaiting_audit' is the status the completion hook in process-ai-audit-queue
+                       looks for (`.eq("status", "awaiting_audit")`) when it arms the send. An
+                       audit_only row is written as AUDIT_ONLY_STATUS instead, which that hook cannot
+                       see, so no completion, no later mode flip and no stale row can turn this into
+                       a message. The audit below still runs exactly the same way either way. */
+                    const armStatus = armStatusFor(mode, false) ?? AUDIT_ONLY_STATUS;
                     const { error: awaitErr } = await service.from("whatsapp_auto_replies").insert({
                       lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
                       template_name: replyTemplate,
-                      status: "awaiting_audit",
+                      status: armStatus,
+                      ...(armStatus === AUDIT_ONLY_STATUS
+                        ? { reason: "audit running — send the template by hand when it completes" }
+                        : {}),
                       fire_after: new Date().toISOString(), // real fire_after is set by the completion upgrade
                     });
                     if (awaitErr) {
                       if ((awaitErr as { code?: string }).code !== "23505") {
-                        console.error(`[auto-reply] awaiting_audit insert failed for lead ${leadId}:`, (awaitErr as { message?: string }).message);
+                        console.error(`[auto-reply] ${armStatus} insert failed for lead ${leadId}:`, (awaitErr as { message?: string }).message);
                       }
                     } else {
                       const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -480,10 +522,19 @@ export async function handleInboundMessages(
                           /* The derived run is status 'complete', so this lead now satisfies exactly
                              the same hasCompletedAudit test the top of this ladder uses. Queue the
                              pitch on the SAME 3-minute delay as the audit-ready path, so a decline
-                             arriving in the meantime still cancels it. */
-                          const { error: upErr } = await service.from("whatsapp_auto_replies")
-                            .update({ status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString() })
-                            .eq("lead_id", leadId).eq("status", "awaiting_audit");
+                             arriving in the meantime still cancels it.
+                             ⛔ SEND MODE ONLY, AND THE `if` IS NOT DECORATION. The update below is
+                             scoped `.eq("status", "awaiting_audit")`, which an audit_only row is
+                             not — so running it in audit_only mode would match ZERO rows, report NO
+                             error (an update that matches nothing is not a failure), and print
+                             "pitch queued, fires in ~3 min" about a message that will never exist.
+                             The guard is here to stop the LOG lying, not to stop a send; the send
+                             was already impossible. */
+                          const { error: upErr } = willSend
+                            ? await service.from("whatsapp_auto_replies")
+                                .update({ status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString() })
+                                .eq("lead_id", leadId).eq("status", "awaiting_audit")
+                            : { error: null };
                           if (upErr) {
                             /* Derived but not queued. Flag it rather than leave a row nothing will
                                ever pick up — the audit is real and free, so this is a send to
@@ -495,7 +546,10 @@ export async function handleInboundMessages(
                           } else {
                             console.log(
                               `[auto-reply] lead ${leadId}: SERVED from the town's market audit `
-                              + `(${dbody.named_datapoints ?? "?"}/${dbody.total_datapoints ?? "?"} named, $0 spent) — pitch queued, fires in ~3 min.`,
+                              + `(${dbody.named_datapoints ?? "?"}/${dbody.total_datapoints ?? "?"} named, $0 spent) — `
+                              + (willSend
+                                ? "pitch queued, fires in ~3 min."
+                                : `mode '${mode}': audit ready NOW, nothing queued — send the template by hand.`),
                             );
                           }
                           servedFromMarket = true;

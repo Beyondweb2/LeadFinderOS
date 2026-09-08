@@ -12,6 +12,24 @@
 export { isDecline, looksAutomated } from "../../../src/lib/inboundClassify.ts";
 import { isSuppressed } from "./suppression.ts";
 
+/* The reply-trigger MODE lives in src/lib too, and for the same reason: the SPA has to render the
+   three-way control and this module cannot be imported there (Deno.env below). One definition of
+   what each mode does, read by the trigger, the drain and the Inbox. */
+export {
+  AUDIT_ONLY_STATUS,
+  AUTO_REPLY_STALE_MS,
+  DEFAULT_FIRST_REPLY_MODE,
+  DEFAULT_FIRST_REPLY_TEMPLATE,
+  FIRST_REPLY_MODES,
+  armStatusFor,
+  isStaleAutoReply,
+  modeRunsAudit,
+  modeSends,
+  parseFirstReplyMode,
+  type FirstReplyMode,
+} from "../../../src/lib/firstReplyMode.ts";
+import { parseFirstReplyMode, type FirstReplyMode } from "../../../src/lib/firstReplyMode.ts";
+
 /** A real, human-typed text worth reacting to: non-empty, not a media/reaction placeholder
  *  ("[image]", "[reaction]", …) and at least a couple of characters. */
 export function isSubstantiveText(body: string): boolean {
@@ -72,6 +90,29 @@ export async function autoReplyToggleOn(service: any): Promise<boolean> {
     return data?.auto_reply_enabled === true;
   } catch {
     return false;
+  }
+}
+
+/** The reply-trigger MODE (whatsapp_outreach_state.first_reply_mode).
+ *
+ *  ⛔ EVERY FAILURE DIRECTION IS 'audit_only'. A missing column (SQL not run), a failed read, a
+ *  NULL, or a value this build does not know all resolve to the mode that sends nothing —
+ *  parseFirstReplyMode owns that rule and this function only supplies it a value. So deploying
+ *  this code before the SQL runs cannot turn a silent inbox into a sending one.
+ *
+ *  ⚠️ THIS DOES NOT ANSWER "is the rule on". `autoReplyToggleOn` still does: OFF is the boolean,
+ *  and the mode only says which of the two working behaviours applies. Two fields because the
+ *  operator's "stop everything" and their choice of behaviour are different decisions, and
+ *  collapsing them would lose the chosen behaviour every time the rule is paused. */
+// deno-lint-ignore no-explicit-any
+export async function firstReplyMode(service: any): Promise<FirstReplyMode> {
+  try {
+    const { data, error } = await service
+      .from("whatsapp_outreach_state").select("first_reply_mode").eq("id", 1).maybeSingle();
+    if (error) return parseFirstReplyMode(null);
+    return parseFirstReplyMode(data?.first_reply_mode);
+  } catch {
+    return parseFirstReplyMode(null);
   }
 }
 
