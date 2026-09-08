@@ -29,6 +29,7 @@ import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtm
 import type { QueueRow, RunRow } from '@/lib/auditReport';
 import type { QueueRowLite } from '@/lib/baselineView';
 import { compareMeasurements, type MeasurementComparison, type Movement } from '@/lib/measurementCompare';
+import { MeasurementCompareTable } from '@/components/MeasurementCompareTable';
 
 /** The sheet's own design width plus its 24px auto margins — see aiAuditReportHtml's `.sheet`. */
 const DESIGN_WIDTH = 812;
@@ -233,6 +234,14 @@ export function ReportBeforeAfter({
   }
 
   const usableRuns = runs.filter(isUsable);
+  /* The EARLIEST run on a side is when that measurement was taken — a side spanning two days
+     (real: ABLM's before is four runs over several days) is dated by when it started, and the run
+     count beside it in the export header says it was more than one. */
+  const measuredAtOf = (ids: Set<string>): string | null => {
+    const picked = runs.filter((r) => ids.has(r.id)).map((r) => r.created_at).sort();
+    return picked[0] ?? null;
+  };
+
   const dateLabel = (ids: Set<string>) => {
     const sel = usableRuns.filter((r) => ids.has(r.id));
     if (!sel.length) return 'nothing selected';
@@ -345,6 +354,21 @@ export function ReportBeforeAfter({
           Pick at least one run as <span className="font-medium text-foreground">Before</span> and one as{' '}
           <span className="font-medium text-foreground">After</span> under “Choose runs”.
         </Card>
+      )}
+
+      {/* ── THE ALIGNED PER-QUESTION TABLE ───────────────────────────────────────
+          ⛔ THIS VIEW HAD NO PER-QUESTION TABLE AT ALL. It showed the headline, the run picker
+          and then the two client reports side by side - two independently laid-out documents,
+          whose question lists therefore could not line up row by row. That is what made
+          like-for-like reading impossible. The joined table goes ABOVE the documents because it
+          is the thing being compared; the documents stay for eyeballing the client's-eye view. */}
+      {comparison && comparison.questions.length > 0 && (
+        <MeasurementCompareTable
+          comparison={comparison}
+          businessName={businessName}
+          beforeMeasuredAt={measuredAtOf(beforeIds)}
+          afterMeasuredAt={measuredAtOf(afterIds)}
+        />
       )}
 
       {/* ── THE TWO DOCUMENTS ────────────────────────────────────────────────── */}
