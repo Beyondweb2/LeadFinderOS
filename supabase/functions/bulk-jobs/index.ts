@@ -62,6 +62,11 @@ function internalHeadersFor(keys: any): Record<string, string> {
    ⚠️ This is a REFUSAL above the cap, not a slice (see the create branch) — the dialog now says so
    before the press rather than letting the server reject it. */
 const JOB_CAPS: Record<string, number> = { enrich: 200, audit: 100, audit_and_push: 25 };
+/* ⛔ THE NO-AUDIT PUSH CAP. audit_and_push is 25 because it BUYS an audit per lead; with the audit
+   dropped (Paul, 2026-09-09 — the email lost {{competitors}}) the run costs nothing, so the 25 was
+   a spend guard with no spend behind it. 200 matches enrich, and it stays a cap rather than
+   unbounded because this still puts real businesses into a live email campaign. */
+const PUSH_ONLY_CAP = 200;
 
 /** ⛔ TRY THE TOWN'S MARKET AUDIT BEFORE BUYING A PER-BUSINESS ONE. £0 against ~8p a lead, and every
  *  refusal falls through to the paid audit unchanged — see the call site in phase A.
@@ -172,7 +177,7 @@ interface TriageRow {
 }
 
 // deno-lint-ignore no-explicit-any
-async function triageForPush(service: any, userId: string, leadIds: string[], cap: number): Promise<TriageRow[]> {
+async function triageForPush(service: any, userId: string, leadIds: string[], cap: number, skipAudit = false): Promise<TriageRow[]> {
   if (!leadIds.length) return [];
   /* ⛔ CHUNKED, FOR THE SAME REASON backfill-lead-towns is. This takes the operator's RAW
      selection, so it is unbounded: 316 leads (~11,700 URL bytes) worked on 2026-08-08 and 400
@@ -239,11 +244,27 @@ async function triageForPush(service: any, userId: string, leadIds: string[], ca
     if (townGated(l)) return cannot(TOWN_GATE_REASON);
     if (!String(l.email ?? "").trim()) return cannot("no email address — run Find emails first");
 
+    /* ⛔ NO-AUDIT MODE: THE LADDER STOPS HERE (Paul, 2026-09-09). The email dropped
+       {{competitors}}, which was the only thing an audit contributed, so a lead that clears
+       suppression, the already-pushed stamp, the town gate and has an email is ready to upload —
+       there is nothing left to buy.
+       ⚠️ THE TRADE AND TOWN ARE STILL REQUIRED, for a different reason than before. They used to be
+       "can this be audited"; they are now MERGE FIELDS, and a lead missing one sends an email with
+       a hole in the sentence. Same test, honest new wording — and it mirrors instantlyVarsFor,
+       which refuses the same lead at the push itself. Two checks agreeing is deliberate: this one
+       makes the confirm dialog truthful before anything runs. */
+    const type = (l.search_keyword || l.category || "").trim();
+    if (skipAudit) {
+      const mergeTown = (l.derived_town || l.search_location || "").trim();
+      if (!type) return cannot("no trade stored — the email's {{trade}} would be blank");
+      if (!mergeTown) return cannot("no town stored — the email's {{city}} would be blank");
+      return { lead_id: id, business_name: name, bucket: "push_now", reason: "" };
+    }
+
     if (leadHasAnsweredAudit.has(id)) return { lead_id: id, business_name: name, bucket: "push_now", reason: "" };
 
     /* An audit needs a business type and a town. Sourced the same way the wizard and the existing
        bulk audit source them, so a lead auditable here is auditable there. */
-    const type = (l.search_keyword || l.category || "").trim();
     const town = (l.search_location || l.address || "").trim();
     if (!type || !town) return cannot("no business type or town stored, so there is nothing to audit");
 
@@ -704,6 +725,16 @@ async function runPushPhase(service: any, job: JobRow): Promise<{ pushed: number
            JWT created the job and whose leads create already filtered the selection down to. */
         acting_user_id: job.user_id,
         campaign_id: campaignId,
+        /* ⛔ THE MODE TRAVELS WITH THE CALL, rather than instantly-push inferring it. The job knows
+           whether an audit was asked for; the push function should not have to guess from whether
+           the leads happen to have one.
+           ⚠️ THE TWO SIDES DEFAULT DIFFERENTLY, ON PURPOSE. instantly-push defaults to NO audit —
+           that is Paul's instruction for the flow. This defaults to REQUIRING one, because a job
+           without `skip_audit` is a job created before this change, whose phase A has already
+           bought the audits; pushing it as though it had not would silently discard work already
+           paid for. New jobs from the dialog always send skip_audit explicitly, so this branch only
+           ever governs a job that was already in flight. */
+        require_audit: (job.params as { skip_audit?: unknown } | null)?.skip_audit !== true,
         lead_ids: ready.map((it) => it.lead_id),
       }),
     });
@@ -964,8 +995,14 @@ Deno.serve(async (req) => {
     if (action === "triage") {
       const leadIds: string[] = Array.from(new Set((body.lead_ids ?? []).filter((x: unknown) => typeof x === "string")));
       if (!leadIds.length) return json({ error: "lead_ids required" }, 400);
-      const cap = JOB_CAPS.audit_and_push;
-      const rows = await triageForPush(service, user.id, leadIds, cap);
+      /* ⛔ THE CAP DEPENDS ON WHETHER ANYTHING IS BEING BOUGHT. 25 exists because audit_and_push
+         SPENDS — five questions and a scan per lead. A push with no audit spends nothing at all, so
+         capping it at 25 would be a limit with no cost behind it, and the operator would just press
+         the button eight times. PUSH_ONLY_CAP is still a cap rather than unbounded, because this
+         does email real businesses even when it costs nothing. */
+      const skipAudit = body.skip_audit === true;
+      const cap = skipAudit ? PUSH_ONLY_CAP : JOB_CAPS.audit_and_push;
+      const rows = await triageForPush(service, user.id, leadIds, cap, skipAudit);
       const actionable = rows.filter((r) => r.bucket !== "cannot").length;
       /* ⛔ THIS RUN's NUMBERS, NOT THE SELECTION's. These are what the confirm line quotes and what
          the cost is multiplied by. Derived from will_run so they cannot disagree with the job. */
@@ -992,7 +1029,13 @@ Deno.serve(async (req) => {
     if (action === "create") {
       const jobType: string = body.job_type ?? "";
       if (jobType !== "enrich" && jobType !== "audit" && jobType !== "audit_and_push") return json({ error: "invalid job_type" }, 400);
-      const cap = JOB_CAPS[jobType];
+      /* ⛔ READ FROM params, NOT the top-level body — because params is what gets STORED on the job
+         row, and the runner reads the mode back from there when phase B calls instantly-push. A
+         flag the create call honoured but did not persist would audit at triage time and then
+         require an audit at push time. The dialog sends it in params for exactly this reason. */
+      const skipAuditCreate = jobType === "audit_and_push"
+        && (body.params as { skip_audit?: unknown } | null)?.skip_audit === true;
+      const cap = jobType === "audit_and_push" && skipAuditCreate ? PUSH_ONLY_CAP : JOB_CAPS[jobType];
       const leadIds: string[] = Array.from(new Set((body.lead_ids ?? []).filter((x: unknown) => typeof x === "string")));
       if (!leadIds.length) return json({ error: "lead_ids required" }, 400);
       /* audit_and_push caps on ACTIONABLE items, counted after the triage below; every other job
@@ -1027,7 +1070,7 @@ Deno.serve(async (req) => {
            could send a different split, and the one thing this job must not do is audit or email
            someone the confirm screen listed under "cannot". Re-running also picks up a suppression
            added between the preview and the press. */
-        const rows = await triageForPush(service, user.id, finalIds, cap);
+        const rows = await triageForPush(service, user.id, finalIds, cap, skipAuditCreate);
         items = rows.map((r): JobItem => {
           if (r.bucket === "cannot") {
             skippedAtCreate++;

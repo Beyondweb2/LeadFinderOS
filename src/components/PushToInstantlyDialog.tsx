@@ -32,7 +32,7 @@ interface PushToInstantlyDialogProps {
   onPushed?: () => void;
   /** Starts the two-phase job. Supplied by Outreach via useBulkJobs. */
   onBulkJob?: (
-    type: 'enrich' | 'site_gen' | 'audit' | 'audit_and_push',
+    type: 'enrich' | 'audit' | 'audit_and_push',
     leadIds: string[],
     params?: Record<string, unknown>,
   ) => Promise<{ ok: boolean; error?: string }>;
@@ -109,6 +109,14 @@ export function PushToInstantlyDialog({
     }
   }, []);
 
+  /* ⛔ NO AUDIT, BY DEFAULT (Paul, 2026-09-09): "I'm dropping {{competitors}} from the email, so no
+     audit is needed." Competitor names were the ONLY thing the audit put into the email, so with
+     them gone an audit before a push buys nothing and costs ~8p and several minutes per lead.
+     ⚠️ Kept as a TOGGLE rather than deleted outright because Paul asked for "the option (or
+     default)". If it goes a month unused it should be removed — a switch nobody flips is the
+     clutter this cleanup is about. */
+  const [auditFirst, setAuditFirst] = useState(false);
+
   /** Ask the server what would happen. Read-only: no job, no spend, no email. */
   const loadTriage = useCallback(async () => {
     if (!leadIds.length) { setTriage([]); return; }
@@ -116,7 +124,7 @@ export function PushToInstantlyDialog({
     setTriageError(null);
     try {
       const { data, error } = await supabase.functions.invoke('bulk-jobs', {
-        body: { action: 'triage', lead_ids: leadIds },
+        body: { action: 'triage', lead_ids: leadIds, skip_audit: !auditFirst },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Could not work out what these leads need');
@@ -131,7 +139,7 @@ export function PushToInstantlyDialog({
     } finally {
       setTriaging(false);
     }
-  }, [leadIds]);
+  }, [leadIds, auditFirst]);
 
   useEffect(() => {
     if (!open) return;
@@ -165,6 +173,10 @@ export function PushToInstantlyDialog({
       const res = await onBulkJob('audit_and_push', leadIds, {
         campaign_id: campaignId,
         question_count: questionCount,
+        /* ⛔ IN params, WHICH IS WHAT GETS STORED ON THE JOB ROW. The runner reads the mode back
+           from there when it calls instantly-push, so a flag sent anywhere else would be honoured
+           at triage and forgotten at push. */
+        skip_audit: !auditFirst,
       });
       if (!res.ok) {
         toast({ title: 'Could not start', description: res.error, variant: 'destructive' });
@@ -240,12 +252,39 @@ export function PushToInstantlyDialog({
             </div>
           ) : triage && (
             <div className="space-y-2">
+              {/* ⛔ WHAT ACTUALLY GETS UPLOADED, NAMED. The merge-field names ARE the contract with
+                  the Instantly template — it fills {{business_name}} by exact name, and a mismatch
+                  renders as an empty string in a sent email rather than erroring. Listing them here
+                  means the campaign's copy can be checked against this screen. */}
+              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs">
+                <p className="font-semibold">Uploaded per lead</p>
+                <p className="mt-0.5 text-muted-foreground">
+                  email · <code>{'{{business_name}}'}</code> · <code>{'{{trade}}'}</code> · <code>{'{{city}}'}</code>
+                  {auditFirst && <> · <code>{'{{competitors}}'}</code> · <code>{'{{report_url}}'}</code></>}
+                </p>
+                <label className="mt-2 flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={auditFirst}
+                    onChange={(e) => setAuditFirst(e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-medium">Audit first, so the email can name competitors</span>
+                    <span className="block text-muted-foreground">
+                      Off by default — the email no longer uses {'{{competitors}}'}, so an audit adds
+                      cost and several minutes per lead for a field nothing merges. Turning this on
+                      restores the old behaviour and only pushes leads that have a finished audit.
+                    </span>
+                  </span>
+                </label>
+              </div>
               {groups.pushNow.length > 0 && (
                 <p className="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs">
                   <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600" />
                   <span>
-                    <span className="font-semibold">{groups.pushNow.length}</span> already audited —
-                    pushed as they are.
+                    <span className="font-semibold">{groups.pushNow.length}</span>{' '}
+                    {auditFirst ? 'already audited — pushed as they are.' : 'ready to upload now.'}
                   </span>
                 </p>
               )}
@@ -310,11 +349,20 @@ export function PushToInstantlyDialog({
               <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
                 {willRun > 0 ? (
                   <>
-                    This run performs <span className="font-semibold">{auditsThisRun}</span>{' '}
-                    audit{auditsThisRun === 1 ? '' : 's'} and pushes{' '}
-                    <span className="font-semibold">{willRun}</span> lead{willRun === 1 ? '' : 's'}
-                    {' '}(~<span className="font-semibold">${costUsd.toFixed(2)}</span>
-                    {auditsThisRun === 0 && ' — nothing to audit'}). Proceed?
+                    {auditFirst ? (
+                      <>
+                        This run performs <span className="font-semibold">{auditsThisRun}</span>{' '}
+                        audit{auditsThisRun === 1 ? '' : 's'} and pushes{' '}
+                        <span className="font-semibold">{willRun}</span> lead{willRun === 1 ? '' : 's'}
+                        {' '}(~<span className="font-semibold">${costUsd.toFixed(2)}</span>
+                        {auditsThisRun === 0 && ' — nothing to audit'}). Proceed?
+                      </>
+                    ) : (
+                      <>
+                        Uploads <span className="font-semibold">{willRun}</span> lead{willRun === 1 ? '' : 's'}{' '}
+                        to the campaign. <span className="font-semibold">No audit, no cost.</span> Proceed?
+                      </>
+                    )}
                   </>
                 ) : (
                   <>Nothing to do — every selected lead is in the list above.</>

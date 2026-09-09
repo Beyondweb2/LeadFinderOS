@@ -19,6 +19,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { townGated } from "../../../src/lib/townVerdict.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
+import { instantlyVarsFor } from "../_shared/instantly-vars.ts";
 import { checkSuppressed } from "../_shared/suppression.ts";
 
 const INSTANTLY_BASE = "https://api.instantly.ai/api/v2";
@@ -195,11 +196,20 @@ Deno.serve(async (req) => {
     // their own rows; admins get no owner filter so they can push any lead by id.
     let leadQuery = service
       .from("outreach_leads")
-      .select("id, business_name, email, phone, is_archived, category, instantly_pushed_at, search_location, derived_town, town_fetch_note")
+      .select("id, business_name, email, phone, is_archived, category, search_keyword, instantly_pushed_at, search_location, derived_town, town_fetch_note")
       .in("id", leadIds);
     if (!isAdmin) leadQuery = leadQuery.eq("user_id", userId);
     const { data: rows, error: lErr } = await leadQuery;
     if (lErr) return json({ success: false, error: lErr.message }, 500);
+
+    /* ⛔ NO AUDIT IS THE DEFAULT NOW (Paul, 2026-09-09). The email dropped {{competitors}}, and
+       competitor names were the ONLY thing the audit supplied — so auditing before a push buys
+       nothing and costs ~8p and several minutes a lead. `require_audit: true` keeps the old
+       behaviour for a caller that still wants it; absent means no audit, which is the instruction.
+       ⚠️ THE SAFETY GATES ARE UNCHANGED IN BOTH MODES. Suppression, already-pushed, the town gate
+       and has-an-email all run below regardless. What changes is only where the merge fields come
+       from and whether a completed audit is required to have them. */
+    const requireAudit = body?.require_audit === true;
 
     const all = rows ?? [];
     /* ⚠️ IDS, NOT JUST COUNTS. A caller that has to map an outcome back onto its own work items —
@@ -245,39 +255,62 @@ Deno.serve(async (req) => {
        link, so competitor names ARE the hook; without them the email is generic and burns both the
        lead and the sending domain's reputation. Refusing is the whole point of resolving here
        rather than sending a blank variable and finding out from a reply that never comes. */
-    const resolved: Array<{ row: typeof toPush[number]; vars: { trade: string; competitors: string; business: string; link: string } }> = [];
+    /* Both modes produce the same shape so everything downstream is identical. `competitors` and
+       `link` are empty strings in no-audit mode and the payload builder below OMITS them entirely —
+       an empty variable in a sent sentence is the failure this file's comments already record. */
+    const resolved: Array<{ row: typeof toPush[number]; vars: { trade: string; competitors: string; business: string; link: string; city: string } }> = [];
     const skippedNoAudit: Array<{ id: string; business_name: string | null; reason: string }> = [];
     /* ⛔ SUPPRESSED PEOPLE ARE NEVER EMAILED, AND THIS FUNCTION USED TO HAVE NO SUCH CHECK AT ALL.
        Its whole filter was "not already pushed AND has an email" — measured 2026-08-08, that let
        142 people who had said no through, held back only by 141 of them not having an email
        address yet. 79 of those had a website, so the Find emails crawl would have supplied one.
        Checked per lead against phone, email AND lead id, because an archived row often has no
-       usable phone and the lead id is the only identifier left. */
+       usable phone and the lead id is the only identifier left.
+       ⚠️ RUNS IN BOTH MODES. Dropping the audit must not drop this. */
     const skippedSuppressed: Array<{ id: string; business_name: string | null; matchedOn: string }> = [];
 
     /* Small concurrency: one resolver call is several reads, and MAX_BATCH is 1000. Sequential
-       would be minutes; unbounded would hammer PostgREST. */
+       would be minutes; unbounded would hammer PostgREST. No-audit mode does no reads at all, so
+       the batching costs it nothing. */
     const CONCURRENCY = 8;
     for (let i = 0; i < toPush.length; i += CONCURRENCY) {
       const slice = toPush.slice(i, i + CONCURRENCY);
-      const out = await Promise.all(slice.map(async (r) => ({ r, v: await resolveAuditReplyVars(service, r.id) })));
       const supp = await Promise.all(slice.map((r) =>
         checkSuppressed(service, { phone: r.phone, email: r.email, leadId: r.id })));
-      for (let k = 0; k < out.length; k++) {
-        const { r, v } = out[k];
+      /* ⛔ THE AUDIT READ ONLY HAPPENS IF AN AUDIT IS REQUIRED. This is the money: resolveAuditReplyVars
+         is several database reads per lead, and in the default mode it is not called at all. */
+      const out = requireAudit
+        ? await Promise.all(slice.map(async (r) => ({ r, v: await resolveAuditReplyVars(service, r.id) })))
+        : slice.map((r) => ({ r, v: null }));
+      for (let k = 0; k < slice.length; k++) {
+        const r = slice[k];
         const sp = supp[k];
-        /* Suppression is checked FIRST and reported separately from "no audit". Folding them into
-           one skip count would hide the only one that is a safety failure rather than a data gap. */
+        /* Suppression is checked FIRST and reported separately from a missing field. Folding them
+           into one skip count would hide the only one that is a safety failure rather than a data gap. */
         if (sp.suppressed) { skippedSuppressed.push({ id: r.id, business_name: r.business_name ?? null, matchedOn: sp.matchedOn ?? "?" }); continue; }
-        if (v.ok) resolved.push({ row: r, vars: { trade: v.trade, competitors: v.competitors, business: v.business, link: v.link } });
-        else skippedNoAudit.push({ id: r.id, business_name: r.business_name ?? null, reason: v.reason });
+
+        if (requireAudit) {
+          const v = out[k].v!;
+          if (v.ok) resolved.push({ row: r, vars: { trade: v.trade, competitors: v.competitors, business: v.business, link: v.link, city: "" } });
+          else skippedNoAudit.push({ id: r.id, business_name: r.business_name ?? null, reason: v.reason });
+          continue;
+        }
+
+        /* ⛔ NO AUDIT, BUT STILL A REFUSAL. resolveAuditReplyVars did two jobs — produce the
+           variables AND refuse a lead whose variables would be broken — and only the first of those
+           depended on an audit. instantlyVarsFor keeps the refusal, sourcing the trade and town from
+           the lead itself. A lead missing either is reported under the SAME skip list, because from
+           the operator's side "this lead cannot be emailed and here is why" is one question. */
+        const lv = instantlyVarsFor(r);
+        if (lv.ok) resolved.push({ row: r, vars: { trade: lv.vars.trade, competitors: "", business: lv.vars.business_name, link: "", city: lv.vars.city } });
+        else skippedNoAudit.push({ id: r.id, business_name: r.business_name ?? null, reason: lv.reason });
       }
     }
 
     if (resolved.length === 0) {
       return json({
-        success: true, pushed: 0, pushedIds: [], skippedAlreadyPushed, skippedNoEmail,
-        alreadyPushedIds, noEmailIds,
+        success: true, pushed: 0, pushedIds: [], skippedAlreadyPushed, skippedNoEmail, skippedTownUnverified,
+        alreadyPushedIds, noEmailIds, townUnverifiedIds,
         skippedNoAudit: skippedNoAudit.length, skippedNoAuditDetail: skippedNoAudit,
         skippedSuppressed: skippedSuppressed.length, skippedSuppressedDetail: skippedSuppressed,
       });
@@ -293,12 +326,21 @@ Deno.serve(async (req) => {
       custom_variables: {
         business_name: vars.business || r.business_name || "",
         trade: vars.trade,
-        competitors: vars.competitors,
-        report_url: vars.link,
-        /* The real town, at last. derived_town is resolved from the Places address and is the
-           truthful one; search_location is what was typed and can be a neighbouring town (the
-           Huntingdon-from-a-Wisbech-search case). Prefer derived, fall back, never empty-string. */
-        city: (r.derived_town ?? "").trim() || (r.search_location ?? "").trim() || "",
+        /* The real town. derived_town is resolved from the Places address and is the truthful one;
+           search_location is what was typed and can be a neighbouring town (the
+           Huntingdon-from-a-Wisbech-search case). Prefer derived, fall back, never empty-string.
+           ⚠️ In no-audit mode instantlyVarsFor has already applied this rule AND refused a lead with
+           neither, so `vars.city` is non-empty; the fallback expression covers the audit path,
+           where the resolver does not supply a town. */
+        city: vars.city || (r.derived_town ?? "").trim() || (r.search_location ?? "").trim() || "",
+        /* ⛔ competitors AND report_url ARE OMITTED ENTIRELY WHEN THERE IS NO AUDIT — not sent
+           empty. Paul dropped {{competitors}} from the email on 2026-09-09, so there is nothing for
+           them to fill; and an empty variable that a template still references renders as a hole in
+           a sentence, which is the exact failure the audit gate was written to prevent. Omitting
+           rather than blanking also means a template still using one renders it empty either way,
+           so nothing silently half-works. */
+        ...(vars.competitors ? { competitors: vars.competitors } : {}),
+        ...(vars.link ? { report_url: vars.link } : {}),
       },
     }));
 
