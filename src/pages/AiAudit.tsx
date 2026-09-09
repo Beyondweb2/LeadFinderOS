@@ -44,9 +44,9 @@ import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS } 
 /* The LLM "playbook" (playbookHtml.ts + the generate-playbook edge function) was DELETED
    2026-09-09. It recommended Bing Places — zero citations across 10,615 — and ICAEW to an ACCA
    firm. The evidence-derived playbook at /playbook/:id is the only one now. */
-import { buildSchema, normalizeUrl } from '@/lib/schemaType';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMeasurementLock } from '@/hooks/useMeasurementLock';
 import { describeLock, diffAgainstLock } from '@/lib/measurementLock';
 
@@ -201,16 +201,6 @@ const AUDIT_SEARCH_LIMIT = 200;
 const AUDIT_SELECT =
   'id, business_name, business_type, location_text, country, has_website, website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted, is_measurement';
 
-/** Split ids into batches so a `.in(ids)` filter never builds a querystring long enough to hit the
- *  gateway URL limit: 300 ids was already ~11KB and 485 ~18KB, near the edge. 150 keeps every read
- *  well under it at any list size. */
-const IN_CHUNK = 150;
-function chunkIds<T>(arr: T[], n = IN_CHUNK): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
-  return out;
-}
-
 /** One ai_audits row as it arrives from AUDIT_SELECT, before hydration: baseline_runs_counted is a
  *  string here (the `baseline->>runs_counted` JSON extract) and runs/report_slug are not fetched yet.
  *  hydrateAudits turns this into an AuditLite. */
@@ -230,6 +220,9 @@ const SEARCH_MIN_BUSINESSES = 8;
 /** Landing-list refresh cadence while ANY run is in flight. The effect is not armed at all when
  *  nothing is draining, so an idle page makes zero requests. */
 const LIST_POLL_MS = 5000;
+/** Stable empty list — a new [] each render would break every memo downstream. */
+const EMPTY_AUDITS: AuditLite[] = [];
+const EMPTY_LEADS: LeadOption[] = [];
 
 
 // Wizard state is persisted to localStorage (USER-SCOPED) so an in-progress New Audit survives
@@ -365,11 +358,17 @@ const AiAudit = () => {
   }, []);
 
   // Existing-lead picker + saved audits
-  const [leads, setLeads] = useState<LeadOption[]>([]);
-  const [savedAudits, setSavedAudits] = useState<AuditLite[]>([]);
-  /** True when the audits query came back full, i.e. older audits exist beyond it. Drives an
-   *  honest label instead of a count that silently stops growing. */
-  const [auditsCapped, setAuditsCapped] = useState(false);
+  /* ⛔ THE AUDIT BOOK IS CACHED NOW, AND THAT IS THE FIX FOR "IT RELOADS EVERY TIME I COME BACK".
+     This was plain useState filled by a mount effect, so every arrival re-fetched the lot behind a
+     spinner. Measured against the live database 2026-09-09: 7.8 SECONDS of queries per arrival
+     (958 audits, their runs, the report slugs, the queue counts). React Query holds it for the
+     app-wide staleTime (5 min), so leaving the page and coming back is instant and silent.
+     ⚠️ `savedAudits` and `setSavedAudits` keep their names and shapes on purpose — the optimistic
+     row edits below (delete, rename, cancel) still write straight into the cache, so a mutation
+     shows immediately instead of waiting for a refetch. */
+  const queryClient = useQueryClient();
+  const auditListKey = useMemo(() => ['ai-audit-list', user?.id ?? null] as const, [user?.id]);
+
   /* THE AUDIT SEARCH. Purely client-side over what is already loaded — no query, no round trip, so
      it filters as you type. Deliberately NOT persisted: a remembered filter is how you come back to
      this page, see four audits and think you have lost 130. */
@@ -506,32 +505,12 @@ const AiAudit = () => {
   // command centre, not a raw dump. Toggled open on demand.
   const [showDetails, setShowDetails] = useState(false);
 
-  // "Schema markup" section — collapsible JSON-LD generator with editable NAP + specialism.
-  // The four fields + the website URL are loaded from ai_audits (not in the wizard state on a
-  // reopened audit) and saved back on demand, so they pre-fill next visit.
-  const [showSchema, setShowSchema] = useState(false);
-  const [schemaNap, setSchemaNap] = useState({ phone: '', address: '', email: '', specialism: '' });
-  const [schemaWebsite, setSchemaWebsite] = useState('');
-  // The audit's explicit stored engagement scope (null when unset) — preferred over the
-  // playbook-derived scope when building the JSON-LD schema.
-  const [schemaScope, setSchemaScope] = useState<'national' | 'local' | 'hybrid' | null>(null);
-  const [schemaCopied, setSchemaCopied] = useState(false);
-  const [schemaSaving, setSchemaSaving] = useState(false);
-  // "Link hub" section — collapsible list of the client's own URLs (label + url), loaded from
-  // ai_audits.client_links and saved back per audit. Mirrors the Schema markup section.
-  const [showLinks, setShowLinks] = useState(false);
-  const [clientLinks, setClientLinks] = useState<{ label: string; url: string }[]>([]);
-  const [linksSaving, setLinksSaving] = useState(false);
-  const [linkCopiedIdx, setLinkCopiedIdx] = useState<number | null>(null);
-  // "Scan site & autofill" — scan the client's own site (scan-site-details), review the found
-  // details + links, then apply into schemaNap / clientLinks via the EXISTING save paths.
-  // Nothing auto-saves; scanReview holds the editable, include-gated review until applied.
-  const [scanning, setScanning] = useState(false);
-  const [scanReview, setScanReview] = useState<null | {
-    details: { phone: string; address: string; email: string; hours: string };
-    detailInclude: { phone: boolean; address: boolean; email: boolean; hours: boolean };
-    links: { label: string; url: string; include: boolean; templateDefault: boolean }[];
-  }>(null);
+  /* ⛔ THE AUDIT'S OWN WEBSITE, AND IT IS THE ONLY SURVIVOR OF THE SCHEMA BLOCK. Schema markup,
+     the Link hub and "Scan site & autofill" were removed on 2026-09-09 — Paul: features he never
+     uses. Their shared loader also supplied THIS, which is not cosmetic: scoreQuestion uses it to
+     exclude the client's own site from the aggregator share, so dropping it would quietly change
+     every question's score on a reopened audit. Loaded on its own now. */
+  const [auditWebsite, setAuditWebsite] = useState('');
   // The run whose opened-audit view we're on. Persisted (per-tab) so navigating away to the
   // report/playbook sub-views — or off the page entirely — and back returns to THIS audit
   // instead of resetting to the list. Cleared by "New audit" and "Back" (to the list).
@@ -609,50 +588,61 @@ const AiAudit = () => {
   // Loads the whole audit book the list needs in four bounded queries: audits, their runs,
   // published-report slugs, and live queue counts for the runs still in flight. Also the
   // refresh the landing list polls while anything is draining.
-  /* HYDRATE a set of audit rows into AuditLite (runs + report pill + live queue progress). Extracted
-     from loadSaved UNCHANGED so the server-side search can reuse the exact same shaping — the only
-     difference from before is the `.in()` reads are chunked (see chunkIds). */
+  /* HYDRATE a set of audit rows into AuditLite (runs + report pill + live queue progress). Shared
+     with the server-side search so both shape a row identically. */
   const hydrateAudits = useCallback(async (auditRows: RawAuditRow[]): Promise<AuditLite[]> => {
-    const ids = auditRows.map((a) => a.id);
-    // ALL runs per audit (newest first): the expanded view lists every run, and the collapsed row's
-    // cost is the sum across them. Chunked so a large id list never overflows the querystring.
+    /* 🔴 THIS USED TO CHUNK BY AUDIT ID, AND THE CHUNKING WAS THE WHOLE COST OF OPENING THE PAGE.
+       Runs and reports were fetched with `.in('audit_id', batch)` over 60-id batches, awaited ONE
+       AFTER ANOTHER — 16 sequential round trips for 958 audits. Measured against the live database
+       2026-09-09: 6,038ms for the runs alone, out of 7.8 SECONDS of queries on every single arrival.
+       Both tables are owner-RLS, so the id filter was never what scoped them — it only decided how
+       many round trips to make. Fetching each table straight through, paginated, is the same rows:
+       1,366 runs in 1,124ms over 2 requests. Same data, a fifth of the time.
+       ⚠️ A run belonging to an audit outside this page's list is simply never read — runsByAudit is
+       keyed by audit_id and looked up per rendered audit — so dropping the filter cannot show
+       anything extra. */
     const runsByAudit = new Map<string, RunLite[]>();
     const inFlightRunIds: string[] = [];
-    for (const idBatch of chunkIds(ids)) {
-      const { data: runs } = await (supabase as unknown as SupabaseClient)
+    const { rows: runRows } = await fetchAllRows<{
+      id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null;
+      created_at: string; actor_cost_usd: number | null; seo_grade: string | null;
+    }>('AiAudit (runs)', (from, to) =>
+      (supabase as unknown as SupabaseClient)
         .from('ai_audit_runs')
         .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results->seo->>overallGrade')
-        .in('audit_id', idBatch)
-        .order('run_number', { ascending: false });
-      for (const r of (runs ?? []) as Array<{
-        id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null;
-        created_at: string; actor_cost_usd: number | null; seo_grade: string | null;
-      }>) {
-        const list = runsByAudit.get(r.audit_id) ?? [];
-        list.push({
-          id: r.id, audit_id: r.audit_id, run_number: r.run_number, status: r.status,
-          // COERCE. Postgres numeric can arrive as a STRING, and then `sum + rate` concatenates
-          // instead of adding (avg visibility came out NaN) and `rate === 0` is false for "0".
-          mention_rate: r.mention_rate === null || r.mention_rate === undefined ? null : Number(r.mention_rate),
-          created_at: r.created_at,
-          actor_cost_usd: r.actor_cost_usd === null || r.actor_cost_usd === undefined ? null : Number(r.actor_cost_usd),
-          seo_grade: r.seo_grade, done: 0, total: 0,
-        });
-        runsByAudit.set(r.audit_id, list);
-        if (r.status === 'pending' || r.status === 'running') inFlightRunIds.push(r.id);
-      }
+        .order('id', { ascending: true })
+        .range(from, to));
+    for (const r of runRows) {
+      const list = runsByAudit.get(r.audit_id) ?? [];
+      list.push({
+        id: r.id, audit_id: r.audit_id, run_number: r.run_number, status: r.status,
+        // COERCE. Postgres numeric can arrive as a STRING, and then `sum + rate` concatenates
+        // instead of adding (avg visibility came out NaN) and `rate === 0` is false for "0".
+        mention_rate: r.mention_rate === null || r.mention_rate === undefined ? null : Number(r.mention_rate),
+        created_at: r.created_at,
+        actor_cost_usd: r.actor_cost_usd === null || r.actor_cost_usd === undefined ? null : Number(r.actor_cost_usd),
+        seo_grade: r.seo_grade, done: 0, total: 0,
+      });
+      runsByAudit.set(r.audit_id, list);
+      if (r.status === 'pending' || r.status === 'running') inFlightRunIds.push(r.id);
     }
+    /* ⛔ SORTED HERE, NOT BY THE QUERY. The old read ordered by run_number DESC and the expanded
+       view depends on newest-first; this one orders by id so pagination has a unique tiebreaker
+       (an unstable sort lets a page boundary skip rows — the reason fetchAllRows exists). Sorting
+       per audit afterwards is the same result and cannot be broken by paging. */
+    for (const list of runsByAudit.values()) list.sort((a, b) => b.run_number - a.run_number);
 
-    // Published report per audit → the "report" pill. Existence only. Chunked like the runs read.
+    // Published report per audit → the "report" pill. Existence only. Same one-pass read.
     const reportByAudit = new Map<string, string>();
-    for (const idBatch of chunkIds(ids)) {
-      const { data: reports } = await (supabase as unknown as SupabaseClient)
-        .from('business_reports')
-        .select('audit_id, slug')
-        .in('audit_id', idBatch);
-      for (const r of (reports ?? []) as Array<{ audit_id: string | null; slug: string }>) {
-        if (r.audit_id && !reportByAudit.has(r.audit_id)) reportByAudit.set(r.audit_id, r.slug);
-      }
+    const { rows: reportRowsAll } = await fetchAllRows<{ audit_id: string | null; slug: string }>(
+      'AiAudit (reports)', (from, to) =>
+        (supabase as unknown as SupabaseClient)
+          .from('business_reports')
+          .select('audit_id, slug')
+          .order('id', { ascending: true })
+          .range(from, to));
+    for (const r of reportRowsAll) {
+      if (r.audit_id && !reportByAudit.has(r.audit_id)) reportByAudit.set(r.audit_id, r.slug);
     }
 
     // Live progress for the runs still draining — nothing fetched when nothing is in flight.
@@ -672,17 +662,39 @@ const AiAudit = () => {
     }));
   }, [fetchQueueCounts]);
 
-  const loadSaved = useCallback(async () => {
-    if (!user) return;
-    const { data: audits } = await (supabase as unknown as SupabaseClient)
-      .from('ai_audits')
-      .select(AUDIT_SELECT)
-      .order('created_at', { ascending: false })
-      .limit(AUDIT_FETCH_LIMIT);
-    const auditRows = (audits ?? []) as RawAuditRow[];
-    setAuditsCapped(auditRows.length >= AUDIT_FETCH_LIMIT);
-    setSavedAudits(await hydrateAudits(auditRows));
-  }, [user, hydrateAudits]);
+  /* ⛔ ONE QUERY FOR THE WHOLE AUDIT BOOK, AND `loadSaved` IS NOW ITS REFRESH.
+     Every existing caller of loadSaved() still works — it invalidates instead of re-running a
+     fetch by hand, so a refresh triggered from three different places cannot start three fetches.
+     ⚠️ EMPTY_AUDITS is a module constant, not `[]` inline: a fresh array every render would give
+     every memo downstream a new identity and undo the caching this exists for. */
+  const auditListQuery = useQuery({
+    queryKey: auditListKey,
+    enabled: !!user,
+    queryFn: async () => {
+      const { data: audits } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audits')
+        .select(AUDIT_SELECT)
+        .order('created_at', { ascending: false })
+        .limit(AUDIT_FETCH_LIMIT);
+      const auditRows = (audits ?? []) as RawAuditRow[];
+      return {
+        audits: await hydrateAudits(auditRows),
+        capped: auditRows.length >= AUDIT_FETCH_LIMIT,
+      };
+    },
+  });
+  const savedAudits = auditListQuery.data?.audits ?? EMPTY_AUDITS;
+  /** True when the audits query came back full, i.e. older audits exist beyond it. Drives an
+   *  honest label instead of a count that silently stops growing. */
+  const auditsCapped = auditListQuery.data?.capped ?? false;
+  const loadSaved = useCallback(() => { void queryClient.invalidateQueries({ queryKey: auditListKey }); },
+    [queryClient, auditListKey]);
+  /* The optimistic row edits below still write directly into the cached list, so a delete or a
+     rename shows at once rather than after a round trip. Same shape as the old setSavedAudits. */
+  const setSavedAudits = useCallback((update: (prev: AuditLite[]) => AuditLite[]) => {
+    queryClient.setQueryData<{ audits: AuditLite[]; capped: boolean }>(auditListKey, (prev) =>
+      prev ? { ...prev, audits: update(prev.audits) } : prev);
+  }, [queryClient, auditListKey]);
 
   /* ── SERVER-SIDE NAME SEARCH ─────────────────────────────────────────────────────────────────
      The real fix for old audits vanishing: the client filter only ever saw the fetched window, so a
@@ -713,15 +725,20 @@ const AiAudit = () => {
     return () => { alive = false; clearTimeout(t); };
   }, [auditQuery, user, savedAudits, hydrateAudits]);
 
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
+  /* ⛔ THE LEAD PICKER IS CACHED TOO. This ran on every arrival for a list that only fills a
+     dropdown in the new-audit dialog — 500 rows fetched whether or not the dialog was ever opened.
+     Same treatment as the audit book above: held for the app-wide staleTime, so returning is free.
+     ⚠️ loadSaved() is NOT called here any more. It used to kick the audit fetch from this effect;
+     the query does its own fetching, and calling it here would have invalidated the cache on every
+     mount — exactly the refetch this change exists to stop. */
+  const leadsQuery = useQuery({
+    queryKey: ['ai-audit-leads', user?.id ?? null],
+    enabled: !!user,
+    queryFn: async () => {
       const LEAD_COLS = 'id, business_name, category, country, website, address, search_keyword, search_location';
       /* MIGRATION-TOLERANT. derived_town is added by a migration Paul applies BY HAND, so until that
          SQL runs PostgREST fails the WHOLE select with a 400 and the lead picker would come back
-         empty — breaking the wizard for a cosmetic prefill. Try with it, fall back without it.
-         `as unknown as` because the column is not in the generated types yet either; once it is live
-         and types are regenerated the plain cast works again. */
+         empty — breaking the wizard for a cosmetic prefill. Try with it, fall back without it. */
       let rows = (await supabase
         .from('outreach_leads')
         .select(`${LEAD_COLS}, derived_town`)
@@ -736,10 +753,10 @@ const AiAudit = () => {
           .order('created_at', { ascending: false })
           .limit(500)).data as unknown as LeadOption[] | null;
       }
-      setLeads(rows ?? []);
-    })();
-    loadSaved();
-  }, [user, loadSaved]);
+      return rows ?? EMPTY_LEADS;
+    },
+  });
+  const leads = leadsQuery.data ?? EMPTY_LEADS;
 
   /* ── Keep the landing list live while audits drain ──────────────────────────────
      THE BUG THIS FIXES. Both existing pollers are gated on step === 'results', so on the
@@ -1397,162 +1414,16 @@ const AiAudit = () => {
     }
   };
 
-  // Load the audit's stored NAP + specialism + website for the Schema section whenever the
-  // opened audit changes (these aren't in the wizard/results state on a reopened audit).
+  /* Load the opened audit's own website — not in the wizard/results state on a reopened audit. */
   useEffect(() => {
-    if (!auditId) { setSchemaNap({ phone: '', address: '', email: '', specialism: '' }); setSchemaWebsite(''); setSchemaScope(null); setClientLinks([]); return; }
+    if (!auditId) { setAuditWebsite(''); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from('ai_audits')
-        .select('website, business_phone, business_address, business_email, specialism, business_scope, client_links')
-        .eq('id', auditId)
-        .maybeSingle();
-      if (cancelled || !data) return;
-      const d = data as { website: string | null; business_phone: string | null; business_address: string | null; business_email: string | null; specialism: string | null; business_scope: string | null; client_links: unknown };
-      setSchemaWebsite(d.website ?? '');
-      setSchemaNap({ phone: d.business_phone ?? '', address: d.business_address ?? '', email: d.business_email ?? '', specialism: d.specialism ?? '' });
-      setSchemaScope(d.business_scope === 'national' || d.business_scope === 'local' || d.business_scope === 'hybrid' ? d.business_scope : null);
-      // Guard: only accept an array of {label,url}; anything else falls back to [].
-      const links = Array.isArray(d.client_links)
-        ? (d.client_links as unknown[]).map((l) => {
-            const o = (l ?? {}) as { label?: unknown; url?: unknown };
-            return { label: typeof o.label === 'string' ? o.label : '', url: typeof o.url === 'string' ? o.url : '' };
-          })
-        : [];
-      setClientLinks(links);
+      const { data } = await supabase.from('ai_audits').select('website').eq('id', auditId).maybeSingle();
+      if (!cancelled && data) setAuditWebsite((data as { website: string | null }).website ?? '');
     })();
     return () => { cancelled = true; };
   }, [auditId]);
-
-  // Copy the JSON-LD block (existing inline clipboard convention).
-  const copySchema = async (code: string) => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setSchemaCopied(true);
-      setTimeout(() => setSchemaCopied(false), 2000);
-    } catch {
-      toast({ title: 'Copy failed', variant: 'destructive' });
-    }
-  };
-
-  // Persist the four schema fields back to ai_audits so they pre-fill next visit.
-  const saveSchemaDetails = async () => {
-    if (!auditId || schemaSaving) return;
-    setSchemaSaving(true);
-    try {
-      const { error } = await supabase.from('ai_audits').update({
-        business_phone: schemaNap.phone.trim() || null,
-        business_address: schemaNap.address.trim() || null,
-        business_email: schemaNap.email.trim() || null,
-        specialism: schemaNap.specialism.trim() || null,
-      }).eq('id', auditId);
-      if (error) throw new Error(error.message);
-      toast({ title: 'Details saved' });
-    } catch (e) {
-      toast({ title: "Couldn't save details", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
-    } finally {
-      setSchemaSaving(false);
-    }
-  };
-
-  // Persist the link hub to ai_audits.client_links: trim, drop rows blank in BOTH fields, and
-  // normalise each url with the shared schemaType helper. Mirrors saveSchemaDetails.
-  const saveClientLinks = async () => {
-    if (!auditId || linksSaving) return;
-    setLinksSaving(true);
-    try {
-      const cleaned = clientLinks
-        .map((l) => ({ label: l.label.trim(), url: normalizeUrl(l.url) }))
-        .filter((l) => l.label || l.url);
-      const { error } = await supabase.from('ai_audits').update({ client_links: cleaned }).eq('id', auditId);
-      if (error) throw new Error(error.message);
-      setClientLinks(cleaned);
-      toast({ title: 'Links saved' });
-    } catch (e) {
-      toast({ title: "Couldn't save links", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
-    } finally {
-      setLinksSaving(false);
-    }
-  };
-
-  // Copy a single link's URL (reuses the inline clipboard convention from copySchema).
-  const copyLink = async (url: string, idx: number) => {
-    try {
-      await navigator.clipboard.writeText(normalizeUrl(url));
-      setLinkCopiedIdx(idx);
-      setTimeout(() => setLinkCopiedIdx((i) => (i === idx ? null : i)), 2000);
-    } catch {
-      toast({ title: 'Copy failed', variant: 'destructive' });
-    }
-  };
-
-  // The site to scan: the schema website, else the wizard website when the audit has one.
-  const scanTargetUrl = (schemaWebsite || (resultsHasWebsite ? website : '')).trim();
-
-  // Scan the client's own site → open the editable review panel. Saves NOTHING.
-  const runScan = async () => {
-    if (!auditId || !scanTargetUrl || scanning) return;
-    setScanning(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('scan-site-details', {
-        body: { website: scanTargetUrl, business_name: resultsBusinessName || businessName, audit_id: auditId },
-      });
-      if (error || !data?.success) throw new Error(error?.message ?? data?.error ?? 'scan failed');
-      const d = (data.details ?? {}) as { phone?: string; address?: string; email?: string; hours?: string };
-      const rawLinks = Array.isArray(data.links) ? data.links as { label?: string; url?: string }[] : [];
-      setScanReview({
-        details: { phone: d.phone ?? '', address: d.address ?? '', email: d.email ?? '', hours: d.hours ?? '' },
-        detailInclude: { phone: !!d.phone, address: !!d.address, email: !!d.email, hours: false }, // hours: no column to save into
-        links: rawLinks.map((l) => {
-          const url = (l.url ?? '').trim();
-          const templateDefault = looksLikeTemplateDefault(url);
-          // Default-EXCLUDE template defaults (facebook.com/wix etc.) so they're never applied by accident.
-          return { label: (l.label ?? '').trim(), url, include: !templateDefault, templateDefault };
-        }),
-      });
-      if (!data.found) toast({ title: 'Nothing found', description: "The scan didn't find details or links on that site." });
-    } catch (e) {
-      toast({ title: "Couldn't scan the site", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  // Apply the INCLUDED, non-empty scanned details into the schemaNap fields (does NOT save —
-  // the operator then clicks the existing "Save details"). Opens the Schema section so the
-  // pre-filled fields are visible. Overwrites are never silent: the review shows the current
-  // value + a "will replace" flag, and each field is include-gated + editable before this.
-  const applyScanDetails = () => {
-    if (!scanReview) return;
-    const r = scanReview;
-    setSchemaNap((p) => ({
-      ...p,
-      phone: r.detailInclude.phone && r.details.phone.trim() ? r.details.phone.trim() : p.phone,
-      address: r.detailInclude.address && r.details.address.trim() ? r.details.address.trim() : p.address,
-      email: r.detailInclude.email && r.details.email.trim() ? r.details.email.trim() : p.email,
-      // hours has no ai_audits column — intentionally NOT applied (see review note).
-    }));
-    setShowSchema(true);
-    toast({ title: 'Details applied', description: 'Review the Schema-markup fields, then Save details.' });
-  };
-
-  // Append the INCLUDED scanned links into clientLinks (never wipes existing; dedups by URL).
-  // Operator then clicks the existing "Save links".
-  const applyScanLinks = () => {
-    if (!scanReview) return;
-    const chosen = scanReview.links
-      .filter((l) => l.include && (l.label.trim() || l.url.trim()))
-      .map((l) => ({ label: l.label.trim(), url: l.url.trim() }));
-    if (!chosen.length) { toast({ title: 'No links selected' }); return; }
-    setClientLinks((prev) => {
-      const have = new Set(prev.map((x) => x.url.trim().toLowerCase().replace(/\/+$/, '')));
-      const add = chosen.filter((l) => !have.has(l.url.toLowerCase().replace(/\/+$/, '')));
-      return [...prev, ...add];
-    });
-    setShowLinks(true);
-    toast({ title: 'Links added', description: 'Review the Link hub rows, then Save links.' });
-  };
 
   /** Open an audit's results. `pickRun` opens THAT run instead of the latest — the expanded
    *  view lists every run and each one is openable. */
@@ -1762,18 +1633,21 @@ const AiAudit = () => {
       locationText: resultsLoc,
       specialisms,
       isAggregatorUrl,
-      // Same expression as `ownWebsite` further down (schema value, else the wizard URL).
-      // scanTargetUrl is computed earlier in this render, so reading it here is safe.
-      ownWebsite: scanTargetUrl,
+      /* ⚠️ THE SAME EXPRESSION AS `ownWebsite` FURTHER DOWN, deliberately. It used to read
+         `scanTargetUrl`, a variable the deleted Scan-site feature happened to compute earlier in
+         the render — the report's own-site exclusion was riding on a scanning helper. Written out
+         here so it depends on the audit's website and nothing else. */
+      ownWebsite: (auditWebsite || (resultsHasWebsite ? website : '')).trim(),
       seoStyle: openSeoStyle,
     });
     if (rd) rd.internal = true; // snapshot default — OVERRIDDEN at render/print by AiAuditReport's Client/Internal toggle (showInternal)
     return rd;
   })();
 
-  // The business's own website (opened-run schema value, else the wizard URL when it has one) —
-  // used by scoreQuestion to exclude own-site citations from the aggregator share. May be "".
-  const ownWebsite = (schemaWebsite || (resultsHasWebsite ? website : '')).trim();
+  /* The business's own website (the opened audit's stored value, else the wizard URL when it has
+     one) — used by scoreQuestion to exclude own-site citations from the aggregator share. May be
+     "". ⚠️ This is why auditWebsite survived the schema block: it feeds SCORING, not display. */
+  const ownWebsite = (auditWebsite || (resultsHasWebsite ? website : '')).trim();
   // Winnable shortlist headline: done questions that scored a real, targetable opportunity
   // (band winnable/named, score ≥ 6). Recomputed live from the queue rows.
   const winnableCount = queueRows.filter((r) => {
@@ -1983,24 +1857,6 @@ const AiAudit = () => {
   const vizPct = vizTotal > 0 ? Math.round((vizNamed / vizTotal) * 100) : 0;
   const vizTone: TileTone = vizTotal === 0 ? 'muted' : vizPct >= 50 ? 'green' : vizPct > 0 ? 'amber' : 'red';
   const seoGrade = hasSeo ? String((run?.results as { seo?: { overallGrade?: string } } | null)?.seo?.overallGrade ?? '') : '';
-
-  // Live JSON-LD schema for the "Schema markup" section — rebuilt each render as the NAP /
-  // specialism inputs change. businessScope precedence: explicit stored scope > the generated
-  // playbook's scope > undefined (buildSchema then falls back to its own heuristic).
-  const playbookScope = (run?.results as { playbook?: { businessScope?: 'national' | 'local' | 'hybrid' } } | null)?.playbook?.businessScope;
-  const schemaBusinessScope = schemaScope ?? playbookScope;
-  const schemaCode = `<script type="application/ld+json">\n${JSON.stringify(buildSchema({
-    name: resultsBusinessName || businessName,
-    url: schemaWebsite || (resultsHasWebsite ? website : ''),
-    businessType: resultsType,
-    businessScope: schemaBusinessScope,
-    locationText: resultsLoc,
-    country,
-    phone: schemaNap.phone,
-    address: schemaNap.address,
-    email: schemaNap.email,
-    specialism: schemaNap.specialism,
-  }), null, 2)}\n</script>`;
 
   // Run the automated Apify SEO scan → run-seo-scan (maps + stores AiAuditSeo at results.seo).
   // The actor takes ~30-120s. On success: refresh the run so results.seo is live, and INVALIDATE
@@ -3329,218 +3185,6 @@ const AiAudit = () => {
               run. /playbook/:id shows done/verified flags from client_listings but cannot SET them
               (that table is read-only there). So there is currently nowhere to tick delivery work off.
               Flagged rather than quietly dropped. */}
-
-          {/* Scan site & autofill — pull NAP + links off the client's own site to review, then
-              apply into the Schema-markup fields + Link hub below (via their existing save paths). */}
-          {!isDraining && liveTally.done > 0 && (
-            <Card>
-              <CardContent className="p-4 sm:p-5 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold">Scan site &amp; autofill</div>
-                    <div className="text-[11px] text-muted-foreground">Pull contact details + links off the client's own site to review, then apply to the fields below.</div>
-                  </div>
-                  <Button size="sm" className="shrink-0" onClick={runScan} disabled={scanning || !scanTargetUrl}>
-                    {scanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                    {scanning ? 'Scanning…' : 'Scan site'}
-                  </Button>
-                </div>
-                {!scanTargetUrl && (
-                  <p className="text-[11px] text-muted-foreground">No website on this audit — nothing to scan.</p>
-                )}
-
-                {scanReview && (
-                  <div className="rounded-lg border border-primary/40 bg-card/60 p-3 space-y-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Review — nothing is saved until you apply</div>
-
-                    {/* Details found — editable + include-gated; conflicts with existing values flagged */}
-                    <div className="space-y-2">
-                      <div className="text-xs font-semibold">Details found</div>
-                      {(['phone', 'address', 'email', 'hours'] as const).map((f) => {
-                        const current = f === 'hours' ? '' : schemaNap[f]; // hours has no ai_audits column
-                        const conflict = f !== 'hours' && current.trim() && current.trim() !== scanReview.details[f].trim();
-                        return (
-                          <div key={f} className="flex items-start gap-2">
-                            <input
-                              type="checkbox"
-                              className="mt-2 h-4 w-4 shrink-0 accent-primary disabled:opacity-40"
-                              checked={scanReview.detailInclude[f]}
-                              disabled={f === 'hours'}
-                              onChange={(e) => setScanReview((s) => s && ({ ...s, detailInclude: { ...s.detailInclude, [f]: e.target.checked } }))}
-                            />
-                            <div className="flex-1 min-w-0 space-y-0.5">
-                              <Label className="text-[11px] capitalize">
-                                {f}{f === 'hours' && <span className="ml-1 font-normal text-muted-foreground">— no field to save into yet</span>}
-                              </Label>
-                              <Input
-                                value={scanReview.details[f]}
-                                placeholder={`No ${f} found`}
-                                onChange={(e) => setScanReview((s) => s && ({ ...s, details: { ...s.details, [f]: e.target.value } }))}
-                              />
-                              {conflict && (
-                                <div className="text-[11px] text-[hsl(var(--badge-waiting))]">Current: "{current}" — applying will replace it</div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <Button variant="outline" size="sm" onClick={applyScanDetails}>Apply details → Schema fields</Button>
-                    </div>
-
-                    {/* Links found — editable + include-gated; template defaults flagged + default-excluded */}
-                    <div className="space-y-2 border-t border-border/60 pt-3">
-                      <div className="text-xs font-semibold">Links found</div>
-                      {scanReview.links.length === 0 && (
-                        <p className="text-[11px] text-muted-foreground">No social / booking links found on the homepage.</p>
-                      )}
-                      {scanReview.links.map((l, i) => (
-                        <div key={i} className="flex items-start gap-2">
-                          <input
-                            type="checkbox"
-                            className="mt-2 h-4 w-4 shrink-0 accent-primary"
-                            checked={l.include}
-                            onChange={(e) => setScanReview((s) => s && ({ ...s, links: s.links.map((x, xi) => xi === i ? { ...x, include: e.target.checked } : x) }))}
-                          />
-                          <div className="flex-1 min-w-0 space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <Input
-                                className="sm:max-w-[10rem]"
-                                value={l.label}
-                                placeholder="Label"
-                                onChange={(e) => setScanReview((s) => s && ({ ...s, links: s.links.map((x, xi) => xi === i ? { ...x, label: e.target.value } : x) }))}
-                              />
-                              <Input
-                                value={l.url}
-                                placeholder="https://…"
-                                onChange={(e) => setScanReview((s) => s && ({ ...s, links: s.links.map((x, xi) => xi === i ? { ...x, url: e.target.value } : x) }))}
-                              />
-                            </div>
-                            {l.templateDefault && (
-                              <div className="text-[11px] font-medium text-[hsl(var(--badge-not-interested))]">⚠ Looks like a template default — likely wrong, fix the URL or leave unchecked</div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      <Button variant="outline" size="sm" onClick={applyScanLinks}>Apply links → Link hub</Button>
-                    </div>
-
-                    <div className="border-t border-border/60 pt-2">
-                      <Button variant="ghost" size="sm" onClick={() => setScanReview(null)}>Dismiss</Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Schema markup — copy-paste JSON-LD, collapsed by default (mirrors Detailed results). */}
-          {!isDraining && liveTally.done > 0 && (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setShowSchema((s) => !s)}
-                className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
-              >
-                <span className="text-sm font-semibold">
-                  Schema markup
-                  <span className="ml-1.5 font-normal text-muted-foreground">· JSON-LD for the site &lt;head&gt;</span>
-                </span>
-                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showSchema ? 'rotate-180' : ''}`} />
-              </button>
-              {showSchema && (
-                <Card>
-                  <CardContent className="p-4 sm:p-5 space-y-3">
-                    <p className="text-sm text-muted-foreground">Structured data that helps AI engines read this business. Fill in the details below, then copy the code into the site's &lt;head&gt;.</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs">Phone</Label>
-                        <Input value={schemaNap.phone} onChange={(e) => setSchemaNap((p) => ({ ...p, phone: e.target.value }))} placeholder="+44 …" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Email</Label>
-                        <Input value={schemaNap.email} onChange={(e) => setSchemaNap((p) => ({ ...p, email: e.target.value }))} placeholder="hello@example.co.uk" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Address</Label>
-                        <Input value={schemaNap.address} onChange={(e) => setSchemaNap((p) => ({ ...p, address: e.target.value }))} placeholder="Street, town, postcode" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Specialism</Label>
-                        <Input value={schemaNap.specialism} onChange={(e) => setSchemaNap((p) => ({ ...p, specialism: e.target.value }))} placeholder="e.g. CIS / construction" />
-                      </div>
-                    </div>
-                    <pre className="overflow-x-auto rounded-lg border border-border bg-muted/40 p-3 text-[11px] leading-relaxed"><code>{schemaCode}</code></pre>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" onClick={() => copySchema(schemaCode)}>
-                        {schemaCopied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-                        {schemaCopied ? 'Copied' : 'Copy code'}
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={saveSchemaDetails} disabled={schemaSaving}>
-                        {schemaSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        {schemaSaving ? 'Saving…' : 'Save details'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* Link hub — the client's own URLs, collapsed by default (mirrors Schema markup). */}
-          {!isDraining && liveTally.done > 0 && (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setShowLinks((s) => !s)}
-                className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
-              >
-                <span className="text-sm font-semibold">
-                  Link hub
-                  <span className="ml-1.5 font-normal text-muted-foreground">· {clientLinks.length} {clientLinks.length === 1 ? 'link' : 'links'}</span>
-                </span>
-                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showLinks ? 'rotate-180' : ''}`} />
-              </button>
-              {showLinks && (
-                <Card>
-                  <CardContent className="p-4 sm:p-5 space-y-3">
-                    <p className="text-sm text-muted-foreground">Store this client's own links — Wix login, Companies House, Google Business Profile, live site — so they're always to hand.</p>
-                    <div className="space-y-2">
-                      {clientLinks.map((link, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <Input
-                            className="sm:max-w-[12rem]"
-                            value={link.label}
-                            placeholder="Label"
-                            onChange={(e) => setClientLinks((prev) => prev.map((x, xi) => xi === i ? { ...x, label: e.target.value } : x))}
-                          />
-                          <Input
-                            value={link.url}
-                            placeholder="https://…"
-                            onChange={(e) => setClientLinks((prev) => prev.map((x, xi) => xi === i ? { ...x, url: e.target.value } : x))}
-                          />
-                          <Button variant="ghost" size="icon" onClick={() => copyLink(link.url, i)} title="Copy URL" disabled={!link.url.trim()}>
-                            {linkCopiedIdx === i ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setClientLinks((prev) => prev.filter((_, xi) => xi !== i))} title="Remove">
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button variant="outline" size="sm" onClick={() => setClientLinks((prev) => [...prev, { label: '', url: '' }])}>
-                        <Plus className="mr-1 h-4 w-4" /> Add link
-                      </Button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={saveClientLinks} disabled={linksSaving}>
-                        {linksSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        {linksSaving ? 'Saving…' : 'Save links'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
 
           {/* Detailed per-question results — collapsed by default behind one toggle. */}
           {!isDraining && queueRows.length > 0 && (
