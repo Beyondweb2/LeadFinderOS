@@ -39,6 +39,10 @@ const MAX_PER_ENGINE = 8;         // cap competitors kept per engine
  *  · One batch failing (rate limit, bad JSON) no longer loses the others.
  * Cost scales with answer volume, not with batch count: ~£0.20 for a 137-item run on gpt-4o. */
 const BATCH_ITEMS = 24;
+/* Attempts per batch, INCLUDING the first. 3 because the observed failure is the model dropping a
+   couple of ids at random rather than anything systematic — one retry clears that nearly always,
+   and a second costs a few pence on a run that would otherwise stay dirty for ever. */
+const CLEAN_ATTEMPTS = 3;
 const MAX_TOTAL_ITEMS = 400;
 const MAX_OUTPUT_TOKENS = 4_000;  // stated, not defaulted — a truncated tool call is unparseable
 
@@ -319,19 +323,40 @@ Return one entry per id via return_competitors.`;
     const byId = new Map<string, string[]>();
     const batchErrors: string[] = [];
     for (let i = 0; i < items.length; i += BATCH_ITEMS) {
-      const batch = items.slice(i, i + BATCH_ITEMS);
-      try {
-        const got = await cleanBatch(batch);
-        for (const [k, v] of got) byId.set(k, v);
-        /* A batch the model answered PARTIALLY is recorded, because the ids it omitted keep their
-           raw names — the recorded failure mode from 2026-08-19 ("changed=7 of 8 rows"). */
-        const missed = batch.filter((it) => !got.has(it.id)).length;
-        if (missed > 0) batchErrors.push(`batch ${i / BATCH_ITEMS + 1}: model omitted ${missed} of ${batch.length} ids`);
-      } catch (e) {
-        const why = e instanceof Error ? e.message : String(e);
-        console.error(`[extract-competitors] batch ${i / BATCH_ITEMS + 1} failed for run ${runId}: ${why}`);
-        batchErrors.push(`batch ${i / BATCH_ITEMS + 1}: ${why}`);
+      const batchNo = i / BATCH_ITEMS + 1;
+      /* ⛔ RETRY THE IDS THE MODEL LEFT OUT, RATHER THAN RECORDING A PERMANENT PARTIAL.
+         Measured 2026-09-09 over the last 60 completed runs: 55 cleaned perfectly and FIVE came back
+         "model omitted N of M ids" — gpt-4o simply not returning every id in its tool call. Nothing
+         retried them, and nothing ever would: the cleaner fires once, from the tick that finalises
+         the run. So those five runs kept raw competitor names until somebody noticed and pressed the
+         manual button, which is exactly the chore Paul asked to stop doing ("extract competitors
+         should always run, I shouldn't have to manually do it myself").
+         ⚠️ THE RETRY ASKS ONLY FOR WHAT IS MISSING. A smaller ask is likelier to be answered in full,
+         and re-sending ids the model already handled would spend money re-deriving names we have.
+         ⚠️ Still sequential, so this cannot increase 429 pressure — it trades a little latency on the
+         ~8% of runs that need it for not leaving them dirty. */
+      let pending = items.slice(i, i + BATCH_ITEMS);
+      const batchSize = pending.length;
+      let lastError = '';
+      for (let attempt = 1; attempt <= CLEAN_ATTEMPTS && pending.length > 0; attempt++) {
+        try {
+          const got = await cleanBatch(pending);
+          for (const [k, v] of got) byId.set(k, v);
+          pending = pending.filter((it) => !got.has(it.id));
+          lastError = pending.length ? `model omitted ${pending.length} of ${batchSize} ids` : '';
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : String(e);
+          console.error(`[extract-competitors] batch ${batchNo} attempt ${attempt} failed for run ${runId}: ${lastError}`);
+          /* ⛔ A HARD OpenAI REFUSAL IS NOT WORTH RETRYING, and retrying it is actively wrong: no
+             credit or a bad key will fail identically every time, so the attempts only delay the
+             honest receipt. Anything else (a 429, a truncated tool call, a blip) is exactly what a
+             retry is for. */
+          if (/openai_http_(401|402|403)|credit/i.test(lastError)) break;
+        }
       }
+      /* Recorded ONLY if it is still unresolved after the retries — the receipt should describe the
+         final state, not every wobble on the way to a good one. */
+      if (lastError) batchErrors.push(`batch ${batchNo}: ${lastError}`);
     }
     if (items.length > 0 && byId.size === 0) {
       /* NOTHING was cleaned. This must be a hard failure, not {ok:true, changed:0} — the caller
