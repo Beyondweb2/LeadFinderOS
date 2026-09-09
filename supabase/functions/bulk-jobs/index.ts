@@ -5,11 +5,12 @@ import { selectInChunks } from "../_shared/chunked-in.ts";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
-// bulk-jobs — server-side bulk runner for enrich + site-gen, so an operator can
-// fire a batch, close the browser, and come back to progress / finished results.
+// bulk-jobs — server-side bulk runner for enrich + audit + audit_and_push, so an operator
+// can fire a batch, close the browser, and come back to progress / finished results.
+// (The site_gen job type went with the barber site product, 2026-09-09.)
 //
 // Actions:
-//   create (user-authed)   — validate (ownership; admin for site_gen; per-job cap),
+//   create (user-authed)   — validate (ownership; per-job cap),
 //                            insert the job (queued), kick the first run, return.
 //   run    (internal-only) — claim the job (locked_until mutex), process pending
 //                            items sequentially under a ~90s time budget writing
@@ -19,13 +20,10 @@ import { isAggregatorUrl } from "../_shared/aggregators.ts";
 //                            updated_at went stale (>3 min) — a broken chain.
 //   cancel (user-authed)   — own job → status 'cancelled'; runner stops between items.
 //
-// Work per item is delegated to the EXISTING functions (enrich-business /
-// generate-barber-site) via their additive internal-call branches (service key +
-// x-internal-job header) — no logic duplication; their caps/caches/guards apply:
+// Work per item is delegated to the EXISTING functions (enrich-business,
+// create-ai-audit, instantly-push) via their additive internal-call branches (service
+// key + x-internal-job header) — no logic duplication; their caps/caches/guards apply:
 //   * enrich: $2/day cap (limit_reached → remaining items skipped_cap) + 30d cache.
-//   * site-gen: 40 sites/24h per-operator cap (403 → skipped_cap) + duplicate-site
-//     guard (existing:true → skipped_existing) + the NEW $10/day global spend cap
-//     enforced HERE from api_usage_log before each item.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -63,7 +61,7 @@ function internalHeadersFor(keys: any): Record<string, string> {
    ⚠️ audit_and_push is UNCHANGED at 25: it emails people, and its cap counts ACTIONABLE items.
    ⚠️ This is a REFUSAL above the cap, not a slice (see the create branch) — the dialog now says so
    before the press rather than letting the server reject it. */
-const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50, audit: 100, audit_and_push: 25 };
+const JOB_CAPS: Record<string, number> = { enrich: 200, audit: 100, audit_and_push: 25 };
 
 /** ⛔ TRY THE TOWN'S MARKET AUDIT BEFORE BUYING A PER-BUSINESS ONE. £0 against ~8p a lead, and every
  *  refusal falls through to the paid audit unchanged — see the call site in phase A.
@@ -72,12 +70,9 @@ const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50, audit: 100
 const DERIVE_FIRST = true;
 const TIME_BUDGET_MS = 90_000;   // stop starting new WAVES once elapsed passes this…
 const WAVE_HEADROOM_MS = 55_000; // …minus headroom, so one full parallel wave + persist still fits under the 150s limit
-const WAVE_SIZE = 3;             // site_gen bounded concurrency (enrich stays 1-at-a-time). Lowered 5->3: 5 concurrent 9a Apify Maps scrapes on the one shared token overran its concurrency limit → 4 of 5 got 429/contention and baked empty photo pools; 3 matches the proven-reliable per-row cap. Wave still runs in parallel (duration ~slowest generate, unchanged), so no time-budget regression.
 const SWEEP_BUDGET_MS = 60_000; // sweep stops CLAIMING new jobs past this, so one invocation (claim + a chunk) stays well under 150s
-const SITEGEN_PER_ITEM_EST_USD = 0.03; // used to SIZE a wave to the remaining daily budget → a batch can't overshoot the cap by >~1 item
 const LOCK_MS = 2 * 60_000;      // claim window (refreshed on every persist)
 const STALE_MS = 3 * 60_000;     // sweep re-kicks active jobs idle longer than this
-const SITEGEN_DAILY_BUDGET_USD = 10;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -134,7 +129,7 @@ const AUDIT_WAIT_MAX_MS = 45 * 60 * 1000;
 interface JobRow {
   id: string;
   user_id: string;
-  job_type: "enrich" | "site_gen" | "audit" | "audit_and_push";
+  job_type: "enrich" | "audit" | "audit_and_push";
   status: string;
   items: JobItem[];
   total: number;
@@ -295,23 +290,6 @@ async function claimAndProcess(service: any, jobId: string): Promise<boolean> {
   return true;
 }
 
-/** Today's (UTC) site-gen spend from api_usage_log — the $10/day budget guard.
- *  Best-effort: errors return 0 (never blocks a job on a logging table hiccup). */
-// deno-lint-ignore no-explicit-any
-async function sitegenSpendTodayUsd(service: any): Promise<number> {
-  try {
-    const since = new Date();
-    since.setUTCHours(0, 0, 0, 0);
-    const { data } = await service
-      .from("api_usage_log")
-      .select("estimated_cost_usd")
-      .eq("function_name", "generate-barber-site")
-      .gte("created_at", since.toISOString());
-    return (data ?? []).reduce((s: number, r: { estimated_cost_usd: number | null }) => s + (Number(r.estimated_cost_usd) || 0), 0);
-  } catch {
-    return 0;
-  }
-}
 
 // The edge functions' AUTO-INJECTED SUPABASE_* keys are stale here (a past key/JWT
 // rotation), so the API gateway 401s a function-to-function call that presents them —
@@ -555,28 +533,13 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     return { status: "failed", error: why.slice(0, 200) };
   }
 
-  // site_gen
-  const template = (job.params?.template as string) ?? "barber";
-  const mode = job.params?.mode as string | undefined;
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-barber-site`, {
-    method: "POST",
-    headers: internalHeaders,
-    body: JSON.stringify({
-      acting_user_id: job.user_id,
-      lead_id: item.lead_id,
-      template,
-      ...(mode ? { mode } : {}),
-    }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 403 && /limit/i.test(String(data?.error ?? ""))) {
-    // Per-operator 40 sites / 24h cap — same treatment as a spend cap.
-    return { status: "skipped_cap", capHit: true };
-  }
-  if (data?.existing) return { status: "skipped_existing" };
-  if (data?.site?.id) return { status: "done" };
-  return { status: "failed", error: String(data?.error ?? `HTTP ${res.status}`).slice(0, 200) };
+  /* ⛔ NO OTHER JOB TYPE EXISTS, AND AN UNKNOWN ONE FAILS LOUDLY RATHER THAN SILENTLY.
+     site_gen used to be the fall-through branch here, so anything that was not enrich and not an
+     audit quietly generated a barber website. With it deleted (2026-09-09) the honest answer to an
+     unrecognised job_type is a failed item naming the type — never a default action. */
+  return { status: "failed", error: `unknown job type: ${String(job.job_type).slice(0, 40)}` };
 }
+
 
 /** Process pending items in WAVES of bounded concurrency under the time budget,
  *  persisting after every wave (and before it, to mark the wave in-flight). */
@@ -797,17 +760,15 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
   const items = job.items;
   let done = job.done_count, failed = job.failed_count, skipped = job.skipped_count;
   let capHit = false;
-  // site_gen runs up to WAVE_SIZE concurrently; enrich stays 1-at-a-time (its $2/day
-  // cap lives inside enrich-business and isn't budget-sized here). audit runs a small
-  // parallel wave (each item is just a fast create-ai-audit call that generates questions
-  // + enqueues ai_audit_queue rows — NO Apify here), so the whole batch enqueues within a
-  // tick or two. The actual multi-engine drain is throttled downstream by
+  // enrich stays 1-at-a-time (its $2/day cap lives inside enrich-business). audit runs a
+  // small parallel wave (each item is just a fast create-ai-audit call that generates
+  // questions + enqueues ai_audit_queue rows — NO Apify here), so the whole batch enqueues
+  // within a tick or two. The actual multi-engine drain is throttled downstream by
   // process-ai-audit-queue (START_BATCH 12 < 32 ceiling), so a burst can't overrun Apify.
-  const concurrency = job.job_type === "site_gen" ? WAVE_SIZE : job.job_type === "audit" ? 4 : 1;
+  const concurrency = job.job_type === "audit" ? 4 : 1;
 
   // Recover orphaned in-flight items from a prior chunk that crashed/timed-out mid-wave
-  // (a clean chunk boundary never leaves "running"). Re-running is safe — generate-
-  // barber-site's duplicate guard returns existing:true → skipped_existing.
+  // (a clean chunk boundary never leaves "running").
   for (const it of items) if (it.status === "running") it.status = "pending";
 
   /* Items enqueued on a PREVIOUS chunk may have finished since. Resolve them first, so a job whose
@@ -856,16 +817,7 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
     const { data: fresh } = await service.from("bulk_jobs").select("status").eq("id", job.id).maybeSingle();
     if (fresh?.status === "cancelled") return;
 
-    // Wave size = concurrency, but for site_gen also clamp to the remaining $10/day
-    // budget so a parallel batch can't overshoot the cap by more than ~1 item.
-    let waveSize = Math.min(concurrency, pending.length);
-    if (job.job_type === "site_gen") {
-      const spent = await sitegenSpendTodayUsd(service);
-      const budgetRoom = Math.floor((SITEGEN_DAILY_BUDGET_USD - spent) / SITEGEN_PER_ITEM_EST_USD);
-      if (budgetRoom <= 0) { capHit = true; capRemaining(); break; }
-      waveSize = Math.min(waveSize, budgetRoom);
-    }
-    const wave = pending.slice(0, waveSize);
+    const wave = pending.slice(0, Math.min(concurrency, pending.length));
 
     // Mark the wave in-flight (drives the per-row spinner) and persist before launching.
     for (const it of wave) it.status = "running";
@@ -1039,7 +991,7 @@ Deno.serve(async (req) => {
 
     if (action === "create") {
       const jobType: string = body.job_type ?? "";
-      if (jobType !== "enrich" && jobType !== "site_gen" && jobType !== "audit" && jobType !== "audit_and_push") return json({ error: "invalid job_type" }, 400);
+      if (jobType !== "enrich" && jobType !== "audit" && jobType !== "audit_and_push") return json({ error: "invalid job_type" }, 400);
       const cap = JOB_CAPS[jobType];
       const leadIds: string[] = Array.from(new Set((body.lead_ids ?? []).filter((x: unknown) => typeof x === "string")));
       if (!leadIds.length) return json({ error: "lead_ids required" }, 400);
@@ -1057,17 +1009,6 @@ Deno.serve(async (req) => {
         .in("status", ["queued", "running"])
         .limit(1);
       if (existing?.length) return json({ error: "You already have a bulk job running — wait for it to finish or cancel it." }, 409);
-
-      // site_gen is admin-triggered from the bulk UI.
-      if (jobType === "site_gen") {
-        const { data: role } = await service
-          .from("user_roles")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("role", "admin")
-          .maybeSingle();
-        if (!role) return json({ error: "Admin only" }, 403);
-      }
 
       // Ownership: keep only the caller's own leads.
       const { data: owned } = await service

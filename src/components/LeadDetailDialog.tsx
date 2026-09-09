@@ -13,8 +13,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { barberSitePreviewUrl, publicSiteUrl } from '@/config/publicSite';
-import { bookingUrl } from '@/lib/subdomain';
 import {
   Select,
   SelectContent,
@@ -38,7 +36,6 @@ import { SALE_TYPES, SALE_TYPE_LABELS, resolveSaleType, type SaleType } from '@/
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, isSentStatus, isRepliedStatus, isSiteSentStatus } from '@/types/outreach';
 import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
-import { BookingServicesEditor } from '@/components/BookingServicesEditor';
 import { WhatsAppLeadControls } from '@/components/WhatsAppLeadControls';
 import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
@@ -194,17 +191,6 @@ const PROJECT_STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
 ];
 
-/** Per-lead funnel tracking pulled from generated_sites (by lead_id). */
-interface LeadFunnel {
-  share_token: string | null;
-  site_name: string | null;
-  sent_at: string | null;
-  first_opened_at: string | null;
-  replied_at: string | null;
-  claimed_at: string | null;
-  addon_interest_at: string | null;
-  booking_only: boolean | null;
-}
 
 /** Small coloured section header for visual hierarchy + fast scanning. */
 function SectionLabel({ icon: Icon, color, children }: { icon: React.ComponentType<{ className?: string }>; color: string; children: React.ReactNode }) {
@@ -347,25 +333,6 @@ function LeadDetailBody({
   const [activities, setActivities] = useState<OutreachActivity[]>([]);
   const [activitiesLoaded, setActivitiesLoaded] = useState(false);
 
-  // Funnel for THIS lead — fetched on open from generated_sites by lead_id.
-  const [funnel, setFunnel] = useState<LeadFunnel | null>(null);
-  useEffect(() => {
-    if (isDemoLead(lead.id)) return;
-    let cancelled = false;
-    (async () => {
-      const { data } = await (supabase as unknown as SupabaseClient)
-        .from('generated_sites')
-        .select('lead_id, site_name, share_token, sent_at, first_opened_at, replied_at, claimed_at, addon_interest_at, booking_only')
-        .eq('lead_id', lead.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (cancelled || !data || data.length === 0) return;
-      setFunnel(data[0] as unknown as LeadFunnel);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [lead.id]);
 
   // Activity log — loaded once on open.
   useEffect(() => {
@@ -482,15 +449,6 @@ function LeadDetailBody({
     } catch { /* ignore */ }
   };
 
-  // Operator-facing site link for the popup (Preview button / URL / "Their site").
-  // Booking-only sites live at bookmybarber.uk/<slug> — link straight there so there's
-  // no yoursites.uk → bookmybarber.uk redirect hop. For marketing sites, use the
-  // ?preview=1 /s/ variant (no Opened event, claim splash hidden); /p/ is the fallback.
-  const siteUrl = funnel?.booking_only && funnel?.site_name
-    ? bookingUrl(funnel.site_name)
-    : funnel?.share_token
-      ? barberSitePreviewUrl(funnel.share_token)
-      : (funnel?.site_name ? publicSiteUrl(funnel.site_name) : null);
 
   const handleAddCustomActionSubmit = () => {
     const trimmed = newCustomAction.trim();
@@ -635,8 +593,8 @@ function LeadDetailBody({
           {/* REMOVED 2026-08-18: the Revenue field (top-right) — confirmed waste for the cockpit. */}
         </div>
 
-        {/* Contact + site — email (from scraping or when they claim) and the live site link */}
-        {(lead.email || siteUrl) && (
+        {/* Contact — email, from scraping or from the questionnaire. */}
+        {lead.email && (
           <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5 text-xs">
             {lead.email && (
               <div className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
@@ -645,15 +603,6 @@ function LeadDetailBody({
                 <button onClick={copyEmail} className="text-muted-foreground/60 hover:text-foreground shrink-0" title="Copy email">
                   {emailCopied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
                 </button>
-              </div>
-            )}
-            {siteUrl && (
-              <div className="inline-flex items-center gap-1.5 min-w-0">
-                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="truncate font-mono text-[11px] text-muted-foreground/80">{siteUrl.replace(/^https?:\/\//, '')}</span>
-                <a href={siteUrl} target="_blank" rel="noreferrer">
-                  <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]">Preview</Button>
-                </a>
               </div>
             )}
           </div>
@@ -780,10 +729,6 @@ function LeadDetailBody({
                 </section>
               );
             })()}
-
-            {/* Booking-page services (Phase 3b) — editable, scan + review-before-overwrite,
-                saves confirmed_services to the lead. Supersedes the 3a read-only scan. */}
-            {!isDemoLead(lead.id) && <BookingServicesEditor lead={lead} onUpdate={onUpdateLead} />}
 
             {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}
             {!isDemoLead(lead.id) && <WhatsAppLeadControls lead={lead} onUpdate={onUpdateLead} />}

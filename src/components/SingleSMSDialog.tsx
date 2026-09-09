@@ -14,10 +14,8 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MessageCircle, Send, AlertTriangle, RotateCcw, Sparkles } from 'lucide-react';
 import { generateSMSUrl, fillTemplate, hasBusinessNameToken } from '@/lib/leadUtils';
-import { barberSiteUrl } from '@/config/publicSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TemplatePicker } from '@/components/TemplatePicker';
-import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAutoRotateTemplate } from '@/hooks/useAutoRotateTemplate';
 import { AutoRotateToggle } from '@/components/AutoRotateToggle';
 
@@ -54,21 +52,8 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent, onAiOpener, 
 
   const { autoOn, toggleAuto, getNextTemplate } = useAutoRotateTemplate();
 
-  // Walkthrough awareness
-  const { isDemoUser, state } = useDemoChecklist();
-  const isWalkthroughStep3 = isDemoUser && state.addedToCrm && !state.contactAttempted;
-
-  useEffect(() => {
-    if (open && isWalkthroughStep3) {
-      setShowTemplateNudge(true);
-      setTemplatesOpened(false);
-    } else {
-      setShowTemplateNudge(false);
-    }
-  }, [open, isWalkthroughStep3]);
-
   // On open: a launch (initialTemplate) always wins and opens FRESH — it ignores
-  // auto-rotate and localStorage so a previous barber's content can never leak.
+  // auto-rotate and localStorage so a previous lead's content can never leak.
   // Otherwise fall back to the existing auto-rotate / saved-template behaviour.
   useEffect(() => {
     if (!open) return;
@@ -92,28 +77,13 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent, onAiOpener, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialTemplate, lead?.id]);
 
-  // Resolve the barber's /s/ link for {{link}}: prefer the launch-supplied link,
-  // else look up the lead's own site by lead_id. Best-effort; never blocks.
-  const [resolvedLink, setResolvedLink] = useState<string | null>(null);
-  useEffect(() => {
-    if (!open || !lead?.id) { setResolvedLink(shareLink ?? null); return; }
-    if (shareLink) { setResolvedLink(shareLink); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await (supabase as unknown as SupabaseClient)
-          .from('generated_sites')
-          .select('share_token')
-          .eq('lead_id', lead.id)
-          .maybeSingle();
-        const token = (data as { share_token?: string } | null)?.share_token;
-        if (!cancelled) setResolvedLink(token ? barberSiteUrl(token) : null);
-      } catch {
-        if (!cancelled) setResolvedLink(null);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [open, lead?.id, shareLink]);
+  /* {{link}} resolves to the link the CALLER passed, and nothing else.
+     ⛔ It used to fall back to querying generated_sites for this lead's barber share_token and
+     building a yoursites.uk/s/<token> URL — the barber product, deleted 2026-09-09. With no site
+     to look up, an absent shareLink now simply means "no link", which siteLinkGuard already
+     handles: a template needing {{link}} is refused rather than sent with a dead URL. */
+  const resolvedLink = shareLink ?? null;
+  const linkLoading = false;
 
   // Listen for AI opener message selection
   useEffect(() => {

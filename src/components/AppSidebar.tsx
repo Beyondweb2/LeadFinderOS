@@ -12,10 +12,9 @@ import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered,
-  HelpCircle, Users, MessageSquare, MessageSquareQuote, Inbox, Sparkles, Map
+  MessageSquare, MessageSquareQuote, Inbox, Sparkles, Map
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import appLogo from '@/assets/logo.png';
 
 export function AppSidebar() {
@@ -35,17 +34,8 @@ export function AppSidebar() {
     { title: 'Page generator', url: '/page-generator', icon: FileCode2, description: 'Client delivery pages, aimed at the measured queries' },
     { title: 'Page plan', url: '/page-plan', icon: ListOrdered, description: 'The per-client page queue: distinct jobs, waves, editable' },
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
-    { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle, description: t('nav.howToUseDesc') },
     { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare, description: t('nav.feedbackDesc') },
   ];
-
-  let searchPulse = false;
-  let crmPulseWalkthrough = false;
-  try {
-    const { state: demoState, isDemoUser, isOpen: walkthroughActive } = useDemoChecklist();
-    searchPulse = isDemoUser && walkthroughActive && !demoState.searchDone;
-    crmPulseWalkthrough = isDemoUser && walkthroughActive && demoState.addedToCrm && !demoState.firstContactMade;
-  } catch {}
 
   const [flashCRM, setFlashCRM] = useState(false);
   const [flashSearch, setFlashSearch] = useState(false);

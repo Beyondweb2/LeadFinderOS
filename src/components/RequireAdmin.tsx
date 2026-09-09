@@ -1,28 +1,25 @@
 import { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useOwner } from '@/contexts/OwnerContext';
 import { Loader2 } from 'lucide-react';
 
 /**
- * Operator/admin gate — the SINGLE source of truth for who may see the operator
- * app (Find Leads, Outreach, Dashboard, /admin/*).
+ * Operator gate — the SINGLE source of truth for who may see the operator app.
  *
- * LeadFinderOS is internal-only (Move37), so operator access is ADMIN-ONLY: you
- * must have a `user_roles` row with role='admin'. Anyone else is diverted —
- * a site owner (barber) to /barber, everyone else to /barber-login. This is a
- * POSITIVE check (require admin), not "block known owners", so a non-owner /
- * non-admin account (e.g. an orphaned barber with no site) can no longer slip in.
+ * LeadFinderOS is internal-only (Move37), so access is ADMIN-ONLY: you must have a
+ * `user_roles` row with role='admin'. This is a POSITIVE check (require admin), never
+ * "block the known non-admins", so an unknown account can't slip in.
  *
- * Waits for BOTH gates to resolve before deciding — useSubscription.isLoading
- * covers the user_roles admin lookup, and useOwner.loading covers ownership — so
- * an admin is never briefly flashed/redirected before their role is known.
+ * ⛔ IT NO LONGER WAITS ON A SECOND LOOKUP, AND THAT IS A REAL SAVING. It used to also
+ * block on useOwner(), a `generated_sites` query that ran on EVERY sign-in purely to
+ * decide whether to divert a barber to /barber. The barber product is gone, so the query
+ * is gone with it and the app renders as soon as the role is known. Anyone who is not an
+ * admin goes to /auth, the only public surface left.
  */
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const { isLoading: roleLoading, isAdmin } = useSubscription();
-  const { loading: ownerLoading, isOwner } = useOwner();
 
-  if (roleLoading || ownerLoading) {
+  if (roleLoading) {
     return (
       <div
         className="min-h-screen flex items-center justify-center bg-background"
@@ -34,7 +31,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   }
 
   if (!isAdmin) {
-    return <Navigate to={isOwner ? '/barber' : '/login'} replace />;
+    return <Navigate to="/auth" replace />;
   }
 
   return <>{children}</>;

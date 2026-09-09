@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
-import { DemoChecklistProvider } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
 import { usePersistedScroll } from '@/hooks/usePersistedScroll';
@@ -38,35 +37,33 @@ export function AppLayout({ children }: AppLayoutProps) {
   });
 
   return (
-    <DemoChecklistProvider isDemoUser={false}>
-      <SidebarProvider defaultOpen={true}>
-        <div className="min-h-screen flex w-full bg-background">
+    <SidebarProvider defaultOpen={true}>
+      <div className="min-h-screen flex w-full bg-background">
 
-          {/* Desktop sidebar - hidden on mobile */}
-          <div className="hidden md:block h-screen sticky top-0">
-            <AppSidebar />
-          </div>
-
-          {/* Main content area */}
-          <div className="flex-1 flex flex-col min-w-0 relative z-10">
-            <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
-              <div className="container max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-                <Suspense fallback={
-                  <div className="flex items-center justify-center py-32">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                  </div>
-                }>
-                  {children}
-                </Suspense>
-              </div>
-            </main>
-          </div>
-
-          {/* Mobile bottom navigation */}
-          <MobileBottomNav />
-
+        {/* Desktop sidebar - hidden on mobile */}
+        <div className="hidden md:block h-screen sticky top-0">
+          <AppSidebar />
         </div>
-      </SidebarProvider>
-    </DemoChecklistProvider>
+
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col min-w-0 relative z-10">
+          <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
+            <div className="container max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-32">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                </div>
+              }>
+                {children}
+              </Suspense>
+            </div>
+          </main>
+        </div>
+
+        {/* Mobile bottom navigation */}
+        <MobileBottomNav />
+
+      </div>
+    </SidebarProvider>
   );
 }

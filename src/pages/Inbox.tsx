@@ -8,7 +8,6 @@ import { useTemplates } from '@/hooks/useTemplates';
 import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
-import { PUBLIC_SITE_ORIGIN } from '@/config/publicSite';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
 import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
 import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
@@ -17,7 +16,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
 import { firstNameFrom, hookFollowupBody, contactFollowupBody } from '@/lib/questionnaireFollowup';
 import { readableTemplateBody } from '@/lib/templateBodies';
-import { barberSitePreviewUrl } from '@/config/publicSite';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -249,7 +247,7 @@ function AutoReplyToggle() {
 }
 
 const Inbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, sitesByLeadId, auditByLeadId, auditRunningLeadIds, isLoading, send, refetch, patchLeadStatus } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, isLoading, send, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
@@ -471,19 +469,13 @@ const Inbox = () => {
       /* The earlier-stage nudge queue — same targeted shape as HOOK_DUE_FILTER, no unassigned/paid exemption. */
       : statusFilter === CONTACT_DUE_FILTER
         ? byCampaign.filter((c) => contactState.eligible.has(c.key))
-      : statusFilter === '__opened__'
-        ? byCampaign.filter((c) => (c.leadId && sitesByLeadId[c.leadId]?.firstOpenedAt != null) || c.unassigned)
-        : statusFilter === '__claimed__'
-          ? byCampaign.filter((c) => (c.leadId && sitesByLeadId[c.leadId]?.claimedAt != null) || c.unassigned)
-          : statusFilter === '__upsell__'
-            ? byCampaign.filter((c) => (c.leadId && sitesByLeadId[c.leadId]?.addonInterestAt != null) || c.unassigned)
-            /* ⛔ AND A PAYING CUSTOMER IS NEVER FILTERED OUT. `isPaid` comes from `amount_paid > 0`
-               (CLAUDE.md §6), not from the status — which is the whole point: the moment a customer
-               moves to `in_delivery` their status stops matching every other filter, and the person
-               paying is precisely the one who must not vanish while Paul is filtering the list.
-               Same convention as `unassigned` directly beside it: a bucket that must always be
-               visible is exempted, not relied on to happen to match. */
-            : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned || c.isPaid);
+      /* ⛔ AND A PAYING CUSTOMER IS NEVER FILTERED OUT. `isPaid` comes from `amount_paid > 0`
+         (CLAUDE.md §6), not from the status — which is the whole point: the moment a customer
+         moves to `in_delivery` their status stops matching every other filter, and the person
+         paying is precisely the one who must not vanish while Paul is filtering the list.
+         Same convention as `unassigned` directly beside it: a bucket that must always be
+         visible is exempted, not relied on to happen to match. */
+      : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned || c.isPaid);
     // Hide dead-state convos (not_interested / closed) unless "Show hidden" is on OR
     // the user has explicitly filtered TO that status. `removedKeys` gives an instant
     // optimistic drop right after "Remove from inbox" (before the refetch lands).
@@ -492,7 +484,7 @@ const Inbox = () => {
       ? byStatus
       : byStatus.filter((c) => c.leadStatus !== 'not_interested' && c.leadStatus !== 'closed');
     return visible.filter((c) => !removedKeys.has(c.key));
-  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, sitesByLeadId, hookState, contactState]);
+  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, hookState, contactState]);
 
   /* Search narrows the already-filtered list. Case-insensitive partial match on the business name
      (c.label — for a lead that IS the business name; for an unassigned convo it is "+<phone>"),
@@ -573,9 +565,6 @@ const Inbox = () => {
   const insertTemplate = (content: string) => setText(fillTemplate(content, { businessName: activeBusinessName }));
 
   // Thread-header quick-action data — each button/link renders only when present.
-  const activeSite = active?.leadId ? sitesByLeadId[active.leadId] : undefined;
-  const sitePreviewUrl = activeSite?.shareToken ? barberSitePreviewUrl(activeSite.shareToken) : null;
-
   // Public audit report for THIS lead — the lead's own COMPLETED audit, served live at /a/<auditId>
   // (strictly the lead's own audit id, never another's). Drives the report-ready pill + Copy/Open,
   // and the audit_reply guard's report identifier.
@@ -743,7 +732,7 @@ const Inbox = () => {
   // strictly from THIS lead's own record: claim templates need its share_token; audit_reply needs
   // the lead's own completed audit (reportSlug = its auditId → /a/<auditId>). Nothing is auto-hidden
   // — invalid templates render disabled with a clear reason.
-  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: activeSite?.shareToken ?? null }, { reportSlug: activeReport?.auditId ?? null });
+  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null });
   /* getTemplateSendability('') returns ok:true, because an unknown name is not its business to
      block — so "nothing selected" has to be refused here or the button would be live with no
      template chosen. */
@@ -1042,11 +1031,6 @@ const Inbox = () => {
               {PIPELINE_STATUS_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
               ))}
-              {/* Site-milestone filters (not lead statuses) — from generated_sites,
-                  presence-based via sitesByLeadId. Distinct sentinel values. */}
-              <SelectItem value="__opened__">Opened</SelectItem>
-              <SelectItem value="__claimed__">Claimed</SelectItem>
-              <SelectItem value="__upsell__">Upsell</SelectItem>
               {/* Opener sent (initial_contact), NEVER replied, no report yet, 3+ days — contact_followup. */}
               <SelectItem value={CONTACT_DUE_FILTER}>Contact follow-up due</SelectItem>
               {/* Report sent (audit_reply), no reply since, 3+ days — the hook_followup work queue. */}
@@ -1196,15 +1180,6 @@ const Inbox = () => {
                   {savingStatusKey === c.key
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                     : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} />}
-                  {(() => {
-                    const s = sitesByLeadId[c.leadId];
-                    if (!s) return null;
-                    const pill = 'inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border-transparent';
-                    if (s.addonInterestAt) return <span className={`${pill} bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))]`} title="Requested the booking + SMS add-on">Upsell</span>;
-                    if (s.claimedAt) return <span className={`${pill} bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))]`} title="Claimed the free site">Claimed</span>;
-                    if (s.firstOpenedAt) return <span className={`${pill} bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))]`} title="Opened the site link">Opened</span>;
-                    return null;
-                  })()}
                 </div>
               )}
             </div>
@@ -1240,12 +1215,6 @@ const Inbox = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {/* View their site — PREVIEW link (does NOT count as an "opened" event). */}
-                  {sitePreviewUrl && (
-                    <a href={sitePreviewUrl} target="_blank" rel="noreferrer" title="View their site (preview — doesn't count as opened)" aria-label="View site preview" className={HEADER_ICON_BTN}>
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  )}
                   {/* FULL LEAD DETAILS — opens the SAME rich dialog Outreach uses, as an overlay
                       over Inbox (audit, questionnaire, business info, mark-paid). No navigation:
                       the whole point is to see everything without leaving the thread. */}

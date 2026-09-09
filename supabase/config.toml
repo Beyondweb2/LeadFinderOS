@@ -3,9 +3,6 @@ project_id = "ruusxpkkmwtljxxulhbq"
 [functions.bulk-jobs]
 verify_jwt = false
 
-[functions.connect-subdomain]
-verify_jwt = false
-
 [functions.instantly-push]
 verify_jwt = false
 
@@ -36,9 +33,6 @@ verify_jwt = false
 [functions.enrich-lead]
 verify_jwt = false
 
-[functions.scan-services]
-verify_jwt = false
-
 [functions.scan-site-details]
 verify_jwt = false
 
@@ -61,36 +55,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.admin-ai-opener]
-verify_jwt = false
-
-[functions.generate-barber-site]
-verify_jwt = false
-
-[functions.claim-info]
-verify_jwt = false
-
-[functions.claim-site]
-verify_jwt = false
-
-[functions.create-booking]
-verify_jwt = false
-
-[functions.get-availability]
-verify_jwt = false
-
-[functions.send-reminders]
-verify_jwt = false
-
-[functions.create-barber-checkout]
-verify_jwt = false
-
-[functions.record-site-event]
-verify_jwt = false
-
-[functions.begin-claim]
-verify_jwt = false
-
-[functions.reset-test-barber]
 verify_jwt = false
 
 [functions.stripe-webhook]

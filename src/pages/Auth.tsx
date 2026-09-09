@@ -9,9 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { LanguageSelector } from '@/components/LanguageSelector';
-import { type SupportedLanguage } from '@/hooks/useLanguage';
-import { LANG_STORAGE_KEY } from '@/i18n';
 import appLogo from '@/assets/logo.png';
 
 const Auth = () => {
@@ -25,16 +22,9 @@ const Auth = () => {
   // Admin tool is INVITE-ONLY: this page is sign-in only. Public self-signup is
   // disabled server-side (Supabase "Allow new users to sign up" = off); new admin
   // users are created from the Supabase dashboard. (?mode=signup is ignored.)
-  // Barber onboarding is unaffected — it goes through /claim → claim-site
-  // (admin.createUser), a separate flow that bypasses the signup toggle.
   const [isLogin] = useState(true);
   const [email, setEmail] = useState(emailParam || '');
   const [password, setPassword] = useState('');
-  const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(() => {
-    try {
-      return (localStorage.getItem(LANG_STORAGE_KEY) as SupportedLanguage) || 'en';
-    } catch { return 'en'; }
-  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
@@ -94,7 +84,6 @@ const Auth = () => {
           }
         }
       } else {
-        try { localStorage.setItem(LANG_STORAGE_KEY, selectedLanguage); } catch {}
         const { error } = await signUp(email, password);
         if (error) {
           if (error.message.includes('User already registered')) {
@@ -111,14 +100,6 @@ const Auth = () => {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleLanguageChange = (lang: SupportedLanguage) => {
-    setSelectedLanguage(lang);
-    try { localStorage.setItem(LANG_STORAGE_KEY, lang); } catch {}
-    import('@/i18n').then(({ default: i18n }) => {
-      i18n.changeLanguage(lang);
-    });
   };
 
   if (isLoading) {
@@ -151,22 +132,12 @@ const Auth = () => {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate(returnToParam || '/landing')}
+          onClick={() => navigate(returnToParam || '/')}
           className="text-muted-foreground hover:text-foreground h-8 px-2.5 text-xs transition-colors duration-200"
         >
           <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
           {t('auth.back')}
         </Button>
-        {!isLogin && (
-          <div className="w-32">
-            <LanguageSelector
-              value={selectedLanguage}
-              onChange={handleLanguageChange}
-              label=""
-              compact
-            />
-          </div>
-        )}
       </div>
 
       {/* Auth Card */}

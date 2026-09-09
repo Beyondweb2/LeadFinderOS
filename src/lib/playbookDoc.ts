@@ -10,7 +10,7 @@ import type { AiAuditSeo } from './aiAuditReportHtml';
 
    NO LANGUAGE MODEL, AT ANY POINT. This is a pure function of the Playbook object (plus the stored
    SEO scan): every sentence is either a template or a value already on that object.
-   generate-playbook is not called, not imported, and not reachable from here.
+   The old generate-playbook LLM pipeline was DELETED 2026-09-09; this is the only playbook.
 
    That is the whole design constraint. The LLM document is what, for Macca-Gas Ltd specifically,
    recommended Bing Places (ZERO citations in 10,615) while never once mentioning Checkatrade (662

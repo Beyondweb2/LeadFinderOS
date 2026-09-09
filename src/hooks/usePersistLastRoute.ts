@@ -25,11 +25,15 @@ export function makeLastRouteKey(userId?: string | null) {
 
 export function isSafeAppRoute(path: string) {
   if (!path.startsWith("/")) return false;
-  // Never resume into public-only routes
-  if (path.startsWith("/landing")) return false;
+  /* Never resume into a public-only route, and never into one that no longer exists —
+     resuming onto a deleted path lands the operator on the 404 page after signing in.
+     /landing, /start, /terms and /guide went with the barber product. */
   if (path.startsWith("/auth")) return false;
-  if (path.startsWith("/subscribe")) return false;
-  if (path.startsWith("/terms")) return true; // still safe, but not in-app; keep allowed
+  if (path.startsWith("/landing")) return false;
+  if (path.startsWith("/start")) return false;
+  if (path.startsWith("/terms")) return false;
+  if (path.startsWith("/guide")) return false;
+  if (path.startsWith("/how-to-use")) return false;
   return true;
 }
 

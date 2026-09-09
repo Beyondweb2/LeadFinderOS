@@ -3,7 +3,7 @@
 // without either owning the styling.
 //
 // WHAT IS SHARED IS THE LOOK, AND ONLY THE LOOK. playbookHtml.ts renders `PlaybookData`, which comes
-// out of the generate-playbook LLM pipeline; playbookDoc.ts renders `Playbook`, which comes out of
+// out of the now-deleted generate-playbook LLM pipeline; playbookDoc.ts renders `Playbook`, which comes out of
 // buildPlaybook and is a pure fold over citations plus hand-maintained host facts. Those two data
 // paths never meet, and that separation is the point: the LLM document recommended ICAEW to an ACCA
 // firm, ACCA's own directory (zero citations in our data) and Bing Places (zero citations across all

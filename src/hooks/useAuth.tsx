@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try { localStorage.removeItem('leadfinder_guest_cap_reached'); } catch {}
     await supabase.auth.signOut();
-    window.location.href = '/landing';
+    window.location.href = '/auth';
   };
 
   return (
