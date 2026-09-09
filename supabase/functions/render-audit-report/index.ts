@@ -40,9 +40,12 @@ import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
    THE ORIGIN IS A PROXY THAT FORCES text/html — findable.live/report/<id>, a Pages Function in the
    findable-site repo (functions/report/[id].ts). Verified on production 2026-08-05: HTTP 200,
    text/html; charset=utf-8, x-robots-tag noindex, the real report.
-   yoursites.uk/a/<id> is the OLDER proxy and still live — every pitch link already sent uses it and
-   must keep working, so it is deliberately not retired. This constant only decides what NEW documents
-   print. One template string, not spread through the file. */
+   ⛔ yoursites.uk/a/<id> IS NO LONGER A PROXY — it is a 301 onto this same origin (2026-09-09,
+   Paul: "all audit reports should be from the findable.live domain"). It used to SERVE the report
+   at that address, which is why the barber domain kept showing up in front of prospects. The 64
+   pitch links already sent still work; they now land on findable.live/report/<id>. See
+   functions/a/[slug].ts. This constant only decides what NEW documents print.
+   One template string, not spread through the file. */
 const REPORT_PUBLIC_ORIGIN = "https://findable.live";
 const shareUrlFor = (_supabaseUrl: string, auditId: string) =>
   `${REPORT_PUBLIC_ORIGIN}/report/${auditId}`;
