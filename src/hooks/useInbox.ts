@@ -12,12 +12,18 @@ const sb = supabase as unknown as { from: (t: string) => any; functions: typeof 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** Out-of-window reply templates (mirror the edge allowlist). */
+/* ⛔ SENDABLE TEMPLATES. The five barber ones (booking_page_intro, no_website_barbers,
+   barber_poor_website, booking_switch_barbers, barber_fresha_booksy) were REMOVED from this list on
+   2026-09-09 with the barber product. Every one of them carries {{link}} = a /s/<share_token> claim
+   URL, and no lead has a share_token any more — so siteLinkGuard refused all five on every lead.
+   They were five permanently-disabled rows in a picker of twelve, and they would have been five
+   dead options in the new bulk-send picker too.
+   ⚠️ HISTORY STILL RENDERS THEM. 71 of those messages were really sent, and a thread showing a raw
+   slug where it used to show a sentence is a regression in the transcript — but the answer is
+   Inbox.tsx's existing TEMPLATE_DISPLAY map, which already names every template this product has
+   ever had. Do not add a second list here: naming a PAST message and choosing the NEXT one are
+   different questions with different lists, and that is the whole reason this one shrank. */
 export const WA_REPLY_TEMPLATES = [
-  { name: 'booking_page_intro', label: 'Booking page intro (claim link)' },
-  { name: 'no_website_barbers', label: 'Free website intro (claim link)' },
-  { name: 'barber_poor_website', label: 'Updated website intro (claim link)' },
-  { name: 'booking_switch_barbers', label: 'Booking switch (no commission) (claim link)' },
-  { name: 'barber_fresha_booksy', label: 'Fresha/Booksy switch (claim link)' },
   { name: 'initial_contact', label: 'Initial contact (opener)' },
   { name: 'audit_reply', label: 'Audit reply (report + competitors)' },
   { name: 'audit_result_hook', label: 'Audit result hook (outreach)' },
@@ -26,6 +32,7 @@ export const WA_REPLY_TEMPLATES = [
   { name: 'book_call', label: 'Arrange a call' },
   { name: 're_engage', label: 'Re-engage (gone quiet)' },
 ];
+
 
 export interface WaMessage {
   id: string;

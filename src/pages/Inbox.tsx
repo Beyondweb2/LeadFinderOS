@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
+import { planBulkSend, groupSkips, type BulkCandidate } from '@/lib/inboxBulkSend';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConversation, type LeadLite } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS } from '@/lib/whatsappTemplates';
@@ -77,10 +78,15 @@ function relTime(iso: string): string {
 }
 
 // Fallback label for legacy template rows sent before the body was stored (body null).
+/* ⚠️ READS TEMPLATE_DISPLAY (defined below), NOT the sendable list. It used to look the name up in
+   WA_REPLY_TEMPLATES, which is the list of what you may SEND — so when the five retired barber
+   templates left that list on 2026-09-09, every historic barber message in a thread would have
+   rendered its raw slug. Naming what a PAST message was and choosing what to send NEXT are
+   different questions, and TEMPLATE_DISPLAY is already the answer to the first one for every
+   template this product has ever had. */
 function templateLabel(name: string | null): string {
   if (!name) return '';
-  const t = WA_REPLY_TEMPLATES.find((x) => x.name === name);
-  return `📄 ${t ? t.label : name}`;
+  return `📄 ${friendlyTemplate(name)}`;
 }
 
 /* ⛔ TWO TEMPLATES PUT A REPORT IN FRONT OF A PROSPECT NOW. `audit_reply` was the only one for
@@ -641,6 +647,22 @@ const Inbox = () => {
   const [hookSending, setHookSending] = useState(false);
   // ── Bulk hook-follow-up queueing (the "Hook follow-up due" view) ──
   const [hookSelected, setHookSelected] = useState<Set<string>>(new Set()); // lead ids
+
+  /* ══ BULK TEMPLATE SEND ═══════════════════════════════════════════════════════════════════════
+     Paul, 2026-09-09: send one approved template to many conversations instead of opening each
+     thread. Keyed by CONVERSATION KEY (the hook queue above is keyed by lead id — deliberately not
+     merged: that one QUEUES and this one SENDS, and one checkbox doing either depending on the
+     filter is how you send fifty messages meaning to schedule them).
+     ⛔ NEVER PERSISTED. Every other bit of page state here survives navigation on purpose, and this
+     one must not: a remembered set of businesses to message, restored a day later against a list
+     that has since changed, is the one piece of state whose staleness sends real messages. */
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkTemplate, setBulkTemplate] = useState('');
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
+  const [bulkReport, setBulkReport] = useState<null | { sent: number; failed: { label: string; reason: string }[] }>(null);
   const [hookQueueConfirm, setHookQueueConfirm] = useState(false);
   const [hookQueuing, setHookQueuing] = useState(false);
   const hookExistingFirst = firstNameFrom(activeLead?.contact_name);
@@ -724,6 +746,74 @@ const Inbox = () => {
   });
   const selectAllHookEligible = () => setHookSelected(new Set(hookEligibleLeadIds));
   const clearHookSelection = () => setHookSelected(new Set());
+
+  /* ══ BULK SEND — the plan, then the sending ═══════════════════════════════════════════════════ */
+  const toggleBulkSelect = (key: string) => setBulkSelected((s) => {
+    const n = new Set(s);
+    if (n.has(key)) n.delete(key); else n.add(key);
+    return n;
+  });
+  const exitBulkMode = () => { setBulkMode(false); setBulkSelected(new Set()); setBulkReport(null); };
+
+  /* The plan is recomputed from the CURRENT list every render, so a conversation that leaves the
+     filter (a status change, a reply landing) leaves the batch with it. Selecting by key and
+     resolving late is what keeps the confirm honest about who is actually about to be messaged. */
+  const bulkCandidates: BulkCandidate[] = useMemo(
+    () => filteredList
+      .filter((c) => bulkSelected.has(c.key))
+      .map((c) => ({ key: c.key, leadId: c.leadId, label: c.label, phone: c.phone })),
+    [filteredList, bulkSelected],
+  );
+  const bulkPlan = useMemo(
+    () => planBulkSend(bulkCandidates, bulkTemplate, { auditByLeadId }),
+    [bulkCandidates, bulkTemplate, auditByLeadId],
+  );
+
+  /**
+   * Send the planned template to each conversation, one at a time.
+   *
+   * ⛔ SEQUENTIAL, NOT Promise.all. Fifty parallel sends would hit Meta's Graph API in one burst
+   * from one number, which is the shape rate limiting exists to punish — and a partial failure in
+   * a parallel batch is far harder to report honestly. Sequential also means the progress count is
+   * true rather than decorative.
+   * ⛔ NO allowResend. The server refuses a template this lead has already had; in a batch that
+   * refusal is exactly right, and overriding it wholesale is how somebody gets the same message
+   * twice. A deliberate repeat is a single send, from the thread, where it is confirmed by name.
+   * ⚠️ Failures are COLLECTED, never thrown — one refusal must not abandon the rest of the batch,
+   * and the operator needs the list at the end more than they need a toast per lead.
+   */
+  const runBulkSend = async () => {
+    if (bulkBusy || !bulkPlan.send.length) return;
+    setBulkBusy(true);
+    setBulkReport(null);
+    setBulkProgress({ done: 0, total: bulkPlan.send.length });
+    const failed: { label: string; reason: string }[] = [];
+    let sent = 0;
+    for (const target of bulkPlan.send) {
+      try {
+        const res = await send({
+          phone: target.phone,
+          leadId: target.leadId,
+          templateName: bulkTemplate,
+        });
+        if (res.ok) sent++;
+        else failed.push({ label: target.label, reason: res.reason ?? res.error ?? 'send failed' });
+      } catch (e) {
+        failed.push({ label: target.label, reason: e instanceof Error ? e.message : 'send failed' });
+      }
+      setBulkProgress((p) => ({ ...p, done: p.done + 1 }));
+    }
+    setBulkBusy(false);
+    setBulkConfirm(false);
+    setBulkReport({ sent, failed });
+    setBulkSelected(new Set());
+    toast({
+      title: failed.length ? `Sent ${sent}, ${failed.length} failed` : `Sent ${sent}`,
+      description: failed.length ? 'The ones that did not go are listed above the conversation list.' : undefined,
+      variant: failed.length ? 'destructive' : undefined,
+    });
+    await refetch();
+  };
 
   const queueHookFollowups = async () => {
     const ids = [...hookSelected];
@@ -1137,6 +1227,85 @@ const Inbox = () => {
               </button>
             )}
           </div>
+          {/* ══ BULK TEMPLATE SEND ═══════════════════════════════════════════════════════════════
+              Hidden behind a "Select" toggle rather than always-on: checkboxes on every row change
+              what a click on a conversation MEANS, and the common action here is opening a thread,
+              not choosing one. Not shown in hook-due mode — that view has its own selection, and two
+              sets of checkboxes on one row is how you queue when you meant to send. */}
+          {!hookDueMode && filteredList.length > 0 && (
+            bulkMode ? (
+              <div className="mb-1.5 space-y-1.5 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[11px]">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-muted-foreground">{bulkSelected.size} selected</span>
+                  <button type="button" className="font-medium text-primary hover:underline"
+                    onClick={() => setBulkSelected(new Set(filteredList.map((c) => c.key)))}>
+                    Select all shown ({filteredList.length})
+                  </button>
+                  {bulkSelected.size > 0 && (
+                    <button type="button" className="text-muted-foreground hover:underline"
+                      onClick={() => setBulkSelected(new Set())}>Clear</button>
+                  )}
+                  <span className="flex-1" />
+                  <button type="button" className="text-muted-foreground hover:underline" onClick={exitBulkMode}>Done</button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select value={bulkTemplate} onValueChange={setBulkTemplate}>
+                    <SelectTrigger className="h-7 flex-1 min-w-[190px] text-[11px]">
+                      <SelectValue placeholder="Choose a template…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {WA_REPLY_TEMPLATES.map((t) => (
+                        <SelectItem key={t.name} value={t.name} className="text-xs">{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-7 px-2 text-[11px]"
+                    disabled={bulkBusy || !bulkTemplate || bulkPlan.send.length === 0}
+                    onClick={() => setBulkConfirm(true)}>
+                    {bulkBusy
+                      ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Sending {bulkProgress.done}/{bulkProgress.total}</>
+                      : `Send to ${bulkPlan.send.length}`}
+                  </Button>
+                </div>
+                {/* The refusal and the skips are stated BEFORE the confirm, not inside it — a
+                    disabled button with no explanation is the thing that makes an operator press
+                    it repeatedly. */}
+                {bulkTemplate && bulkPlan.refusal && (
+                  <p className="text-[11px] text-destructive">{bulkPlan.refusal}</p>
+                )}
+                {bulkTemplate && !bulkPlan.refusal && bulkPlan.skipped.length > 0 && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                    {bulkPlan.skipped.length} of {bulkSelected.size} will be skipped —{' '}
+                    {groupSkips(bulkPlan.skipped).map((g) => `${g.count} ${g.reason}`).join(', ')}.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mb-1.5 flex justify-end">
+                <button type="button" onClick={() => setBulkMode(true)}
+                  className="text-[11px] font-medium text-primary hover:underline">
+                  Select several…
+                </button>
+              </div>
+            )
+          )}
+          {/* What the last batch did. Sticks around until dismissed: a toast disappears, and the
+              list of who did NOT get the message is the part worth acting on. */}
+          {bulkReport && (
+            <div className="mb-1.5 rounded-md border border-border/60 bg-background px-2 py-1.5 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Sent {bulkReport.sent}{bulkReport.failed.length ? `, ${bulkReport.failed.length} failed` : ''}</span>
+                <span className="flex-1" />
+                <button type="button" className="text-muted-foreground hover:underline" onClick={() => setBulkReport(null)}>Dismiss</button>
+              </div>
+              {bulkReport.failed.length > 0 && (
+                <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                  {bulkReport.failed.slice(0, 8).map((x, i) => (<li key={i} className="truncate">· {x.label} — {x.reason}</li>))}
+                  {bulkReport.failed.length > 8 && <li>· and {bulkReport.failed.length - 8} more</li>}
+                </ul>
+              )}
+            </div>
+          )}
           {/* Bulk hook-follow-up control bar — only in the "Hook follow-up due" view. Queue, don't send. */}
           {hookDueMode && filteredList.length > 0 && (
             <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[11px]">
@@ -1191,6 +1360,15 @@ const Inbox = () => {
                       onCheckedChange={() => toggleHookSelect(c.leadId!)}
                       onClick={(e) => e.stopPropagation()}
                       aria-label={`Select ${c.label} for hook follow-up`}
+                      className="mr-0.5 shrink-0"
+                    />
+                  )}
+                  {bulkMode && !hookDueMode && (
+                    <Checkbox
+                      checked={bulkSelected.has(c.key)}
+                      onCheckedChange={() => toggleBulkSelect(c.key)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select ${c.label} for a bulk send`}
                       className="mr-0.5 shrink-0"
                     />
                   )}
@@ -1581,6 +1759,54 @@ const Inbox = () => {
 
       {/* Bulk hook-follow-up QUEUE confirm — shows the count BEFORE anything is written, so a wave of
           hundreds is never one accidental click. Queues (marker column); the queue paces the sends. */}
+      {/* ══ BULK SEND CONFIRM ═══════════════════════════════════════════════════════════════════════
+          These messages go to real businesses the instant this is pressed and cannot be recalled,
+          so the dialog states the three facts that decide it: WHICH template, HOW MANY, and WHO IS
+          BEING SKIPPED and why. The skipped list is spelled out rather than counted — "12 skipped"
+          is how you send to the wrong twelve and never find out. */}
+      <Dialog open={bulkConfirm} onOpenChange={(o) => { if (!bulkBusy) setBulkConfirm(o); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              Send “{WA_REPLY_TEMPLATES.find((t) => t.name === bulkTemplate)?.label ?? bulkTemplate}” to {bulkPlan.send.length} business{bulkPlan.send.length === 1 ? '' : 'es'}?
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              They go out <strong>now</strong>, one after another — not through the daily queue.
+              Everyone here has already replied to you, so this is a continuation, not cold outreach.
+              A business that has already had this template will be refused by the server and listed
+              afterwards, not sent it twice.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-56 space-y-2 overflow-y-auto text-xs">
+            <div>
+              <p className="mb-1 font-medium">Will be sent ({bulkPlan.send.length})</p>
+              <ul className="space-y-0.5 text-muted-foreground">
+                {bulkPlan.send.slice(0, 12).map((t) => <li key={t.key} className="truncate">· {t.label}</li>)}
+                {bulkPlan.send.length > 12 && <li>· and {bulkPlan.send.length - 12} more</li>}
+              </ul>
+            </div>
+            {bulkPlan.skipped.length > 0 && (
+              <div>
+                <p className="mb-1 font-medium text-amber-600 dark:text-amber-500">Skipped ({bulkPlan.skipped.length})</p>
+                <ul className="space-y-0.5 text-muted-foreground">
+                  {groupSkips(bulkPlan.skipped).map((g) => (
+                    <li key={g.reason} className="truncate">· {g.count} — {g.reason} ({g.labels.slice(0, 3).join(', ')}{g.labels.length > 3 ? '…' : ''})</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" disabled={bulkBusy} onClick={() => setBulkConfirm(false)}>Cancel</Button>
+            <Button size="sm" disabled={bulkBusy || bulkPlan.send.length === 0} onClick={() => void runBulkSend()}>
+              {bulkBusy
+                ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Sending {bulkProgress.done}/{bulkProgress.total}</>
+                : `Send ${bulkPlan.send.length} now`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={hookQueueConfirm} onOpenChange={(o) => { if (!hookQueuing) setHookQueueConfirm(o); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
