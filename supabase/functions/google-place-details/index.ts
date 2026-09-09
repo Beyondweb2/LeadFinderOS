@@ -209,7 +209,10 @@ serve(async (req) => {
          touches. Place Details (Enterprise) is $20 per 1,000 = $0.020. 18% under.
          The reasoning in the old note still holds and is worth keeping: the extra address/rating/
          review fields cost nothing, because the call was already Enterprise before they were added.
-         Mirrors src/lib/marketView.ts PLACE_DETAILS_USD. */
+         ⚠️ THIS IS THE ONLY COPY NOW. It used to mirror PLACE_DETAILS_USD in src/lib/marketView.ts,
+         which was deleted 2026-09-09 with the market view — nothing read it, and a constant no
+         consumer reads is a constant that goes stale unnoticed. The figure lives here, beside the
+         call it prices, with the tier reasoning above it. */
       logUsage(supabase, userId, false, 0.020, triggerSource);
 
       // ─── CACHE STORE ─────────────────────────

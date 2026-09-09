@@ -24,7 +24,10 @@ import { CRAWLABLE_STATUSES_DEFAULT } from '@/types/outreach';
  */
 
 const CONCURRENCY = 10;   // website crawl is plain HTTP — safe to parallelise.
-const MAX_PER_RUN = 200;  // bound time per run.
+/* ⛔ THE CAP LIVES IN src/lib/crawlBatch.ts, WITH THE ARITHMETIC THAT DESCRIBES IT. It used to be
+   a bare local const, and the button's label was computed from the UNCAPPED candidate count — so
+   the control read "Crawl 1968 in view" and crawled 200, with nothing anywhere telling the operator
+   the other 1,768 were still waiting. One constant, one plan function, one test. */
 /* ⛔ DON'T RE-CRAWL WHAT WE ALREADY CHECKED. A miss WRITES email_last_checked_at (and
    email_status 'none'), but the target rule only ever tested `!email` — so every lead already
    proven to have no findable email was re-crawled on EVERY run, permanently occupying the
@@ -32,12 +35,13 @@ const MAX_PER_RUN = 200;  // bound time per run.
    30 days matches extract-email's own domain cache, so a shorter window would mostly re-read that
    cache and change nothing anyway. Selecting a lead overrides this — see targetsFor. */
 import { pushCrawlTargets, RECHECK_AFTER_DAYS } from '@/lib/pushCrawlTargets';
+import { CRAWL_MAX_PER_RUN, crawlBatchPlan, crawlDoneMessage } from '@/lib/crawlBatch';
 
 /** What the Push-to-Instantly pre-crawl reports back, so the dialog can state it rather than guess. */
 export interface PushCrawlResult {
   /** Emails actually found and written. */
   found: number;
-  /** Leads crawled this run (<= candidates, because of MAX_PER_RUN). */
+  /** Leads crawled this run (<= candidates, because of CRAWL_MAX_PER_RUN). */
   scanned: number;
   /** Leads that needed a crawl at all. Zero means nothing to do, not a failure. */
   candidates: number;
@@ -132,14 +136,21 @@ export function useOutreachFindEmails(
     return { found, scanned: done };
   };
 
+  /* ⛔ THE TOAST NAMES WHAT IS LEFT. "Found emails for 137 of 200" was true and told the operator
+     the job was finished when 1,768 leads had never been looked at. `remaining` is computed from
+     the SAME plan the label is built from, so the button and the result cannot disagree. */
   const findEmails = async () => {
-    const batch = targets.slice(0, MAX_PER_RUN);
+    const plan = crawlBatchPlan(targets.length, CRAWL_MAX_PER_RUN);
+    const batch = targets.slice(0, plan.batch);
     if (!batch.length) {
       toast({ title: 'No websites to scan', description: 'No leads with a website and no email yet.' });
       return;
     }
     const { found, scanned } = await runCrawl(batch);
-    toast({ title: `Found emails for ${found} of ${scanned}`, description: 'Emails now show on the rows and can be pushed to Instantly.' });
+    /* Recomputed from what was actually scanned, not from the plan: a cancel part-way through
+       leaves MORE outstanding than the plan predicted, and the number has to be the true one. */
+    const remaining = Math.max(0, targets.length - scanned);
+    toast({ title: `Found emails for ${found} of ${scanned}`, description: crawlDoneMessage(found, scanned, remaining) });
   };
 
   /* ⛔ THE PUSH-TO-INSTANTLY PRE-CRAWL (Paul, 2026-09-09: "when I try push to instantly it should run
@@ -155,7 +166,7 @@ export function useOutreachFindEmails(
   const crawlForPush = async (leadIds: readonly string[]): Promise<PushCrawlResult> => {
     const candidates = pushCrawlTargets(leads, leadIds);
     if (!candidates.length) return { found: 0, scanned: 0, candidates: 0, remaining: 0 };
-    const batch = candidates.slice(0, MAX_PER_RUN);
+    const batch = candidates.slice(0, crawlBatchPlan(candidates.length, CRAWL_MAX_PER_RUN).batch);
     const { found, scanned } = await runCrawl(batch);
     /* ⚠️ `remaining` is NAMED rather than silently dropped. A cap that quietly crawls 200 of 743 and
        then pushes reads as "these leads have no email", which is the opposite of true. */
@@ -167,5 +178,13 @@ export function useOutreachFindEmails(
   /* `usingSelection` lets the button say WHICH set it is about to crawl — the ambiguity that made
      "why didn't it crawl my lead" hard to answer. The count and the flag come from the same memo as
      the crawl itself, so the label and the action cannot disagree. */
-  return { findEmails, crawlForPush, cancel, finding, progress, result, withWebsiteCount: targets.length, usingSelection: hasSelection };
+  /* ⚠️ `withWebsiteCount` STAYS THE UNCAPPED TOTAL — other call sites read it as "how much work
+     exists", which is a real question. What changed is that the LABEL no longer uses it alone:
+     `crawlPlan` carries the batch, the remainder and whether the cap bites. */
+  return {
+    findEmails, crawlForPush, cancel, finding, progress, result,
+    withWebsiteCount: targets.length,
+    crawlPlan: crawlBatchPlan(targets.length, CRAWL_MAX_PER_RUN),
+    usingSelection: hasSelection,
+  };
 }

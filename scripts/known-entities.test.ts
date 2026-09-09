@@ -11,11 +11,7 @@
    scan missed it; a directory never occupies a top-N slot).
    ============================================================ */
 import { classifyKnownEntity, isUncleanedName, uncleanedNames } from "../src/lib/knownEntities.ts";
-import {
-  marketShape, NATIONAL_MIN_OTHER_TOWNS,
-  UNCLEANED_MARKER_WORDS as REEXPORTED_MARKERS, isUncleanedName as reexportedIsUncleaned,
-  type MarketShapeInput, type MarketNamedRow, type MarketCitationHost,
-} from "../src/lib/marketView.ts";
+import { UNCLEANED_MARKER_WORDS } from "../src/lib/knownEntities.ts";
 import { isRealCompetitor } from "../src/lib/auditReport.ts";
 
 let f = 0;
@@ -54,9 +50,13 @@ ok(classifyKnownEntity("") === null, "empty -> null");
 ok(classifyKnownEntity("   ") === null, "whitespace -> null");
 ok(classifyKnownEntity("!!!") === null, "punctuation-only -> null");
 
-console.log("\n── THE MARKER FUNCTIONS MOVED, THE RE-EXPORT HOLDS ──");
-ok(REEXPORTED_MARKERS.has("always") && reexportedIsUncleaned("always"),
-  "marketView.ts still exports the marker set + isUncleanedName (every old importer unchanged)");
+/* ⚠️ THIS USED TO ASSERT A RE-EXPORT FROM marketView.ts, AND THE RE-EXPORT HAD NO OTHER READER.
+   The marker set moved here in 2026-08-19 and marketView re-exported it "so every existing importer
+   is unchanged"; by 2026-09-09 there were no importers left, so the only thing keeping the
+   re-export alive was this assertion that it existed. Both are gone — knownEntities.ts is the one
+   home, and the report path (isRealCompetitor, below) is what actually reads it. */
+console.log("\n── THE MARKER FUNCTIONS, AT THEIR ONE HOME ──");
+ok(UNCLEANED_MARKER_WORDS.has("always"), "the marker set is exported from knownEntities.ts");
 ok(isUncleanedName("ask") && isUncleanedName("Always") && isUncleanedName("they,"),
   "single function words are markers, case/punctuation-insensitive");
 ok(!isUncleanedName("Always Secure Ltd") && !isUncleanedName("One Call Locksmiths"),
@@ -72,59 +72,12 @@ ok(isRealCompetitor("Able Group", "Portsmouth"), "Able Group IS a rival (nationa
 ok(isRealCompetitor("Harrlie Plumbing LTD", "Eastbourne"), "an unknown real firm still passes (the list never subtracts real locals)");
 ok(isRealCompetitor("Safe And Secure Locksmiths", "Huntingdon"), "the pinned real-firm case from RG's report still passes");
 
-console.log("\n── THE NATIONAL-LED VERDICT: both signals, directories excluded ──");
-{
-  const firm = (name: string, mentions: number, otherTowns: number, known?: "national" | "directory"): MarketNamedRow => ({
-    key: name.toLowerCase(), name, variants: [name], mentions, audits: 2,
-    tier: "established", auditShare: 1, mentionShare: 1, otherTowns, ...(known ? { known } : {}),
-  });
-  const HOST: MarketCitationHost = { host: "checkatrade.com", citations: 39, isAggregator: true };
-  const market = (named: MarketNamedRow[]): MarketShapeInput => ({
-    audits: 2, completeRuns: 2,
-    leader: named[0] ? { name: named[0].name, mentions: named[0].mentions } : null,
-    leaderRow: named[0] ?? null,
-    topNamed: named,
-    citationHosts: [HOST], citationTotal: 284,
-    distinctBusinesses: Math.max(named.length, 20),
-    marketAuditsComplete: 2, businessAuditsComplete: 0,
-  });
-
-  /* The Portsmouth blind spot: known nationals with ZERO cross-town evidence (first measured town
-     of the trade) hold the whole top. The evidence-only test called this local. */
-  const blindSpot = market([
-    firm("Able Group", 40, 0, "national"),
-    firm("Go Assist", 30, 0, "national"),
-    firm("HomeServe", 20, 0, "national"),
-  ]);
-  ok(marketShape(blindSpot).kind === "national_led",
-    "known nationals with otherTowns=0 -> national_led (the curated signal covers the scan's blind spot)");
-
-  /* A directory in the top three must not shield a national pattern: filtered from the slice, the
-     test reads the three real firms behind it. */
-  const shielded = market([
-    firm("Checkatrade", 50, 0, "directory"),
-    firm("LockRite", 40, NATIONAL_MIN_OTHER_TOWNS, "national"),
-    firm("Lockforce", 30, NATIONAL_MIN_OTHER_TOWNS),
-    firm("LockFit", 20, NATIONAL_MIN_OTHER_TOWNS),
-  ]);
-  ok(marketShape(shielded).kind === "national_led",
-    "a directory occupying #1 is excluded, so Colchester-style national domination is still caught");
-
-  /* And one real local at the top keeps the market workable — the curated list must never flip a
-     genuinely local market. */
-  const local = market([
-    firm("J&J Locksmiths", 32, 0),
-    firm("LockRite", 15, NATIONAL_MIN_OTHER_TOWNS, "national"),
-    firm("Checkatrade", 13, 0, "directory"),
-    firm("Eastbourne Locksmiths", 12, 0),
-  ]);
-  const shape = marketShape(local);
-  ok(shape.kind !== "national_led", `a local leader keeps the market workable (got ${shape.kind})`);
-
-  /* Absent `known` behaves exactly as before — old cached payloads lose nothing. */
-  const legacy = market([firm("J&J Locksmiths", 32, 0), firm("Someone Else", 20, 0)]);
-  ok(marketShape(legacy).kind !== "national_led", "rows with no known field grade exactly as before");
-}
+/* ⛔ THE `national_led` MARKET VERDICT WAS DELETED 2026-09-09 WITH THE MARKET VIEW, and its
+   assertions went with it — they drove marketShape(), which no longer exists. What they were
+   really protecting survives above and is still tested: the curated national/directory
+   classification, and the rule that it may only ever CLASSIFY or SUBTRACT, never add
+   (CLAUDE.md §6). isRealCompetitor is the live consumer — a directory must never print as a
+   client's rival — and those cases are in the block above this one. */
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILED`);
 if (f > 0) process.exit(1);
