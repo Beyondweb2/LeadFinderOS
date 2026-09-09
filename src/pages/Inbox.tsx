@@ -17,7 +17,7 @@ import { fillTemplate } from '@/lib/leadUtils';
 import { firstNameFrom, hookFollowupBody, contactFollowupBody } from '@/lib/questionnaireFollowup';
 import { readableTemplateBody } from '@/lib/templateBodies';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { InboxComposer } from '@/components/InboxComposer';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -347,6 +347,15 @@ const Inbox = () => {
   const setText = useCallback((v: string) => {
     setDrafts((prev) => setDraft(prev, activeKey, v));
   }, [activeKey, setDrafts]);
+  /* ⛔ TAKES THE KEY EXPLICITLY, unlike setText which closes over the CURRENT activeKey. The
+     composer flushes its draft as it UNMOUNTS — by which point activeKey has already moved to the
+     thread being opened — so a closure-based writer would file the outgoing thread's half-typed
+     message under the incoming thread. Same class of bug as the setText('') that used to clear the
+     wrong thread's draft on switch (removed 2026-08-09); the fix is the same: name the key.
+     Stable identity (setDrafts is stable), so it never re-renders the memoised composer. */
+  const persistDraft = useCallback((key: string, v: string) => {
+    setDrafts((prev) => setDraft(prev, key, v));
+  }, [setDrafts]);
   /* Starts UNSELECTED, deliberately. This used to default to WA_REPLY_TEMPLATES[0], which is
      booking_page_intro — the barber booking pitch — so every thread opened with a barber template
      armed regardless of trade. On an accountant thread only the "no site link yet" guard stood
@@ -554,7 +563,14 @@ const Inbox = () => {
     (activeKey && conversations.find((c) => c.key === activeKey)) ||
     (activeKey && synthetic?.key === activeKey ? synthetic : null) || null;
 
-  const thread = active ? messagesForKey(active.key) : [];
+  /* ⛔ MEMOISED. messagesForKey is a plain filter over every whatsapp_messages row (3,432 of
+     them, measured 2026-09-09), and this used to re-run on EVERY render — including one per
+     keystroke while the composer's text lived up here. The composer now holds its own text, and
+     this makes the remaining renders cheap too. */
+  const thread = useMemo(
+    () => (active ? messagesForKey(active.key) : []),
+    [active, messagesForKey],
+  );
   const win = active ? windowFor(active.lastInboundAt) : { open: false, hoursLeft: 0 };
 
   // Quick-reply scripts = the saved TEXT templates (not voice). Placeholders are filled
@@ -562,7 +578,16 @@ const Inbox = () => {
   const textTemplates = useMemo(() => templates.filter((t) => t.template_type === 'text'), [templates]);
   const activeLead = active?.leadId ? leads.find((l) => l.id === active.leadId) : undefined;
   const activeBusinessName = activeLead?.business_name;
-  const insertTemplate = (content: string) => setText(fillTemplate(content, { businessName: activeBusinessName }));
+  /* ⛔ INSERTING A QUICK REPLY WRITES THE DRAFT AND REMOUNTS THE COMPOSER. The composer holds its
+     own text (see InboxComposer — that is what fixed the typing lag), so the parent can no longer
+     push a value into it by setting state. Bumping the seed changes the composer's React key, so it
+     remounts and re-seeds from the draft we just wrote. Deliberately not an imperative ref handle:
+     a remount cannot get out of step with the stored draft, and a handle can. */
+  const [composerSeed, setComposerSeed] = useState(0);
+  const insertTemplate = (content: string) => {
+    setText(fillTemplate(content, { businessName: activeBusinessName }));
+    setComposerSeed((n) => n + 1);
+  };
 
   // Thread-header quick-action data — each button/link renders only when present.
   // Public audit report for THIS lead — the lead's own COMPLETED audit, served live at /a/<auditId>
@@ -939,30 +964,36 @@ const Inbox = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, leads, isLoading]);
 
-  const doSend = async (asTemplate?: boolean) => {
-    if (!active) return;
+  /* `freeText` is the COMPOSER'S OWN current value. It must be passed in rather than read from
+     the draft map: the composer persists on a debounce now, so the stored draft can be up to
+     DRAFT_DEBOUNCE_MS behind what is on screen, and sending the stale copy would send the message
+     minus its last few characters. Template sends ignore it entirely.
+     Returns whether the message actually went, so the composer only clears itself on success. */
+  const doSend = async (asTemplate?: boolean, freeText?: string): Promise<boolean> => {
+    if (!active) return false;
     // IN-FLIGHT GUARD. The buttons are disabled while `sending`, but that only covers the buttons:
     // the composer's Enter key and the template picker can both reach here, and two taps inside the
     // same tick would both pass a disabled check that has not re-rendered yet. A template send is
     // not repeatable-for-free, so the guard lives at the top of the action itself.
-    if (sending) return;
+    if (sending) return false;
     // Explicit template send (asTemplate=true, from the WhatsApp-template picker) works in ANY
     // window state; otherwise fall back to the window default (out-of-window → template, in → text).
     const useTemplate = asTemplate ?? !win.open;
     if (useTemplate && !active.leadId) {
       toast({ title: 'Template needs a lead', description: 'This conversation has no linked lead, so a claim template can’t be sent.', variant: 'destructive' });
-      return;
+      return false;
     }
     // Per-lead validity guard — never send a template whose required data this lead lacks.
     if (useTemplate) {
       /* Nothing chosen. The button is already disabled for this, but the out-of-window path can reach
          doSend with asTemplate undefined, and templateSendability('') reports ok — so refuse here
          too rather than relying on the UI being the only way in. */
-      if (!template) { toast({ title: 'No template chosen', description: 'Pick a template before sending.', variant: 'destructive' }); return; }
+      if (!template) { toast({ title: 'No template chosen', description: 'Pick a template before sending.', variant: 'destructive' }); return false; }
       const s = templateSendability(template);
-      if (!s.ok) { toast({ title: 'Template not available for this lead', description: s.reason, variant: 'destructive' }); return; }
+      if (!s.ok) { toast({ title: 'Template not available for this lead', description: s.reason, variant: 'destructive' }); return false; }
     }
-    if (!useTemplate && !text.trim()) return;
+    const body = (freeText ?? text).trim();
+    if (!useTemplate && !body) return false;
     /* CONFIRM A TEMPLATE SEND. A template goes to a real business the moment it is tapped and
        cannot be recalled, so it gets the same treatment as the audit button above: a plain
        window.confirm naming exactly what is about to happen and to whom.
@@ -979,14 +1010,14 @@ const Inbox = () => {
       const question = alreadySent
         ? `${who} has already had "${label}".\n\nSend it AGAIN?`
         : `Send "${label}" to ${who}?`;
-      if (!window.confirm(question)) return;
+      if (!window.confirm(question)) return false;
       allowResend = alreadySent;
     }
     setSending(true);
     const res = await send({
       phone: active.phone,
       leadId: active.leadId,
-      body: useTemplate ? undefined : text.trim(),
+      body: useTemplate ? undefined : body,
       templateName: useTemplate ? template : undefined,
       allowResend,
     });
@@ -1004,12 +1035,15 @@ const Inbox = () => {
         pitch_already_sent: 'Already sent to this lead, and the repeat was not confirmed. Try again — you will be asked to confirm.',
       };
       toast({ title: 'Not sent', description: res.reason ?? map[res.error ?? ''] ?? res.error ?? 'Send failed.', variant: 'destructive' });
-      return;
+      return false;
     }
+    /* The composer clears ITSELF on a true return (and clears its own draft). This still runs for
+       the template path, which has no composer text to clear but may hold a draft. */
     setText('');
     setSynthetic(null); // the real conversation now exists under the same key
     toast({ title: res.simulated ? 'Sent (simulated — test mode)' : 'Sent ✓' });
     setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
+    return true;
   };
 
   return (
@@ -1425,14 +1459,18 @@ const Inbox = () => {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
-                    <div className="flex items-end gap-2">
-                      <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a reply…"
-                        className="min-h-[44px] max-h-32 flex-1 resize-none" maxLength={4000}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } }} disabled={sending} />
-                      <Button onClick={() => doSend()} disabled={sending || !text.trim()} size="icon" className="h-11 w-11 shrink-0">
-                        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      </Button>
-                    </div>
+                    {/* ⛔ KEYED BY CONVERSATION (+ the insert seed), so switching thread REMOUNTS it:
+                        the outgoing instance flushes its draft under its own key on unmount and the
+                        incoming one seeds from the new thread's draft. That is what stops a
+                        half-typed message following you into someone else's conversation. */}
+                    <InboxComposer
+                      key={`${active.key}:${composerSeed}`}
+                      convKey={active.key}
+                      initialText={text}
+                      sending={sending}
+                      onPersist={persistDraft}
+                      onSend={(bodyText) => doSend(false, bodyText)}
+                    />
                     {/* Approved WhatsApp templates — SEPARATE from the free-text "Quick reply" above. */}
                     <div className="border-t border-border/60 pt-2">
                       <p className="mb-1 text-[11px] text-muted-foreground">Or send an approved WhatsApp template:</p>
