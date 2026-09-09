@@ -47,28 +47,11 @@ const Outreach = () => {
 
   const { user } = useAuth();
 
-  // Server-side bulk jobs (enrich / site-gen): survive leaving the page. On a
-  // watched job finishing, refetch leads (enrich results) and bump the sites
-  // token (site-gen results) so OutreachTable re-reads generated_sites.
-  const [sitesRefreshToken, setSitesRefreshToken] = useState(0);
-  const { activeJob, recentJob, createJob, creating: creatingJob, cancelJob, dismissRecent } = useBulkJobs((job) => {
+  // Server-side bulk jobs (enrich / audit / audit-and-push): survive leaving the page.
+  // On a watched job finishing, refetch leads so its results show.
+  const { activeJob, recentJob, createJob, creating: creatingJob, cancelJob, dismissRecent } = useBulkJobs(() => {
     fetchLeads();
-    if (job.job_type === 'site_gen') setSitesRefreshToken((t) => t + 1);
   });
-
-  // Lead ids of the site-gen items still to finish → per-row spinner. Includes both
-  // 'running' AND 'pending' (queued in the job, not yet started) so a row spins the
-  // MOMENT a build is enqueued and keeps spinning until that item is done/failed —
-  // and, because the job is server-tracked, the spinner survives leaving/returning to
-  // the page. (The build itself starts within ~1 min when the queue sweep picks it up.)
-  const bulkGeneratingIds = useMemo(
-    () => new Set(
-      (activeJob?.job_type === 'site_gen' ? activeJob.items ?? [] : [])
-        .filter((i) => i.status === 'running' || i.status === 'pending')
-        .map((i) => i.lead_id),
-    ),
-    [activeJob],
-  );
 
   // Campaign filter (null = all campaigns). Persisted per-user so it survives
   // navigation + reload + re-login (restored in an effect once campaigns load).
@@ -330,8 +313,6 @@ const Outreach = () => {
         onLaunchConsumed={() => setLaunchIntent(null)}
         onBulkJob={createJob}
         bulkJobActive={!!activeJob || creatingJob}
-        sitesRefreshToken={sitesRefreshToken}
-        bulkGeneratingIds={bulkGeneratingIds}
       />
 
       {/* First-time outreach tips */}

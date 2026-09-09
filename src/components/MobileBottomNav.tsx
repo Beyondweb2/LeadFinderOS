@@ -3,11 +3,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText,
-  MoreHorizontal, Palette, LogOut, HelpCircle,
+  MoreHorizontal, Palette, LogOut,
   MessageSquare, Users, ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -67,17 +66,9 @@ export function MobileBottomNav() {
     { title: 'Inbox', url: '/inbox', icon: MessageSquare },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },
     { title: t('nav.templates'), url: '/templates', icon: FileText },
-    { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle },
     { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare },
   ];
 
-  let searchPulse = false;
-  let crmPulseWalkthrough = false;
-  try {
-    const { state, isDemoUser, isOpen: walkthroughActive } = useDemoChecklist();
-    searchPulse = isDemoUser && walkthroughActive && !state.searchDone;
-    crmPulseWalkthrough = isDemoUser && walkthroughActive && state.addedToCrm && !state.firstContactMade;
-  } catch {}
 
   useEffect(() => {
     const crmHandler = () => { setCrmGlow(true); setTimeout(() => setCrmGlow(false), 2000); };
@@ -133,7 +124,7 @@ export function MobileBottomNav() {
                 )}
                 <item.icon className={cn(
                   'h-5 w-5 transition-all',
-                  item.url === '/outreach' && (crmGlow || crmPulseWalkthrough) && 'scale-110'
+                  item.url === '/outreach' && crmGlow && 'scale-110'
                 )} />
                 <span className={cn(
                   "text-[10px] font-medium",

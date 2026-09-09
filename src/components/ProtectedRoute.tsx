@@ -6,14 +6,14 @@ import { Loader2 } from 'lucide-react';
 interface ProtectedRouteProps {
   children: ReactNode;
   /**
-   * Where to send an unauthenticated visitor. Defaults to the LeadFinder
-   * marketing landing; barber routes pass "/barber-login" so a logged-out barber
-   * hits THEIR front door, never LeadFinder's.
+   * Where to send an unauthenticated visitor. /auth is the only public surface this app
+   * has left — it used to default to the LeadFinder marketing landing, which was deleted
+   * with the barber product, and a redirect to a deleted route is a 404 on sign-out.
    */
   redirectTo?: string;
 }
 
-export function ProtectedRoute({ children, redirectTo = "/landing" }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, redirectTo = "/auth" }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
   const location = useLocation();
 

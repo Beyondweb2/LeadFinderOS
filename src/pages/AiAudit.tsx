@@ -41,9 +41,9 @@ import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
 import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS } from '@/lib/auditQuestionCounts';
-/* playbookHtml.ts (the LLM document renderer) is NO LONGER IMPORTED HERE — that was the last import
-   of it from any page, so the LLM playbook is now unreachable from the app. The file and the
-   generate-playbook edge function both stay in the repo on purpose. */
+/* The LLM "playbook" (playbookHtml.ts + the generate-playbook edge function) was DELETED
+   2026-09-09. It recommended Bing Places — zero citations across 10,615 — and ICAEW to an ACCA
+   firm. The evidence-derived playbook at /playbook/:id is the only one now. */
 import { buildSchema, normalizeUrl } from '@/lib/schemaType';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';

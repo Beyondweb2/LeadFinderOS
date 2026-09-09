@@ -6,17 +6,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
-import { OwnerProvider } from "@/contexts/OwnerContext";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RequireAdmin } from "@/components/RequireAdmin";
-import { SubscriptionGate } from "@/components/SubscriptionGate";
-import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
-import { getBarberSubdomainLabel, isBookingHost } from "@/lib/subdomain";
 import { FirstTimeRedirect } from "./components/FirstTimeRedirect";
 import { Loader2 } from "lucide-react";
 
@@ -32,16 +28,7 @@ const Templates = lazy(() => import("./pages/Templates"));
 const BaselinePage = lazy(() => import("./pages/Baseline"));
 const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
 const PlaybookPage = lazy(() => import("./pages/Playbook"));
-const HowToUse = lazy(() => import("./pages/HowToUse"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
-const AdminClients = lazy(() => import("./pages/AdminClients"));
-const AdminSiteImages = lazy(() => import("./pages/AdminSiteImages"));
-const AdminSitesList = lazy(() => import("./pages/AdminSitesList"));
-const AdminSiteManage = lazy(() => import("./pages/AdminSiteManage"));
-const AdminDirectory = lazy(() => import("./pages/AdminDirectory"));
-const SiteManage = lazy(() => import("./pages/SiteManage"));
-const Landing = lazy(() => import("./pages/Landing"));
-const Terms = lazy(() => import("./pages/Terms"));
 const Feedback = lazy(() => import("./pages/Feedback"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
@@ -49,25 +36,6 @@ const Coverage = lazy(() => import("./pages/Coverage"));
 const ReviewReply = lazy(() => import("./pages/ReviewReply"));
 const PageGenerator = lazy(() => import("./pages/PageGenerator"));
 const PagePlanQueue = lazy(() => import("./pages/PagePlanQueue"));
-const Start = lazy(() => import("./pages/Start"));
-
-const CityLeads = lazy(() => import("./pages/CityLeads"));
-const PublicSite = lazy(() => import("./pages/PublicSite"));
-const SubdomainSite = lazy(() => import("./pages/SubdomainSite"));
-const BookingPage = lazy(() => import("./pages/BookingPage"));
-const BookingHome = lazy(() => import("./pages/BookingHome"));
-const SiteByToken = lazy(() => import("./pages/SiteByToken"));
-const OwnerDashboard = lazy(() => import("./pages/OwnerDashboard"));
-const Claim = lazy(() => import("./pages/Claim"));
-const BarberLogin = lazy(() => import("./pages/BarberLogin"));
-
-function PageLoader() {
-  return (
-    <div className="flex items-center justify-center py-32">
-      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-    </div>
-  );
-}
 
 function FullPageLoader() {
   return (
@@ -169,55 +137,23 @@ function ScrollToTop() {
   return null;
 }
 
+/* ⛔ THE BARBER / SALON SITE PRODUCT IS GONE (2026-09-09, Paul's call: "all dead, delete it").
+   What used to sit above this component: a hostname check that rendered a barber's own site on
+   <label>.yoursites.uk, and a second that rendered the booking surface on bookmybarber.uk — both
+   BEFORE the router, so every operator page load paid for them. With them went /p/:slug, /s/:token,
+   /claim/:token, /login, /barber, /sites/:id and the whole /admin/sites* tree, plus the marketing
+   pages for LeadFinder-as-a-product (/landing, /start, /find-clients/:city, /terms, /guide).
+   ⚠️ SIGNED-OUT NOW MEANS /auth, NOT /landing. Four places used to send an unauthenticated or
+   non-admin visitor to a marketing page that no longer exists (ProtectedRoute's default, useAuth's
+   sign-out, RequireAdmin's diversion, Auth's back button); they all land on the login screen now,
+   which is the only public surface this app still has. */
 const App = () => {
   useGlobalErrorGuard();
-
-  // Barber custom subdomain (<label>.yoursites.uk) → render ONLY their site,
-  // bypassing the operator app + router. Apex / reserved labels / *.pages.dev /
-  // localhost return null here and fall through to the normal operator app below,
-  // so nothing existing is affected.
-  const subdomainLabel = getBarberSubdomainLabel(typeof window !== "undefined" ? window.location.hostname : "");
-  if (subdomainLabel) {
-    return (
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <Suspense fallback={<FullPageLoader />}>
-              <SubdomainSite label={subdomainLabel} />
-            </Suspense>
-          </TooltipProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
-    );
-  }
-
-  // Booking-only domain (bookmybarber.uk) → render ONLY the booking surface,
-  // bypassing the operator app. /<slug> → that barber's booking page; bare root →
-  // a minimal holding page. Any other host falls through to the operator app.
-  if (typeof window !== "undefined" && isBookingHost(window.location.hostname)) {
-    const bookingSlug = window.location.pathname.replace(/^\/+/, "").split("/")[0];
-    return (
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <Suspense fallback={<FullPageLoader />}>
-              {bookingSlug ? <BookingPage slug={bookingSlug} /> : <BookingHome />}
-            </Suspense>
-          </TooltipProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
-    );
-  }
 
   return (
   <ErrorBoundary>
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <OwnerProvider>
       <SubscriptionProvider>
       <AccentInitializer>
         <TooltipProvider>
@@ -229,45 +165,27 @@ const App = () => {
               <Suspense fallback={<FullPageLoader />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
-             <Route
-               path="/landing"
-              element={
-                <PublicRoute>
-                  <Landing />
-                </PublicRoute>
-              } 
-             />
-             <Route path="/terms" element={<Terms />} />
-              <Route path="/start" element={<Start />} />
-              <Route path="/find-clients/:city" element={<CityLeads />} />
-              <Route path="/p/:slug" element={<PublicSite />} />
-              <Route path="/s/:token" element={<SiteByToken />} />
-              {/* Barber front doors — PUBLIC, neutral-branded, never LeadFinder chrome. */}
-              <Route path="/claim/:token" element={<Claim />} />
-              {/* Clean, trade-neutral customer login (canonical). */}
-              <Route path="/login" element={<BarberLogin />} />
-              {/* Legacy alias — kept so old links / bookmarks / in-flight ?next= links don't 404. */}
-              <Route path="/barber-login" element={<BarberLogin />} />
-             <Route path="/guide" element={<HowToUse />} />
             {/* ══ THE OPERATOR SHELL — ONE layout route, not fifteen wrappers ═══════════════════
                 Every operator page used to carry its own <ProtectedRoute><SubscriptionGate>
                 <AppLayout> stack, so EVERY navigation unmounted and remounted the whole shell —
                 sidebar, scroll container, providers — and nothing inside a page could survive by
                 staying mounted (§6c's root cause, half two). The shell now mounts ONCE and the
                 pages render through <Outlet/>. Collapsed 2026-08-28 after checking all fifteen
-                wrappers were BYTE-IDENTICAL (no route passed AppLayout any props); routes with a
-                different stack (admin/RequireAdmin, barber, public) are untouched below.
+                wrappers were BYTE-IDENTICAL (no route passed AppLayout any props).
                 ⚠️ usePersistedScroll keys on the pathname and now sees route changes WITHOUT a
                 remount — it restores per-route scroll on the key change, and resets to top for a
-                route with nothing stored (see the stored===null branch it gained with this). */}
+                route with nothing stored (see the stored===null branch it gained with this).
+                ⚠️ SubscriptionGate is gone as a wrapper: it only ever delegated to RequireAdmin,
+                which is now named directly rather than through a shell that pretended billing
+                existed. */}
             <Route
               element={
                 <ProtectedRoute>
-                  <SubscriptionGate>
+                  <RequireAdmin>
                     <AppLayout>
                       <Outlet />
                     </AppLayout>
-                  </SubscriptionGate>
+                  </RequireAdmin>
                 </ProtectedRoute>
               }
             >
@@ -277,8 +195,8 @@ const App = () => {
               <Route path="/outreach" element={<Outreach />} />
               {/* Archive route removed - merged into Outreach */}
               {/* Track Leads route removed - folded into Outreach (row-click detail modal) */}
-              {/* OPERATOR baseline view. Inside ProtectedRoute + SubscriptionGate like every other
-              operator page - deliberately NOT public: the client gets a week-8 before-and-after,
+              {/* OPERATOR baseline view. Inside ProtectedRoute + RequireAdmin like every other
+              operator page - deliberately NOT public: the client gets a week-4 before-and-after,
               not the working detail. */}
               <Route path="/baseline/:auditId" element={<BaselinePage />} />
               {/* BEFORE/AFTER. Operator-side like the baseline it hangs off: the noise band and the
@@ -290,15 +208,10 @@ const App = () => {
               <Route path="/playbook/:id" element={<PlaybookPage />} />
               {/* /paid-clients is GONE (2026-08-12). Paying customers live in Outreach (the
               "Paid (money in)" filter, keyed on amount_paid > 0) and in the Inbox (paid
-              conversations are exempt from the status filter). The payment and delivery
-              editors moved into LeadDetailDialog, which is now the only place an amount can
-              be corrected. No redirect: the page was operator-only and never linked from
-              anywhere a prospect could reach. */}
+              conversations are exempt from the status filter). */}
               <Route path="/templates" element={<Templates />} />
-              <Route path="/how-to-use" element={<HowToUse />} />
               {/* WhatsApp Inbox — operator-gated + in-app (each operator sees only their own) */}
               <Route path="/inbox" element={<Inbox />} />
-              {/* Team feedback board — operator-gated + in-app (barbers excluded by RLS) */}
               <Route path="/feedback" element={<Feedback />} />
               <Route path="/coverage" element={<Coverage />} />
               {/* Stateless review-reply generator — paste a Google review in, copy a reply out (or a
@@ -311,90 +224,17 @@ const App = () => {
               waved, stored + editable. See src/pages/PagePlanQueue.tsx + src/lib/pagePlanQueue.ts. */}
               <Route path="/page-plan" element={<PagePlanQueue />} />
               <Route path="/ai-audit" element={<AiAudit />} />
+              <Route path="/admin/api-usage" element={<AdminApiUsage />} />
             </Route>
-            <Route
-              path="/barber"
-              element={
-                <ProtectedRoute redirectTo="/login">
-                  <OwnerDashboard />
-                </ProtectedRoute>
-              }
-            />
-            {/* Rep-facing site editor (any authenticated operator; RLS scopes it to
-                the lead-owner). Distinct from the admin-only /admin/sites/:id. */}
-            <Route
-              path="/sites/:id"
-              element={
-                <ProtectedRoute>
-                  <SiteManage />
-                </ProtectedRoute>
-              }
-            />
-            {/* Admin routes — the standalone admin hub is now a zone on /dashboard */}
+            {/* The standalone admin hub is a zone on /dashboard. */}
             <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
-            <Route
-              path="/admin/api-usage"
-              element={
-                <ProtectedRoute>
-                  <RequireAdmin>
-                    <AdminApiUsage />
-                  </RequireAdmin>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/clients"
-              element={
-                <ProtectedRoute>
-                  <RequireAdmin>
-                    <AdminClients />
-                  </RequireAdmin>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/directory"
-              element={
-                <ProtectedRoute>
-                  <RequireAdmin>
-                    <AdminDirectory />
-                  </RequireAdmin>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/site-images"
-              element={
-                <ProtectedRoute>
-                  <RequireAdmin>
-                    <AdminSiteImages />
-                  </RequireAdmin>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/sites"
-              element={
-                <ProtectedRoute>
-                  <RequireAdmin>
-                    <AdminSitesList />
-                  </RequireAdmin>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/sites/:id"
-              element={
-                <ProtectedRoute>
-                  <RequireAdmin>
-                    <AdminSiteManage />
-                  </RequireAdmin>
-                </ProtectedRoute>
-              }
-            />
             {/* The market view is a MODE on Find Leads now, not a page of its own. Kept as a
                 redirect so an old bookmark or link lands somewhere sensible instead of a 404. */}
             <Route path="/market" element={<Navigate to="/find-leads" replace />} />
+            {/* Retired routes from the barber/site product and the LeadFinder marketing pages —
+                redirected rather than 404'd so an old bookmark lands on the app. */}
+            <Route path="/landing" element={<Navigate to="/auth" replace />} />
+            <Route path="/login" element={<Navigate to="/auth" replace />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
@@ -404,7 +244,6 @@ const App = () => {
         </TooltipProvider>
       </AccentInitializer>
       </SubscriptionProvider>
-      </OwnerProvider>
     </AuthProvider>
   </QueryClientProvider>
   </ErrorBoundary>

@@ -1,10 +1,9 @@
 import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LogOut, User, Crown, Key, Loader2, Camera, Globe } from 'lucide-react';
+import { LogOut, User, Crown, Key, Loader2, Camera } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useLanguage, LANGUAGE_OPTIONS } from '@/hooks/useLanguage';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -13,10 +12,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu';
 import {
   Dialog,
@@ -36,7 +31,6 @@ export function UserMenu() {
   const { user, signOut } = useAuth();
   const { subscriptionEnd, isAdmin, isPaidSubscriber, isStripeTrialing } = useSubscription();
   const { uploadAvatar, isUploading } = useAvatar();
-  const { currentLanguage, changeLanguage } = useLanguage();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -124,26 +118,6 @@ export function UserMenu() {
             <Key className="mr-2 h-4 w-4" />
             {t('userMenu.changePassword')}
           </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="cursor-pointer">
-              <Globe className="mr-2 h-4 w-4" />
-              {t('common.language')}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent>
-                {LANGUAGE_OPTIONS.map((lang) => (
-                  <DropdownMenuItem
-                    key={lang.value}
-                    onClick={() => changeLanguage(lang.value)}
-                    className={`cursor-pointer ${currentLanguage === lang.value ? 'bg-accent' : ''}`}
-                  >
-                    {lang.nativeLabel}
-                    <span className="ml-auto text-xs text-muted-foreground">{lang.label}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSignOut} className="text-destructive cursor-pointer">
             <LogOut className="mr-2 h-4 w-4" />

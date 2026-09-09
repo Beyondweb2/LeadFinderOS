@@ -49,7 +49,6 @@ export interface BulkJobProgress {
 
 const LABELS: Record<string, string> = {
   enrich: 'Bulk enrich',
-  site_gen: 'Bulk site generation',
   audit: 'Bulk audit',
   audit_and_push: 'Audit and push',
 };

@@ -24,8 +24,6 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import type { Lead, WebsiteStatus } from '@/types/lead';
 import type { OutreachLead } from '@/types/outreach';
 import { SearchLeadContact } from './SearchLeadContact';
-import type { TeamClaim } from '@/hooks/useTeamClaims';
-import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
 import { readSearchResultsView, writeSearchResultsView } from '@/lib/searchResultsPrefs';
 
@@ -34,31 +32,6 @@ function initials(name: string | null): string {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
 }
 
-/**
- * Soft teammate-claim indicator: a small avatar shown when a teammate has
- * already claimed this business in the active campaign. Purely informational —
- * the add button stays enabled.
- */
-const TeamClaimBadge = memo(({ claim, small }: { claim: TeamClaim; small?: boolean }) => {
-  const label = claim.displayName || 'A teammate';
-  const size = small ? 'h-4 w-4' : 'h-5 w-5';
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Avatar className={`${size} shrink-0 ring-1 ring-amber-400/60`}>
-          {claim.avatarUrl && <AvatarImage src={claim.avatarUrl} alt={label} />}
-          <AvatarFallback className="text-[8px] bg-amber-500/20 text-amber-700 dark:text-amber-300">
-            {initials(claim.displayName)}
-          </AvatarFallback>
-        </Avatar>
-      </TooltipTrigger>
-      <TooltipContent>
-        {label} {claim.contacted ? 'has contacted' : 'claimed'} this in the current campaign
-      </TooltipContent>
-    </Tooltip>
-  );
-});
-TeamClaimBadge.displayName = 'TeamClaimBadge';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -81,8 +54,6 @@ interface LeadsTableProps {
   maxFreeSaves?: number;
   onViewDetailsGated?: () => void;
   viewDetailsExhausted?: boolean;
-  /** Resolve a teammate's claim on this business in the active campaign (soft indicator). */
-  getTeamClaim?: (lead: Lead) => TeamClaim | null;
   /** Contact-enrichment found per place_id before the lead is saved (search-time). */
   searchEnrichment?: Record<string, Partial<OutreachLead>>;
   /** Patch search-time enrichment state, keyed by place_id. */
@@ -128,12 +99,10 @@ interface LeadsTableProps {
   onRemoveFromCrm?: (leadId: string, businessName: string) => void;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
-  const { state, isDemoUser } = useDemoChecklist();
   const { user } = useAuth();
-  const shouldPulseCrm = isDemoUser && !state.addedToCrm;
   // Allow saving up to maxFreeSaves leads even for gated users
   const canSave = !gated || savedLeadCount < maxFreeSaves;
   const handleAddToOutreach = useCallback((lead: Lead) => {
@@ -614,7 +583,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                 )}
                 <div className="flex-1 min-w-0 mr-2">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    {(() => { const tc = getTeamClaim?.(lead); return tc ? <TeamClaimBadge claim={tc} small /> : null; })()}
                     <p className="font-medium text-sm truncate leading-tight min-w-0">{lead.name}</p>
                     {lead.isExpanded && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
@@ -707,7 +675,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                           <Button
                             variant="default"
                             size="icon"
-                            className={`h-8 w-8 bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
+                            className={`h-8 w-8 bg-primary hover:bg-primary/90`}
                             onClick={() => handleAddToOutreach(lead)}
                             data-walkthrough-step="add-to-crm"
                             data-walkthrough="add-crm"
@@ -772,7 +740,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   )}
                   <TableCell className="font-medium pl-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      {(() => { const tc = getTeamClaim?.(lead); return tc ? <TeamClaimBadge claim={tc} /> : null; })()}
                       {/* Wrap (not truncate) a long name within a bounded width so the
                           row height grows but the columns to its right stay aligned. */}
                       <span className="min-w-0 break-words max-w-[220px]">{lead.name}</span>
@@ -910,7 +877,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className={`h-8 px-3 text-xs gap-1.5 text-green-600 dark:text-green-500 border-green-600/30 hover:bg-green-500/10 hover:text-green-500 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
+                                className={`h-8 px-3 text-xs gap-1.5 text-green-600 dark:text-green-500 border-green-600/30 hover:bg-green-500/10 hover:text-green-500`}
                                 onClick={() => handleAddToOutreach(lead)}
                                 data-walkthrough-step="add-to-crm"
                                 data-walkthrough="add-crm"

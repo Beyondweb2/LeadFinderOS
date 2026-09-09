@@ -7,7 +7,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
-import { recordClaimOnAdd, markClaimContacted, releaseClaim } from '@/lib/claims';
 import { statusUpdatePatch, isFreshLead } from '@/lib/leadStatus';
 
 // Statuses that represent an outreach attempt (message/call sent). The legacy per-channel
@@ -653,16 +652,6 @@ export function useOutreach() {
 
     logActivity(newLead.id, 'added', `Added ${lead.name} to outreach list`).then(() => {}).catch(() => {});
 
-    // Team claim registry (non-blocking): record that this user claimed this
-    // business in the active campaign. Holds no sensitive data.
-    recordClaimOnAdd({
-      userId: user.id,
-      campaignId,
-      placeId: lead.id || null,
-      googleMapsUrl: lead.googleMapsUrl || null,
-      businessName: lead.name,
-    });
-
     Promise.resolve(supabase.rpc('log_usage_event', {
       p_event_type: 'business_added',
       p_meta: {
@@ -860,15 +849,6 @@ export function useOutreach() {
       (h) => h.business_name !== name && !(mapsUrl && h.google_maps_url === mapsUrl),
     ));
 
-    // Release the team claim addLead created (reverse of recordClaimOnAdd).
-    releaseClaim({
-      userId: user.id,
-      campaignId: (row as { campaign_id: string | null }).campaign_id ?? null,
-      placeId: (row as { place_id: string | null }).place_id ?? null,
-      googleMapsUrl: mapsUrl,
-      businessName: name,
-    });
-
     // Local state — drop from active/archived.
     setLeads((prev) => prev.filter((l) => l.id !== leadId));
     setArchivedLeads((prev) => prev.filter((l) => l.id !== leadId));
@@ -911,18 +891,6 @@ export function useOutreach() {
       // Auto-increment messages_sent if transitioning FROM non-outreach TO outreach status
       const wasOutreach = previousStatus ? OUTREACH_STATUSES.includes(previousStatus) : false;
       const isNowOutreach = OUTREACH_STATUSES.includes(status);
-
-      // Team claim registry (non-blocking): mark the claim contacted once this
-      // lead reaches an outreach status, scoped to the lead's campaign.
-      if (isNowOutreach) {
-        markClaimContacted({
-          userId: user.id,
-          campaignId: targetLead.campaign_id ?? null,
-          placeId: (targetLead as any).place_id ?? null,
-          googleMapsUrl: targetLead.google_maps_url ?? null,
-          businessName: targetLead.business_name,
-        });
-      }
 
       if (!wasOutreach && isNowOutreach) {
         try {

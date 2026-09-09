@@ -65,10 +65,6 @@ export interface WaConversation {
 
 export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null; contact_name: string | null; hook_followup_queued_at: string | null }
 
-/** Most-recent generated site for a lead — powers the thread's "View site" link and
- *  the engagement pill (opened/claimed/upsell milestones from generated_sites). */
-export interface SiteLite { id: string; siteName: string; shareToken: string | null; bookingOnly: boolean; firstOpenedAt: string | null; claimedAt: string | null; addonInterestAt: string | null }
-
 const convKey = (userId: string | null, phone: string) => `${userId ?? 'unassigned'}::${phone}`;
 
 /** Client mirror of the edge toWhatsAppNumber, so a conversation started from a lead
@@ -97,7 +93,6 @@ export function windowFor(lastInboundAt: string | null): { open: boolean; hoursL
 interface InboxData {
   messages: WaMessage[];
   leads: LeadLite[];
-  sites: Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>;
   audits: Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>;
 }
 
@@ -108,11 +103,10 @@ export const inboxQueryKey = (userId: string | null | undefined) => ['inbox', us
 /* Stable empties so a loading render doesn't mint new arrays every time (memo inputs stay stable). */
 const NO_MESSAGES: WaMessage[] = [];
 const NO_LEADS: LeadLite[] = [];
-const NO_SITES: InboxData['sites'] = [];
 const NO_AUDITS: InboxData['audits'] = [];
 
 async function fetchInboxData(): Promise<InboxData> {
-  const [msgRes, leadRes, siteRes, reportRes] = await Promise.all([
+  const [msgRes, leadRes, reportRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
        This is the fastest-growing table in the system — every send and every reply. */
@@ -138,13 +132,6 @@ async function fetchInboxData(): Promise<InboxData> {
       sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at')
         .eq('is_archived', false).not('phone', 'is', null)
         .order('id', { ascending: true }).range(from, to)),
-    // share_token / booking_only are not in the generated types yet — untyped sb. RLS
-    // scopes rows to the operator. Ordered newest-first so the per-lead pick takes the latest.
-    /* ⛔ PAGINATED FOR THE SAME REASON, BEFORE IT BITES. `created_at` is NOT unique here, so `id`
-       is the tiebreaker; the newest-first order the per-lead pick relies on stays primary. */
-    fetchAllRows<InboxData['sites'][number]>('Inbox (sites)', (from, to) =>
-      sb.from('generated_sites').select('id, site_name, lead_id, share_token, booking_only, first_opened_at, claimed_at, addon_interest_at')
-        .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
     // Per-lead audits + run statuses → the report-ready pill (/a/<auditId>, served live) + the
     // audit_reply guard + the running-audit spinner. Newest-first; RLS scopes to own audits.
     /* ⛔ PAGINATED — truncation here would silently drop the report-ready pill and the audit_reply
@@ -156,7 +143,6 @@ async function fetchInboxData(): Promise<InboxData> {
   return {
     messages: msgRes.rows,
     leads: leadRes.rows.filter((l) => (l.phone ?? '').trim()),
-    sites: siteRes.rows,
     audits: reportRes.rows,
   };
 }
@@ -183,7 +169,6 @@ export function useInbox() {
 
   const messages = query.data?.messages ?? NO_MESSAGES;
   const leads = query.data?.leads ?? NO_LEADS;
-  const sites = query.data?.sites ?? NO_SITES;
   const audits = query.data?.audits ?? NO_AUDITS;
   const isLoading = query.isLoading;
 
@@ -259,18 +244,6 @@ export function useInbox() {
     [leads],
   );
 
-  // Most-recent generated site per lead (sites are ordered newest-first, so the
-  // first row seen for a lead_id wins). Drives the thread's "View site" preview link.
-  const sitesByLeadId = useMemo(() => {
-    const m: Record<string, SiteLite> = {};
-    for (const s of sites) {
-      if (s.lead_id && !m[s.lead_id]) {
-        m[s.lead_id] = { id: s.id, siteName: s.site_name, shareToken: s.share_token ?? null, bookingOnly: !!s.booking_only, firstOpenedAt: s.first_opened_at ?? null, claimedAt: s.claimed_at ?? null, addonInterestAt: s.addon_interest_at ?? null };
-      }
-    }
-    return m;
-  }, [sites]);
-
   // Derive conversations from the message log, grouped by (user_id, phone).
   const conversations = useMemo<WaConversation[]>(() => {
     const groups = new Map<string, WaMessage[]>();
@@ -343,5 +316,5 @@ export function useInbox() {
       prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, status } : l)) } : prev),
     [queryClient, queryKey]);
 
-  return { user, messages, leads, conversations, messagesForKey, sitesByLeadId, auditByLeadId, auditRunningLeadIds, isLoading, refetch: fetchAll, send, patchLeadStatus };
+  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, isLoading, refetch: fetchAll, send, patchLeadStatus };
 }

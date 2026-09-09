@@ -26,7 +26,6 @@ import { useCampaigns } from '@/hooks/useCampaigns';
 import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
-import { useTeamClaims } from '@/hooks/useTeamClaims';
 import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -155,7 +154,6 @@ const Index = () => {
   }, [campaignsLoading, campaigns, activeCampaign, handleCampaignChange]);
 
   // Teammate claims on the current results, scoped to the active campaign.
-  const { getTeamClaim } = useTeamClaims(leads, activeCampaign);
 
   // Count businesses without websites — only from the most recent search
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
@@ -697,7 +695,6 @@ const Index = () => {
                   markAsChecked(name, url);
                 }}
                 isChecked={isChecked}
-                getTeamClaim={getTeamClaim}
                 onSetWebsiteStatus={setWebsiteOverride}
                 onBulkAdd={handleBulkAddEntry}
                 onBulkEnrich={handleBulkEnrich}
