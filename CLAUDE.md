@@ -8,6 +8,54 @@ Facts and warnings, not prose. Keep it that way. If it grows too long to read, i
 
 ---
 
+## 🔴 0. READ THIS BEFORE ANY SECTION BELOW — 2026-09-09 DELETED A LOT OF WHAT THEY DESCRIBE
+
+**Large parts of this file are now WRONG, and they are wrong in the dangerous direction: they
+describe machinery that no longer exists, in confident detail.** Paul's brief that day was to audit
+the app, delete what is unused, and make it run smoothly. Fourteen commits are on `main` and **NOT
+PUSHED** — the live site and the edge functions are still running the OLD code until someone pushes
+and deploys.
+
+**⛔ THE FILE IS DUE A REWRITE AND PAUL HAS ASKED FOR ONE.** Until then, treat every section below
+as *possibly describing something deleted*. Grep before you believe it.
+
+### What was deleted (do not go looking for it, do not "restore" it)
+| Gone | Was |
+|---|---|
+| The whole **barber / salon / booking / claim** product | 252 files, −32,419 lines. Routes `/p/`, `/s/`, `/claim/`, `/barber`, `/sites/`, `/admin/sites*`; `src/templates/**`; 17 edge functions incl. `generate-barber-site`; the two hostname branches that ran before the router on EVERY page load |
+| **`generate-playbook`** (the LLM playbook) | The one that recommended Bing Places and ICAEW-to-an-ACCA-firm. §9's "kept on purpose" note is void |
+| The **per-town market view** | `MarketPanel` (1,823 lines), `MeasureMarket`, `useMarketView`, `useInFlightMeasures`, the leads/market toggle on Find Leads, Coverage's measure/add-all/View row actions. **§6e is almost entirely about deleted code** |
+| Coverage's **`measured`** rung | Graded off market audits. Coverage now has `worked` (contacted) / `leads` / `untouched` — which is all Paul uses it for, plus population sort |
+| The LeadFinder **marketing pages** | `/landing`, `/start`, `/find-clients/:city`, `/terms`, `/guide`, `/how-to-use`. **Signed-out now lands on `/auth`** |
+| **Hindi + Urdu**, the demo/walkthrough tour, 63 unimported files, 74MB of unused media, 19 npm deps | |
+| **5 barber WhatsApp templates** | Removed from the sendable picker (all needed a claim link no lead has). History still renders them via `TEMPLATE_DISPLAY` |
+
+### What is NEW and load-bearing
+- **`npm test`** (78 suites) and **`npm run check`** (typecheck-vs-baseline + build + tests). There
+  was no way to run the tests before; four were failing silently. **Run `npm run check` before
+  claiming anything works.**
+- **`scripts/typecheck-baseline.txt`** — the 9 deliberate errors are ENFORCED now, compared as a
+  LIST. §3's "baseline is 14" is stale; it is 9, and the gate tells you.
+- **`scripts/report-origin.test.ts`** — every audit-report URL must be findable.live.
+  `yoursites.uk/a/<id>` is now a **301 onto findable.live**, not a proxy (§12/§13 updated in place).
+- **`src/components/InboxComposer.tsx`** — the reply box holds its own text. Typing used to
+  re-render the whole Inbox and re-filter 3,432 messages *per keystroke*.
+- **Inbox bulk send** — `src/lib/inboxBulkSend.ts`, immediate (never queued: these leads have
+  already replied). A cold template is refused for the whole batch, by property.
+- **`extract-competitors` retries** the ids the model drops (was ~8% of runs left dirty for ever).
+- **The niche verdict is the ONLY market verdict now**, at the top of Coverage.
+
+### State of play
+- **Supabase CLI is authenticated** — reads and deploys both work. Use it; stop inferring.
+- **findable-site is symlinked** at `/home/paulj/projects/findable-site` → the Windows copy, so
+  `check-cross-repo-sync.mjs` runs (9/9 pass; price and guarantee agree).
+- **Deno is installed** at `~/.deno/bin/deno` for `deno check`.
+- ⚠️ **Nothing is deployed.** SPA deploys on push; edge functions need
+  `npx supabase functions deploy <name>` — `extract-competitors` is the one with a real pending fix.
+- See **`HANDOVER_NEXT.md`** (untracked) for the resume plan and the open decisions.
+
+---
+
 ## 1. What the business is
 
 - Paul sells **AI visibility** to local UK businesses. **£49.99, one-off, ONE FLAT PRICE FOR
