@@ -139,6 +139,7 @@ import { TRADES } from '@/lib/trades';
 import { AiOpenerModal } from '@/components/AiOpenerModal';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/hooks/useOutreachFindEmails';
+import { crawlButtonLabel } from '@/lib/crawlBatch';
 import { isColdOutreachTemplate } from '@/lib/coldOutreach';
 
 interface OutreachTableProps {
@@ -1667,6 +1668,7 @@ export function OutreachTable({
     finding: findingEmails,
     progress: emailProgress,
     withWebsiteCount,
+    crawlPlan,
     usingSelection: crawlUsingSelection,
     /* ⛔ `leads`, NOT `filteredAndSortedLeads`, WHEN RESOLVING A SELECTION. Rows are ticked from the
        visible list, but the filter can change afterwards — resolving against the filtered view would
@@ -2032,23 +2034,25 @@ export function OutreachTable({
                     variant="outline"
                     size="sm"
                     onClick={findEmails}
-                    disabled={!withWebsiteCount}
+                    disabled={!crawlPlan.batch}
                     className="bg-background text-xs h-8"
-                    /* ⛔ THE LABEL NAMES THE SET. "Crawl 187 leads" was true and useless: it never
-                       said WHICH 187, so a ticked row that fell outside the status allow-list looked
-                       like a crawl that had failed rather than one that never included it. */
-                    title={withWebsiteCount
+                    /* ⛔ THE LABEL NAMES THE SET *AND* THE BATCH. "Crawl 187 leads" was true and
+                       useless: it never said WHICH 187, so a ticked row outside the status
+                       allow-list looked like a crawl that had failed rather than one that never
+                       included it. It was then WRONG as well as vague — it printed the uncapped
+                       candidate count while a press crawls at most CRAWL_MAX_PER_RUN, so "Crawl
+                       1968 in view" did 200 and reported success. crawlButtonLabel prints both
+                       numbers when the cap bites, and the title says how many presses are left. */
+                    title={crawlPlan.candidates
                       ? (crawlUsingSelection
-                          ? `Crawl the ${withWebsiteCount} ticked lead${withWebsiteCount === 1 ? '' : 's'} that ha${withWebsiteCount === 1 ? 's' : 've'} a website and no email — free. A selection overrides the status filter and re-crawls even if checked recently. Archived leads are never crawled.`
-                          : `Crawl ${withWebsiteCount} lead${withWebsiteCount === 1 ? '' : 's'} in the current view for a contact email — free. Targeting: ${crawlStatuses.join(', ')}. Skips anything checked in the last 30 days. Archived and suppressed leads are never crawled. Tick rows to crawl exactly those instead.`)
+                          ? `Crawl ${crawlPlan.batch} of the ${crawlPlan.candidates} ticked lead${crawlPlan.candidates === 1 ? '' : 's'} that ha${crawlPlan.candidates === 1 ? 's' : 've'} a website and no email — free. A selection overrides the status filter and re-crawls even if checked recently. Archived leads are never crawled.${crawlPlan.remaining ? ` ${crawlPlan.remaining} would be left over — press again to carry on.` : ''}`
+                          : `Crawl ${crawlPlan.batch} lead${crawlPlan.batch === 1 ? '' : 's'} in the current view for a contact email — free. Targeting: ${crawlStatuses.join(', ')}. Skips anything checked in the last 30 days. Archived and suppressed leads are never crawled. Tick rows to crawl exactly those instead.${crawlPlan.remaining ? ` ${crawlPlan.remaining.toLocaleString()} more qualify than one press can do — press again to carry on.` : ''}`)
                       : (crawlUsingSelection
                           ? 'None of the ticked leads need crawling — they have no website, already have an email, or are archived.'
                           : `Nothing left to crawl in: ${crawlStatuses.join(', ')} — everything with a website either has an email or was checked in the last 30 days.`)}
                   >
                     <Mail className="h-3.5 w-3.5 mr-1.5" />
-                    {crawlUsingSelection
-                      ? <>Crawl {withWebsiteCount} selected</>
-                      : <>Crawl {withWebsiteCount} in view</>}
+                    {crawlButtonLabel(crawlPlan, crawlUsingSelection)}
                   </Button>
                 )
               )}
