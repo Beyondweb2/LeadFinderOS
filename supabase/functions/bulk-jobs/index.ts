@@ -214,16 +214,26 @@ async function triageForPush(service: any, userId: string, leadIds: string[], ca
      absent — which would read as "nobody has an audit" and put the whole selection into needs_audit.
      ⚠️ `capped` counts as answered, exactly as resolveAwaiting and the audit-reply resolver treat
      it: a capped run has real answers, just fewer than asked for. */
-  const { data: auditRows } = await service
-    .from("ai_audits").select("id, lead_id").in("lead_id", leads.map((l) => l.id as string));
-  const audits = (auditRows ?? []) as Array<{ id: string; lead_id: string }>;
+  /* ⛔ CHUNKED, AND FOR A REASON THAT ONLY BECAME REACHABLE WHEN THE CAP CAME OFF. Both of these
+     `.in()` lists grow with the operator's selection, and PostgREST puts them in the URL: 600 ids
+     is an HTTP 400 and 2,000 is a 414 (measured 2026-09-09). Discarding the error, as these did,
+     turns a refused read into "nobody has an audit" — which in audit-first mode routes the WHOLE
+     selection into needs_audit and BUYS an audit for every lead that already had one. Silent, and
+     it spends money. selectInChunks throws instead. */
+  const audits = await selectInChunks<{ id: string; lead_id: string }>(
+    leads.map((l) => l.id as string),
+    (chunk) => service.from("ai_audits").select("id, lead_id").in("lead_id", chunk),
+  );
   const answeredAuditIds = new Set<string>();
   if (audits.length) {
-    const { data: runRows } = await service
-      .from("ai_audit_runs").select("audit_id")
-      .in("audit_id", audits.map((a) => a.id))
-      .in("status", ["complete", "capped"]);
-    for (const r of (runRows ?? []) as Array<{ audit_id: string }>) answeredAuditIds.add(r.audit_id);
+    const runRows = await selectInChunks<{ audit_id: string }>(
+      audits.map((a) => a.id),
+      (chunk) => service
+        .from("ai_audit_runs").select("audit_id")
+        .in("audit_id", chunk)
+        .in("status", ["complete", "capped"]),
+    );
+    for (const r of runRows) answeredAuditIds.add(r.audit_id);
   }
   const leadHasAnsweredAudit = new Set(
     audits.filter((a) => answeredAuditIds.has(a.id)).map((a) => a.lead_id),
@@ -1094,13 +1104,27 @@ Deno.serve(async (req) => {
         .limit(1);
       if (existing?.length) return json({ error: "You already have a bulk job running — wait for it to finish or cancel it." }, 409);
 
-      // Ownership: keep only the caller's own leads.
-      const { data: owned } = await service
+      /* Ownership: keep only the caller's own leads.
+         🔴 THIS READ WAS UNCHUNKED, AND THAT IS THE "No owned leads in the selection." PAUL HIT ON
+         2026-09-09 THE MOMENT THE CAP CAME OFF AND HE COULD SELECT THE WHOLE BOOK. Measured that
+         day against the live database with real ids: 400 ids (15,681 URL bytes) returns 400 rows,
+         600 ids (23,481 bytes) returns **HTTP 400**, and 2,000+ returns **414 URI Too Long**. The
+         error was DISCARDED — only `data` was destructured — so a refused request became `null`,
+         `ownedIds` became empty, and the endpoint reported the one thing that was definitely not
+         true: that Paul does not own his own leads. (One account owns all 3,203; verified.)
+         ⛔ TWO FIXES, AND THE SECOND MATTERS MORE. Chunking chops the URL, but the reason this was
+         invisible for a month is that a failed read was read as an empty one — the absent-value
+         shape, on the gate that decides whether the job runs at all. selectInChunks THROWS on any
+         chunk error, so a real failure now surfaces as the top-level catch's real message and a
+         `bulk_jobs_unhandled` row, never as a confident false statement about ownership.
+         ⚠️ triageForPush has used selectInChunks since 2026-08-09 — which is exactly why the
+         preview looked healthy and only the press failed. */
+      const owned = await selectInChunks<{ id: string }>(leadIds, (chunk) => service
         .from("outreach_leads")
         .select("id")
         .eq("user_id", user.id)
-        .in("id", leadIds);
-      const ownedIds = new Set(((owned ?? []) as { id: string }[]).map((r) => r.id));
+        .in("id", chunk));
+      const ownedIds = new Set(owned.map((r) => r.id));
       const finalIds = leadIds.filter((id) => ownedIds.has(id));
       if (!finalIds.length) return json({ error: "No owned leads in the selection." }, 400);
 

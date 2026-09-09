@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select';
 import { Loader2, Send, AlertTriangle, ClipboardList, Check } from 'lucide-react';
 import { AUDIT_EST_USD_PER_QUESTION, CLEANER_USD_PER_RUN } from '@/lib/marketView';
+import type { PushCrawlResult } from '@/hooks/useOutreachFindEmails';
 
 interface InstantlyCampaign { id: string; name: string }
 
@@ -29,6 +30,15 @@ interface PushToInstantlyDialogProps {
   onOpenChange: (open: boolean) => void;
   /** The selected lead ids. What happens to each is decided by the server-side triage. */
   leadIds: string[];
+  /* ⛔ THE PRE-CRAWL, SUPPLIED BY THE CALLER (Paul, 2026-09-09). The crawler lives in
+     useOutreachFindEmails and stays there — passing the function in means the dialog gets the
+     shared loop, the shared write and the shared cancel rather than a second copy of a thing that
+     overwrites lead emails. Optional: a caller that cannot crawl simply does not pass it, and the
+     dialog goes straight to triage. */
+  onCrawlEmails?: (leadIds: readonly string[]) => Promise<PushCrawlResult>;
+  /** Live progress of that crawl, straight from the hook, so the dialog never counts it itself. */
+  crawlProgress?: { done: number; total: number } | null;
+  onCancelCrawl?: () => void;
   /** Called after the job starts so the table can refresh + clear selection. */
   onPushed?: () => void;
   /** Starts the two-phase job. Supplied by Outreach via useBulkJobs. */
@@ -61,6 +71,7 @@ interface PushToInstantlyDialogProps {
    bulk_jobs on the next page load. */
 export function PushToInstantlyDialog({
   open, onOpenChange, leadIds, onPushed, onBulkJob, bulkJobActive,
+  onCrawlEmails, crawlProgress, onCancelCrawl,
 }: PushToInstantlyDialogProps) {
   const { toast } = useToast();
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
@@ -114,6 +125,19 @@ export function PushToInstantlyDialog({
   const limitToSend = useMemo(() => parseLimit(debouncedLimit), [debouncedLimit]);
   /** Typed something, but not a usable amount. Shown inline; nothing is fetched for it. */
   const limitLooksWrong = sendLimit.trim() !== '' && parseLimit(sendLimit) === null;
+
+  /* ⛔ THE EMAIL CRAWL RUNS BEFORE THE TRIAGE, NOT AFTER, AND THAT ORDERING IS THE FEATURE.
+     Paul, 2026-09-09: "when I try push to instantly it should run an email crawl on ones it hasn't
+     crawled already." Measured that day: 2,287 unarchived leads have a website and have NEVER been
+     crawled, and the crawler's real hit rate is 68% (279 of 412). A triage run before the crawl
+     would refuse most of them with "no email address" and the operator would push a handful.
+     ⚠️ IT IS FREE — extract-email is a plain HTTP fetch with a 30-day domain cache and logs
+     `estimated_cost_usd: 0`. That is the ONLY reason it is allowed to run automatically: §6e's rule
+     is that opening a view never spends, and this does not. If it ever gains a paid lookup it must
+     become a button with the price on its face. */
+  const [crawlDone, setCrawlDone] = useState<PushCrawlResult | null>(null);
+  const [crawling, setCrawling] = useState(false);
+  const [crawlSkipped, setCrawlSkipped] = useState(false);
 
   const loadCampaigns = useCallback(async () => {
     setLoadingCampaigns(true);
@@ -190,13 +214,34 @@ export function PushToInstantlyDialog({
     if (!open) return;
     setCampaignId('');
     setTriage(null);
+    setCrawlDone(null);
+    setCrawlSkipped(false);
     loadCampaigns();
   }, [open, loadCampaigns]);
 
+  /* ⛔ GATED ON crawlDone, SO THE TRIAGE THE OPERATOR READS IS THE ONE TAKEN AFTER THE CRAWL WROTE
+     ITS EMAILS. Without the gate the dialog would triage, crawl, and leave a stale refusal list on
+     screen — "no email address" beside leads that now have one. */
   useEffect(() => {
     if (!open) return;
+    if (onCrawlEmails && !crawlDone && !crawlSkipped) return;
     loadTriage();
-  }, [open, loadTriage]);
+  }, [open, loadTriage, onCrawlEmails, crawlDone, crawlSkipped]);
+
+  useEffect(() => {
+    if (!open || !onCrawlEmails) return;
+    let live = true;
+    setCrawling(true);
+    onCrawlEmails(leadIds)
+      .then((r) => { if (live) setCrawlDone(r); })
+      /* A crawl that fails must not block the push. The leads simply keep whatever email they had,
+         and the triage below reports them honestly as having none. */
+      .catch(() => { if (live) setCrawlSkipped(true); })
+      .finally(() => { if (live) setCrawling(false); });
+    return () => { live = false; };
+    /* leadIds is a fresh array each render; the dialog opening is the trigger, not its identity. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, onCrawlEmails]);
 
   /* Typing re-asks the server, so it waits for a pause. Same reasoning as InboxComposer's 400ms:
      a keystroke must not cost a round trip. */
@@ -298,6 +343,39 @@ export function PushToInstantlyDialog({
                 </SelectContent>
               </Select>
             </div>
+          )}
+
+          {/* ── The email crawl, before anything else ───────────────────────────────────── */}
+          {crawling && (
+            <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs">
+              <p className="flex items-center gap-2 font-semibold">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Looking for email addresses{crawlProgress ? ` — ${crawlProgress.done} of ${crawlProgress.total}` : '…'}
+              </p>
+              <p className="mt-0.5 text-muted-foreground">
+                Crawling the websites of the selected leads that have no email yet and have not been
+                checked in the last 30 days. Free — no audit, no API cost.
+              </p>
+              {onCancelCrawl && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-1.5 h-7 text-xs"
+                  onClick={() => { onCancelCrawl(); setCrawlSkipped(true); }}
+                >
+                  Skip this and push what we have
+                </Button>
+              )}
+            </div>
+          )}
+          {!crawling && crawlDone && crawlDone.scanned > 0 && (
+            <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
+              <span className="font-semibold">Found {crawlDone.found} new email{crawlDone.found === 1 ? '' : 's'}</span>
+              {' '}from {crawlDone.scanned} website{crawlDone.scanned === 1 ? '' : 's'}.
+              {crawlDone.remaining > 0 && (
+                <> {crawlDone.remaining} more still to check — push these, then open this again for the rest.</>
+              )}
+            </p>
           )}
 
           {/* ── The triage ──────────────────────────────────────────────────────────────── */}
