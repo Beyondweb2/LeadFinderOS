@@ -1,7 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
-import { checkSuppressed } from "../_shared/suppression.ts";
+import { checkSuppressed, loadSuppressionIndex } from "../_shared/suppression.ts";
 import { selectInChunks } from "../_shared/chunked-in.ts";
+import { applySendLimit, oldestFirst, resolveSendLimit } from "../_shared/push-selection.ts";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
@@ -62,11 +63,17 @@ function internalHeadersFor(keys: any): Record<string, string> {
    ⚠️ This is a REFUSAL above the cap, not a slice (see the create branch) — the dialog now says so
    before the press rather than letting the server reject it. */
 const JOB_CAPS: Record<string, number> = { enrich: 200, audit: 100, audit_and_push: 25 };
-/* ⛔ THE NO-AUDIT PUSH CAP. audit_and_push is 25 because it BUYS an audit per lead; with the audit
-   dropped (Paul, 2026-09-09 — the email lost {{competitors}}) the run costs nothing, so the 25 was
-   a spend guard with no spend behind it. 200 matches enrich, and it stays a cap rather than
-   unbounded because this still puts real businesses into a live email campaign. */
-const PUSH_ONLY_CAP = 200;
+/* ⛔ THE NO-AUDIT PUSH HAS NO CAP ANY MORE — THE OPERATOR SETS THE AMOUNT (Paul, 2026-09-09:
+   "remove the cap, allow me to select an amount that it sends"). audit_and_push is capped at 25
+   because it BUYS an audit per lead; with the audit dropped the run costs nothing, so 200 was a
+   spend guard with no spend behind it and the operator simply pressed the button repeatedly.
+   ⚠️ WHAT MADE REMOVING IT SAFE IS NOT A DECISION, IT IS A MEASUREMENT. Triage used to do up to
+   three suppression reads PER LEAD, so its cost grew with the batch and a big selection was a real
+   timeout risk. It now loads the whole (142-row) suppression table once — see
+   loadSuppressionIndex — so triage does the same handful of reads for 9 leads as for 900.
+   ⚠️ An ABSENT amount means "no limit", which is the honest reading of "remove the cap". A
+   nonsense amount is refused rather than defaulted; see resolveSendLimit. */
+const PUSH_ONLY_DEFAULT_LIMIT = Number.POSITIVE_INFINITY;
 
 /** ⛔ TRY THE TOWN'S MARKET AUDIT BEFORE BUYING A PER-BUSINESS ONE. £0 against ~8p a lead, and every
  *  refusal falls through to the paid audit unchanged — see the call site in phase A.
@@ -184,15 +191,22 @@ async function triageForPush(service: any, userId: string, leadIds: string[], ca
      (~14,800) is measured to fail outright. That was luck. See _shared/chunked-in.ts. */
   const rowsAll = await selectInChunks<Record<string, string | null>>(leadIds, (chunk) => service
     .from("outreach_leads")
-    .select("id, business_name, email, phone, instantly_pushed_at, search_keyword, category, search_location, address, derived_town, town_fetch_note")
+    .select("id, business_name, email, phone, instantly_pushed_at, search_keyword, category, search_location, address, derived_town, town_fetch_note, created_at")
     .eq("user_id", userId)
     .in("id", chunk)
     .order("id", { ascending: true }));
-  /* ⛔ A STABLE ORDER, because the cap slices this list. Without it the preview and the create —
-     two separate queries — could pick DIFFERENT 25 leads and the confirm would describe a job that
-     never ran. Sorted HERE rather than relying on the database, because chunked reads arrive in
-     chunk order and a per-chunk ORDER BY does not order the whole. */
-  const leads = rowsAll.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  /* ⛔ OLDEST FIRST — "the ones deepest in outreach list first" (Paul, 2026-09-09). The Outreach
+     table is newest-at-the-top, so the deepest rows are the oldest, and they are the ones that have
+     sat unworked longest. This used to sort by id.localeCompare, which is a UUID: stable, but
+     arbitrary, so the cap sliced a random subset and the same lead could sit unsent indefinitely.
+     ⛔ IT MUST STILL BE A TOTAL ORDER, because the limit slices this list and the preview and the
+     create are two separate queries: without a unique tiebreaker they can pick a DIFFERENT N and
+     the confirm would describe a job that never ran. Sorted HERE rather than in the database,
+     because chunked reads arrive in chunk order and a per-chunk ORDER BY does not order the whole. */
+  /* The annotation matters: oldestFirst's generic would otherwise widen `leads` to an intersection
+     type, which stops structurally matching townGated's TownVerdictRow further down. */
+  const leads: Array<Record<string, string | null>> =
+    oldestFirst(rowsAll as Array<Record<string, string | null> & { id: string }>);
   if (!leads.length) return [];
 
   /* WHICH LEADS ALREADY HAVE AN ANSWERED AUDIT. Two reads rather than a join, because the
@@ -215,14 +229,17 @@ async function triageForPush(service: any, userId: string, leadIds: string[], ca
     audits.filter((a) => answeredAuditIds.has(a.id)).map((a) => a.lead_id),
   );
 
-  /* Suppression, in slices — checkSuppressed is several reads each and the cap is 25. */
+  /* ⛔ SUPPRESSION IS ONE READ FOR THE WHOLE BATCH, NOT THREE PER LEAD. This was a sliced loop of
+     per-lead lookups whose cost grew with the selection — the reason a cap existed at all. The
+     table is 142 rows; loading it once makes triage cost the same for 9 leads as for 900, and it
+     FAILS CLOSED exactly as the per-lead check does (a failed or truncated read suppresses
+     everybody rather than clearing them). Identical rule, same file, pinned by
+     scripts/suppression-index.test.ts. */
+  const suppressionIndex = await loadSuppressionIndex(service);
   const suppressed = new Map<string, string>();
-  const SLICE = 8;
-  for (let i = 0; i < leads.length; i += SLICE) {
-    const slice = leads.slice(i, i + SLICE);
-    const hits = await Promise.all(slice.map((l) =>
-      checkSuppressed(service, { phone: l.phone, email: l.email, leadId: l.id as string })));
-    hits.forEach((h, k) => { if (h.suppressed) suppressed.set(slice[k].id as string, h.matchedOn ?? "?"); });
+  for (const l of leads) {
+    const hit = suppressionIndex.check({ phone: l.phone, email: l.email, leadId: l.id as string });
+    if (hit.suppressed) suppressed.set(l.id as string, hit.matchedOn ?? "?");
   }
 
   /* The bucket decision, before the cap has an opinion. Separating the two is the point. */
@@ -271,21 +288,11 @@ async function triageForPush(service: any, userId: string, leadIds: string[], ca
     return { lead_id: id, business_name: name, bucket: "needs_audit", reason: "" };
   });
 
-  /* ── THE CAP, APPLIED ONCE ──────────────────────────────────────────────────────────
-     ⚠️ ALREADY-AUDITED LEADS TAKE THE CAP FIRST. They cost nothing and go out in this run's upload,
-     so spending the budget on them before buying any audit gets the most email sent per run. The
-     old code sliced the two buckets together in database order, which meant a run could spend its
-     whole cap auditing while ready-to-send leads waited for a second pass. */
-  const order = (r: { bucket: TriageBucket }) => (r.bucket === "push_now" ? 0 : r.bucket === "needs_audit" ? 1 : 2);
-  const ranked = graded.map((r, i) => ({ r, i })).sort((a, b) => order(a.r) - order(b.r) || a.i - b.i);
-  let room = Math.max(0, cap);
-  const willRun = new Set<string>();
-  for (const { r } of ranked) {
-    if (r.bucket === "cannot") continue;
-    if (room <= 0) break;
-    willRun.add(r.lead_id);
-    room--;
-  }
+  /* ── THE LIMIT, APPLIED ONCE ─────────────────────────────────────────────────────────
+     Shared with scripts/push-selection.test.ts so the shipped rule is the tested one. Ready-to-push
+     leads take the allowance first (they cost nothing and go out in this run's upload); within each
+     bucket the oldest-first order above is preserved, so "deepest first" survives the slice. */
+  const willRun = applySendLimit(graded, cap);
   return graded.map((r) => ({ ...r, will_run: willRun.has(r.lead_id) }));
 }
 
@@ -1003,13 +1010,18 @@ Deno.serve(async (req) => {
     if (action === "triage") {
       const leadIds: string[] = Array.from(new Set((body.lead_ids ?? []).filter((x: unknown) => typeof x === "string")));
       if (!leadIds.length) return json({ error: "lead_ids required" }, 400);
-      /* ⛔ THE CAP DEPENDS ON WHETHER ANYTHING IS BEING BOUGHT. 25 exists because audit_and_push
-         SPENDS — five questions and a scan per lead. A push with no audit spends nothing at all, so
-         capping it at 25 would be a limit with no cost behind it, and the operator would just press
-         the button eight times. PUSH_ONLY_CAP is still a cap rather than unbounded, because this
-         does email real businesses even when it costs nothing. */
+      /* ⛔ THE AMOUNT IS THE OPERATOR'S, AND THE ONLY REMAINING CEILING IS A SPEND ONE. 25 exists
+         because audit_and_push BUYS five questions and a scan per lead; a push with no audit spends
+         nothing, so it has no ceiling at all and an absent amount means "all of them". A typed
+         amount can only ever LOWER the audit path's 25 — resolveSendLimit takes the min. */
       const skipAudit = body.skip_audit === true;
-      const cap = skipAudit ? PUSH_ONLY_CAP : JOB_CAPS.audit_and_push;
+      const limitResult = resolveSendLimit(
+        body.limit,
+        skipAudit ? PUSH_ONLY_DEFAULT_LIMIT : JOB_CAPS.audit_and_push,
+        skipAudit ? Number.POSITIVE_INFINITY : JOB_CAPS.audit_and_push,
+      );
+      if (!limitResult.ok) return json({ error: limitResult.reason }, 400);
+      const cap = limitResult.limit;
       const rows = await triageForPush(service, user.id, leadIds, cap, skipAudit);
       const actionable = rows.filter((r) => r.bucket !== "cannot").length;
       /* ⛔ THIS RUN's NUMBERS, NOT THE SELECTION's. These are what the confirm line quotes and what
@@ -1027,9 +1039,20 @@ Deno.serve(async (req) => {
         /* What the job will actually do. */
         audits_this_run: auditsThisRun,
         push_this_run: pushThisRun,
-        cap,
+        /* ⚠️ NULL MEANS "NO LIMIT", AND IT HAS TO BE SPELLED THAT WAY. `cap` is now Infinity on the
+           no-audit path, and JSON.stringify(Infinity) is the literal `null` — which the old client
+           read as `Number(null) || 25` and rendered as a 25-lead cap that does not exist. An
+           absent number is a state, not a zero (CLAUDE.md's absent-value rule, on the field that
+           says how many businesses get emailed). */
+        limit: Number.isFinite(cap) ? cap : null,
+        /* How many of the selection could be sent at all — what the "how many" box offers. */
+        actionable,
         /* How many actionable leads would be left for a second run. Named rather than trimmed
-           silently — a cap that quietly drops work reads as "everything was done". */
+           silently — a limit that quietly drops work reads as "everything was done". */
+        over_limit: Math.max(0, actionable - cap),
+        /* Back-compat for a browser still on the previous bundle for the few minutes Cloudflare
+           takes to rebuild. Finite, so it can never render as a cap of 25 that was never applied. */
+        cap: Number.isFinite(cap) ? cap : actionable,
         over_cap: Math.max(0, actionable - cap),
       });
     }
@@ -1043,7 +1066,17 @@ Deno.serve(async (req) => {
          require an audit at push time. The dialog sends it in params for exactly this reason. */
       const skipAuditCreate = jobType === "audit_and_push"
         && (body.params as { skip_audit?: unknown } | null)?.skip_audit === true;
-      const cap = jobType === "audit_and_push" && skipAuditCreate ? PUSH_ONLY_CAP : JOB_CAPS[jobType];
+      /* ⛔ THE AMOUNT COMES FROM params TOO, FOR THE SAME REASON THE MODE DOES: params is what gets
+         STORED on the job row, so what the operator agreed to on the confirm screen is recorded
+         with the job rather than living only in the request that started it. Same resolver as the
+         preview, so a limit that is refused there cannot be accepted here. */
+      const createLimit = resolveSendLimit(
+        (body.params as { send_limit?: unknown } | null)?.send_limit,
+        jobType === "audit_and_push" && skipAuditCreate ? PUSH_ONLY_DEFAULT_LIMIT : JOB_CAPS[jobType],
+        jobType === "audit_and_push" && skipAuditCreate ? Number.POSITIVE_INFINITY : JOB_CAPS[jobType],
+      );
+      if (!createLimit.ok) return json({ error: createLimit.reason }, 400);
+      const cap = createLimit.limit;
       const leadIds: string[] = Array.from(new Set((body.lead_ids ?? []).filter((x: unknown) => typeof x === "string")));
       if (!leadIds.length) return json({ error: "lead_ids required" }, 400);
       /* audit_and_push caps on ACTIONABLE items, counted after the triage below; every other job
@@ -1088,7 +1121,12 @@ Deno.serve(async (req) => {
             /* Over the cap. skipped_cap, with the reason spelled out, so it reads as "left for the
                next run" rather than as a failure or as work that quietly evaporated. */
             skippedAtCreate++;
-            return { lead_id: r.lead_id, status: "skipped_cap", error: `over the ${cap}-lead cap — run again for this one` };
+            /* ⚠️ `cap` can be Infinity now, and "over the Infinity-lead cap" is not a sentence.
+               An unlimited run cannot produce this branch at all, so the wording only ever has to
+               cover the case where a real number was chosen. */
+            return { lead_id: r.lead_id, status: "skipped_cap", error: Number.isFinite(cap)
+              ? `over the ${cap} you asked to send — run again for this one`
+              : "not included in this run — run again for this one" };
           }
           return { lead_id: r.lead_id, status: "pending", phase: r.bucket === "push_now" ? "push" : "audit" };
         });
