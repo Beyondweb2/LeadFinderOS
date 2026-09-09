@@ -1,5 +1,4 @@
 import { canonicalTrade } from './trades';
-import { MARKET_AUDIT_MIN_AUDITS } from './marketAuditThreshold';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WHICH TOWNS HAVE I WORKED, FOR THIS TRADE?
@@ -23,25 +22,22 @@ import { MARKET_AUDIT_MIN_AUDITS } from './marketAuditThreshold';
 export type CoverageState =
   /** Prospects contacted. The furthest along: real outreach has left the building. */
   | 'worked'
-  /** The town's market is measured — a market audit with at least one completed run. */
-  | 'measured'
-  /** Leads are in the CRM for this trade+town, but nothing measured and nobody contacted. */
+  /** Leads are in the CRM for this trade+town, but nobody has been contacted. */
   | 'leads'
   /** Nothing at all. */
   | 'untouched';
 
-export const COVERAGE_STATES: CoverageState[] = ['worked', 'measured', 'leads', 'untouched'];
+export const COVERAGE_STATES: CoverageState[] = ['worked', 'leads', 'untouched'];
 
 export const COVERAGE_LABEL: Record<CoverageState, string> = {
   worked: 'Worked',
-  measured: 'Measured',
   leads: 'Leads found',
   untouched: 'Untouched',
 };
 
 /** Ordered by effort spent, so a summary reads left-to-right as a funnel. */
 export const COVERAGE_ORDER: Record<CoverageState, number> = {
-  worked: 0, measured: 1, leads: 2, untouched: 3,
+  worked: 0, leads: 1, untouched: 2,
 };
 
 export interface CoverageTown {
@@ -53,30 +49,13 @@ export interface CoverageTown {
 
 /** The facts each source contributes, already reduced to a trade+town key by the caller. */
 export interface CoverageFacts {
-  /**
-   * How many distinct market audits WITH a completed run each pair has.
-   *
-   * ⛔ A COUNT, NOT A PRESENCE SET, AND THAT IS THE BUG-2 FIX (2026-08-19). A town is `measured`
-   * only at `>= MARKET_AUDIT_MIN_AUDITS` — the same bar the market panel uses before it will call a
-   * shape. One completed audit is half a measurement; showing it as "Measured" on the row while the
-   * panel says "needs measuring" is the mismatch that made View look like it re-ran the audit.
-   * The endpoint sends ONE ENTRY PER COMPLETED AUDIT (not per pair), so the multiplicity is here to
-   * count — and counting on THIS side, through coverageKey, is what folds `Locksmiths` and
-   * `locksmiths` (a real Eastbourne case) into one 2-audit market rather than two 1-audit ones.
-   */
-  measuredCounts: Map<string, number>;
   /** Pairs with at least one lead in outreach_leads. */
   leadPairs: Set<string>;
   /**
    * Pairs whose LEAD POOL still exists, so the market panel can show businesses.
    *
-   * ⛔ SEPARATE FROM `measuredCounts` ON PURPOSE — being measured and having a pool are independent
-   * facts, and conflating them is the dead end this exists to remove: 20 of 42 measured markets had
-   * no pool (measured 2026-08-20), because two of the three ways to start a market audit run a lead
-   * search and the panel's own audit button does not.
    * ⚠️ Optional, so an older `coverage` deploy that does not send `pooled` degrades to "assume a
-   * pool" — the previous behaviour — instead of relabelling every row "Find leads" and inviting a
-   * spend that may be unnecessary. Absence is not a fact about the pool.
+   * pool" rather than relabelling every row. Absence is not a fact about the pool.
    */
   pooledPairs?: Set<string>;
   /** Pairs where at least one lead has actually been contacted. */
@@ -109,23 +88,6 @@ export function countLeadsByPair(pairs: readonly { trade: string; town: string }
   return counts;
 }
 
-/**
- * How many distinct completed market audits each trade+town has.
- *
- * ⛔ THE ENDPOINT SENDS ONE ENTRY PER COMPLETED AUDIT, so this counts them per canonical pair — the
- * same shape as countLeadsByPair, and for the same reason: canonicalisation (Locksmiths vs
- * locksmiths, plumber vs plumbers) happens HERE, once, through coverageKey, so two sibling audits
- * that drifted in case still fold into one 2-audit market. A raw-string count on the server would
- * split that Eastbourne market into two 1-audit halves and call it unmeasured.
- */
-export function countMeasuredByPair(pairs: readonly { trade: string; town: string }[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const p of pairs) {
-    const key = coverageKey(p.trade, p.town);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return counts;
-}
 
 /** Normalise a town name the way the audit book stores it: ONS parentheticals and case removed. */
 export function coverageTownKey(name: string | null | undefined): string {
@@ -156,17 +118,13 @@ export function coverageKey(trade: string | null | undefined, town: string | nul
 /**
  * Grade one town for one trade.
  *
- * ⚠️ `worked` implies leads and usually implies measured, but the states are EXCLUSIVE for display:
+ * ⚠️ `worked` implies leads, but the states are EXCLUSIVE for display:
  * a town is shown at the furthest rung it has reached. The counts therefore sum to the town total,
  * which is what makes "6 of 87 done" readable at a glance rather than double-counting.
  */
 export function coverageStateFor(trade: string, town: CoverageTown, facts: CoverageFacts): CoverageState {
   const key = coverageKey(trade, town.name);
   if (facts.workedPairs.has(key)) return 'worked';
-  /* MEASURED needs >= MARKET_AUDIT_MIN_AUDITS completed market audits — the panel's own bar. A town
-     with one completed audit is NOT measured here, so the row and the panel agree and View never
-     looks like it re-ran. */
-  if ((facts.measuredCounts.get(key) ?? 0) >= MARKET_AUDIT_MIN_AUDITS) return 'measured';
   if (facts.leadPairs.has(key)) return 'leads';
   return 'untouched';
 }
@@ -205,41 +163,6 @@ export function findLeadsHref(trade: string, town: string): string {
   return `/find-leads?${q.toString()}`;
 }
 
-/** Where "Market view" goes: the market read for this trade and town — unchanged behaviour,
- *  including the arrival confirm on the rungs that have nothing measured. */
-export function marketViewHref(trade: string, town: string, state: CoverageState): string {
-  const q = new URLSearchParams({ mode: 'market', trade, town });
-  if (wantsSearchConfirm(state)) q.set('confirm', 'search');
-  return `/find-leads?${q.toString()}`;
-}
-
-/**
- * Should a "Market view" click on this row arrive with the lead-search confirm already open?
- *
- * ⚠️ IT USED TO BE ASKED OF THE FIND-LEADS BUTTON, because that button opened the market view. The
- * rule has not changed; the control it belongs to has. Find leads never carries this param at all —
- * see findLeadsHref.
- *
- * ⛔ WHAT WENT WRONG. The link carried `confirm=search` unconditionally, so clicking Find leads on a
- * town Paul had already measured opened a "Run the lead search? ~$0.14" modal ON TOP of the market
- * he had clicked through to READ. A dialog he did not ask for, covering the numbers he did, on the
- * page he uses all day. §6c's rule is about persisting a dialog; this is the same harm arriving by
- * another route.
- *
- * ⚠️ POSITIVE TEST, and on the rungs that mean NOTHING HAS BEEN MEASURED. `untouched` and `leads`
- * both have no completed market audit behind them, so their pool is stale or absent and the confirm
- * is the entire reason the link exists. Written this way round deliberately: a fifth rung added
- * later falls to `false`, which loses nobody a dialog they cannot re-open — the note on the market
- * panel carries the button. Written as `!== 'measured'` it would join the auto-modal side instead.
- *
- * ⚠️ AND IT IS ONLY A HINT. Coverage grades `measured` off a COMPLETED run, so a town whose audits
- * all failed still reads `leads` here and still carries the param. The decision that matters is
- * openArrivalSearchConfirm() in marketView.ts, which reads the market's own audit count once the
- * view has loaded. Same split as serveGate: the panel is presentation, the reader is the block.
- */
-export function wantsSearchConfirm(state: CoverageState): boolean {
-  return state === 'untouched' || state === 'leads';
-}
 
 export interface CoverageSummary {
   total: number;
@@ -251,7 +174,7 @@ export interface CoverageSummary {
 /* Generic over the row so callers keep their own extra fields — the page carries suppression
    state alongside, and a signature fixed to CoverageRow would silently drop it. */
 export function summarise(rows: readonly CoverageRow[]): CoverageSummary {
-  const counts: Record<CoverageState, number> = { worked: 0, measured: 0, leads: 0, untouched: 0 };
+  const counts: Record<CoverageState, number> = { worked: 0, leads: 0, untouched: 0 };
   for (const r of rows) counts[r.state]++;
   return { total: rows.length, counts, started: rows.length - counts.untouched };
 }
