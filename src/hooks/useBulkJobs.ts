@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { readFunctionError } from '@/lib/functionError';
 
 // Server-side bulk jobs (bulk enrich / bulk site-gen). The job runs entirely in
 // the bulk-jobs edge function (chunked + self-re-invoking + cron-healed), so the
@@ -101,7 +102,14 @@ export function useBulkJobs(onJobComplete?: (job: BulkJob) => void) {
       const { data, error } = await sb.functions.invoke('bulk-jobs', {
         body: { action: 'create', job_type: jobType, lead_ids: leadIds, params: params ?? null },
       });
-      if (error) return { ok: false, error: error.message };
+      /* 🔴 THE REAL MESSAGE, NOT THE WRAPPER — and this line is why a 200-lead push read as
+         "edge function error" on 2026-09-09 with nobody able to say what had gone wrong.
+         supabase-js sets `error` on ANY non-2xx and its `.message` is always the same useless
+         "Edge Function returned a non-2xx status code"; every refusal bulk-jobs states carefully
+         ("already in Instantly", "nothing to do", "how many to send must be a whole number") was
+         being thrown away here and replaced with that sentence. Fourth hand-rolled instance of the
+         same gap — see src/lib/functionError.ts. */
+      if (error) return { ok: false, error: await readFunctionError(error) };
       if (!data?.ok) return { ok: false, error: data?.error ?? 'create failed' };
       await fetchJobs();
       return { ok: true };

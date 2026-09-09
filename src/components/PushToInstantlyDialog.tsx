@@ -72,8 +72,17 @@ export function PushToInstantlyDialog({
   const [triaging, setTriaging] = useState(false);
   const [triage, setTriage] = useState<TriageRow[] | null>(null);
   const [triageError, setTriageError] = useState<string | null>(null);
-  const [overCap, setOverCap] = useState(0);
-  const [cap, setCap] = useState(25);
+  /* ⛔ HOW MANY TO SEND — THE OPERATOR'S NUMBER, AND BLANK MEANS ALL OF THEM (Paul, 2026-09-09:
+     "remove the cap, allow me to select an amount that it sends"). Held as a STRING because it is
+     a text box: a numeric state would turn a half-typed "" into 0 and a cleared box into "send
+     nothing", which is the opposite of what clearing it means. */
+  const [sendLimit, setSendLimit] = useState('');
+  const [debouncedLimit, setDebouncedLimit] = useState('');
+  /** How many of the selection can be sent at all — what the box is offering to slice. */
+  const [actionable, setActionable] = useState(0);
+  const [overLimit, setOverLimit] = useState(0);
+  /** The limit the SERVER applied. null means it applied none. Never re-derived here. */
+  const [appliedLimit, setAppliedLimit] = useState<number | null>(null);
   /* ⛔ WHAT THIS RUN DOES, FROM THE SERVER. The cost used to be quoted against every lead that
      NEEDED an audit rather than the capped subset that would get one — "auditing 138 first
      (~$13.97)" beside "113 over the 25-lead cap". Overstated 5x, on the number that decides whether
@@ -89,6 +98,22 @@ export function PushToInstantlyDialog({
      making it less thin. Paul rejected that.
      Still an interim: the real fix is deriving from the market audit's 16 questions. */
   const [questionCount, setQuestionCount] = useState(5);
+
+  /* ⛔ WHAT A TYPED AMOUNT MEANS, DECIDED IN ONE PLACE. Blank is not zero and not an error — it is
+     "no limit", which is what removing the cap means. Anything else must be a whole number of at
+     least one; a half-typed or nonsense value re-asks nothing and sends nothing, so a keystroke can
+     never fire a job for an amount the operator did not finish typing.
+     ⚠️ This is form validation, not the send rule. The server resolves the amount itself
+     (resolveSendLimit) and refuses a bad one; this only decides whether it is worth asking yet. */
+  const parseLimit = (raw: string): number | null => {
+    const t = raw.trim();
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isInteger(n) && n >= 1 ? n : null;
+  };
+  const limitToSend = useMemo(() => parseLimit(debouncedLimit), [debouncedLimit]);
+  /** Typed something, but not a usable amount. Shown inline; nothing is fetched for it. */
+  const limitLooksWrong = sendLimit.trim() !== '' && parseLimit(sendLimit) === null;
 
   const loadCampaigns = useCallback(async () => {
     setLoadingCampaigns(true);
@@ -125,7 +150,14 @@ export function PushToInstantlyDialog({
     setTriageError(null);
     try {
       const { data, error } = await supabase.functions.invoke('bulk-jobs', {
-        body: { action: 'triage', lead_ids: leadIds, skip_audit: !auditFirst },
+        body: {
+          action: 'triage',
+          lead_ids: leadIds,
+          skip_audit: !auditFirst,
+          /* Omitted entirely when blank. Absent means "no limit" server-side; sending 0 or null
+             would be a number, and a number means something. */
+          ...(limitToSend === null ? {} : { limit: limitToSend }),
+        },
       });
       /* ⛔ THE REAL MESSAGE, NOT THE WRAPPER. supabase-js's .message is always "Edge Function
          returned a non-2xx status code"; the reason is in the response body. Throwing the raw error
@@ -134,8 +166,12 @@ export function PushToInstantlyDialog({
       if (error) throw new Error(await readFunctionError(error));
       if (!data?.ok) throw new Error(data?.error || 'Could not work out what these leads need');
       setTriage(Array.isArray(data.triage) ? data.triage : []);
-      setOverCap(Number(data.over_cap) || 0);
-      setCap(Number(data.cap) || 25);
+      setActionable(Number(data.actionable) || 0);
+      setOverLimit(Number(data.over_limit) || 0);
+      /* ⚠️ null is a real answer here ("no limit applied") and must not collapse into a number.
+         `Number(null) || 25` is exactly how the old code invented a 25-lead cap that no longer
+         exists — the absent-value fault, on the field that says how many businesses get emailed. */
+      setAppliedLimit(typeof data.limit === 'number' ? data.limit : null);
       setAuditsThisRun(Number(data.audits_this_run) || 0);
       setPushThisRun(Number(data.push_this_run) || 0);
     } catch (e) {
@@ -144,15 +180,30 @@ export function PushToInstantlyDialog({
     } finally {
       setTriaging(false);
     }
-  }, [leadIds, auditFirst]);
+  }, [leadIds, auditFirst, limitToSend]);
 
+  /* ⛔ TWO EFFECTS, NOT ONE, AND THAT IS A FIX RATHER THAN TIDYING. Opening resets the campaign
+     choice; re-triaging must not. They were one effect keyed on loadTriage's identity, so every
+     change that re-triaged (the audit toggle, and now every keystroke in the amount box) also blew
+     away the campaign the operator had just picked. */
   useEffect(() => {
     if (!open) return;
     setCampaignId('');
     setTriage(null);
     loadCampaigns();
+  }, [open, loadCampaigns]);
+
+  useEffect(() => {
+    if (!open) return;
     loadTriage();
-  }, [open, loadCampaigns, loadTriage]);
+  }, [open, loadTriage]);
+
+  /* Typing re-asks the server, so it waits for a pause. Same reasoning as InboxComposer's 400ms:
+     a keystroke must not cost a round trip. */
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedLimit(sendLimit), 400);
+    return () => clearTimeout(t);
+  }, [sendLimit]);
 
   const groups = useMemo(() => ({
     pushNow: (triage ?? []).filter((r) => r.bucket === 'push_now'),
@@ -182,6 +233,10 @@ export function PushToInstantlyDialog({
            from there when it calls instantly-push, so a flag sent anywhere else would be honoured
            at triage and forgotten at push. */
         skip_audit: !auditFirst,
+        /* ⛔ IN params FOR THE SAME REASON THE MODE IS: params is what gets stored on the job row,
+           so the amount the operator agreed to is recorded WITH the job rather than living only in
+           the request that started it. */
+        ...(limitToSend === null ? {} : { send_limit: limitToSend }),
       });
       if (!res.ok) {
         toast({ title: 'Could not start', description: res.error, variant: 'destructive' });
@@ -284,6 +339,40 @@ export function PushToInstantlyDialog({
                   </span>
                 </label>
               </div>
+              {/* ⛔ HOW MANY, AND WHICH ONES — Paul, 2026-09-09. The old 200-lead cap is gone; this
+                  box replaces it, blank meaning all of them. The ORDER is the half that matters
+                  more than the number: the server takes them oldest first, which is the bottom of
+                  the Outreach table, because those are the leads that have sat unworked longest.
+                  It used to slice by UUID, so the same lead could stay unsent indefinitely. */}
+              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs">
+                <label className="flex flex-wrap items-center gap-2" htmlFor="push-send-limit">
+                  <span className="font-semibold">How many to send</span>
+                  <input
+                    id="push-send-limit"
+                    type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder={actionable ? String(actionable) : 'all'}
+                    value={sendLimit}
+                    onChange={(e) => setSendLimit(e.target.value)}
+                    className="h-7 w-24 rounded border border-input bg-background px-2 text-xs"
+                  />
+                  <span className="text-muted-foreground">
+                    blank = all {actionable || 'of them'}
+                  </span>
+                </label>
+                <p className="mt-1 text-muted-foreground">
+                  Taken <span className="font-medium">oldest first</span> — the ones deepest in your
+                  outreach list, which have waited longest.
+                </p>
+                {limitLooksWrong && (
+                  <p className="mt-1 text-destructive">
+                    Enter a whole number of at least 1, or clear the box to send them all.
+                  </p>
+                )}
+              </div>
+
               {groups.pushNow.length > 0 && (
                 <p className="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs">
                   <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600" />
@@ -328,11 +417,18 @@ export function PushToInstantlyDialog({
                 </div>
               )}
 
-              {/* A cap that quietly drops work reads as "everything was done". Say what is left. */}
-              {overCap > 0 && (
+              {/* A limit that quietly drops work reads as "everything was done". Say what is left,
+                  and say WHY it was left — an amount the operator chose reads very differently from
+                  a ceiling the app imposed, and only one of them is a surprise. */}
+              {overLimit > 0 && (
                 <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
-                  <span className="font-semibold">{overCap} over the {cap}-lead cap</span> — this run
-                  takes {cap}. Run it again afterwards for the rest.
+                  <span className="font-semibold">
+                    {overLimit} of the {actionable} left over
+                  </span>{' '}
+                  {appliedLimit !== null && limitToSend !== null
+                    ? <>— you asked for {appliedLimit}. Run it again for the rest.</>
+                    : <>— this run takes {appliedLimit ?? pushThisRun}, because auditing costs money.
+                        Run it again afterwards for the rest.</>}
                 </p>
               )}
 

@@ -137,3 +137,114 @@ export async function suppress(
     return false;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   THE SAME RULE, FOR A WHOLE BATCH AT ONCE.
+
+   ⛔ WHY THIS IS HERE AND NOT IN THE CALLER. checkSuppressed is up to three round trips PER LEAD,
+   which is fine for one send and is the reason the push triage had a cap: 200 leads was 25 sequential
+   slices of reads, 1,000 leads would be 125, and the operator's answer to "why did it fail" was
+   "edge function error". The table is TINY — 142 rows on 2026-09-09 — so reading it once and
+   intersecting in memory makes the cost of triage independent of the batch size, which is what lets
+   the cap go away honestly rather than by hoping.
+
+   ⛔ IT IS IN THIS FILE FOR THE REASON THE HEADER GIVES: two copies of a suppression rule is how
+   somebody gets emailed. Same normalisers, same phone -> email -> lead_id order, same failing-closed
+   default. scripts/suppression-index.test.ts drives BOTH implementations over the same rows and
+   asserts they never disagree.
+
+   ⚠️ PAGINATED TO EXHAUSTION, AND A TRUNCATED READ FAILS CLOSED. PostgREST stops at db-max-rows
+   silently, and a partial suppression list is indistinguishable from a clean one — which is exactly
+   the bug this table exists to prevent. Same reasoning as process-whatsapp-queue's contact_check.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+const INDEX_PAGE = 1000;
+const INDEX_MAX_PAGES = 50; // 50,000 rows; far beyond the real table, and a real ceiling rather than a loop
+
+export interface SuppressionIndex {
+  /** Identical verdict to checkSuppressed(), with no round trip. */
+  check(who: SuppressionIdentity): SuppressionHit;
+  /** How many rows the index holds. Zero is a real answer; a failed load says so via `ok`. */
+  size: number;
+  /** False when the read failed or truncated — every check then fails closed. */
+  ok: boolean;
+}
+
+interface SuppressionRow {
+  id?: string | number | null;
+  phone_e164: string | null;
+  email: string | null;
+  lead_id: string | null;
+  reason: string | null;
+}
+
+/**
+ * Read every suppression row once and return an in-memory checker.
+ *
+ * ⚠️ FAILS CLOSED EXACTLY AS checkSuppressed DOES: if the read throws or truncates, every identity
+ * that HAS an identifier comes back suppressed with matchedOn 'lookup_failed'. An identity with
+ * nothing to match on is still NOT suppressed — there is no identity to have said no.
+ */
+// deno-lint-ignore no-explicit-any
+export async function loadSuppressionIndex(service: any): Promise<SuppressionIndex> {
+  const byPhone = new Map<string, string | null>();
+  const byEmail = new Map<string, string | null>();
+  const byLead = new Map<string, string | null>();
+  let size = 0;
+  let ok = true;
+
+  try {
+    for (let page = 0; page < INDEX_MAX_PAGES; page++) {
+      const from = page * INDEX_PAGE;
+      /* ⚠️ ORDERED BY id. An unstable order lets pages skip rows — the reason fetchAllRows exists. */
+      const { data, error } = await service
+        .from("contact_suppressions")
+        .select("id, phone_e164, email, lead_id, reason")
+        .order("id", { ascending: true })
+        .range(from, from + INDEX_PAGE - 1);
+      if (error) throw new Error((error as { message?: string }).message ?? "read failed");
+      const rows = (data ?? []) as SuppressionRow[];
+      for (const r of rows) {
+        size++;
+        /* First row wins per identifier, so a duplicate cannot change the reason on a re-read. */
+        const p = toE164(r.phone_e164);
+        if (p && !byPhone.has(p)) byPhone.set(p, r.reason ?? null);
+        const e = normEmail(r.email);
+        if (e && !byEmail.has(e)) byEmail.set(e, r.reason ?? null);
+        const l = (r.lead_id ?? "").trim();
+        if (l && !byLead.has(l)) byLead.set(l, r.reason ?? null);
+      }
+      if (rows.length < INDEX_PAGE) {
+        return { size, ok, check: (who) => lookup(who, byPhone, byEmail, byLead, true) };
+      }
+    }
+    /* Ran out of pages before running out of rows. A partial list reads as clean, so refuse. */
+    console.error("[suppression] index exceeded MAX_PAGES — failing closed");
+    ok = false;
+  } catch (e) {
+    console.error("[suppression] index load FAILED — failing closed:", (e as Error).message);
+    ok = false;
+  }
+  return { size, ok, check: (who) => lookup(who, byPhone, byEmail, byLead, ok) };
+}
+
+function lookup(
+  who: SuppressionIdentity,
+  byPhone: Map<string, string | null>,
+  byEmail: Map<string, string | null>,
+  byLead: Map<string, string | null>,
+  loaded: boolean,
+): SuppressionHit {
+  const phone = toE164(who.phone);
+  const email = normEmail(who.email);
+  const leadId = (who.leadId ?? "").trim() || null;
+
+  // Nothing to match on. Not an error, and not a clearance either — there is simply no identity.
+  if (!phone && !email && !leadId) return { suppressed: false };
+  if (!loaded) return { suppressed: true, matchedOn: "lookup_failed", reason: "lookup_failed" };
+
+  if (phone && byPhone.has(phone)) return { suppressed: true, matchedOn: "phone", reason: byPhone.get(phone) ?? null };
+  if (email && byEmail.has(email)) return { suppressed: true, matchedOn: "email", reason: byEmail.get(email) ?? null };
+  if (leadId && byLead.has(leadId)) return { suppressed: true, matchedOn: "lead_id", reason: byLead.get(leadId) ?? null };
+  return { suppressed: false };
+}
