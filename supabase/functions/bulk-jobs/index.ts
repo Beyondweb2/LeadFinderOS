@@ -915,8 +915,15 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
+  /* Hoisted so the catch at the bottom can describe WHAT failed, not just that something did.
+     Both are assigned as the first thing inside the try. */
+  // deno-lint-ignore no-explicit-any
+  let body: any = {};
+  // deno-lint-ignore no-explicit-any
+  let serviceForErr: any = null;
+
   try {
-    const body = await req.json().catch(() => ({}));
+    body = await req.json().catch(() => ({}));
     const action: string = body.action ?? "";
 
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -929,6 +936,7 @@ Deno.serve(async (req) => {
       (!!SERVICE_KEY && token === SERVICE_KEY && !!req.headers.get("x-internal-job"));
 
     const service = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+    serviceForErr = service;
 
     // ── Internal actions (cron / self-chain only) ──
     if (action === "sweep") {
@@ -1114,7 +1122,30 @@ Deno.serve(async (req) => {
 
     return json({ error: "unknown action" }, 400);
   } catch (e) {
-    console.error("[bulk-jobs] error:", (e as Error).message);
-    return json({ error: "internal" }, 500);
+    /* 🔴 THIS USED TO RETURN THE LITERAL STRING "internal" AND console.error THE REAL MESSAGE.
+       Paul's 200-lead push failed on 2026-09-09 and NEITHER OF US COULD FIND OUT WHY: the browser
+       showed "Edge Function returned a non-2xx status code", the response body said "internal", and
+       the actual message went to an edge log — which the Supabase CLI has no way to read (there is
+       no `functions logs` subcommand). Exactly the failure CLAUDE.md §4 already records: "an edge
+       function's refusal that is only console.error'd is undiagnosable afterwards".
+       ⚠️ THE MESSAGE IS SAFE TO RETURN HERE, and that is a judgement rather than an oversight. This
+       endpoint is operator-authed — getUser() has already succeeded above, so the only audience is
+       Paul. It is not findable-checkout, where the caller is a member of the public and the stored
+       message can name Stripe parameters and ids; there the rule is store-the-message-return-the-code
+       and it still stands. */
+    const why = e instanceof Error ? e.message : String(e);
+    console.error("[bulk-jobs] error:", why);
+    /* Recorded as well as returned, so a failure nobody was watching is still readable afterwards —
+       a toast that has been dismissed is gone. Best-effort: never let the recording fail the
+       response, or an error in the error handler hides the error. */
+    try {
+      await serviceForErr?.from("client_error_reports").insert({
+        error_id: "bulk_jobs_unhandled",
+        context: { action: String(body?.action ?? "?"), job_type: String(body?.job_type ?? "?"),
+                   lead_count: Array.isArray(body?.lead_ids) ? body.lead_ids.length : null,
+                   message: why.slice(0, 500), at: new Date().toISOString() },
+      });
+    } catch { /* best-effort */ }
+    return json({ error: why.slice(0, 300) }, 500);
   }
 });
