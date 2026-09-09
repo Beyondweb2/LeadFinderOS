@@ -45,12 +45,37 @@ console.log("\n── WINNABILITY ──");
   ok(w.label === "locked", `same few firms recur → locked (${w.label})`);
   ok(w.topFirmCells === 3 && w.totalCells === 3, `top firm in 3/3 cells (${w.topFirmCells}/${w.totalCells})`);
 }
-// WIDE OPEN: many different firms, none dominant, business sources present.
+/* ⛔ A FIRM ONLY COUNTS ONCE IT RECURS ACROSS THE REPEATS (>=2 cells), and this fixture had not
+   caught up with that. It used to be six firms named once each and expected wide_open; the rule
+   changed to `>=2 cells` to stop one-off prose fragments inflating the count, so distinctFirms
+   became 0 and the label fell to unclear. The suite then failed for weeks with nobody running it.
+   ⚠️ THE RULE IS RIGHT AND THE FIXTURE WAS WRONG — checked against live data 2026-09-09 rather
+   than assumed. Across RG Locksmiths' 12-question, 3-run measurement, EVERY question has a top
+   firm appearing in 50-100% of its answer cells, so nothing in the real book is "wide open" under
+   any reading. Six firms named once each between them is not a shape this data produces. */
+/* ⚠️ SIX CELLS, WHICH IS A REAL MEASUREMENT (3 runs x 2 scored engines) AND NOT AN ARBITRARY
+   FIXTURE SIZE. wide_open needs a firm to RECUR (>=2 cells) while the top firm stays under 40% of
+   them, and at three cells those two demands contradict each other — 2 of 3 is already 67%. So the
+   label is unreachable below six cells by construction. Writing it at three is what made the
+   original fixture unfixable without weakening the rule. */
+// WIDE OPEN: enough firms RECURRING across cells, none dominant, business sources present.
+{
+  const cells = [
+    ["A Ltd", "B Ltd"], ["C Ltd", "D Ltd"], ["E Ltd", "F Ltd"],
+    ["A Ltd", "C Ltd"], ["B Ltd", "E Ltd"], ["D Ltd", "F Ltd"],
+  ];
+  const w = computeWinnability(cells, ["someclinic.co.uk", "aclinic.com"]);
+  ok(w.label === "wide_open", `6 firms each in 2 of 6 cells, none dominant → wide_open (${w.label})`);
+  ok(w.distinctFirms === 6, `6 recurring firms counted (${w.distinctFirms})`);
+  ok(w.topFirmCells === 2 && w.totalCells === 6, `top firm in only 2 of 6 cells (${w.topFirmCells}/${w.totalCells})`);
+}
+/* THE >=2 RULE ITSELF, pinned so nobody "fixes" the fixture above by relaxing it. Six firms named
+   ONCE each is the shape a dirty extraction produced, and it must not read as an open market. */
 {
   const cells = [["A Ltd", "B Ltd"], ["C Ltd", "D Ltd"], ["E Ltd", "F Ltd"]];
   const w = computeWinnability(cells, ["someclinic.co.uk", "aclinic.com"]);
-  ok(w.label === "wide_open", `6 distinct, none dominant, business sources → wide_open (${w.label})`);
-  ok(w.distinctFirms === 6, `6 distinct firms (${w.distinctFirms})`);
+  ok(w.distinctFirms === 0, `firms named in only ONE cell never count (${w.distinctFirms})`);
+  ok(w.label === "unclear", `six one-off names is NOT wide_open (${w.label})`);
 }
 // UNCLEAR default: a handful of firms but no clear dominance and not enough distinct for wide-open.
 {
