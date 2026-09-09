@@ -31,7 +31,19 @@ const MAX_PER_RUN = 200;  // bound time per run.
    200-per-run cap and pushing genuinely-unchecked leads out of the batch.
    30 days matches extract-email's own domain cache, so a shorter window would mostly re-read that
    cache and change nothing anyway. Selecting a lead overrides this — see targetsFor. */
-const RECHECK_AFTER_DAYS = 30;
+import { pushCrawlTargets, RECHECK_AFTER_DAYS } from '@/lib/pushCrawlTargets';
+
+/** What the Push-to-Instantly pre-crawl reports back, so the dialog can state it rather than guess. */
+export interface PushCrawlResult {
+  /** Emails actually found and written. */
+  found: number;
+  /** Leads crawled this run (<= candidates, because of MAX_PER_RUN). */
+  scanned: number;
+  /** Leads that needed a crawl at all. Zero means nothing to do, not a failure. */
+  candidates: number;
+  /** Candidates left over after the per-run cap — stated, never silently dropped. */
+  remaining: number;
+}
 
 export function useOutreachFindEmails(
   leads: OutreachLead[],
@@ -76,12 +88,11 @@ export function useOutreachFindEmails(
     });
   }, [leads, allowed, hasSelection, selectedIds]);
 
-  const findEmails = async () => {
-    const batch = targets.slice(0, MAX_PER_RUN);
-    if (!batch.length) {
-      toast({ title: 'No websites to scan', description: 'No leads with a website and no email yet.' });
-      return;
-    }
+  /* ⛔ ONE CRAWL LOOP, TWO ENTRY POINTS. The button and the Push-to-Instantly pre-crawl differ ONLY
+     in how they choose their targets; the crawling, the concurrency, the cancel and the write are
+     identical. A second copy would be the drift this codebase has paid for four times — and here it
+     would drift on the write, where a MISS writes null over an email. */
+  const runCrawl = async (batch: OutreachLead[]): Promise<{ found: number; scanned: number }> => {
     cancelRef.current = false;
     setFinding(true);
     setResult(null);
@@ -117,8 +128,38 @@ export function useOutreachFindEmails(
       setFinding(false);
       setProgress(null);
       setResult({ found, scanned: done });
-      toast({ title: `Found emails for ${found} of ${done}`, description: 'Emails now show on the rows and can be pushed to Instantly.' });
     }
+    return { found, scanned: done };
+  };
+
+  const findEmails = async () => {
+    const batch = targets.slice(0, MAX_PER_RUN);
+    if (!batch.length) {
+      toast({ title: 'No websites to scan', description: 'No leads with a website and no email yet.' });
+      return;
+    }
+    const { found, scanned } = await runCrawl(batch);
+    toast({ title: `Found emails for ${found} of ${scanned}`, description: 'Emails now show on the rows and can be pushed to Instantly.' });
+  };
+
+  /* ⛔ THE PUSH-TO-INSTANTLY PRE-CRAWL (Paul, 2026-09-09: "when I try push to instantly it should run
+     an email crawl on ones it hasn't crawled already"). It takes an EXPLICIT id list — the leads
+     being pushed — and is deliberately NOT the `selectedIds` path above.
+     ⚠️ THE DIFFERENCE IS THE 30-DAY SKIP, AND IT IS THE WHOLE POINT OF THE REQUEST. Ticking rows and
+     pressing Find emails is an instruction to crawl THOSE rows, so it overrides the skip on purpose.
+     Pushing is not that instruction: "ones it hasn't crawled already" means a lead proven last week
+     to have no findable email must not be crawled again every time he opens the dialog. Same
+     unconditional guards either way — a website, no email already, not archived.
+     ⚠️ Resolved against the `leads` array this hook was given, so a lead the current filter hides is
+     still crawled if it is in the push. */
+  const crawlForPush = async (leadIds: readonly string[]): Promise<PushCrawlResult> => {
+    const candidates = pushCrawlTargets(leads, leadIds);
+    if (!candidates.length) return { found: 0, scanned: 0, candidates: 0, remaining: 0 };
+    const batch = candidates.slice(0, MAX_PER_RUN);
+    const { found, scanned } = await runCrawl(batch);
+    /* ⚠️ `remaining` is NAMED rather than silently dropped. A cap that quietly crawls 200 of 743 and
+       then pushes reads as "these leads have no email", which is the opposite of true. */
+    return { found, scanned, candidates: candidates.length, remaining: Math.max(0, candidates.length - scanned) };
   };
 
   const cancel = () => { cancelRef.current = true; };
@@ -126,5 +167,5 @@ export function useOutreachFindEmails(
   /* `usingSelection` lets the button say WHICH set it is about to crawl — the ambiguity that made
      "why didn't it crawl my lead" hard to answer. The count and the flag come from the same memo as
      the crawl itself, so the label and the action cannot disagree. */
-  return { findEmails, cancel, finding, progress, result, withWebsiteCount: targets.length, usingSelection: hasSelection };
+  return { findEmails, crawlForPush, cancel, finding, progress, result, withWebsiteCount: targets.length, usingSelection: hasSelection };
 }

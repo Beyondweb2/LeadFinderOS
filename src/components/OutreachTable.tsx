@@ -1673,6 +1673,9 @@ export function OutreachTable({
        silently drop the ticked leads that are no longer on screen, crawl fewer than the button said,
        and look like the crawl having failed on exactly the leads the operator cared about. The hook
        intersects with selectedIds itself, so passing the full list cannot widen the set. */
+    /* Handed to PushToInstantlyDialog so the push can crawl the leads it is about to send. Same
+       loop, same write, same cancel as the Find emails button — see the hook's header. */
+    crawlForPush,
   } = useOutreachFindEmails(
     selectedIds.size > 0 ? leads : filteredAndSortedLeads,
     onUpdateLead ?? (async () => null),
@@ -3121,6 +3124,9 @@ export function OutreachTable({
         onPushed={() => { onRefreshLeads?.(); setSelectedIds(new Set()); }}
         onBulkJob={onBulkJob}
         bulkJobActive={bulkJobActive}
+        onCrawlEmails={crawlForPush}
+        crawlProgress={emailProgress}
+        onCancelCrawl={cancelFindEmails}
       />
 
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}
