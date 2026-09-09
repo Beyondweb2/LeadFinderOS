@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { SearchForm } from '@/components/SearchForm';
-import MarketPanel from '@/components/MarketPanel';
 import { LeadsTable } from '@/components/LeadsTable';
 // EmailListBuilder kept in the repo for the future bulk-add flow; no longer rendered
 // here (email finding is now an in-place scan on the results).
@@ -52,45 +51,21 @@ const Index = () => {
      cannot look up a different pool than the one first shown. In market mode the form forces it on
      regardless, so there is no variation to carry either. */
   const [searchParams, setSearchParams] = useSearchParams();
-  const urlMode = searchParams.get('mode') === 'market' ? 'market' : 'leads';
-  const urlTrade = (searchParams.get('trade') ?? '').trim();
-  const urlTown = (searchParams.get('town') ?? '').trim();
   /* ⛔ READ ON FIRST RENDER AND NEVER RE-READ. `confirm=search` is an INTENT that arrived with a
      click on Coverage, not a piece of page state — so it is captured once into a ref and the param
      is stripped below. Left in the URL it would re-open the dialog on a refresh or a back button,
      which is the "modal springs open on return" §6c forbids. */
   const openSearchConfirm = useRef(searchParams.get('confirm') === 'search').current;
-  /* ⛔ THE OTHER ARRIVAL INTENT, AND IT IS A DIFFERENT BUTTON. Coverage now has two: "Market view"
-     sends mode=market (+ the confirm above), "Find leads" sends mode=leads with the trade and town
-     and `run=search`, and expects the NORMAL lead search to run. Captured on first render and
-     stripped below for the same reason as confirm=search: left in the URL it re-runs a PAID search
-     on every refresh and every back button, which is worse than a modal springing open. */
-  const urlWantsLeads = searchParams.get('mode') === 'leads';
-  const runLeadSearchOnArrival = useRef(urlWantsLeads && searchParams.get('run') === 'search').current;
+  /* ⛔ THE ARRIVAL INTENT FROM COVERAGE'S "Find leads": run the normal search, prefilled. Captured
+     on first render and stripped below — left in the URL it re-runs a PAID search on every refresh
+     and every back button.
+     ⚠️ It no longer checks for mode=leads. Coverage used to have two buttons and the mode said
+     which; the market view is gone (2026-09-09) and there is only one thing a Coverage row can
+     ask for. */
+  const runLeadSearchOnArrival = useRef(searchParams.get('run') === 'search').current;
   const urlKeyword = (searchParams.get('keyword') ?? '').trim();
   const urlLocation = (searchParams.get('location') ?? '').trim();
-  /* Seeded from the URL on FIRST RENDER, not in an effect, so the panel never paints an empty
-     market for a frame before correcting itself. */
-  /* ⛔ THE URL STILL WINS; THE MEMORY ONLY FILLS A BARE ONE — the Coverage-trade rule (§6c),
-     applied to the leads/market split. The sidebar links to plain /find-leads, so before this,
-     leaving a market view and coming back always reset to leads: `urlMode` collapses URL-silence
-     to 'leads', and the back/forward sync effect below then FORCED the state to match. The saved
-     view is consulted only when the URL carries no mode param at all; an explicit ?mode= (a
-     Coverage link, a niche-row handoff, back/forward) behaves exactly as before.
-     ⚠️ A remembered market restores ONLY with both trade AND town — a half-remembered market
-     would render an empty panel asking for inputs the user never cleared. */
   const { user } = useAuth();
-  const urlHasExplicitMode = searchParams.get('mode') !== null;
-  const [savedView, setSavedView] = usePersistedState<{ mode: SearchMode; trade: string; town: string }>(
-    'find-leads-view', { mode: 'leads', trade: '', town: '' },
-    { tier: 'session', scope: user?.id, version: 1 },
-  );
-  const restoredMarket = !urlHasExplicitMode && savedView.mode === 'market' && !!savedView.trade && !!savedView.town;
-  const [activeMode, setActiveMode] = useState<SearchMode>(() =>
-    urlHasExplicitMode ? (urlMode === 'market' && urlTrade && urlTown ? 'market' : 'leads')
-      : restoredMarket ? 'market' : 'leads');
-  const [marketTrade, setMarketTrade] = useState(() => (urlHasExplicitMode ? (urlMode === 'market' ? urlTrade : '') : (restoredMarket ? savedView.trade : '')));
-  const [marketTown, setMarketTown] = useState(() => (urlHasExplicitMode ? (urlMode === 'market' ? urlTown : '') : (restoredMarket ? savedView.town : '')));
   /* ⛔ THESE WERE useState AND THAT WAS THE BUG. They were set only by pressing Search, while the
      RESULTS came back from sessionStorage on mount — so returning to this page rather than
      re-searching left the results on screen with no keyword or town behind them, and Add wrote a
@@ -168,20 +143,6 @@ const Index = () => {
   /* BACK AND FORWARD change the URL without remounting this page, so the initial state above is
      not enough on its own — this re-syncs when the query string moves under us. Guarded on real
      change so it cannot loop against setSearchParams. */
-  useEffect(() => {
-    /* A BARE URL EXPRESSES NO OPINION, so it must not stamp on the restored view — without this
-       guard, restoring a market from memory was immediately reverted to leads by this very
-       effect (URL-silence collapses to leads in `urlMode`). Explicit params behave as before. */
-    if (searchParams.get('mode') === null) return;
-    const wantMode: SearchMode = urlMode === 'market' && urlTrade && urlTown ? 'market' : 'leads';
-    setActiveMode((m) => (m === wantMode ? m : wantMode));
-    if (wantMode === 'market') {
-      setMarketTrade((t) => (t === urlTrade ? t : urlTrade));
-      setMarketTown((w) => (w === urlTown ? w : urlTown));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlMode, urlTrade, urlTown]);
-
   /* Consume the one-shot intent. `replace` so it does not become a history entry you can go BACK
      to and re-trigger, and the trade/town params are deliberately left alone — those ARE page
      state (what am I looking at) and belong in the URL. */
@@ -196,38 +157,18 @@ const Index = () => {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  /* Lead results and market output are mutually exclusive. Gating each block on the mode the last
-     search RAN in (rather than hiding them by clearing `leads`) keeps the lead results intact
-     underneath, so switching back to Find leads shows them again without re-running the search. */
-  const showLeadResults = activeMode === 'leads';
 
   const handleSearch = useCallback((filters: any) => {
     /* No longer recorded here — the context records it inside search(), which is the one point every
        search passes through, and persists it with the results. */
 
-    /* MARKET MODE SPENDS NOTHING AND CALLS NO SEARCH. It reads audits and the cached pool for the
-       trade and town in the boxes. The lead search is left completely untouched below. */
-    if (filters.mode === 'market') {
-      const t = filters.keyword?.trim() || '';
-      const w = filters.location?.trim() || '';
-      setActiveMode('market');
-      setMarketTrade(t);
-      setMarketTown(w);
-      setSavedView({ mode: 'market', trade: t, town: w });
-      // replace, not push: re-searching the same page should not stack history entries the back
-      // button then has to walk through one at a time.
-      setSearchParams({ mode: 'market', trade: t, town: w }, { replace: true });
-      return;
-    }
-    setActiveMode('leads');
-    setSavedView({ mode: 'leads', trade: '', town: '' });
-    // Drop the market params so a later refresh does not resurrect a market view over lead results.
+    // Drop any leftover params so a refresh does not resurrect an old arrival intent.
     setSearchParams({}, { replace: true });
     // Region tiling is capped out of the UI (slider max = 50km) — always a normal
     // single-centre search. The backend tiledRegionSearch stays in place but
     // dormant: the frontend never sends region:true.
     search(filters, false, false);
-  }, [search, setSearchParams, setSavedView]);
+  }, [search, setSearchParams]);
 
   // Notify when a region search was downgraded to a single area (daily budget).
   useEffect(() => {
@@ -509,21 +450,12 @@ const Index = () => {
              so an operator whose last visit was a market view arrives with 'market' already set —
              and Find leads would then run a market view. Only an EXPLICIT mode param overrides the
              persisted value; a plain visit to /find-leads still restores whatever was last used. */
-          initialMode={urlMode === 'market' && urlTrade && urlTown ? 'market' : urlWantsLeads ? 'leads' : undefined}
-          initialKeyword={urlMode === 'market' ? urlTrade || undefined : urlKeyword || undefined}
-          initialLocation={urlMode === 'market' ? urlTown || undefined : urlLocation || undefined}
-          /* Runs the normal search once, on arrival, in leads mode only. */
-          autoSubmit={runLeadSearchOnArrival ? 'leads' : null}
+          initialKeyword={urlKeyword || undefined}
+          initialLocation={urlLocation || undefined}
+          /* Runs the search once, on arrival, when Coverage asked for it. */
+          autoSubmit={runLeadSearchOnArrival}
         />
       </section>
-
-      {/* MARKET MODE. Same two boxes, different question: what do we already know about this trade
-          in this town. Spends nothing on mount — it reads audits and the cached lead pool. */}
-      {activeMode === 'market' && (
-        <section>
-          <MarketPanel trade={marketTrade} town={marketTown} openSearchConfirm={openSearchConfirm} selectedCampaignId={activeCampaign} />
-        </section>
-      )}
 
       {/* "THIS TOWN ONLY" ASKED FOR, NOT APPLIED. A persistent banner, deliberately NOT a toast:
           the results below it are wider than the toggle claims, and that has to stay readable for
@@ -536,7 +468,7 @@ const Index = () => {
           ⚠️ The amber form is NOT an error — the search DID run and these are real leads. It says
           which place they are from, so a wrong one is caught by reading rather than by a Cornish
           business name three screens later. */}
-      {showLeadResults && resolvedLocation && !isLoading && (
+      {resolvedLocation && !isLoading && (
         <div className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 ${
           locationCandidates.length > 1
             ? 'border-amber-500/40 bg-amber-500/10'
@@ -559,7 +491,7 @@ const Index = () => {
         </div>
       )}
 
-      {showLeadResults && townFilterFallback && !isLoading && (
+      {townFilterFallback && !isLoading && (
         <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-500" />
           <p className="text-xs leading-snug text-amber-700 dark:text-amber-400">
@@ -571,7 +503,7 @@ const Index = () => {
 
       {/* Handled notice (location not found / map lookup unavailable) — a calm
           empty-state with a retry, NOT the destructive "Search failed" card. */}
-      {showLeadResults && searchNotice && !searchError && !isLoading && (
+      {searchNotice && !searchError && !isLoading && (
         <div className="flex flex-col items-center gap-3 p-5 bg-muted/40 border border-border rounded-lg text-center">
           <MapPin className="h-5 w-5 text-muted-foreground" />
           <p className="text-sm text-muted-foreground max-w-md">{searchNotice}</p>
@@ -582,7 +514,7 @@ const Index = () => {
       )}
 
       {/* Search Error + Retry */}
-      {showLeadResults && searchError && !isLoading && (
+      {searchError && !isLoading && (
         <div className="flex flex-col items-center gap-3 p-5 bg-destructive/10 border border-destructive/20 rounded-lg text-center">
           <p className="text-base font-semibold text-destructive">Search failed</p>
           <p className="text-sm text-muted-foreground">{searchError.message}</p>
@@ -597,7 +529,7 @@ const Index = () => {
 
 
       {/* Expanded search indicator */}
-      {showLeadResults && leads.length > 0 && expanded && noWebsiteCount >= 5 && (
+      {leads.length > 0 && expanded && noWebsiteCount >= 5 && (
         <div className="flex items-center gap-2 py-2 px-3 sm:px-4 bg-muted/30 border border-border/50 rounded-lg">
           <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <span className="text-xs sm:text-sm text-muted-foreground">
@@ -607,7 +539,7 @@ const Index = () => {
       )}
 
       {/* Fallback: expansion couldn't find 3 No Website leads */}
-      {showLeadResults && leads.length > 0 && expanded && noWebsiteCount < 5 && !isLoading && (
+      {leads.length > 0 && expanded && noWebsiteCount < 5 && !isLoading && (
         <div className="flex flex-col gap-3 py-3 px-4 bg-muted/20 border border-border/40 rounded-lg">
           <div className="flex items-start gap-2">
             <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -637,7 +569,7 @@ const Index = () => {
           many you already hold. Sits ABOVE the table so it is read before the rows.
           ⚠️ Shown for the empty case too — "nothing found" is a result, and silence there is the
           state that reads as a broken button. */}
-      {showLeadResults && !isLoading && !searchError && !searchNotice && lastSearchKeyword && (
+      {!isLoading && !searchError && !searchNotice && lastSearchKeyword && (
         <div className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 ${
           searchOutcome.tone === 'new'
             ? 'border-primary/30 bg-primary/5'
@@ -660,7 +592,7 @@ const Index = () => {
       )}
 
       {/* Results Section */}
-      {showLeadResults && leads.length > 0 && (
+      {leads.length > 0 && (
         <section data-walkthrough="results-header">
           {(
             <div className="space-y-3">
@@ -716,7 +648,7 @@ const Index = () => {
       )}
 
       {/* Empty State */}
-      {showLeadResults && leads.length === 0 && !isLoading && (
+      {leads.length === 0 && !isLoading && (
         <section className="text-center py-16">
           <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
             <Search className="h-12 w-12 text-muted-foreground" />

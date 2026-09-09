@@ -5,7 +5,6 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   coverageKey, coverageStateFor,
   hasLeadPool, summarise, applyFilters, applySuppressionPatch, countLeadsByPair,
-  countMeasuredByPair,
   type CoverageFacts, type CoverageRow, type CoverageTown, type CoverageSummary,
   type SuppressionPatch,
 } from '@/lib/coverageState';
@@ -96,10 +95,11 @@ export function useCoverage() {
 
   /* Built once per fetch, not per row: coverageKey canonicalises the trade, and doing that inside a
      733-row render loop would be the same work 733 times.
-     ⛔ measuredCounts is a COUNT (BUG-2 fix): a town is `measured` only at >= MARKET_AUDIT_MIN_AUDITS
-     completed audits, matching the panel — see coverageStateFor. */
+     ⚠️ The endpoint still SENDS `measured` (one entry per completed market audit) and nothing reads
+     it any more — the `measured` rung went with the market view on 2026-09-09, because it graded a
+     town on a market audit and the last one was run on 24 August. Coverage now answers only what it
+     is used for: which towns have leads, which have been contacted, and how big they are. */
   const facts: CoverageFacts = useMemo(() => ({
-    measuredCounts: countMeasuredByPair(pairs?.measured ?? []),
     leadPairs: new Set((pairs?.leads ?? []).map((p) => coverageKey(p.trade, p.town))),
     workedPairs: new Set((pairs?.worked ?? []).map((p) => coverageKey(p.trade, p.town))),
     /* ⚠️ UNDEFINED WHEN THE ENDPOINT DOES NOT SEND IT, never an empty Set. hasLeadPool reads absence

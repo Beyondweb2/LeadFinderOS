@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { QuickLocationsList } from '@/components/QuickLocationsList';
 import { QuickBusinessTypes } from '@/components/QuickBusinessTypes';
 import type { Country } from '@/types/lead';
-import type { SearchFilters, SearchMode } from '@/types/lead';
+import type { SearchFilters } from '@/types/lead';
 
 interface SearchFormProps {
   onSearch: (filters: SearchFilters) => void;
@@ -23,25 +23,26 @@ interface SearchFormProps {
   isPaidSubscriber?: boolean;
   disabled?: boolean;
   initialRadius?: number;
-  /* URL-SEEDED VALUES. Present only when the page was opened on a market-view URL (a pasted link,
-     a refresh, the back button). They win over the persisted boxes ONCE, on mount, so the inputs
-     describe the market actually on screen — boxes reading "plumber / Bourne" above a Wisbech
-     locksmiths view is the quiet kind of wrong this codebase keeps getting caught by. */
-  initialMode?: SearchMode;
+  /* URL-SEEDED VALUES. Present when the page was opened from Coverage's "Find leads", or on a
+     pasted link / refresh / back button. They win over the persisted boxes ONCE, on mount, so the
+     inputs describe the search actually on screen — boxes reading "plumber / Bourne" above Wisbech
+     locksmiths results is the quiet kind of wrong this codebase keeps getting caught by. */
   initialKeyword?: string;
   initialLocation?: string;
   /**
-   * Run the search ONCE on arrival, in this mode — set by Coverage's "Find leads" button, which
-   * exists to run a lead search rather than to prefill a box and wait.
+   * Run the search ONCE on arrival — set by Coverage's "Find leads" button, which exists to run a
+   * search rather than to prefill a box and wait.
    *
-   * ⛔ IT IS A MODE, NOT A BOOLEAN, AND THAT IS THE GUARD. `mode` is PERSISTED per user, so an
-   * operator whose last visit used the market view arrives here with mode already 'market' — and a
-   * boolean autoSubmit would then fire a MARKET VIEW from a button labelled Find leads, which is
-   * the exact fault being fixed. The effect refuses to fire unless the form's own mode equals the
-   * mode asked for, so a seed that failed to apply spends nothing and leaves the operator to press
-   * Search. Asserting on the state we WANT, never on the one we want to exclude (§6).
+   * ⚠️ IT USED TO BE A MODE RATHER THAN A BOOLEAN, and that mattered while this form could also run
+   * a market view: `mode` was persisted, so an operator whose last visit was a market view would
+   * have fired a MARKET VIEW from a button labelled Find leads. The market view is gone
+   * (2026-09-09), so there is only one thing to run and the mode guard has nothing left to protect.
+   * ⛔ THE GUARD THAT STILL MATTERS IS BELOW AND IS UNCHANGED: keyword and location are PERSISTED,
+   * so this must not fire until the form actually HOLDS what the URL asked for. Firing early runs
+   * the PREVIOUS search's terms, spends the money, and then paints the right town above the wrong
+   * results.
    */
-  autoSubmit?: SearchMode | null;
+  autoSubmit?: boolean;
   onUpgrade?: () => void;
   isUpgradeLoading?: boolean;
   freeSearchesExhausted?: boolean;
@@ -56,7 +57,6 @@ export function SearchForm({
   isPaidSubscriber = false,
   disabled = false,
   initialRadius,
-  initialMode,
   initialKeyword,
   initialLocation,
   autoSubmit = null,
@@ -86,17 +86,9 @@ export function SearchForm({
      ⚠️ IT COSTS ONE EXTRA GOOGLE PAGE per search (~$0.035) for the nearby pass. A persisted toggle,
      so turning it off once turns it off for good. */
   const [townOnly, setTownOnly] = usePersistedState('find-leads-town-only', true, persist);
-  /* SEARCH MODE. 'leads' = the existing lead search, unchanged. 'market' = read what we already
-     know about this trade in this town. Persisted like the other inputs so the page comes back the
-     way it was left. */
-  const [mode, setMode] = usePersistedState<SearchMode>('find-leads-mode', 'leads' as SearchMode, persist);
-
-  /* TOWN-ONLY IS FORCED ON IN MARKET MODE. The market view compares a MEASURED town against the
-     businesses in that same town; a radius pool drags in neighbouring towns the audits never
-     covered, which is the exact bug that put businesses in the prospect list that were never in the
-     market. The toggle stays visible so it is clear what is happening, but it is not the operator's
-     to turn off here. */
-  const effectiveTownOnly = mode === 'market' ? true : townOnly;
+  /* ⚠️ `find-leads-mode` IS NO LONGER READ. It was the persisted leads/market choice; the market
+     view was removed on 2026-09-09. Old values stay in browser storage harmlessly — nothing reads
+     the key, and clearing other people's localStorage is not worth a migration. */
 
   /* Apply the URL seeds once. Ref-guarded rather than an empty dep array so the linter stays happy
      and a later re-render can never re-stomp what the operator has since typed. */
@@ -104,10 +96,9 @@ export function SearchForm({
   useEffect(() => {
     if (seeded.current) return;
     seeded.current = true;
-    if (initialMode) setMode(initialMode);
     if (initialKeyword) setKeyword(initialKeyword);
     if (initialLocation) setLocation(initialLocation);
-  }, [initialMode, initialKeyword, initialLocation, setMode, setKeyword, setLocation]);
+  }, [initialKeyword, initialLocation, setKeyword, setLocation]);
 
   /* ⛔ ONE PLACE BUILDS THE FILTERS, so the auto-run and the button cannot send different searches.
      Every value comes from the form's own state — the radius, country and town-only the operator can
@@ -122,11 +113,10 @@ export function SearchForm({
       // for the cache key and for the fallback message if the town has no boundary.
       radius: radius * 1000,
       country: selectedCountry,
-      townOnly: effectiveTownOnly,
-      mode,
+      townOnly,
     });
     return true;
-  }, [keyword, location, radius, selectedCountry, effectiveTownOnly, mode, onSearch]);
+  }, [keyword, location, radius, selectedCountry, townOnly, onSearch]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,48 +130,32 @@ export function SearchForm({
      "plumber / Bourne" from a button that said locksmiths in Wisbech, spend the money, and then paint
      the right town in the boxes above the wrong results. Exactly the measurement-right /
      document-lying fault, in its cheapest form.
-     So it fires only when the form HOLDS WHAT THE URL ASKED FOR — same mode, same keyword, same
-     location. A seed that has not landed yet, or failed to land at all, spends nothing and leaves the
-     operator to press Search. */
+     So it fires only when the form HOLDS WHAT THE URL ASKED FOR — same keyword, same town. A seed
+     that has not landed yet, or failed to land at all, spends nothing and leaves the operator to
+     press Search. */
   const autoSubmitted = useRef(false);
   useEffect(() => {
     if (!autoSubmit || autoSubmitted.current || !seeded.current) return;
-    if (mode !== autoSubmit) return;                                      // the mode we were asked for
     if (initialKeyword && keyword.trim() !== initialKeyword.trim()) return;   // the trade we were asked for
     if (initialLocation && location.trim() !== initialLocation.trim()) return; // the town we were asked for
     if (!keyword.trim() || !location.trim()) return;                       // nothing to search for
     autoSubmitted.current = true;
     runSearch();
-  }, [autoSubmit, mode, keyword, location, initialKeyword, initialLocation, runSearch]);
+  }, [autoSubmit, keyword, location, initialKeyword, initialLocation, runSearch]);
 
   return (
     <Card className="border-border/50 bg-card shadow-sm">
       <CardContent className="p-3 sm:p-6">
         <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
-          {/* MODE. Deliberately louder than the town-only switch: this changes what the Search
-              button DOES, not merely how wide it looks. A segmented control rather than a toggle so
-              both options are named on screen and neither is a hidden default. */}
-          <div className="inline-flex w-full rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
-            {(['leads', 'market'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMode(m)}
-                aria-pressed={mode === m}
-                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors sm:flex-none sm:px-4 ${
-                  mode === m
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {m === 'leads' ? 'Find leads' : 'Market view'}
-              </button>
-            ))}
-          </div>
-          <p className="-mt-1 text-[11px] text-muted-foreground sm:-mt-4">
-            {mode === 'leads'
-              ? 'Search returns local businesses you can add to the CRM.'
-              : 'Search reads what AI already says about this trade in this town \u2014 no spend.'}
+          {/* ⛔ THE MODE TOGGLE IS GONE (2026-09-09). This form used to offer "Find leads" or
+              "Market view", and the second is what Paul said he never uses — confirmed against the
+              data: 96 market audits ever, ALL in August, none since the 24th, while 1,352 leads were
+              added by plain search in the same fortnight. The question the market view was built to
+              answer ("is this niche worth outreaching?") is answered better and for free by the
+              trade-wide niche read on Coverage, so there is one thing this form does now and it
+              does not need naming twice. */}
+          <p className="text-[11px] text-muted-foreground">
+            Search returns local businesses you can add to the CRM.
           </p>
 
           {/* Main Search Fields */}
@@ -230,22 +204,20 @@ export function SearchForm({
                 toggle read as an unrelated setting. */}
             <div className="space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-1">
               <div className="flex items-center justify-between gap-3">
-                <Label className={`whitespace-nowrap text-xs font-medium transition-colors ${effectiveTownOnly ? 'text-muted-foreground/50' : 'text-foreground/80'}`}>
+                <Label className={`whitespace-nowrap text-xs font-medium transition-colors ${townOnly ? 'text-muted-foreground/50' : 'text-foreground/80'}`}>
                   Radius: {radius} km
                 </Label>
                 <div className="flex items-center gap-2">
                   <Label
                     htmlFor="town-only"
-                    className={`whitespace-nowrap text-xs font-medium ${mode === 'market' ? 'text-muted-foreground' : 'cursor-pointer text-foreground/80'}`}
-                    title={mode === 'market' ? 'Always on in market view: the pool has to be the same town that was measured.' : undefined}
+                    className="whitespace-nowrap text-xs font-medium cursor-pointer text-foreground/80"
                   >
-                    This town only{mode === 'market' ? ' (always)' : ''}
+                    This town only
                   </Label>
                   <Switch
                     id="town-only"
-                    checked={effectiveTownOnly}
+                    checked={townOnly}
                     onCheckedChange={setTownOnly}
-                    disabled={mode === 'market'}
                   />
                 </div>
               </div>
@@ -254,7 +226,7 @@ export function SearchForm({
                   and never fires: Radix sets data-disabled, not the HTML disabled attribute, so
                   without this the control looks live while ignoring every drag. `disabled` stays for
                   the real a11y/interaction state; the opacity is only what makes it legible. */}
-              <div className={`relative flex items-center gap-2 sm:gap-3 pt-0.5 transition-opacity ${effectiveTownOnly ? 'opacity-40' : ''}`}>
+              <div className={`relative flex items-center gap-2 sm:gap-3 pt-0.5 transition-opacity ${townOnly ? 'opacity-40' : ''}`}>
                 <Radius className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 text-muted-foreground" />
                 <Slider
                   value={[radius]}
@@ -262,7 +234,7 @@ export function SearchForm({
                   min={1}
                   max={50}
                   step={1}
-                  disabled={effectiveTownOnly}
+                  disabled={townOnly}
                   className="flex-1"
                 />
               </div>
