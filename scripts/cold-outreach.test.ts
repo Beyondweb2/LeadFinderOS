@@ -49,7 +49,34 @@ ok(isColdOutreachTemplate("re_engage_cold"), "re_engage_cold is NOT re_engage");
 ok(isColdOutreachTemplate("pre_engage"), "pre_engage does not match re_engage as a substring");
 
 console.log("\n── THE SET ITSELF ──");
-ok(CONTINUATION_TEMPLATES.size === 8, `8 continuations declared (got ${CONTINUATION_TEMPLATES.size})`);
+/* ⛔ THE EXACT SET, NOT ITS SIZE. This was `size === 8`, a tripwire meant to force a deliberate
+   decision whenever a template joins the exempt list — and it worked: adding audit_reply_warm on
+   2026-09-08 broke it. But nothing runs these scripts, so it sat red for a day and the only thing
+   it said was "8 (got 9)", which tells you a number changed, not WHICH template was exempted from
+   the guard that stops us cold-messaging someone we have already contacted.
+   Listing the members keeps the tripwire AND names the change. Adding a template here is still a
+   two-place edit, on purpose: the point is that exempting one is a decision, not a convenience. */
+const EXPECTED_CONTINUATIONS = [
+  "audit_reply",
+  "audit_reply_warm",
+  "hook_followup",
+  "contact_followup",
+  "report_followup",
+  "onboarding_followup",
+  "questionnaire_followup",
+  "payment_recieved", // Meta's registered spelling — do not "correct" it
+  "re_engage",
+].sort();
+const actual = [...CONTINUATION_TEMPLATES].sort();
+const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));
+const removed = EXPECTED_CONTINUATIONS.filter((t) => !actual.includes(t));
+ok(
+  added.length === 0 && removed.length === 0,
+  added.length || removed.length
+    ? `the exempt set changed — NEWLY EXEMPT: [${added.join(", ") || "none"}] NO LONGER EXEMPT: [${removed.join(", ") || "none"}]. `
+      + `Anything newly exempt can now be sent to a number we have already messaged: is that right?`
+    : `all ${actual.length} continuations are the expected ones`,
+);
 ok(!CONTINUATION_TEMPLATES.has("initial_contact"), "the opener is never in the exempt set");
 ok(!CONTINUATION_TEMPLATES.has("audit_result_hook"), "the hook is never in the exempt set");
 
