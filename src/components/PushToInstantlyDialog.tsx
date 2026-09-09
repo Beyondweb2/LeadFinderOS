@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { readFunctionError } from '@/lib/functionError';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -96,7 +97,7 @@ export function PushToInstantlyDialog({
       const { data, error } = await supabase.functions.invoke('instantly-push', {
         body: { mode: 'list_campaigns' },
       });
-      if (error) throw error;
+      if (error) throw new Error(await readFunctionError(error));
       if (!data?.success) throw new Error(data?.error || 'Could not load campaigns');
       const list: InstantlyCampaign[] = Array.isArray(data.campaigns) ? data.campaigns : [];
       setCampaigns(list);
@@ -126,7 +127,11 @@ export function PushToInstantlyDialog({
       const { data, error } = await supabase.functions.invoke('bulk-jobs', {
         body: { action: 'triage', lead_ids: leadIds, skip_audit: !auditFirst },
       });
-      if (error) throw error;
+      /* ⛔ THE REAL MESSAGE, NOT THE WRAPPER. supabase-js's .message is always "Edge Function
+         returned a non-2xx status code"; the reason is in the response body. Throwing the raw error
+         is what reduced a real failure to "edge function error" on 2026-09-09 and left nobody able
+         to say what had gone wrong. */
+      if (error) throw new Error(await readFunctionError(error));
       if (!data?.ok) throw new Error(data?.error || 'Could not work out what these leads need');
       setTriage(Array.isArray(data.triage) ? data.triage : []);
       setOverCap(Number(data.over_cap) || 0);
