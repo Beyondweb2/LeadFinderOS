@@ -17,9 +17,16 @@
    hero-capable own-site photo, which is exactly why the template must collapse without one
    (src/lib/mockupRender.ts, scripts/mockup-render.test.ts) rather than reach for stock.
 
-   ⚠️ THESE ARE PLACEHOLDERS. Paul swaps the real set in later. They are real files in
-   public/mockup-stock/ rather than data URIs so that swapping means replacing a FILE, not editing
-   code — and so a placeholder is obvious on screen instead of silently passing for a photo.
+   ⛔ ONE SET, AND IT LIVES IN public/mockup-stock/. Paul's other session is producing the six real
+   locksmith files; this is the same set, not a second one. The folder is forced by who has to READ
+   it: the picker needs an HTTP URL for its drag strip, the mockup HTML references it with
+   <img src="/mockup-stock/…">, Cloudflare's screenshot fetches it like any browser, and — the
+   decisive one — Step 8's canvas composite needs it SAME-ORIGIN, because a canvas tainted by a
+   cross-origin image cannot export a PNG and the PNG is the product. public/ is the only directory
+   Vite copies verbatim into dist/.
+   ⚠️ THE FILES HERE ARE PLACEHOLDERS UNTIL THE REAL JPGs LAND, and they are real files rather than
+   data URIs so a swap means replacing a FILE, not editing code — and so a placeholder is obvious on
+   screen instead of silently passing for a photo.
 
    ⛔ AND THE PICKER ASSIGNS STOCK, NOT THE RENDERER. If the renderer substituted stock for an
    empty slot it would be making a layout decision, which is precisely what the template contract
@@ -29,6 +36,8 @@
 
 export interface StockImage {
   id: string;
+  /** What the photograph actually shows. Self-documenting so a numbered file can be identified. */
+  subject: string;
   /** Served from /public. Swap the FILE to swap the image; the id and copy stay put. */
   path: string;
   /**
@@ -68,14 +77,21 @@ export function stockAllowedInSlot(slot: string): boolean {
  * work they did, it is wrong for a stock image.
  */
 export const MOCKUP_STOCK: StockImage[] = [
-  { id: "tools-01", path: "/mockup-stock/tools-01.svg", alt: "Locksmith tools", caption: "Professional tools", niches: ["locksmith"] },
-  { id: "lock-01", path: "/mockup-stock/lock-01.svg", alt: "A door lock", caption: "Door locks", niches: ["locksmith"] },
-  { id: "keys-01", path: "/mockup-stock/keys-01.svg", alt: "Cut keys", caption: "Key cutting", niches: ["locksmith"] },
-  { id: "van-01", path: "/mockup-stock/van-01.svg", alt: "A mobile service van", caption: "Mobile service", niches: ["locksmith", "plumber"] },
-  { id: "pipes-01", path: "/mockup-stock/pipes-01.svg", alt: "Copper pipework", caption: "Pipework", niches: ["plumber"] },
-  { id: "boiler-01", path: "/mockup-stock/boiler-01.svg", alt: "A domestic boiler", caption: "Heating", niches: ["plumber"] },
-  { id: "generic-door-01", path: "/mockup-stock/generic-door-01.svg", alt: "A front door", caption: "Home security" },
-  { id: "generic-work-01", path: "/mockup-stock/generic-work-01.svg", alt: "Tradesperson at work", caption: "On the job" },
+  /* ⛔ ONE SET, SHARED WITH PAUL'S OTHER SESSION — decided 2026-09-10. He is producing these six
+     as 1600x1067 JPGs (3:2, under 400KB each) and does not want to buy or manage two sets of
+     locksmith photos. So the FILENAMES ARE HIS (stock-01 … stock-06, easy to produce and to swap)
+     and the MEANING lives here, because a numbered file carries none and `alt` has to be TRUE.
+     ⚠️ `subject` exists purely so the mapping is self-documenting: without it nobody can tell
+     which file is the euro cylinder, and the next person to swap one would guess.
+     ⚠️ Until the real JPGs land these point at .svg placeholders of the same names, which render
+     as a labelled panel so a placeholder can never quietly pass for a photo. Swapping is: drop
+     stock-0N.jpg into public/mockup-stock/, delete stock-0N.svg, change the extension here. */
+  { id: "stock-01", subject: "front door lock",     path: "/mockup-stock/stock-01.svg", alt: "A front door lock",            caption: "Door locks",       niches: ["locksmith"] },
+  { id: "stock-02", subject: "euro cylinder",       path: "/mockup-stock/stock-02.svg", alt: "A euro cylinder lock",          caption: "Cylinder locks",   niches: ["locksmith"] },
+  { id: "stock-03", subject: "anti-snap cylinder",  path: "/mockup-stock/stock-03.svg", alt: "An anti-snap cylinder lock",    caption: "Anti-snap locks",  niches: ["locksmith"] },
+  { id: "stock-04", subject: "lit doorway",         path: "/mockup-stock/stock-04.svg", alt: "A lit doorway at night",        caption: "Out of hours",     niches: ["locksmith"] },
+  { id: "stock-05", subject: "workshop bench",      path: "/mockup-stock/stock-05.svg", alt: "A workshop bench",              caption: "In the workshop",  niches: ["locksmith"] },
+  { id: "stock-06", subject: "cut keys",            path: "/mockup-stock/stock-06.svg", alt: "Cut keys",                      caption: "Key cutting",      niches: ["locksmith"] },
 ];
 
 /** The stock available for a niche, in set order. Niche-specific first, then the generics. */

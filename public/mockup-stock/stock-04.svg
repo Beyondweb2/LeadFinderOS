@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1067" width="1600" height="1067" role="img" aria-label="Lit doorway">
+<rect width="1600" height="1067" fill="#2a2f3a"/>
+<g fill="none" stroke="#ffffff" stroke-opacity=".10" stroke-width="2"><path d="M100 0V1067"/><path d="M200 0V1067"/><path d="M300 0V1067"/><path d="M400 0V1067"/><path d="M500 0V1067"/><path d="M600 0V1067"/><path d="M700 0V1067"/><path d="M800 0V1067"/><path d="M900 0V1067"/><path d="M1000 0V1067"/><path d="M1100 0V1067"/><path d="M1200 0V1067"/><path d="M1300 0V1067"/><path d="M1400 0V1067"/><path d="M1500 0V1067"/><path d="M0 100H1600"/><path d="M0 200H1600"/><path d="M0 300H1600"/><path d="M0 400H1600"/><path d="M0 500H1600"/><path d="M0 600H1600"/><path d="M0 700H1600"/><path d="M0 800H1600"/><path d="M0 900H1600"/><path d="M0 1000H1600"/></g>
+<text x="800" y="505" text-anchor="middle" fill="#e9ecef" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="62" font-weight="800" letter-spacing="-1">Lit doorway</text>
+<text x="800" y="568" text-anchor="middle" fill="#e9ecef" fill-opacity=".60" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="25" font-weight="600" letter-spacing="3">PLACEHOLDER &#183; REPLACE WITH stock-04.jpg</text>
+</svg>
