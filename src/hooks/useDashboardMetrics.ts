@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { isSentStatus, type OutreachLead } from '@/types/outreach';
@@ -146,41 +147,71 @@ const getDateRanges = () => {
   };
 };
 
+/** Stable empties. A new array or Map per render would give every memo below a fresh identity
+ *  and defeat the caching (the EMPTY_AUDITS lesson, one hook over). */
+const EMPTY_LEADS: OutreachLead[] = [];
+const EMPTY_EVENTS: { lead_id: string; created_at: string }[] = [];
+const EMPTY_IDS: Set<string> = new Set();
+const EMPTY_MSG_TIMES: Map<string, LeadMessageTimes> = new Map();
+const EMPTY_ONBOARDING: Map<string, LeadOnboarding> = new Map();
+const EMPTY_MSGS: Map<string, FunnelMsg[]> = new Map();
+const EMPTY_ACTIVITY: ActivityMetrics = {
+  phonesCopiedToday: 0, phonesCopiedYesterday: 0, phonesCopiedThisWeek: 0, phonesCopiedLastWeek: 0,
+  leadsContactedToday: 0, leadsContactedYesterday: 0, leadsContactedThisWeek: 0, leadsContactedLastWeek: 0,
+  activitiesToday: 0, activitiesYesterday: 0, activitiesThisWeek: 0,
+  totalPhonesCopied: 0, totalLeadsContacted: 0,
+};
+
+/** Everything one dashboard load produces. Was eleven useState slots. */
+interface DashboardData {
+  allLeads: OutreachLead[];
+  totalNoWebsiteFound: number;
+  activityData: ActivityMetrics;
+  outreachEvents7d: { lead_id: string; created_at: string }[];
+  msgTimes: Map<string, LeadMessageTimes>;
+  onboardingByLead: Map<string, LeadOnboarding>;
+  baselineLeadIds: Set<string>;
+  msgsByLeadId: Map<string, FunnelMsg[]>;
+  smsSentLeadIds: Set<string>;
+}
+
 export function useDashboardMetrics(isAdmin = false) {
-  const [allLeads, setAllLeads] = useState<OutreachLead[]>([]);
-  const [totalNoWebsiteFound, setTotalNoWebsiteFound] = useState(0);
-  const [activityData, setActivityData] = useState<ActivityMetrics>({
-    phonesCopiedToday: 0, phonesCopiedYesterday: 0, phonesCopiedThisWeek: 0, phonesCopiedLastWeek: 0,
-    leadsContactedToday: 0, leadsContactedYesterday: 0, leadsContactedThisWeek: 0, leadsContactedLastWeek: 0,
-    activitiesToday: 0, activitiesYesterday: 0, activitiesThisWeek: 0,
-    totalPhonesCopied: 0, totalLeadsContacted: 0,
-  });
-  const [outreachEvents7d, setOutreachEvents7d] = useState<{ lead_id: string; created_at: string }[]>([]);
-  // lead_ids whose audit has been OPENED (ai_audits.first_opened_at set by render-audit-report).
-  // Empty until the open-tracking migration has run + a real human opens a report.
-
-  // Evidence for the derived task list: who wrote last, who filled the questionnaire, whose setup
-  // has begun. State, so the list recomputes on the same refetch as everything else.
-  const [msgTimes, setMsgTimes] = useState<Map<string, LeadMessageTimes>>(new Map());
-  const [onboardingByLead, setOnboardingByLead] = useState<Map<string, LeadOnboarding>>(new Map());
-  const [baselineLeadIds, setBaselineLeadIds] = useState<Set<string>>(new Set());
-  /* Raw per-lead messages, in send order. The task rules only need folded timestamps, but the audit
-     funnel needs the messages themselves (which template, which direction, what the text was), and
-     they are already fetched, so index them rather than querying twice. */
-  const [msgsByLeadId, setMsgsByLeadId] = useState<Map<string, FunnelMsg[]>>(new Map());
-  /** Leads with a real sms_sends row. The pill says 15 leads are "SMS"; this says how many were sent. */
-  const [smsSentLeadIds, setSmsSentLeadIds] = useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading] = useState(true);
-  const hasLoadedOnceRef = useRef(false);
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  // Stable user ID ref to prevent refetches on auth token refreshes
-  const userIdRef = useRef<string | null>(null);
+  /* ⛔ ON REACT QUERY SINCE 2026-09-10, and the point is what does NOT happen: leaving the
+     Dashboard and coming back no longer refires ten queries and flashes a spinner. The hook used
+     to own eleven pieces of useState filled by one big fetch in a mount effect, so every arrival
+     paid for the whole thing again.
+     ⚠️ THE FETCH ITSELF IS UNCHANGED — same queries, same order, same try/catch fallbacks. All
+     that changed is that it RETURNS its results instead of calling eleven setters, so React Query
+     can hold them. Rewriting the fetch at the same time as moving it would have made any
+     regression impossible to attribute.
+     ⛔ NOTHING HERE MUTATES, which is why this hook went first (CLAUDE.md §6c: the mutation risk
+     is the work). There is no invalidation to prove — only `refetch`, which the Dashboard's own
+     refresh button already called. */
+  const queryKey = useMemo(() => ['dashboard-metrics', user?.id ?? null, isAdmin] as const, [user?.id, isAdmin]);
 
-  const fetchAllData = useCallback(async () => {
-    const uid = userIdRef.current;
-    if (!uid) return;
-    if (!hasLoadedOnceRef.current) setIsLoading(true);
+  const loadAll = useCallback(async (): Promise<DashboardData> => {
+    /* Was `userIdRef.current`, a ref that existed to stop an auth-token refresh re-firing the
+       fetch. React Query keys on the id instead, so the ref is gone and this reads it directly.
+       The query is `enabled` on the same value, so this throw is unreachable in practice — it is
+       here so a future caller cannot silently query for nobody. */
+    const uid = user?.id;
+    if (!uid) throw new Error('useDashboardMetrics: no signed-in user');
+
+    /* Locals, then one object at the end. Each was a setState call; the assignments sit exactly
+       where those calls were, so the control flow — including the two try/catch fallbacks that
+       degrade rather than throw — is untouched. */
+    let allLeads: OutreachLead[] = EMPTY_LEADS;
+    let totalNoWebsiteFound = 0;
+    let activityData: ActivityMetrics = EMPTY_ACTIVITY;
+    let outreachEvents7d: { lead_id: string; created_at: string }[] = EMPTY_EVENTS;
+    let msgTimes: Map<string, LeadMessageTimes> = EMPTY_MSG_TIMES;
+    let onboardingByLead: Map<string, LeadOnboarding> = EMPTY_ONBOARDING;
+    let baselineLeadIds: Set<string> = EMPTY_IDS;
+    let msgsByLeadId: Map<string, FunnelMsg[]> = EMPTY_MSGS;
+    let smsSentLeadIds: Set<string> = EMPTY_IDS;
     const dates = getDateRanges();
 
     const sevenDaysAgo = new Date();
@@ -250,31 +281,26 @@ export function useDashboardMetrics(isAdmin = false) {
       return null;
     });
     if (!all) {
-      hasLoadedOnceRef.current = true;
-      setIsLoading(false);
       return;
     }
     const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult, msgResult, obResult, baselineResult, smsResult] = all;
 
-    hasLoadedOnceRef.current = true;
-    setIsLoading(false);
-
-    setAllLeads(leadsResult.rows);
-    setOutreachEvents7d(eventsResult.rows);
+    allLeads = (leadsResult.rows);
+    outreachEvents7d = (eventsResult.rows);
 
     /* Fold the evidence into per-lead maps. Each is wrapped so a missing table or column degrades
        that ONE rule to silence rather than emptying the card - the same defensive posture the
        audit-open fetch below already takes. */
     try {
-      setMsgTimes(foldMessageTimes(msgResult.rows));
+      msgTimes = (foldMessageTimes(msgResult.rows));
       const idx = new Map<string, FunnelMsg[]>();
       for (const m of msgResult.rows) {
         const row: FunnelMsg = { direction: m.direction, created_at: m.created_at, body: m.body, template_name: m.template_name, status: m.status };
         const arr = idx.get(m.lead_id);
         if (arr) arr.push(row); else idx.set(m.lead_id, [row]);
       }
-      setMsgsByLeadId(idx);
-      setSmsSentLeadIds(new Set(smsResult.rows.map((r) => r.lead_id).filter((v): v is string => !!v)));
+      msgsByLeadId = (idx);
+      smsSentLeadIds = (new Set(smsResult.rows.map((r) => r.lead_id).filter((v): v is string => !!v)));
     } catch (e) {
       console.warn('Message-time fold skipped (reply tasks hidden):', e instanceof Error ? e.message : e);
     }
@@ -290,7 +316,7 @@ export function useDashboardMetrics(isAdmin = false) {
         if (!prev || at > prev.createdAt) obs.set(r.lead_id, { createdAt: at, paid });
         else if (paid) obs.set(r.lead_id, { ...prev, paid: true });
       }
-      setOnboardingByLead(obs);
+      onboardingByLead = (obs);
     } catch (e) {
       console.warn('Onboarding fold skipped (chase tasks hidden):', e instanceof Error ? e.message : e);
     }
@@ -300,19 +326,19 @@ export function useDashboardMetrics(isAdmin = false) {
       for (const a of baselineResult.rows) {
         if (Number(a.baseline_target_runs ?? 0) > 1) withBaseline.add(a.lead_id);
       }
-      setBaselineLeadIds(withBaseline);
+      baselineLeadIds = (withBaseline);
     } catch (e) {
       console.warn('Baseline fold skipped (deliver tasks may over-report):', e instanceof Error ? e.message : e);
     }
 
     const searchHistory = searchHistoryResult.rows;
-    setTotalNoWebsiteFound(searchHistory.reduce((sum, s) => sum + (s.no_website_count || 0), 0));
+    totalNoWebsiteFound = (searchHistory.reduce((sum, s) => sum + (s.no_website_count || 0), 0));
 
     const copiedPhones = copiedPhonesResult.rows;
     const activities = activitiesResult.rows;
     const contacts = contactsResult.rows;
 
-    setActivityData({
+    activityData = ({
       phonesCopiedToday: copiedPhones.filter(p => p.copied_at >= dates.todayStr).length,
       phonesCopiedYesterday: copiedPhones.filter(p => p.copied_at >= dates.yesterdayStr && p.copied_at < dates.yesterdayEndStr).length,
       phonesCopiedThisWeek: copiedPhones.filter(p => p.copied_at >= dates.weekStartStr).length,
@@ -327,24 +353,35 @@ export function useDashboardMetrics(isAdmin = false) {
       totalPhonesCopied: copiedPhones.length,
       totalLeadsContacted: contacts.length,
     });
-  }, [isAdmin]);
 
-  // Only refetch when user ID changes (login/logout), not on token refresh
-  useEffect(() => {
-    const newUserId = user?.id ?? null;
-    if (newUserId === userIdRef.current) return;
-    userIdRef.current = newUserId;
-    if (newUserId) {
-      fetchAllData();
-    }
-  }, [user?.id, fetchAllData]);
+    return { allLeads, totalNoWebsiteFound, activityData, outreachEvents7d, msgTimes, onboardingByLead, baselineLeadIds, msgsByLeadId, smsSentLeadIds };
+  }, [isAdmin, user?.id]);
 
-  // Resolve loading state immediately for unauthenticated (ad-entry) users
-  useEffect(() => {
-    if (!user) {
-      setIsLoading(false);
-    }
-  }, [user]);
+  /* The two mount effects are gone. One re-ran the whole fetch whenever the user id changed and
+     guarded against auth-token refreshes with a ref; React Query does both by keying on the id.
+     The other only existed to clear a loading flag for signed-out visitors — `enabled` handles
+     that, and an unauthenticated hook now reports not-loading without a render pass. */
+  const query = useQuery({
+    queryKey,
+    queryFn: loadAll,
+    enabled: !!user?.id,
+  });
+
+  const data = query.data;
+  /* ⚠️ MODULE-LEVEL EMPTIES, never `[]` or `new Map()` inline. A fresh object every render gives
+     every memo below a new identity and undoes the caching this change exists for — the same
+     trap EMPTY_AUDITS documents on the audit book. */
+  const allLeads = data?.allLeads ?? EMPTY_LEADS;
+  const totalNoWebsiteFound = data?.totalNoWebsiteFound ?? 0;
+  const activityData = data?.activityData ?? EMPTY_ACTIVITY;
+  const outreachEvents7d = data?.outreachEvents7d ?? EMPTY_EVENTS;
+  const msgTimes = data?.msgTimes ?? EMPTY_MSG_TIMES;
+  const onboardingByLead = data?.onboardingByLead ?? EMPTY_ONBOARDING;
+  const baselineLeadIds = data?.baselineLeadIds ?? EMPTY_IDS;
+  const msgsByLeadId = data?.msgsByLeadId ?? EMPTY_MSGS;
+  const smsSentLeadIds = data?.smsSentLeadIds ?? EMPTY_IDS;
+  /* Signed out is not "loading" — it is an answer. */
+  const isLoading = !!user?.id && query.isPending;
 
   const metrics = useMemo<DashboardMetrics>(() => {
 
@@ -528,5 +565,12 @@ export function useDashboardMetrics(isAdmin = false) {
     };
   }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, msgTimes, msgsByLeadId, smsSentLeadIds, onboardingByLead, baselineLeadIds]);
 
-  return { metrics, isLoading, refetch: fetchAllData };
+  /* `refetch` keeps its name and contract — the Dashboard's refresh button calls it. It
+     invalidates rather than re-running the fetch by hand, so a refresh triggered from more than
+     one place cannot start two fetches. */
+  const refetch = useCallback(
+    () => { void queryClient.invalidateQueries({ queryKey }); },
+    [queryClient, queryKey],
+  );
+  return { metrics, isLoading, refetch };
 }
