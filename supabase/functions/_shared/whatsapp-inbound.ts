@@ -16,6 +16,7 @@ function ownWebsite(raw: string | null | undefined): string | null {
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, armStatusFor, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, modeSends, phoneSuppressed, pitchEverSent } from "./auto-reply-rules.ts";
 import { suppress } from "./suppression.ts";
+import { createMockupRow, fillMockupFromSite } from "./mockup-trigger.ts";
 
 // Inbound WhatsApp message handling — barber replies arriving on the SAME Meta
 // webhook that delivers statuses (Cloud API has ONE callback URL; inbound lives in
@@ -384,6 +385,70 @@ export async function handleInboundMessages(
                   hasCompletedAudit = !!doneRun;
                 }
 
+                /* ══ MOCKUP PREPARATION ═══════════════════════════════════════════════════════
+                   Paul's flow: a reply triggers their audit AND their mockup, then he opens ONE
+                   screen, places their images, and sends the before/after by hand.
+
+                   ⛔ CALLED FROM INSIDE THIS BRANCH SO IT INHERITS ALL SEVEN GUARDS. Everything
+                   above — the opener gate, the once-ever slot, decline, auto-responder,
+                   suppression, paying-customer, archived — has already refused by the time this
+                   runs, and every one of those refusals is the right answer for a mockup too. A
+                   parallel trigger would need all seven again, which is the drift CLAUDE.md
+                   records four incidents of.
+
+                   ⛔ IT SENDS NOTHING. It creates a `draft` row and reads their website. The
+                   before/after image is a manual second message, always.
+
+                   🔴 THE ROW IS AWAITED; THE SCRAPE IS NOT. This is a META WEBHOOK — the scrape
+                   takes 8-25s (measured 3.2s to 25.9s on six real sites) and Meta retries a slow
+                   webhook, which would re-run this whole chain. So the insert (one query) is
+                   awaited and the scrape is handed to EdgeRuntime.waitUntil, which runs it after
+                   the 200 has gone back. No waitUntil → the row still exists with `scrape: null`
+                   and the picker fills it on demand; absent and empty are different values. */
+                const prepareMockup = async (): Promise<void> => {
+                  try {
+                    const outcome = await createMockupRow(service, leadId);
+                    if (!outcome.started) {
+                      console.log(`[mockup] lead ${leadId}: not prepared — ${outcome.reason}${outcome.detail ? ` (${outcome.detail})` : ""}`);
+                      return;
+                    }
+                    console.log(`[mockup] lead ${leadId}: draft ${outcome.siteId} created, niche '${outcome.niche}'`);
+                    const fill = () =>
+                      fillMockupFromSite(
+                        service,
+                        outcome.siteId,
+                        {
+                          website: outcome.website,
+                          businessName: outcome.businessName,
+                          niche: outcome.niche,
+                          leadId,
+                        },
+                        {
+                          supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
+                          /* ⚠️ THE INTERNAL DOOR, AND IT IS NOT OPEN YET. scan-site-details has no
+                             internal branch, so this returns 401 until one is added — leaving the
+                             row with `scrape: null`, which the picker reads as "not scraped yet"
+                             and fills on demand with the operator's own JWT. Degraded, not broken;
+                             and NOT to be "fixed" by sending the service-role key, which §8 proves
+                             is dead on every function that has such a branch. */
+                          auth: {
+                            kind: "internal" as const,
+                            cronSecret: Deno.env.get("CRON_SECRET") ?? "",
+                          },
+                        },
+                      ).then((r) =>
+                        console.log(`[mockup] lead ${leadId}: scrape ${r.ok ? "ok" : "FAILED"} — ${r.detail}`)
+                      ).catch((e) => console.error(`[mockup] lead ${leadId}: scrape threw`, (e as Error).message));
+                    // deno-lint-ignore no-explicit-any
+                    const rt = (globalThis as any).EdgeRuntime;
+                    if (rt && typeof rt.waitUntil === "function") rt.waitUntil(fill());
+                    else console.log(`[mockup] lead ${leadId}: no waitUntil — scrape deferred to the picker.`);
+                  } catch (e) {
+                    // A mockup must never break the inbound webhook. The reply is already stored.
+                    console.error(`[mockup] lead ${leadId}: prepare threw`, (e as Error).message);
+                  }
+                };
+
                 /* ⚠️ THE ALREADY-SENT CHECK IS A SEND-MODE QUESTION. In audit_only mode we are not
                    proposing to send anything, so whether a pitch went out before decides nothing —
                    asking it would only mean recording a different reason for the same inaction, and
@@ -428,6 +493,9 @@ export async function handleInboundMessages(
                       console.log(armStatus === "pending"
                         ? `[auto-reply] lead ${leadId}: '${replyTemplate ?? DEFAULT_FIRST_REPLY_TEMPLATE}' queued (fires in ~3 min).`
                         : `[auto-reply] lead ${leadId}: audit already complete and mode is '${mode}' — recorded ${AUDIT_ONLY_STATUS}, NOTHING will send.`);
+                      /* Mockup call site 1 of 2: they ALREADY have a measurement. The audit half is
+                         done, so this is the only preparation left before Paul opens the picker. */
+                      await prepareMockup();
                     }
                   }
                 } else {
@@ -476,6 +544,12 @@ export async function handleInboundMessages(
                         console.error(`[auto-reply] ${armStatus} insert failed for lead ${leadId}:`, (awaitErr as { message?: string }).message);
                       }
                     } else {
+                      /* Mockup call site 2 of 2: no completed audit, so the audit is about to be
+                         fired below. The mockup does not wait for it — the two are independent
+                         (the mockup needs their WEBSITE, the audit needs Apify), and only the
+                         composite PNG needs both. Prepared first so the row exists even if the
+                         audit path below returns early. */
+                      await prepareMockup();
                       const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
                       /* ══ SERVE THE TOWN'S MARKET AUDIT BEFORE PAYING FOR A NEW ONE ═══════════
                          ⛔ THE HOLE THIS CLOSES. The check above is `.eq("lead_id", leadId)`, and a
