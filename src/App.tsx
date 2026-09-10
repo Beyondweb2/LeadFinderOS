@@ -33,6 +33,10 @@ const Feedback = lazy(() => import("./pages/Feedback"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Coverage = lazy(() => import("./pages/Coverage"));
+/* THE MOCKUP PICKER. Operator-only like every other page here: the pool carries a prospect's
+   own photos and the row is a DRAFT that must never be public (Step 1 proved anon reads only
+   published rows). Nothing on this screen sends or publishes anything. */
+const Mockups = lazy(() => import("./pages/Mockups"));
 const ReviewReply = lazy(() => import("./pages/ReviewReply"));
 const PageGenerator = lazy(() => import("./pages/PageGenerator"));
 const PagePlanQueue = lazy(() => import("./pages/PagePlanQueue"));
@@ -209,6 +213,13 @@ const App = () => {
               {/* /paid-clients is GONE (2026-08-12). Paying customers live in Outreach (the
               "Paid (money in)" filter, keyed on amount_paid > 0) and in the Inbox (paid
               conversations are exempt from the status filter). */}
+              {/* THE MOCKUP PICKER — one screen per business.
+                  /mockups      the mockups-waiting list (in the app rather than in SQL, Paul's ask)
+                  /mockups/:id  place the images for one business
+                  ⛔ The slot targets are read from the TEMPLATE, never hardcoded, so a new slot in
+                  Paul's template appears here with no code change. */}
+              <Route path="/mockups" element={<Mockups />} />
+              <Route path="/mockups/:id" element={<Mockups />} />
               <Route path="/templates" element={<Templates />} />
               {/* WhatsApp Inbox — operator-gated + in-app (each operator sees only their own) */}
               <Route path="/inbox" element={<Inbox />} />

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" role="img" aria-label="Mobile service van">
+  <rect width="1600" height="900" fill="#2c3a4a"/>
+  <g fill="none" stroke="#ccd6e0" stroke-opacity=".18" stroke-width="2">
+    <path d="M100 0V900"/>
+    <path d="M200 0V900"/>
+    <path d="M300 0V900"/>
+    <path d="M400 0V900"/>
+    <path d="M500 0V900"/>
+    <path d="M600 0V900"/>
+    <path d="M700 0V900"/>
+    <path d="M800 0V900"/>
+    <path d="M900 0V900"/>
+    <path d="M1000 0V900"/>
+    <path d="M1100 0V900"/>
+    <path d="M1200 0V900"/>
+    <path d="M1300 0V900"/>
+    <path d="M1400 0V900"/>
+    <path d="M1500 0V900"/>
+    <path d="M0 100H1600"/>
+    <path d="M0 200H1600"/>
+    <path d="M0 300H1600"/>
+    <path d="M0 400H1600"/>
+    <path d="M0 500H1600"/>
+    <path d="M0 600H1600"/>
+    <path d="M0 700H1600"/>
+    <path d="M0 800H1600"/>
+  </g>
+  <text x="800" y="430" text-anchor="middle" fill="#ccd6e0" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif"
+        font-size="58" font-weight="800" letter-spacing="-1">Mobile service van</text>
+  <text x="800" y="492" text-anchor="middle" fill="#ccd6e0" fill-opacity=".62"
+        font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="26" font-weight="600"
+        letter-spacing="3">PLACEHOLDER STOCK &#183; REPLACE THIS FILE</text>
+</svg>

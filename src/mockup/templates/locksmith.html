@@ -1,0 +1,79 @@
+<!-- ═══════════════════════════════════════════════════════════════════════════════════════════
+     REFERENCE TEMPLATE — locksmith. DELIBERATELY PLAIN.
+
+     ⛔ THIS IS NOT A DESIGN AND IS MEANT TO BE REPLACED. Paul is authoring the real one in a
+     separate session. Its only job is to be a WORKING example that exercises every placeholder in
+     the contract, so the contract can be seen in action rather than read.
+
+     It exercises: every business field, {{#each}} over services and areas, {{#if}} at both
+     granularities, {{url}} in an href and a src, and ONE image slot (hero).
+
+     🔴 THE HERO IS WRAPPED SO IT COLLAPSES. Measured: three of six real locksmiths have NO
+     hero-capable own-site photo, so a page with no hero is the common case, not the edge case.
+     Wrapping the <section> (rather than putting the {{#if}} inside it) is what makes the whole
+     block disappear instead of leaving an empty container — pinned by
+     scripts/mockup-render.test.ts.
+     ⛔ AND STOCK NEVER FILLS IT. Paul's rule: the hero is what renders in the WhatsApp preview, so
+     a stock photo where their shop should be reads as a template. Real photo or no photo.
+     ═══════════════════════════════════════════════════════════════════════════════════════════ -->
+<template data-page="home">
+<style>
+  :root { --ink:#14171a; --muted:#55595e; --accent:#8a6d1f; --line:#e6e6e6; }
+  * { box-sizing:border-box }
+  body { margin:0; font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); }
+  .wrap { max-width:860px; margin:0 auto; padding:0 22px; }
+  .hero img { width:100%; height:320px; object-fit:cover; border-radius:10px; }
+  h1 { font-size:clamp(28px,5vw,46px); line-height:1.08; letter-spacing:-.02em; margin:28px 0 10px; }
+  .lede { color:var(--muted); margin:0 0 6px; }
+  .cta { display:inline-block; margin:16px 0 0; background:var(--ink); color:#fff; text-decoration:none;
+         padding:12px 22px; border-radius:8px; font-weight:700; }
+  h2 { font-size:21px; margin:44px 0 14px; padding-top:20px; border-top:1px solid var(--line); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:15px; }
+  .card h3 { margin:0 0 5px; font-size:16px; }
+  .price { color:var(--accent); font-weight:700; margin:0 0 6px; }
+  .card p { margin:0; color:var(--muted); font-size:14.5px; }
+  .areas { color:var(--muted); }
+  footer { border-top:1px solid var(--line); margin-top:48px; padding:22px 0 64px; color:var(--muted); font-size:14px; }
+  footer p { margin:0 0 4px; }
+</style>
+
+{{#if img hero}}
+<section class="hero"><div class="wrap"><img src="{{url img hero}}" alt="{{business.name}}"></div></section>
+{{/if}}
+
+<div class="wrap">
+  <h1>{{business.trade}} in {{business.town}}</h1>
+  <p class="lede">{{business.name}}</p>
+  {{#if business.hours}}<p class="lede">Open {{business.hours}}</p>{{/if}}
+  {{#if business.phone}}<a class="cta" href="{{url business.phone_link}}">Call {{business.phone}}</a>{{/if}}
+
+  <h2>What we do</h2>
+  <div class="cards">
+  {{#each services}}
+    <div class="card">
+      <h3>{{.name}}</h3>
+      {{#if .price}}<p class="price">{{.price}}</p>{{/if}}
+      {{#if .description}}<p>{{.description}}</p>{{/if}}
+    </div>
+  {{/each}}
+  </div>
+
+  {{#if img work}}
+  <h2>Our work</h2>
+  <img src="{{url img work}}" alt="{{business.trade}} work" style="width:100%;height:260px;object-fit:cover;border-radius:10px">
+  {{/if}}
+
+  {{#if areas}}
+  <h2>Areas we cover</h2>
+  <p class="areas">{{#each areas}}{{.}} &middot; {{/each}}</p>
+  {{/if}}
+
+  <footer>
+    {{#if business.address}}<p>{{business.address}}</p>{{/if}}
+    {{#if business.phone}}<p>{{business.phone}}</p>{{/if}}
+    {{#if business.email}}<p>{{business.email}}</p>{{/if}}
+    <p>{{business.name}} &mdash; {{business.trade}} in {{business.town}}</p>
+  </footer>
+</div>
+</template>
