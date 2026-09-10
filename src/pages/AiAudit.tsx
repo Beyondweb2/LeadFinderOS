@@ -20,7 +20,8 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2 } from 'lucide-react';
+  Copy, Save, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2,
+  Archive, ArchiveRestore, ShieldCheck } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
@@ -48,6 +49,11 @@ import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMeasurementLock } from '@/hooks/useMeasurementLock';
+import { ToastAction } from '@/components/ui/toast';
+import {
+  auditProtection, PROTECTION_WORDING,
+  type AuditProtectionFacts, type ProtectionVerdict,
+} from '@/lib/auditProtection';
 import { describeLock, diffAgainstLock } from '@/lib/measurementLock';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
@@ -115,7 +121,12 @@ interface AuditRow { id: string; business_name: string; business_type: string | 
   /** > 1 marks a PAID BASELINE — the only report that still shows SEO grades (seoStyleForAudit).
    *  Optional because the market/report list selects vary; absent reads as "not a baseline", which
    *  is the safe direction (withhold the grade rather than show one we cannot justify). */
-  baseline_target_runs?: number | null }
+  baseline_target_runs?: number | null;
+  /** SOFT DELETE. Non-null = archived: hidden from the list, but the row, its runs and every
+   *  stored answer are all still in the database. Absent (the column predates most rows, and an
+   *  older deploy may not select it) reads as NOT archived, which is the safe direction — a
+   *  missing column must never hide the whole book. */
+  archived_at?: string | null }
 
 /* ── The audit book, grouped ────────────────────────────────────────────────────
    The list used to be one flat row per AUDIT, which reads as duplicates because the
@@ -198,8 +209,22 @@ const AUDIT_SEARCH_LIMIT = 200;
 
 /** The columns the landing list needs off ai_audits — shared by the full-list load and the search
  *  query so the two can't drift into hydrating different shapes. */
-const AUDIT_SELECT =
+/* ⛔ TWO SELECTS, AND THE SECOND IS NOT BELT-AND-BRACES. `archived_at` arrives with a migration
+   Paul runs BY HAND in the SQL editor (CLAUDE.md §6), so between this deploying and that running
+   the column does not exist — and PostgREST fails the WHOLE query on one unknown column, which
+   would blank the entire audit book rather than degrade. This is the exact fault §3 records
+   costing 20 minutes of dead submissions: code shipped ahead of its columns.
+   `auditSelectFallback` sheds the new column and the list keeps working, unarchived. */
+const AUDIT_SELECT_BASE =
   'id, business_name, business_type, location_text, country, has_website, website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted, is_measurement';
+const AUDIT_SELECT = `${AUDIT_SELECT_BASE}, archived_at`;
+
+/** True when a PostgREST error is "that column does not exist" (42703) rather than anything else.
+ *  Matched on the code AND the column name so an unrelated 42703 is never swallowed. */
+function isMissingArchivedColumn(err: { code?: string; message?: string } | null): boolean {
+  if (!err) return false;
+  return err.code === '42703' || /archived_at/i.test(err.message ?? '');
+}
 
 /** One ai_audits row as it arrives from AUDIT_SELECT, before hydration: baseline_runs_counted is a
  *  string here (the `baseline->>runs_counted` JSON extract) and runs/report_slug are not fetched yet.
@@ -373,7 +398,14 @@ const AiAudit = () => {
      it filters as you type. Deliberately NOT persisted: a remembered filter is how you come back to
      this page, see four audits and think you have lost 130. */
   const [auditQuery, setAuditQuery] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null); // audit being deleted (disables its row buttons)
+  const [deletingId, setDeletingId] = useState<string | null>(null); // audit being archived/restored (disables its row buttons)
+  /* The archive confirm. Holds the audit AND the verdict computed before the dialog opened, so
+     the dialog states a decision already made rather than re-deciding at click time. */
+  const [archiveTarget, setArchiveTarget] = useState<{ audit: AuditLite; verdict: ProtectionVerdict } | null>(null);
+  /* Show the archived audits instead of the live ones. Deliberately NOT persisted: it is a
+     temporary excursion, and coming back to the page in "archived" mode would read as an empty
+     audit book (CLAUDE.md §6c — persist what you were looking at, not a detour). */
+  const [showArchived, setShowArchived] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null); // audit whose run is being cancelled
   /** Which trade groups / businesses are expanded. Trades default OPEN (the list should read
    *  as a list), businesses default CLOSED (that is the whole point of collapsing re-runs). */
@@ -671,15 +703,24 @@ const AiAudit = () => {
     queryKey: auditListKey,
     enabled: !!user,
     queryFn: async () => {
-      const { data: audits } = await (supabase as unknown as SupabaseClient)
+      const fetchWith = (select: string) => (supabase as unknown as SupabaseClient)
         .from('ai_audits')
-        .select(AUDIT_SELECT)
+        .select(select)
         .order('created_at', { ascending: false })
         .limit(AUDIT_FETCH_LIMIT);
-      const auditRows = (audits ?? []) as RawAuditRow[];
+
+      const first = await fetchWith(AUDIT_SELECT);
+      /* Column not there yet (migration unrun) → shed it and fetch again, rather than showing an
+         empty book. `archivedReady` tells the UI to hide the archive controls instead of offering
+         a button that cannot work. */
+      const missing = isMissingArchivedColumn(first.error);
+      const archivedReady = !missing;
+      const rows = missing ? (await fetchWith(AUDIT_SELECT_BASE)).data : first.data;
+      const auditRows = ((rows ?? []) as unknown) as RawAuditRow[];
       return {
         audits: await hydrateAudits(auditRows),
         capped: auditRows.length >= AUDIT_FETCH_LIMIT,
+        archivedReady,
       };
     },
   });
@@ -687,13 +728,18 @@ const AiAudit = () => {
   /** True when the audits query came back full, i.e. older audits exist beyond it. Drives an
    *  honest label instead of a count that silently stops growing. */
   const auditsCapped = auditListQuery.data?.capped ?? false;
+  /** False until the `archived_at` migration has run. Everything archive-related hides rather
+   *  than rendering a control that would fail — a button that visibly does nothing is the
+   *  failure CLAUDE.md §6c names. Defaults FALSE while the first fetch is in flight so the
+   *  controls appear only once the column is proven present. */
+  const archivedReady = auditListQuery.data?.archivedReady ?? false;
   const loadSaved = useCallback(() => { void queryClient.invalidateQueries({ queryKey: auditListKey }); },
     [queryClient, auditListKey]);
   /* The optimistic row edits below still write directly into the cached list, so a delete or a
      rename shows at once rather than after a round trip. Same shape as the old setSavedAudits. */
   const setSavedAudits = useCallback((update: (prev: AuditLite[]) => AuditLite[]) => {
-    queryClient.setQueryData<{ audits: AuditLite[]; capped: boolean }>(auditListKey, (prev) =>
-      prev ? { ...prev, audits: update(prev.audits) } : prev);
+    queryClient.setQueryData<{ audits: AuditLite[]; capped: boolean; archivedReady: boolean }>(
+      auditListKey, (prev) => prev ? { ...prev, audits: update(prev.audits) } : prev);
   }, [queryClient, auditListKey]);
 
   /* ── SERVER-SIDE NAME SEARCH ─────────────────────────────────────────────────────────────────
@@ -949,8 +995,8 @@ const AiAudit = () => {
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
     setOpenRunId(null); setShowDetails(false);
     setRevealed(0); setStep('source');
-    // Close the dialog: deleteAudit calls this, and leaving an emptied form open over the list
-    // after deleting the audit you were viewing would look like a bug.
+    // Close the dialog: confirmArchiveAudit calls this, and leaving an emptied form open over
+    // the list after archiving the audit you were viewing would look like a bug.
     setFormOpen(false);
   };
 
@@ -980,20 +1026,125 @@ const AiAudit = () => {
   const resumeDraft = () => setFormOpen(true);
 
   // Delete an audit + all its children (ai_audit_runs / ai_audit_queue cascade from the FK).
-  // Owner RLS lets the browser delete its own row. Mirrors AdminSitesList: confirm → delete →
-  // optimistic filter → toast. If the deleted audit is the one open in the results view, reset.
-  const deleteAudit = async (a: AuditRow) => {
+  /* ════════════════════════════════════════════════════════════════════════════════════════
+     ARCHIVING REPLACED DELETING — 2026-09-10.
+
+     🔴 WHAT THIS USED TO DO. `supabase.from('ai_audits').delete()` behind a one-line
+     window.confirm, on a 24px trash icon, with NO exemption for a paying customer's baseline.
+     The delete CASCADES (ai_audit_runs and ai_audit_queue are both ON DELETE CASCADE, and
+     page_plan_queue with them), so it destroyed the run, every question and every stored
+     answer — the measurement itself. Nothing is backed up and nothing was recoverable.
+
+     Now: a protection check that REFUSES on anything load-bearing, a confirm that shows what is
+     about to go, an UPDATE that only sets a timestamp, and an Undo on the toast. The row and all
+     its children stay in the database permanently.
+     ⚠️ `deletingId` keeps its name: it is referenced at several render sites and renaming it is
+     churn inside a file this stage is deliberately not restructuring. It means "busy on this id".
+     ════════════════════════════════════════════════════════════════════════════════════════ */
+
+  /** Gather the four protection facts for one audit. Two are already on the row; two are reads
+   *  that may fail — and a failed read returns `null`, NEVER `false`. Under RLS a denied read is
+   *  200-with-[] (CLAUDE.md §8), indistinguishable from "nothing found", so collapsing either
+   *  into `false` would hand out permission we never verified. */
+  const gatherProtectionFacts = useCallback(async (a: AuditLite): Promise<AuditProtectionFacts> => {
+    let leadIsPaying: boolean | null = null;
+    if (!a.lead_id) {
+      /* No lead at all is a KNOWN answer, not an unknown one — a market audit or an
+         audit-only business (ABLM) genuinely has no customer behind it. */
+      leadIsPaying = false;
+    } else {
+      const { data, error } = await (supabase as unknown as SupabaseClient)
+        .from('outreach_leads').select('amount_paid').eq('id', a.lead_id).maybeSingle();
+      /* paid means amount_paid > 0, everywhere (CLAUDE.md §6). */
+      if (!error) leadIsPaying = Number((data as { amount_paid?: number | null } | null)?.amount_paid ?? 0) > 0;
+    }
+
+    let hasMeasurementLock: boolean | null = null;
+    {
+      const { data, error } = await (supabase as unknown as SupabaseClient)
+        .from('measurement_locks').select('id').eq('business_name', a.business_name).limit(1);
+      /* A missing TABLE (the lock migration is hand-run too) is a failed check, not "no lock". */
+      if (!error) hasMeasurementLock = ((data as unknown[] | null) ?? []).length > 0;
+    }
+
+    return {
+      baselineTargetRuns: a.baseline_target_runs ?? null,
+      isMeasurement: a.is_measurement ?? null,
+      leadIsPaying,
+      hasMeasurementLock,
+    };
+  }, []);
+
+  /** Step 1 of archiving: work out whether we may, and open the confirm showing the answer.
+   *  The check runs BEFORE the dialog so the operator never reads "are you sure?" about
+   *  something the app is going to refuse anyway. */
+  const askArchiveAudit = async (a: AuditLite) => {
     if (deletingId) return;
-    if (!window.confirm(`Delete "${a.business_name}"? This can't be undone.`)) return;
+    if (!archivedReady) {
+      toast({
+        title: 'Archiving is not set up yet',
+        description: 'The archived_at column has not been added to the database. Run the migration SQL, then reload.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setDeletingId(a.id);
     try {
-      const { error } = await supabase.from('ai_audits').delete().eq('id', a.id);
-      if (error) throw new Error(error.message);
-      setSavedAudits((prev) => prev.filter((x) => x.id !== a.id));
-      if (auditId === a.id) resetWizard(); // don't leave a stale open view of a deleted audit
-      toast({ title: 'Audit deleted' });
+      const facts = await gatherProtectionFacts(a);
+      setArchiveTarget({ audit: a, verdict: auditProtection(facts) });
     } catch (e) {
-      toast({ title: 'Delete failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+      /* Could not even gather the facts → refuse. Same direction as a null fact. */
+      toast({
+        title: 'Could not check this audit',
+        description: `${e instanceof Error ? e.message : 'Read failed'} — nothing was archived.`,
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  /** Flip archived_at. One function for both directions so archive and restore cannot drift. */
+  const setArchived = async (a: AuditLite, archived: boolean) => {
+    const value = archived ? new Date().toISOString() : null;
+    const { error } = await (supabase as unknown as SupabaseClient)
+      .from('ai_audits').update({ archived_at: value }).eq('id', a.id);
+    if (error) throw new Error(error.message);
+    setSavedAudits((prev) => prev.map((x) => x.id === a.id ? { ...x, archived_at: value } : x));
+  };
+
+  /** Step 2: actually archive. Only ever reached for an audit the verdict cleared. */
+  const confirmArchiveAudit = async () => {
+    const target = archiveTarget;
+    if (!target || target.verdict.isProtected) return;
+    const a = target.audit;
+    setDeletingId(a.id);
+    try {
+      await setArchived(a, true);
+      setArchiveTarget(null);
+      if (auditId === a.id) resetWizard(); // don't leave an open view of an archived audit
+      toast({
+        title: 'Audit archived',
+        description: `"${a.business_name}" is hidden from the list. Nothing was deleted.`,
+        action: (
+          <ToastAction altText="Undo" onClick={() => { void restoreAudit(a); }}>Undo</ToastAction>
+        ),
+      });
+    } catch (e) {
+      toast({ title: 'Archive failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  /** Bring one back. Used by Undo and by the Restore button in the archived list. */
+  const restoreAudit = async (a: AuditLite) => {
+    setDeletingId(a.id);
+    try {
+      await setArchived(a, false);
+      toast({ title: 'Audit restored', description: `"${a.business_name}" is back in the list.` });
+    } catch (e) {
+      toast({ title: 'Restore failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
     } finally {
       setDeletingId(null);
     }
@@ -1663,9 +1814,23 @@ const AiAudit = () => {
      behaviour that /a/<auditId> links depend on.
      TRADE: tradeWord(), because the raw business_type does not group — plumber/plumbers/
      Plumber are one trade stored three ways. */
+  /* ⛔ ARCHIVED AUDITS ARE FILTERED HERE, NOT IN `listSource`. listSource also feeds
+     `openAuditRow`, so filtering it would make an archived audit unopenable by deep link
+     (/ai-audit?runId=…) — hidden from the list is not the same as gone from the app.
+     ⚠️ `!a.archived_at` and not `a.archived_at === null`: the field is absent, not null, on a
+     row fetched by the pre-migration fallback select, and an absent value must read as NOT
+     archived or the whole book vanishes (CLAUDE.md §6). */
+  const visibleAudits = useMemo<AuditLite[]>(
+    () => listSource.filter((a) => (showArchived ? !!a.archived_at : !a.archived_at)),
+    [listSource, showArchived],
+  );
+  /** How many are archived, for the toggle's label. Counted off the fetched window only, which
+   *  is the same window the list itself shows — so the number and the list always agree. */
+  const archivedCount = useMemo(() => listSource.filter((a) => !!a.archived_at).length, [listSource]);
+
   const businesses = useMemo<BusinessGroup[]>(() => {
     const byKey = new Map<string, AuditLite[]>();
-    for (const a of listSource) {
+    for (const a of visibleAudits) {
       const key = a.lead_id ?? `name:${(a.business_name ?? '').trim().toLowerCase()}`;
       const list = byKey.get(key) ?? [];
       list.push(a);
@@ -1696,7 +1861,7 @@ const AiAudit = () => {
     }
     // Most recent activity first within a trade.
     return out.sort((a, b) => b.latestAudit.created_at.localeCompare(a.latestAudit.created_at));
-  }, [listSource]);
+  }, [visibleAudits]);
 
   /* ── THE FILTER ───────────────────────────────────────────────────────────────────────────────
      Matches NAME, TRADE and TOWN, because the way you remember an audit is often "that Wisbech
@@ -2114,10 +2279,36 @@ const AiAudit = () => {
                     did before: any form state restored from sessionStorage is still there, exactly as
                     it would have been sitting on the page. Choosing "New business" or a different
                     lead inside the dialog is what changes the subject, same as it always was. */}
-                <Button size="sm" onClick={() => setFormOpen(true)}>
-                  <Plus className="mr-1.5 h-4 w-4" /> New audit
-                </Button>
+                <div className="flex items-center gap-2">
+                  {/* ⛔ THE TOGGLE ONLY EXISTS ONCE SOMETHING IS ARCHIVED, and only once the
+                      column is proven present. An "Archived (0)" control on a fresh install is
+                      furniture, and one that 400s because the migration has not run is worse. */}
+                  {archivedReady && (archivedCount > 0 || showArchived) && (
+                    <Button
+                      variant={showArchived ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => { setShowArchived((v) => !v); setAuditQuery(''); }}
+                      title={showArchived ? 'Back to the live audit list' : 'Show audits you have archived'}
+                    >
+                      {showArchived
+                        ? (<><Undo2 className="mr-1.5 h-4 w-4" /> Back to live</>)
+                        : (<><Archive className="mr-1.5 h-4 w-4" /> Archived ({archivedCount})</>)}
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={() => setFormOpen(true)}>
+                    <Plus className="mr-1.5 h-4 w-4" /> New audit
+                  </Button>
+                </div>
               </div>
+
+              {/* Say which list you are looking at. Without this an archived view with three rows
+                  in it is indistinguishable from an audit book that has lost everything. */}
+              {showArchived && (
+                <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+                  Showing <span className="font-medium text-foreground">archived</span> audits. Nothing here is deleted —
+                  every run and every stored answer is still in the database. Use the restore arrow to put one back.
+                </div>
+              )}
 
               {/* ── SEARCH ────────────────────────────────────────────────────────────────────────
                   Only once there is enough to lose something in. Below that the list IS the search,
@@ -2272,12 +2463,20 @@ const AiAudit = () => {
                                     {cancellingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleStop className="h-3.5 w-3.5" />}
                                   </Button>
                                 )}
-                                {/* Delete stays on the row ONLY for a single-audit business. With several
-                                    audits it would be ambiguous which one goes, so it moves inside. */}
-                                {!nested && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => deleteAudit(a)} disabled={deletingId === a.id} title="Delete this audit">
-                                    {deletingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                  </Button>
+                                {/* Archive stays on the row ONLY for a single-audit business. With several
+                                    audits it would be ambiguous which one goes, so it moves inside.
+                                    ⚠️ NOT destructive-red any more, and not a bin: this hides a row, it
+                                    does not destroy a measurement. The red is spent on the confirm. */}
+                                {!nested && archivedReady && (
+                                  showArchived ? (
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => restoreAudit(a)} disabled={deletingId === a.id} title="Restore this audit to the list">
+                                      {deletingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArchiveRestore className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  ) : (
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => askArchiveAudit(a)} disabled={deletingId === a.id} title="Archive this audit — hides it from the list, deletes nothing">
+                                      {deletingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  )
                                 )}
                               </div>
 
@@ -2294,9 +2493,15 @@ const AiAudit = () => {
                                         </span>
                                         <AuditPills audit={au} run={au.runs[0] ?? null} />
                                         <span className="flex-1" />
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => deleteAudit(au)} disabled={deletingId === au.id} title="Delete this audit and its runs">
-                                          {deletingId === au.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                                        </Button>
+                                        {archivedReady && (showArchived ? (
+                                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => restoreAudit(au)} disabled={deletingId === au.id} title="Restore this audit to the list">
+                                            {deletingId === au.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArchiveRestore className="h-3 w-3" />}
+                                          </Button>
+                                        ) : (
+                                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => askArchiveAudit(au)} disabled={deletingId === au.id} title="Archive this audit — hides it from the list, deletes nothing">
+                                            {deletingId === au.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
+                                          </Button>
+                                        ))}
                                       </div>
                                       {au.runs.length === 0 ? (
                                         <div className="pl-3 text-[11px] text-muted-foreground">No runs</div>
@@ -2627,6 +2832,83 @@ const AiAudit = () => {
       {/* ══ THE WRONG-TOWN BLOCK ════════════════════════════════════════════════════
           Nothing has been spent at this point — create-ai-audit refuses before generating questions
           or inserting queue rows, so cancelling costs nothing and overriding costs the normal audit. */}
+      {/* ════════════════════════════════════════════════════════════════════════════════════
+          ARCHIVE CONFIRM — replaces a one-line window.confirm that said only "this can't be
+          undone" and was, unusually, telling the truth. It now shows WHAT is being archived
+          (how many audits and runs sit under it), states plainly that nothing is deleted, and
+          when the audit is load-bearing it REFUSES with the reason instead of asking.
+          ⚠️ The verdict was computed before this opened — the dialog reports a decision, it
+          does not make one, so the confirm button cannot race the check. */}
+      <Dialog open={!!archiveTarget} onOpenChange={(o) => { if (!o) setArchiveTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          {archiveTarget && (() => {
+            const { audit, verdict } = archiveTarget;
+            const runCount = audit.runs?.length ?? 0;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    {verdict.isProtected
+                      ? (<><ShieldCheck className="h-4 w-4 text-primary" /> Kept — this one is protected</>)
+                      : (<><Archive className="h-4 w-4" /> Archive this audit?</>)}
+                  </DialogTitle>
+                  <DialogDescription className="pt-1">
+                    <span className="font-medium text-foreground">{audit.business_name}</span>
+                    {audit.location_text ? <> · {audit.location_text}</> : null}
+                    {' · '}
+                    {new Date(audit.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </DialogDescription>
+                </DialogHeader>
+
+                {verdict.isProtected ? (
+                  <div className="space-y-3 text-sm">
+                    <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                      {/* Every reason, not just the headline: an audit can be a customer's
+                          baseline AND part of a locked set, and hiding the second one would
+                          make a later refusal look inconsistent. */}
+                      <ul className="space-y-1.5">
+                        {verdict.reasons.map((r) => (
+                          <li key={r} className="text-foreground">{PROTECTION_WORDING[r]}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <p className="text-muted-foreground">
+                      {verdict.uncertain
+                        ? 'Because that check did not answer, this audit is being kept. Try again in a moment, or archive it once the check succeeds.'
+                        : 'Audits like this are the evidence behind what a customer was promised, so they cannot be archived from here.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-sm">
+                    <p className="text-muted-foreground">
+                      It will be hidden from the audit list. <span className="font-medium text-foreground">Nothing is deleted</span> —
+                      the audit, its {runCount === 1 ? 'run' : `${runCount} runs`} and every stored answer stay in the database,
+                      and you can bring it back at any time from <span className="font-medium text-foreground">Show archived</span>.
+                    </p>
+                    <p className="text-muted-foreground">
+                      Any report link already sent to a prospect keeps working.
+                    </p>
+                  </div>
+                )}
+
+                <DialogFooter className="gap-2 sm:gap-2">
+                  <Button variant="outline" onClick={() => setArchiveTarget(null)}>
+                    {verdict.isProtected ? 'Close' : 'Cancel'}
+                  </Button>
+                  {!verdict.isProtected && (
+                    <Button onClick={confirmArchiveAudit} disabled={deletingId === audit.id}>
+                      {deletingId === audit.id
+                        ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Archiving…</>)
+                        : (<><Archive className="mr-2 h-4 w-4" /> Archive</>)}
+                    </Button>
+                  )}
+                </DialogFooter>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!distanceBlock} onOpenChange={(o) => { if (!o) setDistanceBlock(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
