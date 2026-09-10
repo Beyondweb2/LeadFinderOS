@@ -263,15 +263,21 @@ export default function CompareMeasurements() {
         <>
           {/* ── HEADLINE ─────────────────────────────────────────────────────────── */}
           <Card className="p-5 sm:p-6">
-            <div className="flex flex-wrap items-center gap-3">
-              {comparison.movement === 'incomparable'
-                ? <Badge variant="destructive">Cannot compare</Badge>
-                : <MoveChip movement={comparison.movement} />}
-              <span className="text-xs text-muted-foreground">
-                Sampling swing between repeat measurements: ±{comparison.noiseBandPp} points
-              </span>
-            </div>
-            <p className="mt-3 text-[1.05rem] font-medium leading-relaxed text-foreground">{comparison.headline}</p>
+            {/* ⛔ LEAD WITH THE ANSWER IN PLAIN WORDS. This page used to open with a
+                four-clause sentence carrying the counts, the rate, the noise band and the
+                verdict all at once, and the reader had to parse it to learn the one thing they
+                came for: did it move or not. The sentence is still here — it is the honest
+                detail and it is what the export carries — but it is now support underneath the
+                answer, not the answer itself. */}
+            <p className="text-2xl font-bold tracking-tight">
+              {comparison.movement === 'incomparable' ? "Can't compare these two"
+                : comparison.movement === 'improved' ? 'Improved'
+                : comparison.movement === 'dropped' ? 'Dropped'
+                : 'No proven change'}
+            </p>
+            <p className="mt-1.5 max-w-[52rem] text-sm leading-relaxed text-muted-foreground">
+              {comparison.headline}
+            </p>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               {([['Before', comparison.before], ['After', comparison.after]] as const).map(([label, side]) => (
@@ -291,10 +297,12 @@ export default function CompareMeasurements() {
               ))}
             </div>
 
+            {/* Was a full amber panel. The two tiles above already print both denominators, so
+                the panel was restating what the reader could see — one line carries the point
+                that matters (use the rate, not the count) without a box around it. */}
             {comparison.unevenRuns && (
-              <p className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-                The two sides were measured a different number of times, so the honest figure is the
-                <span className="font-semibold"> rate</span>, not the raw count. Both denominators are shown above and on every row.
+              <p className="mt-3 text-xs text-muted-foreground">
+                Measured a different number of times each side — compare the <span className="font-medium text-foreground">%</span>, not the count.
               </p>
             )}
             {(comparison.onlyBefore.length > 0 || comparison.onlyAfter.length > 0) && (
