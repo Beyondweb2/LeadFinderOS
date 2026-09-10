@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { asPence, SEO_SCAN_USD } from '@/lib/marketView';
@@ -19,9 +19,9 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
-  Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
+  Building2, Users, TrendingUp, EyeOff, Globe, Map as MapIcon, Download, ChevronDown,
   Copy, Save, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2,
-  Archive, ArchiveRestore, ShieldCheck } from 'lucide-react';
+  Archive, ShieldCheck } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
@@ -108,92 +108,10 @@ const COUNTRIES: { value: string; label: string }[] = [
 ];
 
 
-interface AuditRow { id: string; business_name: string; business_type: string | null; location_text: string | null; country: string | null; has_website: boolean; created_at: string;
-  /** The client's own site. Selected so the report's "Cited as a source" figure can tell a
-   *  citation of their OWN domain from a citation of somebody else's. May be null. */
-  website?: string | null;
-  /** MARKET audit: a trade and a town with no business attached. Its named count is 0 by
-   *  construction, so nothing here may render it as a business's result — see isMarketAudit. */
-  is_market?: boolean | null;
-  /** Full Measurement (3-run, full question set). Re-audit reads this to reproduce a LIKE-FOR-LIKE
-   *  re-measure — a measurement re-audits as a measurement, a quick audit stays quick. */
-  is_measurement?: boolean | null;
-  /** > 1 marks a PAID BASELINE — the only report that still shows SEO grades (seoStyleForAudit).
-   *  Optional because the market/report list selects vary; absent reads as "not a baseline", which
-   *  is the safe direction (withhold the grade rather than show one we cannot justify). */
-  baseline_target_runs?: number | null;
-  /** SOFT DELETE. Non-null = archived: hidden from the list, but the row, its runs and every
-   *  stored answer are all still in the database. Absent (the column predates most rows, and an
-   *  older deploy may not select it) reads as NOT archived, which is the safe direction — a
-   *  missing column must never hide the whole book. */
-  archived_at?: string | null }
-
-/* ── The audit book, grouped ────────────────────────────────────────────────────
-   The list used to be one flat row per AUDIT, which reads as duplicates because the
-   Inbox button, the bulk runner and the wizard each mint a NEW ai_audits row for the
-   same lead (only the wizard's edited re-run and the baseline chain reuse an audit id).
-   That upstream behaviour is deliberately left alone: /a/<auditId> report links are
-   already out with real prospects, and reusing ids would change which run they resolve to.
-
-   So the grouping happens HERE: audits are folded by BUSINESS (lead_id when we have one,
-   else the normalised name), and businesses are folded by TRADE via tradeWord(). One
-   collapsed row per business; every audit and run stays reachable underneath. */
-
-/** One run, with the scalars the list needs pulled out of results so no big JSONB moves. */
-interface RunLite {
-  id: string;
-  audit_id: string;
-  run_number: number;
-  status: string;
-  mention_rate: number | null;
-  created_at: string;
-  actor_cost_usd: number | null;
-  seo_grade: string | null;
-  /** Live progress, only meaningful while in flight. done counts queue rows that have
-   *  SETTLED — status 'done' or 'failed' (the queue's vocabulary is not 'complete'). */
-  done: number;
-  total: number;
-}
-
-interface AuditLite extends AuditRow {
-  lead_id: string | null;
-  first_opened_at: string | null;
-  open_count: number | null;
-  baseline_target_runs: number | null;
-  baseline_runs_counted: number | null;
-  baseline_completed_at: string | null;
-  baseline_error: string | null;
-  report_slug: string | null;
-  /** Whether the linked lead has paid. The slot the audit asked to keep: nothing qualifies yet
-   *  (amount_paid is null on all 409 leads), so it simply does not render until one does. */
-  lead_paid?: boolean;
-  /** Newest run first. */
-  runs: RunLite[];
-}
-
-interface BusinessGroup {
-  key: string;
-  name: string;
-  trade: string;
-  business_type: string | null;
-  location: string | null;
-  has_website: boolean;
-  /** A trade-and-town audit with no business attached. Read off the newest audit — already
-   *  selected, so no extra query. Searchable like anything else, but badged, because a sentinel
-   *  called "[market] locksmiths · Hastings" is not a client and must not read as one. */
-  isMarket: boolean;
-  /** Newest audit first. */
-  audits: AuditLite[];
-  /** The newest audit and its latest run — what the collapsed row shows. */
-  latestAudit: AuditLite;
-  latestRun: RunLite | null;
-  runningRun: RunLite | null;
-  auditCount: number;
-  runCount: number;
-  cost: number;
-}
-interface LeadOption { id: string; business_name: string; category: string | null; country: string | null; website: string | null; address: string | null; search_keyword?: string | null; search_location?: string | null; derived_town?: string | null }
-
+/* The audit book's shapes now live in src/types/auditBook.ts so the list, the wizard and the
+   results view can each be their own component and still share them. */
+import type { AuditRow, RunLite, AuditLite, BusinessGroup, LeadOption } from '@/types/auditBook';
+import { AuditBookList } from '@/components/audit/AuditBookList';
 const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
 
 /** How many audits the landing list loads. Was 50, then 300; both silently truncated once the audit
@@ -1871,7 +1789,19 @@ const AiAudit = () => {
      both "Locksmith" and "Wellsecure Locksmiths".
      Every term must match SOMEWHERE in the row, so "wisbech locksmith" narrows rather than widening
      — the two words are in different fields, which an all-in-one-field match would miss. */
-  const auditQueryTerms = useMemo(() => auditSearchTerms(auditQuery), [auditQuery]);
+  /* ⛔ THE SEARCH BOX FILTERS ON A DEFERRED COPY OF WHAT YOU TYPED, AND THAT IS THE TYPING LAG
+     FIX. Measured 2026-09-10 against the live database: 968 audits fold into **901 business
+     rows**, and `closedTrades` starts EMPTY — every trade group is expanded — so all 901 rows,
+     each with its own pill row, were re-rendered synchronously on every single keystroke.
+     `useDeferredValue` lets React paint the character you typed first and re-filter the list
+     immediately afterwards, interrupting that work if you type again. The input stays bound to
+     `auditQuery` (instant), everything downstream reads `deferredQuery`.
+     ⚠️ NOT a debounce: nothing is delayed by a timer, and no keystroke is dropped. The list is
+     never more than one render behind, and always settles on what you actually typed.
+     ⚠️ The SERVER-side name search deliberately keeps reading the raw `auditQuery` — it has its
+     own 300ms debounce, and deferring a value that is already debounced would only add lag. */
+  const deferredQuery = useDeferredValue(auditQuery);
+  const auditQueryTerms = useMemo(() => auditSearchTerms(deferredQuery), [deferredQuery]);
   const filteredBusinesses = useMemo(
     () => (auditQueryTerms.length === 0 ? businesses : businesses.filter((b) => auditMatches(b, auditQueryTerms))),
     [businesses, auditQueryTerms],
@@ -2257,286 +2187,31 @@ const AiAudit = () => {
             </div>
           )}
 
-          {/* THE PAGE IS NOW JUST THE LIST. The source picker and the whole business-details form
-              moved into the dialog at the bottom of this component — they used to sit in this same
-              card, above the list, which is what made the page feel cluttered. */}
-          <StepCard>
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-baseline gap-2">
-                  <Label className="text-sm font-semibold text-foreground">Past audits</Label>
-                  {/* Honest about the window: the count is what was LOADED, and says so when full.
-                      AND WITH A SEARCH ACTIVE IT DESCRIBES THE SEARCH, not the page — leaving
-                      "129 businesses" above a list of three would make the filter look broken. */}
-                  <span className="text-[11px] text-muted-foreground">
-                    {auditQueryTerms.length > 0
-                      ? `${filteredBusinesses.length} of ${metrics.businesses} match`
-                      : `${metrics.businesses} business${metrics.businesses === 1 ? '' : 'es'} · ${metrics.audits} audit${metrics.audits === 1 ? '' : 's'}`}
-                    {auditsCapped ? ` (latest ${AUDIT_FETCH_LIMIT})` : ''}
-                  </span>
-                </div>
-                {/* Opens the dialog WITHOUT resetting, so this is a pure relocation of what the page
-                    did before: any form state restored from sessionStorage is still there, exactly as
-                    it would have been sitting on the page. Choosing "New business" or a different
-                    lead inside the dialog is what changes the subject, same as it always was. */}
-                <div className="flex items-center gap-2">
-                  {/* ⛔ THE TOGGLE ONLY EXISTS ONCE SOMETHING IS ARCHIVED, and only once the
-                      column is proven present. An "Archived (0)" control on a fresh install is
-                      furniture, and one that 400s because the migration has not run is worse. */}
-                  {archivedReady && (archivedCount > 0 || showArchived) && (
-                    <Button
-                      variant={showArchived ? 'secondary' : 'ghost'}
-                      size="sm"
-                      onClick={() => { setShowArchived((v) => !v); setAuditQuery(''); }}
-                      title={showArchived ? 'Back to the live audit list' : 'Show audits you have archived'}
-                    >
-                      {showArchived
-                        ? (<><Undo2 className="mr-1.5 h-4 w-4" /> Back to live</>)
-                        : (<><Archive className="mr-1.5 h-4 w-4" /> Archived ({archivedCount})</>)}
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={() => setFormOpen(true)}>
-                    <Plus className="mr-1.5 h-4 w-4" /> New audit
-                  </Button>
-                </div>
-              </div>
-
-              {/* Say which list you are looking at. Without this an archived view with three rows
-                  in it is indistinguishable from an audit book that has lost everything. */}
-              {showArchived && (
-                <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
-                  Showing <span className="font-medium text-foreground">archived</span> audits. Nothing here is deleted —
-                  every run and every stored answer is still in the database. Use the restore arrow to put one back.
-                </div>
-              )}
-
-              {/* ── SEARCH ────────────────────────────────────────────────────────────────────────
-                  Only once there is enough to lose something in. Below that the list IS the search,
-                  and a box over four rows is furniture. */}
-              {businesses.length > SEARCH_MIN_BUSINESSES && (
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={auditQuery}
-                    onChange={(e) => setAuditQuery(e.target.value)}
-                    /* Escape clears rather than blurring. preventDefault stops it closing anything
-                       this input happens to sit inside. */
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.preventDefault(); setAuditQuery(''); }
-                    }}
-                    placeholder="Search by name, trade or town"
-                    aria-label="Search past audits"
-                    className="h-8 pl-8 pr-8 text-[13px]"
-                  />
-                  {auditQuery !== '' && (
-                    <button
-                      type="button"
-                      onClick={() => setAuditQuery('')}
-                      aria-label="Clear search"
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* NOTHING MATCHED — said out loud, with the term quoted back and a way out. An empty
-                  list reads as "you have no audits", which is the opposite of the truth, and is
-                  exactly how a filter left on by accident becomes a panic. */}
-              {businesses.length > 0 && filteredBusinesses.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
-                  <Search className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
-                  <div className="text-sm font-medium">No audits match &ldquo;{auditQuery}&rdquo;</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Searched {businesses.length} business{businesses.length === 1 ? '' : 'es'} by name, trade and town
-                    {auditsCapped ? `, from the latest ${AUDIT_FETCH_LIMIT} audits loaded` : ''}.
-                  </div>
-                  <Button size="sm" variant="outline" className="mt-3" onClick={() => setAuditQuery('')}>
-                    <X className="mr-1.5 h-3.5 w-3.5" /> Clear search
-                  </Button>
-                </div>
-              ) : businesses.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
-                  <Sparkles className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
-                  <div className="text-sm font-medium">No audits yet</div>
-                  {/* "above" was correct when the form sat at the top of this card. It doesn't now. */}
-                  <div className="text-[11px] text-muted-foreground">Run your first audit to see how AI answers for a business.</div>
-                  <Button size="sm" className="mt-3" onClick={() => setFormOpen(true)}>
-                    <Plus className="mr-1.5 h-4 w-4" /> New audit
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {tradeGroups.map(({ trade, items }) => {
-                    const collapsed = closedTrades.has(trade);
-                    const running = items.filter((b) => b.runningRun).length;
-                    return (
-                      <div key={trade} className="space-y-1.5">
-                        {/* Trade header — collapsible, largest trade first */}
-                        <button
-                          onClick={() => setClosedTrades((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(trade)) next.delete(trade); else next.add(trade);
-                            return next;
-                          })}
-                          className="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted/50"
-                        >
-                          {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
-                          <span className="text-xs font-semibold capitalize">{trade}</span>
-                          <span className="text-[11px] text-muted-foreground">{items.length}</span>
-                          {running > 0 && (
-                            <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-[hsl(var(--badge-waiting))] px-1.5 py-0.5 text-[10px] font-medium text-[hsl(var(--badge-waiting-fg))]">
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" />{running} running
-                            </span>
-                          )}
-                        </button>
-
-                        {!collapsed && items.map((b) => {
-                          const expanded = openBusinesses.has(b.key);
-                          const nested = b.auditCount > 1 || b.runCount > 1;
-                          const inFlight = b.runningRun;
-                          const a = b.latestAudit;
-                          const run = b.latestRun;
-                          return (
-                            <div key={b.key} className="rounded-lg border border-border/60 bg-card/60 transition-colors hover:bg-card">
-                              {/* Collapsed row: ONE per business */}
-                              <div className="flex items-center gap-2 px-3 py-2">
-                                {nested ? (
-                                  <button
-                                    onClick={() => setOpenBusinesses((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(b.key)) next.delete(b.key); else next.add(b.key);
-                                      return next;
-                                    })}
-                                    className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted"
-                                    title={expanded ? 'Hide runs' : `Show ${b.auditCount} audits, ${b.runCount} runs`}
-                                  >
-                                    {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                  </button>
-                                ) : <span className="w-[18px] shrink-0" />}
-
-                                <button onClick={() => reopenAudit(a)} className="min-w-0 flex-1 text-left" title="Open latest results">
-                                  {/* PRIMARY: the business. Heavier and darker than everything else on the row. */}
-                                  <div className="flex items-center gap-1.5 truncate text-[0.95rem] font-semibold text-foreground">
-                                    {b.has_website ? <Globe className="h-3 w-3 shrink-0 text-muted-foreground/70" /> : <MapPin className="h-3 w-3 shrink-0 text-muted-foreground/70" />}
-                                    <span className="truncate">{b.name}</span>
-                                    {/* A MARKET AUDIT IS NOT A CLIENT. It sits in this list because it
-                                        is an audit, and it stays searchable — but "[market] locksmiths
-                                        · Hastings" reading like a business name is how one gets pitched
-                                        by mistake. Badged, not hidden. */}
-                                    {b.isMarket && (
-                                      <span className="shrink-0 rounded border border-border bg-muted/60 px-1 py-0.5 text-[10px] font-medium text-muted-foreground">market</span>
-                                    )}
-                                    {nested && <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground">{b.runCount} runs</span>}
-                                  </div>
-                                  {/* SECONDARY: trade and place, deliberately recessive. */}
-                                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
-                                    {b.business_type || '—'}{b.location ? ` · ${b.location}` : ''}
-                                  </div>
-                                  {/* TERTIARY: the pill row gets its own line so it is readable rather than
-                                      squeezed against the location text. */}
-                                  <div className="mt-1 flex flex-wrap items-center gap-1">
-                                    <AuditPills audit={a} run={run} />
-                                  </div>
-                                </button>
-
-                                {/* State: live progress while draining, else the score */}
-                                {inFlight ? <RunningChip run={inFlight} /> : <MentionPill rate={run?.mention_rate ?? null} />}
-
-                                {/* Report — once the latest run has a score */}
-                                {run?.mention_rate !== null && run?.mention_rate !== undefined && (
-                                  <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={() => viewReport(a)} title="View report">
-                                    <FileText className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Report</span>
-                                  </Button>
-                                )}
-                                {/* REMOVED 2026-07-30: the row's "Playbook" button. It opened the
-                                    generate-playbook LLM document, which is NOT the same thing as the
-                                    `checklist` pill beside it — that one links to /playbook/:id, the
-                                    evidence-derived document a client actually receives.
-                                    Still reachable: open the audit's results and use View playbook.
-                                    The LLM document is also the one with the known content problem
-                                    (recommends Bing Places, which has zero citations across 8,913;
-                                    omits Yell, which is cited). CLAUDE.md §5 and §9. */}
-                                {inFlight && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => cancelAudit(a, inFlight.id)} disabled={cancellingId === a.id} title="Stop this audit">
-                                    {cancellingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleStop className="h-3.5 w-3.5" />}
-                                  </Button>
-                                )}
-                                {/* Archive stays on the row ONLY for a single-audit business. With several
-                                    audits it would be ambiguous which one goes, so it moves inside.
-                                    ⚠️ NOT destructive-red any more, and not a bin: this hides a row, it
-                                    does not destroy a measurement. The red is spent on the confirm. */}
-                                {!nested && archivedReady && (
-                                  showArchived ? (
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => restoreAudit(a)} disabled={deletingId === a.id} title="Restore this audit to the list">
-                                      {deletingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArchiveRestore className="h-3.5 w-3.5" />}
-                                    </Button>
-                                  ) : (
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => askArchiveAudit(a)} disabled={deletingId === a.id} title="Archive this audit — hides it from the list, deletes nothing">
-                                      {deletingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
-                                    </Button>
-                                  )
-                                )}
-                              </div>
-
-                              {/* Expanded: every audit, and every run inside it */}
-                              {expanded && nested && (
-                                <div className="border-t border-border/60 bg-muted/20 px-3 py-2 space-y-2">
-                                  {b.audits.map((au) => (
-                                    <div key={au.id} className="space-y-1">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[11px] font-medium text-muted-foreground">
-                                          {/* Year included: a before/after pair can straddle a year end,
-                                              and "21 Jul" alone would not distinguish them. */}
-                                          Audit {new Date(au.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                        </span>
-                                        <AuditPills audit={au} run={au.runs[0] ?? null} />
-                                        <span className="flex-1" />
-                                        {archivedReady && (showArchived ? (
-                                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => restoreAudit(au)} disabled={deletingId === au.id} title="Restore this audit to the list">
-                                            {deletingId === au.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArchiveRestore className="h-3 w-3" />}
-                                          </Button>
-                                        ) : (
-                                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => askArchiveAudit(au)} disabled={deletingId === au.id} title="Archive this audit — hides it from the list, deletes nothing">
-                                            {deletingId === au.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
-                                          </Button>
-                                        ))}
-                                      </div>
-                                      {au.runs.length === 0 ? (
-                                        <div className="pl-3 text-[11px] text-muted-foreground">No runs</div>
-                                      ) : au.runs.map((r) => {
-                                        const draining = r.status === 'pending' || r.status === 'running';
-                                        return (
-                                          <div key={r.id} className="flex items-center gap-2 pl-3">
-                                            <button onClick={() => reopenAudit(au, r)} className="min-w-0 flex-1 text-left text-[11px] hover:underline" title="Open this run">
-                                              Run {r.run_number}
-                                              <span className="text-muted-foreground"> · {r.status}</span>
-                                              {r.actor_cost_usd !== null && <span className="text-muted-foreground"> · ${r.actor_cost_usd.toFixed(3)}</span>}
-                                            </button>
-                                            {draining ? <RunningChip run={r} /> : <MentionPill rate={r.mention_rate} />}
-                                            {draining && (
-                                              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => cancelAudit(au, r.id)} disabled={cancellingId === au.id} title="Stop this run">
-                                                <CircleStop className="h-3 w-3" />
-                                              </Button>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </StepCard>
+          <AuditBookList
+            businesses={businesses}
+            filteredBusinesses={filteredBusinesses}
+            tradeGroups={tradeGroups}
+            metrics={metrics}
+            auditsCapped={auditsCapped}
+            fetchLimit={AUDIT_FETCH_LIMIT}
+            searchMinBusinesses={SEARCH_MIN_BUSINESSES}
+            auditQuery={auditQuery}
+            deferredQuery={deferredQuery}
+            auditQueryTerms={auditQueryTerms}
+            onQueryChange={setAuditQuery}
+            archivedReady={archivedReady}
+            archivedCount={archivedCount}
+            showArchived={showArchived}
+            onToggleArchived={() => { setShowArchived((v) => !v); setAuditQuery(''); }}
+            onNewAudit={() => setFormOpen(true)}
+            onOpenAudit={reopenAudit}
+            onViewReport={viewReport}
+            onCancelRun={cancelAudit}
+            onArchive={askArchiveAudit}
+            onRestore={restoreAudit}
+            busyId={deletingId}
+            cancellingId={cancellingId}
+          />
         </div>
       )}
 
@@ -3567,9 +3242,6 @@ function ApifyUsageLine({ usage }: { usage: ApifyUsage | null }) {
   );
 }
 
-function StepCard({ children }: { children: React.ReactNode }) {
-  return <Card><CardContent className="p-4 sm:p-5 space-y-4">{children}</CardContent></Card>;
-}
 function StepHeader({ title, onBack }: { title: string; onBack?: () => void }) {
   return (
     <div className="flex items-center gap-2">
@@ -3616,161 +3288,6 @@ function ChoiceButton({ active, onClick, label, hint, icon }: { active: boolean;
    progress bar and "0 of 3", which reads as a nil result rather than work in progress. A spinner
    plus the word "running" plus the question count can only mean one thing, and there is no
    score-shaped element on the row at all while a run is going. */
-function RunningChip({ run }: { run: RunLite }) {
-  return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[hsl(var(--badge-waiting))]/40 bg-[hsl(var(--badge-waiting))]/15 px-2 py-1 text-[11px] font-semibold text-[hsl(var(--badge-waiting))]"
-      title={run.total ? `${run.done} of ${run.total} questions answered` : 'Starting'}
-    >
-      <Loader2 className="h-3 w-3 animate-spin" />
-      {run.total ? <>running <span className="tabular-nums">{run.done}/{run.total}</span></> : <>starting</>}
-    </span>
-  );
-}
-
-/* ── PILL VOCABULARY ────────────────────────────────────────────────────────────────────
-   Four categories, four deliberately different treatments, because they mean different things
-   and previously all read as one thing ("opened" and "baseline 3/3" were both plain green).
-
-     engagement  a PROSPECT ACTED. The most commercially useful signal here, so it gets the only
-                 solid high-contrast fill on the row, and the repeat count is set larger than the
-                 label so "7" is what the eye lands on.
-     client      a PAYING CUSTOMER. Distinct from engagement AND from assets: bordered, tinted,
-                 with a filled dot, so it reads as a status rather than an event.
-     asset       a FACT about what exists (report, playbook). Deliberately recessive - ghost grey.
-     data        a MEASUREMENT (SEO grade). Recessive frame, but the value itself is
-                 colour-coded, since C/D/F is the part worth noticing. */
-
-function EngagementPill({ count, title }: { count: number; title?: string }) {
-  return (
-    <span
-      title={title}
-      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[hsl(var(--badge-closed))] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[hsl(var(--badge-closed-fg))]"
-    >
-      <Eye className="h-3 w-3" />
-      opened
-      {count > 1 && <span className="ml-0.5 text-[12px] font-extrabold leading-none tabular-nums">{count}&times;</span>}
-    </span>
-  );
-}
-
-function ClientPill({ children, title, bad }: { children: React.ReactNode; title?: string; bad?: boolean }) {
-  const tone = bad
-    ? 'border-[hsl(var(--badge-not-interested))]/50 bg-[hsl(var(--badge-not-interested))]/10 text-[hsl(var(--badge-not-interested))]'
-    : 'border-[hsl(var(--badge-closed))]/50 bg-[hsl(var(--badge-closed))]/10 text-[hsl(var(--badge-closed))]';
-  return (
-    <span title={title} className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${tone}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${bad ? 'bg-[hsl(var(--badge-not-interested))]' : 'bg-[hsl(var(--badge-closed))]'}`} />
-      {children}
-    </span>
-  );
-}
-
-function AssetPill({ children, title }: { children: React.ReactNode; title?: string }) {
-  return (
-    <span title={title} className="inline-flex shrink-0 items-center rounded border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-      {children}
-    </span>
-  );
-}
-
-/** SEO grade: recessive frame, grade-coloured value. A/B fine, C/D/F worth noticing. */
-function GradePill({ grade }: { grade: string }) {
-  const letter = grade.trim().charAt(0).toUpperCase();
-  const cls = letter === 'A' || letter === 'B'
-    ? 'text-[hsl(var(--badge-closed))]'
-    : letter === 'C'
-    ? 'text-[hsl(var(--badge-waiting))]'
-    : 'text-[hsl(var(--badge-not-interested))]';
-  return (
-    <span title="Website SEO grade from the latest run" className="inline-flex shrink-0 items-baseline gap-1 rounded border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-      SEO <span className={`text-[11px] font-bold ${cls}`}>{grade}</span>
-    </span>
-  );
-}
-
-function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | null }) {
-  const target = Number(audit.baseline_target_runs ?? 0);
-  const counted = audit.baseline_runs_counted;
-  return (
-    <>
-      {/* ENGAGEMENT first: it is the signal most likely to change what the operator does next. */}
-      {audit.first_opened_at && (
-        <EngagementPill
-          count={audit.open_count ?? 1}
-          title={`Report opened ${new Date(audit.first_opened_at).toLocaleString('en-GB')}${audit.open_count ? ` - ${audit.open_count} view${audit.open_count === 1 ? '' : 's'}` : ''}`}
-        />
-      )}
-      {/* PAID CLIENT. Errors win: a stalled baseline is what needs attention. */}
-      {target > 1 && (
-        audit.baseline_error
-          ? <ClientPill bad title={audit.baseline_error}>baseline failed</ClientPill>
-          /* A FINISHED baseline links to the operator view, because until now it was measured and
-             then invisible. Still-measuring stays a plain pill — there is nothing to read yet. */
-          : audit.baseline_completed_at
-            ? <Link
-                to={`/baseline/${audit.id}`}
-                state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}
-                onClick={(e) => e.stopPropagation()}
-                title={`Baseline finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')} — open the operator view`}
-                className="underline decoration-dotted underline-offset-2 hover:no-underline"
-              >
-                <ClientPill>client &middot; baseline {counted ?? target}/{target}</ClientPill>
-              </Link>
-            : <ClientPill title="Baseline still being measured">
-                client &middot; baseline {counted ?? 0}/{target}
-              </ClientPill>
-      )}
-      {/* DELIVERY CHECKLIST — /playbook/:id, resolved from this AUDIT id. Sits beside the baseline
-          pill because they are the two halves of the same job: the baseline says what is wrong, the
-          checklist says what to do about it.
-
-          NOT the same thing as the `playbook` asset pill below, which means the generate-playbook
-          LLM document stored at results.playbook. This one is the evidence-derived checklist and
-          reads no model output, hence the different word. */}
-      <Link
-        to={`/playbook/${audit.id}`}
-        state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}
-        onClick={(e) => e.stopPropagation()}
-        title="Open the delivery checklist — directories evidenced from citations for this trade"
-        className="underline decoration-dotted underline-offset-2 hover:no-underline"
-      >
-        <AssetPill>checklist</AssetPill>
-      </Link>
-      {audit.lead_paid === true && target <= 1 && <ClientPill title="This lead has paid">client</ClientPill>}
-      {/* ASSETS: facts, not signals. */}
-      {audit.report_slug && <AssetPill title={`Published at /r/${audit.report_slug}`}>report</AssetPill>}
-      {/* REMOVED 2026-07-30: the `playbook` asset pill. It was never a link — just a marker saying an
-          LLM playbook existed for the run — and sitting one pill away from `checklist` it read as a
-          duplicate of it when the two are different documents entirely. `checklist` above is the one
-          that opens /playbook/:id and is KEPT: for a business with an audit but no outreach_leads row
-          (ABLM, the only delivery client) it is the ONLY route to that document, because the other
-          entry point — the lead detail dialog's Playbook pill — is keyed on a LEAD id.
-          ⚠️ THERE WERE THREE ROUTES UNTIL 2026-08-12; the Paid Clients page carried the third and was
-          deleted with it. That makes this pill MORE load-bearing, not less. Do not remove it. */}
-      {/* DATA */}
-      {run?.seo_grade && <GradePill grade={run.seo_grade} />}
-    </>
-  );
-}
-
-function MentionPill({ rate }: { rate: number | null }) {
-  if (rate === null || rate === undefined) {
-    return <span className="shrink-0 text-right text-[13px] tabular-nums text-muted-foreground/50">&mdash;</span>;
-  }
-  const pct = Math.round(rate * 100);
-  // THE headline number: biggest type on the row, so the eye lands on the result first. Tone
-  // carries the meaning; no pill chrome competing with the pill vocabulary to its left.
-  const cls = pct >= 50 ? 'text-[hsl(var(--badge-closed))]'
-    : pct > 0 ? 'text-[hsl(var(--badge-waiting))]'
-    : 'text-[hsl(var(--badge-not-interested))]';
-  return (
-    <span className="shrink-0 text-right leading-none" title={`${pct}% of AI answers named this business`}>
-      <span className={`font-sans text-[1.05rem] font-bold tabular-nums ${cls}`}>{pct}%</span>
-      <span className="ml-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">named</span>
-    </span>
-  );
-}
 // Small stat tile for the landing metrics strip. `tone` tints the value only.
 function MetricCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone?: 'good' | 'mid' | 'bad' }) {
   const valCls = tone === 'good' ? 'text-[hsl(var(--badge-closed))]'
