@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { BackLink } from '@/components/BackLink';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -66,6 +66,9 @@ interface AuditRow {
 }
 
 export default function Baseline() {
+  /* The state THIS page was reached with, forwarded to anywhere that links onward, so a
+     multi-hop trail (AI Audit → Baseline → Compare → Baseline) still knows its origin. */
+  const backState = useLocation().state ?? undefined;
   const { auditId } = useParams<{ auditId: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -293,7 +296,12 @@ export default function Baseline() {
             compare rather than being hidden behind a guess made here. */}
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link to={`/compare/${auditId}`}>
+            {/* ⛔ CARRY THE BACK-CHAIN FORWARD. Baseline ↔ Compare link to each other, so
+                without passing state the trail from AI Audit is lost at the first hop and the
+                two pages become a loop with no way out (Paul, 2026-09-10). Forwarding this
+                page's own `from` means Compare, and Baseline again after it, still know where
+                the operator actually started. */}
+            <Link to={`/compare/${auditId}`} state={backState}>
               <ArrowLeftRight className="mr-2 h-4 w-4" /> Before and after · free
             </Link>
           </Button>

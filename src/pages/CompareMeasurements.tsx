@@ -16,7 +16,7 @@
    READ — "which questions moved" — not to be quoted individually.
    ============================================================ */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,8 @@ function MoveChip({ movement, thin }: { movement: Movement; thin?: boolean }) {
 }
 
 export default function CompareMeasurements() {
+  /* Forwarded straight back to Baseline so the trail from AI Audit survives the round trip. */
+  const backState = useLocation().state ?? undefined;
   const { auditId } = useParams<{ auditId: string }>();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -189,7 +191,12 @@ export default function CompareMeasurements() {
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
       <div className="flex items-center gap-3">
         <Button asChild variant="ghost" size="sm">
-          <Link to={`/baseline/${auditId}`}><ArrowLeft className="mr-1.5 h-4 w-4" /> Baseline</Link>
+          {/* ⛔ HAND THE CHAIN BACK. Baseline's own back link reads router state; without this
+              it arrives with none and falls through to its fallback, so the operator loses the
+              trail that started on AI Audit. Passing it through is what turns
+              AI Audit → Baseline → Compare → Baseline → AI Audit into a path rather than a
+              cycle between these two pages. */}
+          <Link to={`/baseline/${auditId}`} state={backState}><ArrowLeft className="mr-1.5 h-4 w-4" /> Baseline</Link>
         </Button>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Before and after</h1>

@@ -59,11 +59,21 @@ export function BackLink({
      is the honest best guess and going back one step is usually what a person means.
      ⚠️ `window.history.length` was never the right test either — it counts the whole tab's
      session, including a sign-in redirect, so it is > 1 on a page you arrived at directly. */
-  const go = () => {
-    if (state.from) { navigate(state.from); return; }
-    if (window.history.length > 1) { navigate(-1); return; }
-    navigate(target);
-  };
+  /* 🔴 AND THE HISTORY FALLBACK WAS THE LOOP. Paul, 2026-09-10: "each back button just loops
+     around." With no state, `navigate(-1)` returns you to THE PAGE YOU JUST CAME FROM — and
+     when that page's own back link brings you here again, the two pages bounce forever. It is
+     a real cycle in this app: /baseline has "Before and after" → /compare, and /compare has
+     "← Baseline" → /baseline. Neither passed router state, so the chain from AI Audit was lost
+     at the first hop and Baseline's back link fell through to history, i.e. straight back to
+     Compare.
+
+     ⛔ SO: NO STATE MEANS GO TO THE FALLBACK, NEVER BACKWARDS. The fallback is a real place
+     that cannot cycle. History-back is only ever right when we know the previous entry is the
+     one the label names, and if we knew that we would have state. A pasted URL or a bookmark
+     lands on the fallback, which is the honest answer for "I don't know where you came from".
+     ⚠️ The other half of the fix is that the Baseline↔Compare links now PASS the state through,
+     so the chain survives and this fallback is rarely reached at all. */
+  const go = () => navigate(state.from ?? fallback);
 
   return (
     <button
