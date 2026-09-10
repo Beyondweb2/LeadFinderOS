@@ -2803,13 +2803,18 @@ const AiAudit = () => {
                   )}
 
                   {/* THE PRIMARY ACTION — the report is what this screen is for.
-                      ⛔ A REPORT IS A SINGLE RUN'S DOCUMENT AND STAYS ONE. In pooled mode the
-                      button is replaced by a prompt to pick a run, rather than silently
-                      building a report from the latest run while the screen shows three. What a
-                      client receives is not something to change as a side effect of a layout
-                      pass — if the report should ever pool, that is a deliberate decision about
-                      the deliverable. */}
-                  {!isDraining && liveTally.done > 0 && !pooled && (
+                      ⚠️ I BRIEFLY HID THIS IN POOLED MODE ON A FALSE PREMISE, 2026-09-10. The
+                      belief was that a report is one run's document, so pooling the screen while
+                      the button built from a single run would be dishonest. It is not: the
+                      REPORT HAS ALWAYS POOLED. `openReportForCurrentRun` calls
+                      loadAuditRows(auditId) — every run of the audit — and buildReportData does
+                      not filter by run at all; it counts whatever rows it is handed and uses
+                      `run` only for the cleaning stamp and metadata. So the button is correct in
+                      both modes and always was. What was genuinely per-run was the RESULTS
+                      SCREEN reading one run out of component state, which is the thing pooling
+                      fixed. Caught by a second session reading the code rather than the comment
+                      I wrote about it. */}
+                  {!isDraining && liveTally.done > 0 && (
                     <Button size="sm" onClick={openReportForCurrentRun}>
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
                     </Button>
@@ -3254,15 +3259,6 @@ const AiAudit = () => {
                     {' '}Re-audit's before/after view, or pick a single run above.
                   </span>
                 </div>
-              )}
-
-              {/* Pooled mode has no Report button, so it must say why and what to do — a
-                  primary action that silently vanishes reads as a bug. */}
-              {pooled && !isDraining && liveTally.done > 0 && (
-                <p className="text-[11px] text-muted-foreground">
-                  Showing all {auditRuns.length} runs together. A report is built from a single run —
-                  pick one in the selector above to create or view it.
-                </p>
               )}
 
               {/* SEO in-depth — opt-in; the fuller detail behind the 3-grade overview. Renders all
