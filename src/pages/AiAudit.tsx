@@ -2881,7 +2881,9 @@ const AiAudit = () => {
                           Macca-Gas's run died at the Apify cap and its playbook is still right. */}
                       {auditId && (
                         <DropdownMenuItem asChild>
-                          <Link to={`/playbook/${auditId}`} state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}>
+                          {/* Carries the open run, so Back comes straight back to this audit's
+                              results rather than dropping you at the top of the list. */}
+                          <Link to={`/playbook/${auditId}`} state={{ from: runId ? `/ai-audit?runId=${runId}` : '/ai-audit', fromLabel: 'AI Audit' }}>
                             <MapIcon className="mr-2 h-4 w-4" /> Playbook
                           </Link>
                         </DropdownMenuItem>

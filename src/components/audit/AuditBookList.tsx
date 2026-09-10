@@ -364,8 +364,20 @@ export function AuditBookList({
                         </DropdownMenuItem>
                         {/* The delivery checklist — /playbook/:id. It used to be a chip on every
                             row; here it is one click away and out of the way. */}
+                        {/* ⛔ THE `from` CARRIES THE RUN, so Back returns you to the AUDIT you
+                            were reading rather than to the top of a 901-row list. The results
+                            view is not its own URL — it is `step === 'results'` on /ai-audit —
+                            so a bare '/ai-audit' asks for the LIST, and landing there after
+                            reading one audit is losing your place (CLAUDE.md §6c). The page
+                            already reads ?runId= on mount, which is how Outreach and the Inbox
+                            deep-link into a specific audit.
+                            ⚠️ Falls back to the plain path when there is no run: a link that
+                            cannot say which run should ask for the list, not for a broken one. */}
                         <DropdownMenuItem asChild>
-                          <Link to={`/playbook/${a.id}`} state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}>
+                          <Link
+                            to={`/playbook/${a.id}`}
+                            state={{ from: run?.id ? `/ai-audit?runId=${run.id}` : '/ai-audit', fromLabel: 'AI Audit' }}
+                          >
                             <ListChecks className="mr-2 h-4 w-4" /> Delivery checklist
                           </Link>
                         </DropdownMenuItem>

@@ -43,10 +43,32 @@ export function BackLink({
   const state = (useLocation().state ?? {}) as BackNavState;
   const target = state.from ?? fallback;
   const label = state.fromLabel ?? fallbackLabel;
+
+  /* 🔴 THE BUTTON USED TO SAY ONE THING AND DO ANOTHER. It rendered "Back to AI Audit" and then
+     ran `window.history.length > 1 ? navigate(-1) : navigate(target)` — so in any real session,
+     where history is essentially always longer than one entry, it ignored `target` completely
+     and did a plain browser Back. That lands on the PREVIOUS PAGE, which is only the named
+     destination when you arrived by exactly one hop. Paul, 2026-09-10: "back to ai audit page
+     doesn't take back to ai audit page." It was doing what it was written to do; the label was
+     a promise the code never read.
+
+     ⛔ THE RULE: WHEN WE KNOW WHERE THE LABEL POINTS, GO THERE. `state.from` is set by the link
+     that sent us here, so it is not a guess — it is the caller stating the destination, and the
+     label is rendered from the same object. History-back survives only for the case the label
+     is also vague about: no state at all, i.e. a pasted URL or a fresh tab, where the fallback
+     is the honest best guess and going back one step is usually what a person means.
+     ⚠️ `window.history.length` was never the right test either — it counts the whole tab's
+     session, including a sign-in redirect, so it is > 1 on a page you arrived at directly. */
+  const go = () => {
+    if (state.from) { navigate(state.from); return; }
+    if (window.history.length > 1) { navigate(-1); return; }
+    navigate(target);
+  };
+
   return (
     <button
       type="button"
-      onClick={() => (window.history.length > 1 ? navigate(-1) : navigate(target))}
+      onClick={go}
       className={`inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground ${className}`}
     >
       <ArrowLeft className="h-3.5 w-3.5" /> Back to {label}

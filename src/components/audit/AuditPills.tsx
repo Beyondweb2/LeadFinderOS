@@ -109,7 +109,8 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
           : audit.baseline_completed_at
             ? <Link
                 to={`/baseline/${audit.id}`}
-                state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}
+                /* Carries the run so Back reopens this audit, not the list — see AuditBookList. */
+                state={{ from: run?.id ? `/ai-audit?runId=${run.id}` : '/ai-audit', fromLabel: 'AI Audit' }}
                 onClick={(e) => e.stopPropagation()}
                 title={`Baseline finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')} — open the operator view`}
                 className="underline decoration-dotted underline-offset-2 hover:no-underline"
