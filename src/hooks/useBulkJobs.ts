@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { readFunctionError } from '@/lib/functionError';
@@ -38,58 +39,83 @@ export interface BulkJob {
 const RECENT_WINDOW_MS = 10 * 60 * 1000;
 const POLL_MS = 4000;
 
+/** Stable empty — a new array per render would re-run the derivation below. */
+const EMPTY_JOBS: BulkJob[] = [];
+
 export function useBulkJobs(onJobComplete?: (job: BulkJob) => void) {
   const { user } = useAuth();
-  const [activeJob, setActiveJob] = useState<BulkJob | null>(null);
-  const [recentJob, setRecentJob] = useState<BulkJob | null>(null);
-  const [creating, setCreating] = useState(false);
+  const queryClient = useQueryClient();
   // Job ids we've seen active this session → detect the active→done transition
   // so the caller can refetch leads/sites exactly once per job.
   const watchedRef = useRef<Set<string>>(new Set());
   const dismissedRef = useRef<Set<string>>(new Set());
+  const [dismissedTick, setDismissedTick] = useState(0);
   const onCompleteRef = useRef(onJobComplete);
   onCompleteRef.current = onJobComplete;
 
-  const fetchJobs = useCallback(async () => {
-    if (!user) return;
-    const { data } = await sb
-      .from('bulk_jobs')
-      .select('id, job_type, status, total, done_count, failed_count, skipped_count, error, created_at, updated_at, items')
-      .order('created_at', { ascending: false })
-      .limit(5);
-    const jobs = (data ?? []) as BulkJob[];
-    const active = jobs.find((j) => j.status === 'queued' || j.status === 'running') ?? null;
-    setActiveJob(active);
-    if (active) {
-      watchedRef.current.add(active.id);
-      setRecentJob(null);
-      return;
-    }
-    // No active job: surface the newest finished one — either one we watched go
-    // active→done this session, or (resume case) one that finished recently
-    // while the user was away. Dismissals stick for the session.
-    const finished = jobs.find(
+  const queryKey = useMemo(() => ['bulk-jobs', user?.id ?? null] as const, [user?.id]);
+
+  /* ⛔ THE QUERY FUNCTION IS PURE NOW, AND THAT WAS THE REAL WORK HERE. The old fetch did three
+     impure things on its way past: it mutated `watchedRef`, it cleared `recentJob`, and it
+     CALLED `onJobComplete`, which makes the caller refetch its leads. A React Query fetch can be
+     retried or de-duplicated, so a callback fired from inside one can run twice or not at all.
+     It reads rows and returns them; everything else is derived below or done in an effect. */
+  const query = useQuery({
+    queryKey,
+    enabled: !!user,
+    queryFn: async (): Promise<BulkJob[]> => {
+      const { data } = await sb
+        .from('bulk_jobs')
+        .select('id, job_type, status, total, done_count, failed_count, skipped_count, error, created_at, updated_at, items')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      return (data ?? []) as BulkJob[];
+    },
+    /* Poll ONLY while a job is active — unchanged rule, now a property of the query rather than
+       an effect keyed on activeJob?.id. Background refetch is off, so a hidden tab stops. */
+    refetchInterval: (q) =>
+      (q.state.data ?? []).some((j) => j.status === 'queued' || j.status === 'running') ? POLL_MS : false,
+  });
+
+  const jobs = query.data ?? EMPTY_JOBS;
+
+  const activeJob = useMemo(
+    () => jobs.find((j) => j.status === 'queued' || j.status === 'running') ?? null,
+    [jobs],
+  );
+
+  /* Newest finished job worth surfacing: one we watched go active→done this session, or (the
+     resume case) one that finished recently while the operator was away. Dismissals stick for
+     the session — `dismissedTick` exists only to recompute this after one. */
+  const recentJob = useMemo(() => {
+    if (activeJob) return null;
+    void dismissedTick;
+    return jobs.find(
       (j) =>
         (j.status === 'done' || j.status === 'failed' || j.status === 'cancelled') &&
         !dismissedRef.current.has(j.id) &&
         (watchedRef.current.has(j.id) || Date.now() - new Date(j.updated_at).getTime() < RECENT_WINDOW_MS),
     ) ?? null;
-    if (finished && watchedRef.current.has(finished.id)) {
-      watchedRef.current.delete(finished.id);
-      onCompleteRef.current?.(finished); // watched job just completed → refetch
-    }
-    setRecentJob(finished);
-  }, [user]);
+  }, [jobs, activeJob, dismissedTick]);
 
-  // Resume on mount / user change.
-  useEffect(() => { fetchJobs(); }, [fetchJobs]);
-
-  // Poll ONLY while a job is active.
+  /* THE active→done TRANSITION, in an effect where a side effect belongs. Marking the id watched
+     and firing the completion callback are separate concerns from reading rows, and the
+     `delete` before the call is what makes it fire EXACTLY ONCE per job however many times the
+     query refetches. */
   useEffect(() => {
-    if (!activeJob) return;
-    const t = setInterval(fetchJobs, POLL_MS);
-    return () => clearInterval(t);
-  }, [activeJob?.id, fetchJobs]);
+    if (activeJob) { watchedRef.current.add(activeJob.id); return; }
+    if (recentJob && watchedRef.current.has(recentJob.id)) {
+      watchedRef.current.delete(recentJob.id);
+      onCompleteRef.current?.(recentJob);
+    }
+  }, [activeJob, recentJob]);
+
+  const [creating, setCreating] = useState(false);
+
+  const fetchJobs = useCallback(
+    async () => { await queryClient.invalidateQueries({ queryKey }); },
+    [queryClient, queryKey],
+  );
 
   const createJob = useCallback(async (
     jobType: BulkJobType,
@@ -125,7 +151,9 @@ export function useBulkJobs(onJobComplete?: (job: BulkJob) => void) {
 
   const dismissRecent = useCallback(() => {
     if (recentJob) dismissedRef.current.add(recentJob.id);
-    setRecentJob(null);
+    /* recentJob is derived, so there is no state to null — bumping the tick recomputes it with
+       the new dismissal applied. */
+    setDismissedTick((n) => n + 1);
   }, [recentJob]);
 
   return { activeJob, recentJob, creating, createJob, cancelJob, dismissRecent, refetchJobs: fetchJobs };
