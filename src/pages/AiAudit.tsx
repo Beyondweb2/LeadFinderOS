@@ -21,7 +21,7 @@ import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, TrendingUp, EyeOff, Globe, Map as MapIcon, Download, ChevronDown,
   Copy, Save, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2,
-  Archive, ShieldCheck } from 'lucide-react';
+  Archive, ShieldCheck, MoreHorizontal } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
@@ -50,6 +50,10 @@ import { usePersistedState } from '@/hooks/usePersistedState';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMeasurementLock } from '@/hooks/useMeasurementLock';
 import { ToastAction } from '@/components/ui/toast';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import {
   auditProtection, PROTECTION_WORDING,
   type AuditProtectionFacts, type ProtectionVerdict,
@@ -428,6 +432,10 @@ const AiAudit = () => {
   // Fed to generate-report as a trust signal; set here inline so it's ready BEFORE generating a listing.
   const [credentials, setCredentials] = useState('');
   const [credentialsSaving, setCredentialsSaving] = useState(false);
+  /* The credentials field is opened from the More menu now. NOT persisted: it is a panel you
+     opened for one job, and finding it already open on return is the "arrives over the thing you
+     came back for" fault (§6c). It springs open with a value already saved, so nothing is lost. */
+  const [credentialsOpen, setCredentialsOpen] = useState(false);
   // Which run's report is currently open (null = not viewing a report). Replaces the old
   // boolean so we can open a SPECIFIC run's persisted report snapshot.
   const [reportRunId, setReportRunId] = useState<string | null>(null);
@@ -2637,13 +2645,32 @@ const AiAudit = () => {
           {/* ── Command-centre header: business + two score tiles + actions ── */}
           <Card>
             <CardContent className="p-4 sm:p-5 space-y-4">
-              {/* Top bar: back to the list + tidy action buttons */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              {/* ════════════════════════════════════════════════════════════════════════════
+                  THE RESULTS HEADER — rebuilt 2026-09-10.
+
+                  🔴 WHAT IT WAS. Eight to eleven buttons in one undifferentiated row, all the
+                  same size and weight, above a credentials text field — and only BELOW all of
+                  that did the business name and its score appear. So the thing you opened the
+                  page to read started four rows down, and "Re-extract competitors" (a technical
+                  repair, used rarely) was the brightest control on screen while "Create report"
+                  (the reason the page exists) was an outline button in the middle of the row.
+
+                  ⛔ THE RULE APPLIED: the ANSWER comes first, then the one action you are most
+                  likely to want, then everything else behind one menu. Nothing was removed —
+                  every action below is still reachable, and the count is unchanged.
+
+                  ⚠️ TWO THINGS ARE DELIBERATELY NOT IN THE MENU:
+                  · STOP, while a run is draining — it is urgent and time-limited.
+                  · RE-EXTRACT, when the names are proven dirty — it is the FIX for the warning
+                    directly above it, and the old code put it there on purpose. Burying a fix
+                    in a menu under the warning that demands it is how a warning gets ignored.
+                  ════════════════════════════════════════════════════════════════════════════ */}
+              <div className="flex items-center justify-between gap-2">
                 <Button variant="ghost" size="sm" className="-ml-2" onClick={() => { setStep('source'); setOpenRunId(null); }}>
                   <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to audits
                 </Button>
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Stop — only while the open run is still in flight (pending/running). */}
+                <div className="flex items-center gap-2">
+                  {/* Urgent and time-limited: never behind a menu. */}
                   {isDraining && runId && (
                     <Button variant="outline" size="sm" onClick={cancelOpenRun} disabled={cancellingId === runId}
                       className="text-destructive hover:text-destructive" title="Stop this audit — it won't finish">
@@ -2651,130 +2678,156 @@ const AiAudit = () => {
                       {cancellingId === runId ? 'Stopping…' : 'Stop'}
                     </Button>
                   )}
-                  {/* Automated SEO scan — website audits only. Runs the Apify actor (~30-120s). */}
-                  {!isDraining && resultsHasWebsite && (
-                    <Button variant="outline" size="sm" onClick={runSeoScan} disabled={seoScanning}>
-                      {seoScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
-                      {/* Price on the face — the house rule: every spend says what it costs.
-                          Derived from the sync-guarded constant, never hand-typed (§4). */}
-                      {seoScanning ? 'Scanning…' : `${hasSeo ? 'Re-run SEO scan' : 'Run SEO scan'} · ~${asPence(SEO_SCAN_USD)}`}
-                    </Button>
-                  )}
+
+                  {/* THE PRIMARY ACTION — the report is what this screen is for. */}
                   {!isDraining && liveTally.done > 0 && (
-                    <Button variant="outline" size="sm" onClick={openReportForCurrentRun}>
+                    <Button size="sm" onClick={openReportForCurrentRun}>
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
                     </Button>
                   )}
-                  {/* Public LISTING page (/r/[slug]): View if a published one exists, else Generate.
-                      Distinct from the internal in-app report button above — this is the crawlable
-                      public listing served at yoursites.uk/r/. Needs auditId (the generate-report key). */}
-                  {!isDraining && liveTally.done > 0 && auditId && (
-                    reportSlug && reportStatus === 'published' ? (
-                      <Button variant="outline" size="sm" onClick={() => openReportPage(reportSlug)}
-                        title="Open the public listing page (yoursites.uk/r/…)">
-                        <ExternalLink className="mr-2 h-4 w-4" /> View listing
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="sm" onClick={generateReportPage} disabled={reportPageLoading}
-                        title="Generate the public listing page for this business">
-                        {reportPageLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-                        {reportPageLoading ? 'Generating…' : 'Generate listing'}
-                      </Button>
-                    )
-                  )}
-                  {/* ── PLAYBOOK. ONE BUTTON, ONE DOCUMENT. ────────────────────────────────────────
-                      Was TWO buttons ("Generate playbook" / "View playbook"), both opening the
-                      generate-playbook LLM document — the one that recommends Bing Places (zero
-                      citations in 10,615) and never mentions Checkatrade (662 citations across 58 of
-                      59 plumber audits). This goes to /playbook/:auditId, the evidence-derived
-                      document, which is the actual deliverable.
 
-                      NOTHING TO GENERATE ANY MORE, WHICH IS WHY THE VERB IS GONE. The evidence
-                      document is a pure fold over stored citations — it exists the moment the audit
-                      does. There is no model call, no cost, and no "generate" step to wait for.
-
-                      GATED ON auditId ALONE, deliberately not on liveTally.done or !isDraining: the
-                      ranking is trade-level, so the document is complete even when THIS run failed or
-                      is still going. Macca-Gas's run failed at the Apify cap and its playbook is still
-                      correct — locking the deliverable behind a successful run would have hidden it
-                      exactly when it was needed. */}
-                  {auditId && (
-                    <Button asChild variant="outline" size="sm">
-                      <Link to={`/playbook/${auditId}`} state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}
-                        title="Open the delivery playbook — directories evidenced from citations for this trade">
-                        <MapIcon className="mr-2 h-4 w-4" /> Playbook
-                      </Link>
-                    </Button>
-                  )}
-                  {/* ⛔ THE FAIL-SAFE, VISIBLE. Paul's rule 2026-08-28: never ship a junk-named report
-                      without knowing. Basis="the names themselves", so it fires on historic audits too. */}
-                  {competitorCleanliness.verdict === 'dirty' && !isDraining && (
-                    <div className="w-full rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-sm">
-                      <div className="font-medium text-amber-700 dark:text-amber-400">
-                        Competitor names not cleaned — do not send to client
-                      </div>
-                      <div className="mt-1 text-muted-foreground">
-                        {competitorCleanliness.warning}
-                        {' '}Rival names are withheld from the report until this is re-extracted, so it
-                        cannot print raw text as a competitor.
-                      </div>
-                      {competitorCleanliness.junkExamples.length > 0 && (
-                        <div className="mt-1 font-mono text-xs text-muted-foreground">
-                          {competitorCleanliness.junkExamples.slice(0, 12).join(' · ')}
-                          {competitorCleanliness.junkExamples.length > 12
-                            ? ` · +${competitorCleanliness.junkExamples.length - 12} more` : ''}
-                        </div>
+                  {/* Everything else. One menu, grouped, with prices on the faces that spend. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" title="More actions for this audit">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">More actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64">
+                      <DropdownMenuLabel>Measure again</DropdownMenuLabel>
+                      {/* RE-AUDIT — a NEW audit row, prefilled. The measurement you want at week 4:
+                          "Re-run" would add runs to THIS row and mix the after into the before. */}
+                      {!isDraining && auditId && (
+                        <DropdownMenuItem onSelect={startReAudit}
+                          disabled={running || isDraining || reAuditOpen || reAuditBusy}>
+                          <CopyPlus className="mr-2 h-4 w-4" />
+                          <span className="flex-1">Re-audit</span>
+                          <span className="text-[10px] text-muted-foreground">new audit</span>
+                        </DropdownMenuItem>
                       )}
-                    </div>
-                  )}
-                  {/* Re-extract competitors — FREE/instant: recompute from stored answers, no re-scrape.
-                      Highlighted when the stored names PROVE the cleaner never covered this run, so
-                      the fix sits under the warning rather than somewhere else on the page. */}
-                  {!isDraining && liveTally.done > 0 && (
-                    <Button variant={competitorCleanliness.verdict === 'dirty' ? 'default' : 'outline'} size="sm"
-                      onClick={reextractCompetitors} disabled={reextracting}
-                      title="Recompute competitor names from the stored answers — an AI re-read, no new search">
-                      {reextracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
-                      {reextracting ? 'Re-extracting…' : 'Re-extract competitors'}
-                    </Button>
-                  )}
-                  {/* RESUME DRAFT — only when one exists, and labelled with its contents so it is
-                      never a silent restore. Reopens the dialog exactly where it was left. */}
-                  {draftSummary && (
-                    <Button variant="secondary" size="sm" onClick={resumeDraft}
-                      title="Reopen the audit you were part-way through composing. Nothing is regenerated and your edits are kept.">
-                      <Undo2 className="mr-2 h-4 w-4" />
-                      Resume draft — {draftSummary}
-                    </Button>
-                  )}
-                  {/* startNewAudit = resetWizard (what this did before) + open the dialog, since the
-                      form it used to reveal on the page is now in the modal.
-                      ⚠️ This DISCARDS the draft above, on purpose — that is what "new" means here. */}
-                  <Button variant="outline" size="sm" onClick={startNewAudit}
-                    title={draftSummary ? 'Start fresh — this discards the draft beside it' : undefined}>
-                    New audit
-                  </Button>
-                  {/* RE-AUDIT — a NEW audit row, prefilled. The measurement you want at week 8:
-                      "Re-run" would add runs to THIS row and mix the after into the before. */}
-                  {!isDraining && auditId && (
-                    <Button variant="outline" size="sm" onClick={startReAudit}
-                      disabled={running || isDraining || reAuditOpen || reAuditBusy}
-                      title="Create a NEW audit for this business, prefilled from this one. Leaves this audit untouched as your before.">
-                      <CopyPlus className="mr-2 h-4 w-4" /> Re-audit
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={startReRun} disabled={running || isDraining || reRunOpen}>
-                    {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                    Re-run
-                  </Button>
+                      <DropdownMenuItem onSelect={startReRun} disabled={running || isDraining || reRunOpen}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        <span className="flex-1">Re-run</span>
+                        <span className="text-[10px] text-muted-foreground">same audit</span>
+                      </DropdownMenuItem>
+                      {/* Automated SEO scan — website audits only. Price on the face: the house
+                          rule is that every spend says what it costs, derived from the
+                          sync-guarded constant and never hand-typed (§4). */}
+                      {!isDraining && resultsHasWebsite && (
+                        <DropdownMenuItem onSelect={runSeoScan} disabled={seoScanning}>
+                          <Globe className="mr-2 h-4 w-4" />
+                          <span className="flex-1">{hasSeo ? 'Re-run SEO scan' : 'Run SEO scan'}</span>
+                          <span className="text-[10px] text-muted-foreground">~{asPence(SEO_SCAN_USD)}</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel>Deliverables</DropdownMenuLabel>
+                      {/* Public LISTING page (/r/[slug]) — distinct from the in-app report above:
+                          this is the crawlable public listing. Needs auditId (generate-report's key). */}
+                      {!isDraining && liveTally.done > 0 && auditId && (
+                        reportSlug && reportStatus === 'published' ? (
+                          <DropdownMenuItem onSelect={() => openReportPage(reportSlug)}>
+                            <ExternalLink className="mr-2 h-4 w-4" /> View listing
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onSelect={generateReportPage} disabled={reportPageLoading}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            {reportPageLoading ? 'Generating…' : 'Generate listing'}
+                          </DropdownMenuItem>
+                        )
+                      )}
+                      {/* ── PLAYBOOK. ONE BUTTON, ONE DOCUMENT. Goes to /playbook/:auditId, the
+                          EVIDENCE-derived document — not the deleted generate-playbook LLM one
+                          that recommended Bing Places (zero citations in 10,615) and never
+                          mentioned Checkatrade (662 across 58 of 59 plumber audits).
+                          GATED ON auditId ALONE, deliberately not on liveTally.done: the ranking
+                          is trade-level, so the document is complete even when THIS run failed.
+                          Macca-Gas's run died at the Apify cap and its playbook is still right. */}
+                      {auditId && (
+                        <DropdownMenuItem asChild>
+                          <Link to={`/playbook/${auditId}`} state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}>
+                            <MapIcon className="mr-2 h-4 w-4" /> Playbook
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                      {/* Credentials moved in here: an occasional field that was holding a
+                          permanent row of vertical space above the actual result. */}
+                      {!isDraining && liveTally.done > 0 && auditId && (
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setCredentialsOpen((v) => !v); }}>
+                          <Save className="mr-2 h-4 w-4" />
+                          <span className="flex-1">Credentials for listing</span>
+                          {credentials.trim() ? <Check className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+                        </DropdownMenuItem>
+                      )}
+
+                      <DropdownMenuSeparator />
+                      {/* Re-extract — FREE and instant: recomputes from the STORED answers, no
+                          re-scrape. It also appears as a button under the dirty-names warning,
+                          which is where it belongs when it is actually needed. */}
+                      {!isDraining && liveTally.done > 0 && (
+                        <DropdownMenuItem onSelect={reextractCompetitors} disabled={reextracting}>
+                          <Users className="mr-2 h-4 w-4" />
+                          <span className="flex-1">{reextracting ? 'Re-extracting…' : 'Re-extract competitors'}</span>
+                          <span className="text-[10px] text-muted-foreground">free</span>
+                        </DropdownMenuItem>
+                      )}
+                      {/* RESUME DRAFT — labelled with its contents so it is never a silent restore. */}
+                      {draftSummary && (
+                        <DropdownMenuItem onSelect={resumeDraft}>
+                          <Undo2 className="mr-2 h-4 w-4" />
+                          <span className="truncate">Resume draft — {draftSummary}</span>
+                        </DropdownMenuItem>
+                      )}
+                      {/* ⚠️ DISCARDS the draft above, on purpose — that is what "new" means here. */}
+                      <DropdownMenuItem onSelect={startNewAudit}>
+                        <Plus className="mr-2 h-4 w-4" /> New audit
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
+
+              {/* ⛔ THE FAIL-SAFE, VISIBLE. Paul's rule 2026-08-28: never ship a junk-named report
+                  without knowing. Basis = "the names themselves", so it fires on historic audits
+                  too, not only on ones carrying a cleaning receipt.
+                  ⚠️ THE FIX LIVES INSIDE THE WARNING, and that is deliberate. Re-extract is in the
+                  More menu the rest of the time; when the names are PROVEN dirty it belongs under
+                  the sentence demanding it. A warning whose remedy is hidden behind a menu is a
+                  warning that gets scrolled past. */}
+              {competitorCleanliness.verdict === 'dirty' && !isDraining && (
+                <div className="rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-sm">
+                  <div className="font-medium text-amber-700 dark:text-amber-400">
+                    Competitor names not cleaned — do not send to client
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {competitorCleanliness.warning}
+                    {' '}Rival names are withheld from the report until this is re-extracted, so it
+                    cannot print raw text as a competitor.
+                  </div>
+                  {competitorCleanliness.junkExamples.length > 0 && (
+                    <div className="mt-1 font-mono text-xs text-muted-foreground">
+                      {competitorCleanliness.junkExamples.slice(0, 12).join(' · ')}
+                      {competitorCleanliness.junkExamples.length > 12
+                        ? ` · +${competitorCleanliness.junkExamples.length - 12} more` : ''}
+                    </div>
+                  )}
+                  {liveTally.done > 0 && (
+                    <Button size="sm" className="mt-2" onClick={reextractCompetitors} disabled={reextracting}
+                      title="Recompute competitor names from the stored answers — an AI re-read, no new search">
+                      {reextracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+                      {reextracting ? 'Re-extracting…' : 'Re-extract competitors — free'}
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {/* Inline credentials/regulation for the listing — a small operator field. Saved to
                   ai_audits.credentials; the NEXT "Generate listing" picks it up. Same gate as the
                   listing button (a valid, non-draining audit). */}
-              {!isDraining && liveTally.done > 0 && auditId && (
-                <div className="space-y-1">
+              {credentialsOpen && !isDraining && liveTally.done > 0 && auditId && (
+                <div className="space-y-1 rounded-md border border-border/60 bg-muted/20 p-3">
                   <Label className="text-xs text-muted-foreground">Credentials / regulation (for listing)</Label>
                   <div className="flex items-center gap-2">
                     <Input value={credentials} onChange={(e) => setCredentials(e.target.value)}
