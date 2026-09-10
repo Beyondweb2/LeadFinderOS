@@ -57,9 +57,10 @@ function MoveChip({ movement, thin }: { movement: Movement; thin: boolean }) {
       <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${c.cls}`}>
         {c.label}
       </span>
-      {thin && movement !== 'only_before' && movement !== 'only_after' && (
-        <span className="ml-1 text-[10px] text-muted-foreground">unproven</span>
-      )}
+      {/* ⛔ THE PER-ROW "unproven" SUFFIX WAS REMOVED. On a real measurement nearly every row
+          is thin — it printed on 12 of 12 — so it distinguished nothing and doubled the width of
+          a column that already carried a verdict. It is stated ONCE under the table instead,
+          and only when it is actually true of the rows on screen. */}
     </span>
   );
 }
@@ -134,16 +135,24 @@ export function MeasurementCompareTable({
     downloadHtmlDocAsPdf(comparisonToPrintableHtml(comparison, m, order), businessName, 'before-after');
   };
 
+  /* ⛔ A COLUMN OF ZEROES IS NOISE, SO IT IS NOT DRAWN. "Own site cited" read "0 → 0" on every
+     row of a real measurement, which is a whole column of screen width spent saying nothing.
+     ⚠️ IT IS HIDDEN, NOT DELETED, AND THE TEST IS "did anyone cite it", not "is it zero": the
+     moment one row has a citation the column comes back for the whole table, so a real signal
+     can never be hidden by this. The exports are untouched and always carry it. */
+  const anyCited = rows.some((q) => (q.before?.cited ?? 0) > 0 || (q.after?.cited ?? 0) > 0);
+  /* True when nothing on screen was answered often enough to stand on its own. Said once,
+     under the table, instead of on all twelve rows. */
+  const allThin = rows.length > 0 && rows.every(
+    (q) => q.thin || q.movement === 'only_before' || q.movement === 'only_after',
+  );
+
   return (
     <Card className="p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">Question by question</h2>
-          <p className="mt-1 max-w-[46rem] text-xs text-muted-foreground">
-            Every question that was asked, joined across the two measurements so each row is the same question
-            before and after. A single question answered only a few times cannot prove a change on its own — those
-            rows are marked <span className="font-medium">unproven</span>, and the claim is the overall figure.
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Same question, before and after.</p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="flex items-center rounded-md border border-border/60 overflow-hidden">
@@ -176,14 +185,14 @@ export function MeasurementCompareTable({
       </div>
 
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[820px] text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
               <th className="py-2 pr-3">Question</th>
               <th className="py-2 pr-3 text-right">Before</th>
               <th className="py-2 pr-3 text-right">After</th>
               <th className="py-2 pr-3 text-right">Change</th>
-              <th className="py-2 pr-3 text-right">Own site cited</th>
+              {anyCited && <th className="py-2 pr-3 text-right">Own site cited</th>}
               <th className="py-2">Verdict</th>
             </tr>
           </thead>
@@ -212,20 +221,19 @@ export function MeasurementCompareTable({
                   ) : '—'}
                 </td>
                 <td className="py-2.5 pr-3 text-right tabular-nums">
-                  {q.namedDelta === null ? '—' : (
-                    <>
-                      {q.namedDelta > 0 ? '+' : ''}{q.namedDelta}
-                      {q.ratePpDelta !== null && (
-                        <span className="ml-1 text-xs text-muted-foreground">
-                          ({q.ratePpDelta > 0 ? '+' : ''}{q.ratePpDelta.toFixed(0)}pp)
-                        </span>
-                      )}
-                    </>
-                  )}
+                  {/* ⛔ THE RATE LEADS, NOT THE RAW COUNT. With uneven denominators — 1 of 2
+                      before against 6 of 8 after — "+5" is arithmetically true and reads as five
+                      times better, when the honest movement is +25 points. The raw counts are
+                      still on the row, in the Before and After columns where they belong. */}
+                  {q.ratePpDelta === null
+                    ? (q.namedDelta === null ? '—' : `${q.namedDelta > 0 ? '+' : ''}${q.namedDelta}`)
+                    : `${q.ratePpDelta > 0 ? '+' : ''}${q.ratePpDelta.toFixed(0)}pp`}
                 </td>
-                <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">
-                  {q.before && q.after ? `${q.before.cited} → ${q.after.cited}` : '—'}
-                </td>
+                {anyCited && (
+                  <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">
+                    {q.before && q.after ? `${q.before.cited} → ${q.after.cited}` : '—'}
+                  </td>
+                )}
                 <td className="py-2"><MoveChip movement={q.movement} thin={q.thin} /></td>
               </tr>
             ))}
@@ -234,8 +242,11 @@ export function MeasurementCompareTable({
       </div>
 
       <p className="mt-3 text-xs text-muted-foreground">
-        Movement smaller than ±{NOISE_BAND_PP} points is not presented as improvement — repeat measurements with no
-        work done between them swing by about that much. The exports carry the same flags.
+        {allThin
+          ? `No single question here was answered enough times to prove a change on its own — the claim is the overall figure. `
+          : ''}
+        Movement under ±{NOISE_BAND_PP} points is not called improvement: repeat measurements with no work done swing
+        by about that much. The exports carry the same flags.
       </p>
     </Card>
   );

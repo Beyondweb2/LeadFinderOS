@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { asPence, SEO_SCAN_USD } from '@/lib/marketView';
@@ -19,8 +19,9 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
-  Building2, Users, TrendingUp, EyeOff, Globe, MapPin, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, Trash2, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2 } from 'lucide-react';
+  Building2, Users, Globe, Map as MapIcon, Download, ChevronDown,
+  Copy, Save, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2,
+  Archive, ShieldCheck, MoreHorizontal } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
@@ -31,6 +32,8 @@ import { ReportBeforeAfter } from '@/components/ReportBeforeAfter';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
+import { poolRuns, engineSummary, type PooledInput } from '@/lib/pooledRuns';
+import { isPaidLead } from '@/lib/leadPayment';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
 import {
   DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, seoStyleForAudit, classifyWinnability,
@@ -48,6 +51,15 @@ import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMeasurementLock } from '@/hooks/useMeasurementLock';
+import { ToastAction } from '@/components/ui/toast';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {
+  auditProtection, PROTECTION_WORDING,
+  type AuditProtectionFacts, type ProtectionVerdict,
+} from '@/lib/auditProtection';
 import { describeLock, diffAgainstLock } from '@/lib/measurementLock';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
@@ -102,87 +114,10 @@ const COUNTRIES: { value: string; label: string }[] = [
 ];
 
 
-interface AuditRow { id: string; business_name: string; business_type: string | null; location_text: string | null; country: string | null; has_website: boolean; created_at: string;
-  /** The client's own site. Selected so the report's "Cited as a source" figure can tell a
-   *  citation of their OWN domain from a citation of somebody else's. May be null. */
-  website?: string | null;
-  /** MARKET audit: a trade and a town with no business attached. Its named count is 0 by
-   *  construction, so nothing here may render it as a business's result — see isMarketAudit. */
-  is_market?: boolean | null;
-  /** Full Measurement (3-run, full question set). Re-audit reads this to reproduce a LIKE-FOR-LIKE
-   *  re-measure — a measurement re-audits as a measurement, a quick audit stays quick. */
-  is_measurement?: boolean | null;
-  /** > 1 marks a PAID BASELINE — the only report that still shows SEO grades (seoStyleForAudit).
-   *  Optional because the market/report list selects vary; absent reads as "not a baseline", which
-   *  is the safe direction (withhold the grade rather than show one we cannot justify). */
-  baseline_target_runs?: number | null }
-
-/* ── The audit book, grouped ────────────────────────────────────────────────────
-   The list used to be one flat row per AUDIT, which reads as duplicates because the
-   Inbox button, the bulk runner and the wizard each mint a NEW ai_audits row for the
-   same lead (only the wizard's edited re-run and the baseline chain reuse an audit id).
-   That upstream behaviour is deliberately left alone: /a/<auditId> report links are
-   already out with real prospects, and reusing ids would change which run they resolve to.
-
-   So the grouping happens HERE: audits are folded by BUSINESS (lead_id when we have one,
-   else the normalised name), and businesses are folded by TRADE via tradeWord(). One
-   collapsed row per business; every audit and run stays reachable underneath. */
-
-/** One run, with the scalars the list needs pulled out of results so no big JSONB moves. */
-interface RunLite {
-  id: string;
-  audit_id: string;
-  run_number: number;
-  status: string;
-  mention_rate: number | null;
-  created_at: string;
-  actor_cost_usd: number | null;
-  seo_grade: string | null;
-  /** Live progress, only meaningful while in flight. done counts queue rows that have
-   *  SETTLED — status 'done' or 'failed' (the queue's vocabulary is not 'complete'). */
-  done: number;
-  total: number;
-}
-
-interface AuditLite extends AuditRow {
-  lead_id: string | null;
-  first_opened_at: string | null;
-  open_count: number | null;
-  baseline_target_runs: number | null;
-  baseline_runs_counted: number | null;
-  baseline_completed_at: string | null;
-  baseline_error: string | null;
-  report_slug: string | null;
-  /** Whether the linked lead has paid. The slot the audit asked to keep: nothing qualifies yet
-   *  (amount_paid is null on all 409 leads), so it simply does not render until one does. */
-  lead_paid?: boolean;
-  /** Newest run first. */
-  runs: RunLite[];
-}
-
-interface BusinessGroup {
-  key: string;
-  name: string;
-  trade: string;
-  business_type: string | null;
-  location: string | null;
-  has_website: boolean;
-  /** A trade-and-town audit with no business attached. Read off the newest audit — already
-   *  selected, so no extra query. Searchable like anything else, but badged, because a sentinel
-   *  called "[market] locksmiths · Hastings" is not a client and must not read as one. */
-  isMarket: boolean;
-  /** Newest audit first. */
-  audits: AuditLite[];
-  /** The newest audit and its latest run — what the collapsed row shows. */
-  latestAudit: AuditLite;
-  latestRun: RunLite | null;
-  runningRun: RunLite | null;
-  auditCount: number;
-  runCount: number;
-  cost: number;
-}
-interface LeadOption { id: string; business_name: string; category: string | null; country: string | null; website: string | null; address: string | null; search_keyword?: string | null; search_location?: string | null; derived_town?: string | null }
-
+/* The audit book's shapes now live in src/types/auditBook.ts so the list, the wizard and the
+   results view can each be their own component and still share them. */
+import type { AuditRow, RunLite, AuditLite, BusinessGroup, LeadOption } from '@/types/auditBook';
+import { AuditBookList } from '@/components/audit/AuditBookList';
 const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
 
 /** How many audits the landing list loads. Was 50, then 300; both silently truncated once the audit
@@ -198,8 +133,22 @@ const AUDIT_SEARCH_LIMIT = 200;
 
 /** The columns the landing list needs off ai_audits — shared by the full-list load and the search
  *  query so the two can't drift into hydrating different shapes. */
-const AUDIT_SELECT =
+/* ⛔ TWO SELECTS, AND THE SECOND IS NOT BELT-AND-BRACES. `archived_at` arrives with a migration
+   Paul runs BY HAND in the SQL editor (CLAUDE.md §6), so between this deploying and that running
+   the column does not exist — and PostgREST fails the WHOLE query on one unknown column, which
+   would blank the entire audit book rather than degrade. This is the exact fault §3 records
+   costing 20 minutes of dead submissions: code shipped ahead of its columns.
+   `auditSelectFallback` sheds the new column and the list keeps working, unarchived. */
+const AUDIT_SELECT_BASE =
   'id, business_name, business_type, location_text, country, has_website, website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted, is_measurement';
+const AUDIT_SELECT = `${AUDIT_SELECT_BASE}, archived_at`;
+
+/** True when a PostgREST error is "that column does not exist" (42703) rather than anything else.
+ *  Matched on the code AND the column name so an unrelated 42703 is never swallowed. */
+function isMissingArchivedColumn(err: { code?: string; message?: string } | null): boolean {
+  if (!err) return false;
+  return err.code === '42703' || /archived_at/i.test(err.message ?? '');
+}
 
 /** One ai_audits row as it arrives from AUDIT_SELECT, before hydration: baseline_runs_counted is a
  *  string here (the `baseline->>runs_counted` JSON extract) and runs/report_slug are not fetched yet.
@@ -373,7 +322,14 @@ const AiAudit = () => {
      it filters as you type. Deliberately NOT persisted: a remembered filter is how you come back to
      this page, see four audits and think you have lost 130. */
   const [auditQuery, setAuditQuery] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null); // audit being deleted (disables its row buttons)
+  const [deletingId, setDeletingId] = useState<string | null>(null); // audit being archived/restored (disables its row buttons)
+  /* The archive confirm. Holds the audit AND the verdict computed before the dialog opened, so
+     the dialog states a decision already made rather than re-deciding at click time. */
+  const [archiveTarget, setArchiveTarget] = useState<{ audit: AuditLite; verdict: ProtectionVerdict } | null>(null);
+  /* Show the archived audits instead of the live ones. Deliberately NOT persisted: it is a
+     temporary excursion, and coming back to the page in "archived" mode would read as an empty
+     audit book (CLAUDE.md §6c — persist what you were looking at, not a detour). */
+  const [showArchived, setShowArchived] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null); // audit whose run is being cancelled
   /** Which trade groups / businesses are expanded. Trades default OPEN (the list should read
    *  as a list), businesses default CLOSED (that is the whole point of collapsing re-runs). */
@@ -436,6 +392,16 @@ const AiAudit = () => {
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<RunRow | null>(null);
   const [queueRows, setQueueRows] = useState<QueueRow[]>([]);
+  /* ── WHICH RUNS THE SCREEN IS SHOWING ────────────────────────────────────────────────────
+     A paid baseline is 3 runs of the same questions and the screen used to show ONE of them —
+     the highest run_number — so RG's 12-question baseline read "7/24" when the measurement is
+     72 cells. `runScope` is 'all' (pooled, the default whenever there is more than one run) or
+     a single run id. `runId` still points at the reference run throughout, so the draining
+     poller, Re-run and the report keep working exactly as before. */
+  const [auditRuns, setAuditRuns] = useState<{ id: string; run_number: number; status: string; created_at: string }[]>([]);
+  const [runScope, setRunScope] = useState<'all' | string>('all');
+  const [pooledInputs, setPooledInputs] = useState<PooledInput[]>([]);
+  const [poolLoading, setPoolLoading] = useState(false);
   /* ALL-runs queue rows for the REPORT/preview. A Full Measurement asks each question over several
      runs, so the report aggregates across EVERY run ("named X of 120", not one run's 40). Loaded when
      results are shown and the tracked run is terminal; queueRows stays the SINGLE active run so the
@@ -478,6 +444,10 @@ const AiAudit = () => {
   // Fed to generate-report as a trust signal; set here inline so it's ready BEFORE generating a listing.
   const [credentials, setCredentials] = useState('');
   const [credentialsSaving, setCredentialsSaving] = useState(false);
+  /* The credentials field is opened from the More menu now. NOT persisted: it is a panel you
+     opened for one job, and finding it already open on return is the "arrives over the thing you
+     came back for" fault (§6c). It springs open with a value already saved, so nothing is lost. */
+  const [credentialsOpen, setCredentialsOpen] = useState(false);
   // Which run's report is currently open (null = not viewing a report). Replaces the old
   // boolean so we can open a SPECIFIC run's persisted report snapshot.
   const [reportRunId, setReportRunId] = useState<string | null>(null);
@@ -671,15 +641,24 @@ const AiAudit = () => {
     queryKey: auditListKey,
     enabled: !!user,
     queryFn: async () => {
-      const { data: audits } = await (supabase as unknown as SupabaseClient)
+      const fetchWith = (select: string) => (supabase as unknown as SupabaseClient)
         .from('ai_audits')
-        .select(AUDIT_SELECT)
+        .select(select)
         .order('created_at', { ascending: false })
         .limit(AUDIT_FETCH_LIMIT);
-      const auditRows = (audits ?? []) as RawAuditRow[];
+
+      const first = await fetchWith(AUDIT_SELECT);
+      /* Column not there yet (migration unrun) → shed it and fetch again, rather than showing an
+         empty book. `archivedReady` tells the UI to hide the archive controls instead of offering
+         a button that cannot work. */
+      const missing = isMissingArchivedColumn(first.error);
+      const archivedReady = !missing;
+      const rows = missing ? (await fetchWith(AUDIT_SELECT_BASE)).data : first.data;
+      const auditRows = ((rows ?? []) as unknown) as RawAuditRow[];
       return {
         audits: await hydrateAudits(auditRows),
         capped: auditRows.length >= AUDIT_FETCH_LIMIT,
+        archivedReady,
       };
     },
   });
@@ -687,13 +666,18 @@ const AiAudit = () => {
   /** True when the audits query came back full, i.e. older audits exist beyond it. Drives an
    *  honest label instead of a count that silently stops growing. */
   const auditsCapped = auditListQuery.data?.capped ?? false;
+  /** False until the `archived_at` migration has run. Everything archive-related hides rather
+   *  than rendering a control that would fail — a button that visibly does nothing is the
+   *  failure CLAUDE.md §6c names. Defaults FALSE while the first fetch is in flight so the
+   *  controls appear only once the column is proven present. */
+  const archivedReady = auditListQuery.data?.archivedReady ?? false;
   const loadSaved = useCallback(() => { void queryClient.invalidateQueries({ queryKey: auditListKey }); },
     [queryClient, auditListKey]);
   /* The optimistic row edits below still write directly into the cached list, so a delete or a
      rename shows at once rather than after a round trip. Same shape as the old setSavedAudits. */
   const setSavedAudits = useCallback((update: (prev: AuditLite[]) => AuditLite[]) => {
-    queryClient.setQueryData<{ audits: AuditLite[]; capped: boolean }>(auditListKey, (prev) =>
-      prev ? { ...prev, audits: update(prev.audits) } : prev);
+    queryClient.setQueryData<{ audits: AuditLite[]; capped: boolean; archivedReady: boolean }>(
+      auditListKey, (prev) => prev ? { ...prev, audits: update(prev.audits) } : prev);
   }, [queryClient, auditListKey]);
 
   /* ── SERVER-SIDE NAME SEARCH ─────────────────────────────────────────────────────────────────
@@ -949,8 +933,8 @@ const AiAudit = () => {
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
     setOpenRunId(null); setShowDetails(false);
     setRevealed(0); setStep('source');
-    // Close the dialog: deleteAudit calls this, and leaving an emptied form open over the list
-    // after deleting the audit you were viewing would look like a bug.
+    // Close the dialog: confirmArchiveAudit calls this, and leaving an emptied form open over
+    // the list after archiving the audit you were viewing would look like a bug.
     setFormOpen(false);
   };
 
@@ -980,20 +964,131 @@ const AiAudit = () => {
   const resumeDraft = () => setFormOpen(true);
 
   // Delete an audit + all its children (ai_audit_runs / ai_audit_queue cascade from the FK).
-  // Owner RLS lets the browser delete its own row. Mirrors AdminSitesList: confirm → delete →
-  // optimistic filter → toast. If the deleted audit is the one open in the results view, reset.
-  const deleteAudit = async (a: AuditRow) => {
+  /* ════════════════════════════════════════════════════════════════════════════════════════
+     ARCHIVING REPLACED DELETING — 2026-09-10.
+
+     🔴 WHAT THIS USED TO DO. `supabase.from('ai_audits').delete()` behind a one-line
+     window.confirm, on a 24px trash icon, with NO exemption for a paying customer's baseline.
+     The delete CASCADES (ai_audit_runs and ai_audit_queue are both ON DELETE CASCADE, and
+     page_plan_queue with them), so it destroyed the run, every question and every stored
+     answer — the measurement itself. Nothing is backed up and nothing was recoverable.
+
+     Now: a protection check that REFUSES on anything load-bearing, a confirm that shows what is
+     about to go, an UPDATE that only sets a timestamp, and an Undo on the toast. The row and all
+     its children stay in the database permanently.
+     ⚠️ `deletingId` keeps its name: it is referenced at several render sites and renaming it is
+     churn inside a file this stage is deliberately not restructuring. It means "busy on this id".
+     ════════════════════════════════════════════════════════════════════════════════════════ */
+
+  /** Gather the four protection facts for one audit. Two are already on the row; two are reads
+   *  that may fail — and a failed read returns `null`, NEVER `false`. Under RLS a denied read is
+   *  200-with-[] (CLAUDE.md §8), indistinguishable from "nothing found", so collapsing either
+   *  into `false` would hand out permission we never verified. */
+  const gatherProtectionFacts = useCallback(async (a: AuditLite): Promise<AuditProtectionFacts> => {
+    let leadIsPaying: boolean | null = null;
+    if (!a.lead_id) {
+      /* No lead at all is a KNOWN answer, not an unknown one — a market audit or an
+         audit-only business (ABLM) genuinely has no customer behind it. */
+      leadIsPaying = false;
+    } else {
+      const { data, error } = await (supabase as unknown as SupabaseClient)
+        .from('outreach_leads').select('amount_paid, status').eq('id', a.lead_id).maybeSingle();
+      /* ⛔ `isPaidLead`, NOT a bare `amount_paid > 0`. The first version of this used the raw
+         comparison and so protected a REFUNDED customer's audits as a paying customer's — the
+         money went back out, and `refunded` is the one status that subtracts. One rule, in
+         src/lib/leadPayment.ts, is what stops the funnel, the campaign card, the Inbox and this
+         from disagreeing about who has paid; a second copy here is exactly how they drift.
+         ⚠️ A refunded customer's BASELINE is still protected — by `paid_baseline`, which is the
+         honest reason. It is evidence of what was measured, whoever ended up paying for it. */
+      if (!error) leadIsPaying = isPaidLead(data as { amount_paid?: number | null; status?: string | null } | null);
+    }
+
+    let hasMeasurementLock: boolean | null = null;
+    {
+      const { data, error } = await (supabase as unknown as SupabaseClient)
+        .from('measurement_locks').select('id').eq('business_name', a.business_name).limit(1);
+      /* A missing TABLE (the lock migration is hand-run too) is a failed check, not "no lock". */
+      if (!error) hasMeasurementLock = ((data as unknown[] | null) ?? []).length > 0;
+    }
+
+    return {
+      baselineTargetRuns: a.baseline_target_runs ?? null,
+      isMeasurement: a.is_measurement ?? null,
+      leadIsPaying,
+      hasMeasurementLock,
+    };
+  }, []);
+
+  /** Step 1 of archiving: work out whether we may, and open the confirm showing the answer.
+   *  The check runs BEFORE the dialog so the operator never reads "are you sure?" about
+   *  something the app is going to refuse anyway. */
+  const askArchiveAudit = async (a: AuditLite) => {
     if (deletingId) return;
-    if (!window.confirm(`Delete "${a.business_name}"? This can't be undone.`)) return;
+    if (!archivedReady) {
+      toast({
+        title: 'Archiving is not set up yet',
+        description: 'The archived_at column has not been added to the database. Run the migration SQL, then reload.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setDeletingId(a.id);
     try {
-      const { error } = await supabase.from('ai_audits').delete().eq('id', a.id);
-      if (error) throw new Error(error.message);
-      setSavedAudits((prev) => prev.filter((x) => x.id !== a.id));
-      if (auditId === a.id) resetWizard(); // don't leave a stale open view of a deleted audit
-      toast({ title: 'Audit deleted' });
+      const facts = await gatherProtectionFacts(a);
+      setArchiveTarget({ audit: a, verdict: auditProtection(facts) });
     } catch (e) {
-      toast({ title: 'Delete failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+      /* Could not even gather the facts → refuse. Same direction as a null fact. */
+      toast({
+        title: 'Could not check this audit',
+        description: `${e instanceof Error ? e.message : 'Read failed'} — nothing was archived.`,
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  /** Flip archived_at. One function for both directions so archive and restore cannot drift. */
+  const setArchived = async (a: AuditLite, archived: boolean) => {
+    const value = archived ? new Date().toISOString() : null;
+    const { error } = await (supabase as unknown as SupabaseClient)
+      .from('ai_audits').update({ archived_at: value }).eq('id', a.id);
+    if (error) throw new Error(error.message);
+    setSavedAudits((prev) => prev.map((x) => x.id === a.id ? { ...x, archived_at: value } : x));
+  };
+
+  /** Step 2: actually archive. Only ever reached for an audit the verdict cleared. */
+  const confirmArchiveAudit = async () => {
+    const target = archiveTarget;
+    if (!target || target.verdict.isProtected) return;
+    const a = target.audit;
+    setDeletingId(a.id);
+    try {
+      await setArchived(a, true);
+      setArchiveTarget(null);
+      if (auditId === a.id) resetWizard(); // don't leave an open view of an archived audit
+      toast({
+        title: 'Audit archived',
+        description: `"${a.business_name}" is hidden from the list. Nothing was deleted.`,
+        action: (
+          <ToastAction altText="Undo" onClick={() => { void restoreAudit(a); }}>Undo</ToastAction>
+        ),
+      });
+    } catch (e) {
+      toast({ title: 'Archive failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  /** Bring one back. Used by Undo and by the Restore button in the archived list. */
+  const restoreAudit = async (a: AuditLite) => {
+    setDeletingId(a.id);
+    try {
+      await setArchived(a, false);
+      toast({ title: 'Audit restored', description: `"${a.business_name}" is back in the list.` });
+    } catch (e) {
+      toast({ title: 'Restore failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
     } finally {
       setDeletingId(null);
     }
@@ -1505,6 +1600,93 @@ const AiAudit = () => {
 
   // ── Derived results tallies ─────────────────────────────────────────────────
   const doneCount = queueRows.filter((r) => r.status === 'done' || r.status === 'failed').length;
+  /* ── LOAD EVERY RUN OF THE OPEN AUDIT, AND POOL THEM ──────────────────────────────────────
+     Two reads, both owner-RLS: the audit's runs (so the picker can list them and default
+     sensibly), then every queue row belonging to those runs when the scope is pooled.
+     ⚠️ Chunked `.in()` is not needed — an audit has single-digit runs — but the queue read IS
+     capped by db-max-rows, so it is paginated. 12 questions × 3 runs is 36 rows; a 47-question
+     measurement is 141. Silent truncation here would quietly shrink the denominator the
+     guarantee is measured on (CLAUDE.md §6). */
+  useEffect(() => {
+    if (step !== 'results' || !auditId) { setAuditRuns([]); setPooledInputs([]); return; }
+    let alive = true;
+    (async () => {
+      const { data: runs } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audit_runs')
+        .select('id, run_number, status, created_at')
+        .eq('audit_id', auditId)
+        .order('run_number', { ascending: true });
+      if (!alive) return;
+      const list = ((runs ?? []) as { id: string; run_number: number; status: string; created_at: string }[]);
+      setAuditRuns(list);
+    })();
+    return () => { alive = false; };
+  }, [step, auditId]);
+
+  useEffect(() => {
+    if (step !== 'results' || runScope !== 'all' || auditRuns.length < 2) { setPooledInputs([]); return; }
+    let alive = true;
+    const ids = auditRuns.map((r) => r.id);
+    const numberOf = new Map(auditRuns.map((r) => [r.id, r.run_number]));
+    setPoolLoading(true);
+    (async () => {
+      const out: PooledInput[] = [];
+      const PAGE_ROWS = 1000;
+      for (let from = 0; ; from += PAGE_ROWS) {
+        const { data, error } = await (supabase as unknown as SupabaseClient)
+          .from('ai_audit_queue')
+          .select('run_id, question, status, result')
+          .in('run_id', ids)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE_ROWS - 1);
+        if (error) break;
+        const page = (data ?? []) as { run_id: string; question: string; status: string; result: EngineMap | null }[];
+        for (const r of page) {
+          out.push({ runId: r.run_id, runNumber: numberOf.get(r.run_id) ?? 0, question: r.question, status: r.status, result: r.result });
+        }
+        if (page.length < PAGE_ROWS) break;
+      }
+      if (alive) { setPooledInputs(out); setPoolLoading(false); }
+    })();
+    return () => { alive = false; setPoolLoading(false); };
+  }, [step, runScope, auditRuns]);
+
+  /* Picking a single run in the selector LOADS it — same path the expanded row in the list
+     uses, so a run opened either way shows identical numbers. Switching back to pooled points
+     `runId` at the newest run, because Re-run, Stop and the report all act on a single run and
+     must never be left aimed at whichever one happened to be open last. */
+  useEffect(() => {
+    if (step !== 'results' || auditRuns.length === 0) return;
+    if (runScope === 'all') {
+      const newest = [...auditRuns].sort((a, b) => b.run_number - a.run_number)[0];
+      if (newest && newest.id !== runId) { setRunId(newest.id); void pollRun(newest.id); }
+      return;
+    }
+    if (runScope !== runId) { setRunId(runScope); void pollRun(runScope); }
+  }, [step, runScope, auditRuns, runId, pollRun]);
+
+  /* 🔴 POOLING RUNS TAKEN WEEKS APART MIXES A BEFORE WITH AN AFTER, and this audit book really
+     contains that shape: one RG audit holds FIVE runs — three on 26 Aug, then singles appended
+     on 1 Sep and 8 Sep (CLAUDE.md §17 records the same audit as the reason the comparison picker
+     groups by audit AND day). Pooled is still the right default — it is what the operator asked
+     for and what three same-day runs mean — but a spread this wide has to be SAID, not silently
+     averaged into one number. */
+  const runSpanDays = useMemo(() => {
+    if (auditRuns.length < 2) return 0;
+    const times = auditRuns.map((r) => new Date(r.created_at).getTime()).filter((t) => Number.isFinite(t));
+    if (times.length < 2) return 0;
+    return (Math.max(...times) - Math.min(...times)) / 86_400_000;
+  }, [auditRuns]);
+  const POOL_SPAN_WARN_DAYS = 3;
+
+  /** True when the screen is showing every run folded together rather than one. */
+  const pooled = runScope === 'all' && auditRuns.length > 1;
+  /** The pooled fold. Computed only in pooled mode; a 1-run audit never pays for it. */
+  const poolTally = useMemo(
+    () => (pooled ? poolRuns(pooledInputs, SCORED_ENGINES, DISPLAY_ENGINES) : null),
+    [pooled, pooledInputs],
+  );
+
   const liveTally = queueRows.reduce(
     (acc, r) => {
       if (r.status === 'done' && r.result) {
@@ -1581,6 +1763,16 @@ const AiAudit = () => {
   // named most often (from the per-engine "instead" lists). Cheap; recomputed from the
   // live queue rows so it fills in as the run drains.
   const perEngineScore = DISPLAY_ENGINES.map((engine) => {
+    /* Pooled: sum the fold's per-question tallies for this engine, so "ChatGPT 5/12" becomes
+       "ChatGPT 15/36" across three runs rather than one run's slice. */
+    if (pooled && poolTally) {
+      let named = 0; let total = 0;
+      for (const q of poolTally.questions) {
+        const t = q.perEngine[engine];
+        if (t) { named += t.named; total += t.answered; }
+      }
+      return { engine, named, total };
+    }
     let named = 0;
     let total = 0;
     for (const r of queueRows) {
@@ -1663,9 +1855,23 @@ const AiAudit = () => {
      behaviour that /a/<auditId> links depend on.
      TRADE: tradeWord(), because the raw business_type does not group — plumber/plumbers/
      Plumber are one trade stored three ways. */
+  /* ⛔ ARCHIVED AUDITS ARE FILTERED HERE, NOT IN `listSource`. listSource also feeds
+     `openAuditRow`, so filtering it would make an archived audit unopenable by deep link
+     (/ai-audit?runId=…) — hidden from the list is not the same as gone from the app.
+     ⚠️ `!a.archived_at` and not `a.archived_at === null`: the field is absent, not null, on a
+     row fetched by the pre-migration fallback select, and an absent value must read as NOT
+     archived or the whole book vanishes (CLAUDE.md §6). */
+  const visibleAudits = useMemo<AuditLite[]>(
+    () => listSource.filter((a) => (showArchived ? !!a.archived_at : !a.archived_at)),
+    [listSource, showArchived],
+  );
+  /** How many are archived, for the toggle's label. Counted off the fetched window only, which
+   *  is the same window the list itself shows — so the number and the list always agree. */
+  const archivedCount = useMemo(() => listSource.filter((a) => !!a.archived_at).length, [listSource]);
+
   const businesses = useMemo<BusinessGroup[]>(() => {
     const byKey = new Map<string, AuditLite[]>();
-    for (const a of listSource) {
+    for (const a of visibleAudits) {
       const key = a.lead_id ?? `name:${(a.business_name ?? '').trim().toLowerCase()}`;
       const list = byKey.get(key) ?? [];
       list.push(a);
@@ -1696,7 +1902,7 @@ const AiAudit = () => {
     }
     // Most recent activity first within a trade.
     return out.sort((a, b) => b.latestAudit.created_at.localeCompare(a.latestAudit.created_at));
-  }, [listSource]);
+  }, [visibleAudits]);
 
   /* ── THE FILTER ───────────────────────────────────────────────────────────────────────────────
      Matches NAME, TRADE and TOWN, because the way you remember an audit is often "that Wisbech
@@ -1706,24 +1912,28 @@ const AiAudit = () => {
      both "Locksmith" and "Wellsecure Locksmiths".
      Every term must match SOMEWHERE in the row, so "wisbech locksmith" narrows rather than widening
      — the two words are in different fields, which an all-in-one-field match would miss. */
-  const auditQueryTerms = useMemo(() => auditSearchTerms(auditQuery), [auditQuery]);
+  /* ⛔ THE SEARCH BOX FILTERS ON A DEFERRED COPY OF WHAT YOU TYPED, AND THAT IS THE TYPING LAG
+     FIX. Measured 2026-09-10 against the live database: 968 audits fold into **901 business
+     rows**, and `closedTrades` starts EMPTY — every trade group is expanded — so all 901 rows,
+     each with its own pill row, were re-rendered synchronously on every single keystroke.
+     `useDeferredValue` lets React paint the character you typed first and re-filter the list
+     immediately afterwards, interrupting that work if you type again. The input stays bound to
+     `auditQuery` (instant), everything downstream reads `deferredQuery`.
+     ⚠️ NOT a debounce: nothing is delayed by a timer, and no keystroke is dropped. The list is
+     never more than one render behind, and always settles on what you actually typed.
+     ⚠️ The SERVER-side name search deliberately keeps reading the raw `auditQuery` — it has its
+     own 300ms debounce, and deferring a value that is already debounced would only add lag. */
+  const deferredQuery = useDeferredValue(auditQuery);
+  const auditQueryTerms = useMemo(() => auditSearchTerms(deferredQuery), [deferredQuery]);
   const filteredBusinesses = useMemo(
     () => (auditQueryTerms.length === 0 ? businesses : businesses.filter((b) => auditMatches(b, auditQueryTerms))),
     [businesses, auditQueryTerms],
   );
 
-  /** Trades, largest group first — of whatever survived the filter. */
-  const tradeGroups = useMemo(() => {
-    const byTrade = new Map<string, BusinessGroup[]>();
-    for (const b of filteredBusinesses) {
-      const list = byTrade.get(b.trade) ?? [];
-      list.push(b);
-      byTrade.set(b.trade, list);
-    }
-    return [...byTrade.entries()]
-      .map(([trade, items]) => ({ trade, items }))
-      .sort((a, b) => b.items.length - a.items.length || a.trade.localeCompare(b.trade));
-  }, [filteredBusinesses]);
+  /* REMOVED 2026-09-10: `tradeGroups`, which folded the list into collapsible trade sections.
+     Trade is a FILTER in the list now, not a nesting level — the grouping is what put 377
+     locksmiths on screen at once and added an indent to reach any single business. The list
+     derives its own trade options from the businesses it is given. */
 
   /** Anything draining? Gates the landing list's poller so an idle page makes no requests. */
   const inFlightCount = useMemo(
@@ -1852,8 +2062,12 @@ const AiAudit = () => {
   // tally); SEO = the graded overall letter. Same sources the headline/report already use —
   // no new metric invented.
   const vizSummary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number } } | null)?.summary;
-  const vizNamed = vizSummary?.named_datapoints ?? liveTally.named;
-  const vizTotal = vizSummary?.total_datapoints ?? liveTally.total;
+  /* ⛔ IN POOLED MODE THE STORED PER-RUN SUMMARY IS BYPASSED, and that is the whole point.
+     `run.results.summary` is one run's own count, so preferring it here is exactly how a 3-run
+     measurement came to read "7/24" instead of 20/72. Pooled reads the fold; single-run keeps
+     the stored summary first, unchanged. */
+  const vizNamed = pooled ? (poolTally?.named ?? 0) : (vizSummary?.named_datapoints ?? liveTally.named);
+  const vizTotal = pooled ? (poolTally?.total ?? 0) : (vizSummary?.total_datapoints ?? liveTally.total);
   const vizPct = vizTotal > 0 ? Math.round((vizNamed / vizTotal) * 100) : 0;
   const vizTone: TileTone = vizTotal === 0 ? 'muted' : vizPct >= 50 ? 'green' : vizPct > 0 ? 'amber' : 'red';
   const seoGrade = hasSeo ? String((run?.results as { seo?: { overallGrade?: string } } | null)?.seo?.overallGrade ?? '') : '';
@@ -2041,297 +2255,76 @@ const AiAudit = () => {
       {/* Stacked wizard — answered steps stay visible; each answer reveals the next. */}
       {step !== 'results' && (
         <div className="space-y-4">
-          {/* Metrics strip - a quick read on the whole audit book (only when there are audits).
-              Computed over BUSINESSES, not audit rows: a business audited twice used to be counted
-              twice in both the average and the invisible tally. "Site . presence" is gone - it
-              counted has_website, a static property of the lead list that says nothing about how
-              any audit turned out. */}
+          {/* ⛔ ONE LINE, NOT SIX CARDS. This was a six-tile dashboard sitting above the list,
+              so it was the first thing on screen every time — including "IN FLIGHT 0", which is
+              what it reads for all but a few minutes a week. These are reference numbers you
+              glance at, not decisions you act on. Every figure is unchanged and still derived
+              over BUSINESSES rather than audit rows: a business audited twice used to be counted
+              twice in both the average and the invisible tally.
+              ⚠️ Each figure hides itself when it has nothing to say, rather than printing a zero
+              that reads as a measurement. */}
           {metrics.audits > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <MetricCard
-                icon={<FileText className="h-4 w-4" />}
-                label={auditsCapped ? `Businesses (of latest ${AUDIT_FETCH_LIMIT})` : 'Businesses'}
-                value={String(metrics.businesses)}
-              />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[12px] text-muted-foreground">
+              <span>
+                <span className="font-semibold text-foreground">{metrics.businesses}</span> businesses
+                {auditsCapped ? <span className="text-muted-foreground/70"> (of latest {AUDIT_FETCH_LIMIT})</span> : null}
+              </span>
               {metrics.avgPct !== null && (
-                <MetricCard
-                  icon={<TrendingUp className="h-4 w-4" />}
-                  label="Avg visibility"
-                  value={`${metrics.avgPct}%`}
-                  tone={metrics.avgPct >= 50 ? 'good' : metrics.avgPct > 0 ? 'mid' : 'bad'}
-                />
+                <span>
+                  <span className={`font-semibold ${metrics.avgPct >= 50 ? 'text-emerald-500' : metrics.avgPct > 0 ? 'text-amber-500' : 'text-red-500'}`}>
+                    {metrics.avgPct}%
+                  </span> avg visibility
+                </span>
               )}
-              <MetricCard
-                icon={<EyeOff className="h-4 w-4" />}
-                label="Invisible"
-                value={String(metrics.invisible)}
-                tone={metrics.invisible > 0 ? 'bad' : 'good'}
-              />
-              <MetricCard
-                icon={<Loader2 className={`h-4 w-4 ${metrics.inFlight > 0 ? 'animate-spin' : ''}`} />}
-                label="In flight"
-                value={String(metrics.inFlight)}
-                tone={metrics.inFlight > 0 ? 'mid' : undefined}
-              />
-              {/* Paid baselines finalised vs started - the guarantee's measuring stick. */}
+              {metrics.invisible > 0 && (
+                <span><span className="font-semibold text-red-500">{metrics.invisible}</span> invisible</span>
+              )}
+              {metrics.inFlight > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span className="font-semibold text-foreground">{metrics.inFlight}</span> running
+                </span>
+              )}
+              {/* Paid baselines finalised vs started — the guarantee's measuring stick. */}
               {metrics.baselineTotal > 0 && (
-                <MetricCard
-                  icon={<Check className="h-4 w-4" />}
-                  label="Baselines"
-                  value={`${metrics.baselinesDone}/${metrics.baselineTotal}`}
-                  tone={metrics.baselinesDone === metrics.baselineTotal ? 'good' : 'mid'}
-                />
+                <span>
+                  <span className={`font-semibold ${metrics.baselinesDone === metrics.baselineTotal ? 'text-emerald-500' : 'text-amber-500'}`}>
+                    {metrics.baselinesDone}/{metrics.baselineTotal}
+                  </span> baselines done
+                </span>
               )}
-              {/* Real actor spend, summed from ai_audit_runs.actor_cost_usd. Only runs since that
-                  column started being written carry a figure, so this is a floor, not a total. */}
-              <MetricCard
-                icon={<Download className="h-4 w-4" />}
-                label="Spend (recorded)"
-                value={`$${metrics.spend.toFixed(2)}`}
-              />
+              {/* Real actor spend from ai_audit_runs.actor_cost_usd — only runs since that column
+                  started being written carry a figure, so this is a floor, not a total. */}
+              <span>
+                <span className="font-semibold text-foreground">${metrics.spend.toFixed(2)}</span> recorded spend
+              </span>
             </div>
           )}
 
-          {/* THE PAGE IS NOW JUST THE LIST. The source picker and the whole business-details form
-              moved into the dialog at the bottom of this component — they used to sit in this same
-              card, above the list, which is what made the page feel cluttered. */}
-          <StepCard>
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-baseline gap-2">
-                  <Label className="text-sm font-semibold text-foreground">Past audits</Label>
-                  {/* Honest about the window: the count is what was LOADED, and says so when full.
-                      AND WITH A SEARCH ACTIVE IT DESCRIBES THE SEARCH, not the page — leaving
-                      "129 businesses" above a list of three would make the filter look broken. */}
-                  <span className="text-[11px] text-muted-foreground">
-                    {auditQueryTerms.length > 0
-                      ? `${filteredBusinesses.length} of ${metrics.businesses} match`
-                      : `${metrics.businesses} business${metrics.businesses === 1 ? '' : 'es'} · ${metrics.audits} audit${metrics.audits === 1 ? '' : 's'}`}
-                    {auditsCapped ? ` (latest ${AUDIT_FETCH_LIMIT})` : ''}
-                  </span>
-                </div>
-                {/* Opens the dialog WITHOUT resetting, so this is a pure relocation of what the page
-                    did before: any form state restored from sessionStorage is still there, exactly as
-                    it would have been sitting on the page. Choosing "New business" or a different
-                    lead inside the dialog is what changes the subject, same as it always was. */}
-                <Button size="sm" onClick={() => setFormOpen(true)}>
-                  <Plus className="mr-1.5 h-4 w-4" /> New audit
-                </Button>
-              </div>
-
-              {/* ── SEARCH ────────────────────────────────────────────────────────────────────────
-                  Only once there is enough to lose something in. Below that the list IS the search,
-                  and a box over four rows is furniture. */}
-              {businesses.length > SEARCH_MIN_BUSINESSES && (
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={auditQuery}
-                    onChange={(e) => setAuditQuery(e.target.value)}
-                    /* Escape clears rather than blurring. preventDefault stops it closing anything
-                       this input happens to sit inside. */
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.preventDefault(); setAuditQuery(''); }
-                    }}
-                    placeholder="Search by name, trade or town"
-                    aria-label="Search past audits"
-                    className="h-8 pl-8 pr-8 text-[13px]"
-                  />
-                  {auditQuery !== '' && (
-                    <button
-                      type="button"
-                      onClick={() => setAuditQuery('')}
-                      aria-label="Clear search"
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* NOTHING MATCHED — said out loud, with the term quoted back and a way out. An empty
-                  list reads as "you have no audits", which is the opposite of the truth, and is
-                  exactly how a filter left on by accident becomes a panic. */}
-              {businesses.length > 0 && filteredBusinesses.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
-                  <Search className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
-                  <div className="text-sm font-medium">No audits match &ldquo;{auditQuery}&rdquo;</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Searched {businesses.length} business{businesses.length === 1 ? '' : 'es'} by name, trade and town
-                    {auditsCapped ? `, from the latest ${AUDIT_FETCH_LIMIT} audits loaded` : ''}.
-                  </div>
-                  <Button size="sm" variant="outline" className="mt-3" onClick={() => setAuditQuery('')}>
-                    <X className="mr-1.5 h-3.5 w-3.5" /> Clear search
-                  </Button>
-                </div>
-              ) : businesses.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
-                  <Sparkles className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
-                  <div className="text-sm font-medium">No audits yet</div>
-                  {/* "above" was correct when the form sat at the top of this card. It doesn't now. */}
-                  <div className="text-[11px] text-muted-foreground">Run your first audit to see how AI answers for a business.</div>
-                  <Button size="sm" className="mt-3" onClick={() => setFormOpen(true)}>
-                    <Plus className="mr-1.5 h-4 w-4" /> New audit
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {tradeGroups.map(({ trade, items }) => {
-                    const collapsed = closedTrades.has(trade);
-                    const running = items.filter((b) => b.runningRun).length;
-                    return (
-                      <div key={trade} className="space-y-1.5">
-                        {/* Trade header — collapsible, largest trade first */}
-                        <button
-                          onClick={() => setClosedTrades((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(trade)) next.delete(trade); else next.add(trade);
-                            return next;
-                          })}
-                          className="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted/50"
-                        >
-                          {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
-                          <span className="text-xs font-semibold capitalize">{trade}</span>
-                          <span className="text-[11px] text-muted-foreground">{items.length}</span>
-                          {running > 0 && (
-                            <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-[hsl(var(--badge-waiting))] px-1.5 py-0.5 text-[10px] font-medium text-[hsl(var(--badge-waiting-fg))]">
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" />{running} running
-                            </span>
-                          )}
-                        </button>
-
-                        {!collapsed && items.map((b) => {
-                          const expanded = openBusinesses.has(b.key);
-                          const nested = b.auditCount > 1 || b.runCount > 1;
-                          const inFlight = b.runningRun;
-                          const a = b.latestAudit;
-                          const run = b.latestRun;
-                          return (
-                            <div key={b.key} className="rounded-lg border border-border/60 bg-card/60 transition-colors hover:bg-card">
-                              {/* Collapsed row: ONE per business */}
-                              <div className="flex items-center gap-2 px-3 py-2">
-                                {nested ? (
-                                  <button
-                                    onClick={() => setOpenBusinesses((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(b.key)) next.delete(b.key); else next.add(b.key);
-                                      return next;
-                                    })}
-                                    className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted"
-                                    title={expanded ? 'Hide runs' : `Show ${b.auditCount} audits, ${b.runCount} runs`}
-                                  >
-                                    {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                  </button>
-                                ) : <span className="w-[18px] shrink-0" />}
-
-                                <button onClick={() => reopenAudit(a)} className="min-w-0 flex-1 text-left" title="Open latest results">
-                                  {/* PRIMARY: the business. Heavier and darker than everything else on the row. */}
-                                  <div className="flex items-center gap-1.5 truncate text-[0.95rem] font-semibold text-foreground">
-                                    {b.has_website ? <Globe className="h-3 w-3 shrink-0 text-muted-foreground/70" /> : <MapPin className="h-3 w-3 shrink-0 text-muted-foreground/70" />}
-                                    <span className="truncate">{b.name}</span>
-                                    {/* A MARKET AUDIT IS NOT A CLIENT. It sits in this list because it
-                                        is an audit, and it stays searchable — but "[market] locksmiths
-                                        · Hastings" reading like a business name is how one gets pitched
-                                        by mistake. Badged, not hidden. */}
-                                    {b.isMarket && (
-                                      <span className="shrink-0 rounded border border-border bg-muted/60 px-1 py-0.5 text-[10px] font-medium text-muted-foreground">market</span>
-                                    )}
-                                    {nested && <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground">{b.runCount} runs</span>}
-                                  </div>
-                                  {/* SECONDARY: trade and place, deliberately recessive. */}
-                                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
-                                    {b.business_type || '—'}{b.location ? ` · ${b.location}` : ''}
-                                  </div>
-                                  {/* TERTIARY: the pill row gets its own line so it is readable rather than
-                                      squeezed against the location text. */}
-                                  <div className="mt-1 flex flex-wrap items-center gap-1">
-                                    <AuditPills audit={a} run={run} />
-                                  </div>
-                                </button>
-
-                                {/* State: live progress while draining, else the score */}
-                                {inFlight ? <RunningChip run={inFlight} /> : <MentionPill rate={run?.mention_rate ?? null} />}
-
-                                {/* Report — once the latest run has a score */}
-                                {run?.mention_rate !== null && run?.mention_rate !== undefined && (
-                                  <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={() => viewReport(a)} title="View report">
-                                    <FileText className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Report</span>
-                                  </Button>
-                                )}
-                                {/* REMOVED 2026-07-30: the row's "Playbook" button. It opened the
-                                    generate-playbook LLM document, which is NOT the same thing as the
-                                    `checklist` pill beside it — that one links to /playbook/:id, the
-                                    evidence-derived document a client actually receives.
-                                    Still reachable: open the audit's results and use View playbook.
-                                    The LLM document is also the one with the known content problem
-                                    (recommends Bing Places, which has zero citations across 8,913;
-                                    omits Yell, which is cited). CLAUDE.md §5 and §9. */}
-                                {inFlight && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => cancelAudit(a, inFlight.id)} disabled={cancellingId === a.id} title="Stop this audit">
-                                    {cancellingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleStop className="h-3.5 w-3.5" />}
-                                  </Button>
-                                )}
-                                {/* Delete stays on the row ONLY for a single-audit business. With several
-                                    audits it would be ambiguous which one goes, so it moves inside. */}
-                                {!nested && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => deleteAudit(a)} disabled={deletingId === a.id} title="Delete this audit">
-                                    {deletingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                  </Button>
-                                )}
-                              </div>
-
-                              {/* Expanded: every audit, and every run inside it */}
-                              {expanded && nested && (
-                                <div className="border-t border-border/60 bg-muted/20 px-3 py-2 space-y-2">
-                                  {b.audits.map((au) => (
-                                    <div key={au.id} className="space-y-1">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[11px] font-medium text-muted-foreground">
-                                          {/* Year included: a before/after pair can straddle a year end,
-                                              and "21 Jul" alone would not distinguish them. */}
-                                          Audit {new Date(au.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                        </span>
-                                        <AuditPills audit={au} run={au.runs[0] ?? null} />
-                                        <span className="flex-1" />
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => deleteAudit(au)} disabled={deletingId === au.id} title="Delete this audit and its runs">
-                                          {deletingId === au.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                                        </Button>
-                                      </div>
-                                      {au.runs.length === 0 ? (
-                                        <div className="pl-3 text-[11px] text-muted-foreground">No runs</div>
-                                      ) : au.runs.map((r) => {
-                                        const draining = r.status === 'pending' || r.status === 'running';
-                                        return (
-                                          <div key={r.id} className="flex items-center gap-2 pl-3">
-                                            <button onClick={() => reopenAudit(au, r)} className="min-w-0 flex-1 text-left text-[11px] hover:underline" title="Open this run">
-                                              Run {r.run_number}
-                                              <span className="text-muted-foreground"> · {r.status}</span>
-                                              {r.actor_cost_usd !== null && <span className="text-muted-foreground"> · ${r.actor_cost_usd.toFixed(3)}</span>}
-                                            </button>
-                                            {draining ? <RunningChip run={r} /> : <MentionPill rate={r.mention_rate} />}
-                                            {draining && (
-                                              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => cancelAudit(au, r.id)} disabled={cancellingId === au.id} title="Stop this run">
-                                                <CircleStop className="h-3 w-3" />
-                                              </Button>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </StepCard>
+          <AuditBookList
+            businesses={businesses}
+            filteredBusinesses={filteredBusinesses}
+            metrics={metrics}
+            auditsCapped={auditsCapped}
+            fetchLimit={AUDIT_FETCH_LIMIT}
+            searchMinBusinesses={SEARCH_MIN_BUSINESSES}
+            auditQuery={auditQuery}
+            deferredQuery={deferredQuery}
+            auditQueryTerms={auditQueryTerms}
+            onQueryChange={setAuditQuery}
+            archivedReady={archivedReady}
+            archivedCount={archivedCount}
+            showArchived={showArchived}
+            onToggleArchived={() => { setShowArchived((v) => !v); setAuditQuery(''); }}
+            onNewAudit={() => setFormOpen(true)}
+            onOpenAudit={reopenAudit}
+            onViewReport={viewReport}
+            onCancelRun={cancelAudit}
+            onArchive={askArchiveAudit}
+            onRestore={restoreAudit}
+            busyId={deletingId}
+            cancellingId={cancellingId}
+          />
         </div>
       )}
 
@@ -2627,6 +2620,83 @@ const AiAudit = () => {
       {/* ══ THE WRONG-TOWN BLOCK ════════════════════════════════════════════════════
           Nothing has been spent at this point — create-ai-audit refuses before generating questions
           or inserting queue rows, so cancelling costs nothing and overriding costs the normal audit. */}
+      {/* ════════════════════════════════════════════════════════════════════════════════════
+          ARCHIVE CONFIRM — replaces a one-line window.confirm that said only "this can't be
+          undone" and was, unusually, telling the truth. It now shows WHAT is being archived
+          (how many audits and runs sit under it), states plainly that nothing is deleted, and
+          when the audit is load-bearing it REFUSES with the reason instead of asking.
+          ⚠️ The verdict was computed before this opened — the dialog reports a decision, it
+          does not make one, so the confirm button cannot race the check. */}
+      <Dialog open={!!archiveTarget} onOpenChange={(o) => { if (!o) setArchiveTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          {archiveTarget && (() => {
+            const { audit, verdict } = archiveTarget;
+            const runCount = audit.runs?.length ?? 0;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    {verdict.isProtected
+                      ? (<><ShieldCheck className="h-4 w-4 text-primary" /> Kept — this one is protected</>)
+                      : (<><Archive className="h-4 w-4" /> Archive this audit?</>)}
+                  </DialogTitle>
+                  <DialogDescription className="pt-1">
+                    <span className="font-medium text-foreground">{audit.business_name}</span>
+                    {audit.location_text ? <> · {audit.location_text}</> : null}
+                    {' · '}
+                    {new Date(audit.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </DialogDescription>
+                </DialogHeader>
+
+                {verdict.isProtected ? (
+                  <div className="space-y-3 text-sm">
+                    <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                      {/* Every reason, not just the headline: an audit can be a customer's
+                          baseline AND part of a locked set, and hiding the second one would
+                          make a later refusal look inconsistent. */}
+                      <ul className="space-y-1.5">
+                        {verdict.reasons.map((r) => (
+                          <li key={r} className="text-foreground">{PROTECTION_WORDING[r]}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <p className="text-muted-foreground">
+                      {verdict.uncertain
+                        ? 'Because that check did not answer, this audit is being kept. Try again in a moment, or archive it once the check succeeds.'
+                        : 'Audits like this are the evidence behind what a customer was promised, so they cannot be archived from here.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-sm">
+                    <p className="text-muted-foreground">
+                      It will be hidden from the audit list. <span className="font-medium text-foreground">Nothing is deleted</span> —
+                      the audit, its {runCount === 1 ? 'run' : `${runCount} runs`} and every stored answer stay in the database,
+                      and you can bring it back at any time from <span className="font-medium text-foreground">Show archived</span>.
+                    </p>
+                    <p className="text-muted-foreground">
+                      Any report link already sent to a prospect keeps working.
+                    </p>
+                  </div>
+                )}
+
+                <DialogFooter className="gap-2 sm:gap-2">
+                  <Button variant="outline" onClick={() => setArchiveTarget(null)}>
+                    {verdict.isProtected ? 'Close' : 'Cancel'}
+                  </Button>
+                  {!verdict.isProtected && (
+                    <Button onClick={confirmArchiveAudit} disabled={deletingId === audit.id}>
+                      {deletingId === audit.id
+                        ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Archiving…</>)
+                        : (<><Archive className="mr-2 h-4 w-4" /> Archive</>)}
+                    </Button>
+                  )}
+                </DialogFooter>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!distanceBlock} onOpenChange={(o) => { if (!o) setDistanceBlock(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -2680,13 +2750,32 @@ const AiAudit = () => {
           {/* ── Command-centre header: business + two score tiles + actions ── */}
           <Card>
             <CardContent className="p-4 sm:p-5 space-y-4">
-              {/* Top bar: back to the list + tidy action buttons */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              {/* ════════════════════════════════════════════════════════════════════════════
+                  THE RESULTS HEADER — rebuilt 2026-09-10.
+
+                  🔴 WHAT IT WAS. Eight to eleven buttons in one undifferentiated row, all the
+                  same size and weight, above a credentials text field — and only BELOW all of
+                  that did the business name and its score appear. So the thing you opened the
+                  page to read started four rows down, and "Re-extract competitors" (a technical
+                  repair, used rarely) was the brightest control on screen while "Create report"
+                  (the reason the page exists) was an outline button in the middle of the row.
+
+                  ⛔ THE RULE APPLIED: the ANSWER comes first, then the one action you are most
+                  likely to want, then everything else behind one menu. Nothing was removed —
+                  every action below is still reachable, and the count is unchanged.
+
+                  ⚠️ TWO THINGS ARE DELIBERATELY NOT IN THE MENU:
+                  · STOP, while a run is draining — it is urgent and time-limited.
+                  · RE-EXTRACT, when the names are proven dirty — it is the FIX for the warning
+                    directly above it, and the old code put it there on purpose. Burying a fix
+                    in a menu under the warning that demands it is how a warning gets ignored.
+                  ════════════════════════════════════════════════════════════════════════════ */}
+              <div className="flex items-center justify-between gap-2">
                 <Button variant="ghost" size="sm" className="-ml-2" onClick={() => { setStep('source'); setOpenRunId(null); }}>
                   <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to audits
                 </Button>
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Stop — only while the open run is still in flight (pending/running). */}
+                <div className="flex items-center gap-2">
+                  {/* Urgent and time-limited: never behind a menu. */}
                   {isDraining && runId && (
                     <Button variant="outline" size="sm" onClick={cancelOpenRun} disabled={cancellingId === runId}
                       className="text-destructive hover:text-destructive" title="Stop this audit — it won't finish">
@@ -2694,130 +2783,187 @@ const AiAudit = () => {
                       {cancellingId === runId ? 'Stopping…' : 'Stop'}
                     </Button>
                   )}
-                  {/* Automated SEO scan — website audits only. Runs the Apify actor (~30-120s). */}
-                  {!isDraining && resultsHasWebsite && (
-                    <Button variant="outline" size="sm" onClick={runSeoScan} disabled={seoScanning}>
-                      {seoScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
-                      {/* Price on the face — the house rule: every spend says what it costs.
-                          Derived from the sync-guarded constant, never hand-typed (§4). */}
-                      {seoScanning ? 'Scanning…' : `${hasSeo ? 'Re-run SEO scan' : 'Run SEO scan'} · ~${asPence(SEO_SCAN_USD)}`}
-                    </Button>
+
+                  {/* ── WHICH RUNS ─────────────────────────────────────────────────────────
+                      Only when there is a choice to make. A 1-run audit gets no picker: a
+                      control with one option is furniture. */}
+                  {!isDraining && auditRuns.length > 1 && (
+                    <Select value={runScope} onValueChange={(v) => setRunScope(v)}>
+                      <SelectTrigger className="h-8 w-[168px] text-[13px]"><SelectValue /></SelectTrigger>
+                      <SelectContent align="end">
+                        <SelectItem value="all">All {auditRuns.length} runs (pooled)</SelectItem>
+                        {[...auditRuns].sort((a, b) => b.run_number - a.run_number).map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            Run {r.run_number} · {new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                            {r.status !== 'complete' ? ` · ${r.status}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
+
+                  {/* THE PRIMARY ACTION — the report is what this screen is for.
+                      ⚠️ I BRIEFLY HID THIS IN POOLED MODE ON A FALSE PREMISE, 2026-09-10. The
+                      belief was that a report is one run's document, so pooling the screen while
+                      the button built from a single run would be dishonest. It is not: the
+                      REPORT HAS ALWAYS POOLED. `openReportForCurrentRun` calls
+                      loadAuditRows(auditId) — every run of the audit — and buildReportData does
+                      not filter by run at all; it counts whatever rows it is handed and uses
+                      `run` only for the cleaning stamp and metadata. So the button is correct in
+                      both modes and always was. What was genuinely per-run was the RESULTS
+                      SCREEN reading one run out of component state, which is the thing pooling
+                      fixed. Caught by a second session reading the code rather than the comment
+                      I wrote about it. */}
                   {!isDraining && liveTally.done > 0 && (
-                    <Button variant="outline" size="sm" onClick={openReportForCurrentRun}>
+                    <Button size="sm" onClick={openReportForCurrentRun}>
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
                     </Button>
                   )}
-                  {/* Public LISTING page (/r/[slug]): View if a published one exists, else Generate.
-                      Distinct from the internal in-app report button above — this is the crawlable
-                      public listing served at yoursites.uk/r/. Needs auditId (the generate-report key). */}
-                  {!isDraining && liveTally.done > 0 && auditId && (
-                    reportSlug && reportStatus === 'published' ? (
-                      <Button variant="outline" size="sm" onClick={() => openReportPage(reportSlug)}
-                        title="Open the public listing page (yoursites.uk/r/…)">
-                        <ExternalLink className="mr-2 h-4 w-4" /> View listing
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="sm" onClick={generateReportPage} disabled={reportPageLoading}
-                        title="Generate the public listing page for this business">
-                        {reportPageLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-                        {reportPageLoading ? 'Generating…' : 'Generate listing'}
-                      </Button>
-                    )
-                  )}
-                  {/* ── PLAYBOOK. ONE BUTTON, ONE DOCUMENT. ────────────────────────────────────────
-                      Was TWO buttons ("Generate playbook" / "View playbook"), both opening the
-                      generate-playbook LLM document — the one that recommends Bing Places (zero
-                      citations in 10,615) and never mentions Checkatrade (662 citations across 58 of
-                      59 plumber audits). This goes to /playbook/:auditId, the evidence-derived
-                      document, which is the actual deliverable.
 
-                      NOTHING TO GENERATE ANY MORE, WHICH IS WHY THE VERB IS GONE. The evidence
-                      document is a pure fold over stored citations — it exists the moment the audit
-                      does. There is no model call, no cost, and no "generate" step to wait for.
-
-                      GATED ON auditId ALONE, deliberately not on liveTally.done or !isDraining: the
-                      ranking is trade-level, so the document is complete even when THIS run failed or
-                      is still going. Macca-Gas's run failed at the Apify cap and its playbook is still
-                      correct — locking the deliverable behind a successful run would have hidden it
-                      exactly when it was needed. */}
-                  {auditId && (
-                    <Button asChild variant="outline" size="sm">
-                      <Link to={`/playbook/${auditId}`} state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}
-                        title="Open the delivery playbook — directories evidenced from citations for this trade">
-                        <MapIcon className="mr-2 h-4 w-4" /> Playbook
-                      </Link>
-                    </Button>
-                  )}
-                  {/* ⛔ THE FAIL-SAFE, VISIBLE. Paul's rule 2026-08-28: never ship a junk-named report
-                      without knowing. Basis="the names themselves", so it fires on historic audits too. */}
-                  {competitorCleanliness.verdict === 'dirty' && !isDraining && (
-                    <div className="w-full rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-sm">
-                      <div className="font-medium text-amber-700 dark:text-amber-400">
-                        Competitor names not cleaned — do not send to client
-                      </div>
-                      <div className="mt-1 text-muted-foreground">
-                        {competitorCleanliness.warning}
-                        {' '}Rival names are withheld from the report until this is re-extracted, so it
-                        cannot print raw text as a competitor.
-                      </div>
-                      {competitorCleanliness.junkExamples.length > 0 && (
-                        <div className="mt-1 font-mono text-xs text-muted-foreground">
-                          {competitorCleanliness.junkExamples.slice(0, 12).join(' · ')}
-                          {competitorCleanliness.junkExamples.length > 12
-                            ? ` · +${competitorCleanliness.junkExamples.length - 12} more` : ''}
-                        </div>
+                  {/* Everything else. One menu, grouped, with prices on the faces that spend. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" title="More actions for this audit">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">More actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64">
+                      <DropdownMenuLabel>Measure again</DropdownMenuLabel>
+                      {/* RE-AUDIT — a NEW audit row, prefilled. The measurement you want at week 4:
+                          "Re-run" would add runs to THIS row and mix the after into the before. */}
+                      {!isDraining && auditId && (
+                        <DropdownMenuItem onSelect={startReAudit}
+                          disabled={running || isDraining || reAuditOpen || reAuditBusy}>
+                          <CopyPlus className="mr-2 h-4 w-4" />
+                          <span className="flex-1">Re-audit</span>
+                          <span className="text-[10px] text-muted-foreground">new audit</span>
+                        </DropdownMenuItem>
                       )}
-                    </div>
-                  )}
-                  {/* Re-extract competitors — FREE/instant: recompute from stored answers, no re-scrape.
-                      Highlighted when the stored names PROVE the cleaner never covered this run, so
-                      the fix sits under the warning rather than somewhere else on the page. */}
-                  {!isDraining && liveTally.done > 0 && (
-                    <Button variant={competitorCleanliness.verdict === 'dirty' ? 'default' : 'outline'} size="sm"
-                      onClick={reextractCompetitors} disabled={reextracting}
-                      title="Recompute competitor names from the stored answers — an AI re-read, no new search">
-                      {reextracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
-                      {reextracting ? 'Re-extracting…' : 'Re-extract competitors'}
-                    </Button>
-                  )}
-                  {/* RESUME DRAFT — only when one exists, and labelled with its contents so it is
-                      never a silent restore. Reopens the dialog exactly where it was left. */}
-                  {draftSummary && (
-                    <Button variant="secondary" size="sm" onClick={resumeDraft}
-                      title="Reopen the audit you were part-way through composing. Nothing is regenerated and your edits are kept.">
-                      <Undo2 className="mr-2 h-4 w-4" />
-                      Resume draft — {draftSummary}
-                    </Button>
-                  )}
-                  {/* startNewAudit = resetWizard (what this did before) + open the dialog, since the
-                      form it used to reveal on the page is now in the modal.
-                      ⚠️ This DISCARDS the draft above, on purpose — that is what "new" means here. */}
-                  <Button variant="outline" size="sm" onClick={startNewAudit}
-                    title={draftSummary ? 'Start fresh — this discards the draft beside it' : undefined}>
-                    New audit
-                  </Button>
-                  {/* RE-AUDIT — a NEW audit row, prefilled. The measurement you want at week 8:
-                      "Re-run" would add runs to THIS row and mix the after into the before. */}
-                  {!isDraining && auditId && (
-                    <Button variant="outline" size="sm" onClick={startReAudit}
-                      disabled={running || isDraining || reAuditOpen || reAuditBusy}
-                      title="Create a NEW audit for this business, prefilled from this one. Leaves this audit untouched as your before.">
-                      <CopyPlus className="mr-2 h-4 w-4" /> Re-audit
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={startReRun} disabled={running || isDraining || reRunOpen}>
-                    {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                    Re-run
-                  </Button>
+                      <DropdownMenuItem onSelect={startReRun} disabled={running || isDraining || reRunOpen}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        <span className="flex-1">Re-run</span>
+                        <span className="text-[10px] text-muted-foreground">same audit</span>
+                      </DropdownMenuItem>
+                      {/* Automated SEO scan — website audits only. Price on the face: the house
+                          rule is that every spend says what it costs, derived from the
+                          sync-guarded constant and never hand-typed (§4). */}
+                      {!isDraining && resultsHasWebsite && (
+                        <DropdownMenuItem onSelect={runSeoScan} disabled={seoScanning}>
+                          <Globe className="mr-2 h-4 w-4" />
+                          <span className="flex-1">{hasSeo ? 'Re-run SEO scan' : 'Run SEO scan'}</span>
+                          <span className="text-[10px] text-muted-foreground">~{asPence(SEO_SCAN_USD)}</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel>Deliverables</DropdownMenuLabel>
+                      {/* Public LISTING page (/r/[slug]) — distinct from the in-app report above:
+                          this is the crawlable public listing. Needs auditId (generate-report's key). */}
+                      {!isDraining && liveTally.done > 0 && auditId && (
+                        reportSlug && reportStatus === 'published' ? (
+                          <DropdownMenuItem onSelect={() => openReportPage(reportSlug)}>
+                            <ExternalLink className="mr-2 h-4 w-4" /> View listing
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onSelect={generateReportPage} disabled={reportPageLoading}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            {reportPageLoading ? 'Generating…' : 'Generate listing'}
+                          </DropdownMenuItem>
+                        )
+                      )}
+                      {/* ── PLAYBOOK. ONE BUTTON, ONE DOCUMENT. Goes to /playbook/:auditId, the
+                          EVIDENCE-derived document — not the deleted generate-playbook LLM one
+                          that recommended Bing Places (zero citations in 10,615) and never
+                          mentioned Checkatrade (662 across 58 of 59 plumber audits).
+                          GATED ON auditId ALONE, deliberately not on liveTally.done: the ranking
+                          is trade-level, so the document is complete even when THIS run failed.
+                          Macca-Gas's run died at the Apify cap and its playbook is still right. */}
+                      {auditId && (
+                        <DropdownMenuItem asChild>
+                          {/* Carries the open run, so Back comes straight back to this audit's
+                              results rather than dropping you at the top of the list. */}
+                          <Link to={`/playbook/${auditId}`} state={{ from: runId ? `/ai-audit?runId=${runId}` : '/ai-audit', fromLabel: 'AI Audit' }}>
+                            <MapIcon className="mr-2 h-4 w-4" /> Playbook
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                      {/* Credentials moved in here: an occasional field that was holding a
+                          permanent row of vertical space above the actual result. */}
+                      {!isDraining && liveTally.done > 0 && auditId && (
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setCredentialsOpen((v) => !v); }}>
+                          <Save className="mr-2 h-4 w-4" />
+                          <span className="flex-1">Credentials for listing</span>
+                          {credentials.trim() ? <Check className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+                        </DropdownMenuItem>
+                      )}
+
+                      <DropdownMenuSeparator />
+                      {/* Re-extract — FREE and instant: recomputes from the STORED answers, no
+                          re-scrape. It also appears as a button under the dirty-names warning,
+                          which is where it belongs when it is actually needed. */}
+                      {!isDraining && liveTally.done > 0 && (
+                        <DropdownMenuItem onSelect={reextractCompetitors} disabled={reextracting}>
+                          <Users className="mr-2 h-4 w-4" />
+                          <span className="flex-1">{reextracting ? 'Re-extracting…' : 'Re-extract competitors'}</span>
+                          <span className="text-[10px] text-muted-foreground">free</span>
+                        </DropdownMenuItem>
+                      )}
+                      {/* RESUME DRAFT — labelled with its contents so it is never a silent restore. */}
+                      {draftSummary && (
+                        <DropdownMenuItem onSelect={resumeDraft}>
+                          <Undo2 className="mr-2 h-4 w-4" />
+                          <span className="truncate">Resume draft — {draftSummary}</span>
+                        </DropdownMenuItem>
+                      )}
+                      {/* ⚠️ DISCARDS the draft above, on purpose — that is what "new" means here. */}
+                      <DropdownMenuItem onSelect={startNewAudit}>
+                        <Plus className="mr-2 h-4 w-4" /> New audit
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
+
+              {/* ⛔ THE FAIL-SAFE, VISIBLE. Paul's rule 2026-08-28: never ship a junk-named report
+                  without knowing. Basis = "the names themselves", so it fires on historic audits
+                  too, not only on ones carrying a cleaning receipt.
+                  ⚠️ THE FIX LIVES INSIDE THE WARNING, and that is deliberate. Re-extract is in the
+                  More menu the rest of the time; when the names are PROVEN dirty it belongs under
+                  the sentence demanding it. A warning whose remedy is hidden behind a menu is a
+                  warning that gets scrolled past. */}
+              {competitorCleanliness.verdict === 'dirty' && !isDraining && (
+                <div className="rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-sm">
+                  <div className="font-medium text-amber-700 dark:text-amber-400">
+                    Competitor names not cleaned — do not send to client
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {competitorCleanliness.warning}
+                    {' '}Rival names are withheld from the report until this is re-extracted, so it
+                    cannot print raw text as a competitor.
+                  </div>
+                  {competitorCleanliness.junkExamples.length > 0 && (
+                    <div className="mt-1 font-mono text-xs text-muted-foreground">
+                      {competitorCleanliness.junkExamples.slice(0, 12).join(' · ')}
+                      {competitorCleanliness.junkExamples.length > 12
+                        ? ` · +${competitorCleanliness.junkExamples.length - 12} more` : ''}
+                    </div>
+                  )}
+                  {liveTally.done > 0 && (
+                    <Button size="sm" className="mt-2" onClick={reextractCompetitors} disabled={reextracting}
+                      title="Recompute competitor names from the stored answers — an AI re-read, no new search">
+                      {reextracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+                      {reextracting ? 'Re-extracting…' : 'Re-extract competitors — free'}
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {/* Inline credentials/regulation for the listing — a small operator field. Saved to
                   ai_audits.credentials; the NEXT "Generate listing" picks it up. Same gate as the
                   listing button (a valid, non-draining audit). */}
-              {!isDraining && liveTally.done > 0 && auditId && (
-                <div className="space-y-1">
+              {credentialsOpen && !isDraining && liveTally.done > 0 && auditId && (
+                <div className="space-y-1 rounded-md border border-border/60 bg-muted/20 p-3">
                   <Label className="text-xs text-muted-foreground">Credentials / regulation (for listing)</Label>
                   <div className="flex items-center gap-2">
                     <Input value={credentials} onChange={(e) => setCredentials(e.target.value)}
@@ -3078,9 +3224,14 @@ const AiAudit = () => {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <ScoreTile
-                    label="AI Visibility"
-                    value={vizTotal > 0 ? `${vizNamed}/${vizTotal}` : '—'}
-                    sub={vizTotal > 0 ? `${vizPct}% of AI answers name them` : 'No searches completed'}
+                    label={pooled ? `AI Visibility · ${auditRuns.length} runs pooled` : 'AI Visibility'}
+                    value={vizTotal > 0 ? `${vizNamed}/${vizTotal}` : poolLoading ? '…' : '—'}
+                    /* ⚠️ 0/0 must never read as 0%. `vizTotal > 0` is the guard, and the pooled
+                       branch says "loading" rather than "—" while the runs are still being read,
+                       so an in-flight fold is not mistaken for a measurement of nothing. */
+                    sub={vizTotal > 0
+                      ? `${vizPct}% of AI answers name them${pooled ? ` · across ${auditRuns.length} runs` : ''}`
+                      : poolLoading ? 'Reading every run…' : 'No searches completed'}
                     tone={vizTone}
                   />
                   {hasSeo ? (
@@ -3090,6 +3241,25 @@ const AiAudit = () => {
                   ) : (
                     <ScoreTile label="SEO grade" value="N/A" sub="No website for this business" tone="muted" />
                   )}
+                </div>
+              )}
+
+              {/* ⛔ SAY IT WHEN THE POOL SPANS DATES. Three runs on one morning are one
+                  measurement; five runs across a fortnight are a before and an after, and
+                  folding them into a single percentage hides exactly the change the
+                  re-measurement exists to show. */}
+              {pooled && runSpanDays > POOL_SPAN_WARN_DAYS && (
+                <div className="rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-[11px]">
+                  <span className="font-medium text-amber-700 dark:text-amber-400">
+                    These {auditRuns.length} runs span {Math.round(runSpanDays)} days
+                  </span>
+                  <span className="text-muted-foreground">
+                    {' '}({new Date(Math.min(...auditRuns.map((r) => +new Date(r.created_at)))).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    {' – '}
+                    {new Date(Math.max(...auditRuns.map((r) => +new Date(r.created_at)))).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}).
+                    {' '}Pooling them averages a before and an after into one number. To compare the two, use
+                    {' '}Re-audit's before/after view, or pick a single run above.
+                  </span>
                 </div>
               )}
 
@@ -3196,7 +3366,11 @@ const AiAudit = () => {
               >
                 <span className="text-sm font-semibold">
                   Detailed results
-                  <span className="ml-1.5 font-normal text-muted-foreground">· {queueRows.length} {queueRows.length === 1 ? 'question' : 'questions'}</span>
+                  <span className="ml-1.5 font-normal text-muted-foreground">
+                    {pooled
+                      ? `· ${poolTally?.questions.length ?? 0} questions × ${auditRuns.length} runs`
+                      : `· ${queueRows.length} ${queueRows.length === 1 ? 'question' : 'questions'}`}
+                  </span>
                   {winnableCount > 0 && (
                     <span
                       className="ml-1.5 font-normal text-muted-foreground"
@@ -3213,7 +3387,36 @@ const AiAudit = () => {
                   Scores are a heuristic read of what AI shows today (how many rivals are named and whether they lean on directory listings) — a guide to where you can win, not a guarantee.
                 </p>
               )}
-              {showDetails && queueRows.map((row) => (
+              {/* ⛔ POOLED: ONE LINE PER QUESTION, SHOWING HOW IT WENT ACROSS THE RUNS. The
+                  per-run QuestionCard is the right thing when you are reading ONE run and the
+                  wrong thing here — it would print the same 12 questions three times over and
+                  leave the operator to do the arithmetic that the whole point of pooling is to
+                  do for them. Pick a single run in the selector to get the full cards back. */}
+              {showDetails && pooled && poolTally && (
+                <div className="divide-y divide-border/50 rounded-lg border border-border/60">
+                  {poolTally.questions.map((q) => (
+                    <div key={q.question} className="flex items-start gap-3 px-3 py-2">
+                      <span className="min-w-0 flex-1 text-[13px] text-foreground">{q.question}</span>
+                      <span className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground">
+                        {DISPLAY_ENGINES.filter((e) => (q.perEngine[e]?.answered ?? 0) > 0).map((e) => (
+                          <span key={e} className="tabular-nums">
+                            {ENGINE_LABELS[e]} <span className={q.perEngine[e].named > 0 ? 'font-semibold text-foreground' : ''}>{engineSummary(q.perEngine[e])}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                  ))}
+                  {poolTally.unanswered > 0 && (
+                    /* Never folded into the denominator, so it has to be said out loud —
+                       otherwise a run that failed half its questions looks like a clean one. */
+                    <div className="px-3 py-2 text-[11px] text-muted-foreground">
+                      {poolTally.unanswered} question-run{poolTally.unanswered === 1 ? '' : 's'} never returned an answer and
+                      {' '}are excluded from the totals above.
+                    </div>
+                  )}
+                </div>
+              )}
+              {showDetails && !pooled && queueRows.map((row) => (
                 <QuestionCard
                   key={row.id}
                   row={row}
@@ -3285,9 +3488,6 @@ function ApifyUsageLine({ usage }: { usage: ApifyUsage | null }) {
   );
 }
 
-function StepCard({ children }: { children: React.ReactNode }) {
-  return <Card><CardContent className="p-4 sm:p-5 space-y-4">{children}</CardContent></Card>;
-}
 function StepHeader({ title, onBack }: { title: string; onBack?: () => void }) {
   return (
     <div className="flex items-center gap-2">
@@ -3334,176 +3534,6 @@ function ChoiceButton({ active, onClick, label, hint, icon }: { active: boolean;
    progress bar and "0 of 3", which reads as a nil result rather than work in progress. A spinner
    plus the word "running" plus the question count can only mean one thing, and there is no
    score-shaped element on the row at all while a run is going. */
-function RunningChip({ run }: { run: RunLite }) {
-  return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[hsl(var(--badge-waiting))]/40 bg-[hsl(var(--badge-waiting))]/15 px-2 py-1 text-[11px] font-semibold text-[hsl(var(--badge-waiting))]"
-      title={run.total ? `${run.done} of ${run.total} questions answered` : 'Starting'}
-    >
-      <Loader2 className="h-3 w-3 animate-spin" />
-      {run.total ? <>running <span className="tabular-nums">{run.done}/{run.total}</span></> : <>starting</>}
-    </span>
-  );
-}
-
-/* ── PILL VOCABULARY ────────────────────────────────────────────────────────────────────
-   Four categories, four deliberately different treatments, because they mean different things
-   and previously all read as one thing ("opened" and "baseline 3/3" were both plain green).
-
-     engagement  a PROSPECT ACTED. The most commercially useful signal here, so it gets the only
-                 solid high-contrast fill on the row, and the repeat count is set larger than the
-                 label so "7" is what the eye lands on.
-     client      a PAYING CUSTOMER. Distinct from engagement AND from assets: bordered, tinted,
-                 with a filled dot, so it reads as a status rather than an event.
-     asset       a FACT about what exists (report, playbook). Deliberately recessive - ghost grey.
-     data        a MEASUREMENT (SEO grade). Recessive frame, but the value itself is
-                 colour-coded, since C/D/F is the part worth noticing. */
-
-function EngagementPill({ count, title }: { count: number; title?: string }) {
-  return (
-    <span
-      title={title}
-      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[hsl(var(--badge-closed))] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[hsl(var(--badge-closed-fg))]"
-    >
-      <Eye className="h-3 w-3" />
-      opened
-      {count > 1 && <span className="ml-0.5 text-[12px] font-extrabold leading-none tabular-nums">{count}&times;</span>}
-    </span>
-  );
-}
-
-function ClientPill({ children, title, bad }: { children: React.ReactNode; title?: string; bad?: boolean }) {
-  const tone = bad
-    ? 'border-[hsl(var(--badge-not-interested))]/50 bg-[hsl(var(--badge-not-interested))]/10 text-[hsl(var(--badge-not-interested))]'
-    : 'border-[hsl(var(--badge-closed))]/50 bg-[hsl(var(--badge-closed))]/10 text-[hsl(var(--badge-closed))]';
-  return (
-    <span title={title} className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${tone}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${bad ? 'bg-[hsl(var(--badge-not-interested))]' : 'bg-[hsl(var(--badge-closed))]'}`} />
-      {children}
-    </span>
-  );
-}
-
-function AssetPill({ children, title }: { children: React.ReactNode; title?: string }) {
-  return (
-    <span title={title} className="inline-flex shrink-0 items-center rounded border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-      {children}
-    </span>
-  );
-}
-
-/** SEO grade: recessive frame, grade-coloured value. A/B fine, C/D/F worth noticing. */
-function GradePill({ grade }: { grade: string }) {
-  const letter = grade.trim().charAt(0).toUpperCase();
-  const cls = letter === 'A' || letter === 'B'
-    ? 'text-[hsl(var(--badge-closed))]'
-    : letter === 'C'
-    ? 'text-[hsl(var(--badge-waiting))]'
-    : 'text-[hsl(var(--badge-not-interested))]';
-  return (
-    <span title="Website SEO grade from the latest run" className="inline-flex shrink-0 items-baseline gap-1 rounded border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-      SEO <span className={`text-[11px] font-bold ${cls}`}>{grade}</span>
-    </span>
-  );
-}
-
-function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | null }) {
-  const target = Number(audit.baseline_target_runs ?? 0);
-  const counted = audit.baseline_runs_counted;
-  return (
-    <>
-      {/* ENGAGEMENT first: it is the signal most likely to change what the operator does next. */}
-      {audit.first_opened_at && (
-        <EngagementPill
-          count={audit.open_count ?? 1}
-          title={`Report opened ${new Date(audit.first_opened_at).toLocaleString('en-GB')}${audit.open_count ? ` - ${audit.open_count} view${audit.open_count === 1 ? '' : 's'}` : ''}`}
-        />
-      )}
-      {/* PAID CLIENT. Errors win: a stalled baseline is what needs attention. */}
-      {target > 1 && (
-        audit.baseline_error
-          ? <ClientPill bad title={audit.baseline_error}>baseline failed</ClientPill>
-          /* A FINISHED baseline links to the operator view, because until now it was measured and
-             then invisible. Still-measuring stays a plain pill — there is nothing to read yet. */
-          : audit.baseline_completed_at
-            ? <Link
-                to={`/baseline/${audit.id}`}
-                state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}
-                onClick={(e) => e.stopPropagation()}
-                title={`Baseline finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')} — open the operator view`}
-                className="underline decoration-dotted underline-offset-2 hover:no-underline"
-              >
-                <ClientPill>client &middot; baseline {counted ?? target}/{target}</ClientPill>
-              </Link>
-            : <ClientPill title="Baseline still being measured">
-                client &middot; baseline {counted ?? 0}/{target}
-              </ClientPill>
-      )}
-      {/* DELIVERY CHECKLIST — /playbook/:id, resolved from this AUDIT id. Sits beside the baseline
-          pill because they are the two halves of the same job: the baseline says what is wrong, the
-          checklist says what to do about it.
-
-          NOT the same thing as the `playbook` asset pill below, which means the generate-playbook
-          LLM document stored at results.playbook. This one is the evidence-derived checklist and
-          reads no model output, hence the different word. */}
-      <Link
-        to={`/playbook/${audit.id}`}
-        state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}
-        onClick={(e) => e.stopPropagation()}
-        title="Open the delivery checklist — directories evidenced from citations for this trade"
-        className="underline decoration-dotted underline-offset-2 hover:no-underline"
-      >
-        <AssetPill>checklist</AssetPill>
-      </Link>
-      {audit.lead_paid === true && target <= 1 && <ClientPill title="This lead has paid">client</ClientPill>}
-      {/* ASSETS: facts, not signals. */}
-      {audit.report_slug && <AssetPill title={`Published at /r/${audit.report_slug}`}>report</AssetPill>}
-      {/* REMOVED 2026-07-30: the `playbook` asset pill. It was never a link — just a marker saying an
-          LLM playbook existed for the run — and sitting one pill away from `checklist` it read as a
-          duplicate of it when the two are different documents entirely. `checklist` above is the one
-          that opens /playbook/:id and is KEPT: for a business with an audit but no outreach_leads row
-          (ABLM, the only delivery client) it is the ONLY route to that document, because the other
-          entry point — the lead detail dialog's Playbook pill — is keyed on a LEAD id.
-          ⚠️ THERE WERE THREE ROUTES UNTIL 2026-08-12; the Paid Clients page carried the third and was
-          deleted with it. That makes this pill MORE load-bearing, not less. Do not remove it. */}
-      {/* DATA */}
-      {run?.seo_grade && <GradePill grade={run.seo_grade} />}
-    </>
-  );
-}
-
-function MentionPill({ rate }: { rate: number | null }) {
-  if (rate === null || rate === undefined) {
-    return <span className="shrink-0 text-right text-[13px] tabular-nums text-muted-foreground/50">&mdash;</span>;
-  }
-  const pct = Math.round(rate * 100);
-  // THE headline number: biggest type on the row, so the eye lands on the result first. Tone
-  // carries the meaning; no pill chrome competing with the pill vocabulary to its left.
-  const cls = pct >= 50 ? 'text-[hsl(var(--badge-closed))]'
-    : pct > 0 ? 'text-[hsl(var(--badge-waiting))]'
-    : 'text-[hsl(var(--badge-not-interested))]';
-  return (
-    <span className="shrink-0 text-right leading-none" title={`${pct}% of AI answers named this business`}>
-      <span className={`font-sans text-[1.05rem] font-bold tabular-nums ${cls}`}>{pct}%</span>
-      <span className="ml-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">named</span>
-    </span>
-  );
-}
-// Small stat tile for the landing metrics strip. `tone` tints the value only.
-function MetricCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone?: 'good' | 'mid' | 'bad' }) {
-  const valCls = tone === 'good' ? 'text-[hsl(var(--badge-closed))]'
-    : tone === 'mid' ? 'text-[hsl(var(--badge-waiting))]'
-    : tone === 'bad' ? 'text-[hsl(var(--badge-not-interested))]'
-    : 'text-foreground';
-  return (
-    <div className="rounded-xl border border-border/60 bg-card/60 p-3">
-      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        <span className="text-muted-foreground">{icon}</span>{label}
-      </div>
-      <div className={`mt-1 text-2xl font-bold tracking-tight ${valCls}`}>{value}</div>
-    </div>
-  );
-}
 // A single score tile for the opened-audit header. Colour-toned by outcome; optionally
 // clickable (used for the "Add SEO data" empty state).
 type TileTone = 'green' | 'amber' | 'red' | 'muted';

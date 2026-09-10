@@ -43,10 +43,42 @@ export function BackLink({
   const state = (useLocation().state ?? {}) as BackNavState;
   const target = state.from ?? fallback;
   const label = state.fromLabel ?? fallbackLabel;
+
+  /* 🔴 THE BUTTON USED TO SAY ONE THING AND DO ANOTHER. It rendered "Back to AI Audit" and then
+     ran `window.history.length > 1 ? navigate(-1) : navigate(target)` — so in any real session,
+     where history is essentially always longer than one entry, it ignored `target` completely
+     and did a plain browser Back. That lands on the PREVIOUS PAGE, which is only the named
+     destination when you arrived by exactly one hop. Paul, 2026-09-10: "back to ai audit page
+     doesn't take back to ai audit page." It was doing what it was written to do; the label was
+     a promise the code never read.
+
+     ⛔ THE RULE: WHEN WE KNOW WHERE THE LABEL POINTS, GO THERE. `state.from` is set by the link
+     that sent us here, so it is not a guess — it is the caller stating the destination, and the
+     label is rendered from the same object. History-back survives only for the case the label
+     is also vague about: no state at all, i.e. a pasted URL or a fresh tab, where the fallback
+     is the honest best guess and going back one step is usually what a person means.
+     ⚠️ `window.history.length` was never the right test either — it counts the whole tab's
+     session, including a sign-in redirect, so it is > 1 on a page you arrived at directly. */
+  /* 🔴 AND THE HISTORY FALLBACK WAS THE LOOP. Paul, 2026-09-10: "each back button just loops
+     around." With no state, `navigate(-1)` returns you to THE PAGE YOU JUST CAME FROM — and
+     when that page's own back link brings you here again, the two pages bounce forever. It is
+     a real cycle in this app: /baseline has "Before and after" → /compare, and /compare has
+     "← Baseline" → /baseline. Neither passed router state, so the chain from AI Audit was lost
+     at the first hop and Baseline's back link fell through to history, i.e. straight back to
+     Compare.
+
+     ⛔ SO: NO STATE MEANS GO TO THE FALLBACK, NEVER BACKWARDS. The fallback is a real place
+     that cannot cycle. History-back is only ever right when we know the previous entry is the
+     one the label names, and if we knew that we would have state. A pasted URL or a bookmark
+     lands on the fallback, which is the honest answer for "I don't know where you came from".
+     ⚠️ The other half of the fix is that the Baseline↔Compare links now PASS the state through,
+     so the chain survives and this fallback is rarely reached at all. */
+  const go = () => navigate(state.from ?? fallback);
+
   return (
     <button
       type="button"
-      onClick={() => (window.history.length > 1 ? navigate(-1) : navigate(target))}
+      onClick={go}
       className={`inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground ${className}`}
     >
       <ArrowLeft className="h-3.5 w-3.5" /> Back to {label}

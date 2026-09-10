@@ -110,8 +110,27 @@ as *possibly describing something deleted*. Grep before you believe it.
 ## 2. How Paul works
 
 - **He is non-technical.** He does ideation, scoping, plan review, product judgement. You write and run all code.
-- **He never runs terminal commands.** Need SQL? **Hand it to him** — he runs it in the Supabase SQL editor.
-  Never run SQL yourself, and never assume a migration file is live (see §6).
+- **He never runs terminal commands.**
+- ✅ **YOU CAN RUN SQL YOURSELF, AND PAUL ASKED YOU TO (2026-09-10).** His instruction: *"if there
+  is ever an SQL to run, either you run it yourself if possible, or give it to me to run so I can
+  copy and paste it."* **The supersedes the old "never run SQL yourself" rule.**
+  - **How:** `POST https://api.supabase.com/v1/projects/<ref>/database/query` with
+    `{"query": "..."}` and `Authorization: Bearer <token>`, where the token is read AT RUN TIME
+    from `~/.supabase/access-token` (the Supabase CLI's own login). Returns 201 and a JSON array.
+    ⛔ **Read the token inside the script; never echo it, never write it to a file.**
+  - ⚠️ **THIS CONTRADICTS THREE OLDER NOTES THAT SAID IT WAS IMPOSSIBLE.** There is no `psql`, no
+    SQL-execution RPC (`exec_sql` and four other names all 404), and `db push` needs the database
+    password and is broken anyway — all true, and all about the *other* routes. The Management API
+    was never tried. Verified 2026-09-10 by running the `ai_audits.archived_at` migration.
+  - ⛔ **STILL STOP AND ASK BEFORE ANYTHING DESTRUCTIVE.** Being able to run SQL is not permission
+    to drop, truncate, delete or rewrite rows. Additive and idempotent DDL (ADD COLUMN IF NOT
+    EXISTS, CREATE INDEX IF NOT EXISTS) is what this is for. Anything else: show him first.
+  - **Always verify afterwards by reading the schema back**, not by trusting the 201 — and say what
+    you verified. A migration that "ran fine" while the code still cannot see a column is a
+    recorded failure mode (§6).
+  - If it ever fails, fall back to his stated second preference: **hand him the SQL in one
+    copy-pasteable block** for the Supabase SQL editor.
+- **Never assume a migration file is live** (see §6).
 - **Shell is PowerShell**: `;` not `&&`. The Bash tool is Git Bash, separate syntax. Both are available.
 - **Plain English, no jargon.** Lead with the answer. Questions at the very end.
 - **Plan first, then stop** for a new piece of work. Once he approves, build the whole thing without stopping.
@@ -192,8 +211,9 @@ Checks:
 
 Deploy:
 - [ ] **SQL FIRST, CONFIRMED, THEN DEPLOY.** When a task involves both SQL and code that depends on
-      it, hand Paul the SQL and **WAIT for his confirmation that it has run** before deploying
-      anything that reads or writes the new schema. Proven 2026-08-04: `findable-onboarding` v18
+      it, **run the SQL (§2) and verify it by reading the schema back** before deploying anything
+      that reads or writes the new schema. If you cannot run it, hand it to Paul and **WAIT for his
+      confirmation** — "assume the columns exist" is not confirmation either way. Proven 2026-08-04: `findable-onboarding` v18
       deployed before its five new columns existed and **every submission — including ones carrying
       no new fields — died `save_failed` for ~20 minutes**, because the insert always carried the new
       keys and the single-pass column-shedding fallback couldn't recover. The fix (v19) also made the
@@ -544,8 +564,10 @@ Facts with numbers. These are measured, and several contradict the older docs.
 - **No winnability scoring anywhere.** It reads a single run, and competitor lists differ between runs, so its
   output flips between identical inputs. Counts only.
 - **No outcome promises in anything customer-facing.** Say what was measured, what was done, and what changed.
-- **Migrations are applied BY HAND** in the Supabase SQL editor — `supabase db push` is broken (history
-  desynced). A migration file existing does **not** mean it is live. For DB functions, check the live
+- **Migrations are applied ONE AT A TIME, never with `supabase db push`** — that is broken here
+  (history desynced) and would try to apply every migration missing from the remote history table.
+  Run the single migration's statements through the Management API (§2), or hand them to Paul.
+  **A migration file existing does not mean it is live.** For DB functions, check the live
   definition: `select pg_get_functiondef('public.<fn>'::regproc);`
 - **Counts and rates come from `whatsapp_messages`, never `outreach_leads.status`.** `isSentStatus` and
   `isRepliedStatus` in `src/types/outreach.ts` are traps for aggregates. **`paid` means `amount_paid > 0`,
@@ -2723,14 +2745,18 @@ by the single account below.** §6's paginate rule, caught in this file's own no
 | Back link, shared by both views | `src/components/BackLink.tsx` |
 | Audit UI (large) | `src/pages/AiAudit.tsx` |
 
-- 🔴 **Entry points to `/playbook/:id` — now exactly TWO, not three (re-grepped 2026-08-12):**
-  `LeadDetailDialog.tsx`'s `Playbook` pill, and the AI Audit row's **`checklist`** pill. Each passes
+- 🔴 **Entry points to `/playbook/:id` — exactly THREE, and one of them is load-bearing on its
+  own (re-checked 2026-09-10):** `LeadDetailDialog.tsx`'s `Playbook` pill, the AI Audit **row
+  menu**'s *Delivery checklist* item, and the results screen's **More → Playbook**. Each passes
   `state={{ from, fromLabel }}` so `BackLink` can name where it returns to.
-  ⚠️ **The third — `PaidClients.tsx:230` — WENT WITH THE PAGE** when `/paid-clients` was deleted
-  2026-08-12 (§6d). It was a LEAD-keyed route and so is the dialog's, which means the AI Audit row's
-  `checklist` pill is still the **ONLY** route for a business with an audit and no `outreach_leads`
-  row — ABLM, the only delivery client. **Losing one of three made that pill MORE load-bearing, not
-  less. Don't remove it.**
+  ⚠️ **The dialog's is LEAD-keyed, so it cannot reach a business with an audit and no
+  `outreach_leads` row** — ABLM, the only delivery client. The two AI Audit routes are AUDIT-keyed
+  and are the only ones that can. **Do not remove both.** (A fourth, `PaidClients.tsx`, went with
+  that page on 2026-08-12 — §6d.)
+  ⚠️ **It used to be a `checklist` CHIP on every list row and is now a menu item** (2026-09-10).
+  The route was deliberately preserved when the chip went: it rendered on 901 rows out of 901, so
+  it distinguished nothing and was most of why the list read as cluttered. `AuditPills.tsx` carries
+  a comment saying to put the chip back if the row menu ever loses the link.
 
 - ✅ **THE LLM PLAYBOOK IS NOW UNREACHABLE FROM THE APP** (`1715a294`, 2026-07-30). The audit results
   screen has **ONE** button, `Playbook`, linking to `/playbook/:auditId`. Gone: both old buttons, the
