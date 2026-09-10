@@ -102,3 +102,8 @@ verify_jwt = true
 # does its own getUser + owner-scoping. Explicit entry, never a platform default.
 [functions.page-generator]
 verify_jwt = true
+
+# mockup: SPA-only caller with the operator JWT; the handler does its own getUser + admin
+# check. Explicit entry, never a platform default (§8).
+[functions.mockup]
+verify_jwt = false
