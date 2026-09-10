@@ -6,9 +6,14 @@
    so a hero section with no photo collapses cleanly rather than leaving an empty container.
 
    🔴 IT IS NOT A STYLE QUESTION, IT IS THE COMMON CASE. Measured across six real locksmith
-   websites: 96 own-site images found, 93 load, 54 are >=400px, and only 27 are >=900px. Per
-   business the hero-capable counts are 0, 0, 0, 4, 4, 19 — THREE OF SIX CANNOT FILL A HERO SLOT
-   FROM THEIR OWN SITE AT ALL. So "no hero" is what half of these pages will do.
+   websites, RE-MEASURED 2026-09-11 after the placeholder/srcset fix: 48 distinct own-site images,
+   33 are >=400px and 24 are >=900px. Per business the hero-capable counts are 0, 0, 3, 3, 5, 13 —
+   TWO OF SIX CANNOT FILL A HERO SLOT FROM THEIR OWN SITE AT ALL, and stock is forbidden in the
+   hero, so "no hero" is a state a third of these pages will really be in.
+   ⚠️ THE EARLIER FIGURES IN THIS HEADER WERE WRONG AND WERE MEASURING MY OWN HARVESTING. They
+   read "0, 0, 0, 4, 4, 19 — THREE OF SIX", because the harvester was reading blurred Wix
+   placeholders and the smallest srcset entry. RL Locksmiths went 0 -> 5 hero-capable on the fix
+   alone; its photos were always there. The conclusion held, the numbers did not.
 
    ⛔ AND THE GRANULARITY IS THE TEMPLATE AUTHOR'S, NOT THE RENDERER'S. Where the tags go decides
    what disappears. Both forms are legal and they do different things; both are pinned here,

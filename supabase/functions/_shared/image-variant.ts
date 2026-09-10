@@ -104,3 +104,88 @@ export function looksLikePlaceholder(rawUrl: string): boolean {
 /** Widths used across the mockup flow. Named so the two consumers cannot drift. */
 export const GRID_WIDTH = 420;    // the picker's thumbnail grid
 export const PLACE_WIDTH = 1600;  // the copy that is re-hosted and rendered
+
+/* ── srcset: the builder already told us every size it has ─────────────────────────────────────
+   🔴 THE GENERAL FIX, AND IT SUBSUMES SEVERAL BUILDERS. WordPress, Shopify and most lazy-load
+   plugins cannot be asked for an arbitrary width — WordPress generates a FIXED set of sizes at
+   upload, so requesting w_1600 when only 1024 exists 404s. But they all publish what they have in
+   `srcset`, with the width of each candidate. So the size is chosen from the list rather than
+   guessed at.
+   ⛔ AND THE ORIGINAL BUG WAS TAKING THE FIRST ENTRY. srcset is conventionally ordered
+   SMALLEST-FIRST, so `srcset.match(/([^\s,]+)/)` — which is what the harvester did — reliably
+   picked the tiniest variant. That is a second, independent way to end up with a blurry grid, on
+   builders that have nothing to do with Wix. */
+
+export interface SrcsetCandidate { url: string; width: number }
+
+/** Parse a srcset into candidates with widths. `x` descriptors are ignored (no width to compare). */
+export function parseSrcset(srcset: string, base?: string): SrcsetCandidate[] {
+  const out: SrcsetCandidate[] = [];
+  for (const part of String(srcset ?? "").split(",")) {
+    const bits = part.trim().split(/\s+/);
+    if (!bits[0]) continue;
+    const w = bits[1] && /^\d+w$/i.test(bits[1]) ? parseInt(bits[1], 10) : 0;
+    let url = bits[0];
+    if (base) { try { url = new URL(url, base).href; } catch { continue; } }
+    out.push({ url, width: w });
+  }
+  return out;
+}
+
+/**
+ * The best candidate at or above `want`, else the largest available.
+ *
+ * ⚠️ "At or above, else the largest" rather than "nearest": upscaling a 300px image into a 420px
+ * grid tile is the blur this whole module exists to remove, so overshooting is always preferred to
+ * undershooting. Returns null when no candidate carries a width.
+ */
+export function pickFromSrcset(cands: SrcsetCandidate[], want: number): string | null {
+  const sized = cands.filter((c) => c.width > 0).sort((a, b) => a.width - b.width);
+  if (!sized.length) return null;
+  return (sized.find((c) => c.width >= want) ?? sized[sized.length - 1]).url;
+}
+
+/**
+ * Resolve one <img> tag to a { url, thumb } pair, using every signal in order of reliability.
+ *
+ * 1. srcset — the builder's own list of real sizes. Most reliable: nothing is guessed.
+ * 2. a lazy-load attribute holding the FULL image (data-src and friends), size-adjusted by CDN.
+ * 3. src, size-adjusted by CDN.
+ * ⛔ src is LAST because on a lazy-loading site it is the placeholder. Reading it first is what
+ * produced a grid of blurred 73x49 Wix LQIPs.
+ */
+export function resolveImgSizes(
+  attrs: { src?: string; srcset?: string; lazy?: string },
+  base: string,
+  wants: { place: number; grid: number },
+): { url: string; thumb: string } | null {
+  const cands = attrs.srcset ? parseSrcset(attrs.srcset, base) : [];
+  const sized = cands.filter((c) => c.width > 0).sort((a, b) => a.width - b.width);
+  const atOrAbove = (want: number) => sized.find((c) => c.width >= want)?.url ?? null;
+  const largest = sized.length ? sized[sized.length - 1].url : null;
+
+  const raw = attrs.lazy || attrs.src || "";
+  let abs = "";
+  if (raw && !raw.startsWith("data:")) { try { abs = new URL(raw, base).href; } catch { abs = ""; } }
+
+  /* ⛔ THE TWO SIDES USE DIFFERENT RULES, AND THE ASYMMETRY IS MEASURED, NOT STYLISTIC.
+     MEASURED 2026-09-11 across the six test sites, srcset-largest for BOTH sides:
+     grid weight 11,563KB -> 2,056KB (Grays alone 10,071 -> 1,053) but hero-capable photos
+     25 -> 22, and Bristol lost 3 heroes down to 1. The cause is WordPress: several of its
+     images publish a srcset topping out at 375-720w while `src` carries a `-200x300` suffix
+     that imageVariant strips to reach the FULL original. So srcset's largest UNDERSHOT a
+     bigger file we already knew about.
+     - PLACE (the hero, fetched once when the operator places it): never undershoot. srcset
+       only if it reaches `place`, else the CDN-adjusted original, else srcset's largest.
+     - GRID (a 420px tile, fetched for the whole pool at once): prefer srcset even when it
+       undershoots. A 375w entry in a 420px tile is invisible; the original is what made the
+       grid 10MB. The placeholder guard still drops anything at LQIP scale, so "undershoot"
+       here can never mean the blurred 73x49 that started this. */
+  const placeFromCdn = abs ? imageVariant(abs, wants.place) : "";
+  const gridFromCdn = abs ? imageVariant(abs, wants.grid) : "";
+
+  const url = atOrAbove(wants.place) || placeFromCdn || largest || "";
+  const thumb = atOrAbove(wants.grid) || largest || gridFromCdn || "";
+  if (!url) return null;
+  return { url, thumb: thumb || url };
+}

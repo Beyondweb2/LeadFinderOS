@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { isAggregatorUrl, isBookingPlatformUrl, domainOf } from "../_shared/aggregators.ts";
-import { imageVariant, looksLikePlaceholder, GRID_WIDTH, PLACE_WIDTH } from "../_shared/image-variant.ts";
+import { imageVariant, looksLikePlaceholder, resolveImgSizes, GRID_WIDTH, PLACE_WIDTH } from "../_shared/image-variant.ts";
 
 // scan-site-details — reads a business's OWN website in ONE pass and extracts
 // business DETAILS (phone / address / email / hours), the SERVICE AREAS it covers,
@@ -378,6 +378,29 @@ function harvestImages(html: string, base: URL, limit: number): ScannedImage[] {
     });
   };
 
+  /** Push an already-resolved { url, thumb } pair (the srcset path chose real sizes for us). */
+  const pushPair = (url: string, thumb: string, from: "og" | "img", alt?: string, width?: number) => {
+    if (out.length >= limit) return;
+    let a: URL, t: URL;
+    try { a = new URL(url); t = new URL(thumb || url); } catch { return; }
+    if (!["http:", "https:"].includes(a.protocol)) return;
+    // Same extension gate as push(): an SVG or extensionless URL is furniture, not a photo.
+    if (from === "img" && !/\.(?:jpe?g|png|webp|avif)(?:$|\?)/i.test(a.pathname + a.search)) return;
+    if (IMG_SKIP.test(a.pathname)) return;
+    /* ⛔ ITEM 5's GUARD, AND IT IS ENFORCED AFTER RESOLUTION, NOT BEFORE. A placeholder that
+       srcset or a CDN transform has already replaced is fine; one that is STILL a placeholder here
+       could not be rescued and must never reach the grid or the vision scorer. */
+    if (looksLikePlaceholder(a.href)) return;
+    const key = a.href.replace(/\/+$/, "").toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({
+      url: a.href, thumb: t.href, source: "own_site", from,
+      ...(alt ? { alt: alt.slice(0, 120) } : {}),
+      ...(width ? { width } : {}),
+    });
+  };
+
   // og:image first — it is the one image the site itself nominated as representative.
   for (const m of html.matchAll(/<meta\b[^>]*property\s*=\s*["']og:image(?::secure_url)?["'][^>]*>/gi)) {
     const c = m[0].match(/content\s*=\s*["']([^"']+)["']/i);
@@ -385,19 +408,29 @@ function harvestImages(html: string, base: URL, limit: number): ScannedImage[] {
   }
   for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
     const tag = m[0];
-    /* Lazy-loaded sites put a placeholder in src and the real file in data-src /
-       data-lazy-src / srcset. Reading src alone would harvest the placeholder. */
-    const src =
-      tag.match(/\bdata-src\s*=\s*["']([^"']+)["']/i)?.[1] ??
-      tag.match(/\bdata-lazy-src\s*=\s*["']([^"']+)["']/i)?.[1] ??
-      tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1] ??
-      tag.match(/\bsrcset\s*=\s*["']([^"'\s,]+)/i)?.[1];
-    if (!src) continue;
+    /* ⛔ srcset FIRST, THEN A LAZY ATTRIBUTE, THEN src — in that order, and the order is the whole
+       fix. MEASURED across six real locksmith sites 2026-09-11: four of the six lazy-load
+       (data-src, data-srcset, data-lazy-src) and FIVE are WordPress, where an arbitrary width
+       cannot be requested because WordPress only generates a fixed set at upload. srcset is the
+       builder telling us exactly which sizes exist, so the size is CHOSEN rather than guessed.
+       ⛔ AND READING src FIRST IS WHAT CAUSED THE BLURRY GRID: on a lazy-loading site src holds the
+       placeholder. Wix's carried `blur_2` at 73x49. */
+    const srcset = tag.match(/\bdata-srcset\s*=\s*["']([^"']+)["']/i)?.[1]
+      ?? tag.match(/\bsrcset\s*=\s*["']([^"']+)["']/i)?.[1];
+    const lazy = tag.match(/\bdata-src\s*=\s*["']([^"']+)["']/i)?.[1]
+      ?? tag.match(/\bdata-lazy-src\s*=\s*["']([^"']+)["']/i)?.[1]
+      ?? tag.match(/\bdata-original\s*=\s*["']([^"']+)["']/i)?.[1]
+      ?? tag.match(/\bdata-full-src\s*=\s*["']([^"']+)["']/i)?.[1];
+    const src = tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1];
+
     const alt = tag.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1];
-    const w = Number(tag.match(/\bwidth\s*=\s*["']?(\d+)/i)?.[1]);
+    const wAttr = Number(tag.match(/\bwidth\s*=\s*["']?(\d+)/i)?.[1]);
     // A declared width under 100px is furniture whatever it is called.
-    if (Number.isFinite(w) && w > 0 && w < 100) continue;
-    push(src, "img", alt, Number.isFinite(w) && w > 0 ? w : undefined);
+    if (Number.isFinite(wAttr) && wAttr > 0 && wAttr < 100) continue;
+
+    const resolved = resolveImgSizes({ src, srcset, lazy }, base.href, { place: PLACE_WIDTH, grid: GRID_WIDTH });
+    if (!resolved) continue;
+    pushPair(resolved.url, resolved.thumb, "img", alt, Number.isFinite(wAttr) && wAttr > 0 ? wAttr : undefined);
   }
   return out;
 }
@@ -758,8 +791,13 @@ Deno.serve(async (req) => {
        rule earns its place: the fix was deployed, a refill was run, and 10 of 12 own-site URLs
        came back STILL CARRYING blur_2 from the _v7 row written 35 minutes earlier. The code was
        right, the cache was old, and the picker looked exactly as broken as before. Change what an
-       extractor RETURNS, bump its version — every time, including when the change is a bug fix. */
-    const cacheKey = `${auditId || homepage.hostname}:site_details_v8`;
+       extractor RETURNS, bump its version — every time, including when the change is a bug fix.
+       ⛔ _v9: the harvest now reads `srcset` FIRST (the builder's own list of real sizes) and only
+       then a lazy attribute, then `src`. Measured across the six test sites: the grid's own-site
+       thumbnails fall from 11,563KB to 2,195KB — Grays alone 10,071KB to 609KB, 2,940ms to 513ms
+       — and the URLs stored change on every lazy-loading site, so a _v8 hit would serve the old
+       heavy set. Bumped BEFORE deploying this time. */
+    const cacheKey = `${auditId || homepage.hostname}:site_details_v9`;
 
     // cache → cap → run → persist (enrichment_cache/usage + api_usage_log).
     const outcome = await runEnrichSource<{
