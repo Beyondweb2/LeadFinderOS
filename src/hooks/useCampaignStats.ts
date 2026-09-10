@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -194,22 +195,45 @@ const pct = (num: number, den: number): number | null =>
  * Per-campaign rollups derived from whatsapp_messages. Leads are the caller's own (RLS).
  * Best-effort: a failure logs and leaves the previous numbers rather than blanking the page.
  */
+/** Stable empties — a fresh array per render defeats the caching below. */
+const EMPTY_LEADS: LeadRow[] = [];
+const EMPTY_MSGS: MsgRow[] = [];
+const EMPTY_STARTED: StartedRow[] = [];
+const EMPTY_HITS: HitRow[] = [];
+const EMPTY_AUDITS: AuditRow[] = [];
+
+/** One campaign-stats load. Was six useState slots. */
+interface CampaignStatsData {
+  leads: LeadRow[];
+  messages: MsgRow[];
+  startedRows: StartedRow[];
+  hits: HitRow[];
+  audits: AuditRow[];
+  /** Only an actual successful read sets this — see the site-visit branch. */
+  siteTrackingReady: boolean;
+}
+
 export function useCampaignStats() {
   const { user } = useAuth();
   const { campaigns, isLoading: campaignsLoading } = useCampaigns();
-  const [leads, setLeads] = useState<LeadRow[]>([]);
-  const [messages, setMessages] = useState<MsgRow[]>([]);
-  const [startedRows, setStartedRows] = useState<StartedRow[]>([]);
-  const [hits, setHits] = useState<HitRow[]>([]);
-  /* ⛔ THREE STATES, NOT TWO: tracking can be UNAVAILABLE (the table is not there yet), or live
-     with genuinely no visits. Rendering both as 0% would be the fake zero this card refuses. */
-  const [siteTrackingReady, setSiteTrackingReady] = useState(false);
-  const [audits, setAudits] = useState<AuditRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  /* ⛔ ON REACT QUERY SINCE 2026-09-10. This hook read the whole lead table, the whole message
+     table and the whole audit table on EVERY arrival at the campaigns view — three paginated
+     full-table scans plus two more reads — and threw the results away on navigation. Held for
+     the app-wide five minutes now.
+     ⚠️ The fetch body is unchanged, including both defensive branches: a site-visit failure
+     still means "not tracked" rather than "zero visits", and a questionnaire-starts failure
+     still degrades `started` to 0 rather than taking the card down. They set fields on the
+     returned object where they used to call setters. */
+  const queryKey = useMemo(() => ['campaign-stats', user?.id ?? null] as const, [user?.id]);
 
-  const fetchData = useCallback(async () => {
-    if (!user?.id) return;
-    setIsLoading(true);
+  const fetchData = useCallback(async (): Promise<CampaignStatsData> => {
+    let leads: LeadRow[] = EMPTY_LEADS;
+    let messages: MsgRow[] = EMPTY_MSGS;
+    let startedRows: StartedRow[] = EMPTY_STARTED;
+    let hits: HitRow[] = EMPTY_HITS;
+    let audits: AuditRow[] = EMPTY_AUDITS;
+    let siteTrackingReady = false;
     try {
       const client = supabase as unknown as SupabaseClient;
       const [leadsRes, msgsRes, auditsRes] = await Promise.all([
@@ -232,9 +256,9 @@ export function useCampaignStats() {
           client.from('ai_audits').select('id, lead_id, open_count, first_opened_at')
             .order('id', { ascending: true }).range(from, to)),
       ]);
-      setLeads(leadsRes.rows);
-      setMessages(msgsRes.rows);
-      setAudits(auditsRes.rows);
+      leads = (leadsRes.rows);
+      messages = (msgsRes.rows);
+      audits = (auditsRes.rows);
     } catch (e) {
       console.error('Campaign stats fetch failed (non-blocking):', e);
     }
@@ -250,10 +274,10 @@ export function useCampaignStats() {
       const res = await fetchAllRows<HitRow>('Campaign stats (page hits)', (from, to) =>
         client.from('lead_page_hits').select('lead_id, created_at')
           .order('id', { ascending: true }).range(from, to));
-      setHits(res.rows);
-      setSiteTrackingReady(true);
+      hits = (res.rows);
+      siteTrackingReady = (true);
     } catch (e) {
-      setSiteTrackingReady(false);
+      siteTrackingReady = (false);
       console.warn('Site-visit tracking unavailable (shows as not tracked):', e instanceof Error ? e.message : e);
     }
 
@@ -265,15 +289,27 @@ export function useCampaignStats() {
     try {
       const { data: res, error } = await supabase.functions.invoke('submissions', { body: { action: 'lead_statuses' } });
       if (error || !res?.ok) throw new Error(error?.message ?? res?.error ?? 'lead_statuses failed');
-      setStartedRows((res.rows ?? []) as StartedRow[]);
+      startedRows = ((res.rows ?? []) as StartedRow[]);
     } catch (e) {
       console.warn('Onboarding starts unavailable (started shows 0):', e instanceof Error ? e.message : e);
     }
 
-    setIsLoading(false);
-  }, [user?.id]);
+    return { leads, messages, startedRows, hits, audits, siteTrackingReady };
+  }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const query = useQuery({ queryKey, queryFn: fetchData, enabled: !!user?.id });
+  const data = query.data;
+  /* Module-level empties: a new array per render would give every fold below a fresh identity. */
+  const leads = data?.leads ?? EMPTY_LEADS;
+  const messages = data?.messages ?? EMPTY_MSGS;
+  const startedRows = data?.startedRows ?? EMPTY_STARTED;
+  const hits = data?.hits ?? EMPTY_HITS;
+  const audits = data?.audits ?? EMPTY_AUDITS;
+  /* ⛔ FALSE UNTIL AN ACTUAL SUCCESSFUL READ SAYS OTHERWISE — unchanged, and the reason is
+     unchanged too: the card must be able to say "not tracked yet" rather than print 0% against
+     every template, which reads as "nobody clicked" and is the opposite of the truth. */
+  const siteTrackingReady = data?.siteTrackingReady ?? false;
+  const isLoading = !!user?.id && query.isPending;
 
   // --- Group messages by lead, oldest first (the fetch is already ordered). ---
   const msgsByLead = new Map<string, MsgRow[]>();
@@ -555,5 +591,13 @@ export function useCampaignStats() {
   /* siteTrackingReady travels with the stats so the card can tell "no visits" from "no tracking".
      Deriving it in the component from `siteVisits === 0` would be exactly the conflation the flag
      exists to prevent. */
-  return { stats, siteTrackingReady, isLoading: isLoading || campaignsLoading, refetch: fetchData };
+  /* ⛔ `refetch` MUST INVALIDATE, NOT CALL THE LOADER. `fetchData` returns its results now
+     instead of writing state, so calling it directly would run five queries and throw the
+     answer away — a refresh button that silently does nothing. Invalidating is also what stops
+     two refresh presses starting two fetches. */
+  const refetch = useCallback(
+    () => { void queryClient.invalidateQueries({ queryKey }); },
+    [queryClient, queryKey],
+  );
+  return { stats, siteTrackingReady, isLoading: isLoading || campaignsLoading, refetch };
 }

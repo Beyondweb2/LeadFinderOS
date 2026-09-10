@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -60,46 +61,59 @@ const CAMPAIGN_COLS = '*';
  * any authenticated user sees the whole list; anyone can create one; only the
  * creator can edit theirs (enforced by RLS).
  */
+/** Stable empty — a fresh array per render re-runs every picker's memo. */
+const EMPTY_CAMPAIGNS: Campaign[] = [];
+
 export function useCampaigns() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const fetchCampaigns = useCallback(async () => {
-    const { data, error } = await db
-      .from('campaigns')
-      .select(CAMPAIGN_COLS)
-      .order('created_at', { ascending: true });
+  /* ⛔ ONE SHARED LIST, WHICH IS WHAT THE window EVENT WAS FAKING. The old comment here said it
+     plainly: "useCampaigns has NO shared store — every caller (page, picker, dialog) holds its
+     own list", so creating a campaign in one instance left the others stale, and Find Leads'
+     self-heal effect would see the brand-new id as unknown and reset the selection to "No
+     campaign". The workaround was a 'campaign-created' CustomEvent that every instance listened
+     for and appended from. React Query IS the shared store, so the event, its listener and the
+     dedupe-on-append are all deleted — verified first that nothing outside this file listened
+     for it.
+     ⚠️ 'campaign-deleted' STAYS. Outreach.tsx listens for it to refetch its leads and show "No
+     campaign" immediately; that is cross-FEATURE signalling, not the self-sync this replaces.
+     ⚠️ NOT keyed by user: campaigns are team-readable by design (any authenticated user sees the
+     whole list; RLS restricts only who may edit). Keying by user would cache the same shared
+     list once per account. */
+  const queryKey = useMemo(() => ['campaigns'] as const, []);
 
-    setIsLoading(false);
-    if (error) {
-      console.error('Error loading campaigns:', error);
-      return;
-    }
-    setCampaigns((data || []) as Campaign[]);
-  }, []);
+  const query = useQuery({
+    queryKey,
+    queryFn: async (): Promise<Campaign[]> => {
+      const { data, error } = await db
+        .from('campaigns')
+        .select(CAMPAIGN_COLS)
+        .order('created_at', { ascending: true });
+      /* ⛔ THROWS RATHER THAN LOGGING AND LEAVING THE LIST EMPTY. An empty campaign list and a
+         failed read look the same on a picker, and the second one silently offers "No campaign"
+         as the only option — which is how a lead lands unassigned. */
+      if (error) throw new Error(error.message);
+      return (data || []) as Campaign[];
+    },
+  });
 
-  useEffect(() => {
-    fetchCampaigns();
-  }, [fetchCampaigns]);
+  const campaigns = query.data ?? EMPTY_CAMPAIGNS;
+  const isLoading = query.isPending;
 
-  // Cross-instance sync: useCampaigns has NO shared store — every caller (page,
-  // picker, dialog) holds its own list. When ONE instance creates a campaign, the
-  // others stay stale until their next fetch, so anything validating an id against
-  // its own list (e.g. Find Leads' self-heal effect) treats the brand-new campaign
-  // as unknown and resets the selection to "No campaign". Mirror the existing
-  // 'campaign-deleted' event pattern: creation broadcasts the row and every
-  // instance appends it (deduped), so all lists agree immediately.
-  useEffect(() => {
-    const onCreated = (e: Event) => {
-      const created = (e as CustomEvent).detail?.campaign as Campaign | undefined;
-      if (!created?.id) return;
-      setCampaigns((prev) => (prev.some((c) => c.id === created.id) ? prev : [...prev, created]));
-    };
-    window.addEventListener('campaign-created', onCreated);
-    return () => window.removeEventListener('campaign-created', onCreated);
-  }, []);
+  const refetch = useCallback(
+    () => { void queryClient.invalidateQueries({ queryKey }); },
+    [queryClient, queryKey],
+  );
+
+  /* Each mutation has the authoritative row back from `.select().single()`, so the shared list
+     is patched with what the database stored and then invalidated. One helper, so the three
+     cannot drift. */
+  const patchCache = useCallback(async (fn: (prev: Campaign[]) => Campaign[]) => {
+    queryClient.setQueryData<Campaign[]>(queryKey, (prev) => fn(prev ?? EMPTY_CAMPAIGNS));
+    await queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
 
   const createCampaign = useCallback(async (input: CampaignInput): Promise<Campaign | null> => {
     const trimmed = input.name.trim();
@@ -129,12 +143,14 @@ export function useCampaigns() {
     }
 
     const created = data as Campaign;
-    setCampaigns((prev) => [...prev, created]);
-    // Sync every other useCampaigns instance BEFORE the picker's deferred
-    // onChange sets the new id as selected — see the listener above.
-    window.dispatchEvent(new CustomEvent('campaign-created', { detail: { campaign: created } }));
+    /* ⛔ AWAITED, AND THAT ORDERING IS THE POINT THE DELETED EVENT WAS MAKING. The picker's
+       onChange sets the new id as selected right after this resolves; if the shared list did not
+       already contain it, a consumer validating the id against the list treats it as unknown and
+       resets the selection to "No campaign". The event existed to win that race — the cache write
+       wins it directly. */
+    await patchCache((prev) => [...prev, created]);
     return created;
-  }, [user, toast]);
+  }, [user, toast, patchCache]);
 
   const updateCampaign = useCallback(async (id: string, patch: CampaignInput): Promise<Campaign | null> => {
     const trimmed = patch.name.trim();
@@ -160,9 +176,9 @@ export function useCampaigns() {
     }
 
     const updated = data as Campaign;
-    setCampaigns((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    await patchCache((prev) => prev.map((c) => (c.id === id ? updated : c)));
     return updated;
-  }, [toast]);
+  }, [toast, patchCache]);
 
   /**
    * Delete a campaign. The outreach_leads.campaign_id FK is ON DELETE SET NULL, so
@@ -177,10 +193,12 @@ export function useCampaigns() {
       toast({ title: 'Could not delete campaign', description: error.message, variant: 'destructive' });
       return false;
     }
-    setCampaigns((prev) => prev.filter((c) => c.id !== id));
+    await patchCache((prev) => prev.filter((c) => c.id !== id));
+    /* KEPT: Outreach.tsx listens for this to refetch its leads and show them as "No campaign"
+       immediately. Cross-feature, not the self-sync the created event was doing. */
     window.dispatchEvent(new CustomEvent('campaign-deleted', { detail: { id } }));
     return true;
-  }, [toast]);
+  }, [toast, patchCache]);
 
-  return { campaigns, isLoading, createCampaign, updateCampaign, deleteCampaign, refetch: fetchCampaigns };
+  return { campaigns, isLoading, createCampaign, updateCampaign, deleteCampaign, refetch };
 }

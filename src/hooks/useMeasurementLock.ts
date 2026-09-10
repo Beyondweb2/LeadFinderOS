@@ -11,7 +11,8 @@
    silently did nothing because an RLS-denied read returns HTTP 200 with [] — the same shape as an
    empty table — so this hook reports which it saw rather than folding both into null.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { isUsableLock, type MeasurementLock } from '@/lib/measurementLock';
 
@@ -24,46 +25,67 @@ interface State {
   malformed: boolean;
 }
 
-export function useMeasurementLock(businessName: string, leadId: string | null) {
-  const [state, setState] = useState<State>({ lock: null, tableMissing: false, loading: true, malformed: false });
+/** Stable resting state, so a nameless render and a genuinely empty result share one identity. */
+const NO_LOCK: State = { lock: null, tableMissing: false, loading: false, malformed: false };
 
-  const load = useCallback(async () => {
-    const name = (businessName ?? '').trim();
-    if (!name) { setState({ lock: null, tableMissing: false, loading: false, malformed: false }); return; }
-    setState((s) => ({ ...s, loading: true }));
-    try {
-      const client = supabase as unknown as typeof supabase;
-      const { data, error } = await (client as never as {
-        from: (t: string) => {
-          select: (c: string) => {
-            ilike: (c: string, v: string) => {
-              maybeSingle: () => Promise<{ data: { lock: unknown } | null; error: { message?: string } | null }>;
+export function useMeasurementLock(businessName: string, leadId: string | null) {
+  const queryClient = useQueryClient();
+  const name = (businessName ?? '').trim();
+  const queryKey = useMemo(() => ['measurement-lock', name.toLowerCase()] as const, [name]);
+
+  /* ⛔ ON REACT QUERY SINCE 2026-09-10. It re-read the lock every time the audit's re-audit
+     dialog mounted, which is on every visit to a results screen.
+     ⚠️ THE THREE OUTCOMES STAY THREE, and they are the reason this returns a state object
+     rather than throwing. `tableMissing` (we cannot tell whether a lock exists), `malformed` (a
+     stored lock we refuse to trust) and a plain absent lock are DIFFERENT answers, and the one
+     thing none of them may collapse into is "there is no lock" — a validated-but-empty lock
+     would make every future diff report "identical" and sign off the exact drift the feature
+     exists to catch (CLAUDE.md §17). Throwing would flatten all three into one error channel. */
+  const query = useQuery({
+    queryKey,
+    enabled: !!name,
+    queryFn: async (): Promise<State> => {
+      try {
+        const client = supabase as unknown as typeof supabase;
+        const { data, error } = await (client as never as {
+          from: (t: string) => {
+            select: (c: string) => {
+              ilike: (c: string, v: string) => {
+                maybeSingle: () => Promise<{ data: { lock: unknown } | null; error: { message?: string } | null }>;
+              };
             };
           };
+        }).from('measurement_locks').select('lock').ilike('business_name', name).maybeSingle();
+
+        if (error) {
+          /* A missing relation and a permission refusal look different in the message but mean the
+             same thing here: we cannot tell whether a lock exists, so we must not claim one does
+             not. Either way the feature is dormant and the UI says so. */
+          return { lock: null, tableMissing: true, loading: false, malformed: false };
+        }
+        const raw = data?.lock ?? null;
+        if (raw === null) return NO_LOCK;
+        return {
+          lock: isUsableLock(raw) ? raw : null,
+          tableMissing: false,
+          loading: false,
+          malformed: !isUsableLock(raw),
         };
-      }).from('measurement_locks').select('lock').ilike('business_name', name).maybeSingle();
-
-      if (error) {
-        /* A missing relation and a permission refusal look different in the message but mean the
-           same thing here: we cannot tell whether a lock exists, so we must not claim one does
-           not. Either way the feature is dormant and the UI says so. */
-        setState({ lock: null, tableMissing: true, loading: false, malformed: false });
-        return;
+      } catch {
+        return { lock: null, tableMissing: true, loading: false, malformed: false };
       }
-      const raw = data?.lock ?? null;
-      if (raw === null) { setState({ lock: null, tableMissing: false, loading: false, malformed: false }); return; }
-      setState({
-        lock: isUsableLock(raw) ? raw : null,
-        tableMissing: false,
-        loading: false,
-        malformed: !isUsableLock(raw),
-      });
-    } catch {
-      setState({ lock: null, tableMissing: true, loading: false, malformed: false });
-    }
-  }, [businessName]);
+    },
+  });
 
-  useEffect(() => { void load(); }, [load]);
+  /* A blank business name is a resting state, not a load: there is nothing to look up. */
+  const state: State = name
+    ? (query.data ?? { lock: null, tableMissing: false, loading: query.isPending, malformed: false })
+    : NO_LOCK;
+
+  const load = useCallback(
+    async () => { await queryClient.invalidateQueries({ queryKey }); },
+    [queryClient, queryKey],
+  );
 
   /** Write (or replace) the lock for this business. Returns an error string, or null on success. */
   const save = useCallback(async (lock: MeasurementLock): Promise<string | null> => {

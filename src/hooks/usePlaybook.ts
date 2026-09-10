@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -110,23 +111,52 @@ const LEAD_COLS = 'id, business_name, phone, website, address, google_maps_url, 
 /** A lead row's trade lives in search_keyword for ~20% of rows; category is the fallback. */
 const leadTrade = (l: LeadRow) => (l.search_keyword ?? '').trim() || (l.category ?? '').trim() || null;
 
-export function usePlaybook(id: string | undefined): UsePlaybookResult {
-  const [playbook, setPlaybook] = useState<Playbook | null>(null);
-  const [ownCitations, setOwnCitations] = useState<OwnCitations | null>(null);
-  const [seo, setSeo] = useState<AiAuditSeo | null>(null);
-  const [naming, setNaming] = useState<{ named: number; total: number } | null>(null);
-  const [directoryCheck, setDirectoryCheck] = useState<DirectoryCheck | null>(null);
-  const [answers, setAnswers] = useState<ClientAnswers | null>(null);
-  const [resolvedAs, setResolvedAs] = useState<'audit' | 'lead' | null>(null);
-  const [auditId, setAuditId] = useState<string | null>(null);
-  const [leadId, setLeadId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+/** One playbook load. Was eleven useState slots. */
+interface PlaybookData {
+  playbook: Playbook | null;
+  ownCitations: OwnCitations | null;
+  seo: AiAuditSeo | null;
+  naming: { named: number; total: number } | null;
+  directoryCheck: DirectoryCheck | null;
+  answers: ClientAnswers | null;
+  resolvedAs: 'audit' | 'lead' | null;
+  auditId: string | null;
+  leadId: string | null;
+  /** Returned rather than thrown — see the note in the hook. */
+  error: string | null;
+}
+/** Stable empty, so a pending or errored load has one identity rather than a new object each render. */
+const EMPTY_PLAYBOOK: PlaybookData = {
+  playbook: null, ownCitations: null, seo: null, naming: null, directoryCheck: null,
+  answers: null, resolvedAs: null, auditId: null, leadId: null, error: null,
+};
 
-  const load = useCallback(async () => {
-    if (!id) { setIsLoading(false); setError('No id in the URL.'); return; }
-    setIsLoading(true);
-    setError(null);
+export function usePlaybook(id: string | undefined): UsePlaybookResult {
+  const queryClient = useQueryClient();
+  /* ⛔ ON REACT QUERY SINCE 2026-09-10. Seven reads — audit, lead, evidence, listings, directory
+     check, questionnaire answers, queue rows — refired every time the playbook was opened.
+     ⚠️ ERRORS ARE RETURNED AS DATA, NOT THROWN, and that is deliberate. Throwing is the idiom,
+     but this loader distinguishes three outcomes the page renders differently: no id, no audit
+     or lead with that id, and a mid-fold failure that keeps `resolvedAs` while nulling the
+     document. Collapsing all three into React Query's `error` would have flattened them into
+     one message and silently changed what the page shows. Behaviour-preserving beats idiomatic
+     on a migration whose whole promise is that nothing changes but the caching. */
+  const queryKey = useMemo(() => ['playbook', id ?? null] as const, [id]);
+
+  const load = useCallback(async (): Promise<PlaybookData> => {
+    if (!id) return { ...EMPTY_PLAYBOOK, error: 'No id in the URL.' };
+    /* Locals in place of the eleven setters; the assignments sit where the calls were, so every
+       branch — including the not-found early return and the catch — keeps its exact shape. */
+    let playbook: Playbook | null = null;
+    let ownCitations: OwnCitations | null = null;
+    let seo: AiAuditSeo | null = null;
+    let naming: { named: number; total: number } | null = null;
+    let directoryCheck: DirectoryCheck | null = null;
+    let answers: ClientAnswers | null = null;
+    let resolvedAs: 'audit' | 'lead' | null = null;
+    let auditId: string | null = null;
+    let leadId: string | null = null;
+    let error: string | null = null;
     try {
       /* Untyped client: client_listings is not in the generated types, and the audit/lead selects
          only need the columns named above. Same cast Baseline.tsx uses. */
@@ -151,14 +181,14 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
       }
 
       if (!audit && !lead) {
-        setError('No audit or lead with that id.');
-        setPlaybook(null); setResolvedAs(null); setAuditId(null); setLeadId(null);
-        return;
+        error = 'No audit or lead with that id.';
+        playbook = null; resolvedAs = null; auditId = null; leadId = null;
+        return { playbook, ownCitations, seo, naming, directoryCheck, answers, resolvedAs, auditId, leadId, error };
       }
 
-      setResolvedAs(audit ? 'audit' : 'lead');
-      setAuditId(audit?.id ?? null);
-      setLeadId(lead?.id ?? null);
+      resolvedAs = (audit ? 'audit' : 'lead');
+      auditId = (audit?.id ?? null);
+      leadId = (lead?.id ?? null);
 
       /* THE FOLD'S INPUT. Lead fields win where present because they are enriched from Google Place
          Details; the audit fills the gaps and is the only source when there is no lead at all. */
@@ -226,7 +256,7 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
           dirCheck = (dcRaw ?? null) as DirectoryCheck | null;
         } catch { dirCheck = null; }
       }
-      setDirectoryCheck(dirCheck);
+      directoryCheck = (dirCheck);
 
       /* THE QUESTIONNAIRE ANSWERS, for the client request sheet's page list. Keyed on the lead, the
          same key the directory check uses. Newest row wins: a client who re-submitted should get the
@@ -256,11 +286,11 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
           }
         } catch { ans = null; }
       }
-      setAnswers(ans);
+      answers = (ans);
 
       /* directoryCheckFold returns EMPTY sets for anything other than an 'ok' check, so a refused,
          errored or empty search can never suppress a task the operator still needs to do. */
-      setPlaybook(buildPlaybook(pbLead, evidence, tradeAuditTotals, listings, directoryCheckFold(dirCheck)));
+      playbook = (buildPlaybook(pbLead, evidence, tradeAuditTotals, listings, directoryCheckFold(dirCheck)));
 
       /* 5. THIS AUDIT'S OWN CITATIONS — a second, sharper signal alongside the trade fold, never a
          replacement for it. Only possible when the id resolved to an audit: without one there are no
@@ -273,7 +303,7 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
             .eq('audit_id', audit.id)
             .order('id', { ascending: true })
             .range(from, to));
-        setOwnCitations(buildOwnCitations(qRows, pbLead.business_name ?? ''));
+        ownCitations = (buildOwnCitations(qRows, pbLead.business_name ?? ''));
 
         /* 6. THE SEO SCAN, if one has ever been run for this audit. Newest run first, and the first
            one carrying a RENDERABLE scan wins — a later run without a scan must not blank a scan an
@@ -287,7 +317,7 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
             .eq('audit_id', audit.id).order('created_at', { ascending: false });
           const rows = (runRows ?? []) as Array<{ results?: { seo?: unknown; summary?: { named_datapoints?: number; total_datapoints?: number } } | null }>;
           const withSeo = rows.map((r) => r.results?.seo).find((s) => isRenderableSeo(s));
-          setSeo(withSeo
+          seo = (withSeo
             ? { ...(withSeo as AiAuditSeo), leadFindings: aggregateSeoFindings((withSeo as AiAuditSeo).leadFindings ?? []) }
             : null);
 
@@ -296,38 +326,46 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
           const stored = rows.map((r) => r.results?.summary)
             .find((s) => typeof s?.named_datapoints === 'number' && typeof s?.total_datapoints === 'number');
           if (stored) {
-            setNaming({ named: stored.named_datapoints!, total: stored.total_datapoints! });
+            naming = ({ named: stored.named_datapoints!, total: stored.total_datapoints! });
           } else {
             let n = 0, t = 0;
             for (const r of qRows) {
               if (r.status !== 'done' || !r.result) continue;
               for (const e of SCORED_ENGINES) { t++; if (r.result[e]?.named) n++; }
             }
-            setNaming(t > 0 ? { named: n, total: t } : null);
+            naming = (t > 0 ? { named: n, total: t } : null);
           }
         } catch {
-          setSeo(null);
-          setNaming(null);
+          seo = (null);
+          naming = (null);
         }
       } else {
-        setOwnCitations(null);
-        setSeo(null);
-        setNaming(null);
+        ownCitations = (null);
+        seo = (null);
+        naming = (null);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not build that playbook.');
-      setPlaybook(null);
-      setOwnCitations(null);
-      setSeo(null);
-      setNaming(null);
-      setDirectoryCheck(null);
-      setAnswers(null);
-    } finally {
-      setIsLoading(false);
+      error = (e instanceof Error ? e.message : 'Could not build that playbook.');
+      playbook = (null);
+      ownCitations = (null);
+      seo = (null);
+      naming = (null);
+      directoryCheck = (null);
+      answers = (null);
     }
+    return { playbook, ownCitations, seo, naming, directoryCheck, answers, resolvedAs, auditId, leadId, error };
   }, [id]);
 
-  useEffect(() => { load(); }, [load]);
+  const query = useQuery({ queryKey, queryFn: load, enabled: true });
+  const d = query.data ?? EMPTY_PLAYBOOK;
+  const isLoading = query.isPending;
 
-  return { playbook, ownCitations, seo, naming, directoryCheck, answers, resolvedAs, auditId, leadId, isLoading, error, reload: load };
+  /* ⛔ `reload` INVALIDATES — calling `load` directly would fetch and discard, leaving the
+     button doing nothing visible. Same trap as useCampaignStats. */
+  const reload = useCallback(() => { void queryClient.invalidateQueries({ queryKey }); }, [queryClient, queryKey]);
+  return {
+    playbook: d.playbook, ownCitations: d.ownCitations, seo: d.seo, naming: d.naming,
+    directoryCheck: d.directoryCheck, answers: d.answers, resolvedAs: d.resolvedAs,
+    auditId: d.auditId, leadId: d.leadId, isLoading, error: d.error, reload,
+  };
 }
