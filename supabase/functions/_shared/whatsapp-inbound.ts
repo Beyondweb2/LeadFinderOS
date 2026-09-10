@@ -426,12 +426,14 @@ export async function handleInboundMessages(
                         },
                         {
                           supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
-                          /* ⚠️ THE INTERNAL DOOR, AND IT IS NOT OPEN YET. scan-site-details has no
-                             internal branch, so this returns 401 until one is added — leaving the
-                             row with `scrape: null`, which the picker reads as "not scraped yet"
-                             and fills on demand with the operator's own JWT. Degraded, not broken;
-                             and NOT to be "fixed" by sending the service-role key, which §8 proves
-                             is dead on every function that has such a branch. */
+                          /* ⚠️ THE INTERNAL DOOR IS NOW OPEN — scan-site-details gained the
+                             CRON_SECRET + x-internal-job branch in this same series (its
+                             `isInternal`), so this call reaches the scraper for real.
+                             ⛔ IF CRON_SECRET IS UNSET IT 401s AND THAT IS THE SAFE FAILURE: the
+                             row keeps `scrape: null`, which the picker reads as "not scraped yet"
+                             and fills on demand with the operator's own JWT. Degraded, not broken.
+                             ⛔ AND NOT TO BE "FIXED" BY SENDING THE SERVICE-ROLE KEY, which §8
+                             proves is dead on every function that has such a branch. */
                           auth: {
                             kind: "internal" as const,
                             cronSecret: Deno.env.get("CRON_SECRET") ?? "",
