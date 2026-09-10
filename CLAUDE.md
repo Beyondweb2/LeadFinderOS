@@ -849,6 +849,11 @@ refetch in a mount effect:
 useApifyUsage  useAvatar  useBulkJobs  useCampaignStats  useCampaigns  useCheckedBusinesses
 useContactTracking  useInbox  useLeadNotes  usePersonalActions  usePlaybook  useTeamFeedback
 ```
+⚠️ **THAT LIST IS THE 2026-08-09 AUDIT AND IS NOW STALE** — twelve of them were migrated on
+2026-09-10 and two never existed by the end. It is kept as the record of the original finding;
+**the current state is in THE ORDER below, and the way to check is to re-derive from the code.**
+```
+```
 `useInbox:124` is `useEffect(() => { fetchAll(); }, [fetchAll])` with `isLoading` starting `true` —
 leave the Inbox, come back, full refetch and a spinner.
 
@@ -937,10 +942,26 @@ useMarketView.ts   1 persisted vs  6 plain
    patched — a new thread opens empty by construction.
 2. **`useInbox` → React Query**, with invalidation proven on **`send`** and **`patchLeadStatus`**
    specifically. This is the headline fix and the first real mutation test.
-3. **The layout route** — one `<Route element={<AppLayout/>}>` with `<Outlet/>` replacing the 12
-   wrappers. The shell stops remounting and scroll stops needing restoration at all.
-4. **The remaining 11 hooks, one at a time.** ⚠️ **`useOutreach` LAST** — its optimistic updates
-   (`leadsWithOptimistic`) are the hardest thing to keep correct under a cache.
+3. ✅ **DONE 2026-08-28 — the layout route.** One `<Route element={<AppLayout/>}>` with `<Outlet/>`
+   replaced the fifteen wrappers, after checking they were byte-identical. The shell mounts ONCE;
+   §6c's "half two" is closed. `usePersistedScroll` now sees route changes without a remount.
+4. ✅ **DONE 2026-09-10 — twelve hooks, one at a time.** `useDashboardMetrics`, `useCampaignStats`,
+   `usePlaybook`, `useFreeCheckProgress`, `useAvatar`, `useCheckedBusinesses`, `useTeamFeedback`,
+   `useTemplates`, `useCampaigns`, `useBulkJobs`, `useCopiedPhones`, `useMeasurementLock`.
+   ⚠️ **THE LIST IN THIS SECTION WAS WRONG IN BOTH DIRECTIONS and cost time before it was
+   re-derived from the code.** `useLeadNotes` and `usePersonalActions` do not exist (deleted in the
+   September cleanup); `useCopiedPhones`, `useMeasurementLock` and `useSubscription` were missing.
+   **Re-derive the list, do not inherit it.** `useSubscription` was then deliberately SKIPPED: it is
+   a provider mounted ABOVE `BrowserRouter`, so it loads once per session and never refetches.
+   ⚠️ **The recurring trap: every one of these exported a `refetch` bound to the function being
+   converted.** Once the loader returns data instead of writing state, calling it directly fetches
+   and discards — a refresh button that silently does nothing. They invalidate now.
+5. 🔴 **`useOutreach` IS THE ONE LEFT, AND IT IS ITS OWN PIECE OF WORK — do not tack it on.**
+   Measured 2026-09-10: **1,603 lines, 38 direct `setLeads`/`setArchivedLeads` calls, 29 DB writes,
+   33 exported functions, 9 consumer files**, on the screen Paul works in all day. Each of those 38
+   is an optimistic update that has to stay correct under a shared cache, which is 38 invalidation
+   proofs, not one. ⚠️ `leadsWithOptimistic` — named here for months as the hard part — **no longer
+   exists**; check what the optimistic layer actually is before planning around it.
 
 ### ✅ COVERAGE READ-PATH — two bugs fixed 2026-08-19 (`e33d190e`), verified live
 
