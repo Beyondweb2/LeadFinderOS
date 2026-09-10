@@ -105,5 +105,15 @@ verify_jwt = true
 
 # mockup: SPA-only caller with the operator JWT; the handler does its own getUser + admin
 # check. Explicit entry, never a platform default (§8).
+# ⛔ true, MATCHING page-generator, AND THE REASON IS THE POINT OF HAVING TWO LAYERS: the outer
+# one exists to save you when someone later edits the inner one. The handler's admin gate is
+# what refuses today (probed: an unauthenticated POST and an anon-key POST both got the
+# handler's own {"ok":false,"error":"unauthorized"}), so this was never a hole — but a future
+# edit to that gate should not be the only thing standing between the internet and this
+# function. Paul's call, 2026-09-11.
+# ⚠️ SAFE HERE ONLY BECAUSE THIS FUNCTION HAS NO INTERNAL CALLER. verify_jwt = true demands a
+# JWT-shaped bearer at the GATEWAY, which is exactly what killed three internal call paths when
+# the service key stopped being a JWT (§8). Never set this on a function a cron or another
+# function calls with CRON_SECRET.
 [functions.mockup]
-verify_jwt = false
+verify_jwt = true
