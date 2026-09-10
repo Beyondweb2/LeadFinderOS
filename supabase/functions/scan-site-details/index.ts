@@ -426,12 +426,78 @@ function harvestSocialLinks(html: string, base: URL): ScannedLink[] {
 
 // Junk / third-party email domains that are never the business's own contact.
 const JUNK_EMAIL_DOMAINS = /(?:sentry\.io|wixpress\.com|wix\.com|example\.com|schema\.org|w3\.org|sentry-next\.wixpress\.com|googleapis\.com|gstatic\.com)$/i;
+
+/* ⛔ TEMPLATE PLACEHOLDER LOCAL-PARTS, added 2026-09-10 on Paul's call. Aston's Access
+   returns `someone@gmail.com` — a theme placeholder its owner never replaced, sitting in a
+   real mailto: on a real business's real site. The domain is gmail.com, so no domain filter
+   can catch it; it has to be caught on the LOCAL part.
+   ⚠️ ANCHORED WHOLE-STRING, never a substring. As a substring "name" would delete
+   `name@rglocksmiths.co.uk` and "info" would delete every `info@…` address in the book,
+   which is the most common real business email there is. Each entry must match the WHOLE
+   local part.
+   ⚠️ It is a curated list and will be incomplete — append to it when one gets through. The
+   failure mode is mild in one direction (a placeholder prints on a mockup and Paul spots it)
+   and severe in the other (a real address is silently dropped and the contact block is
+   blank), which is why the list is exact-match and short rather than clever. */
+const PLACEHOLDER_EMAIL_LOCAL = new Set([
+  "someone", "example", "placeholder", "sample", "changeme",
+  "yourname", "your-name", "your_name", "youremail", "your-email", "yourmail", "myemail",
+  "firstname", "lastname", "firstnamelastname", "firstname.lastname",
+  "john.doe", "johndoe", "jane.doe", "janedoe", "joe.bloggs", "joebloggs",
+  "test", "testing", "demo", "username", "asdf",
+  // Real but useless on a contact block — a prospect cannot reply to these.
+  "noreply", "no-reply", "donotreply", "do-not-reply",
+]);
+/* ⛔ FIVE ENTRIES WERE REMOVED FROM THE LIST ABOVE BEFORE IT SHIPPED, and the test is what
+   caught it: `name`, `email`, `user`, `abc`, `xyz`. The unit test drove
+   `name@rglocksmiths.co.uk` — a case this file's own comment had warned about — and the
+   filter rejected it. `abc@abc-locksmiths.co.uk` is the same shape: a local part that reads
+   like filler but is the business's actual initials.
+   ⚠️ THE RULE THIS LEAVES BEHIND: only list a local part that CANNOT plausibly be a real
+   mailbox at a real trade business. Dropping a genuine address blanks the contact block
+   silently; letting a placeholder through puts one visible line on a draft Paul reviews. */
+
+/* Counties and regions are not towns. A location page for "Cheshire" is not a location page.
+   ⚠️ THE OLD PHRASE FILTER CANNOT CATCH THESE and that is a word-boundary subtlety worth
+   naming: it tests /\bshire\b/, which does NOT match inside "Cheshire" — there is no boundary
+   between "Che" and "shire". So Cheshire and Lancashire both sailed through it.
+   ⛔ AN EXACT LIST, NOT A SUFFIX RULE. "-shire" alone would be tempting and would also be
+   wrong in the other direction eventually; and "-side" would catch Merseyside but risks a
+   real place. Paul appends to this the same way he appends to knownEntities.ts. */
+const COUNTIES_AND_REGIONS = new Set([
+  // -shire counties
+  "cheshire", "lancashire", "yorkshire", "north yorkshire", "south yorkshire",
+  "west yorkshire", "east yorkshire", "hampshire", "lincolnshire", "leicestershire",
+  "nottinghamshire", "derbyshire", "staffordshire", "warwickshire", "worcestershire",
+  "gloucestershire", "oxfordshire", "berkshire", "buckinghamshire", "bedfordshire",
+  "hertfordshire", "cambridgeshire", "northamptonshire", "shropshire", "wiltshire",
+  "dorset", "somerset", "devon", "cornwall", "herefordshire", "rutland", "cumbria",
+  // metropolitan counties + regions
+  "merseyside", "tyneside", "humberside", "teesside", "greater manchester",
+  "west midlands", "east midlands", "greater london", "tyne and wear",
+  "south wales", "north wales", "mid wales",
+  // compass regions
+  "north west", "north east", "south west", "south east", "the north", "the south",
+  "the midlands", "home counties", "east anglia", "the lake district", "the cotswolds",
+  // non-shire counties commonly listed
+  "kent", "essex", "surrey", "sussex", "east sussex", "west sussex", "norfolk",
+  "suffolk", "durham", "northumberland", "county durham", "clwyd", "gwynedd", "powys",
+  // nations
+  "england", "scotland", "wales", "northern ireland", "uk", "united kingdom",
+]);
+
+/** True for a county, region or nation — anything that is not a town you could target. */
+function isCountyOrRegion(s: string): boolean {
+  const k = s.trim().toLowerCase().replace(/^the\s+/, "").replace(/\s+/g, " ");
+  return COUNTIES_AND_REGIONS.has(k) || COUNTIES_AND_REGIONS.has(`the ${k}`);
+}
 const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
 
 function isPlausibleEmail(e: string): boolean {
   if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(e)) return false;
   if (/\.(?:png|jpe?g|gif|svg|webp|css|js)$/i.test(e)) return false; // asset filenames that look email-ish
-  const dom = e.split("@")[1] ?? "";
+  const [local, dom] = [e.split("@")[0] ?? "", e.split("@")[1] ?? ""];
+  if (PLACEHOLDER_EMAIL_LOCAL.has(local.toLowerCase())) return false; // someone@gmail.com et al
   return !JUNK_EMAIL_DOMAINS.test(dom);
 }
 
@@ -623,8 +689,11 @@ Deno.serve(async (req) => {
        ⛔ _v6 (same day): the single merged prompt became TWO prompts over one fetch, because
        the merged one measured worse (Delta 27 services -> 0, Grays 37 -> 20) AND moved NAP.
        Every _v5 row therefore holds a service list produced by the bad prompt — a hit would
-       serve Delta's zero services as though they were measured. */
-    const cacheKey = `${auditId || homepage.hostname}:site_details_v6`;
+       serve Delta's zero services as though they were measured.
+       ⛔ _v7 (same day): counties/regions are now dropped from `areas` and template
+       placeholder emails from `email`. Both REMOVE values, so a stale hit would keep
+       serving "Cheshire" as a target town and someone@gmail.com as a contact. */
+    const cacheKey = `${auditId || homepage.hostname}:site_details_v7`;
 
     // cache → cap → run → persist (enrichment_cache/usage + api_usage_log).
     const outcome = await runEnrichSource<{
@@ -804,6 +873,7 @@ Deno.serve(async (req) => {
             const t = typeof a === "string" ? a.trim().replace(/\s+/g, " ") : "";
             if (!t || t.length > 40 || /[<>]/.test(t)) continue;
             if (/\b(?:surrounding|areas?|nearby|county|shire|midlands|region|beyond|more)\b/i.test(t)) continue;
+            if (isCountyOrRegion(t)) continue;   // Cheshire, Merseyside, Kent … not a town
             const k = t.toLowerCase();
             if (seenArea.has(k)) continue;
             seenArea.add(k);
