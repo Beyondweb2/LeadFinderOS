@@ -2,10 +2,30 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { isAggregatorUrl, isBookingPlatformUrl, domainOf } from "../_shared/aggregators.ts";
 
-// scan-site-details — reads a client's OWN website and extracts business DETAILS
-// (phone / address / email / hours) + their SOCIAL & BOOKING LINKS, for the AI-audit
-// "autofill" feature. Returns the data ONLY — it does NOT save or auto-apply anything;
-// the UI confirm/edit step (Stage 2) writes to ai_audits (NAP columns + client_links).
+// scan-site-details — reads a business's OWN website in ONE pass and extracts
+// business DETAILS (phone / address / email / hours), the SERVICE AREAS it covers,
+// its SERVICE LIST, its own IMAGES, and its SOCIAL & BOOKING LINKS. Returns the data
+// ONLY — it does NOT save or auto-apply anything; the operator confirms first.
+//
+// ⚠️ THE NAME UNDERSTATES IT AND IS KEPT ON PURPOSE. Renaming a deployed function means
+// a new function, an undeploy, and a caller change for zero functional gain; services,
+// areas and images are all "site details". Do not rename it just to tidy the label.
+//
+// ⛔ ITS ONE CALLER IS src/pages/PageGenerator.tsx — NOT the AI Audit page. Two comments
+// (this header, and PageGenerator's own) used to say the AI-audit autofill used it, and
+// both were stale: AiAudit.tsx invokes create-ai-audit, extract-competitors, run-seo-scan
+// and generate-report, and never this. That stale comment was believed and quoted as a
+// reason NOT to touch this function (§4: a stale comment is a load-bearing bug). Grep for
+// the callers before believing any sentence about what depends on this.
+//
+// ── WHY THIS DOES FIVE JOBS INSTEAD OF TWO FUNCTIONS DOING THREE AND TWO ──────────
+// A separate trade scraper was built, measured on six real locksmith sites, and then
+// folded in here (2026-09-10, Paul's call). It extracted services + areas but NOT
+// phone/address/hours — which the mockup's contact block needs — so the mockup flow would
+// have called BOTH functions per prospect: two fetches of the same website, two LLM calls,
+// two chances for their site to be down. Their website is the least reliable input in the
+// whole system, so fetching it twice doubled the failure rate and the cost for no gain.
+// One pass: 1 homepage + up to MAX_SUBPAGES, one LLM call.
 //
 // Two extraction methods, by data type:
 //   1) DETAILS — gpt-4o-mini reads the cleaned homepage + contact/about text and returns
@@ -32,9 +52,27 @@ const OPENAI_OUTPUT_USD_PER_M = 0.6;
 const EST_COST_USD = 0.005;         // pre-call cap estimate
 const MAX_TEXT_CHARS = 60_000;      // ~15-20k tokens of clean text
 const MAX_SUBPAGE_CHARS = 15_000;   // cap each contact/about subpage
-const MAX_SUBPAGES = 2;             // fetch at most this many contact/about subpages
+/* Was 2 (contact/about only). Now 4, because ONE pass has to reach BOTH the contact page
+   (where NAP lives) and the services page (where the service list lives). Still fewer
+   fetches than the two-function shape it replaces: 1 homepage + up to 4, against
+   2 homepages + up to 5. */
+const MAX_SUBPAGES = 4;
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_HTML_BYTES = 1024 * 1024; // 1MB, same as scan-services / extract-facebook
+
+/* ── Area cap ──────────────────────────────────────────────────────────────────
+   DEFAULT STAYS 12 so the one existing caller (PageGenerator) is byte-for-byte
+   unchanged: it pre-fills one operator text field, and a 38-item list is not a
+   pre-fill, it is a paste. The mockup flow asks for more via `max_areas`, because a
+   location page per covered town is the product. CEILING 60: the largest real list
+   measured is Delta's 38, so 60 is headroom without letting a runaway list through. */
+const DEFAULT_MAX_AREAS = 12;
+const MAX_MAX_AREAS = 60;
+
+/* ── Image harvest caps ────────────────────────────────────────────────────────
+   Their OWN photos of their van, shop and work beat a Maps photo and beat Street
+   View. 24 is enough for a picker grid without turning the response into a payload. */
+const MAX_IMAGES = 24;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -97,19 +135,50 @@ async function fetchHtml(url: string): Promise<string | null> {
   }
 }
 
+/* ⛔ DEFECT 1, FIXED 2026-09-10: NUMERIC HTML ENTITIES WERE NEVER DECODED. The old chain
+   handled &nbsp; &amp; &pound; &#163; and then stripped /&[a-z]+;/i — ALPHABETIC ONLY — so
+   every numeric entity survived into the text AND into extracted values. Measured leftovers
+   on six real locksmith sites: 4, 3, 5, 0, 14, 0. WordPress emits &#038; for a plain
+   ampersand and &#8211; for an en dash, so this hit ordinary punctuation constantly:
+   "Car Ignition &#038; Lock Repairs" was a real extracted service name.
+   ⚠️ ORDER MATTERS. Numeric first, then the known names, and only THEN the catch-all strip —
+   otherwise the catch-all eats the leading "&" of a numeric entity and leaves "#038;". */
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: " ", amp: "&", pound: "£", quot: '"', apos: "'", lt: "<", gt: ">",
+  euro: "€", cent: "¢", yen: "¥", copy: "©", reg: "®", trade: "™",
+  hellip: "…", mdash: "—", ndash: "–", lsquo: "‘", rsquo: "’",
+  ldquo: "“", rdquo: "”", deg: "°", middot: "·", bull: "•", times: "×",
+};
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (_m, hex) => {
+      const n = parseInt(hex, 16);
+      return Number.isFinite(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : " ";
+    })
+    .replace(/&#(\d+);/g, (_m, dec) => {
+      const n = parseInt(dec, 10);
+      return Number.isFinite(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : " ";
+    })
+    .replace(/&([a-z][a-z0-9]*);/gi, (_m, name) => {
+      const k = String(name).toLowerCase();
+      /* An UNKNOWN named entity becomes a space, never its own literal text — the old
+         behaviour, kept deliberately: a stray "&foo;" inside a service name is worse than
+         a gap, because the gap is obviously missing and the artefact looks intentional. */
+      return Object.prototype.hasOwnProperty.call(NAMED_ENTITIES, k) ? NAMED_ENTITIES[k] : " ";
+    });
+}
+
 /** Strip scripts/styles/tags → readable text; collapse whitespace (from scan-services). */
 function htmlToText(html: string): string {
-  return html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&pound;/gi, "£")
-    .replace(/&#163;/g, "£")
-    .replace(/&[a-z]+;/gi, " ")
+  return decodeEntities(
+    html
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+      .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, " ")
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<[^>]+>/g, " "),
+  )
     .replace(/[​‌‍⁠﻿]/g, "") // strip zero-width cruft (Wix injects these, fragmenting labels/values)
     .replace(/[ \t\f\v]+/g, " ")
     .replace(/\s*\n\s*/g, "\n")
@@ -117,12 +186,75 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-/* ── Contact/about subpage finder (adapted from scan-services' findServiceLinks) ── */
+/* ⛔ DEFECT 4, FIXED 2026-09-10: NAV-ACCORDION AND CTA FURNITURE reads as service-shaped
+   text and was going to the model as content. Grays (Nottingham) emits "Close Master
+   Locksmith" / "Open Master Locksmith" once per menu group and "Explore" six times.
+   ⛔ EVERY PATTERN IS ANCHORED TO A WHOLE LINE, never a substring. "Open" as a substring
+   would delete "Safe Opening" and "Open 24 Hours"; "close" would take "Closed Sundays" —
+   i.e. it would eat real services and real HOURS, the field this function exists for.
+   ✅ CHECKED FOR OVER-REACH across all six measured sites before shipping: 22 distinct
+   strings dropped, every one navigation furniture, zero services and zero areas. Re-run
+   that check if you add a pattern. */
+const NAV_JUNK_LINE = new RegExp(
+  "^(?:" +
+    [
+      "(?:open|close)\\s+.{0,40}",
+      "explore",
+      "skip to (?:main )?content",
+      "menu|main menu|toggle (?:menu|navigation)",
+      "read more|learn more|find out more|see more|view (?:all|more)",
+      "back to top|top of page|bottom of page",
+      "use tab to navigate through the menu items\\.?",
+      "call now|call us|get a quote|request a quote|book (?:now|online)",
+      "previous|next|prev",
+      "search",
+      "cookie[s]? (?:policy|settings|preferences)|accept (?:all )?cookies|manage cookies",
+      "privacy policy|terms(?: and conditions| of use)?|sitemap",
+      "share|tweet|follow us",
+    ].join("|") +
+  ")$",
+  "i",
+);
 
-// NAP + hours live on contact / about / find-us pages. Rank contact highest.
-function findContactLinks(html: string, base: URL, limit: number): string[] {
+/** Drop whole lines that are pure navigation furniture. Content lines are untouched. */
+function stripNavJunk(text: string): { text: string; dropped: number } {
+  let dropped = 0;
+  const kept = text.split("\n").filter((line) => {
+    const t = line.trim();
+    if (!t) return true;
+    if (NAV_JUNK_LINE.test(t)) { dropped++; return false; }
+    return true;
+  });
+  return { text: kept.join("\n"), dropped };
+}
+
+/* ── Subpage finder: contact/about AND services, in ONE pass ─────────────────────
+   Was contact-only (findContactLinks). It now has to reach BOTH kinds, because merging
+   the trade scraper in here is what removes a SECOND fetch of the same website — their
+   site being the least reliable input in the system, fetching it twice doubled both the
+   failure rate and the cost for no gain.
+   ⚠️ INTERLEAVED, NOT CONCATENATED. Taking "the top 4 by score" would spend the whole
+   budget on contact pages for a site with contact/about/find-us/directions links and
+   never reach /services/ — the list the mockup is built from. So the budget is split:
+   contact-ish and service-ish are ranked separately and then taken in turns. */
+
+const BOOKING_WIDGET_PATH =
+  /(booking-calendar|book-now|book-online|book-a|\/booking\/|\/bookings\/|\/book\/|schedule|appointment|calendar|service-page\/)/i;
+
+/* ⛔ DEFECT 2, FIXED 2026-09-10: THE DEDUPE WAS PROTOCOL-SENSITIVE. It stripped the hash
+   and trailing slashes but not the scheme, so a site served over http whose own nav links
+   https did not match its own base — and fetched ITS OWN HOMEPAGE as a subpage. RL
+   Locksmiths duplicated 1,522 chars, half its entire payload, for nothing. */
+function sameTarget(a: string, b: string): boolean {
+  const norm = (u: string) =>
+    u.replace(/^https?:\/\//i, "").replace(/#.*$/, "").replace(/\/+$/, "").toLowerCase();
+  return norm(a) === norm(b);
+}
+
+type LinkKind = "contact" | "service";
+
+function rankLinks(html: string, base: URL, kind: LinkKind): string[] {
   const re = /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  const baseHref = base.href.replace(/#.*$/, "").replace(/\/+$/, "");
   const scored = new Map<string, number>();
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
@@ -131,9 +263,23 @@ function findContactLinks(html: string, base: URL, limit: number): string[] {
     const hay = `${href} ${text}`.toLowerCase();
 
     let score = -1;
-    if (/contact|get[-\s]?in[-\s]?touch/.test(hay)) score = 3;
-    else if (/find[-\s]?us|where[-\s]?to[-\s]?find|location|directions|visit[-\s]?us/.test(hay)) score = 2;
-    else if (/about/.test(hay)) score = 1;
+    if (kind === "contact") {
+      // NAP + hours live on contact / about / find-us pages. Rank contact highest.
+      if (/contact|get[-\s]?in[-\s]?touch/.test(hay)) score = 3;
+      else if (/find[-\s]?us|where[-\s]?to[-\s]?find|location|directions|visit[-\s]?us/.test(hay)) score = 2;
+      else if (/about/.test(hay)) score = 1;
+    } else {
+      /* SERVICE-first, not price-first. The deleted scan-services ranked price above
+         service because a barber's menu IS a price list. ⚠️ On all six measured trade
+         sites the two orderings picked the SAME pages — trade sites label the page
+         "Services" and link it from price copy too — so this is the right default for the
+         trade and it is NOT claimed as a fix for anything. */
+      if (/service/.test(hay)) score = 3;
+      else if (/pric|\bcost/.test(hay)) score = 2;
+      else if (/what[-\s]?we[-\s]?do|our[-\s]?work/.test(hay)) score = 1;
+      // JS scheduling widgets are huge and carry no service list.
+      if (score >= 0 && BOOKING_WIDGET_PATH.test(href)) score = -1;
+    }
     if (score < 0) continue;
 
     try {
@@ -142,17 +288,89 @@ function findContactLinks(html: string, base: URL, limit: number): string[] {
       if (isPrivateHostname(abs.hostname)) continue;
       abs.hash = "";
       const clean = abs.href.replace(/#.*$/, "").replace(/\/+$/, "") || abs.href;
-      if (clean === baseHref) continue; // not the homepage itself
+      if (sameTarget(clean, base.href)) continue; // DEFECT 2 — never the homepage itself
       const prev = scored.get(clean);
       if (prev === undefined || score > prev) scored.set(clean, score);
     } catch {
       continue;
     }
   }
-  return [...scored.entries()]
-    .sort((a, b) => b[1] - a[1]) // contact > find-us/location > about
-    .slice(0, limit)
-    .map(([url]) => url);
+  return [...scored.entries()].sort((a, b) => b[1] - a[1]).map(([url]) => url);
+}
+
+/** Up to `limit` subpages, alternating contact-ish and service-ish so neither starves. */
+function findSubpages(html: string, base: URL, limit: number): string[] {
+  const contact = rankLinks(html, base, "contact");
+  const services = rankLinks(html, base, "service");
+  const out: string[] = [];
+  const seen = new Set<string>();
+  /* Contact goes FIRST on each turn: NAP is what the live caller depends on, so if the
+     budget runs out it must run out on the newer half, never on the shipped one. */
+  for (let i = 0; out.length < limit && (i < contact.length || i < services.length); i++) {
+    for (const cand of [contact[i], services[i]]) {
+      if (!cand || out.length >= limit) continue;
+      if (out.some((u) => sameTarget(u, cand)) || seen.has(cand)) continue;
+      seen.add(cand);
+      out.push(cand);
+    }
+  }
+  return out;
+}
+
+/* ── Image harvest (deterministic — no LLM) ──────────────────────────────────────
+   THEIR OWN photos, from the HTML already fetched. A van, a shopfront, real work —
+   all of which beat a scraped Maps photo and all of which beat a Street View frame of
+   the road outside.
+   ⛔ EVERY IMAGE CARRIES ITS SOURCE, and that is a hard requirement rather than a nicety:
+   a saved mockup may later become a real build, and at that point Places-sourced imagery
+   has to be swapped out FIRST. After re-hosting into our own bucket a Maps photo and an
+   own-site photo are both just bucket URLs — indistinguishable — which is exactly how the
+   old picker lost provenance. Record it at harvest, not later. */
+interface ScannedImage { url: string; source: "own_site"; from: "og" | "img"; alt?: string; width?: number }
+
+/** Skip sprites, icons, logos, tracking pixels and data URIs — never a hero photo. */
+const IMG_SKIP = /(?:sprite|icon|favicon|logo|badge|pixel|spacer|placeholder|1x1|blank|loader|spinner|avatar|flag|arrow|chevron|star|cookie)/i;
+
+function harvestImages(html: string, base: URL, limit: number): ScannedImage[] {
+  const out: ScannedImage[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string, from: "og" | "img", alt?: string, width?: number) => {
+    if (out.length >= limit) return;
+    const u = (raw || "").trim();
+    if (!u || u.startsWith("data:")) return;   // inline data URIs are icons, not photos
+    let abs: URL;
+    try { abs = new URL(u, base); } catch { return; }
+    if (!["http:", "https:"].includes(abs.protocol)) return;
+    if (!/\.(?:jpe?g|png|webp|avif)(?:$|\?)/i.test(abs.pathname + abs.search) && from === "img") return;
+    if (IMG_SKIP.test(abs.pathname)) return;
+    const key = abs.href.replace(/\/+$/, "").toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ url: abs.href, source: "own_site", from, ...(alt ? { alt: alt.slice(0, 120) } : {}), ...(width ? { width } : {}) });
+  };
+
+  // og:image first — it is the one image the site itself nominated as representative.
+  for (const m of html.matchAll(/<meta\b[^>]*property\s*=\s*["']og:image(?::secure_url)?["'][^>]*>/gi)) {
+    const c = m[0].match(/content\s*=\s*["']([^"']+)["']/i);
+    if (c) push(c[1], "og");
+  }
+  for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
+    const tag = m[0];
+    /* Lazy-loaded sites put a placeholder in src and the real file in data-src /
+       data-lazy-src / srcset. Reading src alone would harvest the placeholder. */
+    const src =
+      tag.match(/\bdata-src\s*=\s*["']([^"']+)["']/i)?.[1] ??
+      tag.match(/\bdata-lazy-src\s*=\s*["']([^"']+)["']/i)?.[1] ??
+      tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1] ??
+      tag.match(/\bsrcset\s*=\s*["']([^"'\s,]+)/i)?.[1];
+    if (!src) continue;
+    const alt = tag.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1];
+    const w = Number(tag.match(/\bwidth\s*=\s*["']?(\d+)/i)?.[1]);
+    // A declared width under 100px is furniture whatever it is called.
+    if (Number.isFinite(w) && w > 0 && w < 100) continue;
+    push(src, "img", alt, Number.isFinite(w) && w > 0 ? w : undefined);
+  }
+  return out;
 }
 
 /* ── Social + booking link harvest (deterministic — no LLM) ──────────────────── */
@@ -267,10 +485,14 @@ function pickMainEmail(cands: { email: string; fromContact: boolean }[], siteDom
    offers TRADE-BASED suggestions instead (src/lib/tradeCredentials.ts), which cannot be mistaken
    for evidence and so force the operator to supply the knowledge. Areas stay scraped: they are
    factual and carry no safety weight. */
+interface ScannedService { name: string; price?: string; description?: string }
+
 interface ScannedDetails {
   phone?: string; address?: string; email?: string; hours?: string;
   /** Place names the site says the business covers. Literal only. */
   areas?: string[];
+  /** Services as the site names them, with a price ONLY where one is shown per-service. */
+  services?: ScannedService[];
 }
 
 const SYSTEM_PROMPT = `You extract a business's contact details from the plain text of THEIR OWN website.
@@ -286,8 +508,16 @@ Capture what is SHOWN — do not invent. Rules:
 
 ⛔ DO NOT EXTRACT CREDENTIALS AT ALL. Accreditations, memberships, certifications, awards and insurance statements are NOT wanted from this scan — do not report them in any field. A human confirms those separately from trade knowledge, because a site only shows a claim was made once, never that it is still current.
 
+"services" — the things this business does, as the site names them. Added 2026-09-10 so ONE pass feeds the mockup generator; every rule above is unchanged.
+- "name": the service exactly as written (e.g. "Emergency Door Opening", "uPVC Door Repairs", "Car Key Programming"). Keep their wording and capitalisation. Do not translate, expand, tidy or merge.
+- "price": ONLY if a price is literally shown FOR THAT SERVICE, as the literal string exactly as written ("£65", "from £65", "£60 – £100", "£50 – £100 per lock"). Do NOT convert, round, average or estimate. Do NOT take a site-wide headline price (a banner reading "from £65", a "transparent pricing" strapline) and attach it to individual services — if the price is not stated beside that specific service, OMIT the field. Most trade sites show NO prices, and omitting is the normal, correct outcome.
+- "description": ONLY if the site gives a short explanatory line for that service; copy it near-verbatim, trimmed to one sentence. Omit rather than write your own.
+- Do NOT include: navigation labels, headings that are not services, phone numbers, addresses, opening hours, review text, blog titles, cookie/consent text, accreditation or membership badges, or vehicle make/model lists (a list of car marques is not a service).
+- Do NOT list the same service twice. If the site groups services (Residential / Commercial / Motor Vehicle), return each service once and do not return the group names as services.
+- Return [] if the page lists no services.
+
 Return ONLY a JSON object of this exact shape (omit any field not found):
-{"phone"?: string, "address"?: string, "email"?: string, "hours"?: string, "areas"?: string[]}`;
+{"phone"?: string, "address"?: string, "email"?: string, "hours"?: string, "areas"?: string[], "services"?: [{"name": string, "price"?: string, "description"?: string}]}`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -312,6 +542,13 @@ Deno.serve(async (req) => {
     const auditId: string = typeof body.audit_id === "string" ? body.audit_id : "";
     const businessName: string = typeof body.business_name === "string" ? body.business_name : "";
     const websiteRaw: string = typeof body.website === "string" ? body.website.trim() : "";
+    /* max_areas: the existing caller sends nothing and gets 12 — unchanged. An absent,
+       non-numeric or out-of-range value falls back to the DEFAULT rather than to the
+       ceiling: absence must never widen what a caller receives. */
+    const rawMaxAreas = Number(body.max_areas);
+    const maxAreas = Number.isFinite(rawMaxAreas) && rawMaxAreas >= 1
+      ? Math.min(Math.floor(rawMaxAreas), MAX_MAX_AREAS)
+      : DEFAULT_MAX_AREAS;
 
     if (!websiteRaw) return json({ success: false, error: "No website to scan." }, 400);
     if (isAggregatorUrl(websiteRaw)) {
@@ -334,15 +571,23 @@ Deno.serve(async (req) => {
        30-day TTL, so without a bump a client scanned last week would return a hit with neither
        30-day TTL, so without a bump a client scanned before either change returns a HIT missing
        areas (or carrying dead credentials) — an absent value reading as a measured "none".
-       Change what an extractor returns, bump its version. */
-    const cacheKey = `${auditId || homepage.hostname}:site_details_v4`;
+       Change what an extractor returns, bump its version.
+       ⛔ _v5 (2026-09-10): SERVICES and IMAGES were added, and the four fetch/parse defects
+       were fixed. Same reasoning, and it is the one that would bite hardest: a hostname
+       scanned yesterday would return a _v4 HIT carrying no `services` and no `images`, and
+       the mockup generator would read that absence as "this business lists no services" —
+       then build a page with none. The bump is not tidiness, it is the absent-value fault
+       on a 30-day cache. */
+    const cacheKey = `${auditId || homepage.hostname}:site_details_v5`;
 
     // cache → cap → run → persist (enrichment_cache/usage + api_usage_log).
     const outcome = await runEnrichSource<{
       details: ScannedDetails;
       links: ScannedLink[];
+      images: ScannedImage[];
       source_urls: string[];
       found: boolean;
+      diag: { textChars: number; navJunkDropped: number; subpages: number };
     }>({
       service,
       userId,
@@ -355,30 +600,47 @@ Deno.serve(async (req) => {
         // 1) Homepage (always first + in full).
         const homeHtml = await fetchHtml(homepage.toString());
         if (!homeHtml) {
-          return { result: { details: {}, links: [], source_urls: [], found: false }, costUsd: 0 };
+          return {
+            result: {
+              details: {}, links: [], images: [], source_urls: [], found: false,
+              diag: { textChars: 0, navJunkDropped: 0, subpages: 0 },
+            },
+            costUsd: 0,
+          };
         }
         sourceUrls.push(homepage.toString());
 
         // Links: deterministic harvest from the HOMEPAGE anchors (no LLM, no cost).
         const links = harvestSocialLinks(homeHtml, homepage);
 
+        /* Images: deterministic harvest, homepage first so og:image and the hero rank
+           highest. No LLM, no cost. Each carries source: "own_site". */
+        const images = harvestImages(homeHtml, homepage, MAX_IMAGES);
+
         // Email candidates harvested per page (mailto: + plain-text) — deterministic, not the LLM.
         const emailCands: { email: string; fromContact: boolean }[] = [];
         for (const e of harvestEmails(homeHtml)) emailCands.push({ email: e, fromContact: false });
 
-        // Details text: homepage + up to MAX_SUBPAGES contact/about pages (that's where NAP lives).
+        // Details text: homepage + up to MAX_SUBPAGES contact/about AND service pages.
         let text = htmlToText(homeHtml);
-        const candidates = findContactLinks(homeHtml, homepage, MAX_SUBPAGES);
+        const candidates = findSubpages(homeHtml, homepage, MAX_SUBPAGES);
         for (const url of candidates) {
           const subHtml = await fetchHtml(url);
           if (!subHtml) continue;
           sourceUrls.push(url);
           const fromContact = /contact/i.test(url);
           for (const e of harvestEmails(subHtml)) emailCands.push({ email: e, fromContact });
+          for (const im of harvestImages(subHtml, homepage, MAX_IMAGES - images.length)) images.push(im);
           text += `\n\n----- ${url} -----\n\n` + htmlToText(subHtml).slice(0, MAX_SUBPAGE_CHARS);
           if (text.length >= MAX_TEXT_CHARS) break;
         }
-        text = text.slice(0, MAX_TEXT_CHARS);
+
+        /* DEFECT 4: drop navigation furniture before spending tokens on it — and before it
+           can be mistaken for a service name. Applied AFTER assembly so a junk line on a
+           subpage is caught too. */
+        const nav = stripNavJunk(text);
+        text = nav.text.slice(0, MAX_TEXT_CHARS);
+        const diag = { textChars: text.length, navJunkDropped: nav.dropped, subpages: sourceUrls.length - 1 };
 
         // Deterministic main email (prefers own-domain, then contact page). Beats the LLM for email.
         const harvestedEmail = pickMainEmail(emailCands, domainOf(homepage.href));
@@ -386,7 +648,13 @@ Deno.serve(async (req) => {
         if (!text.trim()) {
           // No readable text for the LLM, but a harvested email still stands on its own.
           const details: ScannedDetails = harvestedEmail ? { email: harvestedEmail } : {};
-          return { result: { details, links, source_urls: sourceUrls, found: links.length > 0 || !!harvestedEmail }, costUsd: 0 };
+          return {
+            result: {
+              details, links, images, source_urls: sourceUrls,
+              found: links.length > 0 || images.length > 0 || !!harvestedEmail, diag,
+            },
+            costUsd: 0,
+          };
         }
 
         // 2) Strict details extraction via gpt-4o-mini (temperature 0 — extraction, not creative).
@@ -444,9 +712,30 @@ Deno.serve(async (req) => {
             if (seenArea.has(k)) continue;
             seenArea.add(k);
             areas.push(t);
-            if (areas.length >= 12) break;
+            /* Was a hardcoded 12. Now the caller's cap, defaulting to 12 — so the existing
+               caller is unchanged and the mockup flow can ask for the whole list. */
+            if (areas.length >= maxAreas) break;
           }
           if (areas.length) details.areas = areas;
+
+          /* SERVICES — same discipline as areas: bounded, deduped case-insensitively on the
+             name, and every field trimmed. A nameless entry is dropped rather than kept with
+             a blank label. `price` and `description` are only ever passed through. */
+          const rawServices = Array.isArray(parsed?.services) ? parsed.services : [];
+          const seenSvc = new Set<string>();
+          const services: ScannedService[] = [];
+          for (const s of rawServices) {
+            const name = pick((s as Record<string, unknown>)?.name, 120);
+            if (!name) continue;
+            const k = name.toLowerCase();
+            if (seenSvc.has(k)) continue;
+            seenSvc.add(k);
+            const price = pick((s as Record<string, unknown>)?.price, 60);
+            const description = pick((s as Record<string, unknown>)?.description, 300);
+            services.push({ name, ...(price ? { price } : {}), ...(description ? { description } : {}) });
+            if (services.length >= 60) break;
+          }
+          if (services.length) details.services = services;
 
         } catch (e) {
           console.error("[scan-site-details] JSON parse failed:", (e as Error).message);
@@ -455,8 +744,8 @@ Deno.serve(async (req) => {
         // Deterministic email is authoritative — override the LLM's when we harvested one.
         if (harvestedEmail) details.email = harvestedEmail;
 
-        const found = links.length > 0 || Object.keys(details).length > 0;
-        return { result: { details, links, source_urls: sourceUrls, found }, costUsd };
+        const found = links.length > 0 || images.length > 0 || Object.keys(details).length > 0;
+        return { result: { details, links, images, source_urls: sourceUrls, found, diag }, costUsd };
       },
     });
 
@@ -469,14 +758,24 @@ Deno.serve(async (req) => {
       });
     }
 
-    const result = outcome.result ?? { details: {}, links: [], source_urls: [], found: false };
+    const result = outcome.result ?? {
+      details: {}, links: [], images: [], source_urls: [], found: false,
+      diag: { textChars: 0, navJunkDropped: 0, subpages: 0 },
+    };
+    /* ⛔ THE EXISTING KEYS KEEP THEIR EXACT NAMES AND SHAPES. The one live caller
+       (PageGenerator) reads success / cached / found / details.{phone,address,email,hours,
+       areas} and ignores links and source_urls — so `images`, `services` (inside details)
+       and `diag` are PURELY ADDITIVE and it needs no change. Verified against the real v5
+       response, not assumed. */
     return json({
       success: true,
       cached: outcome.cached,
       found: result.found,
       details: result.details,
       links: result.links,
+      images: result.images,
       source_urls: result.source_urls,
+      diag: result.diag,
       cost_usd: Number(outcome.costUsd.toFixed(4)),
     });
   } catch (error) {
