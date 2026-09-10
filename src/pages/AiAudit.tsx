@@ -1815,18 +1815,10 @@ const AiAudit = () => {
     [businesses, auditQueryTerms],
   );
 
-  /** Trades, largest group first — of whatever survived the filter. */
-  const tradeGroups = useMemo(() => {
-    const byTrade = new Map<string, BusinessGroup[]>();
-    for (const b of filteredBusinesses) {
-      const list = byTrade.get(b.trade) ?? [];
-      list.push(b);
-      byTrade.set(b.trade, list);
-    }
-    return [...byTrade.entries()]
-      .map(([trade, items]) => ({ trade, items }))
-      .sort((a, b) => b.items.length - a.items.length || a.trade.localeCompare(b.trade));
-  }, [filteredBusinesses]);
+  /* REMOVED 2026-09-10: `tradeGroups`, which folded the list into collapsible trade sections.
+     Trade is a FILTER in the list now, not a nesting level — the grouping is what put 377
+     locksmiths on screen at once and added an indent to reach any single business. The list
+     derives its own trade options from the businesses it is given. */
 
   /** Anything draining? Gates the landing list's poller so an idle page makes no requests. */
   const inFlightCount = useMemo(
@@ -2198,7 +2190,6 @@ const AiAudit = () => {
           <AuditBookList
             businesses={businesses}
             filteredBusinesses={filteredBusinesses}
-            tradeGroups={tradeGroups}
             metrics={metrics}
             auditsCapped={auditsCapped}
             fetchLimit={AUDIT_FETCH_LIMIT}

@@ -2745,14 +2745,18 @@ by the single account below.** §6's paginate rule, caught in this file's own no
 | Back link, shared by both views | `src/components/BackLink.tsx` |
 | Audit UI (large) | `src/pages/AiAudit.tsx` |
 
-- 🔴 **Entry points to `/playbook/:id` — now exactly TWO, not three (re-grepped 2026-08-12):**
-  `LeadDetailDialog.tsx`'s `Playbook` pill, and the AI Audit row's **`checklist`** pill. Each passes
+- 🔴 **Entry points to `/playbook/:id` — exactly THREE, and one of them is load-bearing on its
+  own (re-checked 2026-09-10):** `LeadDetailDialog.tsx`'s `Playbook` pill, the AI Audit **row
+  menu**'s *Delivery checklist* item, and the results screen's **More → Playbook**. Each passes
   `state={{ from, fromLabel }}` so `BackLink` can name where it returns to.
-  ⚠️ **The third — `PaidClients.tsx:230` — WENT WITH THE PAGE** when `/paid-clients` was deleted
-  2026-08-12 (§6d). It was a LEAD-keyed route and so is the dialog's, which means the AI Audit row's
-  `checklist` pill is still the **ONLY** route for a business with an audit and no `outreach_leads`
-  row — ABLM, the only delivery client. **Losing one of three made that pill MORE load-bearing, not
-  less. Don't remove it.**
+  ⚠️ **The dialog's is LEAD-keyed, so it cannot reach a business with an audit and no
+  `outreach_leads` row** — ABLM, the only delivery client. The two AI Audit routes are AUDIT-keyed
+  and are the only ones that can. **Do not remove both.** (A fourth, `PaidClients.tsx`, went with
+  that page on 2026-08-12 — §6d.)
+  ⚠️ **It used to be a `checklist` CHIP on every list row and is now a menu item** (2026-09-10).
+  The route was deliberately preserved when the chip went: it rendered on 901 rows out of 901, so
+  it distinguished nothing and was most of why the list read as cluttered. `AuditPills.tsx` carries
+  a comment saying to put the chip back if the row menu ever loses the link.
 
 - ✅ **THE LLM PLAYBOOK IS NOW UNREACHABLE FROM THE APP** (`1715a294`, 2026-07-30). The audit results
   screen has **ONE** button, `Playbook`, linking to `/playbook/:auditId`. Gone: both old buttons, the

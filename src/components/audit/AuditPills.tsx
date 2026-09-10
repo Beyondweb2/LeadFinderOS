@@ -120,22 +120,14 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
                 client &middot; baseline {counted ?? 0}/{target}
               </ClientPill>
       )}
-      {/* DELIVERY CHECKLIST — /playbook/:id, resolved from this AUDIT id. Sits beside the baseline
-          pill because they are the two halves of the same job: the baseline says what is wrong, the
-          checklist says what to do about it.
-
-          NOT the same thing as the `playbook` asset pill below, which means the generate-playbook
-          LLM document stored at results.playbook. This one is the evidence-derived checklist and
-          reads no model output, hence the different word. */}
-      <Link
-        to={`/playbook/${audit.id}`}
-        state={{ from: '/ai-audit', fromLabel: 'AI Audit' }}
-        onClick={(e) => e.stopPropagation()}
-        title="Open the delivery checklist — directories evidenced from citations for this trade"
-        className="underline decoration-dotted underline-offset-2 hover:no-underline"
-      >
-        <AssetPill>checklist</AssetPill>
-      </Link>
+      /* ⛔ THE `checklist` CHIP WAS REMOVED FROM THIS ROW ON 2026-09-10, AND THE ROUTE IT
+         CARRIED WAS NOT. It linked to /playbook/:auditId and rendered on EVERY row — 901 of 901
+         — so as a chip it distinguished nothing and was most of why the list looked busy. It is
+         now "Delivery checklist" in each row's own menu in AuditBookList.
+         ⚠️ CLAUDE.md §9 says do not remove it, and the reason still stands: for a business with
+         an audit and NO outreach_leads row (ABLM, the only delivery client) this is the ONLY
+         route to that document, because the lead dialog's Playbook pill is keyed on a LEAD id.
+         The route survives on every row. If the row menu ever loses it, put the chip back. */
       {audit.lead_paid === true && target <= 1 && <ClientPill title="This lead has paid">client</ClientPill>}
       {/* ASSETS: facts, not signals. */}
       {audit.report_slug && <AssetPill title={`Published at /r/${audit.report_slug}`}>report</AssetPill>}
