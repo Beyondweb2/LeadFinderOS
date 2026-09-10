@@ -631,19 +631,50 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    // --- Auth (same pattern as scan-services) ---
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) return json({ success: false, error: "Unauthorized" }, 401);
-    const token = authHeader.replace("Bearer ", "");
+    /* --- Auth: an operator's JWT (as before) OR a trusted INTERNAL call. ---
+       ⛔ THE INTERNAL DOOR IS CRON_SECRET + x-internal-job, AND IT IS NOT A CHOICE.
+       CLAUDE.md §8 records the full matrix: since the ~2026-08-11 rotation the service-role key is
+       `sb_secret_` shaped, not a JWT, so `getClaims` cannot read it — AND the gateway only forwards
+       a JWT-shaped bearer while `sb_` keys are accepted only in `apikey`. The two requirements are
+       mutually exclusive, so a service-role bearer branch is dead code on every function that has
+       one. Do NOT "fix" a 401 here by hunting for the right key; CRON_SECRET and an operator JWT
+       are the only two doors that exist. This is the same shape extract-competitors and
+       generate-report use.
+       ⚠️ ADDED 2026-09-10 for the mockup reply trigger, which runs inside a Meta webhook and has no
+       operator JWT to offer. The user-JWT path below is byte-for-byte unchanged, and an external
+       caller can hold neither header, so this is purely additive. */
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+    const authHeader = req.headers.get("Authorization");
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims?.sub) return json({ success: false, error: "Unauthorized" }, 401);
-    const userId = claimsData.claims.sub as string;
+    const isInternal = !!cronSecret &&
+      req.headers.get("x-cron-secret") === cronSecret &&
+      !!req.headers.get("x-internal-job");
+
+    let userId: string;
+    if (isInternal) {
+      /* ⛔ THE CALLER MUST NAME AN OWNER, and it is read here for the DAILY COST CAP, not for
+         permission. runEnrichSource skips the cap entirely when userId is null, so accepting an
+         internal call without one would quietly create an uncapped spend path into a paid API —
+         the opposite of what an internal branch should cost. An internal call with no user_id is
+         refused rather than run uncapped. */
+      const bodyPeek = await req.clone().json().catch(() => ({}));
+      const claimed = typeof bodyPeek?.user_id === "string" ? bodyPeek.user_id.trim() : "";
+      if (!/^[0-9a-f-]{36}$/i.test(claimed)) {
+        return json({ success: false, error: "internal call requires user_id (for the cost cap)" }, 400);
+      }
+      userId = claimed;
+    } else {
+      if (!authHeader?.startsWith("Bearer ")) return json({ success: false, error: "Unauthorized" }, 401);
+      const token = authHeader.replace("Bearer ", "");
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims?.sub) return json({ success: false, error: "Unauthorized" }, 401);
+      userId = claimsData.claims.sub as string;
+    }
 
     // --- Parse + validate ---
     const body = await req.json().catch(() => ({}));

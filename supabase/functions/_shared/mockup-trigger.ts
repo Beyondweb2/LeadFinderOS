@@ -46,9 +46,30 @@
 import { isAggregatorUrl } from "./aggregators.ts";
 import { nicheForKeyword, MOCKUP_SCRAPE_MAX_AREAS } from "../../../src/lib/mockupNiche.ts";
 
+/* ⛔ EVERY OUTCOME IS RECORDED IN A TABLE, NOT ONLY console.log'd — CLAUDE.md §4's rule, and this
+   is precisely the case it was written for. "AN EDGE FUNCTION'S REFUSAL THAT IS ONLY console.error'd
+   IS UNDIAGNOSABLE AFTERWARDS — THE CLI HAS NO `functions logs` SUBCOMMAND." Two lanes were dead for
+   days in September with the reason existing only in a log nobody here can read.
+   This one runs inside a Meta webhook that fires unattended, so the operator has to be able to check
+   it WITHOUT a terminal: one query against client_error_reports answers "did the mockup happen, and
+   if not why". Successes are recorded too — the convention findable-checkout already uses with
+   `checkout_session_created` — because "no row" must not be the only evidence of success.
+   ⚠️ Best-effort and never awaited into a failure: recording must not be able to break the thing it
+   is recording. */
+async function record(
+  // deno-lint-ignore no-explicit-any
+  service: any,
+  errorId: string,
+  context: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await service.from("client_error_reports").insert({ error_id: errorId, context });
+  } catch (_e) { /* recording is never allowed to fail the caller */ }
+}
+
 /** Why a mockup row was or was not created. Recorded, never silent. */
 export type MockupOutcome =
-  | { started: true; siteId: string; niche: string; website: string; businessName: string }
+  | { started: true; siteId: string; niche: string; website: string; businessName: string; ownerId: string }
   | {
     started: false;
     reason:
@@ -83,33 +104,39 @@ export async function createMockupRow(
       /* ⛔ FAIL CLOSED. An unreadable existence check must not create a duplicate — the
          duplicate-openers incident (CLAUDE.md §8) was exactly this shape: a dedupe read that
          returned nothing was treated as "no duplicates exist". */
+      await record(service, "mockup_skipped", { lead_id: leadId, reason: "error", detail: `existence check failed: ${exErr.message ?? "unknown"}` });
       return { started: false, reason: "error", detail: `existence check failed: ${exErr.message ?? "unknown"}` };
     }
-    if (existing?.id) return { started: false, reason: "already_exists", detail: existing.id };
+    if (existing?.id) return { started: false, reason: "already_exists", detail: existing.id }; // not recorded: the guard working is not an event
 
     const { data: lead, error: leadErr } = await service
       .from("outreach_leads")
       .select("id, user_id, business_name, website, search_keyword, category, derived_town, search_location, address, phone, email")
       .eq("id", leadId).maybeSingle();
     if (leadErr || !lead?.business_name || !lead?.user_id) {
+      await record(service, "mockup_skipped", { lead_id: leadId, reason: "lead_unreadable", detail: leadErr?.message ?? "missing name or owner" });
       return { started: false, reason: "lead_unreadable", detail: leadErr?.message ?? "missing name or owner" };
     }
 
     /* ── The three mockup-specific refusals ─────────────────────────────────────────────── */
     const website = typeof lead.website === "string" ? lead.website.trim() : "";
-    if (!website) return { started: false, reason: "no_website" };
-    if (isAggregatorUrl(website)) return { started: false, reason: "website_is_aggregator", detail: website };
+    if (!website) {
+      await record(service, "mockup_skipped", { lead_id: leadId, business: lead.business_name, reason: "no_website" });
+      return { started: false, reason: "no_website" };
+    }
+    if (isAggregatorUrl(website)) {
+      await record(service, "mockup_skipped", { lead_id: leadId, business: lead.business_name, reason: "website_is_aggregator", website });
+      return { started: false, reason: "website_is_aggregator", detail: website };
+    }
 
     /* ⚠️ TRADE FROM search_keyword, NOT category. category is populated on 1 lead of 3,203
        (measured 2026-09-10); search_keyword on 3,063. `category` is kept as a second look only
        because it costs nothing, but it is not the signal. */
     const niche = nicheForKeyword(lead.search_keyword) ?? nicheForKeyword(lead.category);
     if (!niche) {
-      return {
-        started: false,
-        reason: "no_template_for_trade",
-        detail: String(lead.search_keyword ?? lead.category ?? "").slice(0, 60),
-      };
+      const trade = String(lead.search_keyword ?? lead.category ?? "").slice(0, 60);
+      await record(service, "mockup_skipped", { lead_id: leadId, business: lead.business_name, reason: "no_template_for_trade", trade });
+      return { started: false, reason: "no_template_for_trade", detail: trade };
     }
 
     /* ── Create the row FIRST, draft, and own it before spending anything ────────────────
@@ -155,10 +182,14 @@ export async function createMockupRow(
       })
       .select("id").single();
     if (insErr || !created?.id) {
+      await record(service, "mockup_skipped", { lead_id: leadId, business: lead.business_name, reason: "insert_failed", detail: insErr?.message ?? "no id returned" });
       return { started: false, reason: "insert_failed", detail: insErr?.message ?? "no id returned" };
     }
+    await record(service, "mockup_prepared", {
+      lead_id: leadId, business: lead.business_name, site_id: created.id, niche, website,
+    });
 
-    return { started: true, siteId: created.id, niche, website, businessName: lead.business_name };
+    return { started: true, siteId: created.id, niche, website, businessName: lead.business_name, ownerId: lead.user_id };
   } catch (e) {
     // Never throws — see the header. The caller has already stored the prospect's reply.
     return { started: false, reason: "error", detail: (e as Error).message?.slice(0, 200) };
@@ -200,7 +231,7 @@ export async function fillMockupFromSite(
   // deno-lint-ignore no-explicit-any
   service: any,
   siteId: string,
-  args: { website: string; businessName: string; niche: string; leadId: string },
+  args: { website: string; businessName: string; niche: string; leadId: string; ownerId: string },
   opts: { supabaseUrl: string; auth: FillAuth },
 ): Promise<{ ok: boolean; detail: string }> {
   try {
@@ -218,11 +249,16 @@ export async function fillMockupFromSite(
         business_name: args.businessName,
         audit_id: `mockup-${siteId}`, // scopes scan-site-details' 30-day cache to THIS mockup
         max_areas: MOCKUP_SCRAPE_MAX_AREAS,
+        /* Read by scan-site-details' INTERNAL branch for the daily cost cap only — never for
+           permission. It refuses an internal call without one rather than spending uncapped. */
+        user_id: args.ownerId,
       }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok || !body?.success) {
-      return { ok: false, detail: `scan failed: ${String(body?.error ?? res.status).slice(0, 140)}` };
+      const detail = `scan failed: ${String(body?.error ?? res.status).slice(0, 140)}`;
+      await record(service, "mockup_scrape_failed", { site_id: siteId, lead_id: args.leadId, business: args.businessName, http: res.status, detail });
+      return { ok: false, detail };
     }
 
     /* ⛔ READ-MODIFY-WRITE ON content, NOT AN OVERWRITE. The picker may already have written
@@ -268,13 +304,24 @@ export async function fillMockupFromSite(
 
     const { error: upErr } = await service
       .from("generated_sites").update({ content: next }).eq("id", siteId);
-    if (upErr) return { ok: false, detail: `update failed: ${String(upErr.message ?? "").slice(0, 140)}` };
+    if (upErr) {
+      const detail = `update failed: ${String(upErr.message ?? "").slice(0, 140)}`;
+      await record(service, "mockup_scrape_failed", { site_id: siteId, lead_id: args.leadId, business: args.businessName, detail });
+      return { ok: false, detail };
+    }
 
     const nSvc = Array.isArray(d.services) ? d.services.length : 0;
     const nArea = Array.isArray(d.areas) ? d.areas.length : 0;
     const nImg = Array.isArray(body.images) ? body.images.length : 0;
+    await record(service, "mockup_scraped", {
+      site_id: siteId, lead_id: args.leadId, business: args.businessName,
+      services: nSvc, areas: nArea, images: nImg,
+      cost_usd: typeof body.cost_usd === "number" ? body.cost_usd : null,
+    });
     return { ok: true, detail: `${nSvc} services, ${nArea} areas, ${nImg} own-site images` };
   } catch (e) {
-    return { ok: false, detail: `scan threw: ${String((e as Error).message ?? "").slice(0, 140)}` };
+    const detail = `scan threw: ${String((e as Error).message ?? "").slice(0, 140)}`;
+    await record(service, "mockup_scrape_failed", { site_id: siteId, lead_id: args.leadId, business: args.businessName, detail });
+    return { ok: false, detail };
   }
 }

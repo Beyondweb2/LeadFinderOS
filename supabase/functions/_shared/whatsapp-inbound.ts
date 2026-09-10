@@ -422,6 +422,7 @@ export async function handleInboundMessages(
                           businessName: outcome.businessName,
                           niche: outcome.niche,
                           leadId,
+                          ownerId: outcome.ownerId,
                         },
                         {
                           supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",

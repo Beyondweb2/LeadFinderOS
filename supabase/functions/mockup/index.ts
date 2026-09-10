@@ -101,6 +101,7 @@ Deno.serve(async (req) => {
           businessName: outcome.businessName,
           niche: outcome.niche,
           leadId,
+          ownerId: outcome.ownerId,
         },
         { supabaseUrl, auth: { kind: "operator", jwt: token } },
       );
@@ -159,6 +160,8 @@ Deno.serve(async (req) => {
           businessName: String(business.name ?? ""),
           niche: String(row.template ?? ""),
           leadId: String(row.lead_id ?? ""),
+          /* refill runs as the operator, so the cost cap keys on the operator. */
+          ownerId: u.user.id,
         },
         { supabaseUrl, auth: { kind: "operator", jwt: token } },
       );
