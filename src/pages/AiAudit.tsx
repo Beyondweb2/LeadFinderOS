@@ -19,7 +19,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
-  Building2, Users, TrendingUp, EyeOff, Globe, Map as MapIcon, Download, ChevronDown,
+  Building2, Users, Globe, Map as MapIcon, Download, ChevronDown,
   Copy, Save, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2,
   Archive, ShieldCheck, MoreHorizontal } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
@@ -33,6 +33,7 @@ import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
 import { poolRuns, engineSummary, type PooledInput } from '@/lib/pooledRuns';
+import { isPaidLead } from '@/lib/leadPayment';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
 import {
   DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, seoStyleForAudit, classifyWinnability,
@@ -991,9 +992,15 @@ const AiAudit = () => {
       leadIsPaying = false;
     } else {
       const { data, error } = await (supabase as unknown as SupabaseClient)
-        .from('outreach_leads').select('amount_paid').eq('id', a.lead_id).maybeSingle();
-      /* paid means amount_paid > 0, everywhere (CLAUDE.md §6). */
-      if (!error) leadIsPaying = Number((data as { amount_paid?: number | null } | null)?.amount_paid ?? 0) > 0;
+        .from('outreach_leads').select('amount_paid, status').eq('id', a.lead_id).maybeSingle();
+      /* ⛔ `isPaidLead`, NOT a bare `amount_paid > 0`. The first version of this used the raw
+         comparison and so protected a REFUNDED customer's audits as a paying customer's — the
+         money went back out, and `refunded` is the one status that subtracts. One rule, in
+         src/lib/leadPayment.ts, is what stops the funnel, the campaign card, the Inbox and this
+         from disagreeing about who has paid; a second copy here is exactly how they drift.
+         ⚠️ A refunded customer's BASELINE is still protected — by `paid_baseline`, which is the
+         honest reason. It is evidence of what was measured, whoever ended up paying for it. */
+      if (!error) leadIsPaying = isPaidLead(data as { amount_paid?: number | null; status?: string | null } | null);
     }
 
     let hasMeasurementLock: boolean | null = null;
@@ -2248,54 +2255,49 @@ const AiAudit = () => {
       {/* Stacked wizard — answered steps stay visible; each answer reveals the next. */}
       {step !== 'results' && (
         <div className="space-y-4">
-          {/* Metrics strip - a quick read on the whole audit book (only when there are audits).
-              Computed over BUSINESSES, not audit rows: a business audited twice used to be counted
-              twice in both the average and the invisible tally. "Site . presence" is gone - it
-              counted has_website, a static property of the lead list that says nothing about how
-              any audit turned out. */}
+          {/* ⛔ ONE LINE, NOT SIX CARDS. This was a six-tile dashboard sitting above the list,
+              so it was the first thing on screen every time — including "IN FLIGHT 0", which is
+              what it reads for all but a few minutes a week. These are reference numbers you
+              glance at, not decisions you act on. Every figure is unchanged and still derived
+              over BUSINESSES rather than audit rows: a business audited twice used to be counted
+              twice in both the average and the invisible tally.
+              ⚠️ Each figure hides itself when it has nothing to say, rather than printing a zero
+              that reads as a measurement. */}
           {metrics.audits > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <MetricCard
-                icon={<FileText className="h-4 w-4" />}
-                label={auditsCapped ? `Businesses (of latest ${AUDIT_FETCH_LIMIT})` : 'Businesses'}
-                value={String(metrics.businesses)}
-              />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[12px] text-muted-foreground">
+              <span>
+                <span className="font-semibold text-foreground">{metrics.businesses}</span> businesses
+                {auditsCapped ? <span className="text-muted-foreground/70"> (of latest {AUDIT_FETCH_LIMIT})</span> : null}
+              </span>
               {metrics.avgPct !== null && (
-                <MetricCard
-                  icon={<TrendingUp className="h-4 w-4" />}
-                  label="Avg visibility"
-                  value={`${metrics.avgPct}%`}
-                  tone={metrics.avgPct >= 50 ? 'good' : metrics.avgPct > 0 ? 'mid' : 'bad'}
-                />
+                <span>
+                  <span className={`font-semibold ${metrics.avgPct >= 50 ? 'text-emerald-500' : metrics.avgPct > 0 ? 'text-amber-500' : 'text-red-500'}`}>
+                    {metrics.avgPct}%
+                  </span> avg visibility
+                </span>
               )}
-              <MetricCard
-                icon={<EyeOff className="h-4 w-4" />}
-                label="Invisible"
-                value={String(metrics.invisible)}
-                tone={metrics.invisible > 0 ? 'bad' : 'good'}
-              />
-              <MetricCard
-                icon={<Loader2 className={`h-4 w-4 ${metrics.inFlight > 0 ? 'animate-spin' : ''}`} />}
-                label="In flight"
-                value={String(metrics.inFlight)}
-                tone={metrics.inFlight > 0 ? 'mid' : undefined}
-              />
-              {/* Paid baselines finalised vs started - the guarantee's measuring stick. */}
+              {metrics.invisible > 0 && (
+                <span><span className="font-semibold text-red-500">{metrics.invisible}</span> invisible</span>
+              )}
+              {metrics.inFlight > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span className="font-semibold text-foreground">{metrics.inFlight}</span> running
+                </span>
+              )}
+              {/* Paid baselines finalised vs started — the guarantee's measuring stick. */}
               {metrics.baselineTotal > 0 && (
-                <MetricCard
-                  icon={<Check className="h-4 w-4" />}
-                  label="Baselines"
-                  value={`${metrics.baselinesDone}/${metrics.baselineTotal}`}
-                  tone={metrics.baselinesDone === metrics.baselineTotal ? 'good' : 'mid'}
-                />
+                <span>
+                  <span className={`font-semibold ${metrics.baselinesDone === metrics.baselineTotal ? 'text-emerald-500' : 'text-amber-500'}`}>
+                    {metrics.baselinesDone}/{metrics.baselineTotal}
+                  </span> baselines done
+                </span>
               )}
-              {/* Real actor spend, summed from ai_audit_runs.actor_cost_usd. Only runs since that
-                  column started being written carry a figure, so this is a floor, not a total. */}
-              <MetricCard
-                icon={<Download className="h-4 w-4" />}
-                label="Spend (recorded)"
-                value={`$${metrics.spend.toFixed(2)}`}
-              />
+              {/* Real actor spend from ai_audit_runs.actor_cost_usd — only runs since that column
+                  started being written carry a figure, so this is a floor, not a total. */}
+              <span>
+                <span className="font-semibold text-foreground">${metrics.spend.toFixed(2)}</span> recorded spend
+              </span>
             </div>
           )}
 
@@ -3534,21 +3536,6 @@ function ChoiceButton({ active, onClick, label, hint, icon }: { active: boolean;
    progress bar and "0 of 3", which reads as a nil result rather than work in progress. A spinner
    plus the word "running" plus the question count can only mean one thing, and there is no
    score-shaped element on the row at all while a run is going. */
-// Small stat tile for the landing metrics strip. `tone` tints the value only.
-function MetricCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone?: 'good' | 'mid' | 'bad' }) {
-  const valCls = tone === 'good' ? 'text-[hsl(var(--badge-closed))]'
-    : tone === 'mid' ? 'text-[hsl(var(--badge-waiting))]'
-    : tone === 'bad' ? 'text-[hsl(var(--badge-not-interested))]'
-    : 'text-foreground';
-  return (
-    <div className="rounded-xl border border-border/60 bg-card/60 p-3">
-      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        <span className="text-muted-foreground">{icon}</span>{label}
-      </div>
-      <div className={`mt-1 text-2xl font-bold tracking-tight ${valCls}`}>{value}</div>
-    </div>
-  );
-}
 // A single score tile for the opened-audit header. Colour-toned by outcome; optionally
 // clickable (used for the "Add SEO data" empty state).
 type TileTone = 'green' | 'amber' | 'red' | 'muted';
