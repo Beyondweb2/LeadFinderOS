@@ -5,11 +5,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Target, RefreshCw, ArrowLeftRight } from 'lucide-react';
+import { Loader2, Target, RefreshCw, ArrowLeftRight, FileText } from 'lucide-react';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { reAuditFromSource, RE_AUDIT_EST_USD_PER_QUESTION } from '@/lib/reAudit';
+import { AiAuditReport } from '@/components/AiAuditReport';
+import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
+import { isAggregatorUrl } from '@/lib/aggregators';
+import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from '@/lib/auditReport';
+import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
+import { type AiAuditReportData } from '@/lib/aiAuditReportHtml';
 import {
   buildBaselineView, BANDS, BAND_LABEL, BAND_MEANING,
   type BaselineView, type Band, type QueueRowLite,
@@ -51,6 +57,12 @@ interface AuditRow {
   // (absent from generated types) — read via the loosely-typed client below so it does not type-error.
   is_measurement: boolean | null;
   baseline_target_runs: number | null;
+  // Report context only — buildReportData needs the trade, the town and the client's own domain
+  // (the last one enables the citation half of the "cited as a source" figure; without it this
+  // report would show a LOWER cited count than the live client report, which does pass it).
+  business_type: string | null;
+  location_text: string | null;
+  website: string | null;
 }
 
 export default function Baseline() {
@@ -64,6 +76,80 @@ export default function Baseline() {
   const [isLoading, setIsLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);   // "Re-run this measurement" confirm step
   const [reRunBusy, setReRunBusy] = useState(false);
+  /* THE CLIENT REPORT, shown over this page on request. Deliberately NOT persisted: it is a view
+     you opened, and springing it open on return is the "never restore an interruption" rule. The
+     queue rows are kept from the page's own load so opening it costs no extra read. */
+  const [queueRows, setQueueRows] = useState<QueueRow[]>([]);
+  const [report, setReport] = useState<AiAuditReportData | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  /* Whether the rival names in that report can be trusted. buildReportData ALREADY withholds them
+     on a dirty run — the report itself is safe by construction — but silence with no explanation
+     reads as "AI named nobody", which is the opposite of what a dirty run means. This state exists
+     to tell the OPERATOR the difference, exactly as the AI Audit page does. */
+  const [reportDirty, setReportDirty] = useState(false);
+
+  /* WHY THIS PAGE CAN SHOW A CLIENT REPORT AT ALL, given the operator-only warning above: the
+     REPORT is the client artefact — it is what render-audit-report serves at findable.live and
+     what the prospect already receives. What must never reach a client is THIS page's working
+     detail (answer text, full rival lists). Showing the report here changes who can see nothing.
+
+     ⛔ RENDERED IN-APP, NEVER BY OPENING findable.live/report/<auditId>. That public URL is the
+     one the prospect opens, and fetching it stamps ai_audits.open_count + first_opened_at — so an
+     operator preview would forge a "human open" and permanently own the first one. The Inbox and
+     LeadDeliveryCockpit already link to the public URL and pay exactly that cost (useCampaignStats
+     records it). This path touches no tracking.
+
+     ⛔ POOLED ACROSS EVERY RUN, which is why it passes the page's own rows. buildReportData counts
+     over the rows it is HANDED (it does not filter by run), and this page already loads every run's
+     rows for the same reason the header can say "0 of 30". Handing it one run's rows would report a
+     3-run measurement on a third of its evidence, and the report would quietly disagree with the
+     figure printed directly above the button. */
+  const openReport = async () => {
+    if (!audit || reportBusy) return;
+    setReportBusy(true);
+    try {
+      /* The newest run, for its cleaning receipt and metadata only — the COUNTS come from the
+         pooled rows above. `results` is where extract-competitors stamps whether it covered the
+         run; buildReportData reads it to decide whether rival names can be trusted. */
+      const { data: runRow } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audit_runs')
+        .select('id, audit_id, run_number, status, mention_rate, results, created_at')
+        .eq('audit_id', audit.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const data = buildReportData(queueRows, (runRow as RunRow | null) ?? null, {
+        businessName: audit.business_name ?? '',
+        businessType: audit.business_type ?? '',
+        locationText: audit.location_text ?? '',
+        specialisms: '',
+        isAggregatorUrl,
+        seoStyle: seoStyleForAudit(audit.baseline_target_runs, audit.is_measurement),
+        ownWebsite: audit.website ?? '',
+      });
+      if (!data) {
+        toast({ title: 'No completed results to report yet', variant: 'destructive' });
+        return;
+      }
+      setReportDirty(
+        assessCompetitorCleanliness(
+          collectCompetitorNames(queueRows),
+          (runRow as RunRow | null)?.results,
+          { answeredCells: countAnsweredCells(queueRows) },
+        ).suppressNames,
+      );
+      setReport(data);
+    } catch (e) {
+      toast({
+        title: "Couldn't build the report",
+        description: e instanceof Error ? e.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setReportBusy(false);
+    }
+  };
 
   /* Re-run THIS baseline as a full measurement, via the SAME shared helper the AI Audit page's
      Re-audit uses (reAuditFromSource) — so the fixed logic (all questions, all runs, purpose:
@@ -98,7 +184,7 @@ export default function Baseline() {
       const client = supabase as unknown as SupabaseClient;
       const { data: a, error: aErr } = await client
         .from('ai_audits')
-        .select('id, lead_id, business_name, baseline, baseline_completed_at, is_measurement, baseline_target_runs')
+        .select('id, lead_id, business_name, baseline, baseline_completed_at, is_measurement, baseline_target_runs, business_type, location_text, website')
         .eq('id', auditId).maybeSingle();
       if (aErr) throw aErr;
       if (!a) { setError('No audit with that id.'); setAudit(null); setView(null); return; }
@@ -108,13 +194,16 @@ export default function Baseline() {
       /* Paginated: ai_audit_queue is questions x runs, the table likeliest to cross the 1000-row cap
          PostgREST truncates at silently. A truncated page here would quietly shrink a denominator and
          make a question look better than it is, which is the one thing this view must not do. */
-      const { rows } = await fetchAllRows<QueueRowLite>('Baseline (queue)', (from, to) =>
+      /* `id` is here only for the report: buildReportData takes QueueRow (id/question/status/
+         result). One read feeds both consumers rather than two reads that could disagree. */
+      const { rows } = await fetchAllRows<QueueRowLite & { id: string }>('Baseline (queue)', (from, to) =>
         client.from('ai_audit_queue')
-          .select('run_id, question, engines, status, result')
+          .select('id, run_id, question, engines, status, result')
           .eq('audit_id', auditId)
           .order('id', { ascending: true })
           .range(from, to));
 
+      setQueueRows(rows as unknown as QueueRow[]);
       setView(buildBaselineView(rows, {
         businessName: row.business_name,
         measuredAt: row.baseline?.measured_at ?? row.baseline_completed_at ?? null,
@@ -140,6 +229,31 @@ export default function Baseline() {
             places, so they cannot drift apart. */}
         <div className="mt-3"><BackLink /></div>
       </div>
+    );
+  }
+
+  /* THE REPORT TAKES OVER THE PAGE while open. Not a dialog and not persisted: onBack returns to
+     the baseline, and a reload lands back on the operator view, which is this page's job. */
+  if (report) {
+    return (
+      <>
+        <SEOHead title={`Report — ${audit.business_name ?? 'client'}`} description="Client report preview." noindex />
+        <div className="mx-auto max-w-5xl space-y-4 py-4">
+          {reportDirty && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-500">
+              Competitor names not cleaned &mdash; do not send to client. Rival names are withheld from
+              this report because the cleaner never covered this measurement, so an empty rivals list
+              here means &ldquo;we cannot vouch for the names&rdquo;, not &ldquo;AI named nobody&rdquo;.
+            </div>
+          )}
+          <AiAuditReport
+            data={report}
+            onBack={() => setReport(null)}
+            onDownload={(internal) => downloadReportHtml({ ...report, internal })}
+            onCompare={() => navigate(`/compare/${auditId}`)}
+          />
+        </div>
+      </>
     );
   }
 
@@ -182,6 +296,12 @@ export default function Baseline() {
             <Link to={`/compare/${auditId}`}>
               <ArrowLeftRight className="mr-2 h-4 w-4" /> Before and after · free
             </Link>
+          </Button>
+          {/* THE CLIENT REPORT. Free and read-only — it re-renders rows already loaded and calls
+              no paid API. Rendered in-app, so it does NOT count as a report open (see openReport). */}
+          <Button variant="outline" size="sm" onClick={openReport} disabled={reportBusy}>
+            {reportBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+            {reportBusy ? 'Building…' : 'View client report · free'}
           </Button>
         </div>
 
