@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -69,129 +70,88 @@ const DEFAULT_TEMPLATES: Array<{
   },
 ];
 
+/** Stable empty — a fresh array per render re-runs getTemplatesByType/Category for every caller. */
+const EMPTY_TEMPLATES: Template[] = [];
+
+/** The hardcoded set a signed-out visitor sees. Built once, not per render. */
+const GUEST_TEMPLATES: Template[] = DEFAULT_TEMPLATES.map((t, i) => ({
+  ...t,
+  id: `default-${i}`,
+  user_id: '',
+  is_default: true,
+  created_at: new Date(0).toISOString(),
+  updated_at: new Date(0).toISOString(),
+})) as Template[];
+
+const typeRow = (t: Record<string, unknown>): Template => ({
+  ...t,
+  template_type: t.template_type as TemplateType,
+  category: t.category as TemplateCategory,
+}) as Template;
+
 export function useTemplates() {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasFetched, setHasFetched] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
-  
-  // Track the user ID to prevent refetches on auth token refreshes
-  const userIdRef = useRef<string | null>(null);
-  const hasCreatedDefaults = useRef(false);
-  const hasLoadedTemplatesOnce = useRef(false);
+  const queryClient = useQueryClient();
 
-  const createDefaultTemplates = useCallback(async () => {
-    if (!user || hasCreatedDefaults.current) return;
-    
-    hasCreatedDefaults.current = true;
-    
-    const templatesWithUserId = DEFAULT_TEMPLATES.map((t) => ({
-      ...t,
-      user_id: user.id,
-      is_default: true,
-    }));
+  /* ⛔ ON REACT QUERY SINCE 2026-09-10. Three refs and a hand-rolled effect used to do what the
+     cache does: `userIdRef` stopped an auth-token refresh refetching, `hasFetched` stopped a
+     second load, `hasLoadedTemplatesOnce` suppressed the spinner on refreshes. All three were
+     approximations of "hold this until the key changes" and all three are gone.
+     ⚠️ NOT `enabled`-GATED, deliberately: a signed-out visitor is a real case here, not an
+     absence. They see the hardcoded defaults, which is what the guest branch has always done. */
+  const queryKey = useMemo(() => ['templates', user?.id ?? null] as const, [user?.id]);
 
-    const { error } = await supabase
-      .from('templates')
-      .insert(templatesWithUserId);
+  const query = useQuery({
+    queryKey,
+    queryFn: async (): Promise<Template[]> => {
+      if (!user) return GUEST_TEMPLATES;
 
-    if (error) {
-      console.error('Error creating default templates:', error);
-      hasCreatedDefaults.current = false;
-      return false;
-    }
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (error) throw new Error(error.message);
 
-    return true;
-  }, [user]);
+      if (data && data.length > 0) return data.map(typeRow);
 
-  const fetchTemplates = useCallback(async () => {
-    if (!user) {
-      // No auth — show hardcoded defaults so ad-entry/guest users can view templates
-      const defaults = DEFAULT_TEMPLATES.map((t, i) => ({
-        ...t,
-        id: `default-${i}`,
-        user_id: '',
-        is_default: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })) as Template[];
-      setTemplates(defaults);
-      setIsLoading(false);
-      setHasFetched(true);
-      return;
-    }
-
-    if (!hasLoadedTemplatesOnce.current) {
-      setIsLoading(true);
-    }
-    const { data, error } = await supabase
-      .from('templates')
-      .select('*')
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      setIsLoading(false);
-      console.error('Error fetching templates:', error);
-      toast({
-        title: 'Error loading templates',
-        description: error.message,
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // If no templates exist, create defaults
-    if (!data || data.length === 0) {
-      const created = await createDefaultTemplates();
-      if (created) {
-        // Refetch after creating defaults
-        const { data: newData } = await supabase
-          .from('templates')
-          .select('*')
-          .order('created_at', { ascending: true });
-        
-        const typedData = (newData || []).map(t => ({
-          ...t,
-          template_type: t.template_type as TemplateType,
-          category: t.category as TemplateCategory,
-        })) as Template[];
-
-        setTemplates(typedData);
+      /* NO TEMPLATES YET → seed the defaults, then read back what the database actually stored.
+         ⚠️ `hasCreatedDefaults` was a ref guarding against seeding twice. React Query
+         de-duplicates concurrent fetches of one key, so two components mounting at once share a
+         single run of this function — the ref's job, without the ref. */
+      const seeded = DEFAULT_TEMPLATES.map((t) => ({ ...t, user_id: user.id, is_default: true }));
+      const { error: insErr } = await supabase.from('templates').insert(seeded);
+      if (insErr) {
+        console.error('Error creating default templates:', insErr);
+        /* ⛔ RETURN THE GUEST SET RATHER THAN NOTHING. The old code returned early and left the
+           list EMPTY on a seeding failure, so the Templates page read as "you have no
+           templates" when the truth was "we could not create them". */
+        return GUEST_TEMPLATES;
       }
-    } else {
-      // Cast to Template type
-      const typedData = data.map(t => ({
-        ...t,
-        template_type: t.template_type as TemplateType,
-        category: t.category as TemplateCategory,
-      })) as Template[];
+      const { data: seededRows } = await supabase
+        .from('templates')
+        .select('*')
+        .order('created_at', { ascending: true });
+      return (seededRows ?? []).map(typeRow);
+    },
+  });
 
-      setTemplates(typedData);
-    }
-    
-    hasLoadedTemplatesOnce.current = true;
-    setIsLoading(false);
-    setHasFetched(true);
-  }, [user, toast, createDefaultTemplates]);
+  const templates = query.data ?? EMPTY_TEMPLATES;
+  const isLoading = query.isPending;
 
-  // Only fetch when user ID actually changes, not on every auth state change
-  useEffect(() => {
-    const currentUserId = user?.id ?? null;
-    
-    // Only refetch if user ID changed (login/logout), not on token refresh
-    if (currentUserId !== userIdRef.current) {
-      userIdRef.current = currentUserId;
-      hasCreatedDefaults.current = false;
-      if (currentUserId && !hasFetched) {
-        fetchTemplates();
-      } else if (!currentUserId) {
-        // Guest / logged out — load default templates for viewing
-        setHasFetched(false);
-        fetchTemplates();
-      }
-    }
-  }, [user?.id, hasFetched, fetchTemplates]);
+  const refetch = useCallback(
+    () => { void queryClient.invalidateQueries({ queryKey }); },
+    [queryClient, queryKey],
+  );
+
+  /* ⛔ ONE HELPER FOR ALL THREE MUTATIONS' CACHE WRITE. Each one already has the authoritative
+     row back from `.select().single()`, so the list is patched with what the DATABASE stored —
+     never with what was submitted — and then invalidated so the next read is authoritative
+     regardless. Three copies of this is how they drift. */
+  const patchCache = useCallback(async (fn: (prev: Template[]) => Template[]) => {
+    queryClient.setQueryData<Template[]>(queryKey, (prev) => fn(prev ?? EMPTY_TEMPLATES));
+    await queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
 
   const createTemplate = useCallback(async (
     template: Pick<Template, 'template_type' | 'category' | 'title' | 'content'>
@@ -223,11 +183,10 @@ export function useTemplates() {
       category: data.category as TemplateCategory,
     } as Template;
 
-    setTemplates((prev) => [...prev, newTemplate]);
-    // Template created — no toast
+    await patchCache((prev) => [...prev, newTemplate]);
 
     return newTemplate;
-  }, [user, toast]);
+  }, [user, toast, patchCache]);
 
   const updateTemplate = useCallback(async (
     id: string,
@@ -255,15 +214,15 @@ export function useTemplates() {
       category: data.category as TemplateCategory,
     } as Template;
 
-    setTemplates((prev) => prev.map((t) => (t.id === id ? updatedTemplate : t)));
-    // Template updated — no toast
+    await patchCache((prev) => prev.map((t) => (t.id === id ? updatedTemplate : t)));
 
     return updatedTemplate;
-  }, [toast]);
+  }, [toast, patchCache]);
 
   const deleteTemplate = useCallback(async (id: string) => {
-    const template = templates.find((t) => t.id === id);
-
+    /* ⚠️ The unused `templates.find(...)` that used to sit here is gone — it was dead, and it
+       was the only reason this callback depended on the whole list, which rebuilt it on every
+       load. */
     const { error } = await supabase
       .from('templates')
       .delete()
@@ -278,11 +237,10 @@ export function useTemplates() {
       return false;
     }
 
-    setTemplates((prev) => prev.filter((t) => t.id !== id));
-    // Template deleted — no toast
+    await patchCache((prev) => prev.filter((t) => t.id !== id));
 
     return true;
-  }, [templates, toast]);
+  }, [toast, patchCache]);
 
   const copyToClipboard = useCallback((content: string, title?: string) => {
     navigator.clipboard.writeText(content);
@@ -306,6 +264,6 @@ export function useTemplates() {
     copyToClipboard,
     getTemplatesByType,
     getTemplatesByCategory,
-    refetch: fetchTemplates,
+    refetch,
   };
 }
