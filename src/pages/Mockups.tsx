@@ -35,7 +35,12 @@ import locksmithTpl from '@/mockup/templates/locksmith.html?raw';
 /* The template files, by niche key. ⚠️ Vite `?raw` so the HTML ships as a string — the picker needs
    the template to know its slots, and the registry names the file. Adding a niche adds a line
    here and a registry row; no other code changes. */
-const TEMPLATE_HTML: Record<string, string> = { locksmith: locksmithTpl, plumber: locksmithTpl };
+/* ⛔ PLUMBER IS DELIBERATELY ABSENT, AND IT USED TO POINT AT THE LOCKSMITH FILE. That mapping
+   would have given a plumber a page whose fixed copy talks about picking locks and non-destructive
+   entry — the same class of error as `nicheForKeyword` returning a default: building a locksmith
+   mockup for an accountant is worse than building nothing. An absent template means the picker
+   says so; a wrong one gets sent. Add the row when the plumber template exists. */
+const TEMPLATE_HTML: Record<string, string> = { locksmith: locksmithTpl };
 
 const asPence = (usd: number | null | undefined) =>
   typeof usd === 'number' ? `${(usd * 100).toFixed(2)}p` : '—';
@@ -187,6 +192,16 @@ function Picker({ id }: { id: string }) {
       <h2 className="mt-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Slots this template asks for ({slots.length})
       </h2>
+      {/* ⛔ "NO TEMPLATE" AND "A TEMPLATE WITH NO SLOTS" MUST NOT LOOK THE SAME. Without this the
+          heading reads "(0)" over an empty grid, which looks like a template that wants no photos
+          rather than a trade we cannot build for at all. */}
+      {!templateHtml && (
+        <p className="mt-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+          No template for <span className="font-medium">{String(m?.template ?? 'this trade')}</span> yet,
+          so there are no slots to fill and nothing to send. Adding one is a template file plus a
+          registry row — no code change.
+        </p>
+      )}
       <div className="mt-2 grid gap-3" style={{ gridTemplateColumns: `repeat(auto-fit,minmax(220px,1fr))` }}>
         {slots.map((slot) => {
           const p = placed[slot];

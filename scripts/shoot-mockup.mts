@@ -97,7 +97,8 @@ if (process.argv[2] === '--compose') {
   console.log('their site :', site.ok ? `${site.bytes} bytes in ${site.ms}ms${site.note ? ' — ' + site.note : ''}` : `REFUSED (${site.refusal})`);
   /* ⚠️ THE LINUX PATH, NOT THE WINDOWS ONE. Playwright runs inside WSL, so file:///C:/... does
      not exist for it; C:/ is only how PAUL opens the result in Windows Chrome. */
-  const mock = await shoot(b, 'file:///mnt/c/shots/mockup.html', '/mnt/c/shots/mock.png', { trusted: true });
+  const mockPath = process.env.MOCK_HTML ?? 'file:///mnt/c/shots/mockup.html';
+  const mock = await shoot(b, mockPath, '/mnt/c/shots/mock.png', { trusted: true });
   console.log('the mockup :', mock.ok ? `${mock.bytes} bytes in ${mock.ms}ms` : `FAILED (${(mock as any).detail ?? mock.refusal})`);
 
   // Composite in the browser: no image library, and the labels are real text.
