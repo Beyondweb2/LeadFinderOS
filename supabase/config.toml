@@ -102,3 +102,6 @@ verify_jwt = true
 # does its own getUser + owner-scoping. Explicit entry, never a platform default.
 [functions.page-generator]
 verify_jwt = true
+
+[functions.scan-trade-site]
+verify_jwt = false
