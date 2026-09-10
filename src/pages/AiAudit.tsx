@@ -32,6 +32,7 @@ import { ReportBeforeAfter } from '@/components/ReportBeforeAfter';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
+import { poolRuns, engineSummary, type PooledInput } from '@/lib/pooledRuns';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
 import {
   DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, seoStyleForAudit, classifyWinnability,
@@ -390,6 +391,16 @@ const AiAudit = () => {
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<RunRow | null>(null);
   const [queueRows, setQueueRows] = useState<QueueRow[]>([]);
+  /* ── WHICH RUNS THE SCREEN IS SHOWING ────────────────────────────────────────────────────
+     A paid baseline is 3 runs of the same questions and the screen used to show ONE of them —
+     the highest run_number — so RG's 12-question baseline read "7/24" when the measurement is
+     72 cells. `runScope` is 'all' (pooled, the default whenever there is more than one run) or
+     a single run id. `runId` still points at the reference run throughout, so the draining
+     poller, Re-run and the report keep working exactly as before. */
+  const [auditRuns, setAuditRuns] = useState<{ id: string; run_number: number; status: string; created_at: string }[]>([]);
+  const [runScope, setRunScope] = useState<'all' | string>('all');
+  const [pooledInputs, setPooledInputs] = useState<PooledInput[]>([]);
+  const [poolLoading, setPoolLoading] = useState(false);
   /* ALL-runs queue rows for the REPORT/preview. A Full Measurement asks each question over several
      runs, so the report aggregates across EVERY run ("named X of 120", not one run's 40). Loaded when
      results are shown and the tracked run is terminal; queueRows stays the SINGLE active run so the
@@ -1582,6 +1593,93 @@ const AiAudit = () => {
 
   // ── Derived results tallies ─────────────────────────────────────────────────
   const doneCount = queueRows.filter((r) => r.status === 'done' || r.status === 'failed').length;
+  /* ── LOAD EVERY RUN OF THE OPEN AUDIT, AND POOL THEM ──────────────────────────────────────
+     Two reads, both owner-RLS: the audit's runs (so the picker can list them and default
+     sensibly), then every queue row belonging to those runs when the scope is pooled.
+     ⚠️ Chunked `.in()` is not needed — an audit has single-digit runs — but the queue read IS
+     capped by db-max-rows, so it is paginated. 12 questions × 3 runs is 36 rows; a 47-question
+     measurement is 141. Silent truncation here would quietly shrink the denominator the
+     guarantee is measured on (CLAUDE.md §6). */
+  useEffect(() => {
+    if (step !== 'results' || !auditId) { setAuditRuns([]); setPooledInputs([]); return; }
+    let alive = true;
+    (async () => {
+      const { data: runs } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audit_runs')
+        .select('id, run_number, status, created_at')
+        .eq('audit_id', auditId)
+        .order('run_number', { ascending: true });
+      if (!alive) return;
+      const list = ((runs ?? []) as { id: string; run_number: number; status: string; created_at: string }[]);
+      setAuditRuns(list);
+    })();
+    return () => { alive = false; };
+  }, [step, auditId]);
+
+  useEffect(() => {
+    if (step !== 'results' || runScope !== 'all' || auditRuns.length < 2) { setPooledInputs([]); return; }
+    let alive = true;
+    const ids = auditRuns.map((r) => r.id);
+    const numberOf = new Map(auditRuns.map((r) => [r.id, r.run_number]));
+    setPoolLoading(true);
+    (async () => {
+      const out: PooledInput[] = [];
+      const PAGE_ROWS = 1000;
+      for (let from = 0; ; from += PAGE_ROWS) {
+        const { data, error } = await (supabase as unknown as SupabaseClient)
+          .from('ai_audit_queue')
+          .select('run_id, question, status, result')
+          .in('run_id', ids)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE_ROWS - 1);
+        if (error) break;
+        const page = (data ?? []) as { run_id: string; question: string; status: string; result: EngineMap | null }[];
+        for (const r of page) {
+          out.push({ runId: r.run_id, runNumber: numberOf.get(r.run_id) ?? 0, question: r.question, status: r.status, result: r.result });
+        }
+        if (page.length < PAGE_ROWS) break;
+      }
+      if (alive) { setPooledInputs(out); setPoolLoading(false); }
+    })();
+    return () => { alive = false; setPoolLoading(false); };
+  }, [step, runScope, auditRuns]);
+
+  /* Picking a single run in the selector LOADS it — same path the expanded row in the list
+     uses, so a run opened either way shows identical numbers. Switching back to pooled points
+     `runId` at the newest run, because Re-run, Stop and the report all act on a single run and
+     must never be left aimed at whichever one happened to be open last. */
+  useEffect(() => {
+    if (step !== 'results' || auditRuns.length === 0) return;
+    if (runScope === 'all') {
+      const newest = [...auditRuns].sort((a, b) => b.run_number - a.run_number)[0];
+      if (newest && newest.id !== runId) { setRunId(newest.id); void pollRun(newest.id); }
+      return;
+    }
+    if (runScope !== runId) { setRunId(runScope); void pollRun(runScope); }
+  }, [step, runScope, auditRuns, runId, pollRun]);
+
+  /* 🔴 POOLING RUNS TAKEN WEEKS APART MIXES A BEFORE WITH AN AFTER, and this audit book really
+     contains that shape: one RG audit holds FIVE runs — three on 26 Aug, then singles appended
+     on 1 Sep and 8 Sep (CLAUDE.md §17 records the same audit as the reason the comparison picker
+     groups by audit AND day). Pooled is still the right default — it is what the operator asked
+     for and what three same-day runs mean — but a spread this wide has to be SAID, not silently
+     averaged into one number. */
+  const runSpanDays = useMemo(() => {
+    if (auditRuns.length < 2) return 0;
+    const times = auditRuns.map((r) => new Date(r.created_at).getTime()).filter((t) => Number.isFinite(t));
+    if (times.length < 2) return 0;
+    return (Math.max(...times) - Math.min(...times)) / 86_400_000;
+  }, [auditRuns]);
+  const POOL_SPAN_WARN_DAYS = 3;
+
+  /** True when the screen is showing every run folded together rather than one. */
+  const pooled = runScope === 'all' && auditRuns.length > 1;
+  /** The pooled fold. Computed only in pooled mode; a 1-run audit never pays for it. */
+  const poolTally = useMemo(
+    () => (pooled ? poolRuns(pooledInputs, SCORED_ENGINES, DISPLAY_ENGINES) : null),
+    [pooled, pooledInputs],
+  );
+
   const liveTally = queueRows.reduce(
     (acc, r) => {
       if (r.status === 'done' && r.result) {
@@ -1658,6 +1756,16 @@ const AiAudit = () => {
   // named most often (from the per-engine "instead" lists). Cheap; recomputed from the
   // live queue rows so it fills in as the run drains.
   const perEngineScore = DISPLAY_ENGINES.map((engine) => {
+    /* Pooled: sum the fold's per-question tallies for this engine, so "ChatGPT 5/12" becomes
+       "ChatGPT 15/36" across three runs rather than one run's slice. */
+    if (pooled && poolTally) {
+      let named = 0; let total = 0;
+      for (const q of poolTally.questions) {
+        const t = q.perEngine[engine];
+        if (t) { named += t.named; total += t.answered; }
+      }
+      return { engine, named, total };
+    }
     let named = 0;
     let total = 0;
     for (const r of queueRows) {
@@ -1947,8 +2055,12 @@ const AiAudit = () => {
   // tally); SEO = the graded overall letter. Same sources the headline/report already use —
   // no new metric invented.
   const vizSummary = (run?.results as { summary?: { named_datapoints: number; total_datapoints: number } } | null)?.summary;
-  const vizNamed = vizSummary?.named_datapoints ?? liveTally.named;
-  const vizTotal = vizSummary?.total_datapoints ?? liveTally.total;
+  /* ⛔ IN POOLED MODE THE STORED PER-RUN SUMMARY IS BYPASSED, and that is the whole point.
+     `run.results.summary` is one run's own count, so preferring it here is exactly how a 3-run
+     measurement came to read "7/24" instead of 20/72. Pooled reads the fold; single-run keeps
+     the stored summary first, unchanged. */
+  const vizNamed = pooled ? (poolTally?.named ?? 0) : (vizSummary?.named_datapoints ?? liveTally.named);
+  const vizTotal = pooled ? (poolTally?.total ?? 0) : (vizSummary?.total_datapoints ?? liveTally.total);
   const vizPct = vizTotal > 0 ? Math.round((vizNamed / vizTotal) * 100) : 0;
   const vizTone: TileTone = vizTotal === 0 ? 'muted' : vizPct >= 50 ? 'green' : vizPct > 0 ? 'amber' : 'red';
   const seoGrade = hasSeo ? String((run?.results as { seo?: { overallGrade?: string } } | null)?.seo?.overallGrade ?? '') : '';
@@ -2670,8 +2782,32 @@ const AiAudit = () => {
                     </Button>
                   )}
 
-                  {/* THE PRIMARY ACTION — the report is what this screen is for. */}
-                  {!isDraining && liveTally.done > 0 && (
+                  {/* ── WHICH RUNS ─────────────────────────────────────────────────────────
+                      Only when there is a choice to make. A 1-run audit gets no picker: a
+                      control with one option is furniture. */}
+                  {!isDraining && auditRuns.length > 1 && (
+                    <Select value={runScope} onValueChange={(v) => setRunScope(v)}>
+                      <SelectTrigger className="h-8 w-[168px] text-[13px]"><SelectValue /></SelectTrigger>
+                      <SelectContent align="end">
+                        <SelectItem value="all">All {auditRuns.length} runs (pooled)</SelectItem>
+                        {[...auditRuns].sort((a, b) => b.run_number - a.run_number).map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            Run {r.run_number} · {new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                            {r.status !== 'complete' ? ` · ${r.status}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  {/* THE PRIMARY ACTION — the report is what this screen is for.
+                      ⛔ A REPORT IS A SINGLE RUN'S DOCUMENT AND STAYS ONE. In pooled mode the
+                      button is replaced by a prompt to pick a run, rather than silently
+                      building a report from the latest run while the screen shows three. What a
+                      client receives is not something to change as a side effect of a layout
+                      pass — if the report should ever pool, that is a deliberate decision about
+                      the deliverable. */}
+                  {!isDraining && liveTally.done > 0 && !pooled && (
                     <Button size="sm" onClick={openReportForCurrentRun}>
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
                     </Button>
@@ -3079,9 +3215,14 @@ const AiAudit = () => {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <ScoreTile
-                    label="AI Visibility"
-                    value={vizTotal > 0 ? `${vizNamed}/${vizTotal}` : '—'}
-                    sub={vizTotal > 0 ? `${vizPct}% of AI answers name them` : 'No searches completed'}
+                    label={pooled ? `AI Visibility · ${auditRuns.length} runs pooled` : 'AI Visibility'}
+                    value={vizTotal > 0 ? `${vizNamed}/${vizTotal}` : poolLoading ? '…' : '—'}
+                    /* ⚠️ 0/0 must never read as 0%. `vizTotal > 0` is the guard, and the pooled
+                       branch says "loading" rather than "—" while the runs are still being read,
+                       so an in-flight fold is not mistaken for a measurement of nothing. */
+                    sub={vizTotal > 0
+                      ? `${vizPct}% of AI answers name them${pooled ? ` · across ${auditRuns.length} runs` : ''}`
+                      : poolLoading ? 'Reading every run…' : 'No searches completed'}
                     tone={vizTone}
                   />
                   {hasSeo ? (
@@ -3092,6 +3233,34 @@ const AiAudit = () => {
                     <ScoreTile label="SEO grade" value="N/A" sub="No website for this business" tone="muted" />
                   )}
                 </div>
+              )}
+
+              {/* ⛔ SAY IT WHEN THE POOL SPANS DATES. Three runs on one morning are one
+                  measurement; five runs across a fortnight are a before and an after, and
+                  folding them into a single percentage hides exactly the change the
+                  re-measurement exists to show. */}
+              {pooled && runSpanDays > POOL_SPAN_WARN_DAYS && (
+                <div className="rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-[11px]">
+                  <span className="font-medium text-amber-700 dark:text-amber-400">
+                    These {auditRuns.length} runs span {Math.round(runSpanDays)} days
+                  </span>
+                  <span className="text-muted-foreground">
+                    {' '}({new Date(Math.min(...auditRuns.map((r) => +new Date(r.created_at)))).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    {' – '}
+                    {new Date(Math.max(...auditRuns.map((r) => +new Date(r.created_at)))).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}).
+                    {' '}Pooling them averages a before and an after into one number. To compare the two, use
+                    {' '}Re-audit's before/after view, or pick a single run above.
+                  </span>
+                </div>
+              )}
+
+              {/* Pooled mode has no Report button, so it must say why and what to do — a
+                  primary action that silently vanishes reads as a bug. */}
+              {pooled && !isDraining && liveTally.done > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  Showing all {auditRuns.length} runs together. A report is built from a single run —
+                  pick one in the selector above to create or view it.
+                </p>
               )}
 
               {/* SEO in-depth — opt-in; the fuller detail behind the 3-grade overview. Renders all
@@ -3197,7 +3366,11 @@ const AiAudit = () => {
               >
                 <span className="text-sm font-semibold">
                   Detailed results
-                  <span className="ml-1.5 font-normal text-muted-foreground">· {queueRows.length} {queueRows.length === 1 ? 'question' : 'questions'}</span>
+                  <span className="ml-1.5 font-normal text-muted-foreground">
+                    {pooled
+                      ? `· ${poolTally?.questions.length ?? 0} questions × ${auditRuns.length} runs`
+                      : `· ${queueRows.length} ${queueRows.length === 1 ? 'question' : 'questions'}`}
+                  </span>
                   {winnableCount > 0 && (
                     <span
                       className="ml-1.5 font-normal text-muted-foreground"
@@ -3214,7 +3387,36 @@ const AiAudit = () => {
                   Scores are a heuristic read of what AI shows today (how many rivals are named and whether they lean on directory listings) — a guide to where you can win, not a guarantee.
                 </p>
               )}
-              {showDetails && queueRows.map((row) => (
+              {/* ⛔ POOLED: ONE LINE PER QUESTION, SHOWING HOW IT WENT ACROSS THE RUNS. The
+                  per-run QuestionCard is the right thing when you are reading ONE run and the
+                  wrong thing here — it would print the same 12 questions three times over and
+                  leave the operator to do the arithmetic that the whole point of pooling is to
+                  do for them. Pick a single run in the selector to get the full cards back. */}
+              {showDetails && pooled && poolTally && (
+                <div className="divide-y divide-border/50 rounded-lg border border-border/60">
+                  {poolTally.questions.map((q) => (
+                    <div key={q.question} className="flex items-start gap-3 px-3 py-2">
+                      <span className="min-w-0 flex-1 text-[13px] text-foreground">{q.question}</span>
+                      <span className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground">
+                        {DISPLAY_ENGINES.filter((e) => (q.perEngine[e]?.answered ?? 0) > 0).map((e) => (
+                          <span key={e} className="tabular-nums">
+                            {ENGINE_LABELS[e]} <span className={q.perEngine[e].named > 0 ? 'font-semibold text-foreground' : ''}>{engineSummary(q.perEngine[e])}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                  ))}
+                  {poolTally.unanswered > 0 && (
+                    /* Never folded into the denominator, so it has to be said out loud —
+                       otherwise a run that failed half its questions looks like a clean one. */
+                    <div className="px-3 py-2 text-[11px] text-muted-foreground">
+                      {poolTally.unanswered} question-run{poolTally.unanswered === 1 ? '' : 's'} never returned an answer and
+                      {' '}are excluded from the totals above.
+                    </div>
+                  )}
+                </div>
+              )}
+              {showDetails && !pooled && queueRows.map((row) => (
                 <QuestionCard
                   key={row.id}
                   row={row}

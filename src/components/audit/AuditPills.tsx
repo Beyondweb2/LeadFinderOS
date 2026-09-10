@@ -120,14 +120,14 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
                 client &middot; baseline {counted ?? 0}/{target}
               </ClientPill>
       )}
-      /* ⛔ THE `checklist` CHIP WAS REMOVED FROM THIS ROW ON 2026-09-10, AND THE ROUTE IT
+      {/* ⛔ THE `checklist` CHIP WAS REMOVED FROM THIS ROW ON 2026-09-10, AND THE ROUTE IT
          CARRIED WAS NOT. It linked to /playbook/:auditId and rendered on EVERY row — 901 of 901
          — so as a chip it distinguished nothing and was most of why the list looked busy. It is
          now "Delivery checklist" in each row's own menu in AuditBookList.
          ⚠️ CLAUDE.md §9 says do not remove it, and the reason still stands: for a business with
          an audit and NO outreach_leads row (ABLM, the only delivery client) this is the ONLY
          route to that document, because the lead dialog's Playbook pill is keyed on a LEAD id.
-         The route survives on every row. If the row menu ever loses it, put the chip back. */
+         The route survives on every row. If the row menu ever loses it, put the chip back. */}
       {audit.lead_paid === true && target <= 1 && <ClientPill title="This lead has paid">client</ClientPill>}
       {/* ASSETS: facts, not signals. */}
       {audit.report_slug && <AssetPill title={`Published at /r/${audit.report_slug}`}>report</AssetPill>}
