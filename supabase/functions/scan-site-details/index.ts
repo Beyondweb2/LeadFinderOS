@@ -495,7 +495,29 @@ interface ScannedDetails {
   services?: ScannedService[];
 }
 
-const SYSTEM_PROMPT = `You extract a business's contact details from the plain text of THEIR OWN website.
+/* ── TWO PROMPTS, ONE FETCH ────────────────────────────────────────────────────
+   ⛔ THE MERGE WENT ONE STEP TOO FAR AND MEASURED WORSE. Folding services into the
+   SAME prompt as NAP + areas cost real extraction: Delta went 27 services -> 0 and
+   Grays 37 -> 20, from BYTE-IDENTICAL input text and the same pages fetched. Delta's
+   services sit in a three-column grid that reads as interleaved short lines, and with
+   six extraction targets plus a long exclusion list ahead of them the model treated
+   them as navigation.
+   ⛔ IT ALSO MOVED NAP, which is the thing that must never move: Aston's lost its
+   address and Delta's gained/lost a comma.
+
+   THE FIX IS ONE FETCH, TWO CALLS -- not one call. The expensive, slow, fragile part is
+   fetching THEIR WEBSITE, and that is still done once. gpt-4o-mini costs ~$0.0008 a
+   call, so the second call is ~0.08p per prospect; the fetch is 8-25 seconds and can
+   fail. Splitting the calls buys prompt isolation for a rounding error.
+
+   ⛔ NAP_SYSTEM_PROMPT IS v4's PROMPT, BYTE-FOR-BYTE, spliced in from git rather than
+   retyped. That is what makes a NAP regression structurally impossible instead of
+   merely unlikely: the phone/address/email/hours/areas extraction is running the exact
+   text it ran before this feature existed. If you edit it, you are changing a shipped
+   extractor -- capture a baseline FIRST (see the report), because a prompt tweak that
+   looks harmless moved an address last time. */
+
+const NAP_SYSTEM_PROMPT = `You extract a business's contact details from the plain text of THEIR OWN website.
 
 Capture what is SHOWN — do not invent. Rules:
 - Extract values that appear in the text. Do NOT guess, infer, or normalise a value that isn't shown; if a field genuinely does not appear, OMIT it (an omitted field is correct when it isn't shown).
@@ -508,16 +530,36 @@ Capture what is SHOWN — do not invent. Rules:
 
 ⛔ DO NOT EXTRACT CREDENTIALS AT ALL. Accreditations, memberships, certifications, awards and insurance statements are NOT wanted from this scan — do not report them in any field. A human confirms those separately from trade knowledge, because a site only shows a claim was made once, never that it is still current.
 
-"services" — the things this business does, as the site names them. Added 2026-09-10 so ONE pass feeds the mockup generator; every rule above is unchanged.
-- "name": the service exactly as written (e.g. "Emergency Door Opening", "uPVC Door Repairs", "Car Key Programming"). Keep their wording and capitalisation. Do not translate, expand, tidy or merge.
-- "price": ONLY if a price is literally shown FOR THAT SERVICE, as the literal string exactly as written ("£65", "from £65", "£60 – £100", "£50 – £100 per lock"). Do NOT convert, round, average or estimate. Do NOT take a site-wide headline price (a banner reading "from £65", a "transparent pricing" strapline) and attach it to individual services — if the price is not stated beside that specific service, OMIT the field. Most trade sites show NO prices, and omitting is the normal, correct outcome.
-- "description": ONLY if the site gives a short explanatory line for that service; copy it near-verbatim, trimmed to one sentence. Omit rather than write your own.
-- Do NOT include: navigation labels, headings that are not services, phone numbers, addresses, opening hours, review text, blog titles, cookie/consent text, accreditation or membership badges, or vehicle make/model lists (a list of car marques is not a service).
-- Do NOT list the same service twice. If the site groups services (Residential / Commercial / Motor Vehicle), return each service once and do not return the group names as services.
-- Return [] if the page lists no services.
-
 Return ONLY a JSON object of this exact shape (omit any field not found):
-{"phone"?: string, "address"?: string, "email"?: string, "hours"?: string, "areas"?: string[], "services"?: [{"name": string, "price"?: string, "description"?: string}]}`;
+{"phone"?: string, "address"?: string, "email"?: string, "hours"?: string, "areas"?: string[]}`;
+
+/* The SERVICES prompt, verbatim from the deleted scan-trade-site (commit 5db2e243) --
+   the version MEASURED at 12/4/37/27/9/2 services across the six real locksmith sites.
+   It carries its own anti-headline-price rule: Dr Locks' banner "from £65" was being
+   attached to four specific services whose own bands are different (uPVC is
+   "£125 - £150"), which is a price that is literally on the site but paired with the
+   wrong service -- and a mockup that misquotes a prospect's own prices back at them is
+   the wrong-town report in a new place. */
+const SERVICES_SYSTEM_PROMPT = `You extract a trade business's SERVICE LIST and SERVICE AREAS from the plain text of THEIR OWN website. Typical trades: locksmith, plumber, electrician, mechanic.
+
+THE ONE RULE THAT OVERRIDES EVERYTHING: extract ONLY what is LITERALLY present in the text. Never invent, infer, guess, normalise or complete a value. If something is not shown, omit it. An empty list is the correct answer when the page does not list services.
+
+"services" — the things this business does, as the site names them.
+- "name": the service exactly as written (e.g. "Emergency Door Opening", "uPVC Door Repairs", "Car Key Programming"). Keep their wording and capitalisation. Do not translate, expand, tidy or merge.
+- "price": ONLY if a price is literally shown BESIDE THAT SPECIFIC SERVICE, as the literal string exactly as written ("£65", "from £65", "£60 – £100", "£50 – £100 per lock"). Do NOT convert, round, average or estimate. Do NOT take a site-wide headline or strapline price (a banner reading "from £65", "transparent pricing from £65", a footer "prices from …") and attach it to individual services — if no price is stated beside that specific service, OMIT the field for that service. Most trade sites show NO prices — omitting the field is the normal, correct outcome.
+- "description": ONLY if the site gives a short explanatory line for that service; copy it near-verbatim, trimmed to one sentence. Omit rather than write your own.
+- Do NOT include: navigation labels, headings that are not services, phone numbers, addresses, opening hours, review text, blog titles, cookie/consent text, "Read more", accreditation or membership badges, or vehicle make/model lists (a list of car marques is not a service).
+- Do NOT list the same service twice. If the site groups services (Residential / Commercial / Motor Vehicle), return each service once; do not invent group names as services.
+
+"areas" — the towns, villages, cities or districts the site says the business COVERS or SERVES (from "Areas we cover", a footer list, or "serving X, Y and Z").
+- Place names only, exactly as written.
+- Do NOT include vague catch-alls ("the Midlands", "the North West", "and surrounding areas", "nationwide") and do NOT add a place the text does not name.
+- Return [] if the site names no areas.
+
+⛔ DO NOT EXTRACT CREDENTIALS. Accreditations, memberships, certifications, awards and insurance statements are NOT wanted in any field. A website only shows a claim was made once, never that a registration is current; a human confirms those separately.
+
+Return ONLY a JSON object of this exact shape:
+{"services": [{"name": string, "price"?: string, "description"?: string}], "areas": string[]}`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -577,8 +619,12 @@ Deno.serve(async (req) => {
        scanned yesterday would return a _v4 HIT carrying no `services` and no `images`, and
        the mockup generator would read that absence as "this business lists no services" —
        then build a page with none. The bump is not tidiness, it is the absent-value fault
-       on a 30-day cache. */
-    const cacheKey = `${auditId || homepage.hostname}:site_details_v5`;
+       on a 30-day cache.
+       ⛔ _v6 (same day): the single merged prompt became TWO prompts over one fetch, because
+       the merged one measured worse (Delta 27 services -> 0, Grays 37 -> 20) AND moved NAP.
+       Every _v5 row therefore holds a service list produced by the bad prompt — a hit would
+       serve Delta's zero services as though they were measured. */
+    const cacheKey = `${auditId || homepage.hostname}:site_details_v6`;
 
     // cache → cap → run → persist (enrichment_cache/usage + api_usage_log).
     const outcome = await runEnrichSource<{
@@ -657,21 +703,54 @@ Deno.serve(async (req) => {
           };
         }
 
-        // 2) Strict details extraction via gpt-4o-mini (temperature 0 — extraction, not creative).
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${openAiKey}` },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            temperature: 0,
-            response_format: { type: "json_object" },
-            messages: [
-              { role: "system", content: SYSTEM_PROMPT },
-              { role: "user", content: `Business name: ${businessName || "(unknown)"}\n\nWebsite text:\n${text}` },
-            ],
-          }),
-        });
+        /* 2) TWO extractions over the SAME text, on ONE fetch. gpt-4o-mini, temperature 0
+              (extraction, not writing). See the two-prompts note above for why they are not
+              one call.
+           ⛔ THE NAP CALL IS THE SHIPPED ONE AND THE SERVICES CALL MUST NOT BE ABLE TO BREAK
+              IT. The NAP call throws on a non-OK response exactly as it did before, so a real
+              OpenAI outage still fails the run and never caches a hollow result. The SERVICES
+              call is wrapped so that ANY failure — HTTP, parse, malformed shape — costs the
+              service list and nothing else. The newer half is not allowed to take the half
+              PageGenerator depends on down with it. */
+        const callOpenAi = async (systemPrompt: string) => {
+          const r = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${openAiKey}` },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              temperature: 0,
+              response_format: { type: "json_object" },
+              max_tokens: 3000,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Business name: ${businessName || "(unknown)"}\n\nWebsite text:\n${text}` },
+              ],
+            }),
+          });
+          return r;
+        };
+        const usdOf = (c: Record<string, unknown>): number => {
+          const u = (c?.usage ?? {}) as Record<string, unknown>;
+          return (
+            ((Number(u.prompt_tokens) || 0) / 1_000_000) * OPENAI_INPUT_USD_PER_M +
+            ((Number(u.completion_tokens) || 0) / 1_000_000) * OPENAI_OUTPUT_USD_PER_M
+          );
+        };
 
+        /* Fired together: they are independent reads of the same string, so serialising them
+           would add the whole second latency for nothing. Their SETTLEMENT is handled
+           separately below — Promise.all would let the services call's rejection discard the
+           NAP result, which is the one thing this split exists to prevent. */
+        const [napSettled, svcSettled] = await Promise.allSettled([
+          callOpenAi(NAP_SYSTEM_PROMPT),
+          callOpenAi(SERVICES_SYSTEM_PROMPT),
+        ]);
+
+        if (napSettled.status !== "fulfilled") {
+          console.error(`[scan-site-details] NAP call failed: ${String(napSettled.reason).slice(0, 300)}`);
+          throw new Error("OpenAI request failed");
+        }
+        const res = napSettled.value;
         if (!res.ok) {
           const errText = await res.text().catch(() => "");
           console.error(`[scan-site-details] OpenAI ${res.status}: ${errText.slice(0, 300)}`);
@@ -679,10 +758,27 @@ Deno.serve(async (req) => {
         }
 
         const completion = await res.json();
-        const inTok = Number(completion?.usage?.prompt_tokens) || 0;
-        const outTok = Number(completion?.usage?.completion_tokens) || 0;
-        const costUsd =
-          (inTok / 1_000_000) * OPENAI_INPUT_USD_PER_M + (outTok / 1_000_000) * OPENAI_OUTPUT_USD_PER_M;
+        let costUsd = usdOf(completion);
+
+        /* SERVICES — best-effort by construction. A failure here logs and leaves `services`
+           absent, which the mockup flow must read as "not extracted", never as "this business
+           lists none". */
+        let servicesRaw: unknown[] = [];
+        if (svcSettled.status === "fulfilled" && svcSettled.value.ok) {
+          try {
+            const sc = await svcSettled.value.json();
+            costUsd += usdOf(sc);
+            const p = JSON.parse(sc?.choices?.[0]?.message?.content ?? "{}");
+            if (Array.isArray(p?.services)) servicesRaw = p.services;
+          } catch (e) {
+            console.error(`[scan-site-details] services parse failed: ${(e as Error).message}`);
+          }
+        } else {
+          const why = svcSettled.status === "fulfilled"
+            ? `HTTP ${svcSettled.value.status}`
+            : String(svcSettled.reason).slice(0, 200);
+          console.error(`[scan-site-details] services call failed (${why}) — NAP unaffected`);
+        }
 
         const details: ScannedDetails = {};
         try {
@@ -720,8 +816,11 @@ Deno.serve(async (req) => {
 
           /* SERVICES — same discipline as areas: bounded, deduped case-insensitively on the
              name, and every field trimmed. A nameless entry is dropped rather than kept with
-             a blank label. `price` and `description` are only ever passed through. */
-          const rawServices = Array.isArray(parsed?.services) ? parsed.services : [];
+             a blank label. `price` and `description` are only ever passed through.
+             ⛔ SOURCED FROM THE SECOND CALL (`servicesRaw`), NOT from `parsed`. The NAP prompt
+             is v4's byte-for-byte and does not ask for services at all, so reading
+             parsed.services here would silently always be []. */
+          const rawServices = servicesRaw;
           const seenSvc = new Set<string>();
           const services: ScannedService[] = [];
           for (const s of rawServices) {
