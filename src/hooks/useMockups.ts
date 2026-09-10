@@ -27,6 +27,8 @@ export interface MockupListRow {
 
 export interface PoolImage {
   url: string;
+  /** Grid-sized copy. ⛔ The grid must load THIS, never `url` — the originals are 2-7.5MB. */
+  thumb?: string;
   source: 'maps' | 'own_site' | 'stock';
   from?: string;
   alt?: string;

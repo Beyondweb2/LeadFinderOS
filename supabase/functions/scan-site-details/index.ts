@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { isAggregatorUrl, isBookingPlatformUrl, domainOf } from "../_shared/aggregators.ts";
+import { imageVariant, looksLikePlaceholder, GRID_WIDTH, PLACE_WIDTH } from "../_shared/image-variant.ts";
 
 // scan-site-details — reads a business's OWN website in ONE pass and extracts
 // business DETAILS (phone / address / email / hours), the SERVICE AREAS it covers,
@@ -326,7 +327,18 @@ function findSubpages(html: string, base: URL, limit: number): string[] {
    has to be swapped out FIRST. After re-hosting into our own bucket a Maps photo and an
    own-site photo are both just bucket URLs — indistinguishable — which is exactly how the
    old picker lost provenance. Record it at harvest, not later. */
-interface ScannedImage { url: string; source: "own_site"; from: "og" | "img"; alt?: string; width?: number }
+interface ScannedImage {
+  /** ~PLACE_WIDTH — the copy that gets re-hosted and rendered. */
+  url: string;
+  /** ~GRID_WIDTH — what the picker's grid loads. Same image, a size that does not crawl. */
+  thumb: string;
+  source: "own_site";
+  from: "og" | "img";
+  alt?: string;
+  width?: number;
+  /** Set when the harvested URL was a low-quality placeholder we upgraded away from. */
+  was_placeholder?: boolean;
+}
 
 /** Skip sprites, icons, logos, tracking pixels and data URIs — never a hero photo. */
 const IMG_SKIP = /(?:sprite|icon|favicon|logo|badge|pixel|spacer|placeholder|1x1|blank|loader|spinner|avatar|flag|arrow|chevron|star|cookie)/i;
@@ -343,10 +355,27 @@ function harvestImages(html: string, base: URL, limit: number): ScannedImage[] {
     if (!["http:", "https:"].includes(abs.protocol)) return;
     if (!/\.(?:jpe?g|png|webp|avif)(?:$|\?)/i.test(abs.pathname + abs.search) && from === "img") return;
     if (IMG_SKIP.test(abs.pathname)) return;
-    const key = abs.href.replace(/\/+$/, "").toLowerCase();
+    /* ⛔ ASK THE CDN FOR A REAL SIZE. Wix (and Squarespace, and WordPress) put a blurred
+       thumbnail in `src` and swap the photo in with JavaScript — measured on Starr Keys: 10 of 12
+       harvested URLs carried `blur_2` at 73x49. Upgrading here rather than at display time means
+       the VISION PASS also sees the real photo; scoring the placeholder is what made nine of their
+       perfectly good photos read as "blurry". */
+    const placed = imageVariant(abs.href, PLACE_WIDTH);
+    const thumb = imageVariant(abs.href, GRID_WIDTH);
+    const wasPlaceholder = looksLikePlaceholder(abs.href);
+    /* ⚠️ A placeholder we could NOT upgrade is dropped — an un-upgradeable 73x49 is not a photo and
+       putting it in the grid wastes a slot and a vision score. One we COULD upgrade is kept, and
+       flagged so the picker can say where it came from. */
+    if (wasPlaceholder && placed === abs.href) return;
+    const key = placed.replace(/\/+$/, "").toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ url: abs.href, source: "own_site", from, ...(alt ? { alt: alt.slice(0, 120) } : {}), ...(width ? { width } : {}) });
+    out.push({
+      url: placed, thumb, source: "own_site", from,
+      ...(alt ? { alt: alt.slice(0, 120) } : {}),
+      ...(width ? { width } : {}),
+      ...(wasPlaceholder ? { was_placeholder: true } : {}),
+    });
   };
 
   // og:image first — it is the one image the site itself nominated as representative.
@@ -723,8 +752,14 @@ Deno.serve(async (req) => {
        serve Delta's zero services as though they were measured.
        ⛔ _v7 (same day): counties/regions are now dropped from `areas` and template
        placeholder emails from `email`. Both REMOVE values, so a stale hit would keep
-       serving "Cheshire" as a target town and someone@gmail.com as a contact. */
-    const cacheKey = `${auditId || homepage.hostname}:site_details_v7`;
+       serving "Cheshire" as a target town and someone@gmail.com as a contact.
+       ⛔ _v8 (same day): the IMAGE HARVEST changed — Wix/Squarespace/WordPress placeholder URLs
+       are now upgraded to a real size. AND I FORGOT THIS BUMP THE FIRST TIME, which is how the
+       rule earns its place: the fix was deployed, a refill was run, and 10 of 12 own-site URLs
+       came back STILL CARRYING blur_2 from the _v7 row written 35 minutes earlier. The code was
+       right, the cache was old, and the picker looked exactly as broken as before. Change what an
+       extractor RETURNS, bump its version — every time, including when the change is a bug fix. */
+    const cacheKey = `${auditId || homepage.hostname}:site_details_v8`;
 
     // cache → cap → run → persist (enrichment_cache/usage + api_usage_log).
     const outcome = await runEnrichSource<{

@@ -260,7 +260,7 @@ function Picker({ id }: { id: string }) {
               className={`m-0 cursor-grab overflow-hidden rounded-lg border-2 active:cursor-grabbing ${im.demoted ? 'border-border opacity-50' : 'border-border'}`}
               title={im.demoted ?? `quality ${im.quality ?? '?'}`}
             >
-              <img src={im.url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-24 w-full bg-muted object-cover" />
+              <img src={im.thumb || im.url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-24 w-full bg-muted object-cover" />
               <figcaption className="px-1.5 py-1 text-[10.5px] leading-tight">
                 <span className="font-semibold">{im.source === 'maps' ? 'Maps' : im.source === 'own_site' ? 'their site' : im.source}</span>
                 {typeof im.quality === 'number' && <span className="text-muted-foreground"> · q{im.quality}</span>}

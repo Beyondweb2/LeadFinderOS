@@ -266,6 +266,8 @@ Deno.serve(async (req) => {
       const ownSite: PoolImage[] = ((content.images ?? []) as Array<Record<string, unknown>>)
         .map((i) => ({
           url: String(i.url ?? ""),
+          // Falls back to url for rows harvested before thumbs existed — absent, not broken.
+          thumb: String(i.thumb ?? i.url ?? ""),
           source: "own_site" as const,
           from: typeof i.from === "string" ? i.from : "img",
           ...(typeof i.alt === "string" ? { alt: i.alt } : {}),

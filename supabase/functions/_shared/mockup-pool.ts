@@ -25,10 +25,16 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { mapsEnrich } from "./enrichment/sources.ts";
+import { imageVariant, GRID_WIDTH, PLACE_WIDTH } from "./image-variant.ts";
 
 /** One candidate photo. `source` is recorded at gather time and never inferred later. */
 export interface PoolImage {
+  /** ~PLACE_WIDTH — the copy that is re-hosted and rendered. */
   url: string;
+  /** ~GRID_WIDTH — what the picker's grid loads, and what the vision pass is shown.
+   *  ⛔ THE GRID MUST NEVER LOAD `url`. Measured on real Wix originals: 2-7.5 MB EACH, so twelve
+   *  of them is ~50MB in one screen — which is exactly why Paul reported the picker as slow. */
+  thumb: string;
   /** ⛔ RECORDED AT GATHER, NOT DERIVED. After re-hosting into our bucket a Maps photo and an
    *  own-site photo are both just bucket URLs — indistinguishable. That is exactly how the old
    *  picker lost provenance, and it matters because a saved mockup may become a real build, at
@@ -111,7 +117,15 @@ export async function fetchMapsPool(
       .filter((u): u is string => typeof u === "string" && !!u)
       .map((u) => {
         const d = demoteReason(u);
-        return { url: u, source: "maps" as const, from: "maps listing", ...(d ? { demoted: d } : {}) };
+        /* Google encodes the size in a `=w1920-h1080-k-no` suffix, so a grid-sized copy costs
+           nothing extra and a placed copy is asked for at full width. */
+        return {
+          url: imageVariant(u, PLACE_WIDTH),
+          thumb: imageVariant(u, GRID_WIDTH),
+          source: "maps" as const,
+          from: "maps listing",
+          ...(d ? { demoted: d } : {}),
+        };
       });
     return { images, ms, costUsd: typeof usageTotalUsd === "number" ? usageTotalUsd : null };
   } catch (e) {
@@ -196,7 +210,10 @@ export async function scorePoolForSort(
   try {
     const content: unknown[] = [{ type: "text", text: visionPrompt(args.niche, args.slots) }];
     // detail:"low" — one cheap tile per image. The grid needs a ranking, not a critique.
-    for (const c of candidates) content.push({ type: "image_url", image_url: { url: c.url, detail: "low" } });
+    /* ⛔ THE VISION PASS IS SHOWN THE THUMB, NOT THE ORIGINAL. detail:"low" downsamples anyway, so
+       sending a 7MB original buys nothing and costs latency — and, before the LQIP fix, sending the
+       PLACEHOLDER is what made nine of Starr Keys' good photos score as "blurry". */
+    for (const c of candidates) content.push({ type: "image_url", image_url: { url: c.thumb || c.url, detail: "low" } });
 
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
