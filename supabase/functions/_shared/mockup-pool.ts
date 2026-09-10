@@ -25,7 +25,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { mapsEnrich } from "./enrichment/sources.ts";
-import { imageVariant, GRID_WIDTH, PLACE_WIDTH } from "./image-variant.ts";
+import { imageVariant, GRID_WIDTH, PLACE_WIDTH, looksLikePlaceholder } from "./image-variant.ts";
 
 /** One candidate photo. `source` is recorded at gather time and never inferred later. */
 export interface PoolImage {
@@ -71,6 +71,18 @@ export function demoteReason(url: string): string | null {
   try { const u = new URL(url); host = u.hostname; path = u.pathname; } catch { return "unparseable url"; }
   if (STREET_VIEW_HOST.test(host)) return "Street View — the road, not the business";
   if (FURNITURE.test(path)) return "looks like site furniture, not a photo";
+  /* 🔴 A PLACEHOLDER MUST NEVER BE SCORED, AND THIS IS THE SECOND HALF OF THAT GUARANTEE.
+     The harvester already drops one it could not upgrade — but the harvester is not the only way
+     into this pool (Maps photos, a cached _v8 row, a hand-added URL), and scorePoolForSort's
+     candidate list is exactly `!p.demoted`. So demoting here is what makes "cannot be scored"
+     true for every path rather than for one of them.
+     ⚠️ WHY IT MATTERS MORE THAN A WASTED SCORE: the vision pass graded nine of Starr Keys'
+     perfectly good photos as "blurry" when it was shown their blurred 73x49 placeholders. That is
+     not a wasted penny, it is a measurement of the wrong thing that reads exactly like a
+     measurement of the right thing — and it went into the sort order.
+     ⚠️ Demoted, not deleted, like everything else here: if this URL guess is wrong, the photo
+     ranks last and stays placeable. */
+  if (looksLikePlaceholder(url)) return "a low-quality placeholder, not the real photo";
   return null;
 }
 
