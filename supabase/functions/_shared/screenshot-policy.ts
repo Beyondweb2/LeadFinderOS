@@ -70,6 +70,17 @@ export const HIDE_SELECTORS = [
   "#drift-widget", "#crisp-client", "#tawkchat-container", "#chat-widget-container",
   ".fb_dialog", "#fb-root", "#launcher", "#livechat-compact-container",
   "[id*='livechat' i]", "[class*='chat-widget' i]", "[id*='whatsapp-button' i]",
+  /* 🔴 CHAT WIDGETS ARE IFRAMES, AND AN ID LIST CANNOT SEE THEM. Confirmed on the first real
+     example: ABLM's "Let's Chat!" bubble rendered in the screenshot despite six vendor ids being
+     on this list, because it is <iframe title="Wix Chat" src="engage.wixapps.net/chat-widget-
+     server/...">. Nothing about it matches an id. Targeting the IFRAME by title and src is the
+     rule that generalises — Intercom, Drift, Tawk and Crisp all mount the same way.
+     ⚠️ Deliberately NOT "hide every iframe": an embedded map or video is legitimate page content
+     and blanking it would misrepresent their site. */
+  "iframe[title*='chat' i]", "iframe[title*='messag' i]",
+  "iframe[src*='chat-widget']", "iframe[src*='livechat']", "iframe[src*='engage.wixapps.net']",
+  "iframe[src*='intercom']", "iframe[src*='tawk.to']", "iframe[src*='drift.com']",
+  "iframe[src*='crisp.chat']",
   // Newsletter / exit-intent overlays and the scroll locks they bring.
   "[class*='exit-intent' i]", "[id*='popup-overlay' i]", "[class*='modal-backdrop' i]",
 ];
@@ -156,6 +167,21 @@ export const COOKIE_TEXT_RE = "(cookie|consent|gdpr)";
 export function hideByBehaviourJs(): string {
   return `(() => {
     const hidden = [];
+    /* 🔴 FREEZE VIDEO, NOT JUST CSS ANIMATION. Found on ABLM 2026-09-11: its hero is a PLAYING
+       Wix background video, so three runs of the same URL gave 1,607,561 / 1,732,235 / 1,739,880
+       bytes — a 7.7% spread, where three static sites were 0.00%. The CSS freeze sets
+       animation-duration to 0s and does nothing whatever to a <video>.
+       ⛔ PAUSE *AND* SEEK TO A FIXED TIME. Pausing alone still captures whatever frame happened
+       to be showing, so the image stays run-dependent. Seeking to the same offset every time is
+       what makes it reproducible; 0 is avoided because many heroes open on a black frame. */
+    for (const v of Array.from(document.querySelectorAll("video"))) {
+      try {
+        v.pause();
+        v.removeAttribute("autoplay");
+        if (Number.isFinite(v.duration) && v.duration > 1) v.currentTime = Math.min(1, v.duration / 2);
+        hidden.push("video:paused");
+      } catch (e) { /* a cross-origin or not-yet-loaded video simply stays as it is */ }
+    }
     const re = new RegExp(${JSON.stringify(COOKIE_TEXT_RE)}, "i");
     const vh = window.innerHeight || 800;
     for (const el of Array.from(document.querySelectorAll("body *"))) {
