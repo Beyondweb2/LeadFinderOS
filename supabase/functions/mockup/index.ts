@@ -5,6 +5,7 @@ import { rehostToMockupBucket, storeMockupBytes, signMockupPath } from "../_shar
 import { nicheByKey, MOCKUP_MAX_SERVICES, MOCKUP_MAX_AREAS } from "../../../src/lib/mockupNiche.ts";
 import { slotsIn } from "../../../src/lib/mockupRender.ts";
 import { stockAllowedInSlot, stockById, stockFor } from "../../../src/lib/mockupStock.ts";
+import { assetAllowedInSlot, classifyPoolImage } from "../../../src/lib/mockupAsset.ts";
 import { shootSite } from "../_shared/mockup-shot.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -433,6 +434,24 @@ Deno.serve(async (req) => {
          needs the Places-sourced images swapped FIRST. */
       const pool = (content.pool ?? []) as Array<Record<string, unknown>>;
       const entry = pool.find((p) => String(p.url) === url);
+
+      /* 🔴 A BADGE IS NEVER A HERO, AND A PHOTOGRAPH IS NEVER A BADGE ROW. Same law as the stock
+         rule above, and refused in the same place: server-side, because a rule that lives only in
+         a component is one keystroke from being bypassed. A 170x99 Yell badge stretched across a
+         hero is the most obviously broken thing this generator could emit — and it would be
+         obvious to the PROSPECT too, which is the part that costs something. */
+      {
+        const bizName = ((content.business ?? {}) as Record<string, unknown>).name;
+        const kind = classifyPoolImage({
+          url,
+          alt: (entry?.alt as string | undefined) ?? null,
+          width: (entry?.width as number | undefined) ?? null,
+        }, typeof bizName === "string" ? bizName : null).kind;
+        const verdict = assetAllowedInSlot(kind, slot);
+        if (!verdict.ok) {
+          return json({ ok: false, error: "asset_not_allowed_in_slot", detail: verdict.detail }, 400);
+        }
+      }
       const source = entry && typeof entry.source === "string" ? entry.source : "unknown";
 
       const rehosted = await rehostToMockupBucket(url, { client: service, siteId, slot });

@@ -29,6 +29,7 @@ import { Loader2, RefreshCw, Trash2, ImageOff, ExternalLink, Plus, X } from 'luc
 import { useMockup, useMockupActions, useMockupList, type PoolImage } from '@/hooks/useMockups';
 import { MOCKUP_MAX_SERVICES, MOCKUP_MAX_AREAS } from '@/lib/mockupNiche';
 import { stockAllowedInSlot, stockFor } from '@/lib/mockupStock';
+import { classifyPoolImage, slotWants } from '@/lib/mockupAsset';
 import { renderPage } from '@/lib/mockupRender';
 import { slotsIn } from '@/lib/mockupRender';
 import { deriveMockup, MissingRaw } from '@/lib/mockupDerive';
@@ -139,7 +140,25 @@ function Picker({ id }: { id: string }) {
     }
   }, [templateHtml, m, c, data?.lead, slotUrls]);
 
-  const images: PoolImage[] = Array.isArray(c.pool) ? c.pool : [];
+  const allImages: PoolImage[] = Array.isArray(c.pool) ? c.pool : [];
+  /* ── TWO GROUPS, BECAUSE THEY ARE TWO DIFFERENT THINGS ─────────────────────────────────────
+     Paul's correction, 2026-09-11: their own logo and the directory badges are the most valuable
+     non-photographs in the pool, not junk. A prospect seeing their OWN logo understands instantly
+     that the page is theirs, and the Bark / Checkatrade / Yell badges are credential proof
+     nothing else in this system can source. Mixed into the photo grid they get lost; sorted by
+     eye they cost Paul time on every business. So they are DETECTED and shown separately.
+     Measured on First4locks' real pool: 24 photographs, 2 logo files, 3 badges. */
+  const grouped = useMemo(() => {
+    const photos: PoolImage[] = [], marks: Array<PoolImage & { kind: string; why: string; iffy?: boolean }> = [];
+    for (const im of allImages) {
+      const v = classifyPoolImage({ url: im.url, alt: (im as { alt?: string }).alt ?? null,
+                                    width: (im as { width?: number }).width ?? null }, c.business?.name);
+      if (v.kind === 'photo') photos.push(im);
+      else marks.push({ ...im, kind: v.kind, why: v.reason, iffy: v.uncertain });
+    }
+    return { photos, marks };
+  }, [allImages, c.business?.name]);
+  const images = grouped.photos;
   const placed = c.slots ?? {};
 
   /* Service editor. Seeded from the operator's confirmed list if there is one, else the scrape —
@@ -321,6 +340,52 @@ function Picker({ id }: { id: string }) {
           );
         })}
       </div>
+
+      {/* ── LOGO AND BADGES ───────────────────────────────────────────────────────────────
+          ⛔ A SEPARATE GROUP, NOT A FILTER ON THE PHOTO GRID. These go in their own slots; a
+          badge dropped on a hero is refused server-side, so the separation here is about making
+          the right move obvious rather than about enforcement. */}
+      {grouped.marks.length > 0 && (
+        <>
+          <h2 className="mt-8 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Logo and badges ({grouped.marks.length})
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Their own logo and any directory badges we found on their site. These carry credential
+            proof nothing else here can source — drag them to the logo or badge slots, never a hero.
+          </p>
+          <div className="mt-2 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))' }}>
+            {grouped.marks.map((im) => (
+              <figure
+                key={im.url}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/uri-list', im.url);
+                  e.dataTransfer.setData('text/plain', im.url);
+                  e.dataTransfer.effectAllowed = 'copy';
+                  setDragUrl(im.url);
+                }}
+                onDragEnd={() => setDragUrl(null)}
+                className="m-0 cursor-grab overflow-hidden rounded-lg border-2 border-border active:cursor-grabbing"
+                title={im.why}
+              >
+                {/* object-contain, not cover: a lockup must not be cropped to a square. */}
+                <img src={im.thumb || im.url} alt="" loading="lazy" referrerPolicy="no-referrer"
+                     className="h-24 w-full bg-white object-contain p-1" />
+                <figcaption className="px-1.5 py-1 text-[10.5px] leading-tight">
+                  <span className={`font-semibold ${im.kind === 'logo' ? 'text-sky-700' : 'text-emerald-700'}`}>
+                    {im.kind === 'logo' ? 'their logo' : 'badge'}
+                  </span>
+                  <span className="text-muted-foreground"> · {im.why}</span>
+                  {/* ⚠️ Named, never auto-corrected: the shape hints disagreed with the name match,
+                      so it is worth a glance. Detection is a guess and says so. */}
+                  {im.iffy && <span className="block text-amber-700">check this one</span>}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* ── POOL ──────────────────────────────────────────────────────────────────────── */}
       <h2 className="mt-8 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

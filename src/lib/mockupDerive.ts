@@ -28,6 +28,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { MOCKUP_STOCK, type StockImage } from "./mockupStock.ts";
+import { classifyPoolImage } from "./mockupAsset.ts";
 
 /* ── Caps ────────────────────────────────────────────────────────────────────────────────────
    ⚠️ THESE ARE THE TEMPLATE'S CAPS, NOT THE SCRAPER'S, and they are deliberately separate from
@@ -52,7 +53,7 @@ export interface RawBusiness {
 }
 export interface RawService { name?: string; price?: string; description?: string; category?: string }
 export interface RawPrice { label?: string; amount?: string; note?: string }
-export interface RawPoolImage { url: string; local?: string }
+export interface RawPoolImage { url: string; local?: string; alt?: string | null; width?: number | null }
 
 export interface MockupRaw {
   business?: RawBusiness;
@@ -104,10 +105,13 @@ export function truthy(v: unknown): boolean {
 /** Digits (and a leading +) for tel: and wa.me links. */
 const digits = (s: unknown): string => (s ? String(s).replace(/[^\d+]/g, "") : "");
 
-/** Names that are site furniture rather than photographs of the work. Mirrors the harvester's
- *  IMG_SKIP and the pool's demoteReason — deliberately, so all three agree. */
+/* Names that are site furniture rather than photographs of the work.
+   🔴 `logo` AND `badge` ARE NOT HERE. They are kept in the pool and excluded from the GALLERY by
+   classification instead (classifyPoolImage), because the operator places them in their own
+   slots — a badge is credential proof, not junk, but it is emphatically not a gallery photo.
+   ⚠️ The social names stay: a Facebook glyph is furniture in both senses. */
 const POOL_FURNITURE =
-  /(?:sprite|icon|favicon|logo|badge|pixel|spacer|placeholder|1x1|blank|loader|spinner|avatar|flag|arrow|chevron|star|cookie|facebook|twitter|instagram|linkedin|whatsapp|youtube|watermark)/i;
+  /(?:sprite|icon|favicon|pixel|spacer|placeholder|1x1|blank|loader|spinner|avatar|flag|arrow|chevron|star|cookie|facebook|twitter|instagram|linkedin|whatsapp|youtube|watermark)/i;
 
 /* ── The monogram ────────────────────────────────────────────────────────────────────────────
    Trade and legal-form words carry no identity, so they are skipped: "First4locks Ltd -
@@ -178,7 +182,11 @@ export function deriveMockup(raw: MockupRaw, opts: { now?: Date } = {}): Record<
      correct on its own. */
   const realPool = (raw.images ?? [])
     .filter((p) => p && typeof p.url === "string" && !heroUrls.has(p.url))
-    .filter((p) => !POOL_FURNITURE.test(p.url));
+    .filter((p) => !POOL_FURNITURE.test(p.url))
+    /* ⛔ ONLY PHOTOGRAPHS REACH THE GALLERY. A Yell badge in a photo grid reads as a stray advert
+       for Yell on the prospect's own page. It still lives in the pool for its own slot. */
+    .filter((p) => classifyPoolImage({ url: p.url, alt: p.alt ?? null, width: p.width ?? null },
+                                     raw.business?.name).kind === "photo");
   const photos = raw.photo_section === false
     ? []
     : buildPhotos(realPool, raw.photo_captions ?? {}, raw.stock_base ?? "/mockup-stock/");

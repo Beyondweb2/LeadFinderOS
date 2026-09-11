@@ -340,8 +340,16 @@ interface ScannedImage {
   was_placeholder?: boolean;
 }
 
-/** Skip sprites, icons, logos, tracking pixels and data URIs — never a hero photo. */
-const IMG_SKIP = /(?:sprite|icon|favicon|logo|badge|pixel|spacer|placeholder|1x1|blank|loader|spinner|avatar|flag|arrow|chevron|star|cookie)/i;
+/* Skip sprites, icons, tracking pixels and data URIs — never a hero photo.
+   🔴 `logo` AND `badge` WERE REMOVED FROM THIS LIST ON 2026-09-11, AND THAT IS THE POINT.
+   Paul: their own logo is better than anything we could generate, and the Bark / Checkatrade /
+   Yell badges are credential proof nothing else in this system can source — no scraper reads
+   accreditations. Dropping them at harvest meant a file honestly named "checkatrade-badge.png"
+   never reached the pool at all. They are now KEPT and CLASSIFIED (src/lib/mockupAsset.ts), so
+   the operator sees them in their own group instead of losing them.
+   ⚠️ First4locks' badges survived the old list only by luck — they are named "bark-reviews.png"
+   and "reviews yell_PNG.png", with neither word in them. */
+const IMG_SKIP = /(?:sprite|icon|favicon|pixel|spacer|placeholder|1x1|blank|loader|spinner|avatar|flag|arrow|chevron|star|cookie)/i;
 
 function harvestImages(html: string, base: URL, limit: number): ScannedImage[] {
   const out: ScannedImage[] = [];
@@ -796,8 +804,11 @@ Deno.serve(async (req) => {
        then a lazy attribute, then `src`. Measured across the six test sites: the grid's own-site
        thumbnails fall from 11,563KB to 2,195KB — Grays alone 10,071KB to 609KB, 2,940ms to 513ms
        — and the URLs stored change on every lazy-loading site, so a _v8 hit would serve the old
-       heavy set. Bumped BEFORE deploying this time. */
-    const cacheKey = `${auditId || homepage.hostname}:site_details_v9`;
+       heavy set. Bumped BEFORE deploying this time.
+       ⛔ _v10: IMG_SKIP no longer drops `logo` or `badge`, so the harvest now RETURNS a class of
+       image it used to discard — their own logo and the directory badges. A _v9 hit would serve
+       a pool with those still missing, which is precisely the thing Paul asked for. */
+    const cacheKey = `${auditId || homepage.hostname}:site_details_v10`;
 
     // cache → cap → run → persist (enrichment_cache/usage + api_usage_log).
     const outcome = await runEnrichSource<{

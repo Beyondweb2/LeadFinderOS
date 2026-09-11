@@ -63,8 +63,11 @@ export interface PoolImage {
  *  cached pool, and one as a hero would be actively misleading. */
 const STREET_VIEW_HOST = /(?:^|\.)streetviewpixels-pa\.googleapis\.com$/i;
 
-/** Filename/path markers that are furniture rather than photography. */
-const FURNITURE = /(?:sprite|favicon|logo|badge|pixel|spacer|placeholder|1x1|blank|loader|spinner|avatar|flag|arrow|chevron|cookie|watermark)/i;
+/* Filename/path markers that are furniture rather than photography.
+   🔴 `logo` AND `badge` DELIBERATELY ABSENT — see scan-site-details' IMG_SKIP for the reasoning.
+   They are the most valuable non-photograph in the pool, not junk, and they are separated by
+   classification rather than removed by a regex. */
+const FURNITURE = /(?:sprite|favicon|pixel|spacer|placeholder|1x1|blank|loader|spinner|avatar|flag|arrow|chevron|cookie|watermark)/i;
 
 export function demoteReason(url: string): string | null {
   let host = "", path = "";
