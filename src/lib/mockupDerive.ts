@@ -73,7 +73,7 @@ export interface MockupRaw {
   mla_member?: boolean | null;
   area_times?: Record<string, string>;
   /** 🔴 Typed testimonials. Never set on the product path — see the derivation's note. */
-  reviews?: Array<{ quote?: string; name?: string; place?: string; placeholder?: boolean }>;
+  reviews?: Array<{ quote?: string; name?: string; place?: string; role?: string; placeholder?: boolean }>;
   /** Where stock images are served from. */
   stock_base?: string;
   /** Off by default: the photo SECTION, not the hero. */
@@ -108,6 +108,28 @@ const digits = (s: unknown): string => (s ? String(s).replace(/[^\d+]/g, "") : "
  *  IMG_SKIP and the pool's demoteReason — deliberately, so all three agree. */
 const POOL_FURNITURE =
   /(?:sprite|icon|favicon|logo|badge|pixel|spacer|placeholder|1x1|blank|loader|spinner|avatar|flag|arrow|chevron|star|cookie|facebook|twitter|instagram|linkedin|whatsapp|youtube|watermark)/i;
+
+/* ── The monogram ────────────────────────────────────────────────────────────────────────────
+   Trade and legal-form words carry no identity, so they are skipped: "First4locks Ltd -
+   Locksmiths Speke" is F, not FL. */
+const MARK_SKIP = new Set(["the", "and", "of", "ltd", "limited", "co", "company", "services",
+  "service", "locksmith", "locksmiths", "security", "locks", "lock", "auto", "mobile",
+  "emergency", "key", "keys", "24", "7"]);
+
+export function markInitials(name: unknown): string {
+  const raw = String(name ?? "").trim();
+  if (!raw) return "";
+  const words = raw.split(/[\s\-–—]+/).filter(Boolean);
+  if (!words.length) return "";
+  /* ⚠️ DIGITS COUNT. "A1 Locksmiths" is branded A1, and stripping the 1 left a single letter
+     "A" — a weaker mark than the one the business already uses. */
+  const first = words[0].replace(/[^A-Za-z0-9]/g, "");
+  if (/^[A-Z0-9]{2,3}$/.test(first) && /[A-Z]/.test(first)) return first;
+  const pick = words.map((w) => w.replace(/[^A-Za-z]/g, ""))
+    .filter((w) => w && !MARK_SKIP.has(w.toLowerCase()));
+  const use = (pick.length ? pick : words.map((w) => w.replace(/[^A-Za-z]/g, "")).filter(Boolean)).slice(0, 2);
+  return use.map((w) => w[0].toUpperCase()).join("");
+}
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const str = (v: unknown) => String(v ?? "").trim();
@@ -177,8 +199,14 @@ export function deriveMockup(raw: MockupRaw, opts: { now?: Date } = {}): Record<
       reviews_unlinked: truthy(b.rating) && truthy(b.review_count) && !truthy(b.google_reviews_url),
       no_owner_name: !truthy(b.owner_first_name),
       no_reviews: !(truthy(b.rating) && truthy(b.review_count)),
+      mark: markInitials(b.name),
     },
     services: services.map((s, i) => ({ ...s, index: pad2(i + 1) })),
+    /* The three the hero leads with. `no_price` is a paired flag, not an absence — a service
+       with no price must render as itself rather than as a blank cell. */
+    services_top3: services.slice(0, 3).map((s, i) => ({
+      ...s, index: pad2(i + 1), no_price: !truthy(s.price),
+    })),
     ...deriveServiceGroups(services),
     headline_price: deriveHeadlinePrice(raw, prices),
     owner: deriveOwner(raw, b, year),
@@ -186,20 +214,20 @@ export function deriveMockup(raw: MockupRaw, opts: { now?: Date } = {}): Record<
        FIXED is template copy describing a TECHNIQUE and a PROCESS, not a promise about a
        specific firm. TYPED is data, and absent means NO CLAIM AT ALL. */
     trust_fixed: [
-      { title: "Non-destructive entry",
+      { title: "Non-destructive entry", icon: "pick",
         note: "The lock is picked or bypassed, so it still works afterwards." },
-      { title: "Price agreed before work starts",
+      { title: "Price agreed before work starts", icon: "tag",
         note: "You get the figure first. Nothing starts until you have it." },
     ],
     trust_typed: [
       ...(raw.no_callout_fee === true
-        ? [{ title: "No call-out fee", note: "You are quoted for the job, not for turning up." }] : []),
+        ? [{ title: "No call-out fee", icon: "coin", note: "You are quoted for the job, not for turning up." }] : []),
       ...(raw.dbs_checked === true
-        ? [{ title: "DBS checked", note: "Certificate available on request before work starts." }] : []),
+        ? [{ title: "DBS checked", icon: "shield", note: "Certificate available on request before work starts." }] : []),
       /* ⚠️ "member … verifiable on the register", NEVER "approved" or "inspected" — those are
          specific MLA grades and claiming the wrong one is the DBS mistake in a new coat. */
       ...(raw.mla_member === true
-        ? [{ title: "Master Locksmiths Association", note: "Member — verifiable on the MLA register." }] : []),
+        ? [{ title: "Master Locksmiths Association", icon: "rosette", note: "Member — verifiable on the MLA register." }] : []),
     ],
     /* ── TESTIMONIALS ─────────────────────────────────────────────────────────────────────
        🔴 TYPED ONLY, AND THE PRODUCT PATH NEVER SETS THEM. `rawFromMockupRow` does not populate
@@ -210,7 +238,19 @@ export function deriveMockup(raw: MockupRaw, opts: { now?: Date } = {}): Record<
        the safe direction: a quote must PROVE it is real to be presented as real. The design
        session's samples carry placeholder quotes so the layout can be judged; they are marked as
        such and this repo carries the same rule rather than a different one. */
-    reviews: raw.reviews ?? [],
+    reviews: (raw.reviews ?? []).slice(0, 3).map((r) => {
+      const name = str(r?.name);
+      return {
+        quote: str(r?.quote),
+        name,
+        place: str(r?.place),
+        role: str(r?.role),
+        /* An initial in a circle rather than a customer photograph: we have none and will not
+           fake one, and an initial is derived from a name we were given rather than invented. */
+        initial: name ? name[0].toUpperCase() : "",
+        placeholder: r?.placeholder !== false,
+      };
+    }).filter((r) => truthy(r.quote)),
     reviews_are_placeholder: (raw.reviews ?? []).some((r) => r?.placeholder !== false),
     fee: {
       none: raw.no_callout_fee === true,
