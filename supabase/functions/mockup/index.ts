@@ -7,6 +7,11 @@ import { slotsIn } from "../../../src/lib/mockupRender.ts";
 import { stockAllowedInSlot, stockById, stockFor } from "../../../src/lib/mockupStock.ts";
 import { assetAllowedInSlot, classifyPoolImage } from "../../../src/lib/mockupAsset.ts";
 import { shootSite } from "../_shared/mockup-shot.ts";
+/* ⚠️ THE VERSION ONLY. Imported rather than copied because a pinned Graph API version is exactly
+   the value that goes stale in two places — but note this pulls the send module into this
+   function's bundle. The media_probe branch calls none of it: it uploads and deletes, and there
+   is no message-send code path in this function at all. */
+import { GRAPH_VERSION } from "../_shared/whatsapp-send.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    mockup — the operator's door to one prospect's mockup.
@@ -231,6 +236,75 @@ Deno.serve(async (req) => {
         message: `${siteId}: ${shot.bytes.length} bytes in ${shot.ms}ms for ${shot.url}`,
       });
       return json({ ok: true, bytes: shot.bytes.length, request_ms: shot.ms, path: stored.path });
+    }
+
+    /* ── media_probe: CAN META TAKE THE ASSET, AND HOW LONG DOES IT TAKE? ─────────────────
+       🔴 IT UPLOADS AND DELETES. IT CANNOT SEND. There is no message-send code in this branch at
+       all, which is the point: the only honest way to measure the media path is to exercise it,
+       and every other way of finding out involves messaging a real prospect. Same reasoning as
+       instantly-push's `auth_probe`, which exists because every other mode either sends email or
+       calls a paid API.
+       ⚠️ The uploaded media is DELETED again immediately, so the probe leaves nothing behind on
+       Meta's side. A failure to delete is reported, never swallowed — an orphaned media id is
+       harmless but should not be invisible.
+       ⚠️ Nothing here reads a lead, a phone number or a template. It takes bytes and a size. */
+    if (action === "media_probe") {
+      const token = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
+      const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "";
+      if (!token || !phoneNumberId) return json({ ok: false, error: "whatsapp_not_configured" }, 400);
+
+      /* Bytes come from the caller so the probe measures a REAL asset size rather than a toy.
+         Either a stored mockup shot (by site id) or a plain byte count to synthesise. */
+      let bytes: Blob;          // kept as a Blob: FormData wants one, and it avoids a copy
+      let byteLen = 0;
+      let source: string;
+      const siteId = typeof body.id === "string" ? body.id.trim() : "";
+      if (siteId) {
+        const { data: row } = await service.from("generated_sites").select("content").eq("id", siteId).maybeSingle();
+        const shots = (((row?.content ?? {}) as Record<string, unknown>).shots ?? {}) as Record<string, { path?: string }>;
+        const path = typeof shots?.current_site?.path === "string" ? shots.current_site.path : "";
+        if (!path) return json({ ok: false, error: "no_stored_shot", detail: "run action:'shot' first" }, 400);
+        const { data: blob, error: dlErr } = await service.storage.from("mockup-assets").download(path);
+        if (dlErr || !blob) return json({ ok: false, error: "download_failed", detail: dlErr?.message ?? "no blob" }, 500);
+        bytes = blob;
+        byteLen = blob.size;
+        source = path;
+      } else {
+        const want = Math.min(Math.max(Number(body.bytes) || 1_000_000, 1_000), 6_000_000);
+        /* A valid 1x1 PNG followed by padding inside a tEXt chunk would be cleaner, but Meta
+           validates the image, so a synthetic blob is refused and would measure nothing. Require
+           a real stored shot instead of pretending. */
+        return json({ ok: false, error: "id_required",
+          detail: `pass a site id with a stored shot — a synthetic ${want}-byte blob is not a valid PNG and Meta would refuse it, which measures nothing` }, 400);
+      }
+
+      const t0 = Date.now();
+      const form = new FormData();
+      form.append("messaging_product", "whatsapp");
+      form.append("type", "image/png");
+      form.append("file", bytes, "asset.png");
+      const up = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/media`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form,
+      });
+      const upMs = Date.now() - t0;
+      const upBody = await up.text();
+      if (!up.ok) {
+        return json({ ok: false, error: "upload_failed", http: up.status,
+          detail: upBody.slice(0, 400), bytes: byteLen, upload_ms: upMs });
+      }
+      let mediaId = "";
+      try { mediaId = String(JSON.parse(upBody)?.id ?? ""); } catch { /* reported below */ }
+
+      /* Clean up: the probe must not accumulate media on the account. */
+      let deleted: string | number = "not attempted";
+      if (mediaId) {
+        const del = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${mediaId}`, {
+          method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+        });
+        deleted = del.status;
+      }
+      return json({ ok: true, bytes: byteLen, upload_ms: upMs, media_id: mediaId ? `${mediaId.slice(0, 6)}…` : "",
+                    deleted, source });
     }
 
     /* ── refill: re-read their website into an existing mockup ────────────────────────── */

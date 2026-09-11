@@ -22,6 +22,58 @@ Nothing else should be built until that is decided.
 
 ---
 
+## 0b. THE COMPOSITE — STOPPED ON PAUL'S CALL, 2026-09-11
+
+⛔ **STOPPED DELIBERATELY, AND IT IS NOT A BLOCKER.** Paul built a single ABLM example VIDEO he
+sends to everyone. It costs nothing per prospect and answers the question that actually matters
+first — whether a rebuild offer gets any interest at all. A personalised asset is premature until
+that is known. **Do not restart this without him saying so.**
+
+### What the composite was going to be (his spec, superseded but recorded)
+Their business name at the top, their own site screenshot on the left, ABLM's finished site on the
+right labelled honestly as "A site we built for a client" (NOT "what we would build for you" —
+ABLM is an accountancy firm), then the ABLM before/after search proof, a benefits list, the price
+and his contact card.
+
+### What is already BUILT and reusable
+- **Their screenshot** — `action: "shot"` on the `mockup` function, via Cloudflare Browser
+  Rendering, stored in the private bucket and returned signed as `current_site_url`. Proven
+  byte-identical across three runs.
+- **The ABLM site screenshot** — nothing needed from Paul. `ablm.co.uk` shoots cleanly through the
+  same pipeline (`npx tsx scripts/shoot-mockup.mts`), which is BETTER than him exporting one
+  because both panels then share a viewport and need no cropping.
+- **The layout step** — a browser render of an HTML page, screenshotted. Measured at ~1.6s for a
+  realistic four-image asset producing a 1,036KB PNG.
+- **The Meta upload** — measured, see §4d. Not a constraint.
+
+### What is LEFT to do
+1. **The two ABLM search-proof PNGs.** Only Paul has these — they are ChatGPT/Gemini answers, not
+   a website. Needed shape: PNG, **≥1200px wide**, cropped to the answer with NO browser chrome,
+   and **both the same width and roughly the same height** or one has to be cropped to match.
+   Destination `public/proof/`.
+2. **His contact card details** — name, number, whatever goes on it. Nowhere in the codebase.
+3. 🔴 **AN ANSWER ABOUT ABLM.** The asset visibly identifies them — logo and name in both the site
+   shot and the search results — even though the label only says "a client". **Are they happy to
+   be a public reference?** That is a conversation with them, not a code question, and it should
+   happen BEFORE 185 prospects see it.
+4. The composite layout itself, and the price read from **`FINDABLE_SETUP_PRICE_GBP`** — never
+   typed, it is byte-locked across both repos by `scripts/check-cross-repo-sync.mjs`.
+
+### Measured end-to-end, so the volume question is already answered
+| step | measured |
+|---|---|
+| `get` (row + lead + signed URLs) | 3.1s ⚠️ slower than it should be for a read plus two signings |
+| `shot` (Cloudflare) | 9.0s round trip, 5.3s of it Cloudflare's own render |
+| compose + screenshot | ~1.6s |
+| **cold total** | **≈14s** |
+
+⚠️ **14s is the wrong number for planning.** The screenshot is taken once per prospect and can
+happen on reply, so at send time it is **`get` + compose ≈ 5s**. Machine time is not the
+constraint — 185 assets is under an hour of compute. The operator reviewing each one and the
+WhatsApp daily cap are.
+
+---
+
 ## 1. WHERE THE BUILD IS, BY STEP
 
 | Step | State |
@@ -129,6 +181,19 @@ test locksmith sites runs a chat widget**, so that half of the list has never fi
 example. Cookie banners *are* proven (and the Wix one was missed on the first attempt: Wix names it
 `data-hook="consent-banner-root"` with no "cookie" anywhere in the markup, which is why a bounded
 behaviour heuristic was added as a second layer).
+
+### 4d. ✅ MEASURED: the Meta media upload is not a constraint
+A **1,458,137-byte PNG** uploaded to the WhatsApp Cloud API in **1,923ms** and **2,175ms** on two
+runs, returned a media id, and deleted cleanly (HTTP 200 both times). So a ~1MB asset is well
+inside what the image-header path will take, and the upload adds about **2 seconds** to a send.
+- Exercised by **`action: "media_probe"`** on the `mockup` function. ⛔ **It uploads and DELETES
+  and it cannot send** — there is no message-send code in that branch. Same reasoning as
+  instantly-push's `auth_probe`: the only honest way to measure a path is to exercise it, and
+  every other way of finding out involves messaging a real prospect.
+- ⚠️ **Meta's 5MB image ceiling and the 30-day media lifetime are DOCUMENTED, not measured here.**
+  Only the 1.46MB case was actually tested.
+- ⚠️ Nothing in the codebase sends an image-header template yet — `whatsapp-send.ts` has no image
+  header and no template is registered with one. The upload works; the SEND is unbuilt.
 
 ### 4c. ⚠️ NOT MEASURED: Cloudflare browser-seconds
 **There are no Cloudflare credentials on this machine**, so screenshots ran locally under
