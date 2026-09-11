@@ -1,79 +1,931 @@
-<!-- ═══════════════════════════════════════════════════════════════════════════════════════════
-     REFERENCE TEMPLATE — locksmith. DELIBERATELY PLAIN.
-
-     ⛔ THIS IS NOT A DESIGN AND IS MEANT TO BE REPLACED. Paul is authoring the real one in a
-     separate session. Its only job is to be a WORKING example that exercises every placeholder in
-     the contract, so the contract can be seen in action rather than read.
-
-     It exercises: every business field, {{#each}} over services and areas, {{#if}} at both
-     granularities, {{url}} in an href and a src, and ONE image slot (hero).
-
-     🔴 THE HERO IS WRAPPED SO IT COLLAPSES. Measured: three of six real locksmiths have NO
-     hero-capable own-site photo, so a page with no hero is the common case, not the edge case.
-     Wrapping the <section> (rather than putting the {{#if}} inside it) is what makes the whole
-     block disappear instead of leaving an empty container — pinned by
-     scripts/mockup-render.test.ts.
-     ⛔ AND STOCK NEVER FILLS IT. Paul's rule: the hero is what renders in the WhatsApp preview, so
-     a stock photo where their shop should be reads as a template. Real photo or no photo.
-     ═══════════════════════════════════════════════════════════════════════════════════════════ -->
 <template data-page="home">
 <style>
-  :root { --ink:#14171a; --muted:#55595e; --accent:#8a6d1f; --line:#e6e6e6; }
-  * { box-sizing:border-box }
-  body { margin:0; font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); }
-  .wrap { max-width:860px; margin:0 auto; padding:0 22px; }
-  .hero img { width:100%; height:320px; object-fit:cover; border-radius:10px; }
-  h1 { font-size:clamp(28px,5vw,46px); line-height:1.08; letter-spacing:-.02em; margin:28px 0 10px; }
-  .lede { color:var(--muted); margin:0 0 6px; }
-  .cta { display:inline-block; margin:16px 0 0; background:var(--ink); color:#fff; text-decoration:none;
-         padding:12px 22px; border-radius:8px; font-weight:700; }
-  h2 { font-size:21px; margin:44px 0 14px; padding-top:20px; border-top:1px solid var(--line); }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; }
-  .card { border:1px solid var(--line); border-radius:10px; padding:15px; }
-  .card h3 { margin:0 0 5px; font-size:16px; }
-  .price { color:var(--accent); font-weight:700; margin:0 0 6px; }
-  .card p { margin:0; color:var(--muted); font-size:14.5px; }
-  .areas { color:var(--muted); }
-  footer { border-top:1px solid var(--line); margin-top:48px; padding:22px 0 64px; color:var(--muted); font-size:14px; }
-  footer p { margin:0 0 4px; }
+/* ============================================================================
+   LOCKSMITH MASTER TEMPLATE
+   Layout and CSS are fixed and owned by Paul. Only the listed variables change.
+
+   THE ONE TEST: it must not look like a template. Everything below is aimed at
+   that, and specifically AWAY from the UK locksmith norm (Wix, stock photo of a
+   hand holding a key, red 24 HOUR banner, six identical rounded icon cards).
+
+   HOW RICHNESS IS ACHIEVED WITHOUT PHOTOGRAPHS — this is the load-bearing
+   decision, because measured real supply was 17/0/24/24/24/7 image URLs and one
+   business had NOTHING:
+     1. Alternating grounds. Ink → paper → ink switches hard, several times.
+        Contrast between sections does the work a photograph usually does.
+     2. Scale. The name is set very large; section headings are large.
+     3. A mono spec strip. Numbers (rating, reviews, established, postcode) set
+        in a mono face read as a datasheet, which no Wix template does.
+     4. One accent. Brass, used on rules, indices and a single button style —
+        never scattered.
+   ========================================================================== */
+
+/* Self-hosted, SIL OFL. Recovered from this project's own history (barber
+   template, CREDITS.md). No font CDN at runtime — a delivered mockup must not
+   depend on an external host, and the product sells crawlability. */
+@font-face{font-family:'Manrope';src:url('assets/fonts/Manrope-400.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Manrope';src:url('assets/fonts/Manrope-500.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Manrope';src:url('assets/fonts/Manrope-700.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Manrope';src:url('assets/fonts/Manrope-800.woff2') format('woff2');font-weight:800;font-display:swap}
+@font-face{font-family:'Bebas';src:url('assets/fonts/BebasNeue-400.woff2') format('woff2');font-weight:400;font-display:swap}
+/* JetBrains Mono, SIL OFL 1.1 — see assets/fonts/CREDITS.md. Bundled so the
+   numerals are the SAME face everywhere: the system stack gave Consolas on
+   Windows and DejaVu Sans Mono in the review screenshots, i.e. one design
+   judged against two different faces. */
+@font-face{font-family:'JBMono';src:url('assets/fonts/JetBrainsMono-400.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'JBMono';src:url('assets/fonts/JetBrainsMono-500.woff2') format('woff2');font-weight:500;font-display:swap}
+
+:root{
+  --ink:#0A0C0F; --ink-2:#111519; --ink-3:#181E25; --ink-4:#212933;
+  --paper:#F2EEE7; --paper-2:#E7E1D6; --paper-ink:#13171B;
+  --brass:#C9922F; --brass-lit:#EBB75A; --brass-dim:#7A5A1C;
+  --text:#E9EBEE; --dim:#98A2AE; --dimmer:#8B949F;
+  --line:rgba(255,255,255,.10); --line-2:rgba(255,255,255,.055);
+  --grid:rgba(255,255,255,.032);
+  --line-ink:rgba(19,23,27,.14);
+  --mono:'JBMono',ui-monospace,"Cascadia Mono","Consolas","DejaVu Sans Mono",monospace;
+  --pad:clamp(20px,5vw,80px);
+}
+/* ── THE WARM ACCENT VARIANT ───────────────────────────────────────────────
+   Paul's question: does brass on black signal "expensive safe manufacturer"
+   rather than "approachable local trade"? Here is the alternative to compare
+   against — a CLAY / terracotta.
+   ⚠️ ONLY the three accent values change. Grounds, type and spacing are
+   identical, so the comparison isolates the accent instead of confounding it
+   with five other differences. Clay is deliberately desaturated and used only
+   on rules, indices and one button — it must never become the red emergency
+   banner Paul ruled out.
+   Built with `npm run build -- --warm`.
+   ⛔ DECLARE NOTHING HERE EXCEPT THE ACCENTS. An earlier version of this block
+   swallowed --text, --dim, --mono and --pad because :root was closed above it
+   by mistake: the default build then had no text colour at all and rendered
+   near-black on near-black at 1.07:1. Caught by the contrast sweep, invisible
+   to a brace count. */
+/* ── THE OLD DARK-HEAVY BALANCE, kept as a live A/B ────────────────────────
+   Before 2026-09-11 six sections were near-black against two paper ones, and
+   Paul's read was that the page came across as menace rather than help — a
+   conversion problem, not a taste one. The rebalance made paper the default.
+   This block restores the OLD grounds so the two can be compared in a browser
+   rather than from memory. Built with `npm run build -- --darkheavy`.
+   ⚠️ It restores background AND foreground together. Flipping a ground without
+   its text colours is how the planned lane once ended up with white text on a
+   near-white panel at 1.03:1. */
+:root[data-palette="darkheavy"] .trust{background:var(--ink-2);color:var(--text);
+  border-bottom:1px solid var(--line-2)}
+:root[data-palette="darkheavy"] .trust h3{color:var(--text)}
+:root[data-palette="darkheavy"] .trust p{color:var(--dim)}
+:root[data-palette="darkheavy"] .trust h3::before{background:var(--brass)}
+:root[data-palette="darkheavy"] .gal{background:var(--ink);color:var(--text)}
+:root[data-palette="darkheavy"] .gal .h2{color:var(--text)}
+:root[data-palette="darkheavy"] figcaption{color:var(--dimmer)}
+:root[data-palette="darkheavy"] .areas{background:var(--ink-2);color:var(--text);
+  border-top:1px solid var(--line-2)}
+:root[data-palette="darkheavy"] .areas .h2{color:var(--text)}
+:root[data-palette="darkheavy"] .area-list{border-top:1px solid var(--line)}
+:root[data-palette="darkheavy"] .area-row{border-bottom:1px solid var(--line-2)}
+:root[data-palette="darkheavy"] .area-row dd{color:var(--brass-lit)}
+:root[data-palette="darkheavy"] .based,
+:root[data-palette="darkheavy"] .t-none,
+:root[data-palette="darkheavy"] .area-note{color:var(--dimmer)}
+:root[data-palette="darkheavy"] .faq{background:var(--ink);color:var(--text)}
+:root[data-palette="darkheavy"] .faq .h2{color:var(--text)}
+:root[data-palette="darkheavy"] .faq-item{border-top:1px solid var(--line-2)}
+:root[data-palette="darkheavy"] .faq-item p{color:var(--dim)}
+:root[data-palette="darkheavy"] .owner{background:var(--ink-3);color:var(--text);
+  border-bottom:1px solid var(--line-2)}
+:root[data-palette="darkheavy"] .owner .h2{color:var(--text)}
+:root[data-palette="darkheavy"] .owner-bio{color:var(--dim)}
+:root[data-palette="darkheavy"] .owner-facts{border-top:1px solid var(--line)}
+:root[data-palette="darkheavy"] .owner-facts dt{color:var(--dimmer)}
+:root[data-palette="darkheavy"] .owner-facts dd{color:var(--text)}
+:root[data-palette="darkheavy"] .eyebrow.on-paper{color:var(--brass)}
+
+:root[data-palette="warm"]{
+  /* #CE7549, not the #B85C36 this started as. Measured: the darker clay gave
+     3.69:1 for the eyebrow on the contact section and 4.19:1 for dark text on
+     the primary button — both below AA. This one clears every dark ground
+     AND takes the dark button text, AND clears 4.5:1 against the worst-case
+     background behind a photograph — that last one is why it is #D68053 and
+     not #CE7549: the lighter-clay-on-a-bright-photo case measured 4.39:1 in
+     the prices and contact sections, which only the analytic check sees. The
+     accent is lighter and warmer than brass, which is the point. */
+  --brass:#D68053; --brass-lit:#E8A176; --brass-dim:#8E4526;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--text);
+  font:400 17px/1.62 'Manrope',system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+img{max-width:100%;display:block}
+a{color:inherit}
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE LIGHT THEME — white base, dark as a rare accent.
+   Built 2026-09-11 after Paul sampled three real UK locksmith sites (Aston's,
+   Dr Locks York, First4locks). All three are predominantly WHITE with a bright
+   friendly accent; not one uses brass, amber or clay, and dark is the base
+   nowhere. The earlier rebalance moved in this direction and did not go nearly
+   far enough.
+
+   ⛔ TWO ACCENT TONES ARE REQUIRED, AND THAT IS ARITHMETIC NOT STYLE. A colour
+   dark enough to clear 4.5:1 on white (#22683E green, 6.74:1) only reaches
+   2.5–2.9:1 on the two remaining dark bands. So --accent-ink is the dark tone
+   for light grounds and --accent-lift is the light tone for dark grounds.
+   Using one value for both is unreadable at one end or the other, whichever
+   end you happen to be looking at.
+
+   DARK SURVIVES IN EXACTLY TWO PLACES: the "locked out right now" lane, where
+   the contrast IS the message, and the contact band, which anchors the foot of
+   the page. Five became two.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root[data-palette="light"],:root[data-palette="light-blue"]{
+  --paper:#FFFFFF; --paper-2:#F5F4F1; --paper-3:#EDEBE6; --paper-ink:#15181C;
+  --line-ink:rgba(21,24,28,.13);
+}
+:root[data-palette="light"]{      /* MOSS GREEN */
+  --accent-ink:#22683E; --accent-lift:#6ECF9A; --accent-wash:rgba(34,104,62,.07);
+}
+:root[data-palette="light-blue"]{ /* KINGFISHER */
+  --accent-ink:#0B5A74; --accent-lift:#6FC7E4; --accent-wash:rgba(11,90,116,.07);
+}
+/* map the old accent names onto the new pair, so no rule needs rewriting */
+:root[data-palette="light"],:root[data-palette="light-blue"]{
+  --brass:var(--accent-lift); --brass-lit:var(--accent-lift); --brass-dim:var(--accent-ink);
+}
+
+/* ---- grounds: white by default, dark only twice --------------------------- */
+[data-palette="light"] body,[data-palette="light-blue"] body{
+  background:var(--paper);color:var(--paper-ink)}
+[data-palette="light"] .hero,[data-palette="light-blue"] .hero{
+  background:var(--paper);color:var(--paper-ink);border-bottom:1px solid var(--line-ink)}
+[data-palette="light"] .trust,[data-palette="light-blue"] .trust{
+  background:var(--paper-2);color:var(--paper-ink);border-bottom:1px solid var(--line-ink)}
+[data-palette="light"] .owner,[data-palette="light-blue"] .owner{background:var(--paper)}
+[data-palette="light"] .svcs,[data-palette="light-blue"] .svcs{background:var(--paper-2)}
+[data-palette="light"] .gal,[data-palette="light-blue"] .gal{background:var(--paper)}
+[data-palette="light"] .areas,[data-palette="light-blue"] .areas{background:var(--paper-2)}
+[data-palette="light"] .faq,[data-palette="light-blue"] .faq{background:var(--paper)}
+/* prices was dark; now a near-white band with an accent wash */
+[data-palette="light"] .prices,[data-palette="light-blue"] .prices{
+  background:linear-gradient(180deg,var(--accent-wash),transparent 70%),var(--paper-3);
+  color:var(--paper-ink)}
+[data-palette="light"] .prices .h2,[data-palette="light-blue"] .prices .h2{color:var(--paper-ink)}
+[data-palette="light"] .prices .eyebrow,[data-palette="light-blue"] .prices .eyebrow{color:var(--accent-ink)}
+[data-palette="light"] .price-table,[data-palette="light-blue"] .price-table{border-top:1px solid var(--line-ink)}
+[data-palette="light"] .price-row,[data-palette="light-blue"] .price-row{border-bottom:1px solid var(--line-ink)}
+[data-palette="light"] .price-row dd,[data-palette="light-blue"] .price-row dd{color:var(--accent-ink);font-weight:500}
+[data-palette="light"] .price-row .note,[data-palette="light-blue"] .price-row .note{color:#525C68}
+[data-palette="light"] .price-none,[data-palette="light-blue"] .price-none{
+  border:1px solid var(--line-ink);border-top:2px solid var(--accent-ink);background:var(--paper)}
+[data-palette="light"] .price-none>div,[data-palette="light-blue"] .price-none>div{border-right:1px solid var(--line-ink)}
+[data-palette="light"] .price-none>div:last-child,[data-palette="light-blue"] .price-none>div:last-child{border-right:0}
+[data-palette="light"] .price-none dt,[data-palette="light-blue"] .price-none dt{
+  color:var(--accent-ink);border-bottom:1px solid var(--line-ink)}
+[data-palette="light"] .price-none dd,[data-palette="light-blue"] .price-none dd{color:var(--paper-ink)}
+/* footer follows the light base */
+[data-palette="light"] footer,[data-palette="light-blue"] footer{
+  background:var(--paper-2);border-top:1px solid var(--line-ink);color:#5A6470}
+[data-palette="light"] .f-name,[data-palette="light-blue"] .f-name{color:var(--paper-ink)}
+
+/* ---- text + accents on the light grounds --------------------------------- */
+[data-palette="light"] .h2,[data-palette="light-blue"] .h2,
+[data-palette="light"] .trust h3,[data-palette="light-blue"] .trust h3,
+[data-palette="light"] .owner .h2,[data-palette="light-blue"] .owner .h2{color:var(--paper-ink)}
+[data-palette="light"] .eyebrow,[data-palette="light-blue"] .eyebrow{color:var(--accent-ink)}
+[data-palette="light"] .trust p,[data-palette="light-blue"] .trust p,
+[data-palette="light"] .faq-item p,[data-palette="light-blue"] .faq-item p{color:#4A5460}
+[data-palette="light"] .trust h3::before,[data-palette="light-blue"] .trust h3::before{background:var(--accent-ink)}
+[data-palette="light"] .faq-item,[data-palette="light-blue"] .faq-item{border-top:1px solid var(--line-ink)}
+[data-palette="light"] .area-row dd,[data-palette="light-blue"] .area-row dd{color:var(--accent-ink)}
+[data-palette="light"] .svc-i,[data-palette="light-blue"] .svc-i,
+[data-palette="light"] .grp,[data-palette="light-blue"] .grp{color:var(--accent-ink)}
+[data-palette="light"] .svc-price,[data-palette="light-blue"] .svc-price{border-top:2px solid var(--accent-ink)}
+[data-palette="light"] .btn-p,[data-palette="light-blue"] .btn-p{
+  background:var(--accent-ink);border-color:var(--accent-ink);color:#fff}
+[data-palette="light"] .btn-s,[data-palette="light-blue"] .btn-s{
+  color:var(--paper-ink);border-color:rgba(21,24,28,.28)}
+[data-palette="light"] .cb-call,[data-palette="light-blue"] .cb-call{background:var(--accent-ink);color:#fff}
+[data-palette="light"] .cb-wa,[data-palette="light-blue"] .cb-wa{background:var(--paper-ink);color:#fff}
+
+/* ---- the two surviving dark bands --------------------------------------- */
+[data-palette="light"] .lane-now,[data-palette="light-blue"] .lane-now,
+[data-palette="light"] .contact,[data-palette="light-blue"] .contact{color:var(--text)}
+[data-palette="light"] .lane-now .h2,[data-palette="light-blue"] .lane-now .h2,
+[data-palette="light"] .lane-now h2,[data-palette="light-blue"] .lane-now h2,
+[data-palette="light"] .contact .h2,[data-palette="light-blue"] .contact .h2{color:var(--text)}
+[data-palette="light"] .lane-now .eyebrow,[data-palette="light-blue"] .lane-now .eyebrow,
+[data-palette="light"] .contact .eyebrow,[data-palette="light-blue"] .contact .eyebrow{color:var(--accent-lift)}
+[data-palette="light"] .lane-now p,[data-palette="light-blue"] .lane-now p,
+[data-palette="light"] .lane-now dd,[data-palette="light-blue"] .lane-now dd{color:var(--dim)}
+[data-palette="light"] .lane-now .btn-p,[data-palette="light-blue"] .lane-now .btn-p{
+  background:var(--accent-lift);border-color:var(--accent-lift);color:#08150E}
+[data-palette="light"] .c-tel,[data-palette="light-blue"] .c-tel{color:var(--accent-lift)}
+[data-palette="light"] .c-grid dt,[data-palette="light-blue"] .c-grid dt{color:var(--dimmer)}
+[data-palette="light"] .c-grid dd a,[data-palette="light-blue"] .c-grid dd a{border-bottom-color:var(--accent-lift)}
+
+/* ---- THE HERO becomes a SPLIT: text on white, the person on the right ----
+   The photo stops being a full-bleed background and becomes a right-hand
+   panel, which is what all three real sites do — a face in daylight beside the
+   headline rather than behind it under a scrim. Markup is unchanged; only the
+   positioning of .hero-bg moves. */
+[data-palette="light"] .hero-bg,[data-palette="light-blue"] .hero-bg{left:52%;right:0}
+[data-palette="light"] .hero-bg::after,[data-palette="light-blue"] .hero-bg::after{
+  background:linear-gradient(90deg,var(--paper) 0%,rgba(255,255,255,.34) 26%,rgba(255,255,255,0) 62%)}
+/* the person must NOT be desaturated — that is the whole point of the face */
+[data-palette="light"] .hero-bg .shot>img,[data-palette="light-blue"] .hero-bg .shot>img{
+  filter:contrast(1.03) saturate(1) brightness(1.02)}
+[data-palette="light"] .hero-bg .shot::before,[data-palette="light-blue"] .hero-bg .shot::before{opacity:.06}
+[data-palette="light"] .hero-bg .shot::after,[data-palette="light-blue"] .hero-bg .shot::after{background:none}
+[data-palette="light"] .hero-art,[data-palette="light-blue"] .hero-art{
+  background:radial-gradient(60% 70% at 6% 0%,var(--accent-wash),transparent 62%),var(--paper)}
+[data-palette="light"] .hero-grid,[data-palette="light-blue"] .hero-grid{
+  background-image:linear-gradient(rgba(21,24,28,.045) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(21,24,28,.045) 1px,transparent 1px)}
+[data-palette="light"] .hero h1,[data-palette="light-blue"] .hero h1{color:var(--paper-ink)}
+[data-palette="light"] .hero-sub,[data-palette="light-blue"] .hero-sub{color:#3E4854}
+[data-palette="light"] .hero-sub b,[data-palette="light-blue"] .hero-sub b{color:var(--paper-ink)}
+[data-palette="light"] .hero-rule,[data-palette="light-blue"] .hero-rule{background:var(--accent-ink)}
+/* the spec panel drops to a full-width strip under the text, clear of the photo */
+[data-palette="light"] .hero-in,[data-palette="light-blue"] .hero-in{
+  grid-template-columns:minmax(0,1fr) minmax(0,.82fr)}
+[data-palette="light"] .spec,[data-palette="light-blue"] .spec{
+  grid-column:1/-1;background:var(--paper-2);border-top:2px solid var(--accent-ink);
+  border-left:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+[data-palette="light"] .spec>div,[data-palette="light-blue"] .spec>div{
+  border-bottom:0;border-right:1px solid var(--line-ink);display:block;padding:16px 20px}
+[data-palette="light"] .spec>div:last-child,[data-palette="light-blue"] .spec>div:last-child{border-right:0}
+[data-palette="light"] .spec dt,[data-palette="light-blue"] .spec dt{color:#5A6470;margin-bottom:7px}
+[data-palette="light"] .spec dd,[data-palette="light-blue"] .spec dd{
+  color:var(--paper-ink);text-align:left}
+[data-palette="light"] .spec .hl dd,[data-palette="light-blue"] .spec .hl dd{color:var(--accent-ink)}
+[data-palette="light"] .spec dd small,[data-palette="light-blue"] .spec dd small{color:#5A6470}
+[data-palette="light"] .spec-link,[data-palette="light-blue"] .spec-link{border-bottom-color:var(--accent-ink)}
+
+/* ---- ⛔ THE BACKGROUND-PHOTO SCRIM MUST FLIP WITH THE GROUND -------------
+   Found by looking at the rendered page, NOT by the contrast checker, which
+   reads background-COLOR and is blind to a background image — the fourth time
+   that blind spot has bitten. The prices band flipped to near-black text while
+   its .secbg kept the DARK scrim rgba(9,11,14,.88), so the section rendered
+   dark with dark text on it: unreadable, and reported as passing.
+   On the light theme the scrim inverts to white, and the photo becomes a faint
+   texture instead of a ground. Worst case is now a BLACK photo pixel under a
+   0.90 white scrim = rgb(230,230,230), which every light-ground text colour
+   clears comfortably. */
+[data-palette="light"] .prices .secbg::after,[data-palette="light-blue"] .prices .secbg::after{
+  background:rgba(255,255,255,.90)}
+[data-palette="light"] .prices .secbg::before,[data-palette="light-blue"] .prices .secbg::before{
+  opacity:.08}
+[data-palette="light"] .prices .secbg img,[data-palette="light-blue"] .prices .secbg img{
+  filter:grayscale(1) contrast(.94) brightness(1.06)}
+
+/* the hero spec strip overlaps the photo panel, so it needs to read as a card
+   sitting ON the image rather than as a band running under it */
+[data-palette="light"] .spec,[data-palette="light-blue"] .spec{
+  box-shadow:0 1px 0 var(--line-ink),0 14px 34px rgba(21,24,28,.09)}
+
+@media (max-width:820px){
+  /* the photo goes ABOVE the text on a phone, never behind it */
+  [data-palette="light"] .hero-bg,[data-palette="light-blue"] .hero-bg{
+    position:relative;left:0;right:0;height:300px;margin-bottom:8px}
+  [data-palette="light"] .hero-bg::after,[data-palette="light-blue"] .hero-bg::after{
+    background:linear-gradient(0deg,var(--paper) 0%,rgba(255,255,255,0) 46%)}
+  [data-palette="light"] .hero-in,[data-palette="light-blue"] .hero-in{grid-template-columns:1fr}
+}
+
+/* ---- shared atoms ------------------------------------------------------- */
+.wrap{max-width:1240px;margin:0 auto;padding-inline:var(--pad)}
+.eyebrow{font-family:'Bebas',Impact,sans-serif;font-size:clamp(13px,1.1vw,15px);
+  letter-spacing:.20em;text-transform:uppercase;color:var(--brass);margin:0}
+.eyebrow.on-paper{color:var(--brass-dim)}
+.h2{font-weight:800;letter-spacing:-.028em;line-height:1.04;
+  font-size:clamp(30px,4.1vw,54px);margin:.28em 0 0}
+.lede{font-size:clamp(17px,1.35vw,20px);line-height:1.6;color:var(--dim);max-width:62ch;margin:1.1em 0 0}
+.on-paper .lede,.paper .lede{color:#4A5460}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.rule{height:1px;background:linear-gradient(90deg,var(--brass),rgba(201,146,47,0));border:0;margin:0}
+section{position:relative}
+.pad-y{padding-block:clamp(56px,7.5vw,116px)}
+.paper{background:var(--paper);color:var(--paper-ink)}
+.paper .h2{color:var(--paper-ink)}
+
+/* Buttons. TWO only, and the primary is the single most saturated thing on the
+   page — that is what "one accent used with intent" means here. */
+.btn{display:inline-flex;align-items:center;gap:.6em;text-decoration:none;
+  font-weight:700;font-size:16px;padding:16px 26px;border-radius:2px;
+  border:1px solid transparent;transition:none}
+.btn-p{background:var(--brass);color:#160F02;border-color:var(--brass)}
+.btn-s{background:transparent;color:var(--text);border-color:var(--line)}
+.paper .btn-s,.lane-plan .btn-s{color:var(--paper-ink);border-color:var(--line-ink)}
+.btn-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+
+/* ---- THE ONE PHOTO TREATMENT -------------------------------------------
+   Every image on the page goes through .shot — a real photo from their site, a
+   purchased stock plate, and the Google Static Maps snapshot alike. That is the
+   whole point: a rough Maps grab and a bought image must read as one set.
+   Monochrome + a warm shadow tint + a vignette. ----------------------------- */
+.shot{position:relative;overflow:hidden;background:var(--ink-3)}
+.shot>img{width:100%;height:100%;object-fit:cover;
+  filter:grayscale(1) contrast(1.04) brightness(.93)}
+.shot::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(175deg,#4A3A1E 0%,#10141A 100%);
+  mix-blend-mode:color;opacity:.55}
+.shot::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(125% 95% at 50% 32%,rgba(0,0,0,0) 44%,rgba(6,8,10,.46) 100%)}
+
+/* ---- BACKGROUND PHOTOGRAPHY behind the dark sections --------------------
+   Four operator-placed slots. Same treatment as every other image so a
+   background, a gallery plate and a map snapshot read as one set, then a heavy
+   scrim on top. ⚠️ THE SCRIM VALUE IS A CONTRAST DECISION, NOT A TASTE ONE:
+   it is set so every piece of text still passes WCAG AA with a photograph
+   behind it, measured after each change. Raising the photo's presence means
+   re-measuring, not guessing.
+   The page must look correct with all four empty — it does, because each sits
+   behind an if-guard and the section keeps its own flat background beneath.
+   ⛔ Do NOT write a literal double-brace construct in a comment in this file:
+   the renderer tokenises comments too, so prose becomes a real unclosed tag. */
+.secbg{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.secbg img{width:100%;height:100%;object-fit:cover;
+  filter:grayscale(1) contrast(1.02) brightness(.9)}
+.secbg::before{content:"";position:absolute;inset:0;
+  background:linear-gradient(175deg,#4A3A1E 0%,#10141A 100%);
+  mix-blend-mode:color;opacity:.55}
+.secbg::after{content:"";position:absolute;inset:0;background:rgba(9,11,14,.88)}
+/* content sits above the background layer */
+section>.wrap,.lane>.lane-in{position:relative;z-index:1}
+.lane{position:relative}
+
+/* ============================ HERO ======================================= */
+.hero{background:var(--ink);border-bottom:1px solid var(--line-2);overflow:hidden}
+.hero-bg{position:absolute;inset:0;z-index:0}
+.hero-bg::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,rgba(10,12,15,.96) 0%,rgba(10,12,15,.92) 42%,rgba(10,12,15,.72) 100%)}
+/* No-photo depth: a brass wash and a hairline grid. CSS only, so the hero is
+   never empty-looking and never waits on an image. */
+.hero-art{position:absolute;inset:0;z-index:0;
+  background:
+    radial-gradient(62% 78% at 4% -6%,rgba(201,146,47,.26),transparent 60%),
+    radial-gradient(48% 62% at 99% 104%,rgba(201,146,47,.12),transparent 62%),
+    linear-gradient(180deg,#0B0E12,#080A0D)}
+.hero-grid{position:absolute;inset:0;z-index:0;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:100% 132px,132px 100%;opacity:1;
+  mask-image:linear-gradient(112deg,#000 0%,rgba(0,0,0,.30) 34%,transparent 62%);
+  -webkit-mask-image:linear-gradient(112deg,#000 0%,rgba(0,0,0,.30) 34%,transparent 62%)}
+.hero-in{position:relative;z-index:1;padding-block:clamp(56px,8vw,112px);
+  display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,.85fr);
+  gap:clamp(28px,5vw,72px);align-items:end}
+.hero h1{font-weight:800;letter-spacing:-.038em;line-height:.93;
+  font-size:clamp(44px,7.4vw,104px);margin:.16em 0 0;max-width:19ch;
+  text-wrap:balance}
+.hero-rule{width:112px;height:3px;background:var(--brass);margin:30px 0 0}
+.hero-sub{font-size:clamp(17px,1.5vw,21px);line-height:1.55;color:var(--dim);
+  max-width:46ch;margin:26px 0 0}
+.hero-sub b{color:var(--text);font-weight:700}
+
+/* The mono spec strip — the device that makes it read bespoke with no photo. */
+.spec{margin:0;border-top:1px solid var(--brass);
+  border-left:1px solid var(--line-2);background:rgba(10,12,15,.90)}
+.spec>div{padding:17px 20px;border-bottom:1px solid var(--line-2);
+  display:flex;align-items:baseline;justify-content:space-between;gap:16px}
+.spec>div:last-child{border-bottom:0}
+.spec dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--dimmer);margin:0;white-space:nowrap}
+.spec dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;
+  font-size:clamp(18px,1.55vw,22px);font-weight:500;color:var(--text);
+  letter-spacing:-.01em;text-align:right}
+.spec dd small{font-size:12px;color:var(--dim);letter-spacing:.02em}
+.spec .hl dd{color:var(--brass-lit)}
+.spec-link{color:inherit;text-decoration:none;border-bottom:1px solid var(--brass-dim);
+  padding-bottom:2px}
+.spec-link small{margin-left:6px}
+
+/* ============================ TRUST STRIP ================================ */
+/* WAS ink-2. Paper now: this is the first thing under the hero and it is the
+   page's reassurance, which should not arrive on a black band. */
+.trust{background:var(--paper);color:var(--paper-ink);border-bottom:1px solid var(--line-ink)}
+.trust h3{color:var(--paper-ink)}
+.trust p{color:#4A5460}
+.trust ul{list-style:none;margin:0;padding:0;display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(206px,1fr));
+  gap:22px clamp(24px,3vw,44px)}
+.trust li{padding:24px 0}
+.trust h3{font-size:15px;font-weight:700;margin:0;letter-spacing:-.005em}
+.trust h3::before{content:"";display:block;width:22px;height:2px;background:var(--brass-dim);margin-bottom:13px}
+.trust p{margin:7px 0 0;font-size:14.5px;line-height:1.5}
+
+/* ============================ URGENT / PLANNED =========================== */
+/* The section that serves two visitors. Deliberately NOT symmetrical cards:
+   different grounds, different weights, so the page never reads as a grid. */
+.lanes{display:grid;grid-template-columns:1.06fr .94fr}
+.lane{padding:clamp(38px,5vw,76px) var(--pad)}
+.lane-now{background:var(--ink-3);
+  background-image:radial-gradient(78% 100% at 0% 0%,rgba(201,146,47,.10),transparent 66%)}
+.lane-plan{background:var(--paper);color:var(--paper-ink)}
+.lane h2{font-weight:800;letter-spacing:-.026em;line-height:1.06;
+  font-size:clamp(25px,2.8vw,38px);margin:.34em 0 0}
+.lane p{font-size:16.5px;line-height:1.62;margin:1em 0 0;color:var(--dim);max-width:44ch}
+.lane-plan p{color:#4A5460}
+.lane dl{margin:26px 0 0;display:grid;gap:15px}
+.lane dt{font-weight:700;font-size:15.5px}
+.lane dd{margin:3px 0 0;font-size:14.5px;line-height:1.55;color:var(--dim)}
+.lane-plan dd{color:#525C68}
+.chip{display:inline-block;font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;
+  text-transform:uppercase;padding:7px 12px;border:1px solid var(--line);color:var(--dim);margin-top:24px}
+.lane-plan .chip{border-color:var(--line-ink);color:#525C68}
+
+/* ============================ THE OWNER ================================== */
+/* Light ground, a real portrait, generous measure. The one section whose job
+   is entirely tone rather than information. */
+.owner{background:var(--paper);color:var(--paper-ink);border-bottom:1px solid var(--line-ink)}
+.owner-in{display:grid;grid-template-columns:minmax(0,.62fr) minmax(0,1fr);
+  gap:clamp(26px,4vw,64px);align-items:center}
+/* No portrait yet -> one column, so the text is not squeezed into 62% of the
+   width waiting for an image that may never come. */
+.owner-in:not(:has(.owner-pic)){grid-template-columns:1fr}
+.owner-pic .shot{aspect-ratio:4/5;background:var(--paper-2)}
+/* ⛔ THE PORTRAIT IS THE ONE IMAGE THAT IS NOT DESATURATED. Every other photo
+   goes through the monochrome treatment so the set matches; a greyed-out face
+   reads as a mugshot, which is the exact opposite of the point of this
+   section. Warmth beats consistency here, deliberately. */
+.owner-pic .shot>img{filter:contrast(1.03) saturate(.97) brightness(1.01)}
+.owner-pic .shot::before{opacity:.10}
+.owner-pic .shot::after{background:radial-gradient(120% 90% at 50% 30%,rgba(0,0,0,0) 60%,rgba(19,23,27,.15) 100%)}
+.owner .h2{color:var(--paper-ink)}
+.owner-bio{font-size:clamp(17px,1.5vw,20px);line-height:1.66;color:#3E4854;
+  margin:1.05em 0 0;max-width:56ch}
+.owner-facts{display:flex;flex-wrap:wrap;gap:0 clamp(26px,3.4vw,52px);
+  margin:clamp(24px,2.8vw,36px) 0 0;padding-top:20px;border-top:1px solid var(--line-ink)}
+.owner-facts dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;
+  text-transform:uppercase;color:#5A6470;margin:0 0 7px}
+.owner-facts dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;
+  font-size:19px;color:var(--paper-ink);letter-spacing:-.01em}
+
+/* ============================ SERVICES =================================== */
+/* Six substantial editorial rows, NOT twelve list items and NOT an icon grid.
+   The mono index and the generous vertical rhythm are what make six feel like
+   a considered list rather than a menu. */
+.svcs{background:var(--paper);color:var(--paper-ink)}
+.svc-list{margin:clamp(34px,4.4vw,58px) 0 0;border-top:1px solid var(--line-ink);
+  display:grid;grid-template-columns:1fr 1fr}
+/* Hairlines only — no boxes, no rounding, no icons. Paul ruled out the grid of
+   identical rounded cards, and a bordered cell IS that card. */
+.svc{display:grid;grid-template-columns:clamp(38px,3.4vw,54px) minmax(0,1fr);
+  gap:0 clamp(12px,1.4vw,20px);
+  padding:clamp(24px,2.7vw,34px) clamp(18px,2vw,30px) clamp(26px,2.9vw,38px) 0;
+  border-bottom:1px solid var(--line-ink);align-items:start}
+.svc:nth-child(odd){border-right:1px solid var(--line-ink)}
+.svc:nth-child(even){padding-left:clamp(24px,3vw,44px);padding-right:0}
+.svc-i{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;
+  font-weight:500;color:var(--brass-dim);padding-top:.62em;letter-spacing:.04em}
+.svc-name{font-weight:800;letter-spacing:-.024em;line-height:1.14;
+  font-size:clamp(21px,2.1vw,29px);margin:0;text-wrap:balance}
+.svc-desc{margin:.66em 0 0;font-size:16px;line-height:1.62;color:#4A5460}
+.svc-price{margin:.9em 0 0;font-family:var(--mono);font-variant-numeric:tabular-nums;
+  font-size:14.5px;color:var(--paper-ink);border-top:2px solid var(--brass);
+  padding-top:.7em;display:inline-block;letter-spacing:.02em}
+.svc-group+.svc-group{margin-top:clamp(26px,3vw,42px)}
+.grp{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--brass-dim);margin:clamp(26px,3vw,40px) 0 0;font-weight:500}
+.svc-group:first-of-type .grp{margin-top:clamp(22px,2.6vw,32px)}
+.svc-group .svc-list{margin-top:14px}
+/* A single-service group must not leave an empty right-hand cell. Same
+   reasoning as the gallery: an empty grid cell reads as a fault. */
+.svc-list:has(.svc:first-child:last-child){grid-template-columns:1fr}
+.svc-list:has(.svc:first-child:last-child) .svc{border-right:0;padding-right:0}
+
+/* ============================ PHOTOS ===================================== */
+/* WAS ink. Paper-2 now: a photograph of real work on a light ground reads as
+   a daylight job photo; the same photograph on near-black reads as a thriller
+   still, which is exactly the note Paul gave. */
+.gal{background:var(--paper-2);color:var(--paper-ink)}
+.gal .h2{color:var(--paper-ink)}
+.gal-grid{display:grid;gap:clamp(10px,1.1vw,16px);margin-top:clamp(30px,3.6vw,48px);
+  grid-template-columns:repeat(4,1fr);grid-auto-rows:minmax(190px,auto)}
+/* Asymmetric on purpose — an equal 4-up is the stock-site look. One 2x2
+   feature cell + four singles fills the 8-cell grid exactly. */
+.gal-grid figure:nth-child(1){grid-column:span 2;grid-row:span 2}
+.gal-grid figure{margin:0;position:relative;min-width:0;display:flex;flex-direction:column}
+.gal-grid .shot{flex:1;min-height:190px}
+.gal-grid figure:nth-child(1) .shot{min-height:392px}
+
+/* ---- THE GRID ADAPTS TO HOW MANY PHOTOGRAPHS THERE ACTUALLY ARE ----------
+   ⚠️ NOT A REFINEMENT — a correctness fix. Paul has THREE of six images, and a
+   fixed 4-column grid with a 2x2 feature needs exactly 5 to fill its 8 cells.
+   With three it left two empty cells, which reads as broken images rather than
+   as a layout choice. Each count below tiles EXACTLY, with no hole:
+     1 -> one plate           2 -> two equal
+     3 -> feature 2x2 + 2 stacked beside it   (3 cols x 2 rows = 6 cells)
+     4 -> four equal, feature span cancelled  (2 cols x 2 rows)
+     5 -> feature 2x2 + 4 singles             (4 cols x 2 rows = 8 cells)
+   `:has()` counts the children in CSS, so the RENDERER makes no layout
+   decision — it only says how many photographs exist. */
+.gal-grid:has(figure:first-child:last-child){grid-template-columns:1fr}
+.gal-grid:has(figure:nth-child(2):last-child){grid-template-columns:repeat(2,1fr)}
+.gal-grid:has(figure:nth-child(3):last-child){grid-template-columns:repeat(3,1fr)}
+.gal-grid:has(figure:nth-child(4):last-child){grid-template-columns:repeat(2,1fr)}
+.gal-grid:has(figure:first-child:last-child) figure:nth-child(1),
+.gal-grid:has(figure:nth-child(2):last-child) figure:nth-child(1),
+.gal-grid:has(figure:nth-child(4):last-child) figure:nth-child(1){
+  grid-column:auto;grid-row:auto}
+.gal-grid:has(figure:first-child:last-child) .shot,
+.gal-grid:has(figure:nth-child(2):last-child) .shot,
+.gal-grid:has(figure:nth-child(4):last-child) .shot{min-height:300px}
+figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.10em;
+  text-transform:uppercase;color:#5A6470;margin-top:10px}
+/* A real photo with no caption typed yet gets a rule, not a blank: an
+   uncaptioned figure next to captioned ones reads as a rendering fault. */
+.cap-none{color:rgba(19,23,27,.20)}
+
+/* ============================ AREAS + TIMES ============================== */
+.areas{background:var(--paper);color:var(--paper-ink);border-top:1px solid var(--line-ink)}
+.areas .h2{color:var(--paper-ink)}
+.area-list{margin:clamp(28px,3.4vw,44px) 0 0;border-top:1px solid var(--line-ink)}
+.area-row{display:flex;flex-wrap:wrap;gap:6px 20px;align-items:baseline;
+  padding-block:17px;border-bottom:1px solid var(--line-ink)}
+.area-row dt{margin:0;font-size:18px;font-weight:700;flex:1 1 220px;letter-spacing:-.008em}
+.area-row dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;
+  font-size:17px;color:var(--brass-dim);letter-spacing:-.01em;font-weight:500}
+.t-none{font-family:var(--mono);font-size:12.5px;letter-spacing:.06em;
+  color:#5A6470;text-transform:none}
+.based{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:#5A6470;margin-left:8px;font-weight:400}
+.area-note{margin:18px 0 0;font-size:14px;line-height:1.55;color:#5A6470;max-width:74ch}
+
+/* ============================ PRICES ===================================== */
+.prices{background:var(--ink)}
+.price-table{margin-top:clamp(28px,3.4vw,44px);border-top:1px solid var(--line)}
+.price-row{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:baseline;
+  padding-block:20px;border-bottom:1px solid var(--line-2)}
+.price-row dt{font-weight:700;font-size:17.5px;flex:1 1 230px;margin:0}
+.price-row dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;
+  font-size:19px;color:var(--brass-lit);letter-spacing:-.01em}
+.price-row .note{font-size:14px;color:var(--dim);flex-basis:100%;font-family:'Manrope',sans-serif}
+/* THE EMPTY STATE. Most businesses have no prices — measured 0 of 6 — so this
+   is the NORMAL case, not a degraded one, and it must read as a policy. */
+.price-none{margin-top:clamp(28px,3.4vw,44px);border:1px solid var(--line);
+  border-top:2px solid var(--brass);
+  padding:clamp(30px,3.6vw,48px);display:grid;gap:0;
+  grid-template-columns:repeat(auto-fit,minmax(228px,1fr));
+  background:linear-gradient(135deg,rgba(201,146,47,.055),transparent 62%)}
+.price-none>div{padding:4px clamp(22px,2.4vw,34px) 4px 0;
+  border-right:1px solid var(--line-2)}
+.price-none>div:last-child{border-right:0;padding-right:0}
+.price-none dt{font-family:var(--mono);font-size:11px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--brass);margin:0 0 14px;
+  padding-bottom:12px;border-bottom:1px solid var(--line-2)}
+.price-none dd{margin:0;font-size:17px;line-height:1.58;color:var(--text)}
+
+/* ============================ FAQ ======================================== */
+/* Plain, always-open Q&A. No <details>, no JS: every word must be in the
+   initial HTML *and* visible in a screenshot. */
+/* WAS ink. Paper-2: six questions in white-on-black is the single grimmest
+   block on the page, and it is the part a nervous customer actually reads. */
+.faq{background:var(--paper-2);color:var(--paper-ink)}
+.faq .h2{color:var(--paper-ink)}
+.faq-grid{display:grid;gap:0 clamp(30px,4vw,72px);margin-top:clamp(30px,3.6vw,48px);
+  grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.faq-item{padding-block:clamp(20px,2.4vw,30px);border-top:1px solid var(--line-ink)}
+.faq-item h3{font-size:18px;font-weight:800;letter-spacing:-.016em;margin:0;line-height:1.28}
+.faq-item p{margin:.6em 0 0;font-size:16px;line-height:1.6;color:#4A5460;max-width:56ch}
+
+/* ============================ CONTACT + FOOTER =========================== */
+.contact{background:var(--ink-3)}
+/* Flex, not auto-fit grid: with only two entries (a business with a phone and
+   areas and nothing else — sample 3) the grid stretched them to half the page
+   each and left a visibly empty third column. Capped and left-aligned they read
+   as a deliberate cluster at any count from 2 to 6. */
+.c-grid{display:flex;flex-wrap:wrap;gap:clamp(24px,3vw,46px);
+  margin-top:clamp(28px,3.4vw,44px)}
+.c-grid>div{flex:1 1 232px;max-width:330px}
+.c-grid dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dimmer);margin:0 0 9px}
+.c-grid dd{margin:0;font-size:17px;line-height:1.55}
+.c-grid dd a{text-decoration:none;border-bottom:1px solid var(--brass-dim)}
+.c-tel{font-family:var(--mono);font-size:23px;letter-spacing:-.01em;color:var(--brass-lit)}
+footer{background:var(--ink);border-top:1px solid var(--line-2);
+  padding-block:34px;font-size:13.5px;color:var(--dimmer)}
+.f-in{display:flex;flex-wrap:wrap;gap:10px 26px;justify-content:space-between;align-items:baseline}
+.f-name{font-weight:800;color:var(--dim);letter-spacing:-.01em}
+
+/* ============================ STICKY CALL BAR (mobile) =================== */
+.callbar{display:none}
+@media (max-width:820px){
+  .hero-in{grid-template-columns:1fr;gap:34px;align-items:stretch}
+  .spec{border-left:0;border-top:2px solid var(--brass)}
+  .spec>div{padding:15px 0}
+  .lanes{grid-template-columns:1fr}
+  .svc-list{grid-template-columns:1fr}
+  .svc:nth-child(odd){border-right:0}
+  .svc:nth-child(even){padding-left:0}
+  .svc{padding-right:0}
+  .price-none>div{border-right:0;border-bottom:1px solid var(--line-2);
+    padding:18px 0}
+  .price-none>div:last-child{border-bottom:0}
+  .faq-grid{grid-template-columns:1fr}
+  .owner-in{grid-template-columns:1fr;gap:26px}
+  .owner-pic .shot{aspect-ratio:4/3}
+  .map-box{grid-template-columns:1fr}
+  .map-side{border-left:0;border-top:1px solid var(--line-2)}
+  .gal-grid{grid-template-columns:repeat(2,1fr)}
+  .gal-grid figure:nth-child(1){grid-column:span 2;grid-row:auto}
+  .gal-grid figure:nth-child(1) .shot{min-height:236px}
+  .gal-grid .shot{min-height:148px}
+  .trust li{border-left:0;padding-left:0;padding-block:20px;
+    border-top:1px solid var(--line-2)}
+  .trust li:first-child{border-top:0}
+  .spec>div{flex:1 1 44%;border-right:0;padding-right:14px}
+  .callbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:60;
+    border-top:1px solid rgba(0,0,0,.4);box-shadow:0 -10px 30px rgba(0,0,0,.42)}
+  .callbar a{flex:1;display:flex;align-items:center;justify-content:center;gap:.5em;
+    padding:17px 10px;text-decoration:none;font-weight:700;font-size:16px}
+  .cb-call{background:var(--brass);color:#160F02}
+  .cb-wa{background:var(--ink-4);color:var(--text);flex:0 0 40%}
+  body{padding-bottom:62px}
+}
+@media (max-width:430px){
+  .svc{grid-template-columns:1fr}
+  .svc-i{padding-top:0;margin-bottom:6px}
+}
 </style>
 
-{{#if img hero}}
-<section class="hero"><div class="wrap"><img src="{{url img hero}}" alt="{{business.name}}"></div></section>
+<!-- ================================ HERO ================================= -->
+<section class="hero">
+  {{#if img hero}}
+  <div class="hero-bg"><div class="shot" style="height:100%"><img src="{{url img hero}}" alt="{{business.name}}"></div></div>
+  {{/if}}
+  {{#if img.no_hero}}
+  <div class="hero-art"></div>
+  <div class="hero-grid"></div>
+  {{/if}}
+  <div class="wrap hero-in">
+    <div>
+    <p class="eyebrow">{{business.trade}} &middot; {{business.town}}</p>
+    <h1>{{business.name}}</h1>
+    <div class="hero-rule"></div>
+    <p class="hero-sub">
+{{#if headline_price}}<b>{{headline_price.service}} from {{headline_price.from}}.</b> {{/if}}{{#if business.response_time}}{{business.response_time}} to most {{business.town}} addresses. {{/if}}{{#if services_lead}}{{services_lead}}.{{/if}}
+    </p>
+    <div class="btn-row">
+      {{#if business.phone}}<a class="btn btn-p" href="tel:{{business.phone_digits}}">Call {{business.phone}}</a>{{/if}}
+      {{#if business.whatsapp_digits}}<a class="btn btn-s" href="https://wa.me/{{business.whatsapp_digits}}">WhatsApp a photo of your lock</a>{{/if}}
+    </div>
+    </div>
+    <dl class="spec">
+      {{#if business.has_reviews}}
+      <div class="hl"><dt>Google rating</dt><dd>{{business.rating}} <small>/ 5</small></dd></div>
+      <div><dt>Reviews</dt><dd>{{#if business.reviews_linked}}<a class="spec-link" href="{{url business.google_reviews_url}}" rel="noopener">{{business.review_count}} <small>read on Google</small></a>{{/if}}{{#if business.reviews_unlinked}}{{business.review_count}}{{/if}}</dd></div>
+      {{/if}}
+      {{#if business.established}}<div><dt>Established</dt><dd>{{business.established}}</dd></div>{{/if}}
+      {{#if business.postcode}}<div><dt>Based in</dt><dd>{{business.postcode}}</dd></div>{{/if}}
+      {{#if business.hours}}<div><dt>Hours</dt><dd>{{business.hours}}</dd></div>{{/if}}
+    </dl>
+  </div>
+</section>
+
+<!-- ============================ TRUST STRIP ============================== -->
+<section class="trust">
+  <div class="wrap">
+    <ul>
+      {{#each trust_fixed}}
+      <li><h3>{{.title}}</h3>{{#if .note}}<p>{{.note}}</p>{{/if}}</li>
+      {{/each}}
+      {{#each trust_typed}}
+      <li><h3>{{.title}}</h3>{{#if .note}}<p>{{.note}}</p>{{/if}}</li>
+      {{/each}}
+    </ul>
+  </div>
+</section>
+
+<!-- ======================== URGENT vs PLANNED ============================ -->
+<section class="lanes">
+  <div class="lane lane-now">
+    {{#if img bg_urgent}}<div class="secbg"><img src="{{url img bg_urgent}}" alt=""></div>{{/if}}
+    <div class="lane-in">
+    <p class="eyebrow">Locked out right now</p>
+    <h2>We can usually open it without damaging the door.</h2>
+    <p>Call and describe the door. You will be told what it costs before anyone sets off.</p>
+    <dl>
+      <dt>Non-destructive entry</dt>
+      <dd>The lock is picked or bypassed so it still works afterwards. Drilling is a last resort, and you are told first.</dd>
+      {{#if business.response_time}}<dt>Response</dt><dd>{{business.response_time}} to most {{business.town}} addresses.</dd>{{/if}}
+    </dl>
+    {{#if business.phone}}
+    <div class="btn-row"><a class="btn btn-p" href="tel:{{business.phone_digits}}">Call {{business.phone}}</a></div>
+    {{/if}}
+    </div>
+  </div>
+  <div class="lane lane-plan">
+    <p class="eyebrow on-paper">Planning a lock change</p>
+    <h2>New locks, insurance upgrades and key control.</h2>
+    <p>Moving in, changing a tenant, or told by your insurer to upgrade. Booked in for when it suits you.</p>
+    <dl>
+      <dt>BS3621 insurance standard</dt>
+      <dd>Most home insurers ask for a British Standard lock on final exit doors. That is a specific kitemarked lock, and it can be fitted to your existing door.</dd>
+      <dt>Price agreed before work starts</dt>
+      <dd>You get the figure first. Nothing starts until you have agreed it.</dd>
+    </dl>
+    {{#if business.whatsapp_digits}}
+    <div class="btn-row"><a class="btn btn-s" href="https://wa.me/{{business.whatsapp_digits}}">Send a photo, ask for a price</a></div>
+    {{/if}}
+  </div>
+</section>
+
+<!-- =============================== THE OWNER ============================= -->
+<!-- The warmth. A name, a face and a year, in their own words. Drops entirely
+     when owner_bio is absent — and it IS absent on most prospects, so the page
+     has to be complete without it. Never generated; see render.mjs. -->
+{{#if owner}}
+<section class="owner pad-y">
+  <div class="wrap owner-in">
+    {{#if img owner}}
+    <div class="owner-pic"><div class="shot"><img src="{{url img owner}}" alt="{{owner.name}}{{#if owner.name}}, {{/if}}{{business.trade}} at {{business.name}}"></div></div>
+    {{/if}}
+    <div class="owner-txt">
+      <p class="eyebrow on-paper">Who you are calling</p>
+      {{#if owner.name}}<h2 class="h2">I'm {{owner.name}}.</h2>{{/if}}
+      {{#if business.no_owner_name}}<h2 class="h2">About {{business.name}}.</h2>{{/if}}
+      <p class="owner-bio">{{owner.bio}}</p>
+      <dl class="owner-facts">
+        {{#if owner.years}}<div><dt>Doing this</dt><dd>{{owner.years}} years</dd></div>{{/if}}
+        {{#if owner.established}}<div><dt>Established</dt><dd>{{owner.established}}</dd></div>{{/if}}
+        <div><dt>Based in</dt><dd>{{business.town}}</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
 {{/if}}
 
-<div class="wrap">
-  <h1>{{business.trade}} in {{business.town}}</h1>
-  <p class="lede">{{business.name}}</p>
-  {{#if business.hours}}<p class="lede">Open {{business.hours}}</p>{{/if}}
-  {{#if business.phone}}<a class="cta" href="{{url business.phone_link}}">Call {{business.phone}}</a>{{/if}}
-
-  <h2>What we do</h2>
-  <div class="cards">
-  {{#each services}}
-    <div class="card">
-      <h3>{{.name}}</h3>
-      {{#if .price}}<p class="price">{{.price}}</p>{{/if}}
-      {{#if .description}}<p>{{.description}}</p>{{/if}}
+<!-- ============================== SERVICES =============================== -->
+{{#if services}}
+<section class="svcs pad-y">
+  <div class="wrap">
+    <p class="eyebrow on-paper">Services</p>
+    <h2 class="h2">Lock and key work in {{business.town}}, done properly.</h2>
+    {{#if services_flat}}
+    <div class="svc-list">
+      {{#each services}}
+      <article class="svc">
+        <div class="svc-i">{{.index}}</div>
+        <div>
+          <h3 class="svc-name">{{.name}}</h3>
+          {{#if .description}}<p class="svc-desc">{{.description}}</p>{{/if}}
+          {{#if .price}}<p class="svc-price">{{.price}}</p>{{/if}}
+        </div>
+      </article>
+      {{/each}}
     </div>
-  {{/each}}
+    {{/if}}
+    {{#each service_groups}}
+    <div class="svc-group">
+      {{#if .label}}<h3 class="grp">{{.label}}</h3>{{/if}}
+      <div class="svc-list">
+        {{#each .items}}
+        <article class="svc">
+          <div class="svc-i">{{.index}}</div>
+          <div>
+            <h3 class="svc-name">{{.name}}</h3>
+            {{#if .description}}<p class="svc-desc">{{.description}}</p>{{/if}}
+            {{#if .price}}<p class="svc-price">{{.price}}</p>{{/if}}
+          </div>
+        </article>
+        {{/each}}
+      </div>
+    </div>
+    {{/each}}
   </div>
+</section>
+{{/if}}
 
-  {{#if img work}}
-  <h2>Our work</h2>
-  <img src="{{url img work}}" alt="{{business.trade}} work" style="width:100%;height:260px;object-fit:cover;border-radius:10px">
-  {{/if}}
+<!-- =============================== PHOTOS ================================ -->
+{{#if photos}}
+<section class="gal pad-y">
+  <div class="wrap">
+    <p class="eyebrow on-paper">The work</p>
+    {{#if has_real_photos}}<h2 class="h2">Some recent jobs around {{business.town}}.</h2>{{/if}}
+    {{#if photos_all_stock}}<h2 class="h2">The sort of work we do most days.</h2>{{/if}}
+    <div class="gal-grid">
+      {{#each photos}}
+      <figure>
+        <div class="shot"><img src="{{url .src}}" alt="{{.alt}}" loading="lazy"></div>
+        {{#if .caption}}<figcaption>{{.caption}}</figcaption>{{/if}}
+        {{#if .uncaptioned}}<figcaption class="cap-none">&mdash;</figcaption>{{/if}}
+      </figure>
+      {{/each}}
+    </div>
+  </div>
+</section>
+{{/if}}
 
-  {{#if areas}}
-  <h2>Areas we cover</h2>
-  <p class="areas">{{#each areas}}{{.}} &middot; {{/each}}</p>
-  {{/if}}
+<!-- ====================== RESPONSE TIMES BY AREA ========================== -->
+<!-- Replaced the map panel on 2026-09-11. The map needed an API, showed one
+     dot, and was the weakest thing on the page; a town list with a realistic
+     travel window against each is the pattern that actually works in this
+     trade. ⛔ No time is ever invented — see area_rows in render.mjs. -->
+{{#if area_rows}}
+<section class="areas pad-y">
+  <div class="wrap">
+    <p class="eyebrow on-paper">Where we work</p>
+    {{#if areas_timed}}<h2 class="h2">How long we usually take to reach you.</h2>{{/if}}
+    {{#if areas_untimed}}<h2 class="h2">Areas we cover.</h2>{{/if}}
+    <dl class="area-list">
+      {{#each area_rows}}
+      <div class="area-row">
+        <dt>{{.area}}{{#if .home}} <span class="based">based here</span>{{/if}}</dt>
+        {{#if .time}}<dd>{{.time}}</dd>{{/if}}
+        {{#if .no_time}}<dd class="t-none">ask when you call</dd>{{/if}}
+      </div>
+      {{/each}}
+    </dl>
+    {{#if areas_timed}}<p class="area-note">Typical daytime travel times, not a guarantee &mdash; traffic and where the van already is both change it. You are told the real figure when you call.</p>{{/if}}
+    {{#if business.postcode}}<p class="area-note">Based in {{business.town}}, {{business.postcode}}.</p>{{/if}}
+  </div>
+</section>
+{{/if}}
 
-  <footer>
-    {{#if business.address}}<p>{{business.address}}</p>{{/if}}
-    {{#if business.phone}}<p>{{business.phone}}</p>{{/if}}
-    {{#if business.email}}<p>{{business.email}}</p>{{/if}}
-    <p>{{business.name}} &mdash; {{business.trade}} in {{business.town}}</p>
-  </footer>
+<!-- =============================== PRICES ================================ -->
+<section class="prices pad-y">
+  {{#if img bg_prices}}<div class="secbg"><img src="{{url img bg_prices}}" alt=""></div>{{/if}}
+  <div class="wrap">
+    <p class="eyebrow">Prices</p>
+    {{#if prices}}
+    <h2 class="h2">What the common jobs cost.</h2>
+    <dl class="price-table">
+      {{#each prices}}
+      <div class="price-row">
+        <dt>{{.label}}</dt>
+        <dd>{{.amount}}</dd>
+        {{#if .note}}<p class="note">{{.note}}</p>{{/if}}
+      </div>
+      {{/each}}
+    </dl>
+    {{/if}}
+    {{#if prices_none}}
+    <h2 class="h2">You get the price before the work starts.</h2>
+    <dl class="price-none">
+      <div><dt>How it works</dt><dd>Describe the door and the lock on the phone. You get the figure for the job before it starts.</dd></div>
+      {{#if fee.none}}<div><dt>No call-out fee</dt><dd>You are not charged for someone turning up and looking at it.</dd></div>{{/if}}
+      {{#if fee.charged}}<div><dt>The call-out charge</dt><dd>Stated up front, before anyone sets off, as part of the figure for the job.</dd></div>{{/if}}
+      {{#if fee.unknown}}<div><dt>One figure, up front</dt><dd>Whatever the job comes to, including any call-out charge, you have the number before it starts.</dd></div>{{/if}}
+      <div><dt>Nothing starts unagreed</dt><dd>If the job turns out to be different once seen, you are told and asked before anything changes.</dd></div>
+    </dl>
+    {{/if}}
+  </div>
+</section>
+
+<!-- ================================ FAQ ================================== -->
+<section class="faq pad-y">
+  {{#if img bg_faq}}<div class="secbg"><img src="{{url img bg_faq}}" alt=""></div>{{/if}}
+  <div class="wrap">
+    <p class="eyebrow on-paper">The things people ask us</p>
+    <h2 class="h2">No jargon, no sales pitch.</h2>
+    <div class="faq-grid">
+      <div>
+        <div class="faq-item"><h3>Is there a call-out fee?</h3>
+          {{#if fee.none}}<p>No. You are quoted for the job itself, and that is the figure you pay.</p>{{/if}}
+          {{#if fee.charged}}<p>Yes, there is a call-out charge. You are told what it is, and the full figure for the job, before anyone sets off &mdash; so nothing on the bill is a surprise.</p>{{/if}}
+          {{#if fee.unknown}}<p>Ask when you call. You get the full figure for the job, including any call-out charge, before anyone sets off.</p>{{/if}}
+        </div>
+        <div class="faq-item"><h3>What is BS3621 and do I need it?</h3><p>It is the British Standard for a door lock, and most home insurers ask for one on final exit doors. Check your policy wording. It can usually be fitted to the door you already have.</p></div>
+      </div>
+      <div>
+        <div class="faq-item"><h3>My uPVC door will not lock. Is that the lock?</h3><p>Usually it is the multipoint mechanism inside the door rather than the cylinder you put the key in. It is a common repair and it does not mean a new door.</p></div>
+        <div class="faq-item"><h3>I have just moved in. Should I change the locks?</h3><p>You do not know who still has a key. Changing the cylinder is cheaper than changing the whole lock and takes the old keys out of use.</p></div>
+        <div class="faq-item"><h3>Will you have to drill my lock?</h3><p>Usually not. Most locks open without damage, which means the lock still works once you are back inside. If drilling turns out to be the only way, you are told before it happens and told what a replacement costs.</p></div>
+        <div class="faq-item"><h3>How soon can you get here?</h3><p>It depends where you are and where the van already is. There is a town-by-town list further up this page, and you get a real figure when you call rather than a promise made in advance.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =============================== CONTACT =============================== -->
+<section class="contact pad-y">
+  {{#if img bg_contact}}<div class="secbg"><img src="{{url img bg_contact}}" alt=""></div>{{/if}}
+  <div class="wrap">
+    <p class="eyebrow">Get in touch</p>
+    <h2 class="h2">{{#if business.owner_first_name}}Ask for {{business.owner_first_name}}.{{/if}}{{#if business.no_owner_name}}Call {{business.name}}.{{/if}}</h2>
+    <dl class="c-grid">
+      {{#if business.phone}}<div><dt>Phone</dt><dd class="c-tel"><a href="tel:{{business.phone_digits}}">{{business.phone}}</a></dd></div>{{/if}}
+      {{#if business.whatsapp_digits}}<div><dt>WhatsApp</dt><dd><a href="https://wa.me/{{business.whatsapp_digits}}">Send a photo of the lock</a></dd></div>{{/if}}
+      {{#if business.address}}<div><dt>Address</dt><dd>{{business.address}}</dd></div>{{/if}}
+      {{#if business.email}}<div><dt>Email</dt><dd><a href="mailto:{{business.email}}">{{business.email}}</a></dd></div>{{/if}}
+      {{#if business.hours}}<div><dt>Hours</dt><dd>{{business.hours}}</dd></div>{{/if}}
+      {{#if areas_line}}<div><dt>Areas covered</dt><dd>{{business.town}}, {{areas_line}}</dd></div>{{/if}}
+    </dl>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap f-in">
+    <span class="f-name">{{business.name}}</span>
+    <span>{{business.trade}} in {{business.town}}{{#if business.postcode}} &middot; {{business.postcode}}{{/if}}</span>
+    <span>&copy; {{year}} {{business.name}}</span>
+  </div>
+</footer>
+
+<!-- ========================= STICKY CALL BAR ============================= -->
+{{#if business.phone}}
+<div class="callbar">
+  <a class="cb-call" href="tel:{{business.phone_digits}}">Call now</a>
+  {{#if business.whatsapp_digits}}<a class="cb-wa" href="https://wa.me/{{business.whatsapp_digits}}">WhatsApp</a>{{/if}}
 </div>
+{{/if}}
 </template>

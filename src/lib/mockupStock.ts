@@ -35,6 +35,10 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 export interface StockImage {
+  /** 🔴 TRUE while this entry is still a labelled SVG placeholder rather than a photograph.
+   *  buildPhotos SKIPS these, so "REPLACE WITH stock-04" can never appear in a prospect's
+   *  gallery. Delete the flag on the row when the real file lands. */
+  placeholder?: boolean;
   id: string;
   /** What the photograph actually shows. Self-documenting so a numbered file can be identified. */
   subject: string;
@@ -77,21 +81,30 @@ export function stockAllowedInSlot(slot: string): boolean {
  * work they did, it is wrong for a stock image.
  */
 export const MOCKUP_STOCK: StockImage[] = [
-  /* ⛔ ONE SET, SHARED WITH PAUL'S OTHER SESSION — decided 2026-09-10. He is producing these six
-     as 1600x1067 JPGs (3:2, under 400KB each) and does not want to buy or manage two sets of
-     locksmith photos. So the FILENAMES ARE HIS (stock-01 … stock-06, easy to produce and to swap)
-     and the MEANING lives here, because a numbered file carries none and `alt` has to be TRUE.
-     ⚠️ `subject` exists purely so the mapping is self-documenting: without it nobody can tell
-     which file is the euro cylinder, and the next person to swap one would guess.
-     ⚠️ Until the real JPGs land these point at .svg placeholders of the same names, which render
-     as a labelled panel so a placeholder can never quietly pass for a photo. Swapping is: drop
-     stock-0N.jpg into public/mockup-stock/, delete stock-0N.svg, change the extension here. */
-  { id: "stock-01", subject: "front door lock",     path: "/mockup-stock/stock-01.svg", alt: "A front door lock",            caption: "Door locks",       niches: ["locksmith"] },
-  { id: "stock-02", subject: "euro cylinder",       path: "/mockup-stock/stock-02.svg", alt: "A euro cylinder lock",          caption: "Cylinder locks",   niches: ["locksmith"] },
-  { id: "stock-03", subject: "anti-snap cylinder",  path: "/mockup-stock/stock-03.svg", alt: "An anti-snap cylinder lock",    caption: "Anti-snap locks",  niches: ["locksmith"] },
-  { id: "stock-04", subject: "lit doorway",         path: "/mockup-stock/stock-04.svg", alt: "A lit doorway at night",        caption: "Out of hours",     niches: ["locksmith"] },
-  { id: "stock-05", subject: "workshop bench",      path: "/mockup-stock/stock-05.svg", alt: "A workshop bench",              caption: "In the workshop",  niches: ["locksmith"] },
-  { id: "stock-06", subject: "cut keys",            path: "/mockup-stock/stock-06.svg", alt: "Cut keys",                      caption: "Key cutting",      niches: ["locksmith"] },
+  /* ⛔ ONE SET, AND THE REPO NOW OWNS IT — 2026-09-11, same ruling as the template. The design
+     session produced these six photographs; this file carries the MEANING, because a numbered
+     file carries none and `alt` has to be TRUE.
+     🔴 THE CAPTIONS BELOW ARE COPIED VERBATIM FROM THAT SESSION'S captions.json, AND THEY HAD
+     ALREADY DRIFTED. A golden diff of the two derivations found this file saying "Out of hours"
+     and "In the workshop" where the design session said "Out-of-hours call-out" and "Key cutting
+     and lock workshop" — two stock sets with two sets of words, which is precisely what "one
+     curated set" exists to prevent. If they are edited, edit them HERE and let that session read
+     this file.
+     ⚠️ Still generic and true only: never claim the photo is this business's own work, and never
+     name the owner or the town. `subject` exists so the mapping is self-documenting — without it
+     nobody can tell which file is the euro cylinder, and the next person to swap one would guess.
+     ⚠️ ALL SIX ARE REAL PHOTOGRAPHS NOW. The `placeholder` flag stays on the interface because the
+     NEXT niche will go through the same half-finished state, and buildPhotos skipping a flagged
+     row is what stops a labelled "REPLACE WITH" panel reaching a prospect's gallery.
+     ⚠️ 01-03 ARE ~2MB PNGs AND 04-06 ARE ~250KB JPEGs. The PNGs are far too heavy for a
+     below-the-fold gallery image; flagged rather than silently re-encoded, because resizing
+     someone's photography is a design decision, not a build step. */
+  { id: "stock-01", subject: "front door lock", path: "/mockup-stock/stock-01.png", alt: "A black lever handle on a composite front door", caption: "Composite front door, lever handle", niches: ["locksmith"] },
+  { id: "stock-02", subject: "euro cylinder", path: "/mockup-stock/stock-02.png", alt: "A brass euro profile cylinder on dark slate", caption: "Brass euro cylinder", niches: ["locksmith"] },
+  { id: "stock-03", subject: "anti-snap cylinder", path: "/mockup-stock/stock-03.png", alt: "An anti-snap cylinder cut away with the pins exposed", caption: "Anti-snap cylinder, pins exposed", niches: ["locksmith"] },
+  { id: "stock-04", subject: "lit doorway", path: "/mockup-stock/stock-04.jpg", alt: "A lit doorway at night", caption: "Out-of-hours call-out", niches: ["locksmith"] },
+  { id: "stock-05", subject: "workshop bench", path: "/mockup-stock/stock-05.jpg", alt: "A workshop bench with lock tools", caption: "Key cutting and lock workshop", niches: ["locksmith"] },
+  { id: "stock-06", subject: "cut keys", path: "/mockup-stock/stock-06.jpg", alt: "A set of freshly cut keys", caption: "Cut keys", niches: ["locksmith"] },
 ];
 
 /** The stock available for a niche, in set order. Niche-specific first, then the generics. */
