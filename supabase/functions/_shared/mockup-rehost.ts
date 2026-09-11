@@ -87,29 +87,52 @@ export async function rehostToMockupBucket(
     }
 
     const bytes = new Uint8Array(await res.arrayBuffer());
-    if (!bytes.length) return { ok: false, path: "", detail: "empty body" };
-    if (bytes.length > MAX_BYTES) {
-      return { ok: false, path: "", detail: `${Math.round(bytes.length / 1024)}KB exceeds the bucket's 10MB limit` };
-    }
-
-    /* Slot names are free-form (the operator invents them in the template), so the path segment is
-       sanitised — a slot called "hero/../.." must not escape the site's own folder. */
-    const safeSlot = String(opts.slot).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "slot";
-    const ext = EXT_BY_TYPE[contentType] ?? "jpg";
-    const path = `${opts.siteId}/${safeSlot}.${ext}`;
-
-    const { error: upErr } = await opts.client.storage
-      .from(MOCKUP_BUCKET)
-      .upload(path, bytes, { contentType, upsert: true });   // upsert: re-placing a slot overwrites
-    if (upErr) return { ok: false, path: "", detail: `upload: ${String(upErr.message ?? "").slice(0, 140)}` };
-
-    return { ok: true, path, contentType, bytes: bytes.length };
+    return await storeMockupBytes(opts.client, {
+      siteId: opts.siteId, slot: opts.slot, bytes, contentType,
+    });
   } catch (e) {
     const m = String((e as Error).message ?? "");
     return { ok: false, path: "", detail: (e as Error).name === "AbortError" ? "download timed out" : `error: ${m.slice(0, 140)}` };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * Put bytes we ALREADY HOLD into the private bucket.
+ *
+ * ⚠️ EXTRACTED FROM rehostToMockupBucket RATHER THAN COPIED. The screenshot path has its bytes in
+ * hand (Cloudflare returns the PNG in the response) so it has nothing to download — but it must
+ * obey the same three rules, and two near-identical uploaders would drift on exactly the rules
+ * that matter: the allowed-type refusal, the 10MB cap, and the slot-name sanitisation that stops
+ * a slot called "hero/../.." escaping the site's own folder.
+ */
+export async function storeMockupBytes(
+  // deno-lint-ignore no-explicit-any
+  client: any,
+  opts: { siteId: string; slot: string; bytes: Uint8Array; contentType: string },
+): Promise<RehostResult> {
+  const contentType = String(opts.contentType || "").split(";")[0].trim().toLowerCase();
+  /* ⛔ REFUSED, NOT GUESSED — defaulting an unknown type to jpg uploads a mislabelled file, and
+     the bucket then rejects it with a message about MIME rather than about the real problem. */
+  if (!ALLOWED.has(contentType)) {
+    return { ok: false, path: "", detail: `not an allowed image type: ${contentType || "unknown"}` };
+  }
+  if (!opts.bytes?.length) return { ok: false, path: "", detail: "empty body" };
+  if (opts.bytes.length > MAX_BYTES) {
+    return { ok: false, path: "", detail: `${Math.round(opts.bytes.length / 1024)}KB exceeds the bucket's 10MB limit` };
+  }
+
+  const safeSlot = String(opts.slot).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "slot";
+  const ext = EXT_BY_TYPE[contentType] ?? "jpg";
+  const path = `${opts.siteId}/${safeSlot}.${ext}`;
+
+  const { error: upErr } = await client.storage
+    .from(MOCKUP_BUCKET)
+    .upload(path, opts.bytes, { contentType, upsert: true });   // upsert: re-shooting overwrites
+  if (upErr) return { ok: false, path: "", detail: `upload: ${String(upErr.message ?? "").slice(0, 140)}` };
+
+  return { ok: true, path, contentType, bytes: opts.bytes.length };
 }
 
 /**

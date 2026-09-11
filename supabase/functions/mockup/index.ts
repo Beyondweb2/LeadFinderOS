@@ -1,10 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createMockupRow, fillMockupFromSite } from "../_shared/mockup-trigger.ts";
 import { fetchMapsPool, mergePool, scorePoolForSort, sortPool, type PoolImage } from "../_shared/mockup-pool.ts";
-import { rehostToMockupBucket, signMockupPath } from "../_shared/mockup-rehost.ts";
+import { rehostToMockupBucket, storeMockupBytes, signMockupPath } from "../_shared/mockup-rehost.ts";
 import { nicheByKey, MOCKUP_MAX_SERVICES, MOCKUP_MAX_AREAS } from "../../../src/lib/mockupNiche.ts";
 import { slotsIn } from "../../../src/lib/mockupRender.ts";
 import { stockAllowedInSlot, stockById, stockFor } from "../../../src/lib/mockupStock.ts";
+import { shootSite } from "../_shared/mockup-shot.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    mockup — the operator's door to one prospect's mockup.
@@ -156,6 +157,14 @@ Deno.serve(async (req) => {
         }
       }
 
+      /* Their website's screenshot, signed the same way and for the same reason as the slots. */
+      let currentSiteUrl: string | null = null;
+      {
+        const shots = (((row?.content ?? {}) as Record<string, unknown>).shots ?? {}) as Record<string, { path?: string }>;
+        const p = typeof shots?.current_site?.path === "string" ? shots.current_site.path : "";
+        if (p) currentSiteUrl = await signMockupPath(service, p);
+      }
+
       /* ── The lead's own facts, JOINED AT READ TIME AND NEVER COPIED ONTO THE ROW ──────
          The template wants a Google rating, a review count, a postcode and a reviews link, and
          the mockup row carries none of them. Copying them in at creation would freeze a rating
@@ -175,7 +184,52 @@ Deno.serve(async (req) => {
       /* ⛔ null IS A REAL ANSWER AND SAYS SO. "no mockup for this lead" and "the read failed"
          must never look the same to the picker — the RLS-returns-200-with-[] trap that has cost
          this codebase three features (CLAUDE.md §8). */
-      return json({ ok: true, found: !!row, mockup: row ?? null, slot_urls: slotUrls, lead });
+      return json({ ok: true, found: !!row, mockup: row ?? null, slot_urls: slotUrls, lead,
+                    current_site_url: currentSiteUrl });
+    }
+
+    /* ── shot: photograph their CURRENT website ───────────────────────────────────────── */
+    if (action === "shot") {
+      const siteId = typeof body.id === "string" ? body.id.trim() : "";
+      if (!siteId) return json({ ok: false, error: "id required" }, 400);
+      const { data: row } = await service
+        .from("generated_sites").select("id, lead_id, content").eq("id", siteId).maybeSingle();
+      if (!row) return json({ ok: false, error: "not_found" }, 404);
+
+      const content = (row.content ?? {}) as Record<string, unknown>;
+      const site = typeof content.current_site_url === "string" ? content.current_site_url : "";
+
+      const shot = await shootSite(site);
+      if (!shot.ok) {
+        /* ⛔ RECORDED, NOT console.error'd. The CLI has no `functions logs` subcommand, so a
+           refusal that is only logged is undiagnosable afterwards (CLAUDE.md §4). */
+        await service.from("client_error_reports").insert({
+          context: "mockup_shot_skipped",
+          message: `${siteId}: ${shot.refusal}${shot.detail ? ` — ${shot.detail}` : ""}`,
+        });
+        return json({ ok: false, error: shot.refusal, detail: shot.detail ?? null, ms: shot.ms });
+      }
+
+      const stored = await storeMockupBytes(service, {
+        siteId, slot: "current_site", bytes: shot.bytes, contentType: "image/png",
+      });
+      if (!stored.ok) return json({ ok: false, error: "store_failed", detail: stored.detail }, 500);
+
+      /* ⚠️ THE DURATION IS OURS, MEASURED, AND LABELLED AS SUCH. It is the wall clock of the
+         request, not a billed figure — Cloudflare's REST response carries no usage field, and
+         this project has four constants that were wrong because a number was copied from a
+         pricing page instead of a billed row. The authoritative number is in the Cloudflare
+         dashboard; this is what we can actually observe. */
+      const shots = { ...(content.shots as Record<string, unknown> ?? {}), current_site: {
+        path: stored.path, bytes: shot.bytes.length, request_ms: shot.ms,
+        url: shot.url, at: new Date().toISOString(),
+      } };
+      await service.from("generated_sites").update({ content: { ...content, shots } }).eq("id", siteId);
+      await service.from("client_error_reports").insert({
+        context: "mockup_shot",
+        message: `${siteId}: ${shot.bytes.length} bytes in ${shot.ms}ms for ${shot.url}`,
+      });
+      return json({ ok: true, bytes: shot.bytes.length, request_ms: shot.ms, path: stored.path });
     }
 
     /* ── refill: re-read their website into an existing mockup ────────────────────────── */

@@ -107,6 +107,8 @@ export function useMockup(id: string | undefined) {
       mockup: Mockup | null;
       slot_urls: Record<string, string>;
       lead: MockupRowLead | null;
+      /** A signed URL for their CURRENT website's screenshot, or null if none has been taken. */
+      current_site_url: string | null;
     }>({ action: 'get', id }),
     enabled: !!id,
   });
@@ -141,11 +143,20 @@ export function useMockupActions(id: string | undefined) {
     onSuccess: invalidate,
   });
 
+  /** Photograph their CURRENT website, via Cloudflare Browser Rendering.
+   *  ⚠️ `request_ms` is OUR measurement of the request, not a billed figure — Cloudflare's REST
+   *  response carries no usage field, and a number copied from a pricing page has been wrong four
+   *  times in this project. The authoritative figure is the Cloudflare dashboard. */
+  const shoot = useMutation({
+    mutationFn: () => callMockup<{ bytes: number; request_ms: number; path: string }>({ action: 'shot', id }),
+    onSuccess: invalidate,
+  });
+
   /** Re-read their website. Their site is the least reliable input, so a retry is a first-class action. */
   const refill = useMutation({
     mutationFn: () => callMockup<{ detail: string }>({ action: 'refill', id }),
     onSuccess: invalidate,
   });
 
-  return { pool, place, saveServices, refill };
+  return { pool, place, saveServices, refill, shoot };
 }

@@ -109,7 +109,7 @@ function WaitingList() {
 function Picker({ id }: { id: string }) {
   const { toast } = useToast();
   const { data, isLoading } = useMockup(id);
-  const { pool, place, saveServices, refill } = useMockupActions(id);
+  const { pool, place, saveServices, refill, shoot } = useMockupActions(id);
   const m = data?.mockup ?? null;
   const c = m?.content ?? {};
   /* Signed display URLs for placed photos, minted per read by the server — never stored. */
@@ -211,7 +211,31 @@ function Picker({ id }: { id: string }) {
         </p>
       )}
 
-      {/* ── THE LIVE PREVIEW ──────────────────────────────────────────────────────────── */}
+      {/* ── THE COMPARISON ────────────────────────────────────────────────────────────────
+          ⛔ THE LABELS ARE PAUL'S AND THEY STAY. "Their website today" beside "What we would
+          build", with the domain named. He kept them because that framing reads honestly: it
+          says which is theirs and which is ours, rather than implying the mockup is already
+          live. */}
+      <h2 className="mt-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Their website today{c.current_site_url ? <span className="font-normal normal-case text-muted-foreground"> — {(() => { try { return new URL(String(c.current_site_url)).hostname.replace(/^www\./, ''); } catch { return ''; } })()}</span> : null}
+      </h2>
+      <div className="mt-2 overflow-hidden rounded-md border">
+        {data?.current_site_url ? (
+          <img src={data.current_site_url} alt="Their website as it is today" className="block w-full" />
+        ) : (
+          <div className="flex items-center justify-between gap-3 p-3 text-sm text-muted-foreground">
+            {/* ⛔ "not taken yet" and "we refused to take it" must not look the same. The refusal
+                reason is recorded server-side; the button says plainly that nothing has run. */}
+            <span>No screenshot of their site yet.</span>
+            <Button size="sm" variant="outline"
+              onClick={() => shoot.mutate()} disabled={shoot.isPending}>
+              {shoot.isPending ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : null}
+              Photograph their site
+            </Button>
+          </div>
+        )}
+      </div>
+
       <h2 className="mt-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         What we would build
       </h2>
