@@ -72,6 +72,8 @@ export interface MockupRaw {
   dbs_checked?: boolean | null;
   mla_member?: boolean | null;
   area_times?: Record<string, string>;
+  /** 🔴 Typed testimonials. Never set on the product path — see the derivation's note. */
+  reviews?: Array<{ quote?: string; name?: string; place?: string; placeholder?: boolean }>;
   /** Where stock images are served from. */
   stock_base?: string;
   /** Off by default: the photo SECTION, not the hero. */
@@ -174,6 +176,7 @@ export function deriveMockup(raw: MockupRaw, opts: { now?: Date } = {}): Record<
       reviews_linked: truthy(b.rating) && truthy(b.review_count) && truthy(b.google_reviews_url),
       reviews_unlinked: truthy(b.rating) && truthy(b.review_count) && !truthy(b.google_reviews_url),
       no_owner_name: !truthy(b.owner_first_name),
+      no_reviews: !(truthy(b.rating) && truthy(b.review_count)),
     },
     services: services.map((s, i) => ({ ...s, index: pad2(i + 1) })),
     ...deriveServiceGroups(services),
@@ -198,6 +201,17 @@ export function deriveMockup(raw: MockupRaw, opts: { now?: Date } = {}): Record<
       ...(raw.mla_member === true
         ? [{ title: "Master Locksmiths Association", note: "Member — verifiable on the MLA register." }] : []),
     ],
+    /* ── TESTIMONIALS ─────────────────────────────────────────────────────────────────────
+       🔴 TYPED ONLY, AND THE PRODUCT PATH NEVER SETS THEM. `rawFromMockupRow` does not populate
+       `reviews`, so a prospect mockup renders NO testimonials at all. Fabricating a customer
+       quote for a business is inventing a record about a third party — the single clearest
+       version of the no-invented-data rule.
+       ⛔ THE PLACEHOLDER FLAG DEFAULTS TO "PLACEHOLDER" (`!== false`, not `=== true`), which is
+       the safe direction: a quote must PROVE it is real to be presented as real. The design
+       session's samples carry placeholder quotes so the layout can be judged; they are marked as
+       such and this repo carries the same rule rather than a different one. */
+    reviews: raw.reviews ?? [],
+    reviews_are_placeholder: (raw.reviews ?? []).some((r) => r?.placeholder !== false),
     fee: {
       none: raw.no_callout_fee === true,
       charged: raw.no_callout_fee === false,

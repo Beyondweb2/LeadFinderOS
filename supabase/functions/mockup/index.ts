@@ -156,10 +156,26 @@ Deno.serve(async (req) => {
         }
       }
 
+      /* ── The lead's own facts, JOINED AT READ TIME AND NEVER COPIED ONTO THE ROW ──────
+         The template wants a Google rating, a review count, a postcode and a reviews link, and
+         the mockup row carries none of them. Copying them in at creation would freeze a rating
+         that changes weekly and would need a backfill for every existing row — the same reason
+         the serve-gate verdict is derived rather than stored (CLAUDE.md §6).
+         ⚠️ A failed read degrades the mockup, it never blanks the picker: those fields simply
+         arrive absent, and absent renders as nothing. */
+      let lead: Record<string, unknown> | null = null;
+      if (row?.lead_id) {
+        const { data: l } = await service
+          .from("outreach_leads")
+          .select("business_name, rating, review_count, address, phone, website, google_maps_url, derived_town, search_location")
+          .eq("id", row.lead_id).maybeSingle();
+        lead = l ?? null;
+      }
+
       /* ⛔ null IS A REAL ANSWER AND SAYS SO. "no mockup for this lead" and "the read failed"
          must never look the same to the picker — the RLS-returns-200-with-[] trap that has cost
          this codebase three features (CLAUDE.md §8). */
-      return json({ ok: true, found: !!row, mockup: row ?? null, slot_urls: slotUrls });
+      return json({ ok: true, found: !!row, mockup: row ?? null, slot_urls: slotUrls, lead });
     }
 
     /* ── refill: re-read their website into an existing mockup ────────────────────────── */

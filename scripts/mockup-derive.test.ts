@@ -18,6 +18,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { deriveMockup, MissingRaw, truthy, CAP_SERVICES, CAP_AREAS, PHOTO_SLOTS,
          type MockupRaw } from "../src/lib/mockupDerive.ts";
+import { rawFromMockupRow } from "../src/lib/mockupRaw.ts";
 import { MOCKUP_STOCK } from "../src/lib/mockupStock.ts";
 
 let f = 0;
@@ -135,6 +136,18 @@ ok(truthy("  ") === false && truthy([]) === false && truthy({}) === false && tru
      "an uncaptioned real photo says so rather than inventing a caption");
 }
 
+/* ── 🔴 TESTIMONIALS ARE NEVER FABRICATED ───────────────────────────────────────────────── */
+{
+  const d = deriveMockup(base()) as any;
+  ok(Array.isArray(d.reviews) && d.reviews.length === 0, "no typed reviews -> NO testimonials at all");
+  ok(d.reviews_are_placeholder === false, "and an empty list is not 'placeholder', it is empty");
+  const unmarked = deriveMockup({ ...base(), reviews: [{ quote: "Great" }] } as any) as any;
+  ok(unmarked.reviews_are_placeholder === true,
+     "⛔ a quote with NO placeholder flag counts as a PLACEHOLDER — it must prove it is real to be shown as real");
+  const real = deriveMockup({ ...base(), reviews: [{ quote: "Great", placeholder: false }] } as any) as any;
+  ok(real.reviews_are_placeholder === false, "only an explicit placeholder:false is treated as a real quote");
+}
+
 /* ── Stock honesty ───────────────────────────────────────────────────────────────────────── */
 for (const s of MOCKUP_STOCK) {
   ok(!/\b(our|we|their)\b/i.test(s.caption + " " + s.alt),
@@ -161,6 +174,37 @@ for (const s of MOCKUP_STOCK) {
   const withHero = deriveMockup({ ...base(), img: { hero: "https://x/h.jpg" } }) as any;
   ok(withHero.img.no_hero === false, "a real hero -> no_hero false, so the OPAQUE art layer stays off it");
   ok(typeof withHero.img.bg_faq === "string", "every slot the template declares is present, bg_faq included");
+}
+
+/* ── 🔴 THE PRODUCT PATH INVENTS NOTHING ─────────────────────────────────────────────────
+   The builder that a real prospect's mockup goes through, driven by a realistic stored row. */
+{
+  const raw = rawFromMockupRow(
+    { niche: "locksmith",
+      business: { name: "First4locks Ltd", town: "Liverpool", phone: "+44 7920 684400",
+                  address: "10 Lovel Rd, Speke, Liverpool L24 0ST, UK", email: "a@b.co.uk" },
+      scrape: { services: [{ name: "Lock change" }], areas: ["Widnes"] },
+      pool: [{ url: "https://x/photo.jpg" }, { url: "https://x/logo.png", demoted: "furniture" }] },
+    { rating: "5", review_count: 288, google_maps_url: "https://maps.google.com/?cid=1" },
+    { hero: "https://signed/hero.jpg" },
+  );
+  ok(raw.business!.trade === "Locksmith", "trade comes from the REGISTRY, title case — the row has none");
+  ok(raw.business!.postcode === "L24 0ST", "the postcode is read out of the Google address");
+  ok(raw.business!.phone === "07920 684400", "+44 is normalised for display");
+  ok(raw.reviews === undefined, "🔴 the product path sets NO testimonials");
+  ok(raw.owner_bio === undefined, "🔴 no owner bio — there is no source for one");
+  ok(raw.no_callout_fee === undefined, "🔴 no call-out-fee claim — we have not asked");
+  ok(raw.dbs_checked === undefined && raw.mla_member === undefined, "🔴 no credential is ever asserted");
+  ok((raw.prices ?? []).length === 0, "no prices — nothing scrapes a reliable price list");
+  ok(raw.area_times === undefined, "no response times — they would have to be invented");
+  ok(raw.images!.length === 1, "a demoted pool image never reaches the gallery");
+
+  const d = deriveMockup(raw) as any;
+  ok(d.business.has_reviews === true && d.business.reviews_linked === true,
+     "a real rating AND count AND link -> the Google figure is shown with its source");
+  ok(d.owner === null && d.prices_none === true && d.fee.unknown === true && d.areas_untimed === true,
+     "so the page renders with no owner section, no price table, no fee claim and no times — honest and thin");
+  ok(d.reviews.length === 0, "and no testimonials");
 }
 
 /* ══ THE GOLDEN DIFF ════════════════════════════════════════════════════════════════════════ */

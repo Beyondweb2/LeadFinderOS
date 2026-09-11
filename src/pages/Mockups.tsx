@@ -29,7 +29,10 @@ import { Loader2, RefreshCw, Trash2, ImageOff, ExternalLink, Plus, X } from 'luc
 import { useMockup, useMockupActions, useMockupList, type PoolImage } from '@/hooks/useMockups';
 import { MOCKUP_MAX_SERVICES, MOCKUP_MAX_AREAS } from '@/lib/mockupNiche';
 import { stockAllowedInSlot, stockFor } from '@/lib/mockupStock';
+import { renderPage } from '@/lib/mockupRender';
 import { slotsIn } from '@/lib/mockupRender';
+import { deriveMockup, MissingRaw } from '@/lib/mockupDerive';
+import { rawFromMockupRow } from '@/lib/mockupRaw';
 import locksmithTpl from '@/mockup/templates/locksmith.html?raw';
 
 /* The template files, by niche key. ⚠️ Vite `?raw` so the HTML ships as a string — the picker needs
@@ -116,6 +119,26 @@ function Picker({ id }: { id: string }) {
   const slots = useMemo(() => (templateHtml ? slotsIn(templateHtml) : []), [templateHtml]);
   const stock = useMemo(() => stockFor(m?.template), [m?.template]);
 
+  /* ── THE LIVE PREVIEW ────────────────────────────────────────────────────────────────────
+     The same three steps the edge function will run when a prospect replies — row+lead → raw →
+     derive → render — so what is on screen here is what gets sent, by construction rather than
+     by two code paths agreeing.
+     ⛔ A REFUSAL IS SHOWN, NEVER SWALLOWED. renderPage throws MissingRequired when the business
+     has no name/trade/town, and that is a mockup that must not be sent; printing an empty frame
+     would hide it. */
+  const preview = useMemo(() => {
+    if (!templateHtml || !m) return { html: '', error: '' };
+    try {
+      const raw = rawFromMockupRow(c, data?.lead ?? null, slotUrls);
+      return { html: renderPage(templateHtml, 'home', deriveMockup(raw) as never), error: '' };
+    } catch (e) {
+      const why = e instanceof MissingRaw || (e as Error)?.name === 'MissingRequired'
+        ? (e as Error).message
+        : `render failed: ${(e as Error)?.message ?? 'unknown'}`;
+      return { html: '', error: why };
+    }
+  }, [templateHtml, m, c, data?.lead, slotUrls]);
+
   const images: PoolImage[] = Array.isArray(c.pool) ? c.pool : [];
   const placed = c.slots ?? {};
 
@@ -187,6 +210,30 @@ function Picker({ id }: { id: string }) {
           Add <code>src/mockup/templates/{m.template}.html</code> and a registry row.
         </p>
       )}
+
+      {/* ── THE LIVE PREVIEW ──────────────────────────────────────────────────────────── */}
+      <h2 className="mt-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        What we would build
+      </h2>
+      {preview.error ? (
+        <p className="mt-2 rounded-md border border-dashed border-destructive/50 p-3 text-sm text-destructive">
+          {preview.error}
+        </p>
+      ) : preview.html ? (
+        <div className="mt-2 overflow-hidden rounded-md border">
+          {/* ⛔ SANDBOXED AND srcDoc: the page is built from SCRAPED text, so it is untrusted by
+              definition. No allow-scripts, no allow-same-origin — it renders and can do nothing
+              else. <base href="/"> is what lets the template's own relative font URLs resolve
+              against the SPA root; the template file is byte-identical to the design session's
+              copy and must stay that way, so the fix belongs here rather than in it. */}
+          <iframe
+            title="Mockup preview"
+            sandbox=""
+            className="h-[560px] w-full border-0 bg-white"
+            srcDoc={`<!doctype html><html><head><meta charset="utf-8"><base href="/"></head><body style="margin:0">${preview.html}</body></html>`}
+          />
+        </div>
+      ) : null}
 
       {/* ── SLOTS, driven by the template ─────────────────────────────────────────────── */}
       <h2 className="mt-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

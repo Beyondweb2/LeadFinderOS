@@ -8,6 +8,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { MockupRowLead } from '@/lib/mockupRaw';
 
 export interface MockupListRow {
   id: string;
@@ -98,7 +99,15 @@ export function useMockupList() {
 export function useMockup(id: string | undefined) {
   return useQuery({
     queryKey: ['mockup', id],
-    queryFn: () => callMockup<{ found: boolean; mockup: Mockup | null; slot_urls: Record<string, string> }>({ action: 'get', id }),
+    /* `lead` carries the facts the template needs that the mockup row does not store — the
+       Google rating, the review count, the address the postcode comes from, and the reviews
+       link. Joined at READ time so a rating that changes weekly is never frozen into the row. */
+    queryFn: () => callMockup<{
+      found: boolean;
+      mockup: Mockup | null;
+      slot_urls: Record<string, string>;
+      lead: MockupRowLead | null;
+    }>({ action: 'get', id }),
     enabled: !!id,
   });
 }
