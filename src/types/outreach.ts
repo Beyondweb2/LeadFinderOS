@@ -335,6 +335,43 @@ export function productOf(lead: { product?: string | null } | null | undefined):
   return (PRODUCT_VALUES as readonly string[]).includes(v) ? (v as ProductValue) : null;
 }
 
+/* ── SHARES A PHONE WITH ANOTHER LIVE LEAD ──────────────────────────────────────────────────
+   🔴 THIS CLASS PUT 25 DUPLICATE OPENERS OUT IN AUGUST, 11 OF THEM TO PHONES THAT HAD ALREADY
+   REPLIED. Two genuine Google listings for one operator ("Luna Locksmiths" and "Luna Locksmiths
+   key cutting and engraving") are different businesses by name and by place_id and the same
+   person by phone, so no name or place_id dedupe can ever catch them.
+   ⛔ SURFACED, NOT HIDDEN. Paul's call, 2026-09-11: "I would rather see them than trust a
+   send-time catch." The queue's phone-history seatbelt still refuses a cold template to a number
+   with history — this does not replace that guard, it makes the overlap visible before he acts.
+   ⚠️ Normalised to digits: the same number is stored as "+44 7920 684400" and "07920684400" on
+   different rows, and a raw string compare would call those two different people. */
+export function normalisePhoneKey(phone: string | null | undefined): string {
+  const d = String(phone ?? '').replace(/\D/g, '');
+  if (!d) return '';
+  // UK: 07… and 447… are the same subscriber. Compare on the national part.
+  if (d.startsWith('44')) return d.slice(2).replace(/^0+/, '');
+  return d.replace(/^0+/, '');
+}
+
+/**
+ * The ids of leads whose phone is shared with at least one OTHER lead in the same list.
+ *
+ * ⚠️ Computed over the list it is given, so it means "shared among the leads on screen" — the
+ * caller passes the unarchived set. A lead with no phone is never "shared": absence is not a match.
+ */
+export function sharedPhoneLeadIds(leads: Array<{ id: string; phone?: string | null }>): Set<string> {
+  const byKey = new Map<string, string[]>();
+  for (const l of leads) {
+    const k = normalisePhoneKey(l.phone);
+    if (!k) continue;
+    const arr = byKey.get(k);
+    if (arr) arr.push(l.id); else byKey.set(k, [l.id]);
+  }
+  const out = new Set<string>();
+  for (const ids of byKey.values()) if (ids.length > 1) for (const id of ids) out.add(id);
+  return out;
+}
+
 export const PAID_FILTER_VALUE = '__paid__';
 
 /** What the Outreach status filter can hold: a real status, or the Paid sentinel. */

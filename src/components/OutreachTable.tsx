@@ -77,6 +77,7 @@ import {
   Sparkles,
   MapPin,
   Tag,
+  Users,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -115,7 +116,7 @@ import { isDemoLead } from '@/lib/demoLeads';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { leadStatusLabel } from '@/types/outreach';
-import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, type ProductValue, type StatusFilterValue } from '@/types/outreach';
+import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
 import { useApifyUsage } from '@/hooks/useApifyUsage';
 import {
@@ -348,6 +349,8 @@ export function OutreachTable({
      living in the URL (the app-wide rule: the URL is for what you are looking at). */
   const [productFilter, setProductFilter] = useState<ProductValue | typeof PRODUCT_UNDECIDED | 'all'>('all');
   const [productBusy, setProductBusy] = useState(false);
+  /* Off by default: it is a warning about a minority, not a lens Paul works through. */
+  const [sharedPhoneOnly, setSharedPhoneOnly] = useState(false);
   const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
   const [trackedOnly, setTrackedOnly] = useState(false);
   // Contactability filters (AND-combined, stack with the others). Each matches the
@@ -1545,6 +1548,9 @@ export function OutreachTable({
     }
   };
 
+  /* Over every loaded lead, so a pair is still a pair when one half is filtered out. */
+  const sharedPhoneIds = useMemo(() => sharedPhoneLeadIds(leadsWithOptimistic), [leadsWithOptimistic]);
+
   const filteredAndSortedLeads = useMemo(() => {
     let result = [...leadsWithOptimistic];
 
@@ -1602,6 +1608,15 @@ export function OutreachTable({
         const wanted = statusesForFilter(statusFilter);
         result = result.filter((lead) => wanted.includes(lead.status as LeadStatus));
       }
+    }
+
+    /* ── SHARES A PHONE WITH ANOTHER LIVE LEAD ────────────────────────────────────────────
+       ⛔ THE SET IS BUILT FROM EVERY LOADED LEAD, NOT FROM THE FILTERED VIEW. A duplicate whose
+       twin is hidden by the current filter is still a duplicate — computing it after filtering
+       would quietly under-report exactly the pairs that matter, which is how the August incident
+       stayed invisible. */
+    if (sharedPhoneOnly) {
+      result = result.filter((lead) => sharedPhoneIds.has(lead.id));
     }
 
     /* ── PRODUCT: WHICH PITCH, NOT WHERE IN THE CONVERSATION ──────────────────────────────
@@ -1682,7 +1697,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
+  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, productFilter, sharedPhoneOnly, sharedPhoneIds, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
@@ -2362,6 +2377,13 @@ export function OutreachTable({
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem checked={hasWhatsApp} onCheckedChange={toggle(setHasWhatsApp)} onSelect={(e) => e.preventDefault()}>
                       <Smartphone className="h-3.5 w-3.5 mr-2" /> WhatsApp-capable
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuSeparator />
+                    {/* ⛔ A WARNING, NOT A HIDE — it is under "Show only" for that reason. Paul:
+                        "I would rather see them than trust a send-time catch." The count is on the
+                        label so the size of the problem is visible without switching it on. */}
+                    <DropdownMenuCheckboxItem checked={sharedPhoneOnly} onCheckedChange={toggle(setSharedPhoneOnly)} onSelect={(e) => e.preventDefault()}>
+                      <Users className="h-3.5 w-3.5 mr-2 text-amber-600" /> Shares a phone ({sharedPhoneIds.size})
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>Hide</DropdownMenuLabel>

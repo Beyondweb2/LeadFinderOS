@@ -87,6 +87,56 @@ export type MockupOutcome =
  * THE FAST HALF: apply the three mockup refusals and create the draft row. One insert, no fetch.
  * Safe to await inside the webhook. Returns an outcome; never throws.
  */
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   THE AUTO-VERDICT — AND IT SETS EXACTLY ONE VALUE.
+
+   🔴 `no_website` ONLY. Paul's explicit instruction, 2026-09-11, after I told him the data
+   cannot honestly decide the other two: 371 of the 430 replied leads with a real website do have
+   a completed SEO scan and 345 carry an overallGrade — but that grades ON-PAGE SEO, not whether
+   a site looks credible to a customer. His own call on First4locks proves the gap: he looked at
+   the comparison and said their site wins, and no grade told him that. His words: "A number I
+   would not trust is worse than no number." So rebuild-vs-ai_only stays UNDECIDED and he decides
+   from the screenshot.
+
+   ⛔ FILL-EMPTY-ONLY. `.is("product", null)` means an operator's decision is NEVER overwritten by
+   a later reply — the same convention as the questionnaire's contact_name write-through. If Paul
+   has looked at a lead and said `ai_only`, a re-scrape must not silently drag it back.
+   ⛔ AND IT SENDS NOTHING. This writes one column. No send path reads `product` and, per Paul's
+   rule, none ever may — the moment the sender consults it, a field he sets by hand starts
+   deciding sends.
+   ⚠️ NEVER THROWS. A mockup refusal is already a non-event; failing to annotate it must not turn
+   into a failed webhook. The column may also not exist yet on an older database, which reads as
+   an ordinary error here and is ignored.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+async function setProductNoWebsite(
+  // deno-lint-ignore no-explicit-any
+  service: any,
+  leadId: string,
+  why: string,
+): Promise<void> {
+  try {
+    const { data, error } = await service
+      .from("outreach_leads")
+      .update({ product: "no_website" })
+      .eq("id", leadId)
+      .is("product", null)          // ⛔ fill-empty-only: never overwrite a human decision
+      .select("id");
+    if (error) {
+      await record(service, "mockup_skipped", {
+        lead_id: leadId, reason: "product_not_set", detail: String(error.message ?? "").slice(0, 140),
+      });
+      return;
+    }
+    /* An empty result is the guard working (already decided), not a failure — recorded only when
+       it actually set something, so the log says what changed rather than what did not. */
+    if (Array.isArray(data) && data.length) {
+      await record(service, "mockup_skipped", { lead_id: leadId, reason: "product_no_website", detail: why });
+    }
+  } catch {
+    /* Deliberately silent: annotating a refusal must never break the inbound webhook. */
+  }
+}
+
 export async function createMockupRow(
   // deno-lint-ignore no-explicit-any
   service: any,
@@ -121,10 +171,12 @@ export async function createMockupRow(
     /* ── The three mockup-specific refusals ─────────────────────────────────────────────── */
     const website = typeof lead.website === "string" ? lead.website.trim() : "";
     if (!website) {
+      await setProductNoWebsite(service, leadId, "no website on the lead");
       await record(service, "mockup_skipped", { lead_id: leadId, business: lead.business_name, reason: "no_website" });
       return { started: false, reason: "no_website" };
     }
     if (isAggregatorUrl(website)) {
+      await setProductNoWebsite(service, leadId, `aggregator: ${website}`);
       await record(service, "mockup_skipped", { lead_id: leadId, business: lead.business_name, reason: "website_is_aggregator", website });
       return { started: false, reason: "website_is_aggregator", detail: website };
     }
