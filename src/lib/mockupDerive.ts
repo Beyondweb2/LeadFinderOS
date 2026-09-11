@@ -167,12 +167,32 @@ export function deriveMockup(raw: MockupRaw, opts: { now?: Date } = {}): Record<
   /* The hero's CSS-only art layer is OPAQUE, so it must not render when a real photo exists —
      it painted straight over the photograph on the design session's first build. */
   img.no_hero = !truthy(img.hero);
-  for (const slot of ["bg_urgent", "bg_prices", "bg_faq", "bg_contact", "owner"]) {
+  for (const slot of ["bg_urgent", "bg_prices", "bg_faq", "bg_contact", "owner", "logo", "services"]) {
     img[slot] = placed[slot] ?? "";
   }
+  /* ⛔ THEIR REAL LOGO BEATS INITIALS EVERY TIME (Paul, 2026-09-11), so the
+     monogram is a FALLBACK, never the default. The template needs a paired flag
+     because an if-guard there has no else branch: `no_logo` is the only thing
+     that lets the initials render, and it is false the moment a scraped logo
+     exists. Getting this backwards would put a generated monogram over a real
+     brand mark, which is the one substitution that always looks worse. */
+  img.no_logo = !truthy(img.logo);
+  /* The owner photo slot renders a visible DROP TARGET when empty rather than
+     collapsing, so the picker has somewhere to aim and a missing photograph is
+     obvious instead of invisible. */
+  img.no_owner_photo = !truthy(img.owner);
+
+  /* `badges` is a LIST, not a slot — their Bark / MyBuilder / Yell marks, which
+     they actually earned. Never invented, so an absent list renders no row. */
+  const badges = Array.isArray(raw.img?.badges)
+    ? (raw.img.badges as unknown[]).map((b) => String(b ?? "").trim()).filter(Boolean)
+    : [];
 
   /* Photos: real first, stock fills the gap, stock is never captioned as their work. */
-  const heroUrls = new Set(Object.values(placed).filter(Boolean));
+  (img as Record<string, unknown>).badges = badges;
+
+  const heroUrls = new Set(Object.values(placed).flatMap((v) =>
+    Array.isArray(v) ? (v as unknown[]).map(String) : [v as string]).filter(Boolean));
   /* 🔴 THE FURNITURE FILTER IS BELT-AND-BRACES AND A GOLDEN DIFF PROVED IT NECESSARY. The first
      port assumed the caller hands over an already-cleaned pool — true on the product path, where
      the harvester's IMG_SKIP and the pool's demoteReason have both run. But run against the

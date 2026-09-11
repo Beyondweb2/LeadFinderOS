@@ -32,6 +32,23 @@
    numerals are the SAME face everywhere: the system stack gave Consolas on
    Windows and DejaVu Sans Mono in the review screenshots, i.e. one design
    judged against two different faces. */
+/* Fraunces, SIL OFL. The single biggest premium signal available without
+   photography: a high-contrast serif headline is the one thing no Wix trade
+   template does. Warm and sturdy rather than fashion-editorial, which also
+   pulls against the "this feels scary" note. */
+/* ⚠️ ABLM HAS NO SERIF. Both --sans and --serif map to "Archivo" there; the
+   only second face is IBM Plex Mono. The Fraunces serif was MY addition and it
+   is why the type read as a different site — flagged in the deviation list.
+   Self-hosted rather than pulled from Google's CDN, which ABLM does: a mockup
+   must not depend on an external host. */
+@font-face{font-family:'Archivo';src:url('assets/fonts/Archivo-400.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Archivo';src:url('assets/fonts/Archivo-500.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Archivo';src:url('assets/fonts/Archivo-600.woff2') format('woff2');font-weight:600;font-display:swap}
+@font-face{font-family:'Archivo';src:url('assets/fonts/Archivo-700.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'PlexMono';src:url('assets/fonts/IBMPlexMono-400.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'PlexMono';src:url('assets/fonts/IBMPlexMono-500.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Fraunces';src:url('assets/fonts/Fraunces-600.woff2') format('woff2');font-weight:600;font-display:swap}
+@font-face{font-family:'Fraunces';src:url('assets/fonts/Fraunces-700.woff2') format('woff2');font-weight:700;font-display:swap}
 @font-face{font-family:'JBMono';src:url('assets/fonts/JetBrainsMono-400.woff2') format('woff2');font-weight:400;font-display:swap}
 @font-face{font-family:'JBMono';src:url('assets/fonts/JetBrainsMono-500.woff2') format('woff2');font-weight:500;font-display:swap}
 
@@ -43,6 +60,7 @@
   --line:rgba(255,255,255,.10); --line-2:rgba(255,255,255,.055);
   --grid:rgba(255,255,255,.032);
   --line-ink:rgba(19,23,27,.14);
+  --display:'Fraunces',Georgia,'Times New Roman',serif;
   --mono:'JBMono',ui-monospace,"Cascadia Mono","Consolas","DejaVu Sans Mono",monospace;
   --pad:clamp(20px,5vw,80px);
 }
@@ -163,6 +181,10 @@ a{color:inherit}
 [data-palette="light"] .gal,[data-palette="light-blue"] .gal{background:var(--paper)}
 [data-palette="light"] .areas,[data-palette="light-blue"] .areas{background:var(--paper-2)}
 [data-palette="light"] .faq,[data-palette="light-blue"] .faq{background:var(--paper)}
+[data-palette="light"] .revs,[data-palette="light-blue"] .revs{background:var(--paper-2)}
+[data-palette="light"] .rev-card,[data-palette="light-blue"] .rev-card{background:var(--paper);border-color:var(--line-ink)}
+[data-palette="light"] .rev-stars i,[data-palette="light-blue"] .rev-stars i{background:var(--accent-ink)}
+[data-palette="light"] .rev-more a,[data-palette="light-blue"] .rev-more a{border-bottom-color:var(--accent-ink)}
 /* prices was dark; now a near-white band with an accent wash */
 [data-palette="light"] .prices,[data-palette="light-blue"] .prices{
   background:linear-gradient(180deg,var(--accent-wash),transparent 70%),var(--paper-3);
@@ -290,18 +312,918 @@ a{color:inherit}
   [data-palette="light"] .hero-in,[data-palette="light-blue"] .hero-in{grid-template-columns:1fr}
 }
 
+/* ══ MOTION ════════════════════════════════════════════════════════════════
+   ⛔ THERE ARE NO ENTRANCE ANIMATIONS, AND THAT IS A DELIBERATE REVERSAL.
+   Scroll-driven reveals were built here (CSS `animation-timeline: view()`, no
+   JavaScript) and then removed the same hour, because of what this page is FOR:
+   it gets SCREENSHOTTED. The before/after image is captured by a headless
+   browser, and a full-page capture resizes the viewport so that every element
+   is "in view" at once — the view() ranges never resolve, `fill-mode: both`
+   holds the `from` state, and the services, gallery, prices, reviews and FAQ
+   all captured EMPTY. The page was perfect in a browser and blank in the
+   product.
+
+   Animating transform only (never opacity) would have captured content in the
+   wrong position instead of not at all, which is not better.
+
+   So: nothing on this page hides itself, ever, for any reason. The polish
+   below is limited to hover and press — states a screenshot cannot be caught
+   in, because nothing is hovering an element in a headless capture.
+   ⚠️ If anyone re-adds a reveal animation, screenshot the built page full-page
+   and look at it before believing it works. A browser is not the test; the
+   capture is. */
+.btn{transition:transform .16s ease,box-shadow .16s ease,background-color .16s ease}
+.btn:hover{transform:translateY(-1px)}
+.btn-p:hover{box-shadow:0 8px 22px rgba(0,0,0,.22)}
+.btn:active{transform:translateY(0)}
+.gal-grid .shot>img{transition:transform .55s cubic-bezier(.2,.6,.2,1)}
+.gal-grid figure:hover .shot>img{transform:scale(1.04)}
+.svc{transition:background-color .2s ease}
+.svc:hover{background:rgba(0,0,0,.018)}
+.rev-card{transition:transform .18s ease,box-shadow .18s ease}
+.rev-card:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(21,24,28,.07)}
+.area-row{transition:background-color .18s ease}
+.spec-link,.rev-more a,.c-grid dd a{transition:border-color .16s ease}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE CHARACTER VARIANT — ornament, not restraint.
+   Built 2026-09-11 from Paul's read of andersonlock.com and mathias1901.com:
+   his page was "pure typography on flat grounds with no ornament", which is a
+   tasteful designerly solution and exactly why it read as generic. Those two
+   are less refined and far more memorable.
+
+   ⛔ EVERY ORNAMENT BELOW IS HIDDEN BY DEFAULT AND REVEALED ONLY HERE, so the
+   comparison is fair and nothing that already worked is disturbed. Structure is
+   untouched: the hero, the urgent/planned split, grouped services with prices
+   and the response-times table are all exactly as they were.
+
+   ⛔ THE CAVEAT PAUL NAMED IS ENFORCED IN THE DATA, NOT THE CSS: Anderson says
+   "65+ years" and "over 40 work trucks" because it is a 65-year-old firm with
+   40 trucks. Our prospects are sole traders. Every number here is a field the
+   business supplied — established year, review count, response time — and the
+   section carrying it disappears when the field is empty. The DEVICES are
+   borrowed; the SCALE of the claims is not.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* the ornament is invisible unless the variant asks for it */
+.mark,.heritage,.straddle,.swoop,.ico,.avatar,.badges{display:none}
+.logo{max-height:46px;width:auto}
+
+:root[data-palette="character"]{
+  --paper:#FFFFFF; --paper-2:#F4F2ED; --paper-3:#E9E5DC; --paper-ink:#16191D;
+  --line-ink:rgba(22,25,29,.14);
+  --accent-ink:#1F6B45; --accent-lift:#6FD3A0; --accent-wash:rgba(31,107,69,.08);
+  --brass:var(--accent-lift); --brass-lit:var(--accent-lift); --brass-dim:var(--accent-ink);
+}
+
+/* ---- grounds: light base, two dark bands, as the research said ----------- */
+[data-palette="character"] body{background:var(--paper);color:var(--paper-ink)}
+[data-palette="character"] .hero{background:var(--paper);color:var(--paper-ink);border-bottom:0}
+[data-palette="character"] .hero h1,[data-palette="character"] .h2,
+[data-palette="character"] .trust h3,[data-palette="character"] .owner .h2{color:var(--paper-ink)}
+[data-palette="character"] .hero-sub{color:#3C4550}
+[data-palette="character"] .hero-sub b{color:var(--paper-ink)}
+[data-palette="character"] .hero-rule{display:none}
+[data-palette="character"] .eyebrow{color:var(--accent-ink)}
+[data-palette="character"] .trust{background:var(--paper-2);color:var(--paper-ink);
+  border-bottom:1px solid var(--line-ink);padding-top:96px}
+[data-palette="character"] .trust p,[data-palette="character"] .faq-item p{color:#48525E}
+[data-palette="character"] .trust h3::before{display:none}
+[data-palette="character"] .owner{background:var(--paper)}
+[data-palette="character"] .revs{background:var(--paper-2)}
+[data-palette="character"] .svcs{background:var(--paper)}
+[data-palette="character"] .gal{background:var(--paper-2)}
+[data-palette="character"] .areas{background:var(--paper)}
+[data-palette="character"] .faq{background:var(--paper-2)}
+[data-palette="character"] .faq-item{border-top:1px solid var(--line-ink)}
+[data-palette="character"] .area-row dd,[data-palette="character"] .svc-i,
+[data-palette="character"] .grp{color:var(--accent-ink)}
+[data-palette="character"] .svc-price{border-top:2px solid var(--accent-ink)}
+[data-palette="character"] .btn-p{background:var(--accent-ink);border-color:var(--accent-ink);color:#fff}
+[data-palette="character"] .btn-s{color:var(--paper-ink);border-color:rgba(22,25,29,.26)}
+[data-palette="character"] .cb-call{background:var(--accent-ink);color:#fff}
+[data-palette="character"] .cb-wa{background:var(--paper-ink);color:#fff}
+[data-palette="character"] footer{background:var(--paper-2);border-top:1px solid var(--line-ink);color:#5A6470}
+[data-palette="character"] .f-name{color:var(--paper-ink)}
+
+/* ---- 2. TEXTURE on section grounds, not just photography ----------------
+   Mathias runs brushed steel behind one band and dark wood behind another.
+   Both are CSS gradients here: no image request, no licence, and they scale. */
+[data-palette="character"] .prices{
+  background-color:#161A1F;
+  background-image:
+    repeating-linear-gradient(90deg,rgba(255,255,255,.030) 0 1px,transparent 1px 3px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.018) 0 1px,transparent 1px 9px),
+    linear-gradient(180deg,#232A31 0%,#12161A 60%,#171C22 100%);   /* brushed steel */
+  color:var(--text)}
+[data-palette="character"] .prices .h2{color:var(--text)}
+[data-palette="character"] .prices .eyebrow{color:var(--accent-lift)}
+[data-palette="character"] .prices .secbg{display:none}
+[data-palette="character"] .contact{
+  background-color:#241C15;
+  background-image:
+    repeating-linear-gradient(91deg,rgba(0,0,0,.16) 0 2px,transparent 2px 7px),
+    repeating-linear-gradient(88deg,rgba(255,255,255,.022) 0 1px,transparent 1px 13px),
+    linear-gradient(180deg,#33271D 0%,#1E1710 100%);                /* dark timber */
+  color:var(--text)}
+[data-palette="character"] .contact .h2{color:var(--text)}
+[data-palette="character"] .contact .eyebrow{color:var(--accent-lift)}
+[data-palette="character"] .c-tel{color:var(--accent-lift)}
+[data-palette="character"] .contact .secbg{display:none}
+[data-palette="character"] .lane-now{
+  background-color:#141A17;
+  background-image:radial-gradient(80% 100% at 0% 0%,rgba(31,107,69,.26),transparent 62%)}
+/* ⛔ THE DARK LANE NEEDS ITS TEXT FLIPPED TOO. The character variant makes the
+   body near-black for the light base; this lane keeps a dark ground, so every
+   string inside it had to be flipped back or it is black on black. Same class
+   of mistake as the prices band and the hero photo — a ground and its text are
+   one edit, never two. Caught by src/check-pixels.mjs, which reads the rendered
+   pixels rather than the CSS. */
+[data-palette="character"] .lane-now{color:var(--text)}
+[data-palette="character"] .lane-now h2,[data-palette="character"] .lane-now dt{color:var(--text)}
+[data-palette="character"] .lane-now p,[data-palette="character"] .lane-now dd{color:var(--dim)}
+[data-palette="character"] .lane-now .eyebrow{color:var(--accent-lift)}
+[data-palette="character"] .lane-now .btn-p{background:var(--accent-lift);border-color:var(--accent-lift);color:#06180F}
+
+/* ---- 1. THE LOGO MARK ---------------------------------------------------- */
+[data-palette="character"] .brandline{display:flex;align-items:center;gap:14px}
+[data-palette="character"] .mark{display:inline-flex;align-items:center;justify-content:center;
+  min-width:56px;height:40px;padding:0 13px;border-radius:999px;
+  background:var(--accent-ink);color:#fff;
+  font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:.04em;
+  box-shadow:0 3px 0 rgba(22,25,29,.16)}
+[data-palette="character"] .brandline .eyebrow{margin:0}
+
+/* ---- 9. HERITAGE, stated loudly ----------------------------------------- */
+[data-palette="character"] .heritage{display:flex;align-items:baseline;gap:9px;
+  margin:18px 0 0;font-family:var(--display);font-weight:700;
+  font-size:clamp(26px,3vw,40px);letter-spacing:-.01em;color:var(--accent-ink)}
+[data-palette="character"] .heritage span{font-family:var(--mono);font-size:12px;
+  letter-spacing:.2em;text-transform:uppercase;color:#5A6470;font-weight:400}
+
+/* ---- 6. RULES EITHER SIDE OF SECTION HEADINGS --------------------------- */
+[data-palette="character"] section .eyebrow{display:flex;align-items:center;gap:12px}
+[data-palette="character"] section .eyebrow::before,
+[data-palette="character"] section .eyebrow::after{content:"";height:1px;flex:0 0 26px;
+  background:currentColor;opacity:.55}
+[data-palette="character"] section .eyebrow::after{flex:1 1 auto;max-width:120px}
+[data-palette="character"] .brandline .eyebrow::before{display:none}
+
+/* ---- 7. THE NUMBERS, called out in colour ------------------------------- */
+[data-palette="character"] .spec{background:var(--paper-2);border-top:3px solid var(--accent-ink);
+  border-left:0;box-shadow:0 1px 0 var(--line-ink)}
+[data-palette="character"] .spec>div{border-bottom:1px solid var(--line-ink)}
+[data-palette="character"] .spec dt{color:#5A6470}
+[data-palette="character"] .spec dd{color:var(--accent-ink);font-weight:500;
+  font-size:clamp(20px,1.8vw,25px)}
+[data-palette="character"] .spec dd small{color:#5A6470}
+/* --brass-lit maps to the LIGHT accent, which is meant for dark grounds; the
+   spec panel is light, so the highlighted rating was mint on near-white. */
+[data-palette="character"] .spec .hl dd{color:var(--accent-ink)}
+[data-palette="character"] .spec-link{border-bottom-color:var(--accent-ink)}
+
+/* ---- 5. CARDS STRADDLING THE SECTION EDGE ------------------------------- */
+[data-palette="character"] .straddle{display:block;position:relative;z-index:3;
+  margin-top:-58px;margin-bottom:-58px}
+[data-palette="character"] .straddle-in{display:grid;gap:clamp(12px,1.4vw,20px);
+  grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+[data-palette="character"] .scard{display:flex;flex-direction:column;gap:7px;
+  background:var(--paper);border:1px solid var(--line-ink);border-top:3px solid var(--accent-ink);
+  padding:22px 22px 20px;text-decoration:none;color:var(--paper-ink);
+  box-shadow:0 14px 34px rgba(22,25,29,.10);
+  transition:transform .18s ease,box-shadow .18s ease}
+[data-palette="character"] .scard:hover{transform:translateY(-3px);
+  box-shadow:0 20px 44px rgba(22,25,29,.14)}
+[data-palette="character"] .scard-i{font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+  color:var(--accent-ink)}
+[data-palette="character"] .scard-n{font-family:var(--display);font-weight:600;
+  font-size:clamp(17px,1.5vw,20px);line-height:1.2;letter-spacing:-.01em}
+[data-palette="character"] .scard-p{font-family:var(--mono);font-size:14px;color:var(--accent-ink);
+  margin-top:auto;padding-top:8px}
+[data-palette="character"] .scard-p.muted{color:#5A6470}
+
+/* ---- 3. CURVED SECTION DIVIDERS ----------------------------------------- */
+/* Anderson's sections swoop into each other. A CSS mask, so there is no SVG
+   file to fetch and the curve inherits whatever colour sits above it. */
+/* ⚠️ IT HAS TO OVERLAP THE SECTION BELOW, AND CARRY THE COLOUR OF THE SECTION
+   ABOVE. The first version did neither: it sat between the two as its own
+   64px band, painted white, on a white body — a white curve on white, visible
+   to nobody. The negative bottom margin pulls it over the next section and the
+   mask paints a dome, so the band above genuinely bulges down into the one
+   below. Colour is set per boundary by sibling selector, because a divider has
+   to know which two grounds it is joining. */
+[data-palette="character"] .swoop{display:block;position:relative;z-index:2;
+  height:clamp(38px,4.4vw,64px);margin-bottom:calc(-1 * clamp(38px,4.4vw,64px));
+  pointer-events:none;background:var(--paper);
+  -webkit-mask:radial-gradient(96% 100% at 50% 0,#000 69.6%,transparent 70%);
+  mask:radial-gradient(96% 100% at 50% 0,#000 69.6%,transparent 70%)}
+[data-palette="character"] .owner+.swoop{background:var(--paper)}
+[data-palette="character"] .svcs+.swoop{background:var(--paper)}
+[data-palette="character"] .areas+.swoop{background:var(--paper)}
+[data-palette="character"] .faq+.swoop{background:var(--paper-2)}
+/* the section under a divider needs headroom or its heading tucks beneath it */
+[data-palette="character"] .swoop+section{padding-top:calc(clamp(38px,4.4vw,64px) + clamp(56px,7.5vw,116px))}
+
+/* ---- 4. ICONS, inline, no dependency ------------------------------------ */
+/* Drawn as CSS masks over the accent colour: one element, no <svg> in the
+   markup to escape, and they recolour with the palette for free. */
+[data-palette="character"] .ico{display:block;width:26px;height:26px;margin-bottom:12px;
+  background:var(--accent-ink);
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-size:contain;mask-size:contain}
+[data-palette="character"] .ico-pick{-webkit-mask-image:var(--i-pick);mask-image:var(--i-pick)}
+[data-palette="character"] .ico-tag{-webkit-mask-image:var(--i-tag);mask-image:var(--i-tag)}
+[data-palette="character"] .ico-coin{-webkit-mask-image:var(--i-coin);mask-image:var(--i-coin)}
+[data-palette="character"] .ico-shield{-webkit-mask-image:var(--i-shield);mask-image:var(--i-shield)}
+[data-palette="character"] .ico-rosette{-webkit-mask-image:var(--i-rosette);mask-image:var(--i-rosette)}
+:root{
+  --i-pick:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='7.5' cy='16.5' r='3.5'/%3E%3Cpath d='M10 14 21 3M18 6l2 2M15 9l2 2'/%3E%3C/svg%3E");
+  --i-tag:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.5 13.5 13 21a2 2 0 0 1-2.8 0L3 13.8V4h9.8l7.7 7.7a2 2 0 0 1 0 1.8Z'/%3E%3Ccircle cx='7.8' cy='7.8' r='1.4'/%3E%3C/svg%3E");
+  --i-coin:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M15 8.5a3.5 3.5 0 0 0-6 2.5c0 3.5 6 2 6 4.5A3.5 3.5 0 0 1 9 15.5M12 6v12'/%3E%3C/svg%3E");
+  --i-shield:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2.8 4.5 6v6c0 4.6 3.2 7.9 7.5 9.2 4.3-1.3 7.5-4.6 7.5-9.2V6Z'/%3E%3Cpath d='m8.8 12 2.2 2.2 4.2-4.4'/%3E%3C/svg%3E");
+  --i-rosette:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='9' r='5.6'/%3E%3Cpath d='M8.4 13.6 7 22l5-2.6L17 22l-1.4-8.4'/%3E%3C/svg%3E");
+}
+
+/* ---- 8. REVIEW AVATARS -------------------------------------------------- */
+[data-palette="character"] .rev-card figcaption{display:flex;align-items:center;gap:11px;
+  flex-wrap:wrap;text-transform:none;letter-spacing:.02em;font-size:12.5px}
+[data-palette="character"] .avatar{display:inline-flex;align-items:center;justify-content:center;
+  width:36px;height:36px;border-radius:999px;background:var(--accent-ink);color:#fff;
+  font-family:var(--display);font-weight:700;font-size:16px;flex:0 0 auto}
+[data-palette="character"] .who{display:flex;flex-direction:column;line-height:1.3}
+[data-palette="character"] .who em{font-style:normal;color:#5A6470;font-size:11.5px}
+[data-palette="character"] .rev-stars i{background:var(--accent-ink)}
+[data-palette="character"] .rev-card{border-top:3px solid var(--accent-ink)}
+
+/* ---- ⛔ THE HERO PHOTO SCRIM MUST FLIP WITH THE GROUND ------------------
+   Third time this exact class of bug: a variant flips a ground to light, the
+   background PHOTO keeps its dark scrim, and near-black text lands on a dark
+   photograph. It passed every contrast check both previous times because a DOM
+   checker reads background-COLOR and cannot see a background image.
+   The rule, now written down: FLIPPING A GROUND MEANS FLIPPING THE SCRIM OVER
+   ITS PHOTO, in the same edit, always. `npm run contrast` gained a probe that
+   reads the scrim's own computed ::after colour so it cannot miss it again. */
+[data-palette="character"] .hero-bg{left:50%;right:0}
+[data-palette="character"] .hero-bg::after{
+  background:linear-gradient(90deg,var(--paper) 0%,rgba(255,255,255,.42) 24%,rgba(255,255,255,0) 60%)}
+[data-palette="character"] .hero-bg .shot>img{filter:contrast(1.03) saturate(1) brightness(1.02)}
+[data-palette="character"] .hero-bg .shot::before{opacity:.06}
+[data-palette="character"] .hero-bg .shot::after{background:none}
+[data-palette="character"] .hero-art{
+  background:radial-gradient(58% 68% at 4% -4%,var(--accent-wash),transparent 60%),var(--paper)}
+[data-palette="character"] .hero-grid{
+  background-image:linear-gradient(rgba(22,25,29,.045) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(22,25,29,.045) 1px,transparent 1px)}
+[data-palette="character"] .hero-in{grid-template-columns:minmax(0,1fr) minmax(0,.78fr)}
+
+@media (max-width:820px){
+  [data-palette="character"] .straddle{margin-top:-30px;margin-bottom:-30px}
+  [data-palette="character"] .trust{padding-top:64px}
+  [data-palette="character"] .heritage{font-size:26px}
+  [data-palette="character"] .hero-bg{position:relative;left:0;right:0;height:280px;margin-bottom:8px}
+  [data-palette="character"] .hero-bg::after{
+    background:linear-gradient(0deg,var(--paper) 0%,rgba(255,255,255,0) 44%)}
+  [data-palette="character"] .hero-in{grid-template-columns:1fr}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   "SOLID" — the Anderson Lock target, and the only one from now on.
+   Built 2026-09-11 after three attempts at a mood from contradictory
+   references. Dr Locks and Aston's are light and friendly; Anderson and Mathias
+   are dark, heavy and textured. Chasing both produced something that was
+   neither. This is Anderson only, adapted for a UK sole trader.
+
+   WHAT "SOLID" MEANS HERE, taken literally from Paul's list:
+     heavier weights, tighter leading, less air   -> line-height 1.02 on display,
+                                                     1.5 on body, padding cut ~30%
+     warm dark greys and browns, not near-black   -> #17120F / #201A15 / #2A221B,
+                                                     every one warm-shifted
+     texture on grounds, nothing flat             -> every ground carries a
+                                                     gradient or weave
+     photographs filling the width                -> hero full-bleed, gallery
+                                                     edge-to-edge, no boxes
+     fewer, bigger sections                       -> adjacent related sections
+                                                     share a ground and drop the
+                                                     rule between them, so the
+                                                     page reads as 7 blocks
+
+   ⛔ THE ONE ANDERSON ELEMENT THAT CANNOT BE BUILT: real photographs of people
+   and vans. Anderson's warmth comes from the owner by a red truck. There is no
+   such photograph available — Unsplash, Pexels, Openverse and Picsum were all
+   searched and looked at. NOTHING IS SUBSTITUTED FOR IT: the hero takes a
+   full-bleed photograph, and the moment a real one of a person exists it drops
+   into the same slot with no layout change. The gap is left visible rather than
+   filled with something that would read as stock.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root[data-palette="solid"]{
+  --ink:#17120F; --ink-2:#201A15; --ink-3:#2A221B; --ink-4:#372C22;
+  --paper:#F4EFE6; --paper-2:#E9E1D3; --paper-ink:#1A1410;
+  --text:#F2ECE4; --dim:#CFC5B8; --dimmer:#A99D8D;
+  --line:rgba(242,236,228,.14); --line-2:rgba(242,236,228,.075);
+  --line-ink:rgba(26,20,16,.16);
+  --red:#C1272D; --red-lift:#EC7A6E; --red-ink:#A81F26;
+  --brass:var(--red-lift); --brass-lit:var(--red-lift); --brass-dim:var(--red-ink);
+  --pad:clamp(20px,4.4vw,72px);
+}
+
+/* ---- weight and air: the "solid" part ----------------------------------- */
+[data-palette="solid"] body{background:var(--ink);color:var(--text);
+  font-weight:400;line-height:1.5}
+[data-palette="solid"] .pad-y{padding-block:clamp(44px,5.4vw,84px)}
+[data-palette="solid"] .hero h1{font-weight:700;line-height:.96;letter-spacing:-.028em;
+  font-size:clamp(46px,7.6vw,112px);max-width:15ch}
+[data-palette="solid"] .h2{font-weight:700;line-height:1.0;letter-spacing:-.022em;
+  font-size:clamp(32px,4.6vw,62px)}
+[data-palette="solid"] .lane h2{font-weight:700;line-height:1.02;font-size:clamp(27px,3.1vw,44px)}
+[data-palette="solid"] .svc-name{font-weight:700;line-height:1.1}
+[data-palette="solid"] .hero-sub{font-size:clamp(17px,1.45vw,20px);line-height:1.45;max-width:44ch}
+[data-palette="solid"] .lede,[data-palette="solid"] .faq-item p,
+[data-palette="solid"] .svc-desc,[data-palette="solid"] .lane p{line-height:1.5}
+[data-palette="solid"] .eyebrow{font-size:clamp(12px,1vw,14px);letter-spacing:.22em}
+
+/* ---- texture on every ground: nothing is flat colour -------------------- */
+[data-palette="solid"] .trust,[data-palette="solid"] .areas{
+  background-color:var(--ink-2);
+  background-image:repeating-linear-gradient(122deg,rgba(242,236,228,.016) 0 2px,transparent 2px 6px),
+                   linear-gradient(180deg,#241D17,#1B1511)}
+[data-palette="solid"] .owner,[data-palette="solid"] .revs{
+  background-color:var(--ink-3);
+  background-image:repeating-linear-gradient(90deg,rgba(0,0,0,.13) 0 3px,transparent 3px 9px),
+                   linear-gradient(180deg,#332820 0%,#241C16 100%)}          /* timber */
+[data-palette="solid"] .svcs,[data-palette="solid"] .prices{
+  background-color:var(--ink);
+  background-image:repeating-linear-gradient(90deg,rgba(242,236,228,.022) 0 1px,transparent 1px 4px),
+                   linear-gradient(180deg,#1E1813 0%,#141010 100%)}          /* brushed */
+[data-palette="solid"] .faq{background-color:var(--ink-2);
+  background-image:radial-gradient(120% 90% at 12% 0,rgba(193,39,45,.09),transparent 60%),
+                   linear-gradient(180deg,#221B16,#191410)}
+[data-palette="solid"] .contact{background-color:#241C15;
+  background-image:repeating-linear-gradient(91deg,rgba(0,0,0,.17) 0 2px,transparent 2px 7px),
+                   linear-gradient(180deg,#35291E 0%,#1D1610 100%)}
+[data-palette="solid"] footer{background:var(--ink);border-top:1px solid var(--line-2)}
+
+/* text colours across all of it */
+[data-palette="solid"] .h2,[data-palette="solid"] .hero h1,[data-palette="solid"] .trust h3,
+[data-palette="solid"] .svc-name,[data-palette="solid"] .faq-item h3,[data-palette="solid"] .owner .h2,
+[data-palette="solid"] .area-row dt,[data-palette="solid"] .price-row dt{color:var(--text)}
+[data-palette="solid"] .trust p,[data-palette="solid"] .faq-item p,[data-palette="solid"] .svc-desc,
+[data-palette="solid"] .lane p,[data-palette="solid"] .owner-bio,[data-palette="solid"] .lede{color:var(--dim)}
+[data-palette="solid"] .eyebrow{color:var(--red-lift)}
+[data-palette="solid"] .area-row dd,[data-palette="solid"] .price-row dd,
+[data-palette="solid"] .c-tel,[data-palette="solid"] .spec .hl dd{color:var(--red-lift)}
+[data-palette="solid"] .svc-i,[data-palette="solid"] .grp{color:var(--red-lift)}
+/* ⚠️ SPECIFICITY, not a missing rule. `.gal .h2{color:var(--paper-ink)}` and its
+   siblings come from the light era and sit LATER in the file at equal weight,
+   so they won and four section headings rendered dark-on-dark. Adding `section`
+   raises this above them. Found by the pixel probe; a CSS reader would have
+   said the colour was set, and it was — just not the winning one. */
+[data-palette="solid"] section .h2,
+[data-palette="solid"] section .h2 *{color:var(--text)}
+[data-palette="solid"] section .rev-more a{color:var(--red-lift);border-bottom-color:var(--red)}
+[data-palette="solid"] section figcaption{color:var(--dimmer)}
+[data-palette="solid"] .svc-price{border-top:2px solid var(--red);color:var(--text)}
+[data-palette="solid"] .btn-p{background:var(--red);border-color:var(--red);color:#fff}
+[data-palette="solid"] .btn-s{color:var(--text);border-color:var(--line)}
+[data-palette="solid"] .cb-call{background:var(--red);color:#fff}
+[data-palette="solid"] .cb-wa{background:var(--ink-4);color:var(--text)}
+[data-palette="solid"] .area-list,[data-palette="solid"] .price-table{border-top:1px solid var(--line)}
+[data-palette="solid"] .area-row,[data-palette="solid"] .price-row,
+[data-palette="solid"] .faq-item{border-color:var(--line-2)}
+[data-palette="solid"] .svc{border-bottom:1px solid var(--line-2)}
+[data-palette="solid"] .svc:nth-child(odd){border-right:1px solid var(--line-2)}
+[data-palette="solid"] .svc-list{border-top:1px solid var(--line)}
+[data-palette="solid"] .svc:hover{background:rgba(242,236,228,.02)}
+[data-palette="solid"] .price-none{border:1px solid var(--line);border-top:2px solid var(--red)}
+[data-palette="solid"] .price-none dt{color:var(--red-lift);border-bottom:1px solid var(--line-2)}
+[data-palette="solid"] .price-none dd,[data-palette="solid"] .c-grid dd{color:var(--text)}
+[data-palette="solid"] .c-grid dt,[data-palette="solid"] .spec dt,
+[data-palette="solid"] .based,[data-palette="solid"] .t-none,
+[data-palette="solid"] .area-note,[data-palette="solid"] figcaption{color:var(--dimmer)}
+
+/* ---- FEWER, BIGGER: related sections share a ground and lose the rule --- */
+[data-palette="solid"] .owner{border-bottom:0;padding-bottom:0}
+[data-palette="solid"] .revs{padding-top:clamp(30px,3.4vw,48px)}
+[data-palette="solid"] .svcs{padding-bottom:clamp(30px,3.4vw,48px)}
+[data-palette="solid"] .prices{padding-top:clamp(30px,3.4vw,48px);border-top:0}
+[data-palette="solid"] .prices .eyebrow{color:var(--red-lift)}
+
+/* ---- the hero: ONE full-bleed photograph, not a panel ------------------- */
+[data-palette="solid"] .hero{border-bottom:0}
+[data-palette="solid"] .hero-bg{left:0;right:0}
+[data-palette="solid"] .hero-bg::after{
+  background:linear-gradient(90deg,rgba(23,18,15,.95) 0%,rgba(23,18,15,.86) 46%,rgba(23,18,15,.62) 100%),
+             linear-gradient(0deg,rgba(23,18,15,.92) 0%,rgba(23,18,15,.28) 46%)}
+[data-palette="solid"] .hero-bg .shot>img{filter:grayscale(.25) contrast(1.06) brightness(.86) saturate(1.05)}
+[data-palette="solid"] .hero-bg .shot::before{
+  background:linear-gradient(175deg,#7A4A22 0%,#1A120D 100%);opacity:.34}
+[data-palette="solid"] .hero-in{grid-template-columns:minmax(0,1fr) minmax(0,.74fr);
+  padding-block:clamp(58px,7.4vw,104px)}
+[data-palette="solid"] .spec{background:rgba(23,18,15,.88);border-top:3px solid var(--red);
+  border-left:1px solid var(--line-2)}
+[data-palette="solid"] .spec dd{color:var(--text)}
+
+/* ---- the mark, in red, heavier ----------------------------------------- */
+[data-palette="solid"] .mark{display:inline-flex;align-items:center;justify-content:center;
+  min-width:60px;height:44px;padding:0 15px;border-radius:999px;background:var(--red);color:#fff;
+  font-family:var(--display);font-weight:700;font-size:21px;letter-spacing:.03em;
+  box-shadow:0 3px 0 rgba(0,0,0,.34)}
+[data-palette="solid"] .brandline{display:flex;align-items:center;gap:15px}
+[data-palette="solid"] .brandline .eyebrow{margin:0}
+[data-palette="solid"] .brandline .eyebrow::before{display:none}
+
+/* ---- heritage, loud ----------------------------------------------------- */
+[data-palette="solid"] .heritage{display:flex;align-items:baseline;gap:10px;margin:16px 0 0;
+  font-family:var(--display);font-weight:700;font-size:clamp(30px,3.6vw,52px);
+  letter-spacing:-.02em;color:var(--red-lift)}
+[data-palette="solid"] .heritage span{font-family:var(--mono);font-size:12px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--dimmer);font-weight:400}
+
+/* ---- ruled headings, icons, straddling cards, avatars ------------------- */
+[data-palette="solid"] section .eyebrow{display:flex;align-items:center;gap:12px}
+[data-palette="solid"] section .eyebrow::before,[data-palette="solid"] section .eyebrow::after{
+  content:"";height:2px;flex:0 0 24px;background:currentColor;opacity:.7}
+[data-palette="solid"] section .eyebrow::after{flex:1 1 auto;max-width:96px}
+[data-palette="solid"] .ico{display:block;width:28px;height:28px;margin-bottom:12px;
+  background:var(--red-lift);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-size:contain;mask-size:contain}
+[data-palette="solid"] .ico-pick{-webkit-mask-image:var(--i-pick);mask-image:var(--i-pick)}
+[data-palette="solid"] .ico-tag{-webkit-mask-image:var(--i-tag);mask-image:var(--i-tag)}
+[data-palette="solid"] .ico-coin{-webkit-mask-image:var(--i-coin);mask-image:var(--i-coin)}
+[data-palette="solid"] .ico-shield{-webkit-mask-image:var(--i-shield);mask-image:var(--i-shield)}
+[data-palette="solid"] .ico-rosette{-webkit-mask-image:var(--i-rosette);mask-image:var(--i-rosette)}
+[data-palette="solid"] .trust h3::before{display:none}
+[data-palette="solid"] .straddle{display:block;position:relative;z-index:3;
+  margin-top:-52px;margin-bottom:-52px}
+[data-palette="solid"] .straddle-in{display:grid;gap:2px;
+  grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+[data-palette="solid"] .scard{display:flex;flex-direction:column;gap:6px;padding:22px 22px 20px;
+  background:var(--ink-3);border-top:3px solid var(--red);text-decoration:none;color:var(--text);
+  box-shadow:0 18px 40px rgba(0,0,0,.42);transition:background-color .18s ease}
+[data-palette="solid"] .scard:hover{background:var(--ink-4)}
+[data-palette="solid"] .scard-i{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--red-lift)}
+[data-palette="solid"] .scard-n{font-family:var(--display);font-weight:700;font-size:clamp(17px,1.5vw,20px);line-height:1.16}
+[data-palette="solid"] .scard-p{font-family:var(--mono);font-size:14px;color:var(--red-lift);margin-top:auto;padding-top:8px}
+[data-palette="solid"] .scard-p.muted{color:var(--dimmer)}
+[data-palette="solid"] .trust{padding-top:92px}
+[data-palette="solid"] .avatar{display:inline-flex;align-items:center;justify-content:center;
+  width:38px;height:38px;border-radius:999px;background:var(--red);color:#fff;
+  font-family:var(--display);font-weight:700;font-size:17px;flex:0 0 auto}
+[data-palette="solid"] .rev-card{background:rgba(23,18,15,.55);border:1px solid var(--line-2);
+  border-top:3px solid var(--red)}
+[data-palette="solid"] .rev-card blockquote{color:var(--text)}
+[data-palette="solid"] .rev-stars i{background:var(--red-lift)}
+[data-palette="solid"] .rev-card figcaption{display:flex;align-items:center;gap:11px;flex-wrap:wrap;
+  text-transform:none;letter-spacing:.02em;font-size:12.5px;color:var(--dimmer)}
+[data-palette="solid"] .who{display:flex;flex-direction:column;line-height:1.3}
+[data-palette="solid"] .who em{font-style:normal;color:var(--dimmer);font-size:11.5px}
+[data-palette="solid"] .rev-flag{color:#FFD9C9;background:rgba(193,39,45,.22);
+  border-left:3px solid var(--red)}
+[data-palette="solid"] .ph{color:#FFD9C9;border-color:rgba(255,217,201,.4)}
+
+/* ---- curved dividers, warm ---------------------------------------------- */
+[data-palette="solid"] .swoop{display:block;position:relative;z-index:2;
+  height:clamp(34px,4vw,58px);margin-bottom:calc(-1 * clamp(34px,4vw,58px));pointer-events:none;
+  -webkit-mask:radial-gradient(96% 100% at 50% 0,#000 69.6%,transparent 70%);
+  mask:radial-gradient(96% 100% at 50% 0,#000 69.6%,transparent 70%)}
+[data-palette="solid"] .owner+.swoop{background:#2A221B}
+[data-palette="solid"] .svcs+.swoop{background:#171311}
+[data-palette="solid"] .areas+.swoop{background:#1B1511}
+[data-palette="solid"] .faq+.swoop{background:#191410}
+[data-palette="solid"] .swoop+section{padding-top:calc(clamp(34px,4vw,58px) + clamp(44px,5.4vw,84px))}
+
+/* ---- PHOTOGRAPHS FILL THE WIDTH: the gallery leaves its box -------------- */
+[data-palette="solid"] .gal{background:var(--ink);padding-block:0}
+[data-palette="solid"] .gal .wrap{max-width:none;padding-inline:0}
+[data-palette="solid"] .gal .eyebrow,[data-palette="solid"] .gal .h2{
+  padding-inline:var(--pad);max-width:1240px;margin-inline:auto}
+[data-palette="solid"] .gal .h2{padding-bottom:clamp(26px,3vw,40px)}
+[data-palette="solid"] .gal-grid{margin-top:0;gap:2px;grid-auto-rows:minmax(230px,auto)}
+[data-palette="solid"] .gal-grid figure:nth-child(1) .shot{min-height:462px}
+[data-palette="solid"] .gal-grid .shot{min-height:230px}
+[data-palette="solid"] .gal figcaption{padding-inline:12px}
+/* ⚠️ THE TREATMENT HAS TO LIGHTEN WHEN THE GROUND GOES DARK. On a warm-dark
+   band the previous values (brightness .93, a 28% warm blend, plus each plate's
+   own vignette) stacked into near-black rectangles: the photographs filled the
+   width, which was the point, and could not be seen, which defeated it.
+   Lifted and warmed instead of desaturated — on this palette the warmth IS the
+   cohesion, so the set still reads as one family. */
+[data-palette="solid"] .shot>img{filter:grayscale(.18) contrast(1.02) brightness(1.14) saturate(1.06)}
+[data-palette="solid"] .shot::before{background:linear-gradient(175deg,#8A5526 0%,#2A1D12 100%);opacity:.20}
+[data-palette="solid"] .shot::after{
+  background:radial-gradient(135% 105% at 50% 34%,rgba(0,0,0,0) 62%,rgba(12,8,6,.26) 100%)}
+/* the hero keeps a heavier hand — text sits on it */
+[data-palette="solid"] .hero-bg .shot>img{filter:grayscale(.25) contrast(1.06) brightness(.92) saturate(1.05)}
+
+/* ---- ⛔ THE PAPER-ERA SECTIONS HAD TO BE FLIPPED, TEXT AND ALL -----------
+   The owner, reviews and planned lane were built for a light ground. Moving
+   them onto warm dark without flipping their text produced 19 unreadable
+   elements — dark-on-dark and light-on-light — every one found by
+   `npm run pixels` reading rendered pixels, and none by a CSS check. Flipping a
+   ground is one edit with its text, never two. */
+[data-palette="solid"] .lane-plan{background:var(--ink-3);color:var(--text);
+  background-image:repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 3px,transparent 3px 9px),
+                   linear-gradient(180deg,#332820,#241C16)}
+[data-palette="solid"] .lane-plan h2,[data-palette="solid"] .lane-plan dt{color:var(--text)}
+[data-palette="solid"] .lane-plan p,[data-palette="solid"] .lane-plan dd{color:var(--dim)}
+[data-palette="solid"] .lane-plan .chip{border-color:var(--line);color:var(--dim)}
+[data-palette="solid"] .lane-plan .btn-s{color:var(--text);border-color:var(--line)}
+[data-palette="solid"] .eyebrow.on-paper{color:var(--red-lift)}
+[data-palette="solid"] .owner-facts{border-top:1px solid var(--line)}
+[data-palette="solid"] .owner-facts dt{color:var(--dimmer)}
+[data-palette="solid"] .owner-facts dd{color:var(--text)}
+[data-palette="solid"] .owner-pic .shot{background:var(--ink-4)}
+[data-palette="solid"] .rev-more a{border-bottom-color:var(--red)}
+[data-palette="solid"] .svc-desc{color:var(--dim)}
+[data-palette="solid"] .price-row .note{color:var(--dimmer)}
+[data-palette="solid"] .grp{color:var(--red-lift)}
+/* ⚠️ SPECIFICITY, not a missing rule. `.gal .h2{color:var(--paper-ink)}` and its
+   siblings come from the light era and sit LATER in the file at equal weight,
+   so they won and four section headings rendered dark-on-dark. Adding `section`
+   raises this above them. Found by the pixel probe; a CSS reader would have
+   said the colour was set, and it was — just not the winning one. */
+[data-palette="solid"] section .h2,
+[data-palette="solid"] section .h2 *{color:var(--text)}
+[data-palette="solid"] section .rev-more a{color:var(--red-lift);border-bottom-color:var(--red)}
+[data-palette="solid"] section figcaption{color:var(--dimmer)}
+
+/* ---- their real logo, and the directory badges -------------------------- */
+[data-palette="solid"] .logo{display:block;max-height:52px;width:auto;
+  filter:brightness(0) invert(1) opacity(.94)}   /* their mark, reversed out */
+[data-palette="solid"] .badges{display:block;background:var(--ink);
+  border-block:1px solid var(--line-2)}
+[data-palette="solid"] .badges-in{display:flex;flex-wrap:wrap;align-items:center;
+  gap:clamp(18px,2.6vw,42px);padding-block:20px}
+[data-palette="solid"] .badge{height:34px;width:auto;opacity:.62;
+  filter:grayscale(1) brightness(1.7)}
+
+/* ---- the straddle cards at their new, quieter boundary ------------------ */
+[data-palette="solid"] .gal .straddle,[data-palette="solid"] .straddle{margin-top:-46px;margin-bottom:26px}
+
+@media (max-width:820px){
+  [data-palette="solid"] .hero-bg{position:absolute;left:0;height:auto}
+  [data-palette="solid"] .straddle{margin-top:-26px;margin-bottom:-26px}
+  [data-palette="solid"] .trust{padding-top:58px}
+  [data-palette="solid"] .heritage{font-size:30px}
+  [data-palette="solid"] .gal .gal-grid{gap:2px}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   "STONE" — ported from ABLM Associates, Paul's own client homepage, which he
+   arrived at over ~40 iterations and is happy with. Seven iterations and three
+   variants of invented mood were rejected; this is the standard he had been
+   describing all along.
+
+   ⛔ THE INSIGHT THAT EXPLAINS THE WHOLE MORNING, and it was not the palette.
+   ABLM's h1 is clamp(2.5rem,5.2vw,4.3rem) — 40 to 69px. Mine had grown to
+   46–112px. I had been scaling type UP to manufacture presence because the
+   content was thin, which made it shout instead of read. ABLM does not shout
+   because it has substance. Its base is warm STONE, not near-white, and its
+   body is #39424A, a soft dark grey, not near-black. Light felt thin and dark
+   felt bleak for the same reason: density and warmth, not hue.
+   ⚠️ DO NOT RAISE THE TYPE SCALE. If a section looks empty the answer is more
+   substance or fewer sections, never bigger type.
+
+   TAKEN FROM ABLM: section order, type treatment and spacing, the stone/ink
+   alternation, and photography used as section BACKGROUNDS rather than sitting
+   in boxes (which is why the gallery section is hidden here).
+   CHANGED: accountancy -> locksmith services; the four-person team -> the owner
+   section; the four calculators -> response times by area, at full weight.
+   ⛔ NO CALCULATOR WAS INVENTED. An insurance-lock checker would mean
+   publishing advice with no source, which the honesty rule forbids.
+   ACCENT: brick red, not ABLM's blue, so Paul's two client sites do not read as
+   one template. Measured: #9E3B2E clears 4.5:1 on all three stones
+   (6.01 / 5.41 / 4.65) and takes white text at 6.73:1.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root[data-palette="stone"]{
+  --ink:#0E1417; --ink-2:#171F24; --ink-3:#2A353C; --ink-4:#38454E;
+  --paper:#F4F2EC; --paper-2:#EAE6DE; --paper-3:#DBD6CB; --paper-ink:#0E1417;
+  --body:#39424A;
+  /* ⚠️ ABLM's own --muted is #6E7880, which measures 4.02:1 on stone and is
+     BELOW AA for small text. Darkened here rather than copied. Flagged to Paul:
+     the same grey is on his live client site. */
+  --muted:#5A646E;
+  --brick:#9E3B2E; --brick-lift:#E8836F; --brick-deep:#8A2F26;
+  --brass:var(--brick-lift); --brass-lit:var(--brick-lift); --brass-dim:var(--brick);
+  --text:#F4F2EC; --dim:#C6C1B7;
+  /* #9A958C measured 4.29:1 for the 10.5px contact labels once a photograph sat
+     behind that band and lifted the ground. Raised rather than darkening the
+     scrim, because the photograph is the point of that band. */
+  --dimmer:#ABA69C;
+  --line:rgba(244,242,236,.14); --line-2:rgba(244,242,236,.075);
+  --line-ink:#D9D4C9;
+  --pad:clamp(20px,5vw,72px);
+}
+
+/* ---- ABLM's type scale, verbatim. Smaller than mine was, on purpose. ----- */
+[data-palette="stone"] body{background:var(--paper);color:var(--body);
+  font-size:17px;line-height:1.62}
+[data-palette="stone"] .hero h1{font-family:var(--display);font-weight:600;
+  font-size:clamp(2.5rem,5.2vw,4.3rem);line-height:1.04;letter-spacing:-.02em;max-width:18ch}
+[data-palette="stone"] .h2{font-family:var(--display);font-weight:600;
+  font-size:clamp(2.1rem,4.4vw,3.4rem);line-height:1.08;letter-spacing:-.018em;color:var(--ink)}
+[data-palette="stone"] .lane h2{font-family:var(--display);font-weight:600;
+  font-size:clamp(1.45rem,3vw,2.2rem);line-height:1.14;letter-spacing:-.012em}
+[data-palette="stone"] .svc-name,[data-palette="stone"] .faq-item h3,
+[data-palette="stone"] .step h3{font-family:var(--display);font-weight:600;letter-spacing:-.008em}
+[data-palette="stone"] .svc-name{font-size:clamp(18px,1.6vw,21px);color:var(--ink)}
+[data-palette="stone"] .faq-item h3{font-size:18px;color:var(--ink)}
+[data-palette="stone"] .hero-sub{font-size:clamp(17px,1.4vw,19px);line-height:1.55;color:var(--dim);max-width:48ch}
+[data-palette="stone"] .lede{color:var(--body);font-size:clamp(17px,1.35vw,19px)}
+[data-palette="stone"] .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.17em;
+  font-weight:500;color:var(--brick)}
+[data-palette="stone"] .pad-y{padding-block:clamp(54px,6.4vw,104px)}
+
+/* ---- grounds: stone base, ink for the three punctuation bands ----------- */
+[data-palette="stone"] .hero{background:var(--ink);color:var(--text);border-bottom:0}
+[data-palette="stone"] .trust{background:var(--paper-2);color:var(--body);border-bottom:1px solid var(--line-ink)}
+[data-palette="stone"] .trust h3{color:var(--ink);font-family:var(--display);font-weight:600}
+[data-palette="stone"] .trust p{color:var(--body)}
+[data-palette="stone"] .trust h3::before{background:var(--brick)}
+[data-palette="stone"] .svcs{background:var(--paper)}
+[data-palette="stone"] .owner{background:var(--paper-2);border-bottom:1px solid var(--line-ink)}
+[data-palette="stone"] .proc{background:var(--paper)}
+[data-palette="stone"] .prices{background:var(--paper-2)}
+[data-palette="stone"] .faq{background:var(--paper)}
+/* the three dark bands, exactly as ABLM places them */
+[data-palette="stone"] .areas,[data-palette="stone"] .revs,[data-palette="stone"] .contact{
+  background:var(--ink);color:var(--text)}
+[data-palette="stone"] .areas .h2,[data-palette="stone"] .revs .h2,
+[data-palette="stone"] .contact .h2{color:var(--text)}
+[data-palette="stone"] .areas .eyebrow,[data-palette="stone"] .revs .eyebrow,
+[data-palette="stone"] .contact .eyebrow{color:var(--brick-lift)}
+[data-palette="stone"] footer{background:var(--ink);border-top:1px solid var(--line-2);color:var(--dimmer)}
+[data-palette="stone"] .f-name{color:var(--dim)}
+
+/* ---- the photography moves to BACKGROUNDS, so the gallery box goes ------ */
+[data-palette="stone"] .gal,[data-palette="stone"] .straddle,
+[data-palette="stone"] .swoop,[data-palette="stone"] .badges{display:none}
+/* ⛔ BACKGROUND PHOTOGRAPHS BELONG ONLY BEHIND THE DARK BANDS. The scrim is
+   dark, so on a stone section it turns the ground dark and leaves near-black
+   text on a near-black photograph — the fourth time that exact pairing has
+   appeared. In this variant prices is STONE, so its background slot is simply
+   not rendered rather than given a second scrim to get wrong. */
+[data-palette="stone"] .secbg::after{background:rgba(14,20,23,.86)}
+[data-palette="stone"] .prices .secbg,[data-palette="stone"] .faq .secbg,
+[data-palette="stone"] .svcs .secbg,[data-palette="stone"] .proc .secbg,
+[data-palette="stone"] .owner .secbg{display:none}
+[data-palette="stone"] .secbg img{filter:grayscale(.5) contrast(1.04) brightness(.95) saturate(.8)}
+
+/* ---- the hero: ABLM's gradient, and its slow zoom ----------------------- */
+[data-palette="stone"] .hero-bg{left:0;right:0}
+[data-palette="stone"] .hero-bg::after{
+  background:linear-gradient(96deg,rgba(14,20,23,.95) 0%,rgba(14,20,23,.86) 38%,rgba(14,20,23,.45) 68%,rgba(14,20,23,.62) 100%)}
+[data-palette="stone"] .hero-bg .shot>img{filter:saturate(.55) contrast(1.06);transform:scale(1.04)}
+[data-palette="stone"] .hero-bg .shot::before{opacity:.12}
+[data-palette="stone"] .hero-bg .shot::after{background:none}
+/* ⚠️ A SLOW ZOOM IS SAFE WHERE A REVEAL WAS NOT: it only ever moves the image,
+   never reveals content, so a screenshot taken at any moment still contains
+   every word. That was the distinction the scroll-reveal failure turned on. */
+@media (prefers-reduced-motion: no-preference){
+  [data-palette="stone"] .hero-bg .shot>img{animation:kb 26s ease-in-out infinite alternate}
+  @keyframes kb{to{transform:scale(1.12) translateY(-1.2%)}}
+}
+[data-palette="stone"] .hero-in{grid-template-columns:1.12fr .88fr;gap:clamp(28px,4vw,56px);
+  align-items:end;padding-block:clamp(72px,9vw,120px)}
+[data-palette="stone"] .hero-art,[data-palette="stone"] .hero-grid{display:none}
+[data-palette="stone"] .hero-rule{background:var(--brick-lift);height:2px;width:84px}
+[data-palette="stone"] .heritage{display:flex;align-items:baseline;gap:9px;margin:14px 0 0;
+  font-family:var(--display);font-weight:600;font-size:clamp(22px,2.4vw,32px);color:var(--brick-lift)}
+[data-palette="stone"] .heritage span{font-family:var(--mono);font-size:11px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--dimmer);font-weight:400}
+[data-palette="stone"] .mark{display:inline-flex;align-items:center;justify-content:center;
+  min-width:54px;height:38px;padding:0 13px;border-radius:4px;background:var(--brick);color:#fff;
+  font-family:var(--display);font-weight:700;font-size:18px;letter-spacing:.03em}
+[data-palette="stone"] .brandline{display:flex;align-items:center;gap:13px}
+[data-palette="stone"] .brandline .eyebrow{margin:0;color:var(--dim)}
+[data-palette="stone"] .logo{display:block;max-height:44px;width:auto}
+/* ⚠️ THE PANEL NEEDS A REAL BACKING, NOT A TINT. At 6% it was effectively
+   transparent and its 10.5px labels sat straight on the photograph at 2.0:1.
+   ABLM's hero gradient deliberately stays light on the right so the picture
+   reads; that means anything placed there supplies its own ground. */
+[data-palette="stone"] .spec{background:rgba(14,20,23,.90);border-top:2px solid var(--brick-lift);
+  border-left:1px solid var(--line-2)}
+[data-palette="stone"] .spec dt{color:var(--dimmer)}
+[data-palette="stone"] .spec dd{color:var(--text)}
+[data-palette="stone"] .spec .hl dd{color:var(--brick-lift)}
+[data-palette="stone"] .spec-link{border-bottom-color:var(--brick-lift)}
+
+/* ---- everything on stone ------------------------------------------------ */
+[data-palette="stone"] .svc-desc,[data-palette="stone"] .faq-item p,
+[data-palette="stone"] .step p,[data-palette="stone"] .owner-bio,
+[data-palette="stone"] .price-row .note{color:var(--body)}
+[data-palette="stone"] .svc-i,[data-palette="stone"] .grp,
+[data-palette="stone"] .step b{color:var(--brick)}
+[data-palette="stone"] .svc-price{border-top:2px solid var(--brick);color:var(--ink)}
+[data-palette="stone"] .price-row dt,[data-palette="stone"] .owner-facts dd{color:var(--ink)}
+[data-palette="stone"] .price-row dd{color:var(--brick)}
+[data-palette="stone"] .owner-facts dt,[data-palette="stone"] .c-grid dt{color:var(--muted)}
+[data-palette="stone"] .owner-facts{border-top:1px solid var(--line-ink)}
+[data-palette="stone"] .svc-list,[data-palette="stone"] .price-table{border-top:1px solid var(--line-ink)}
+[data-palette="stone"] .svc,[data-palette="stone"] .price-row,
+[data-palette="stone"] .faq-item{border-color:var(--line-ink)}
+[data-palette="stone"] .svc:nth-child(odd){border-right:1px solid var(--line-ink)}
+[data-palette="stone"] .price-none{border:1px solid var(--line-ink);border-top:2px solid var(--brick);background:var(--paper)}
+[data-palette="stone"] .price-none dt{color:var(--brick);border-bottom:1px solid var(--line-ink)}
+[data-palette="stone"] .price-none dd{color:var(--ink)}
+[data-palette="stone"] .btn-p{background:var(--brick);border-color:var(--brick);color:#fff}
+[data-palette="stone"] .btn-s{color:var(--ink);border-color:rgba(14,20,23,.26)}
+[data-palette="stone"] .hero .btn-s{color:var(--text);border-color:var(--line)}
+[data-palette="stone"] .cb-call{background:var(--brick);color:#fff}
+[data-palette="stone"] .cb-wa{background:var(--ink-3);color:var(--text)}
+[data-palette="stone"] .ico{display:block;width:24px;height:24px;margin-bottom:11px;background:var(--brick);
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:contain;mask-size:contain}
+[data-palette="stone"] .ico-pick{-webkit-mask-image:var(--i-pick);mask-image:var(--i-pick)}
+[data-palette="stone"] .ico-tag{-webkit-mask-image:var(--i-tag);mask-image:var(--i-tag)}
+[data-palette="stone"] .ico-coin{-webkit-mask-image:var(--i-coin);mask-image:var(--i-coin)}
+[data-palette="stone"] .ico-shield{-webkit-mask-image:var(--i-shield);mask-image:var(--i-shield)}
+[data-palette="stone"] .ico-rosette{-webkit-mask-image:var(--i-rosette);mask-image:var(--i-rosette)}
+
+/* ---- the two dark data bands: response times at full "tools" weight ----- */
+[data-palette="stone"] .area-list{border-top:1px solid var(--line)}
+[data-palette="stone"] .area-row{border-bottom:1px solid var(--line-2);padding-block:19px}
+[data-palette="stone"] .area-row dt{color:var(--text);font-size:19px}
+[data-palette="stone"] .area-row dd{color:var(--brick-lift);font-size:18px}
+[data-palette="stone"] .based,[data-palette="stone"] .t-none,
+[data-palette="stone"] .area-note{color:var(--dimmer)}
+[data-palette="stone"] .rev-card{background:rgba(244,242,236,.05);border:1px solid var(--line-2);
+  border-top:2px solid var(--brick-lift)}
+[data-palette="stone"] .rev-card blockquote{color:var(--text)}
+[data-palette="stone"] .rev-stars i{background:var(--brick-lift)}
+[data-palette="stone"] .rev-card figcaption{color:var(--dimmer)}
+[data-palette="stone"] .avatar{display:inline-flex;align-items:center;justify-content:center;
+  width:34px;height:34px;border-radius:999px;background:var(--brick);color:#fff;
+  font-family:var(--display);font-weight:700;font-size:15px;flex:0 0 auto}
+[data-palette="stone"] .who{display:flex;flex-direction:column;line-height:1.3}
+[data-palette="stone"] .who em{font-style:normal;color:var(--dimmer);font-size:11.5px}
+[data-palette="stone"] .rev-flag{color:#FFD9CE;background:rgba(158,59,46,.26);border-left:3px solid var(--brick-lift)}
+[data-palette="stone"] .ph{color:#FFD9CE;border-color:rgba(255,217,206,.42)}
+[data-palette="stone"] .rev-more a{color:var(--brick-lift);border-bottom-color:var(--brick-lift)}
+[data-palette="stone"] .c-tel{color:var(--brick-lift)}
+[data-palette="stone"] .contact .c-grid dt{color:var(--dimmer)}
+[data-palette="stone"] .contact .c-grid dd{color:var(--text)}
+[data-palette="stone"] .lane-now{background:var(--ink-2);color:var(--text)}
+[data-palette="stone"] .lane-now h2,[data-palette="stone"] .lane-now dt{color:var(--text)}
+[data-palette="stone"] .lane-now p,[data-palette="stone"] .lane-now dd{color:var(--dim)}
+[data-palette="stone"] .lane-now .eyebrow{color:var(--brick-lift)}
+[data-palette="stone"] .lane-plan{background:var(--paper);color:var(--body)}
+[data-palette="stone"] .lane-plan h2,[data-palette="stone"] .lane-plan dt{color:var(--ink)}
+[data-palette="stone"] .lane-plan .eyebrow{color:var(--brick)}
+
+/* ---- the process grid --------------------------------------------------- */
+[data-palette="stone"] .proc-grid{display:grid;gap:0;margin-top:clamp(30px,3.6vw,48px);
+  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));border-top:1px solid var(--line-ink)}
+[data-palette="stone"] .step{padding:clamp(22px,2.4vw,32px) clamp(18px,2vw,28px) clamp(24px,2.8vw,36px) 0;
+  border-right:1px solid var(--line-ink)}
+[data-palette="stone"] .step:last-child{border-right:0}
+[data-palette="stone"] .step b{font-family:var(--mono);font-size:12px;letter-spacing:.08em;display:block}
+[data-palette="stone"] .step h3{font-size:18px;margin:12px 0 0;line-height:1.24}
+[data-palette="stone"] .step p{margin:.5em 0 0;font-size:15.5px;line-height:1.55}
+@media (max-width:820px){
+  [data-palette="stone"] .step{border-right:0;border-bottom:1px solid var(--line-ink);padding-right:0}
+  [data-palette="stone"] .step:last-child{border-bottom:0}
+  [data-palette="stone"] .hero-in{grid-template-columns:1fr}
+}
+
+/* ══ THE NINE FIXES, 2026-09-11 ═════════════════════════════════════════ */
+
+/* 8. TYPE. Archivo everywhere, IBM Plex Mono for numbers — ABLM's actual
+      stack. No serif; the serif was mine and it was wrong. */
+[data-palette="stone"]{--display:'Archivo',system-ui,sans-serif;
+  --mono:'PlexMono',ui-monospace,monospace}
+[data-palette="stone"] body{font-family:'Archivo',system-ui,-apple-system,sans-serif}
+[data-palette="stone"] .hero h1,[data-palette="stone"] .h2,[data-palette="stone"] .lane h2,
+[data-palette="stone"] .svc-name,[data-palette="stone"] .faq-item h3,
+[data-palette="stone"] .qh span,[data-palette="stone"] .step h3{font-family:'Archivo',system-ui,sans-serif}
+[data-palette="stone"] .hero h1{font-weight:700;letter-spacing:-.028em}
+[data-palette="stone"] .h2{font-weight:700;letter-spacing:-.022em}
+
+/* 1. THE FAQ ACCORDION, styled like ABLM's .qa/.qh/.qb ------------------- */
+[data-palette="stone"] .faq-list{margin-top:clamp(26px,3vw,42px);border-top:1px solid var(--line-ink)}
+[data-palette="stone"] .qa{border-bottom:1px solid var(--line-ink)}
+[data-palette="stone"] .qh{display:flex;align-items:flex-start;justify-content:space-between;gap:22px;
+  width:100%;padding:22px 0;cursor:pointer;list-style:none;
+  font-size:clamp(17px,1.5vw,19px);font-weight:600;color:var(--ink);line-height:1.34}
+[data-palette="stone"] .qh::-webkit-details-marker{display:none}
+[data-palette="stone"] .qh i{flex:0 0 auto;width:20px;height:20px;position:relative;margin-top:3px}
+[data-palette="stone"] .qh i::before,[data-palette="stone"] .qh i::after{content:"";position:absolute;
+  background:var(--brick);transition:transform .18s ease,opacity .18s ease}
+[data-palette="stone"] .qh i::before{inset:9px 0 9px 0;height:2px}
+[data-palette="stone"] .qh i::after{inset:0 9px 0 9px;width:2px}
+[data-palette="stone"] .qa[open] .qh i::after{transform:scaleY(0);opacity:0}
+[data-palette="stone"] .qa[open] .qh{color:var(--brick)}
+[data-palette="stone"] .qb{overflow:hidden}
+[data-palette="stone"] .qbi{padding:0 0 24px;max-width:74ch}
+[data-palette="stone"] .qbi p{margin:0 0 .8em;color:var(--body);font-size:16.5px;line-height:1.6}
+[data-palette="stone"] .qbi p:last-child{margin-bottom:0}
+[data-palette="stone"] .qa:hover .qh{color:var(--brick)}
+
+/* 2. THE HERO PANEL. Five label/value rows read as a product datasheet.
+      It is now a short human line plus the numbers that matter, inline. */
+/* ⚠️ IT MOVES TO THE LEFT COLUMN. Stripped of its panel it was sitting on the
+   open right-hand side of the hero, where ABLM's gradient deliberately stays
+   light so the photograph reads — 2.7:1 on the labels. The numbers belong with
+   the name anyway, and the right side is left clear for the picture. */
+[data-palette="stone"] .spec{grid-column:1;background:none;border:0;box-shadow:none;
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 26px;
+  padding:20px 0 0;margin-top:clamp(20px,2.4vw,30px);border-top:1px solid var(--line-2)}
+[data-palette="stone"] .spec>div{display:flex;align-items:baseline;gap:8px;padding:0;border:0}
+[data-palette="stone"] .spec dt{font-family:'Archivo',sans-serif;font-size:14px;letter-spacing:0;
+  text-transform:none;color:var(--dim);margin:0;white-space:normal;order:2}
+[data-palette="stone"] .spec dd{font-family:var(--mono);font-size:17px;font-weight:500;
+  color:var(--text);text-align:left;order:1}
+[data-palette="stone"] .spec .hl dd{color:var(--brick-lift);font-size:19px}
+
+/* 6. REVIEWS CYCLE, with an INSTANT change and never a fade -------------
+      step-end means there is no in-between frame to be caught mid-change, so
+      any screenshot lands on exactly one clean review. Each holds 5s. */
+[data-palette="stone"] .rev-grid{display:block;position:relative;min-height:210px}
+[data-palette="stone"] .rev-card{position:absolute;inset:0;opacity:0}
+@media (prefers-reduced-motion: no-preference){
+  [data-palette="stone"] .rev-card{animation:revcyc 15s step-end infinite}
+  [data-palette="stone"] .rev-card:nth-child(2){animation-delay:5s}
+  [data-palette="stone"] .rev-card:nth-child(3){animation-delay:10s}
+  @keyframes revcyc{0%{opacity:1}33.333%{opacity:0}100%{opacity:0}}
+}
+/* ⚠️ WITHOUT the animation (reduced motion, or an engine that skips it) the
+   FIRST review must still be visible — otherwise the section is blank. */
+[data-palette="stone"] .rev-card:first-child{opacity:1}
+@media (prefers-reduced-motion: no-preference){
+  [data-palette="stone"] .rev-card:first-child{animation:revcyc 15s step-end infinite}
+}
+[data-palette="stone"] .rev-dots{display:flex;gap:7px;margin-top:16px}
+[data-palette="stone"] .rev-dots i{width:7px;height:7px;border-radius:999px;background:var(--line)}
+
+/* 7. HOW IT WORKS: a connected line, dots on it, text beneath ----------- */
+[data-palette="stone"] .proc-grid{display:grid;gap:0;border-top:0;position:relative;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  margin-top:clamp(34px,4vw,56px);padding-top:46px}
+[data-palette="stone"] .proc-grid::before{content:"";position:absolute;left:6%;right:6%;top:13px;
+  height:2px;background:linear-gradient(90deg,var(--brick) 0%,rgba(158,59,46,.35) 100%)}
+[data-palette="stone"] .step{padding:0 clamp(14px,1.8vw,26px) 0 0;border:0;position:relative}
+[data-palette="stone"] .step::before{content:"";position:absolute;top:-46px;left:0;
+  width:26px;height:26px;border-radius:999px;background:var(--paper);
+  border:3px solid var(--brick);box-sizing:border-box}
+[data-palette="stone"] .step::after{content:"";position:absolute;top:-38px;left:8px;
+  width:10px;height:10px;border-radius:999px;background:var(--brick)}
+[data-palette="stone"] .step b{font-family:var(--mono);font-size:12px;letter-spacing:.1em;
+  color:var(--brick);display:block}
+[data-palette="stone"] .step h3{font-size:17px;margin:8px 0 0;line-height:1.26}
+@media (max-width:820px){
+  [data-palette="stone"] .proc-grid{grid-template-columns:1fr;padding-top:0}
+  [data-palette="stone"] .proc-grid::before{left:12px;right:auto;top:0;bottom:0;width:2px;height:auto;
+    background:linear-gradient(180deg,var(--brick),rgba(158,59,46,.3))}
+  [data-palette="stone"] .step{padding:0 0 26px 46px}
+  [data-palette="stone"] .step::before{top:0;left:0}
+  [data-palette="stone"] .step::after{top:8px;left:8px}
+}
+
+/* 4. SERVICES: a large photograph beside the list, not text alone -------- */
+[data-palette="stone"] .svcs .wrap{display:grid;gap:clamp(24px,3.2vw,56px);
+  grid-template-columns:minmax(0,1fr)}
+[data-palette="stone"] .svcs:has(.svc-photo) .wrap{grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);
+  align-items:start}
+[data-palette="stone"] .svcs .eyebrow,[data-palette="stone"] .svcs .h2{grid-column:1/-1}
+[data-palette="stone"] .svc-photo .shot{aspect-ratio:4/5;min-height:340px}
+[data-palette="stone"] .svc-photo{position:sticky;top:26px}
+[data-palette="stone"] .svcs .svc-list,[data-palette="stone"] .svcs .svc-group{grid-column:2}
+[data-palette="stone"] .svcs:not(:has(.svc-photo)) .svc-list,
+[data-palette="stone"] .svcs:not(:has(.svc-photo)) .svc-group{grid-column:1/-1}
+[data-palette="stone"] .svc-list{grid-template-columns:1fr}
+[data-palette="stone"] .svc:nth-child(odd){border-right:0}
+[data-palette="stone"] .svc{padding-right:0}
+
+/* 5. the owner photo drop target ---------------------------------------- */
+[data-palette="stone"] .pic-empty{aspect-ratio:4/5;min-height:340px;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  border:2px dashed rgba(158,59,46,.45);background:rgba(158,59,46,.05);color:var(--brick)}
+[data-palette="stone"] .pic-empty span{font-family:var(--mono);font-size:12px;letter-spacing:.18em}
+[data-palette="stone"] .pic-empty small{font-size:12.5px;color:#4E5860}  /* was --muted: 4.50:1 is the threshold itself, not clear of it */
+
+@media (max-width:820px){
+  [data-palette="stone"] .svcs:has(.svc-photo) .wrap{grid-template-columns:1fr}
+  [data-palette="stone"] .svcs .svc-list,[data-palette="stone"] .svcs .svc-group{grid-column:1}
+  [data-palette="stone"] .svc-photo{position:static}
+  [data-palette="stone"] .svc-photo .shot,[data-palette="stone"] .pic-empty{min-height:260px;aspect-ratio:4/3}
+}
+
 /* ---- shared atoms ------------------------------------------------------- */
 .wrap{max-width:1240px;margin:0 auto;padding-inline:var(--pad)}
 .eyebrow{font-family:'Bebas',Impact,sans-serif;font-size:clamp(13px,1.1vw,15px);
   letter-spacing:.20em;text-transform:uppercase;color:var(--brass);margin:0}
 .eyebrow.on-paper{color:var(--brass-dim)}
-.h2{font-weight:800;letter-spacing:-.028em;line-height:1.04;
-  font-size:clamp(30px,4.1vw,54px);margin:.28em 0 0}
+.h2{font-family:var(--display);font-weight:600;letter-spacing:-.018em;line-height:1.06;
+  font-size:clamp(31px,4.2vw,56px);margin:.28em 0 0}
 .lede{font-size:clamp(17px,1.35vw,20px);line-height:1.6;color:var(--dim);max-width:62ch;margin:1.1em 0 0}
 .on-paper .lede,.paper .lede{color:#4A5460}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .rule{height:1px;background:linear-gradient(90deg,var(--brass),rgba(201,146,47,0));border:0;margin:0}
 section{position:relative}
+/* A very fine grain over the whole page. Printed matter is never perfectly
+   flat and neither is a screen that wants to look considered; at 3% it is
+   invisible as texture and obvious by its absence. SVG data-URI, ~200 bytes,
+   no request. */
+body::after{content:"";position:fixed;inset:0;z-index:200;pointer-events:none;opacity:.035;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E")}
 .pad-y{padding-block:clamp(56px,7.5vw,116px)}
 .paper{background:var(--paper);color:var(--paper-ink)}
 .paper .h2{color:var(--paper-ink)}
@@ -323,12 +1245,12 @@ section{position:relative}
    Monochrome + a warm shadow tint + a vignette. ----------------------------- */
 .shot{position:relative;overflow:hidden;background:var(--ink-3)}
 .shot>img{width:100%;height:100%;object-fit:cover;
-  filter:grayscale(1) contrast(1.04) brightness(.93)}
+  filter:grayscale(.45) contrast(1.04) brightness(1.04) saturate(.9)}
 .shot::before{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(175deg,#4A3A1E 0%,#10141A 100%);
-  mix-blend-mode:color;opacity:.55}
+  background:linear-gradient(175deg,#6B5226 0%,#1B2430 100%);
+  mix-blend-mode:color;opacity:.26}
 .shot::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(125% 95% at 50% 32%,rgba(0,0,0,0) 44%,rgba(6,8,10,.46) 100%)}
+  background:radial-gradient(130% 100% at 50% 34%,rgba(0,0,0,0) 56%,rgba(6,8,10,.30) 100%)}
 
 /* ---- BACKGROUND PHOTOGRAPHY behind the dark sections --------------------
    Four operator-placed slots. Same treatment as every other image so a
@@ -356,7 +1278,7 @@ section>.wrap,.lane>.lane-in{position:relative;z-index:1}
 .hero{background:var(--ink);border-bottom:1px solid var(--line-2);overflow:hidden}
 .hero-bg{position:absolute;inset:0;z-index:0}
 .hero-bg::after{content:"";position:absolute;inset:0;
-  background:linear-gradient(90deg,rgba(10,12,15,.96) 0%,rgba(10,12,15,.92) 42%,rgba(10,12,15,.72) 100%)}
+  background:linear-gradient(90deg,rgba(10,12,15,.96) 0%,rgba(10,12,15,.90) 40%,rgba(10,12,15,.62) 72%,rgba(10,12,15,.42) 100%)}
 /* No-photo depth: a brass wash and a hairline grid. CSS only, so the hero is
    never empty-looking and never waits on an image. */
 .hero-art{position:absolute;inset:0;z-index:0;
@@ -373,8 +1295,8 @@ section>.wrap,.lane>.lane-in{position:relative;z-index:1}
 .hero-in{position:relative;z-index:1;padding-block:clamp(56px,8vw,112px);
   display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,.85fr);
   gap:clamp(28px,5vw,72px);align-items:end}
-.hero h1{font-weight:800;letter-spacing:-.038em;line-height:.93;
-  font-size:clamp(44px,7.4vw,104px);margin:.16em 0 0;max-width:19ch;
+.hero h1{font-family:var(--display);font-weight:600;letter-spacing:-.026em;line-height:.98;
+  font-size:clamp(42px,6.9vw,96px);margin:.16em 0 0;max-width:17ch;
   text-wrap:balance}
 .hero-rule{width:112px;height:3px;background:var(--brass);margin:30px 0 0}
 .hero-sub{font-size:clamp(17px,1.5vw,21px);line-height:1.55;color:var(--dim);
@@ -405,8 +1327,8 @@ section>.wrap,.lane>.lane-in{position:relative;z-index:1}
 .trust h3{color:var(--paper-ink)}
 .trust p{color:#4A5460}
 .trust ul{list-style:none;margin:0;padding:0;display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(206px,1fr));
-  gap:22px clamp(24px,3vw,44px)}
+  grid-template-columns:repeat(auto-fit,minmax(186px,1fr));
+  gap:22px clamp(18px,2.2vw,34px)}
 .trust li{padding:24px 0}
 .trust h3{font-size:15px;font-weight:700;margin:0;letter-spacing:-.005em}
 .trust h3::before{content:"";display:block;width:22px;height:2px;background:var(--brass-dim);margin-bottom:13px}
@@ -420,8 +1342,8 @@ section>.wrap,.lane>.lane-in{position:relative;z-index:1}
 .lane-now{background:var(--ink-3);
   background-image:radial-gradient(78% 100% at 0% 0%,rgba(201,146,47,.10),transparent 66%)}
 .lane-plan{background:var(--paper);color:var(--paper-ink)}
-.lane h2{font-weight:800;letter-spacing:-.026em;line-height:1.06;
-  font-size:clamp(25px,2.8vw,38px);margin:.34em 0 0}
+.lane h2{font-family:var(--display);font-weight:600;letter-spacing:-.016em;line-height:1.1;
+  font-size:clamp(26px,2.9vw,40px);margin:.34em 0 0}
 .lane p{font-size:16.5px;line-height:1.62;margin:1em 0 0;color:var(--dim);max-width:44ch}
 .lane-plan p{color:#4A5460}
 .lane dl{margin:26px 0 0;display:grid;gap:15px}
@@ -431,6 +1353,27 @@ section>.wrap,.lane>.lane-in{position:relative;z-index:1}
 .chip{display:inline-block;font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;
   text-transform:uppercase;padding:7px 12px;border:1px solid var(--line);color:var(--dim);margin-top:24px}
 .lane-plan .chip{border-color:var(--line-ink);color:#525C68}
+
+/* ============================ REVIEWS ==================================== */
+.revs{background:var(--paper-2);color:var(--paper-ink);border-bottom:1px solid var(--line-ink)}
+.revs .h2{color:var(--paper-ink)}
+.rev-flag{margin:14px 0 0;font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;
+  color:#4A3008;background:rgba(201,146,47,.16);border-left:3px solid var(--brass-dim);
+  padding:9px 14px;display:inline-block}
+.rev-grid{display:grid;gap:clamp(14px,1.6vw,22px);margin-top:clamp(26px,3vw,40px);
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.rev-card{margin:0;background:var(--paper);border:1px solid var(--line-ink);
+  padding:clamp(22px,2.4vw,30px);display:flex;flex-direction:column;gap:13px}
+.rev-stars{display:flex;gap:4px}
+.rev-stars i{width:15px;height:15px;background:var(--brass-dim);
+  clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)}
+.rev-card blockquote{margin:0;font-family:var(--display);font-weight:600;
+  font-size:clamp(17px,1.5vw,20px);line-height:1.45;letter-spacing:-.008em;color:var(--paper-ink)}
+.rev-card figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:#5A6470;margin-top:auto}
+.ph{color:#4A3008;border:1px solid rgba(74,48,8,.45);padding:1px 5px;margin-left:4px}
+.rev-more{margin:clamp(20px,2.4vw,30px) 0 0;font-size:15.5px}
+.rev-more a{text-decoration:none;border-bottom:1px solid var(--brass-dim);padding-bottom:2px}
 
 /* ============================ THE OWNER ================================== */
 /* Light ground, a real portrait, generous measure. The one section whose job
@@ -476,7 +1419,7 @@ section>.wrap,.lane>.lane-in{position:relative;z-index:1}
 .svc:nth-child(even){padding-left:clamp(24px,3vw,44px);padding-right:0}
 .svc-i{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;
   font-weight:500;color:var(--brass-dim);padding-top:.62em;letter-spacing:.04em}
-.svc-name{font-weight:800;letter-spacing:-.024em;line-height:1.14;
+.svc-name{font-family:var(--display);font-weight:600;letter-spacing:-.012em;line-height:1.18;
   font-size:clamp(21px,2.1vw,29px);margin:0;text-wrap:balance}
 .svc-desc{margin:.66em 0 0;font-size:16px;line-height:1.62;color:#4A5460}
 .svc-price{margin:.9em 0 0;font-family:var(--mono);font-variant-numeric:tabular-nums;
@@ -658,8 +1601,20 @@ footer{background:var(--ink);border-top:1px solid var(--line-2);
   {{/if}}
   <div class="wrap hero-in">
     <div>
-    <p class="eyebrow">{{business.trade}} &middot; {{business.town}}</p>
+    <div class="brandline">
+      <!-- ⛔ THEIR REAL LOGO BEATS INITIALS EVERY TIME. The picker scrapes it
+           from their own site; the monogram is what happens when it found
+           nothing, not the default. business.no_logo is the paired flag,
+           because an if-guard here has no else branch.
+           (And note: this comment deliberately does NOT spell that construct
+           out in braces — the renderer tokenises comments too, so prose becomes
+           a real unclosed tag. That trap has now bitten twice.) -->
+      {{#if img logo}}<img class="logo" src="{{url img logo}}" alt="{{business.name}}">{{/if}}
+      {{#if img.no_logo}}{{#if business.mark}}<span class="mark" aria-hidden="true">{{business.mark}}</span>{{/if}}{{/if}}
+      <p class="eyebrow">{{business.trade}} &middot; {{business.town}}</p>
+    </div>
     <h1>{{business.name}}</h1>
+    {{#if business.established}}<p class="heritage"><span>Est.</span> {{business.established}}</p>{{/if}}
     <div class="hero-rule"></div>
     <p class="hero-sub">
 {{#if headline_price}}<b>{{headline_price.service}} from {{headline_price.from}}.</b> {{/if}}{{#if business.response_time}}{{business.response_time}} to most {{business.town}} addresses. {{/if}}{{#if services_lead}}{{services_lead}}.{{/if}}
@@ -686,19 +1641,32 @@ footer{background:var(--ink);border-top:1px solid var(--line-2);
   <div class="wrap">
     <ul>
       {{#each trust_fixed}}
-      <li><h3>{{.title}}</h3>{{#if .note}}<p>{{.note}}</p>{{/if}}</li>
+      <li>{{#if .icon}}<span class="ico ico-{{.icon}}" aria-hidden="true"></span>{{/if}}
+        <h3>{{.title}}</h3>{{#if .note}}<p>{{.note}}</p>{{/if}}</li>
       {{/each}}
       {{#each trust_typed}}
-      <li><h3>{{.title}}</h3>{{#if .note}}<p>{{.note}}</p>{{/if}}</li>
+      <li>{{#if .icon}}<span class="ico ico-{{.icon}}" aria-hidden="true"></span>{{/if}}
+        <h3>{{.title}}</h3>{{#if .note}}<p>{{.note}}</p>{{/if}}</li>
       {{/each}}
     </ul>
   </div>
 </section>
 
+{{#if img badges}}
+<!-- Their real directory badges, scraped by the picker. A row, not a grid of
+     invented icons — these are marks they have actually earned. -->
+<div class="badges"><div class="wrap badges-in">
+  {{#each img badges}}<img class="badge" src="{{url .}}" alt="">{{/each}}
+</div></div>
+{{/if}}
+
 <!-- ======================== URGENT vs PLANNED ============================ -->
 <section class="lanes">
   <div class="lane lane-now">
-    {{#if img bg_urgent}}<div class="secbg"><img src="{{url img bg_urgent}}" alt=""></div>{{/if}}
+    <!-- ⛔ NO BACKGROUND PHOTOGRAPH ON THIS LANE. The one that was here read as
+         a nightclub, and an irrelevant photograph is worse than none: it is the
+         one band where the reader is already stressed. The slot stays wired for
+         a RELEVANT image; it is simply not rendered in this variant. -->
     <div class="lane-in">
     <p class="eyebrow">Locked out right now</p>
     <h2>We can usually open it without damaging the door.</h2>
@@ -729,37 +1697,15 @@ footer{background:var(--ink);border-top:1px solid var(--line-2);
   </div>
 </section>
 
-<!-- =============================== THE OWNER ============================= -->
-<!-- The warmth. A name, a face and a year, in their own words. Drops entirely
-     when owner_bio is absent — and it IS absent on most prospects, so the page
-     has to be complete without it. Never generated; see render.mjs. -->
-{{#if owner}}
-<section class="owner pad-y">
-  <div class="wrap owner-in">
-    {{#if img owner}}
-    <div class="owner-pic"><div class="shot"><img src="{{url img owner}}" alt="{{owner.name}}{{#if owner.name}}, {{/if}}{{business.trade}} at {{business.name}}"></div></div>
-    {{/if}}
-    <div class="owner-txt">
-      <p class="eyebrow on-paper">Who you are calling</p>
-      {{#if owner.name}}<h2 class="h2">I'm {{owner.name}}.</h2>{{/if}}
-      {{#if business.no_owner_name}}<h2 class="h2">About {{business.name}}.</h2>{{/if}}
-      <p class="owner-bio">{{owner.bio}}</p>
-      <dl class="owner-facts">
-        {{#if owner.years}}<div><dt>Doing this</dt><dd>{{owner.years}} years</dd></div>{{/if}}
-        {{#if owner.established}}<div><dt>Established</dt><dd>{{owner.established}}</dd></div>{{/if}}
-        <div><dt>Based in</dt><dd>{{business.town}}</dd></div>
-      </dl>
-    </div>
-  </div>
-</section>
-{{/if}}
-
 <!-- ============================== SERVICES =============================== -->
 {{#if services}}
 <section class="svcs pad-y">
   <div class="wrap">
     <p class="eyebrow on-paper">Services</p>
     <h2 class="h2">Lock and key work in {{business.town}}, done properly.</h2>
+    {{#if img services}}
+    <div class="svc-photo"><div class="shot"><img src="{{url img services}}" alt="" loading="lazy"></div></div>
+    {{/if}}
     {{#if services_flat}}
     <div class="svc-list">
       {{#each services}}
@@ -795,26 +1741,60 @@ footer{background:var(--ink);border-top:1px solid var(--line-2);
 </section>
 {{/if}}
 
-<!-- =============================== PHOTOS ================================ -->
-{{#if photos}}
-<section class="gal pad-y">
-  <div class="wrap">
-    <p class="eyebrow on-paper">The work</p>
-    {{#if has_real_photos}}<h2 class="h2">Some recent jobs around {{business.town}}.</h2>{{/if}}
-    {{#if photos_all_stock}}<h2 class="h2">The sort of work we do most days.</h2>{{/if}}
-    <div class="gal-grid">
-      {{#each photos}}
-      <figure>
-        <div class="shot"><img src="{{url .src}}" alt="{{.alt}}" loading="lazy"></div>
-        {{#if .caption}}<figcaption>{{.caption}}</figcaption>{{/if}}
-        {{#if .uncaptioned}}<figcaption class="cap-none">&mdash;</figcaption>{{/if}}
-      </figure>
-      {{/each}}
+<div class="swoop" aria-hidden="true"></div>
+<!-- ===================== CARDS STRADDLING A SECTION EDGE ================== -->
+<!-- ⛔ MOVED OFF THE HERO 2026-09-11. On the hero it fought the headline and
+     cut the photograph in half; Paul's call, and he is right — the device needs
+     a quieter boundary. It now straddles services -> photographs, where it
+     reads as depth rather than as clutter. Real services, real prices. -->
+{{#if services}}
+<div class="straddle">
+  <div class="wrap straddle-in">
+    {{#each services_top3}}
+    <a class="scard" href="tel:{{business.phone_digits}}">
+      <span class="scard-i">{{.index}}</span>
+      <span class="scard-n">{{.name}}</span>
+      {{#if .price}}<span class="scard-p">{{.price}}</span>{{/if}}
+      {{#if .no_price}}<span class="scard-p muted">Ask for a price</span>{{/if}}
+    </a>
+    {{/each}}
+  </div>
+</div>
+{{/if}}
+
+<!-- =============================== THE OWNER ============================= -->
+<!-- The warmth. A name, a face and a year, in their own words. Drops entirely
+     when owner_bio is absent — and it IS absent on most prospects, so the page
+     has to be complete without it. Never generated; see render.mjs. -->
+{{#if owner}}
+<section class="owner pad-y">
+  <div class="wrap owner-in">
+    <!-- ⛔ THE PHOTO SLOT ALWAYS RENDERS. An empty slot shows a visible drop
+         target rather than collapsing, so the picker has somewhere to aim and
+         Paul can see that a photograph is missing rather than not knowing the
+         slot exists. -->
+    {{#if img owner}}
+    <div class="owner-pic"><div class="shot"><img src="{{url img owner}}" alt="{{owner.name}}{{#if owner.name}}, {{/if}}{{business.trade}} at {{business.name}}"></div></div>
+    {{/if}}
+    {{#if img.no_owner_photo}}
+    <div class="owner-pic"><div class="pic-empty"><span>OWNER PHOTO</span><small>drop their own picture here</small></div></div>
+    {{/if}}
+    <div class="owner-txt">
+      <p class="eyebrow on-paper">Who you are calling</p>
+      {{#if owner.name}}<h2 class="h2">{{owner.name}}</h2>{{/if}}
+      {{#if business.no_owner_name}}<h2 class="h2">About {{business.name}}.</h2>{{/if}}
+      <p class="owner-bio">{{owner.bio}}</p>
+      <dl class="owner-facts">
+        {{#if owner.years}}<div><dt>Doing this</dt><dd>{{owner.years}} years</dd></div>{{/if}}
+        {{#if owner.established}}<div><dt>Established</dt><dd>{{owner.established}}</dd></div>{{/if}}
+        <div><dt>Based in</dt><dd>{{business.town}}</dd></div>
+      </dl>
     </div>
   </div>
 </section>
 {{/if}}
 
+<div class="swoop" aria-hidden="true"></div>
 <!-- ====================== RESPONSE TIMES BY AREA ========================== -->
 <!-- Replaced the map panel on 2026-09-11. The map needed an API, showed one
      dot, and was the weakest thing on the page; a town list with a realistic
@@ -840,6 +1820,79 @@ footer{background:var(--ink);border-top:1px solid var(--line-2);
   </div>
 </section>
 {{/if}}
+
+<div class="swoop" aria-hidden="true"></div>
+<!-- ============================== REVIEWS ================================ -->
+<!-- ⚠️ PLACEHOLDER COPY. Contract v1.1 forbids republishing review TEXT (a
+     Google terms position); these are invented, and every card says so on its
+     face until the real source is decided. Renders nothing without data. -->
+{{#if reviews}}
+<section class="revs pad-y">
+  <div class="wrap">
+    <p class="eyebrow on-paper">What people say</p>
+    <h2 class="h2">{{#if business.has_reviews}}{{business.rating}} out of 5 across {{business.review_count}} Google reviews.{{/if}}{{#if business.no_reviews}}In their words.{{/if}}</h2>
+    {{#if reviews_are_placeholder}}
+    <p class="rev-flag">Placeholder text &mdash; not real customer reviews. To be replaced before this is sent to anyone.</p>
+    {{/if}}
+    <div class="rev-grid">
+      {{#each reviews}}
+      <figure class="rev-card">
+        <div class="rev-stars"><i></i><i></i><i></i><i></i><i></i></div>
+        <blockquote>{{.quote}}</blockquote>
+        <figcaption>
+          {{#if .initial}}<span class="avatar" aria-hidden="true">{{.initial}}</span>{{/if}}
+          <span class="who">{{#if .name}}{{.name}}{{/if}}{{#if .role}}<em>{{.role}}</em>{{/if}}{{#if .place}}<em>{{.place}}</em>{{/if}}</span>
+          {{#if .placeholder}}<span class="ph">placeholder</span>{{/if}}
+        </figcaption>
+      </figure>
+      {{/each}}
+    </div>
+    {{#if business.google_reviews_url}}
+    <p class="rev-more"><a href="{{url business.google_reviews_url}}" rel="noopener">Read the real ones on Google</a></p>
+    {{/if}}
+  </div>
+</section>
+{{/if}}
+
+<!-- =============================== PHOTOS ================================ -->
+{{#if photos}}
+<section class="gal pad-y">
+  <div class="wrap">
+    <p class="eyebrow on-paper">The work</p>
+    {{#if has_real_photos}}<h2 class="h2">Some recent jobs around {{business.town}}.</h2>{{/if}}
+    {{#if photos_all_stock}}<h2 class="h2">The sort of work we do most days.</h2>{{/if}}
+    <div class="gal-grid">
+      {{#each photos}}
+      <figure>
+        <div class="shot"><img src="{{url .src}}" alt="{{.alt}}" loading="lazy"></div>
+        {{#if .caption}}<figcaption>{{.caption}}</figcaption>{{/if}}
+        {{#if .uncaptioned}}<figcaption class="cap-none">&mdash;</figcaption>{{/if}}
+      </figure>
+      {{/each}}
+    </div>
+  </div>
+</section>
+{{/if}}
+
+<!-- =============================== PROCESS =============================== -->
+<!-- ABLM's "How it works". Restored 2026-09-11: it was cut earlier as
+     duplicative of the urgent lane, and against ABLM's structure it is a real
+     section carrying 6% of the page. It is process, not a claim — every line
+     describes what happens, none of it asserts anything about this business
+     that is not already true of the call. -->
+<section class="proc pad-y">
+  <div class="wrap">
+    <p class="eyebrow on-paper">How it works</p>
+    <h2 class="h2">Four steps, and most of it is us.</h2>
+    <p class="lede">Describe the door, agree the price, let someone in. That is the whole of your part.</p>
+    <div class="proc-grid">
+      <div class="step"><b>01</b><h3>You call and describe the door</h3><p>What kind of door, what kind of lock, and whether the key turns at all. A photo on WhatsApp saves a lot of guessing.</p></div>
+      <div class="step"><b>02</b><h3>You get a price before anyone sets off</h3><p>A figure for the job, not an estimate that moves{{#if business.response_time}}, and how long it will be{{/if}}. If the job turns out to be different once seen, you are told and asked first.</p></div>
+      <div class="step"><b>03</b><h3>The lock is opened or changed</h3><p>Non-destructive entry wherever the lock allows it, so you are not paying for a replacement you did not need.</p></div>
+      <div class="step"><b>04</b><h3>You pay the figure you agreed</h3><p>The same number you were quoted on the phone. Card or cash, and a receipt if you want one.</p></div>
+    </div>
+  </div>
+</section>
 
 <!-- =============================== PRICES ================================ -->
 <section class="prices pad-y">
@@ -872,30 +1925,67 @@ footer{background:var(--ink);border-top:1px solid var(--line-2);
 </section>
 
 <!-- ================================ FAQ ================================== -->
+<!-- ⛔ AN ACCORDION, AND IT NEEDS NO JAVASCRIPT. ABLM's own version is
+     <button aria-expanded> driven by a 14KB script; we cannot copy that,
+     because zero-JS is the rule the product sells on. <details>/<summary> gets
+     the same behaviour natively: it collapses, it expands, and EVERY WORD stays
+     in the initial HTML so a crawler reads all of it either way.
+     ⚠️ Stated plainly: collapsed means a SCREENSHOT shows the questions and not
+     the answers. ABLM's is collapsed by default too, so the before/after image
+     matches what a visitor first sees — but it is a real consequence, not an
+     oversight. -->
 <section class="faq pad-y">
-  {{#if img bg_faq}}<div class="secbg"><img src="{{url img bg_faq}}" alt=""></div>{{/if}}
   <div class="wrap">
-    <p class="eyebrow on-paper">The things people ask us</p>
-    <h2 class="h2">No jargon, no sales pitch.</h2>
-    <div class="faq-grid">
-      <div>
-        <div class="faq-item"><h3>Is there a call-out fee?</h3>
-          {{#if fee.none}}<p>No. You are quoted for the job itself, and that is the figure you pay.</p>{{/if}}
+    <p class="eyebrow on-paper">Common questions</p>
+    <h2 class="h2">The things people ask us most.</h2>
+    <div class="faq-list">
+      <details class="qa">
+        <summary class="qh"><span>Is there a call-out fee?</span><i aria-hidden="true"></i></summary>
+        <div class="qb"><div class="qbi">{{#if fee.none}}<p>No. You are quoted for the job itself, and that is the figure you pay.</p>{{/if}}
           {{#if fee.charged}}<p>Yes, there is a call-out charge. You are told what it is, and the full figure for the job, before anyone sets off &mdash; so nothing on the bill is a surprise.</p>{{/if}}
-          {{#if fee.unknown}}<p>Ask when you call. You get the full figure for the job, including any call-out charge, before anyone sets off.</p>{{/if}}
-        </div>
-        <div class="faq-item"><h3>What is BS3621 and do I need it?</h3><p>It is the British Standard for a door lock, and most home insurers ask for one on final exit doors. Check your policy wording. It can usually be fitted to the door you already have.</p></div>
-      </div>
-      <div>
-        <div class="faq-item"><h3>My uPVC door will not lock. Is that the lock?</h3><p>Usually it is the multipoint mechanism inside the door rather than the cylinder you put the key in. It is a common repair and it does not mean a new door.</p></div>
-        <div class="faq-item"><h3>I have just moved in. Should I change the locks?</h3><p>You do not know who still has a key. Changing the cylinder is cheaper than changing the whole lock and takes the old keys out of use.</p></div>
-        <div class="faq-item"><h3>Will you have to drill my lock?</h3><p>Usually not. Most locks open without damage, which means the lock still works once you are back inside. If drilling turns out to be the only way, you are told before it happens and told what a replacement costs.</p></div>
-        <div class="faq-item"><h3>How soon can you get here?</h3><p>It depends where you are and where the van already is. There is a town-by-town list further up this page, and you get a real figure when you call rather than a promise made in advance.</p></div>
-      </div>
+          {{#if fee.unknown}}<p>Ask when you call. You get the full figure for the job, including any call-out charge, before anyone sets off.</p>{{/if}}</div></div>
+      </details>
+      <details class="qa">
+        <summary class="qh"><span>What is BS3621 and do I need it?</span><i aria-hidden="true"></i></summary>
+        <div class="qb"><div class="qbi"><p>It is the British Standard for a door lock, and most home insurers ask for one on final exit doors. Check your policy wording. It can usually be fitted to the door you already have.</p></div></div>
+      </details>
+      <details class="qa">
+        <summary class="qh"><span>My uPVC door will not lock. Is that the lock?</span><i aria-hidden="true"></i></summary>
+        <div class="qb"><div class="qbi"><p>Usually it is the multipoint mechanism inside the door rather than the cylinder you put the key in. It is a common repair and it does not mean a new door.</p></div></div>
+      </details>
+      <details class="qa">
+        <summary class="qh"><span>I have just moved in. Should I change the locks?</span><i aria-hidden="true"></i></summary>
+        <div class="qb"><div class="qbi"><p>You do not know who still has a key. Changing the cylinder is cheaper than changing the whole lock and takes the old keys out of use.</p></div></div>
+      </details>
+      <details class="qa">
+        <summary class="qh"><span>Will you have to drill my lock?</span><i aria-hidden="true"></i></summary>
+        <div class="qb"><div class="qbi"><p>Usually not. Most locks open without damage, which means the lock still works once you are back inside. If drilling turns out to be the only way, you are told before it happens and told what a replacement costs.</p></div></div>
+      </details>
+      <details class="qa">
+        <summary class="qh"><span>My key snapped in the lock. Is the lock ruined?</span><i aria-hidden="true"></i></summary>
+        <div class="qb"><div class="qbi"><p>Not normally. A snapped key can usually be extracted and the lock kept, as long as the mechanism itself has not been damaged. Trying to dig it out with pliers is what usually turns a cheap job into a replacement.</p></div></div>
+      </details>
+      <details class="qa">
+        <summary class="qh"><span>What is anti-snap, and do I need it?</span><i aria-hidden="true"></i></summary>
+        <div class="qb"><div class="qbi"><p>Standard euro cylinders can be snapped in seconds, which is how a lot of break-ins happen on uPVC and composite doors. An anti-snap cylinder is built to break in a controlled place and keep the door shut. If your door is uPVC or composite and the cylinder is more than a few years old, it is worth asking about.</p></div></div>
+      </details>
+      <details class="qa">
+        <summary class="qh"><span>How soon can you get here?</span><i aria-hidden="true"></i></summary>
+        <div class="qb"><div class="qbi"><p>It depends where you are and where the van already is. There is a town-by-town list further up this page, and you get a real figure when you call rather than a promise made in advance. If someone quotes you a time before asking where you are, treat it carefully.</p></div></div>
+      </details>
+      <details class="qa">
+        <summary class="qh"><span>Can you get into a uPVC door without breaking it?</span><i aria-hidden="true"></i></summary>
+        <div class="qb"><div class="qbi"><p>Usually, yes. Most uPVC doors open by manipulating the cylinder or the mechanism rather than by force. Where the gearbox has already failed completely the door sometimes has to be opened destructively, but that is the exception and you are told before it happens.</p></div></div>
+      </details>
+      <details class="qa">
+        <summary class="qh"><span>Do I need to be there?</span><i aria-hidden="true"></i></summary>
+        <div class="qb"><div class="qbi"><p>Yes, and you will be asked to prove the property is yours &mdash; a tenancy agreement, a utility bill, a driving licence with the address. Any locksmith who opens a door without asking is one to avoid.</p></div></div>
+      </details>
     </div>
   </div>
 </section>
 
+<div class="swoop" aria-hidden="true"></div>
 <!-- =============================== CONTACT =============================== -->
 <section class="contact pad-y">
   {{#if img bg_contact}}<div class="secbg"><img src="{{url img bg_contact}}" alt=""></div>{{/if}}
