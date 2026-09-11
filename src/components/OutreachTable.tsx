@@ -115,7 +115,7 @@ import { isDemoLead } from '@/lib/demoLeads';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { leadStatusLabel } from '@/types/outreach';
-import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type StatusFilterValue } from '@/types/outreach';
+import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, type ProductValue, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
 import { useApifyUsage } from '@/hooks/useApifyUsage';
 import {
@@ -344,6 +344,10 @@ export function OutreachTable({
   /* StatusFilterValue, not LeadStatus: the list also carries the Paid sentinel, which is not a
      status (see OUTREACH_STATUS_FILTER_OPTIONS — paid means amount_paid > 0, not payment_received). */
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue | 'all'>('all');
+  /* Product is HOW THE PAGE IS CONFIGURED, so it persists like the other filters rather than
+     living in the URL (the app-wide rule: the URL is for what you are looking at). */
+  const [productFilter, setProductFilter] = useState<ProductValue | typeof PRODUCT_UNDECIDED | 'all'>('all');
+  const [productBusy, setProductBusy] = useState(false);
   const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
   const [trackedOnly, setTrackedOnly] = useState(false);
   // Contactability filters (AND-combined, stack with the others). Each matches the
@@ -543,6 +547,7 @@ export function OutreachTable({
     /* Normalised onto the filter list: a state saved before the no-WhatsApp options merged may hold
        'no_whatsapp_needs_sms', which is no longer an option's own value. Without this the Select
        would render blank while still filtering — the control disagreeing with the table. */
+    if (parsed.productFilter) setProductFilter(parsed.productFilter);
     if (parsed.statusFilter) {
       setStatusFilter(parsed.statusFilter === 'all' ? 'all' : canonicalFilterValue(parsed.statusFilter as StatusFilterValue));
     }
@@ -586,6 +591,7 @@ export function OutreachTable({
       searchQuery,
       locationFilter,
       statusFilter,
+      productFilter,
       countryFilter,
       trackedOnly,
       hideNoWhatsApp,
@@ -601,7 +607,7 @@ export function OutreachTable({
       sortDirection,
       currentPage,
     });
-  }, [tableStateKey, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hideNoWhatsApp, hideNotInterested, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection, currentPage]);
+  }, [tableStateKey, searchQuery, locationFilter, statusFilter, productFilter, countryFilter, trackedOnly, hideNoWhatsApp, hideNotInterested, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection, currentPage]);
 
   // Apply optimistic updates to leads for rendering
   const leadsWithOptimistic = useMemo(() => {
@@ -1101,6 +1107,34 @@ export function OutreachTable({
   const [tradeChoice, setTradeChoice] = useState('');
   const [tradeBusy, setTradeBusy] = useState(false);
 
+  /* ── SET THE PRODUCT ON A SELECTION ────────────────────────────────────────────────────────
+     🔴 BULK IS THE POINT, NOT A CONVENIENCE. The pile is 421 leads at report_sent with no
+     decision recorded; deciding them one row at a time is the thing that has not happened for
+     months. Selecting a screenful and setting one product is what makes the pile workable.
+     ⛔ IT WRITES A COLUMN AND SENDS NOTHING. `product` is an operator's note about intent — no
+     send path reads it, and Paul's rule when he approved it was that none ever may. */
+  const setProductOn = async (ids: string[], value: ProductValue | null) => {
+    if (!onUpdateLead || !ids.length) return;
+    setProductBusy(true);
+    try {
+      /* ⚠️ null, not the string "undecided" — clearing a decision must restore ABSENCE, the same
+         rule as clearing amount_paid writing null rather than 0. */
+      const results = await Promise.allSettled(ids.map((id) => onUpdateLead(id, { product: value } as Partial<OutreachLead>)));
+      const okCount = results.filter((r) => r.status === 'fulfilled').length;
+      const label = value ? (PRODUCT_OPTIONS.find((o) => o.value === value)?.label ?? value) : 'Undecided';
+      toast({
+        title: `${label} set on ${okCount} of ${ids.length} lead${ids.length === 1 ? '' : 's'}`,
+        description: okCount < ids.length ? `${ids.length - okCount} failed — try again`
+          : 'Nothing was sent. This only records which pitch they are for.',
+        variant: okCount === 0 ? 'destructive' : undefined,
+      });
+      setSelectedIds(new Set());
+      onRefreshLeads?.();
+    } finally {
+      setProductBusy(false);
+    }
+  };
+
   /* Writes search_keyword, which is what create-ai-audit reads first (search_keyword || category).
      The canonical LABEL is stored rather than the slug, because the stored string is what the audit
      questions and the report print — and trades.ts maps labels back onto the fixed list at read
@@ -1570,6 +1604,18 @@ export function OutreachTable({
       }
     }
 
+    /* ── PRODUCT: WHICH PITCH, NOT WHERE IN THE CONVERSATION ──────────────────────────────
+       ⛔ UNDECIDED IS ITS OWN CHOICE AND IS TESTED SEPARATELY. It is the pile that matters most
+       — 421 leads sat at report_sent with no decision recorded — so it needs to be selectable,
+       and it cannot be expressed as "one of the three products" because it is the absence of
+       one. `productOf` returns null for undecided AND for an unrecognised value, so a value this
+       build does not know about surfaces here instead of joining a pile silently. */
+    if (productFilter !== 'all') {
+      result = productFilter === PRODUCT_UNDECIDED
+        ? result.filter((lead) => productOf(lead) === null)
+        : result.filter((lead) => productOf(lead) === productFilter);
+    }
+
     /* ⛔ "Already Visible" is HIDDEN FROM THE DEFAULT LIST — a lead AI already names (>=3 of 6),
        parked so it is not chased. It stays fully reachable: the status filter offers it permanently
        (a static option — see OUTREACH_STATUS_OPTIONS), and selecting it runs the wanted-status path
@@ -1807,6 +1853,31 @@ export function OutreachTable({
                     <ClipboardList className="h-3.5 w-3.5 mr-1.5 text-sky-500" />
                     Run audits ({auditEligibleIds.length})
                   </Button>
+                )}
+                {/* ── SET PRODUCT ON THE SELECTION ──────────────────────────────────────────
+                    ⛔ WRITES A COLUMN, SENDS NOTHING. Deciding what to pitch is not pitching. */}
+                {!readOnly && onUpdateLead && (
+                  <Select
+                    value=""
+                    onValueChange={(v) => {
+                      const ids = Array.from(selectedIds);
+                      void setProductOn(ids, v === PRODUCT_UNDECIDED ? null : (v as ProductValue));
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[150px] bg-background text-xs" disabled={productBusy}>
+                      <SelectValue placeholder={productBusy ? 'Setting…' : `Set product (${selectedIds.size})`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRODUCT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          <span className="font-medium">{opt.label}</span>
+                          <span className="ml-1 text-muted-foreground">— {opt.hint}</span>
+                        </SelectItem>
+                      ))}
+                      {/* Clearing writes NULL, restoring absence rather than storing a word. */}
+                      <SelectItem value={PRODUCT_UNDECIDED}>Back to undecided</SelectItem>
+                    </SelectContent>
+                  </Select>
                 )}
                 {/* Shown only when the selection actually contains repairable rows, so they do not
                     clutter the bar for the 846 leads that are fine. */}
@@ -2195,6 +2266,31 @@ export function OutreachTable({
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* ── PRODUCT: work one pile at a time ──────────────────────────────────────────
+                Beside Status rather than inside it, because they answer different questions:
+                status is where they are in the conversation, product is what the pitch should
+                be. Paul had one field doing both, which is why 421 leads reached report_sent
+                with no record of what to sell next. */}
+            <Select
+              value={productFilter}
+              onValueChange={(v) => {
+                setProductFilter(v as ProductValue | typeof PRODUCT_UNDECIDED | 'all');
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-[120px] sm:w-[140px] bg-background h-8 text-xs">
+                <SelectValue placeholder="Product" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All products</SelectItem>
+                {/* The pile that matters most, and it is the ABSENCE of a product rather than one
+                    of them — so it is its own option, not a fourth value. */}
+                <SelectItem value={PRODUCT_UNDECIDED}>Undecided</SelectItem>
+                {PRODUCT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

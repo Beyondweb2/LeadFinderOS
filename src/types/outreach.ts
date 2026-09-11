@@ -91,6 +91,10 @@ export interface ConfirmedService {
 }
 
 export interface OutreachLead {
+  /** What we are selling them — separate from status. NULL/absent means undecided.
+   *  ⚠️ Optional: the column post-dates most rows, and leads are read with select('*'), so it is
+   *  simply missing until the ALTER runs. Always read it through `productOf()`. */
+  product?: string | null;
   id: string;
   user_id: string;
   business_name: string;
@@ -289,6 +293,48 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
    53-vs-509 "No WhatsApp" failure this file's own comments were written about. The parenthetical is
    what the option actually tests, so the two are told apart by their words rather than by luck.
    scripts/status-constants.test.ts asserts they never collide. */
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   PRODUCT — WHAT WE ARE SELLING THEM. A DIFFERENT QUESTION FROM STATUS.
+
+   🔴 Paul, 2026-09-11: "Status and PRODUCT are two different things and I only have one field for
+   both." Status is a position in a conversation (queued -> replied -> report_sent); product is
+   what the pitch should be. Measured that day: 498 unarchived leads sit at replied/report_sent/
+   interested with nothing recording which of the three products they are for — and 421 of those
+   are at report_sent, i.e. already sent a report with no decision about what comes next.
+
+   ⛔ NULL MEANS UNDECIDED, AND IT IS NOT STORED AS A WORD. No default and no backfill of 3,203
+   rows, and absence stays honestly absent — the same reasoning as every other absent value in
+   this codebase. `productOf()` is the only place that reads it, so a row written before the
+   column existed reads as undecided rather than as an error.
+
+   ⛔ THIS FIELD MUST NEVER BE READ BY process-whatsapp-queue. Paul's rule, stated when he
+   approved it: the moment the sender consults it, a field he sets by hand starts deciding sends.
+   It is an operator's note about intent, not a trigger.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+export const PRODUCT_VALUES = ['rebuild', 'ai_only', 'no_website'] as const;
+export type ProductValue = typeof PRODUCT_VALUES[number];
+
+/** The sentinel for "not decided yet". Never written to the database — NULL is. */
+export const PRODUCT_UNDECIDED = '__undecided__';
+
+export const PRODUCT_OPTIONS: Array<{ value: ProductValue; label: string; hint: string }> = [
+  { value: 'rebuild', label: 'Rebuild', hint: 'Their site loses the comparison — send the before-and-after mockup' },
+  { value: 'ai_only', label: 'AI only', hint: 'Their site is fine — sell AI visibility on the site they have' },
+  { value: 'no_website', label: 'No website', hint: 'Nothing to compare against — a different product again' },
+];
+
+/**
+ * Read a lead's product.
+ *
+ * ⚠️ Returns null for undecided AND for anything unrecognised. An unknown value must show up as
+ * undecided rather than silently joining one of the three piles — absence is never a decision, and
+ * a value this build does not know about is not one either.
+ */
+export function productOf(lead: { product?: string | null } | null | undefined): ProductValue | null {
+  const v = String(lead?.product ?? '').trim().toLowerCase();
+  return (PRODUCT_VALUES as readonly string[]).includes(v) ? (v as ProductValue) : null;
+}
+
 export const PAID_FILTER_VALUE = '__paid__';
 
 /** What the Outreach status filter can hold: a real status, or the Paid sentinel. */
