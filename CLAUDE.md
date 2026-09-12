@@ -3721,6 +3721,87 @@ The four commits behind the AI Audit page's before/after panel. Pure folds in
 
 ---
 
+## 19. ✅ THE THREE-TYPE MEASUREMENT MODEL — built and live 2026-09-12 (Paul's spec, seven slices)
+
+**Nothing else exists.** Every measurement is one of three, and the code refuses the fourth:
+
+| | Shape | Purpose column | Compared? |
+|---|---|---|---|
+| **HOOK** | 3 q × 1 run (free check: 3 q × **3 runs**, via internal `target_runs`, because it is emailed as a frequency) | `audit` | never |
+| **BASELINE** | **12 q, HOME TOWN ONLY**, × 3 runs, generated fresh, **frozen** | `baseline` | it IS the before side |
+| **FULL MEASURE** | 20 q × 3 runs across home + `areas_list` (`fullMeasureAllocation`: four towns → 10/4/3/3), **DISJOINT** from the baseline | `measurement` | never |
+| **DAY-28 REPLAY** | the baseline's ASKED set verbatim × 3 runs | `remeasure` | it IS the after side |
+
+- ⛔ **ORDER IS STRUCTURAL, NOT A CONVENTION.** `advanceBaseline` finalises with a CONDITIONAL write
+  (`.is("baseline", null).select()`); only the tick that won calls `onBaselineFrozen`, which (a)
+  fills `remeasure_due_date` WHERE NULL and (b) starts the full measure. Nothing else starts one
+  for a client. And `create-ai-audit` refuses a full measure for a **paying** lead with no frozen
+  baseline (`409 baseline_not_frozen`, recorded): if the judged set were picked after seeing what
+  is winnable, the before/after would be self-serving and a client could say so.
+- ⛔ **DISJOINT IN TWO LAYERS** (`src/lib/fullMeasure.ts`): `coverageDirective` built from the
+  baseline's asked set steers the model (the polite request); `excludeAsked` removes any paraphrase
+  that comes back (the guarantee); `overAskFor` asks for enough extra under the named generator
+  ceiling. The baseline's 6 cells per judged question already clear `MIN_CELLS_FOR_QUESTION_CLAIM`,
+  so nothing is measured twice. A full measure that CONTAINED the judged set would be comparable.
+- ⛔ **THE REPLAY READS THE STORED DATE AND COMPUTES NOTHING.** `src/lib/remeasureDue.ts` imports
+  nothing and has no date arithmetic, by test; `fireDueRemeasures` (audit-baseline.ts, every
+  30-second tick beside `ensureBaselinesForPaidOnboardings`) selects `remeasure_due_date <= today`
+  and re-checks each row with it. **RG's stored 2026-10-06 fires him; his computed default would
+  have been 2026-09-08 and cannot reach the decision.** The ONLY `+REMEASURE_OFFSET_DAYS` is
+  `remeasureFill.ts`, called once at freeze, and its UPDATE carries `.is("remeasure_due_date", null)`.
+- ⛔ **REFUNDED STOPS THE REPLAY, ALONE.** SC Plumbing (refunded, date NULL) is refused as
+  `refunded` before the date is looked at, and with a past date filled in he is STILL refused as
+  refunded — pinned. A **hosting** cancellation is NOT a stop: the £99 guarantee is calendar-based.
+  Archived (`is_archived` — the real column; `archived_at` does not exist) and unpaid also refuse.
+  **Work unfinished does not delay it**: the unticked milestones are STAMPED on the replay
+  (`results.remeasure.work_incomplete`), fire-and-stamp, Paul's call.
+- ⛔ **THE POINTER IS THE IDEMPOTENCY, AT 2,880 TICKS A DAY.** `outreach_leads.remeasure_audit_id`
+  is claimed by trigger in the replay audit's own insert transaction (Slice 0 SQL, same pattern as
+  `baseline_audit_id`), immutable once set, and **the partial unique index
+  `uq_ai_audits_one_remeasure_per_lead` refuses a second `remeasure` insert at the database** —
+  the read gate is necessary and not sufficient. `create-ai-audit` answers that 23505 with
+  `409 already_remeasured`; the tick treats it as the race resolving. **One replay per lead, ever.**
+  A continuing-work client's later re-measures are operator-driven, not automatic.
+- ⛔ **SEEDING IS GONE.** The baseline no longer carries the hook's questions forward (`applySeed`,
+  `SeedOutcome`, `rejected_seeds`, the seeded branches — deleted). `decideGuarantee`/`GuaranteeKind`
+  are gone: every client is on the outcome-conditional guarantee and grading them `work` from the
+  price was a semantic inversion. Contract **v2** records intent (home town, areas deferred to the
+  full measure, money questions); the judged set is the pointer's asked set, never a field.
+- ⛔ **`page-generator` READS THE POINTER + THE FULL MEASURE, NEVER "LATEST".** `measuredSetForLead`.
+  Under this model the newest multi-run audit at day 0 is the full measure, so "latest" would have
+  dropped the 12 judged questions from every page plan. No pointer → `no_baseline_recorded`.
+- **Deleted with it (Slice 5):** market audits (`purpose:"market"`, `market_only`, the cooldown),
+  `derive-audit` + `derivable.ts` + the try-derive branches + the Outreach "Derive reports" button,
+  `compareToBaseline` (no consumers), **`measurement_locks` and everything that read it** (the
+  pointer + server-side refusal on the ASKED set superseded it four days after it shipped), the
+  re-audit dialog's 3-run "measurement" mode and the Baseline page's "Re-run this measurement".
+  A re-audit is a one-run quick diagnostic now.
+- **Numbers:** `BASELINE_QUESTIONS = 12`, `FULL_MEASURE_QUESTIONS = 20`, `FREE_CHECK_QUESTIONS = 3`,
+  `GENERATOR_ABSOLUTE_MAX_QUESTIONS = 40` (the generator's inner clamp used to borrow the baseline
+  ceiling, so a 75-question policy generated 20 and nothing said so — now named, and
+  `scripts/question-ceilings.test.ts` asserts every policy ceiling sits under it). Per client, all
+  four stages: ~135 question-runs, ~$1.47 Apify + ~$0.70 cleaner ≈ **£1.70**; day 0 ≈ 50 min
+  (baseline then full measure, sequential), day 28 ≈ 25 min.
+- 🔴 **THE PARSE GATE, AND WHY IT EXISTS.** A stray `}` in create-ai-audit passed typecheck (does
+  not cover `supabase/functions`), the build (does not bundle edge code) and every suite (they read
+  the file's TEXT), and was caught only by the Supabase bundler. **`scripts/check-edge-syntax.mjs`**
+  (esbuild's TS transform, parse only) now runs inside `npm run check`; proven against the broken
+  file. Deno is not on this machine; this is the cheap pass in front of the deploy, and it does NOT
+  catch a missing `.ts` import extension (§4).
+- ⚠️ **STILL OPEN AFTER THIS:** (1) **nothing sends the four-week results** — the replay produces an
+  audit and `findable.live/refunds` starts a 14-day clock on RECEIPT of results that no code
+  delivers (scoped 2026-09-12: a `render-remeasure` document over `compareMeasurements`, a Resend
+  send with a claim-first stamp `remeasure_results_sent_at`, a dashboard card; ~a day). (2) The
+  client is not yet TOLD "we judge the refund where you trade, we measure your ambitions to decide
+  what to build" — that is findable-site copy (`OnboardingFlow.tsx:3005` still says the towns are
+  "both delivery and measurement"). (3) `derive-audit` v23 is still DEPLOYED with no source
+  (`functions delete` awaits Paul's word), and `measurement_locks` still EXISTS in the DB (Paul's
+  `DROP TABLE`, after the SPA that stopped reading it was confirmed live — it is).
+- **Deployed 2026-09-12:** `create-ai-audit` v106, `process-ai-audit-queue` v152, `stripe-webhook`
+  v82, `bulk-jobs` v55, `whatsapp-status` v74, `findable-onboarding` v82, `page-generator` v46.
+
+---
+
 ## 18. 🔴 ONE PAYMENT, ONE BASELINE — the loop, the pointer, the replay and the refusal (2026-09-12)
 
 **Paul paid once on lead `50826b1a` and got TEN paid baselines**, 343 queue rows, ~$3.70 of Apify,
