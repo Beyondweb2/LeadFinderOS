@@ -12,19 +12,29 @@ import { serveDecision, serveInputFromRow, type ServeGateRow } from "../../../sr
 // findable-checkout — Stripe Checkout for the Findable onboarding plan (verify_jwt = false;
 // called by the public findable-site with the anon apikey — the visitor has no app account).
 //
-// ONE plan: the eight-week sprint, ONE-OFF at FINDABLE_SETUP_PRICE_GBP (findableOffer.ts —
-// £99 since 2026-08-04), work-based guarantee. mode=payment — deliberately NOT the barber
-// subscription function (that one needs an operator JWT, bills £29.99/month and redirects
-// to /barber).
+// ONE plan: the four-week cycle, ONE-OFF at FINDABLE_SETUP_PRICE_GBP (findableOffer.ts), with a
+// refund if the measured number has not gone up. mode=payment — UNLESS the customer asked us to
+// build their site, which adds the £9.99/month hosting line and makes it mode=subscription. Either
+// way this is deliberately NOT the barber subscription function (that one needs an operator JWT,
+// bills £29.99/month and redirects to /barber).
+//
+// ⚠️ THIS HEADER WAS THREE THINGS WRONG AT ONCE UNTIL 2026-09-12, which is worth recording because
+// none of them broke anything and all of them would have misled someone reading in a hurry: it said
+// "eight-week sprint" (the cycle has been four weeks since 2026-09-04), "£99 since 2026-08-04" (the
+// price had been £49.99 since 2026-09-03 and is £99 again today, so the figure was right by
+// coincidence and the date was wrong), and "work-based guarantee" (the refund is conditional on the
+// measurement now). Prose next to a constant rots silently — name the constant, not the value.
 //
 // KEY SAFETY: STRIPE_SECRET_KEY lives ONLY in this function's server-side secrets. The
 // session is created HERE via the Stripe REST API; the browser only ever receives the
 // session's redirect URL. Nothing secret ships in findable-site's bundle.
 //
-// Price: FINDABLE_SETUP_PRICE_ID (a Stripe dashboard Price) wins when set (NOT set as of
-// 2026-08-04 — checked the secret list); otherwise the inline price_data below charges
-// exactly FINDABLE_SETUP_PRICE_GBP. The price findable-site DISPLAYS is that repo's own
-// copy — a matching pass there is required when this changes.
+// Price: FINDABLE_SETUP_PRICE_ID (a Stripe dashboard Price) wins when set — still NOT set as of
+// 2026-09-12, re-checked against the live secret list — otherwise the inline price_data below
+// charges exactly FINDABLE_SETUP_PRICE_GBP. Keep it unset: a dashboard Price carries no description
+// field of ours, so setting it would silently drop the guarantee text from the Stripe page.
+// The price findable-site DISPLAYS is that repo's own copy, pinned to this one by
+// scripts/check-cross-repo-sync.mjs, which now also asserts the guarantee names the same figure.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
