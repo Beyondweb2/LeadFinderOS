@@ -835,7 +835,6 @@ Deno.serve(async (req) => {
         const leaked = questions.filter((q) => !disjoint([q]).length);
         if (leaked.length) console.error(`[create-ai-audit] INVARIANT: ${leaked.length} baseline question(s) survived exclusion — ${leaked.join(" | ")}`);
       }
-    }
       const auditRow: Record<string, unknown> = {
         user_id: userId,
         lead_id: leadId,
