@@ -362,6 +362,25 @@ const REPORT_CONTACT_WHATSAPP = "447347041545";
  *  are" reads as an invitation. */
 const REPORT_SITE_URL = "https://findable.live";
 
+/** WHERE "See how it works" GOES — the explainer video, by anchor, not the bare home page.
+ *
+ *  🔴 IT POINTED AT THE BARE ORIGIN UNTIL 2026-09-12, AND THAT IS HOW THE VIDEO CAME TO EXIST AT
+ *  ALL. The button promised an explainer while findable.live had no <video> element on it; the
+ *  video was added that day and landed SIXTH on the page, so a prospect pressing this still got
+ *  the top of the home page and five sections of scrolling to find the thing the button named.
+ *  The section then moved to slot 3 and this became an anchor: it is a jump to the thing, not a
+ *  jump to a page that contains the thing.
+ *
+ *  ⛔ THE ANCHOR IS SAFE BECAUSE THE TARGET IS A RULE, NOT A LIST. findable-site's global.css
+ *  applies scroll-margin-top to `section[id]` for every id, so #video clears the fixed nav the way
+ *  every other jump target does — it needed no per-id CSS when it was created and needs none now.
+ *  ⚠️ IF THE SECTION IS EVER REMOVED OR RENAMED, THIS LINK DEGRADES QUIETLY: a browser given an
+ *  unknown fragment loads the page and stays at the top, which is exactly where this button used
+ *  to land. It fails back to the old behaviour rather than to an error — worth knowing, because it
+ *  also means nothing here will TELL you the anchor has gone. findable-site's Explainer header
+ *  carries the matching warning. */
+const REPORT_EXPLAINER_URL = `${REPORT_SITE_URL}/#video`;
+
 const SEV_COLOUR: Record<SeoFinding["severity"], string> = { high: "var(--red)", med: "var(--amber)", low: "var(--muted)" };
 
 /** No website at all: say what we will build, in the SEO slot's place. Distinct from a FAILED
@@ -1317,7 +1336,7 @@ ${d.hidePitch ? "" : `
       <p>Watch the explainer, or just ask me anything.</p>
       <div class="cta-actions">
         ${startBtn}
-        <a class="cta-btn site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">See how it works</a>
+        <a class="cta-btn site" href="${esc(REPORT_EXPLAINER_URL)}" target="_blank" rel="noopener noreferrer">See how it works</a>
         <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp me</a>
       </div>
       <!-- 🔴 THE GUARANTEE IS BACK ON THE REPORT (2026-09-12). When the founder-offer block was
