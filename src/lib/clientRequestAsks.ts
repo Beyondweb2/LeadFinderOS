@@ -12,7 +12,7 @@
      · their Google Business Profile completed properly
      · their name, address, phone and services consistent everywhere an engine reads them
      · a review link
-     · the week-eight re-measurement
+     · the four-week re-measurement
    And if their site cannot take pages, we move it to our hosting or send the spec to whoever runs it.
 
    THE RULE FOR THIS LIST, unchanged from the document it replaces: an ask belongs here ONLY if we

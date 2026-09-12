@@ -148,7 +148,7 @@ export function SubmissionsCard() {
           <ClipboardList className="h-4 w-4" />
           Questionnaire submissions
           {/* ⛔ FIRST, AND IN RED. A paid customer whose delivery cannot start is the only row here
-              with a refund attached to it, and the whole point is not discovering it at week eight. */}
+              with a refund attached to it, and the whole point is not discovering it at week four. */}
           {summary.awaitingQ2 > 0 && (
             <Badge variant="outline" className="ml-1 border-red-500/30 bg-red-500/15 text-xs text-red-600">
               {summary.awaitingQ2} awaiting details

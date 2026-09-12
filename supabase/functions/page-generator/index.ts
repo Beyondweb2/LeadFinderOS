@@ -52,6 +52,46 @@ const escHtml = (s: string): string =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const httpUrl = (s: string): string => (/^https?:\/\//i.test(String(s ?? "").trim()) ? String(s).trim() : "");
 
+/* ⛔ WHICH AUDITS A LEAD'S PAGES ARE PLANNED FROM (Paul, 2026-09-12): THE POINTER'S AUDIT PLUS EVERY
+   FULL MEASURE ON THE LEAD — never "the latest multi-run audit". Under the three-type model the
+   newest multi-run audit at day 0 is the FULL MEASURE (20 questions, DISJOINT from the baseline),
+   so "latest" would have silently dropped the 12 judged questions from every page plan. The
+   baseline's 3 runs x 2 engines = 6 cells per question already clear MIN_CELLS_FOR_QUESTION_CLAIM,
+   so both sets carry real signals and neither is re-measured to get them.
+   ⛔ NO POINTER → REFUSE, never "pick one" (baselineReplay.ts's rule): a plan built on a guessed
+   baseline would target questions the refund is not judged on. RG / Ronnie / SC have pointers and
+   no full measure yet, so for them this is exactly the pointer's audit. */
+type MeasuredAudit = {
+  id: string; lead_id: string | null; business_name: string; business_type: string | null; business_scope: string | null;
+  location_text: string | null; baseline_target_runs: number; created_at: string; audit_purpose?: string | null;
+};
+const MEASURED_COLS = "id, lead_id, business_name, business_type, business_scope, location_text, baseline_target_runs, created_at, audit_purpose";
+// deno-lint-ignore no-explicit-any
+async function measuredSetForLead(service: any, userId: string, leadId: string): Promise<
+  | { anchor: MeasuredAudit; audits: MeasuredAudit[]; runIds: string[] }
+  | { anchor: null; reason: "no_baseline_recorded" | "baseline_audit_missing" }
+> {
+  const { data: lr } = await service.from("outreach_leads").select("baseline_audit_id").eq("id", leadId).eq("user_id", userId).maybeSingle();
+  const pointer = (lr as { baseline_audit_id?: string | null } | null)?.baseline_audit_id ?? null;
+  if (!pointer) return { anchor: null, reason: "no_baseline_recorded" };
+  const { data: a } = await service.from("ai_audits").select(MEASURED_COLS).eq("id", pointer).eq("user_id", userId).maybeSingle();
+  if (!a) return { anchor: null, reason: "baseline_audit_missing" };
+  const { data: ms } = await service.from("ai_audits").select(MEASURED_COLS)
+    .eq("lead_id", leadId).eq("user_id", userId).eq("audit_purpose", "measurement")
+    .order("created_at", { ascending: false });
+  const audits: MeasuredAudit[] = [a as MeasuredAudit, ...((ms ?? []) as MeasuredAudit[]).filter((m) => m.id !== pointer)];
+  /* Per audit, its latest `baseline_target_runs` complete/capped runs — the same rule the plan
+     always used for one audit, applied to each. */
+  const runIds: string[] = [];
+  for (const au of audits) {
+    const { data: runs } = await service.from("ai_audit_runs").select("id")
+      .eq("audit_id", au.id).in("status", ["complete", "capped"])
+      .order("created_at", { ascending: false }).limit(Math.max(1, Number(au.baseline_target_runs ?? 1)));
+    runIds.push(...((runs ?? []) as Array<{ id: string }>).map((r) => String(r.id)));
+  }
+  return { anchor: a as MeasuredAudit, audits, runIds };
+}
+
 const PAGE_TOOL = {
   type: "function",
   function: {
@@ -249,9 +289,17 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false });
       const audits = (auds ?? []) as Array<{ id: string; lead_id: string | null; business_name: string; business_type: string | null; business_scope: string | null; location_text: string | null; baseline_target_runs: number; created_at: string }>;
 
+      /* Leads with a RECORDED baseline: for those, the pointer's audit is THE client entry and the
+         newer full measure is not offered as a separate "client" — it is folded in by
+         measuredSetForLead when the pointer is chosen. Lead-less audits (Solene) keep the old rule. */
+      const { data: pointed } = await service.from("outreach_leads").select("id, baseline_audit_id")
+        .eq("user_id", userId).not("baseline_audit_id", "is", null);
+      const pointerByLead = new Map<string, string>(((pointed ?? []) as Array<{ id: string; baseline_audit_id: string }>).map((l) => [l.id, l.baseline_audit_id]));
+
       if (action === "qa_clients") {
         const seen = new Set<string>();
         const clients = audits
+          .filter((a) => !(a.lead_id && pointerByLead.has(a.lead_id) && pointerByLead.get(a.lead_id) !== a.id))
           .filter((a) => { const k = (a.business_name ?? "").toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; })
           .map((a) => ({ audit_id: a.id, business_name: a.business_name, business_type: a.business_type, baseline_at: a.created_at }));
         return json({ ok: true, clients });
@@ -330,10 +378,18 @@ Deno.serve(async (req) => {
         }
       }
 
-      const { data: qaRuns } = await service.from("ai_audit_runs")
-        .select("id").eq("audit_id", auditId).in("status", ["complete", "capped"])
-        .order("created_at", { ascending: false }).limit(qaAudit.baseline_target_runs);
-      const qaRunIds = (qaRuns ?? []).map((r) => String((r as { id: string }).id));
+      /* Pointer + full measures for a lead with a recorded baseline; the audit's own latest runs
+         for a lead-less client. */
+      let qaRunIds: string[] = [];
+      const qaSet = qaAudit.lead_id ? await measuredSetForLead(service, userId, qaAudit.lead_id) : null;
+      if (qaSet?.anchor) {
+        qaRunIds = qaSet.runIds;
+      } else {
+        const { data: qaRuns } = await service.from("ai_audit_runs")
+          .select("id").eq("audit_id", auditId).in("status", ["complete", "capped"])
+          .order("created_at", { ascending: false }).limit(qaAudit.baseline_target_runs);
+        qaRunIds = (qaRuns ?? []).map((r) => String((r as { id: string }).id));
+      }
       const { data: qaQRows } = qaRunIds.length
         ? await service.from("ai_audit_queue").select("question").in("run_id", qaRunIds).order("created_at", { ascending: true })
         : { data: [] as Array<{ question: string }> };
@@ -752,34 +808,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    /* ── THE CLIENTS: leads with a paid baseline, owned by the caller. ─────────────────────── */
-    const { data: baselines } = await service
-      .from("ai_audits")
-      .select("id, lead_id, business_name, business_type, baseline_target_runs, created_at")
-      .gt("baseline_target_runs", 1)
-      .not("lead_id", "is", null)
+    /* ── THE CLIENTS: leads with a RECORDED baseline — outreach_leads.baseline_audit_id. ────
+       Not "leads with a multi-run audit": since 2026-09-12 a client has a baseline (the judged
+       set) AND a full measure (the winnability read), and only the pointer says which is which. */
+    const { data: pointedLeads } = await service
+      .from("outreach_leads")
+      .select("id, business_name, baseline_audit_id")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-    const baselineAudits = (baselines ?? []) as Array<{
-      id: string; lead_id: string; business_name: string; business_type: string | null;
-      baseline_target_runs: number; created_at: string;
-    }>;
+      .not("baseline_audit_id", "is", null)
+      .eq("is_archived", false);
+    const pointed = (pointedLeads ?? []) as Array<{ id: string; business_name: string | null; baseline_audit_id: string }>;
 
     if (action === "clients") {
-      /* Newest baseline per lead. */
-      const seen = new Set<string>();
-      const clients = baselineAudits.filter((a) => {
-        if (seen.has(a.lead_id)) return false;
-        seen.add(a.lead_id);
-        return true;
-      }).map((a) => ({ lead_id: a.lead_id, business_name: a.business_name, baseline_at: a.created_at }));
+      const ids = pointed.map((l) => l.baseline_audit_id);
+      const { data: pa } = ids.length
+        ? await service.from("ai_audits").select("id, business_name, created_at").in("id", ids)
+        : { data: [] as Array<{ id: string; business_name: string; created_at: string }> };
+      const byId = new Map(((pa ?? []) as Array<{ id: string; business_name: string; created_at: string }>).map((a) => [a.id, a]));
+      const clients = pointed.map((l) => {
+        const a = byId.get(l.baseline_audit_id);
+        return { lead_id: l.id, business_name: a?.business_name ?? l.business_name ?? "", baseline_at: a?.created_at ?? null };
+      });
       return json({ ok: true, clients });
     }
 
     const leadId = typeof body.lead_id === "string" ? body.lead_id.trim() : "";
     if (!leadId) return json({ ok: false, error: "lead_id required" }, 400);
-    const audit = baselineAudits.find((a) => a.lead_id === leadId);
-    if (!audit) return json({ ok: false, error: "no_baseline_for_lead" }, 404);
+    const measured = await measuredSetForLead(service, userId, leadId);
+    if (!measured.anchor) return json({ ok: false, error: measured.reason }, 404);
+    const audit = measured.anchor;
 
     /* ── INPUT 1: the newest questionnaire row. ────────────────────────────────────────────── */
     const { data: obRow } = await service
@@ -814,15 +871,9 @@ Deno.serve(async (req) => {
     const siteRoot = (() => { const w = httpUrl(lead.website ?? ""); return w ? w.replace(/\/+$/, "") + "/" : ""; })();
     const contactDefault = siteRoot ? `${siteRoot}contact/` : "";
 
-    /* ── INPUT 2: the baseline questions — LATEST baseline_target_runs runs only. ──────────── */
-    const { data: runs } = await service
-      .from("ai_audit_runs")
-      .select("id, created_at")
-      .eq("audit_id", audit.id)
-      .in("status", ["complete", "capped"])
-      .order("created_at", { ascending: false })
-      .limit(audit.baseline_target_runs);
-    const runIds = (runs ?? []).map((r) => String((r as { id: string }).id));
+    /* ── INPUT 2: the measured questions — the POINTER's latest runs plus every full measure's
+       (measuredSetForLead). The judged 12 and the winnability 20, never one without the other. ── */
+    const runIds = measured.runIds;
     if (runIds.length === 0) return json({ ok: false, error: "baseline_has_no_complete_runs" }, 422);
     const { data: qRows } = await service
       .from("ai_audit_queue")

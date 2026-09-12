@@ -37,7 +37,7 @@ export const DELIVERY_CHECKLIST_ITEMS: DeliveryChecklistItem[] = [
   { key: 'pages', label: 'Pages', hint: 'Service + area pages published on their own site' },
   { key: 'gbp', label: 'GBP profile', hint: 'Google Business Profile claimed, verified and consistent with the pages' },
   { key: 'website', label: 'Website', hint: 'Site built or fixed where there was none / it was blocking' },
-  { key: 'remeasure', label: 'Re-measure taken', hint: 'The 8-week re-measurement has been run and evidenced' },
+  { key: 'remeasure', label: 'Re-measure taken', hint: 'The four-week re-measurement has been run and evidenced (RG Locksmiths: eight weeks, by his contract)' },
 ];
 
 export type DeliveryChecklist = Record<string, boolean>;
@@ -57,7 +57,8 @@ export function addDaysISO(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** The default re-measure due date: baseline + 56 days. */
+/** The default re-measure due date: baseline + REMEASURE_OFFSET_DAYS (28). Written ONCE, where
+ *  remeasure_due_date IS NULL (remeasureFill.ts); a stored date is never touched. */
 export function defaultRemeasureDue(baselineDate: string): string {
   return addDaysISO(baselineDate, REMEASURE_OFFSET_DAYS);
 }

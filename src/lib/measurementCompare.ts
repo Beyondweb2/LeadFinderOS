@@ -1,5 +1,5 @@
 /* ============================================================
-   BEFORE / AFTER — the week-eight re-measurement, computed instead of eyeballed.
+   BEFORE / AFTER — the day-28 re-measurement, computed instead of eyeballed.
 
    WHY THIS EXISTS. Nothing in the codebase compared two measurements. `ai_audit_runs.results.
    measurement` was tagged at creation "so the start-vs-re-measure before/after can find them

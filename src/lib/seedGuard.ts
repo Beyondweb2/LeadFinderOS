@@ -444,7 +444,7 @@ export function qualifyPlace(
     /* Replace the LAST occurrence of the town, which is where the place sits in
        "[service] in [town]". Case-insensitive match, but the ORIGINAL casing is kept: rewriting
        "Wisbech" to "wisbech" would change the stored question string for no reason, and the stored
-       string is what a week-eight re-measurement re-runs verbatim. */
+       string is what a day-28 re-measurement re-runs verbatim. */
     const re = new RegExp(`(.*)(${escapeForRegex(town.trim())})`, 'i');
     const m = q.match(re);
     if (!m) return q;

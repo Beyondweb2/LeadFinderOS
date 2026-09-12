@@ -36,9 +36,12 @@ export const FREE_CHECK_AUDIT_REPEAT_DAYS = 7;
  *  plus the one-off Google resolution on genuinely new businesses. */
 export const FREE_CHECK_DAILY_AUDIT_CAP = 10;
 
-/** How many questions a free-check audit asks. Five is the wizard's own maximum and what §6j's
- *  phase-2 plan specified; the SEO scan is skipped, so this is the whole cost. */
-export const FREE_CHECK_QUESTIONS = 5;
+/** How many questions a free-check audit asks. THREE, since 2026-09-12 (Paul's decision): under
+ *  the three-type measurement model (hook / baseline / full measure) the free check is a HOOK
+ *  asked three times, not a fourth type. Own constant, unchanged mechanism (internal `target_runs`),
+ *  and the result email's "named N of 3 times" stays true because FREE_CHECK_RUNS is what it
+ *  counts, not this. Was 5 — the wizard's maximum — from 2026-08-20 to 2026-09-12. */
+export const FREE_CHECK_QUESTIONS = 3;
 
 export type AutoAuditDecision =
   | { fire: true }
@@ -111,7 +114,7 @@ export async function shouldAutoAudit(service: Client, leadId: string): Promise<
  *
  *  ⛔ IT MULTIPLIES SPEND AND WALL CLOCK, AND BOTH WERE MEASURED BEFORE IT WAS SET. Cost is linear
  *  in question-runs — fitted over 713 completed runs, `actor_cost_usd` = $0.0004/run +
- *  $0.0108/question, i.e. no per-run overhead — so 5x3 is ~$0.16 of Apify against ~$0.05 at 5x1.
+ *  $0.0108/question, i.e. no per-run overhead — so 3x3 is ~$0.10 of Apify against ~$0.03 at 3x1.
  *  Runs are SEQUENTIAL (advanceBaseline starts run N+1 when run N finishes), median ~5.9 min each,
  *  so three runs is ~18 min typical. The confirmation copy on findable-site says twenty minutes
  *  BECAUSE of this number; change one and read the other. */

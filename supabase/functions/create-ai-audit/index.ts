@@ -1424,7 +1424,7 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
          place was under-specified. See qualifyPlace for why that differs from dropMissingTown.
          ⚠️ The suffix stays "UK" deliberately. The geocoder can now supply "Cambridgeshire", which
          pins a town far harder — but changing it changes what the engines return for EVERY town,
-         and a week-eight re-measurement compares against day-0 wording. Paul's decision, not a
+         and a day-28 re-measurement compares against day-0 wording. Paul's decision, not a
          code change. */
       const pinned = qualifyPlace(localised.questions, town);
       if (pinned.repaired.length) {

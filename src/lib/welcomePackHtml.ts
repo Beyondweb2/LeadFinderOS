@@ -1,4 +1,5 @@
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml';
+import { FINDABLE_GUARANTEE } from './findableOffer';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WELCOME PACK — ONE printable document for a client who has just paid:
@@ -186,14 +187,14 @@ function planPage1(name: string): string {
           <li>Clean, purpose-built pages on your website that AI can actually read and quote</li>
           <li>Your listings on the directories AI checks, made consistent and correct</li>
           <li>We reply to your Google reviews for you, to keep your profile active</li>
-          <li>A re-check at 8 weeks that shows your before and after in plain numbers</li>
+          <li>A re-check at four weeks that shows your before and after in plain numbers</li>
         </ul>
       </div>
 
       <div class="wp-box-navy">
         <p class="wp-boxtitle">Timeline &amp; guarantee</p>
-        ${lead('Timeline.', 'The work goes live in the first few weeks. AI tools take a little time to re-read the web, so we re-measure at 8 weeks from your starting point and send you a clear before-and-after.')}
-        ${lead('Guarantee.', 'If you’re not named in more AI answers at that 8-week re-check than you were at the start, you get your money back. We don’t promise a specific position, and no honest company can promise AI will always name you. What we promise is to move you from where you are now.')}
+        ${lead('Timeline.', 'The work goes live in the first few weeks. AI tools take a little time to re-read the web, so we re-measure at four weeks from your starting point, on the same questions and the same engines, and send you a clear before-and-after.')}
+        ${lead('Guarantee.', esc(FINDABLE_GUARANTEE))}
       </div>`;
 }
 

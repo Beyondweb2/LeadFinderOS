@@ -513,7 +513,7 @@ Deno.serve(async (req) => {
          NO ?lead= tag and is on their way to pay. Until today that was impossible - the price was
          derived per-lead, so a lead-less arrival could not be charged and findable-checkout refused
          it outright. One flat price removes the reason for the refusal; the only thing still needed
-         is a trade + town so the week-eight guarantee has something to measure, which the pre-payment
+         is a trade + town so the four-week guarantee has something to measure, which the pre-payment
          screen now asks for in exactly this case. */
       const SUBMISSION_SOURCES = new Set(["free_check", "signup"]);
       const submissionSource =

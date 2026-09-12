@@ -92,8 +92,8 @@ export const isLeadPaid = (r: SubmissionRow) => (r.lead_amount_paid ?? 0) > 0;
 /**
  * ⛔ PAID, AND THE SECOND QUESTIONNAIRE IS STILL OUTSTANDING — its own state, never mixed in.
  * This is the one that costs money to miss: no confirmed town and no services means
- * startPaidBaseline defers, so there is no week-eight measurement, so the guarantee cannot be
- * delivered and the exposure is a refund. Finding that out at week eight is finding out too late.
+ * startPaidBaseline defers, so there is no four-week measurement, so the guarantee cannot be
+ * delivered and the exposure is a refund. Finding that out at week four is finding out too late.
  *
  * ⚠️ DERIVED FROM THE ANSWERS, NOT STORED. Same rule as serveGate: a stored "q2_done" flag would
  * freeze old rows against a stale definition and let the readers drift. The two fields are

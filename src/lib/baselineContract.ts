@@ -1,10 +1,10 @@
 /* ============================================================
-   THE BASELINE CONTRACT — what a paid client's week-eight re-measurement is, in writing.
+   THE BASELINE CONTRACT — what a paid client's day-28 re-measurement is, in writing.
 
    WHY THIS EXISTS. The paid baseline used the client's MAIN TOWN only, while the questionnaire
    now captures areas_list: a priority-ordered list of towns they want work from. A client with
    three towns got work aimed at three and a measurement of one. This module decides how a fixed
-   question budget is spread across the towns they picked, and freezes that decision so week eight
+   question budget was spread across the towns they picked (v1), and freezes that decision so day 28
    re-runs the identical set instead of re-deriving it from whatever the code does by then.
 
    IMPORTED BY EDGE FUNCTIONS: relative paths with an explicit .ts extension only, no @/ alias,
@@ -58,7 +58,7 @@ export interface BaselineContract {
    *  today", and "today" is the audit they were shown — so the scored set is the seed, not whatever
    *  the new allocation happens to put first. */
   scoredQuestions?: string[];
-  /** The audit the scored set came from, so week eight can compare against the exact measurement
+  /** The audit the scored set came from, so day 28 can compare against the exact measurement
    *  that was sold rather than re-deriving a "before". Outcome clients only. */
   scoredFromAuditId?: string | null;
   /** THE MONEY QUESTIONS IN THIS MEASUREMENT, verbatim as queued — the buying-moment queries the
@@ -68,7 +68,7 @@ export interface BaselineContract {
    *  consumer cannot tell those two apart from this field alone, so it should say which it means).
    *
    *  ⛔ WHY IT IS RECORDED AT ALL: money questions can be authority-locked by directories, so they
-   *  may be harder to move than a head term. Flagging them lets the week-eight before/after be
+   *  may be harder to move than a head term. Flagging them lets the day-28 before/after be
    *  computed on ALL questions or on STANDARD QUESTIONS ONLY — a decision deliberately NOT made
    *  here. Nothing in the guarantee reads this field.
    *  ⛔ AND IT IS NOT THE REFUND TEST. `scoredQuestions` below is, and money questions cannot enter
@@ -156,7 +156,7 @@ export function allocateAreas(
 }
 
 /** Every question in a contract's measured set, main town first. Used to re-run the identical set
- *  at week eight without re-deriving anything. */
+ *  at day 28 without re-deriving anything. */
 export function contractQuestionCount(c: BaselineContract): number {
   return c.allocation.reduce((s, a) => s + a.questions, 0);
 }

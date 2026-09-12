@@ -212,7 +212,7 @@ Deno.serve(async (req) => {
          bare visit. Guarding the senders closes some of those; guarding this closes all of them.
 
          Without a trade on the LEAD, startPaidBaseline returns skipped:"no_business_type" and no
-         baseline is ever created — so the week-eight re-measurement this payment guarantees has
+         baseline is ever created — so the four-week re-measurement this payment guarantees has
          nothing to measure against, and that only surfaces at week four in front of the customer. Refusing
          a payment is recoverable in a minute; selling an unmeasurable guarantee is not.
 
@@ -235,7 +235,7 @@ Deno.serve(async (req) => {
     } else {
       /* NO ATTRIBUTION — refuse rather than take the money.
          Without a lead there is no baseline (startPaidBaseline returns skipped:no_lead_id) and
-         therefore no way to measure the week-eight re-measurement this payment guarantees. Taking
+         therefore no way to measure the four-week re-measurement this payment guarantees. Taking
          the money for a promise that cannot be assessed is the wrong side of the trade, so the session is not
          created. The site turns this into an instruction to use their own link, never an error.
          Safe to enforce now that the client falls back to the URL's ?lead=, so a failed prefill no

@@ -116,20 +116,24 @@ eq("onboarding_followup does not", templateNeedsAudit(["name", "onboarding_url"]
 eq("absent vars -> not audit-class", templateNeedsAudit(undefined), false);
 eq("empty vars -> not audit-class", templateNeedsAudit([]), false);
 
-// ── the config is the outreach one, and separate from the free check's 5x3
+// ── the config is the outreach one, and separate from the free check's 3x3
 eq("outreach asks 3 questions", OUTREACH_AUDIT_QUESTIONS, 3);
 eq("outreach runs once", OUTREACH_AUDIT_RUNS, 1);
 eq("concurrency is 3", OUTREACH_AUDIT_CONCURRENCY, 3);
 ok("concurrency is a real cap", OUTREACH_AUDIT_CONCURRENCY >= 1 && OUTREACH_AUDIT_CONCURRENCY <= 10);
-/* ⛔ THE LANES MUST NOT CONVERGE. If someone ever "tidies" these to share a constant, the free
-   check silently drops to 1 run (it is emailed as a frequency) or outreach triples its spend. */
+/* ⛔ THE LANES MUST NOT CONVERGE ON RUNS. Since 2026-09-12 both ask THREE questions (the free check
+   is a hook asked three times — Paul's decision, not a fourth measurement type), so the property
+   that separates them is the RUN COUNT: the free check is emailed as a frequency ("named 2 of 3
+   times") and must stay at 3 runs; outreach is one throwaway run and must not triple its spend.
+   If someone ever "tidies" the two run constants into one, one of those two facts breaks. */
 {
   const fc = await import("../supabase/functions/_shared/free-check-audit.ts")
     .then((m) => ({ q: m.FREE_CHECK_QUESTIONS, r: m.FREE_CHECK_RUNS })).catch(() => null);
   if (fc) {
-    eq("free check still asks 5", fc.q, 5);
+    eq("free check asks 3 (a hook asked three times)", fc.q, 3);
     eq("free check still runs 3", fc.r, 3);
-    ok("the two lanes differ", fc.q !== OUTREACH_AUDIT_QUESTIONS && fc.r !== OUTREACH_AUDIT_RUNS);
+    ok("the two lanes differ in RUNS — the property that matters", fc.r !== OUTREACH_AUDIT_RUNS);
+    ok("free check runs more than once (it is emailed as a frequency)", fc.r > 1);
   } else {
     ok("free-check constants importable", false, "could not import free-check-audit.ts");
   }
