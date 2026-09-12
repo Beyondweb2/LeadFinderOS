@@ -1051,69 +1051,6 @@ export function OutreachTable({
     }
   };
 
-  /* ══ DERIVE A REPORT FROM THE TOWN'S MARKET AUDIT ════════════════════════════════════
-     A market audit already asked 8 questions about this trade in this town, and a business audit
-     asks 3-5 of the same kind and checks whether the business appears. Deriving reuses the answers
-     and recomputes only the verdict, so a prospect's report costs NOTHING instead of ~8p.
-     ⚠️ Eligible = selected, real, and with no completed audit already. A lead that HAS one keeps it:
-     re-deriving over a paid measurement would replace a thing that was measured for them with a
-     thing measured for the town. */
-  const deriveEligibleIds = useMemo(
-    () => leads.filter((l) => selectedIds.has(l.id) && !isDemoLead(l.id) && !auditsByLead[l.id]
-      && !!(l.search_keyword || l.category)
-      && !!(l.derived_town || l.search_location)).map((l) => l.id),
-    [leads, selectedIds, auditsByLead],
-  );
-  const [deriveOpen, setDeriveOpen] = useState(false);
-  const [deriveBusy, setDeriveBusy] = useState(false);
-  const [derivePreview, setDerivePreview] = useState<{ ok: number; refused: Array<{ name: string; why: string }> } | null>(null);
-
-  /* Ask what would happen, per lead. Creates nothing and spends nothing. */
-  const openDerive = async () => {
-    setDeriveOpen(true);
-    setDerivePreview(null);
-    const refused: Array<{ name: string; why: string }> = [];
-    let good = 0;
-    for (const id of deriveEligibleIds) {
-      const lead = leads.find((l) => l.id === id);
-      const { data, error } = await supabase.functions.invoke('derive-audit', { body: { lead_id: id, dry_run: true } });
-      if (!error && data?.ok) good++;
-      else {
-        refused.push({
-          name: lead?.business_name || id.slice(0, 8),
-          why: String(data?.message ?? data?.error ?? error?.message ?? 'could not check'),
-        });
-      }
-    }
-    setDerivePreview({ ok: good, refused });
-  };
-
-  const confirmDerive = async () => {
-    setDeriveBusy(true);
-    try {
-      let made = 0;
-      const failed: string[] = [];
-      for (const id of deriveEligibleIds) {
-        const lead = leads.find((l) => l.id === id);
-        const { data, error } = await supabase.functions.invoke('derive-audit', { body: { lead_id: id } });
-        if (!error && data?.ok) made++;
-        else failed.push(lead?.business_name || id.slice(0, 8));
-      }
-      toast({
-        title: `Derived ${made} report${made === 1 ? '' : 's'} — nothing spent`,
-        description: failed.length
-          ? `${failed.length} could not be derived: ${failed.slice(0, 4).join(', ')}${failed.length > 4 ? '…' : ''}. They need their own audit.`
-          : 'Built from the market audit already run for their town.',
-        variant: made === 0 ? 'destructive' : undefined,
-      });
-      setDeriveOpen(false);
-      setSelectedIds(new Set());
-      onRefreshLeads?.();
-    } finally {
-      setDeriveBusy(false);
-    }
-  };
-
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [tradeChoice, setTradeChoice] = useState('');
   const [tradeBusy, setTradeBusy] = useState(false);
@@ -1907,16 +1844,6 @@ export function OutreachTable({
                 )}
                 {/* Shown only when the selection actually contains repairable rows, so they do not
                     clutter the bar for the 846 leads that are fine. */}
-                {!readOnly && deriveEligibleIds.length > 0 && (
-                  <Button
-                    variant="outline" size="sm" className="bg-background text-xs h-8"
-                    title="Build a report from the market audit already run for their town — free, and 8 questions instead of 3"
-                    onClick={openDerive}
-                  >
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5 text-violet-500" />
-                    Derive reports ({deriveEligibleIds.length})
-                  </Button>
-                )}
                 {!readOnly && missingTownIds.length > 0 && (
                   <Button
                     variant="outline" size="sm" className="bg-background text-xs h-8"
@@ -3045,55 +2972,6 @@ export function OutreachTable({
             <Button size="sm" onClick={confirmBulkAudit} disabled={bulkJobActive || !auditBatchCost.leads}>
               <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
               Audit {auditBatchCost.leads}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Derive reports — preview first. Nothing here spends money; the preview exists because a
-          REFUSAL is the interesting outcome and it must be readable before anything is created. */}
-      <Dialog open={deriveOpen} onOpenChange={setDeriveOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-base">Derive reports from the market audit</DialogTitle>
-            <DialogDescription className="text-xs">
-              Reuses the answers already bought for each lead&rsquo;s town and recomputes only whether
-              that business was named. Costs nothing, and rests on 8 questions rather than 3.
-            </DialogDescription>
-          </DialogHeader>
-          {!derivePreview ? (
-            <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Checking {deriveEligibleIds.length} lead
-              {deriveEligibleIds.length === 1 ? '' : 's'}…
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
-                <span className="font-semibold">{derivePreview.ok}</span> can be derived now —
-                <span className="font-semibold"> £0.00</span>.
-              </p>
-              {/* ⛔ THE REFUSALS ARE NAMED, NOT COUNTED. A refusal means the report would have had to
-                  say "we could not tell" while looking like "you are invisible" — the reason is the
-                  useful part, and a bare count would hide which lead needs a paid audit instead. */}
-              {derivePreview.refused.length > 0 && (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-                  <p className="text-xs font-semibold">
-                    {derivePreview.refused.length} cannot be derived — they need their own audit
-                  </p>
-                  <ul className="mt-1.5 max-h-40 space-y-0.5 overflow-y-auto text-xs leading-snug">
-                    {derivePreview.refused.map((r, i) => (
-                      <li key={i}><span className="font-medium">{r.name}</span> <span className="text-muted-foreground">— {r.why}</span></li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setDeriveOpen(false)} disabled={deriveBusy}>Cancel</Button>
-            <Button size="sm" onClick={confirmDerive} disabled={deriveBusy || !derivePreview?.ok}>
-              {deriveBusy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
-              Derive {derivePreview?.ok ?? 0}
             </Button>
           </DialogFooter>
         </DialogContent>

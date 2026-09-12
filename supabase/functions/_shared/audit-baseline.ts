@@ -97,52 +97,6 @@ export async function aggregateRuns(service: Client, runIds: string[]): Promise<
   };
 }
 
-export interface BaselineComparison {
-  /** Questions present AND answered on both sides — the only ones compared. */
-  compared_questions: number;
-  skipped_questions: string[];
-  baseline: { answered_cells: number; named_cells: number; named_rate: number };
-  later: { answered_cells: number; named_cells: number; named_rate: number };
-  /** later.named_rate - baseline.named_rate, on the common set only. */
-  delta_named_rate: number;
-  improved: boolean;
-}
-
-/**
- * Compare a later measurement to the stored baseline, LIKE FOR LIKE. Only questions that
- * returned at least one answer on both sides are counted, so a run where the engines simply
- * answered fewer questions can never look like a regression (or an improvement).
- */
-export function compareToBaseline(baseline: BaselineSnapshot, later: BaselineSnapshot): BaselineComparison {
-  const skipped: string[] = [];
-  let bAns = 0, bNamed = 0, lAns = 0, lNamed = 0, compared = 0;
-
-  const allQuestions = new Set([...Object.keys(baseline.questions), ...Object.keys(later.questions)]);
-  for (const q of allQuestions) {
-    const b = baseline.questions[q];
-    const l = later.questions[q];
-    const bTotal = b ? SCORED_ENGINES.reduce((n, e) => n + (b[e]?.answered ?? 0), 0) : 0;
-    const lTotal = l ? SCORED_ENGINES.reduce((n, e) => n + (l[e]?.answered ?? 0), 0) : 0;
-    if (bTotal === 0 || lTotal === 0) { skipped.push(q); continue; }  // the denominator fix
-    compared += 1;
-    for (const e of SCORED_ENGINES) {
-      bAns += b![e]?.answered ?? 0; bNamed += b![e]?.named ?? 0;
-      lAns += l![e]?.answered ?? 0; lNamed += l![e]?.named ?? 0;
-    }
-  }
-
-  const bRate = bAns > 0 ? bNamed / bAns : 0;
-  const lRate = lAns > 0 ? lNamed / lAns : 0;
-  return {
-    compared_questions: compared,
-    skipped_questions: skipped,
-    baseline: { answered_cells: bAns, named_cells: bNamed, named_rate: Number(bRate.toFixed(4)) },
-    later: { answered_cells: lAns, named_cells: lNamed, named_rate: Number(lRate.toFixed(4)) },
-    delta_named_rate: Number((lRate - bRate).toFixed(4)),
-    improved: lRate > bRate,
-  };
-}
-
 /** What the last advance attempt did. Persisted so a stalled chain is diagnosable from a
  *  query — the first stall cost a day of guessing because console output isn't reachable. */
 export interface BaselineAdvanceOutcome {

@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { defaultReAuditMode, runsForReAuditMode, type ReAuditMode } from './measurementRuns';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    RE-AUDIT — mint a NEW audit (the "after" of a before/after) from an existing source audit,
@@ -33,30 +32,31 @@ import { defaultReAuditMode, runsForReAuditMode, type ReAuditMode } from './meas
 export const RE_AUDIT_EST_USD_PER_QUESTION = 0.0104;
 
 export type ReAuditOutcome =
-  | { ok: true; auditId: string; runId: string | null; measurement: boolean; targetRuns: number }
+  | { ok: true; auditId: string; runId: string | null }
   | { ok: false; error: string };
 
 /* Non-literal string so supabase-js uses its generic overload and does NOT type-validate the column
-   list — is_measurement is a hand-added column absent from the generated types. The finalised-state
-   columns (baseline, baseline_completed_at, …) are deliberately NOT copied: the copy must start
-   fresh so advanceBaseline fires its runs. */
+   list. The measurement markers (is_measurement, baseline_target_runs) and the finalised-state
+   columns (baseline, baseline_completed_at, …) are deliberately NOT copied: a re-audit is a QUICK
+   diagnostic — one run, the source's questions — and must never look like a baseline or a measure.
+   ⛔ THE "measurement" MODE IS GONE (2026-09-12). Re-measuring a baseline is the day-28 replay,
+   fired by the queue against outreach_leads.baseline_audit_id and refused server-side if the set
+   differs; re-measuring a full measure is meaningless, because a full measure is never compared.
+   A dialog that could mint a 3-run copy of any audit was a second route to a comparable set that
+   nothing recorded. */
 const SRC_SELECT: string =
   'lead_id, business_name, business_type, location_text, country, has_website, website, business_scope, ' +
-  'specialism, credentials, business_phone, business_address, business_email, client_links, ' +
-  'is_measurement, baseline_target_runs';
+  'specialism, credentials, business_phone, business_address, business_email, client_links';
 
 /**
- * Re-audit `sourceAuditId` into a fresh audit owned by `userId`, running `questions`. Returns the new
- * audit id + first run id, or an error. Never throws. The source audit is left untouched.
+ * Re-audit `sourceAuditId` into a fresh single-run audit owned by `userId`, asking `questions`.
+ * Returns the new audit id + first run id, or an error. Never throws. The source audit is left
+ * untouched. Excluded from every before/after by construction (one run cannot support a
+ * per-question claim — judgeRemeasure's `quick_diagnostic`).
  */
 export async function reAuditFromSource(
   supabase: SupabaseClient,
-  opts: {
-    sourceAuditId: string; userId: string; questions: string[];
-    /** The operator's choice from the Re-audit dialog. Omitted → the source's own implied mode,
-     *  i.e. exactly the behaviour every existing caller had (the Baseline page passes nothing). */
-    mode?: ReAuditMode;
-  },
+  opts: { sourceAuditId: string; userId: string; questions: string[] },
 ): Promise<ReAuditOutcome> {
   const clean = opts.questions.map((q) => (q ?? '').trim()).filter(Boolean);
   if (clean.length === 0) return { ok: false, error: 'no questions to re-audit' };
@@ -65,47 +65,20 @@ export async function reAuditFromSource(
     .from('ai_audits').select(SRC_SELECT).eq('id', opts.sourceAuditId).maybeSingle();
   if (readErr || !src) return { ok: false, error: readErr?.message ?? 'could not read the audit to copy' };
 
-  const markers = src as unknown as { is_measurement?: boolean | null; baseline_target_runs?: number | null };
-  const sourceTargetRuns = Number(markers.baseline_target_runs ?? 0);
-  /* The chosen mode wins; absent, the source's own markers decide exactly as before. */
-  const mode: ReAuditMode = opts.mode ?? defaultReAuditMode(markers);
-  const isMeasurement = mode === 'measurement';
-  const targetRuns = runsForReAuditMode(mode, sourceTargetRuns);
-
-  /* Copy business fields; carry the measurement markers ONLY when this run is a measurement.
-     ⛔ BOTH MARKERS, AND baseline_target_runs IS THE LOAD-BEARING ONE. `purpose:'measurement'` alone
-     is NOT enough to get 3 runs: advanceBaseline returns early on `!(target > 1)`
-     (_shared/audit-baseline.ts), and create-ai-audit writes baseline_target_runs only in its
-     NEW-AUDIT insert branch — never on the reuse path a re-audit takes (it has no .update() on
-     ai_audits at all). So without this write the copy would run ONCE while the dialog priced three,
-     which is the mispriced-run fault in a new place. It is written from runsForReAuditMode, the same
-     function the cost line uses, so the number charged is the number shown.
-     ⚠️ is_measurement=true is also what makes advanceBaseline send purpose:'measurement' on the
-     REPEATS (the 2026-08-28 clamp fix), so runs 2 and 3 carry the full question set rather than the
-     baseline's 20-question ceiling — and it keeps startPaidBaseline from ever mistaking a
-     re-measure for a new paid baseline. */
   const copyRow: Record<string, unknown> = { ...(src as unknown as Record<string, unknown>), user_id: opts.userId };
-  delete copyRow.is_measurement;
-  delete copyRow.baseline_target_runs;
-  if (isMeasurement) {
-    copyRow.is_measurement = true;
-    copyRow.baseline_target_runs = targetRuns;
-  }
 
   const { data: created, error: insErr } = await supabase
     .from('ai_audits')
-    // cast via unknown: copyRow carries is_measurement, a hand-added column absent from the generated
-    // types — the DB column exists, so the extra key inserts fine at runtime.
     .insert(copyRow as unknown as TablesInsert<'ai_audits'>)
     .select('id')
     .single();
   if (insErr || !created) return { ok: false, error: insErr?.message ?? 'could not create the new audit' };
 
   const { data, error } = await supabase.functions.invoke('create-ai-audit', {
-    body: { audit_id: (created as { id: string }).id, questions: clean, ...(isMeasurement ? { purpose: 'measurement', skip_seo: true } : {}) },
+    body: { audit_id: (created as { id: string }).id, questions: clean },
   });
   const d = data as { ok?: boolean; run_id?: string; error?: string } | null;
   if (error || !d?.ok) return { ok: false, error: error?.message ?? d?.error ?? 're-audit failed' };
 
-  return { ok: true, auditId: (created as { id: string }).id, runId: d.run_id ?? null, measurement: isMeasurement, targetRuns };
+  return { ok: true, auditId: (created as { id: string }).id, runId: d.run_id ?? null };
 }

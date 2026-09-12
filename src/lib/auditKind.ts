@@ -67,7 +67,7 @@ export function auditKind(row: AuditKindRow): AuditKind {
   if (!(runs > 1)) return 'single_run';
   if (row?.is_measurement === true) return 'measurement';
   /* Absent, null, an empty object and an empty string all mean "no contract". A contract that
-     validates as empty is not a contract — same rule isUsableLock applies to measurement_locks. */
+     validates as empty is not a contract — an empty stamp is absence, never a record. */
   const c = row?.baseline_contract;
   const hasContract = !!c && typeof c === 'object' && Object.keys(c as object).length > 0;
   return hasContract ? 'paid_baseline' : 'multi_run_unmarked';

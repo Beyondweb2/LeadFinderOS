@@ -22,7 +22,7 @@
 
    ⛔ AND IT NEVER BLOCKS ON OUR OWN IGNORANCE. No coordinates means we have not looked, not that the
    business is far. That case WARNS and proceeds, because blocking it would refuse 638 of 900 leads
-   today and stop the product working. Same principle as derivable.ts: "we could not tell" and "you
+   today and stop the product working. Same principle the old derivable.ts had: "we could not tell" and "you
    are in the wrong town" must never produce the same outcome.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 

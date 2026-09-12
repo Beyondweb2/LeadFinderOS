@@ -31,7 +31,6 @@ const PLAIN: AuditProtectionFacts = {
   baselineTargetRuns: null,
   isMeasurement: false,
   leadIsPaying: false,
-  hasMeasurementLock: false,
 };
 
 console.log("── THE ONLY ARCHIVABLE SHAPE: every check RAN and every one came back negative ──");
@@ -58,11 +57,8 @@ console.log("\n── ⚠️ BUT A STORED 0 IS NOT A BASELINE, AND MUST NOT PROT
   ok(v.isProtected === false, "baseline_target_runs=0 -> NOT a baseline, archivable");
 }
 
-console.log("\n── ⛔ THE OTHER THREE POSITIVE REASONS EACH PROTECT ON THEIR OWN ──");
+console.log("\n── ⛔ THE OTHER TWO POSITIVE REASONS EACH PROTECT ON THEIR OWN ──");
 {
-  const lock = auditProtection({ ...PLAIN, hasMeasurementLock: true });
-  ok(lock.isProtected && lock.reasons.includes("locked_measurement"), "measurement lock -> protected");
-
   const meas = auditProtection({ ...PLAIN, isMeasurement: true });
   ok(meas.isProtected && meas.reasons.includes("measurement"), "is_measurement -> protected");
 
@@ -79,13 +75,6 @@ console.log("\n── 🔴 THE WHOLE POINT: A CHECK THAT COULD NOT RUN PROTECTS,
   ok(noPay.uncertain, "leadIsPaying=null -> flagged uncertain, not asserted as fact");
   ok(noPay.reasons.includes("unknown_paying_status"), "leadIsPaying=null -> names the failed check");
 
-  const noLock = auditProtection({ ...PLAIN, hasMeasurementLock: null });
-  ok(noLock.isProtected, "hasMeasurementLock=null -> PROTECTED");
-  ok(noLock.uncertain, "hasMeasurementLock=null -> uncertain");
-  ok(noLock.reasons.includes("unknown_lock_status"), "hasMeasurementLock=null -> names the failed check");
-
-  const neither = auditProtection({ ...PLAIN, leadIsPaying: null, hasMeasurementLock: null });
-  ok(neither.isProtected && neither.reasons.length === 2, "both checks failed -> protected, both named");
 }
 
 console.log("\n── ⚠️ is_measurement=null MUST NOT BE READ AS true EITHER ──");
@@ -114,10 +103,9 @@ console.log("\n── ORDERING: most load-bearing reason first, whatever order t
     baselineTargetRuns: 3,
     isMeasurement: true,
     leadIsPaying: true,
-    hasMeasurementLock: true,
   });
-  const expected: ProtectionReason[] = ["paid_baseline", "locked_measurement", "measurement", "paying_customer"];
-  ok(JSON.stringify(v.reasons) === JSON.stringify(expected), `all four -> ${expected.join(" > ")}`);
+  const expected: ProtectionReason[] = ["paid_baseline", "measurement", "paying_customer"];
+  ok(JSON.stringify(v.reasons) === JSON.stringify(expected), `all three -> ${expected.join(" > ")}`);
 }
 
 console.log("\n── EVERY REASON HAS WORDING, AND A PROTECTED VERDICT IS NEVER SILENT ──");
@@ -125,8 +113,8 @@ console.log("\n── EVERY REASON HAS WORDING, AND A PROTECTED VERDICT IS NEVER
    visibly does nothing. Every reason the module can emit must have a sentence attached. */
 {
   const all: ProtectionReason[] = [
-    "paid_baseline", "locked_measurement", "measurement",
-    "paying_customer", "unknown_paying_status", "unknown_lock_status",
+    "paid_baseline", "measurement",
+    "paying_customer", "unknown_paying_status",
   ];
   for (const r of all) {
     const w = PROTECTION_WORDING[r];
@@ -135,11 +123,9 @@ console.log("\n── EVERY REASON HAS WORDING, AND A PROTECTED VERDICT IS NEVER
   /* Drive every single-reason shape and assert none produces an empty summary. */
   const shapes: AuditProtectionFacts[] = [
     { ...PLAIN, baselineTargetRuns: 3 },
-    { ...PLAIN, hasMeasurementLock: true },
     { ...PLAIN, isMeasurement: true },
     { ...PLAIN, leadIsPaying: true },
     { ...PLAIN, leadIsPaying: null },
-    { ...PLAIN, hasMeasurementLock: null },
   ];
   for (const s of shapes) {
     const v = auditProtection(s);
@@ -147,7 +133,7 @@ console.log("\n── EVERY REASON HAS WORDING, AND A PROTECTED VERDICT IS NEVER
   }
 }
 
-console.log("\n── EXHAUSTIVE: all 3×3×3×4 fact combinations, and the invariant that must hold ──");
+console.log("\n── EXHAUSTIVE: all 3×3×4 fact combinations, and the invariant that must hold ──");
 /* The invariant is the feature in one line: an audit is archivable ONLY when every check ran and
    every one came back negative. Driving the whole space stops a later reason being added on the
    permissive side by accident. */
@@ -157,27 +143,24 @@ console.log("\n── EXHAUSTIVE: all 3×3×3×4 fact combinations, and the inva
   for (const baseline of [null, 0, 1, 3] as (number | null)[]) {
     for (const isMeasurement of tri) {
       for (const leadIsPaying of tri) {
-        for (const hasMeasurementLock of tri) {
-          const v = auditProtection({ baselineTargetRuns: baseline, isMeasurement, leadIsPaying, hasMeasurementLock });
-          const allClear =
-            !(typeof baseline === "number" && baseline > 0) &&
-            isMeasurement !== true &&
-            leadIsPaying === false &&
-            hasMeasurementLock === false;
-          checked++;
-          if (v.isProtected === allClear) {
-            violations++;
-            console.log(`   violation: ${JSON.stringify({ baseline, isMeasurement, leadIsPaying, hasMeasurementLock })}`);
-          }
-          if (v.isProtected) {
-            if (v.reasons.length === 0) { violations++; console.log("   protected with no reason"); }
-            if (protectionSummary(v) === "") { violations++; console.log("   protected with no summary"); }
-          }
+        const v = auditProtection({ baselineTargetRuns: baseline, isMeasurement, leadIsPaying });
+        const allClear =
+          !(typeof baseline === "number" && baseline > 0) &&
+          isMeasurement !== true &&
+          leadIsPaying === false;
+        checked++;
+        if (v.isProtected === allClear) {
+          violations++;
+          console.log(`   violation: ${JSON.stringify({ baseline, isMeasurement, leadIsPaying })}`);
+        }
+        if (v.isProtected) {
+          if (v.reasons.length === 0) { violations++; console.log("   protected with no reason"); }
+          if (protectionSummary(v) === "") { violations++; console.log("   protected with no summary"); }
         }
       }
     }
   }
-  ok(checked === 108, `drove all ${checked} combinations`);
+  ok(checked === 36, `drove all ${checked} combinations`);
   ok(violations === 0, "archivable ONLY when every check ran and every one was negative");
 }
 

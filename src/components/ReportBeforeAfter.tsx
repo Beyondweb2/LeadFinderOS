@@ -25,7 +25,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, Loader2, ArrowUp, ArrowDown, Minus, CircleHelp, SlidersHorizontal, Lock } from 'lucide-react';
+import { ArrowLeft, Loader2, ArrowUp, ArrowDown, Minus, CircleHelp, SlidersHorizontal } from 'lucide-react';
 import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtml';
 import type { QueueRow, RunRow } from '@/lib/auditReport';
 import type { QueueRowLite } from '@/lib/baselineView';
@@ -39,8 +39,6 @@ import {
   sideCellsPerQuestion,
   sideProvable,
 } from '@/lib/measurementRunGroups';
-import { useMeasurementLock } from '@/hooks/useMeasurementLock';
-import { describeLock, diffAgainstLock, lockFromRows } from '@/lib/measurementLock';
 
 /** The sheet's own design width plus its 24px auto margins — see aiAuditReportHtml's `.sheet`. */
 const DESIGN_WIDTH = 812;
@@ -173,9 +171,6 @@ export function ReportBeforeAfter({
      nobody trusts, and this one deliberately skips the oldest day. */
   const [defaultNote, setDefaultNote] = useState<string | null>(null);
   const { toast } = useToast();
-  /* The locked baseline for this business, if one has been set. A missing table leaves this
-     dormant rather than erroring — the SQL is hand-run. */
-  const lockState = useMeasurementLock(businessName, null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -415,78 +410,6 @@ export function ReportBeforeAfter({
               {' '}Only questions asked both times can move.
             </p>
           )}
-        </Card>
-      )}
-
-      {/* ── THE LOCKED BASELINE ────────────────────────────────────────────────────
-          ⛔ WHAT IT DOES AND DOES NOT DO. Re-measures already reuse the exact questions
-          (create-ai-audit uses a supplied list verbatim and otherwise repeats the previous run's
-          set; the generator has no randomness). Locking does not change that — it RECORDS the
-          intended set so a proposed re-measure can be diffed against it before the money is
-          spent, instead of a mismatch turning up afterwards as unmatched rows. */}
-      {comparison && (
-        <Card className="p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="max-w-[44rem]">
-              <h3 className="text-sm font-semibold">Locked baseline</h3>
-              {lockState.tableMissing ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Locking is not set up yet — run <code>SQL_FOR_PAUL_measurement_locks.sql</code> and reload.
-                </p>
-              ) : lockState.malformed ? (
-                <p className="mt-1 text-xs text-amber-700">
-                  A lock is stored for this business but it is not readable, so it is being ignored. Re-lock to replace it.
-                </p>
-              ) : lockState.lock ? (
-                <>
-                  <p className="mt-1 text-xs text-muted-foreground">{describeLock(lockState.lock)}</p>
-                  {/* Whether the BEFORE side you have selected is the locked set. */}
-                  {(() => {
-                    const picked = Array.from(new Set(rows.filter((r) => beforeIds.has(r.run_id)).map((r) => (r.question ?? '').trim()).filter(Boolean)));
-                    const d = diffAgainstLock(lockState.lock, picked);
-                    return (
-                      <p className={`mt-1 text-xs ${d.identical ? 'text-emerald-700' : 'text-amber-700'}`}>
-                        Before side vs the lock: {d.summary}
-                      </p>
-                    );
-                  })()}
-                </>
-              ) : (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  No baseline locked for this business. Lock the BEFORE side you have selected and every future
-                  re-measure can be checked against it before it runs.
-                </p>
-              )}
-            </div>
-            {!lockState.tableMissing && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5 text-xs"
-                disabled={beforeIds.size === 0 || lockState.loading}
-                onClick={async () => {
-                  const picked = rows.filter((r) => beforeIds.has(r.run_id));
-                  const lock = lockFromRows(picked, {
-                    sourceAuditId: (usableRuns.find((r) => beforeIds.has(r.id))?.audit_id) ?? auditId,
-                    measuredAt: measuredAtOf(beforeIds),
-                  });
-                  if (!lock) { toast({ title: 'Nothing to lock', description: 'The before side has no questions.', variant: 'destructive' }); return; }
-                  /* Replacing a lock is destructive of the previous intent, so it is confirmed. */
-                  if (lockState.lock && !window.confirm(
-                    `Replace the locked baseline?\n\nCurrently: ${describeLock(lockState.lock)}\nNew: ${lock.questions.length} questions × ${lock.runs} runs`,
-                  )) return;
-                  const err = await lockState.save(lock);
-                  toast(err
-                    ? { title: "Couldn't lock the baseline", description: err, variant: 'destructive' }
-                    : { title: 'Baseline locked', description: `${lock.questions.length} questions × ${lock.runs} runs. Re-measures are now checked against this set.` });
-                }}
-                title="Freeze the questions on the BEFORE side as this business's measured set"
-              >
-                <Lock className="h-3.5 w-3.5" />
-                {lockState.lock ? 'Re-lock to the before side' : 'Lock the before side'}
-              </Button>
-            )}
-          </div>
         </Card>
       )}
 
