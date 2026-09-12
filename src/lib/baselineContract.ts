@@ -11,17 +11,12 @@
    and no dependencies — see CLAUDE.md §4.
    ============================================================ */
 
-/** Which promise the client was actually sold. This is the ONLY field that changes what a refund
- *  hinges on, so it is recorded rather than inferred later:
- *
- *   'work'    — the current guarantee (since 2026-08-04): the audit, the work, and the week-eight
- *               re-measurement with evidence, or a full refund. It does NOT promise being named,
- *               so no particular question decides anything. Everything picked is measured and
- *               reported, and the scored set is deliberately absent.
- *   'outcome' — the LEGACY £49.99 promise: "named in more AI answers after 8 weeks than today, or
- *               you get it back". For these clients the exact measured set IS the refund test, so
- *               it is frozen in `scoredQuestions` and must never drift. */
-export type GuaranteeKind = "work" | "outcome";
+/* ⛔ `GuaranteeKind` / `decideGuarantee` WERE DELETED 2026-09-12. They graded a client 'work' or
+   'outcome' from what they paid, and since 2026-09-12 the guarantee is outcome-conditional for
+   everyone: the judged set is the pointer's ASKED set (outreach_leads.baseline_audit_id → the
+   baseline's first-run queue rows), read by baselineReplay.ts, never a field in this document.
+   Contracts written before that date still carry `guarantee` / `scoredQuestions` and are read
+   as history — RG Locksmiths' frozen contract is untouched. */
 
 export interface AreaAllocation {
   town: string;
@@ -31,25 +26,31 @@ export interface AreaAllocation {
 }
 
 export interface BaselineContract {
-  /** Schema version, so a later shape change can be detected rather than guessed at. */
-  version: 1;
-  guarantee: GuaranteeKind;
-  /** How the guarantee was decided, in words, so the stored row explains itself. */
-  guaranteeReason: string;
+  /** Schema version, so a later shape change can be detected rather than guessed at.
+   *  1 = the 2026-08-04 multi-town, seeded shape. 2 = since 2026-09-12: home town only, unseeded,
+   *  the picked areas recorded but measured in the FULL MEASURE instead. */
+  version: 1 | 2;
+  /** v1 ONLY — history. See the note above. */
+  guarantee?: 'work' | 'outcome';
+  /** v1 ONLY. */
+  guaranteeReason?: string;
   mainTown: string;
   /** Every area the client picked, in the priority order they picked them. */
   areasRequested: string[];
   /** What each measured town actually got. Sums to <= ceiling. */
   allocation: AreaAllocation[];
-  /** Areas that could not be given the AREA_MIN_QUESTIONS floor and are therefore NOT measured.
-   *  Named on screen as measured-but-not-scored: never dropped silently. */
+  /** v1: areas that could not be given the AREA_MIN_QUESTIONS floor and were NOT measured.
+   *  v2: EVERY picked area — none is measured by the baseline; they are measured by the full
+   *  measure and named here so the document says so rather than an area quietly vanishing. */
   areasDropped: string[];
+  /** v2 ONLY. The areas handed to the full measure — the same list as areasRequested, kept as a
+   *  separate field so the intent is explicit in the stored row. */
+  areasMeasuredInFullMeasure?: string[];
   /** The question ceiling in force when this contract was written. */
   ceiling: number;
-  /** Questions carried verbatim from the outreach audit that sold them (the main town's set).
-   *  Seed-preserving: these are re-run exactly, so the numbers that closed the sale are the
-   *  numbers the re-measurement reports. */
-  seededQuestions: string[];
+  /** v1 ONLY — history. Seeding from the outreach hook was dropped on 2026-09-12: the hook is
+   *  throwaway and never compared, so the baseline is generated fresh. */
+  seededQuestions?: string[];
   /** OUTCOME-GUARANTEE CLIENTS ONLY. The frozen set the refund test reads: the questions from the
    *  audit that SOLD them, verbatim, as actually queued. Written once, never recomputed. Absent for
    *  'work' clients, because nothing rides on which questions moved.
@@ -152,37 +153,6 @@ export function allocateAreas(
     if (i === allocation.length - 1 && remaining > 0) i = 0; // wrap, still priority-first
   }
   return { allocation, dropped };
-}
-
-/**
- * Which guarantee a client was sold, from what they PAID — evidence, not a guess.
- *
- * A payment below the current price is a legacy £49.99 sale, which carried the outcome promise.
- * Anything at or above the current price, or an explicit override, is the work guarantee. Decided
- * ONCE at baseline time and frozen in the contract: re-deriving it later, after another price
- * change, would silently move what a client is owed.
- */
-export function decideGuarantee(
-  amountPaidGbp: number | null | undefined,
-  currentPriceGbp: number,
-  override?: GuaranteeKind | null,
-): { guarantee: GuaranteeKind; reason: string } {
-  if (override === "outcome" || override === "work") {
-    return { guarantee: override, reason: `set explicitly by the caller (${override})` };
-  }
-  const paid = typeof amountPaidGbp === "number" ? amountPaidGbp : 0;
-  if (paid > 0 && paid < currentPriceGbp) {
-    return {
-      guarantee: "outcome",
-      reason: `paid £${paid.toFixed(2)}, below the current £${currentPriceGbp} — legacy outcome-guarantee sale`,
-    };
-  }
-  return {
-    guarantee: "work",
-    reason: paid > 0
-      ? `paid £${paid.toFixed(2)} at or above the current £${currentPriceGbp} — work guarantee`
-      : `no recorded payment below the current £${currentPriceGbp} — work guarantee (the default)`,
-  };
 }
 
 /** Every question in a contract's measured set, main town first. Used to re-run the identical set

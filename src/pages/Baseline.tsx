@@ -24,7 +24,7 @@ import { SEOHead } from '@/components/SEOHead';
 /**
  * OPERATOR VIEW of a paid client's baseline — /baseline/:auditId.
  *
- * The 10-question, 2-engine, 3-run baseline that runs when someone pays had no view at all: it was
+ * The 12-question (home town only), 2-engine, 3-run baseline that runs when someone pays had no view at all: it was
  * measured, stored in ai_audits.baseline, and never shown. This is that data as delivery work.
  *
  * Counts only — no score and no verdict. Notably NOT the winnability classifier: it reads a single

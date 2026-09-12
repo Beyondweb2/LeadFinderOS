@@ -184,35 +184,10 @@ export function dropResearchIntent(
   return { questions: out, rejected };
 }
 
-export interface SeedOutcome {
-  questions: string[];
-  seeded: string[];
-  rejected: Array<{ question: string; reason: string }>;
-}
-
-/** Keep the surviving seeds, generate the rest, drop any generated duplicate of a seed. */
-export function applySeed(seeds: string[], generated: string[], target: number, businessType: string, locationText: string): SeedOutcome {
-  const kept: string[] = [];
-  const rejected: Array<{ question: string; reason: string }> = [];
-  const seenKey = new Set<string>();
-  for (const q of seeds) {
-    const reason = seedRejectionReason(q, businessType, locationText);
-    if (reason) { rejected.push({ question: q, reason }); continue; }
-    const key = normalise(q);
-    if (seenKey.has(key)) continue; // a seed repeated in the outreach set counts once
-    seenKey.add(key);
-    kept.push(q.trim());
-  }
-  const out = kept.slice(0, target);
-  for (const g of generated) {
-    if (out.length >= target) break;
-    const key = normalise(g);
-    if (seenKey.has(key)) continue; // generator produced a seed we already hold
-    seenKey.add(key);
-    out.push(g.trim());
-  }
-  return { questions: out, seeded: kept.slice(0, target), rejected };
-}
+/* ⛔ `applySeed` / `SeedOutcome` WERE DELETED 2026-09-12 with baseline seeding. The outreach hook
+   is throwaway and never compared, so a paid baseline no longer carries the hook's questions
+   forward; it is generated fresh for the home town. `seedRejectionReason` survives as the shared
+   rule behind dropResearchIntent and the town guard. */
 
 /* ── CASE-INSENSITIVE QUESTION IDENTITY ───────────────────────────────────────────────────────
    MEASURED 2026-08-04, locksmiths/Hastings: of 18 questions paid for, "locksmith services in

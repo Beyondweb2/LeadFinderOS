@@ -29,13 +29,23 @@ export const WIZARD_MAX_QUESTIONS = 5;
 export const WIZARD_DEFAULT_QUESTIONS = 3;
 
 /**
- * PAID BASELINE — findable onboarding. 10 questions, measured over BASELINE_RUNS runs and
- * averaged. Do NOT economise here: this is the money-back guarantee's measuring stick, and the
- * variance is brutal. Measured in this database, one business swung 0 → 0.5 → 0 → 0.5 → 0.6
- * mention rate across five identical runs with no work done, and another's answered-question
- * coverage swung 40%..100% across 18 runs. A small sample cannot defend a refund decision.
+ * PAID BASELINE — day 0. HOME TOWN ONLY, 12 questions, measured over BASELINE_RUNS runs and
+ * FROZEN: the refund is judged on this set and nothing else, and it is replayed verbatim at day 28
+ * against outreach_leads.baseline_audit_id. Do NOT economise here: this is the money-back
+ * guarantee's measuring stick, and the variance is brutal. Measured in this database, one business
+ * swung 0 → 0.5 → 0 → 0.5 → 0.6 mention rate across five identical runs with no work done, and
+ * another's answered-question coverage swung 40%..100% across 18 runs. A small sample cannot
+ * defend a refund decision.
+ *
+ * ⛔ 12, NOT 10, AND SINGLE-TOWN (Paul, 2026-09-12). 12 was the old multi-town ceiling; RG's set is
+ * 12. The client's extra towns are no longer squeezed in here at two questions each — they live in
+ * the FULL MEASURE (below), where winnability decides which towns get pages. The client is told
+ * plainly: we judge the refund where you trade, we measure your ambitions to decide what to build.
+ *
+ * ⛔ NOT SEEDED from the outreach hook any more. The hook is throwaway and never compared; the
+ * baseline is generated fresh for the home town.
  */
-export const BASELINE_QUESTIONS = 10;
+export const BASELINE_QUESTIONS = 12;
 export const BASELINE_RUNS = 3;
 
 /**
