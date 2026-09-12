@@ -81,7 +81,10 @@ Deno.serve(async (req) => {
     const country: string | null = typeof body.country === "string" ? body.country : null;
 
     const to = toWhatsAppNumber(rawPhone, country);
-    if (!to) return json({ ok: false, error: "invalid_phone" }, 400);
+    /* ⚠️ test_send is the one mode that does NOT need a phone in the request — it takes its
+       destination from WHATSAPP_TEST_NUMBER (see below). Refusing here would make the safest
+       form of the call impossible. Every other path still requires a readable number. */
+    if (!to && body.mode !== "test_send") return json({ ok: false, error: "invalid_phone" }, 400);
 
     /* ══ mode 'test_send' — THE ONLY HONEST WAY TO PROVE A TEMPLATE ACTUALLY SENDS ═══════════════
        Built 2026-09-12 on the `instantly-push` mode:'auth_probe' precedent, and for the same
@@ -100,10 +103,11 @@ Deno.serve(async (req) => {
        sendViaGraph, so what it proves is the thing we needed proven: our header component, our
        variable order, and Meta accepting both.
 
-       ⛔ HARD-GATED TO ONE NUMBER, AND IT FAILS CLOSED. The phone must equal WHATSAPP_TEST_NUMBER.
-       With that secret UNSET the mode refuses outright rather than defaulting to "any number the
-       caller typed" — because the failure this guards is a mistyped digit reaching a stranger, and
-       an admin typo is exactly as damaging as a hostile call. Absence is never permission.
+       ⛔ HARD-GATED TO ONE NUMBER, AND IT FAILS CLOSED. The destination IS WHATSAPP_TEST_NUMBER —
+       read from the secret, never taken from the request (see the note at `dest`). With that secret
+       UNSET the mode refuses outright rather than falling back to "any number the caller typed":
+       the failure this guards is a mistyped digit reaching a stranger, and an admin typo is exactly
+       as damaging as a hostile call. Absence is never permission.
        ⚠️ ADMIN ONLY, using the same user_roles check every other admin mode here uses.
        ⚠️ It sends a REAL message and costs a real template send. It is a diagnostic, not a preview:
        there is no dry-run, because a dry-run would prove nothing about Meta. */
@@ -112,9 +116,17 @@ Deno.serve(async (req) => {
         .from("user_roles").select("role").eq("user_id", operatorId).eq("role", "admin").maybeSingle();
       if (!roleRow) return json({ ok: false, error: "admin_only" }, 403);
 
-      const allowed = toWhatsAppNumber(Deno.env.get("WHATSAPP_TEST_NUMBER") ?? "", "UK");
-      if (!allowed) return json({ ok: false, error: "test_number_not_configured" }, 400);
-      if (to !== allowed) return json({ ok: false, error: "phone_not_the_test_number" }, 403);
+      /* ⛔ THE DESTINATION IS THE SECRET, NOT THE REQUEST (2026-09-12). It first REQUIRED the caller
+         to supply a matching phone, which turned out to be unusable for the one job this mode has:
+         `supabase secrets list` returns SHA-256 DIGESTS, so nobody operating the function can read
+         the number back to retype it — and retyping it was the only way to get a digit wrong.
+         Taking the destination straight from WHATSAPP_TEST_NUMBER removes the typo surface
+         entirely: there is no longer any input through which this mode can address anyone else.
+         ⚠️ A supplied phone is kept as an OPTIONAL CONFIRMATION and must still match — a caller who
+         names a number is told when it is the wrong one rather than having it quietly ignored. */
+      const dest = toWhatsAppNumber(Deno.env.get("WHATSAPP_TEST_NUMBER") ?? "", "UK");
+      if (!dest) return json({ ok: false, error: "test_number_not_configured" }, 400);
+      if (to && to !== dest) return json({ ok: false, error: "phone_not_the_test_number" }, 403);
 
       if (!templateName) return json({ ok: false, error: "empty_message" }, 400);
       const entry = WA_TEMPLATES[templateName];
@@ -140,10 +152,10 @@ Deno.serve(async (req) => {
       if (!env.live) {
         return json({ ok: false, error: "not_live", detail: "WHATSAPP_TEST_MODE is on, or the WhatsApp secrets are missing — nothing was sent." }, 400);
       }
-      const r = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);
-      console.log(`[send-whatsapp-message] test_send ${templateName} -> ${to}: ${r.ok ? "ok " + r.messageId : "FAILED " + r.error}`);
+      const r = await sendViaGraph(env.accessToken, env.phoneNumberId, dest, payload);
+      console.log(`[send-whatsapp-message] test_send ${templateName} -> ${dest}: ${r.ok ? "ok " + r.messageId : "FAILED " + r.error}`);
       return json({
-        ok: r.ok, mode: "test_send", template: templateName, to,
+        ok: r.ok, mode: "test_send", template: templateName, to: dest,
         messageId: r.messageId, failCode: r.failCode ?? null, error: r.error,
         /* Echoed so the payload that was actually posted is inspectable without a redeploy. */
         payload,
