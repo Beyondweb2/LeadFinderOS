@@ -5,9 +5,9 @@ import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
-import { applySeed, dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
+import { dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
+import { excludeAsked, overAskFor } from "../../../src/lib/fullMeasure.ts";
 import { measurementFlagFor } from "../../../src/lib/auditKind.ts";
-import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
 import { moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
 import {
@@ -311,7 +311,7 @@ Deno.serve(async (req) => {
        guarantee measurement. MEASUREMENT_RUNS is the one number to tune. */
     /* ⛔ `target_runs` — REPEAT RUNS ON AN ORDINARY AUDIT, INTERNAL CALLERS ONLY (2026-09-02, for
        the free-check lane). Both existing routes to multi-run change the QUESTIONS as a side
-       effect: isBaseline clamps to BASELINE_MAX_QUESTION_COUNT and takes the seeded paid-baseline
+       effect: isBaseline clamps to BASELINE_MAX_QUESTION_COUNT and takes the paid-baseline
        character, and isMeasurement sets moneyQuestionCount to 0 (the money predicate below). A free
        check wants three asks of the SAME five money-question-bearing questions, so it needs the run
        count without either of those.
@@ -368,11 +368,12 @@ Deno.serve(async (req) => {
        `preview: true` and then confirms by sending `questions` VERBATIM, so both ends reading this
        one value is what makes preview == run. */
     const moneyQuestionCount = (!isBaseline && !isMeasurement) ? questionCount : 0;
-    /* MULTI-AREA BASELINE. audit-baseline sends the allocation it froze into the baseline contract:
-       [{town, questions, isMain}]. The MAIN town keeps location_text and the verbatim seed; each
+    /* MULTI-TOWN FULL MEASURE. audit-baseline's startFullMeasure sends the allocation from
+       fullMeasureAllocation: [{town, questions, isMain}]. The MAIN town keeps location_text; each
        extra area gets its own generated questions for the same services. Absent (every other
        caller) leaves the single-town path byte-for-byte unchanged.
-       INTERNAL ONLY, like purpose='baseline': it decides what a paying client is measured on. */
+       INTERNAL ONLY: it decides how a paying client's ambitions are measured. (Until 2026-09-12
+       the paid BASELINE carried this; it is home-town-only now — option C.) */
     const areaAllocation: AreaAllocation[] = isInternal && Array.isArray(body.areas)
       ? (body.areas as unknown[])
         .map((a) => a as { town?: unknown; questions?: unknown; isMain?: unknown })
@@ -636,12 +637,9 @@ Deno.serve(async (req) => {
     /* Set by the like-for-like check below; stored on the run so the before/after can tell a
        counted re-measurement from a diagnostic or an overridden set. */
     let remeasureNote: { reason: string; counts: boolean; detail: string } | null = null;
-    /* Populated only on the baseline seeding path. Surfaced on the response so a rejected seed is
-       VISIBLE rather than a silent fallback — the whole failure this guards against is a bad
-       question entering the guarantee unnoticed, and a guard you cannot see firing is barely a
-       guard. Empty arrays here mean "not a seeded call", not "nothing rejected". */
-    /* THE MONEY QUESTIONS THIS AUDIT GENERATED, verbatim. Accumulated across the baseline branches
-       (a multi-area baseline generates per area), intersected with what is actually queued further
+    let fullMeasureNote: Record<string, unknown> | null = null;
+    /* THE MONEY QUESTIONS THIS AUDIT GENERATED, verbatim. Accumulated across the generation
+       branches (a multi-town measure generates per area), intersected with what is actually queued further
        down, then stored in ai_audit_runs.results.money_questions and returned to the caller so
        audit-baseline can freeze it into BaselineContract.moneyQuestions. Empty on every other path. */
     let moneyGenerated: string[] = [];
@@ -649,14 +647,59 @@ Deno.serve(async (req) => {
        the questions verbatim, so without this a hand-run Full Measurement would store no flag at all.
        ⚠️ IT IS CALLER-SUPPLIED, AND THAT IS SAFE FOR EXACTLY ONE REASON: it only LABELS questions for
        later analysis. It cannot change which questions are asked, and it cannot reach the refund test
-       — BaselineContract.scoredQuestions is derived server-side from the SEEDS, never from this. It is
+       — the judged set is the baseline's ASKED set read through outreach_leads.baseline_audit_id,
+       never anything a caller supplies. It is
        also intersected with the questions actually queued further down, so it can only ever name
        strings that are in the run. Anything else in the array is discarded silently. */
     if (Array.isArray(body.money_questions)) {
       moneyGenerated.push(...(body.money_questions as unknown[]).filter((q): q is string => typeof q === "string" && !!q.trim()));
     }
-    let seededQuestions: string[] = [];
-    let rejectedSeeds: Array<{ question: string; reason: string }> = [];
+    /* ⛔ THE BASELINE POINTER, READ ONCE FOR ANY MEASUREMENT ON A LEAD. Two things hang off it:
+       the full measure's EXCLUSION (it must be disjoint from the judged set) and the ORDER gate
+       (a paying lead cannot be full-measured before its baseline is frozen). Ground truth for the
+       asked set is the baseline's FIRST run's queue rows — the contract records intent, not what
+       was asked (baselineReplay.ts). */
+    let pointer: string | null = null;
+    let pointerFrozen = false;
+    let baselineAsked: string[] = [];
+    if (isMeasurement && leadId) {
+      const { data: leadRow } = await service
+        .from("outreach_leads").select("baseline_audit_id, amount_paid").eq("id", leadId).maybeSingle();
+      pointer = (leadRow as { baseline_audit_id?: string | null } | null)?.baseline_audit_id ?? null;
+      const leadPaid = Number((leadRow as { amount_paid?: number | null } | null)?.amount_paid ?? 0) > 0;
+      if (pointer) {
+        const { data: base } = await service
+          .from("ai_audits").select("baseline_completed_at").eq("id", pointer).maybeSingle();
+        pointerFrozen = !!(base as { baseline_completed_at?: string | null } | null)?.baseline_completed_at;
+        const { data: firstRun } = await service
+          .from("ai_audit_runs").select("id").eq("audit_id", pointer)
+          .order("run_number", { ascending: true }).limit(1).maybeSingle();
+        if (firstRun?.id) {
+          const { data: bq } = await service
+            .from("ai_audit_queue").select("question").eq("run_id", firstRun.id).order("created_at", { ascending: true });
+          baselineAsked = ((bq ?? []) as Array<{ question: string }>).map((r) => (r.question ?? "").trim()).filter(Boolean);
+        }
+      }
+      /* ⛔ ORDER MATTERS AND IS NOT NEGOTIABLE (Paul, 2026-09-12): the baseline is frozen BEFORE
+         the full measurement runs. If the judged set were picked after seeing which questions are
+         winnable, the before/after would be self-serving and a client could say so. So a PAYING
+         lead with no frozen baseline cannot be full-measured — refused, recorded, never queued.
+         A prospect (nothing paid) may still be measured from the wizard: there is no refund set to
+         protect. */
+      if (leadPaid && !(pointer && pointerFrozen)) {
+        const why = !pointer
+          ? "This client has no recorded baseline. The full measure runs after the baseline freezes, never before it."
+          : "This client's baseline is still measuring. The full measure starts by itself the moment it freezes.";
+        try {
+          await service.from("client_error_reports").insert({
+            error_id: "full_measure_before_baseline",
+            message: why,
+            context: { lead_id: leadId, baseline_audit_id: pointer, baseline_frozen: pointerFrozen },
+          });
+        } catch { /* reporting must never turn a refusal into a retryable error */ }
+        return json({ ok: false, error: "baseline_not_frozen", detail: why }, 409);
+      }
+    }
 
     if (effectiveReuseId) {
       // Re-run: load + ownership-check the existing audit, reuse its questions. Reusing the STORED
@@ -704,39 +747,37 @@ Deno.serve(async (req) => {
         }
       }
     } else {
-      /* New audit: edited questions verbatim if a FULL set was provided, else generate.
-         BETWEEN those two sits the paid baseline's first run, which now arrives with the outreach
-         audit's 3 questions and a question_count of 10. Those 3 are a SEED, not the set: they are
-         guarded, kept, and topped up to 10 by the generator.
-
-         The `>= questionCount` test is what keeps runs 2 and 3 byte-for-byte unchanged — they send
-         the full stored set, so they take the verbatim branch exactly as before. Only a SHORT
-         supplied set on a baseline is treated as a seed, which no existing caller sends. */
+      /* New audit: supplied questions verbatim (a repeat, a pasted set), else generate. A paid
+         baseline arrives with NO questions and generates BASELINE_QUESTIONS fresh for the home
+         town — seeding from the outreach hook was deleted 2026-09-12. */
       /* Coverage hint for the generator. Empty here; the full-measure exclusion (slice 1b of
          the 2026-09-12 measurement work) is what fills it — the baseline's asked set, so the
          measure never re-asks the judged questions. */
       let coverage = "";
-      const isSeeding = isBaseline && !!providedQuestions?.length && providedQuestions.length < questionCount;
-      /* ORDER MATTERS. The multi-area branch must be tested BEFORE isSeeding: a multi-area baseline
-         normally arrives WITH a short seed, so the single-town seeded branch would win and the extra
-         areas would be silently dropped — the exact failure this work exists to remove. The
-         multi-area branch does its own seeding for the main town's share. */
+      /* ⛔ THE FULL MEASURE IS DISJOINT FROM THE BASELINE, IN TWO LAYERS. `coverage` asks the
+         model to steer clear of the judged intents (the polite request); `excludeAsked` removes
+         any paraphrase that came back anyway (the guarantee); `overAskFor` asks for enough extra
+         that the target survives the filter, never above the generator's named ceiling. Every
+         other caller has an empty exclusion set and is byte-for-byte unchanged. */
+      if (isMeasurement && baselineAsked.length) coverage = coverageDirective(baselineAsked, businessType);
+      const disjoint = (qs: string[]) => excludeAsked(qs, baselineAsked);
+      const ask = (n: number) => overAskFor(n, baselineAsked.length);
+
       if (areaAllocation.length > 1) {
-        /* MULTI-AREA, SEED-PRESERVING. The main town's share carries the verbatim seed (topped up
-           if the seed is short); every extra area is generated for the same services in that town.
-           One LLM call per area, gpt-4o-mini — the Apify question runs dominate the bill, not this.
-           A failed area generation is skipped and LOGGED rather than silently substituted, so the
-           stored contract and the queued set cannot disagree about what was measured. */
+        /* MULTI-TOWN FULL MEASURE. One LLM call per area, gpt-4o-mini — the Apify question runs
+           dominate the bill, not this. A failed area generation is skipped and LOGGED rather than
+           silently substituted, so the stored allocation and the queued set cannot disagree about
+           what was measured. */
         const perArea: string[] = [];
         for (const area of areaAllocation) {
           if (area.isMain) continue;
           try {
-            const mixed = await generateWithMoney(businessName, businessType, area.town, hasWebsite, specialisms, area.questions, "local", country);
-            perArea.push(...mixed.questions.slice(0, area.questions));
-            /* Only the ones that SURVIVED the slice are flagged. An area whose allocation is under
-               MONEY_QUESTION_MIN_COUNT gets none at all (baselineMoneyQuestionShare returns 0), so
-               small areas are excluded by the floor rather than by a special case here. */
-            const keptArea = new Set(mixed.questions.slice(0, area.questions));
+            const mixed = await generateWithMoney(businessName, businessType, area.town, hasWebsite, specialisms, ask(area.questions), "local", country, area.questions, coverage);
+            const kept = disjoint(mixed.questions).slice(0, area.questions);
+            perArea.push(...kept);
+            /* Only the ones that SURVIVED are flagged. An area whose allocation is under
+               MONEY_QUESTION_MIN_COUNT gets none at all (baselineMoneyQuestionShare returns 0). */
+            const keptArea = new Set(kept);
             moneyGenerated.push(...mixed.money.filter((q) => keptArea.has(q)));
           } catch (e) {
             console.error(`[create-ai-audit] area "${area.town}" generation failed, area NOT measured:`, e instanceof Error ? e.message : e);
@@ -744,72 +785,42 @@ Deno.serve(async (req) => {
         }
         const mainShare = areaAllocation.find((a) => a.isMain)?.questions ?? questionCount;
         let mainQs: string[];
-        if (providedQuestions?.length && providedQuestions.length < mainShare) {
-          /* Pool is mainShare long so applySeed can still reach target if seeds are rejected, but the
-             money share is taken on the TOP-UP only — the seeds keep their slots. */
-          const mixed = await generateWithMoney(
-            businessName, businessType, locationText, hasWebsite, specialisms, mainShare, businessScope, country,
-            Math.max(0, mainShare - providedQuestions.length),
-          );
-          const generated = mixed.questions;
-          const outcome = applySeed(providedQuestions, generated, mainShare, businessType, locationText);
-          // Flag only what applySeed actually kept — a money question beyond target is not in the run.
-          const keptMain = new Set(outcome.questions);
-          moneyGenerated.push(...mixed.money.filter((q) => keptMain.has(q)));
-          mainQs = outcome.questions;
-          seededQuestions = outcome.seeded;
-          rejectedSeeds = outcome.rejected;
-        } else if (providedQuestions?.length) {
-          mainQs = providedQuestions.slice(0, mainShare);
-          seededQuestions = mainQs;
+        if (providedQuestions?.length) {
+          mainQs = disjoint(providedQuestions).slice(0, mainShare);
         } else {
-          const mixed = await generateWithMoney(businessName, businessType, locationText, hasWebsite, specialisms, mainShare, businessScope, country);
-          mainQs = mixed.questions;
-          moneyGenerated.push(...mixed.money);
+          const mixed = await generateWithMoney(businessName, businessType, locationText, hasWebsite, specialisms, ask(mainShare), businessScope, country, mainShare, coverage);
+          mainQs = disjoint(mixed.questions).slice(0, mainShare);
+          const keptMain = new Set(mainQs);
+          moneyGenerated.push(...mixed.money.filter((q) => keptMain.has(q)));
         }
         questions = [...mainQs, ...perArea];
-        console.log(`[create-ai-audit] multi-area baseline: ${mainQs.length} for "${locationText}" (${seededQuestions.length} seeded) + ${perArea.length} across ${areaAllocation.length - 1} other areas = ${questions.length}`);
-      } else if (isSeeding) {
-        // Same split as the multi-area main town: pool at full size, money share on the top-up only.
-        const mixed = await generateWithMoney(
-          businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country,
-          Math.max(0, questionCount - providedQuestions!.length),
-        );
-        const generated = mixed.questions;
-        const outcome = applySeed(providedQuestions!, generated, questionCount, businessType, locationText);
-        const keptSeeded = new Set(outcome.questions);
-        moneyGenerated.push(...mixed.money.filter((q) => keptSeeded.has(q)));
-        questions = outcome.questions;
-        seededQuestions = outcome.seeded;
-        rejectedSeeds = outcome.rejected;
-        if (outcome.rejected.length) {
-          console.error(`[create-ai-audit] SEED REJECTED ${outcome.rejected.length}: ${outcome.rejected.map((r) => `"${r.question}" (${r.reason})`).join(" | ")}`);
-        }
-        console.log(`[create-ai-audit] baseline seeded with ${outcome.seeded.length} of ${providedQuestions!.length} outreach questions, topped up to ${questions.length}`);
+        console.log(`[create-ai-audit] multi-town measure: ${mainQs.length} for "${locationText}" + ${perArea.length} across ${areaAllocation.length - 1} other areas = ${questions.length}`);
       } else {
         /* ⛔ THE ONLY CALL SITE THAT ASKS FOR MONEY QUESTIONS — the ordinary per-business NEW audit.
-           Eight call sites reach generateQuestions; the other seven pass nothing and are therefore
-           byte-identical to before. Excluded deliberately, each for its own reason:
-             · isBaseline / isSeeding — a paid baseline is the guarantee's day-0. Its character must
-               not shift under a client mid-contract.
-             · the multi-area baseline branch — same reason.
-             · the reuse/top-up path (~line 717) — that is a paid baseline's repeat.
+           Excluded deliberately, each for its own reason:
+             · isBaseline — a paid baseline is the guarantee's day-0. Its character must not shift
+               under a client mid-contract.
+             · isMeasurement — the winnability read; flagged money via the two-call generator.
+             · the reuse path — that is a paid baseline's repeat.
              · preview — mirrors whatever the real call will do; left alone so the preview cannot
-               promise a mix the run does not produce. (Worth revisiting: see the report.)
+               promise a mix the run does not produce.
            ⛔ AND A VERBATIM REPEAT NEVER GETS HERE AT ALL. advanceBaseline sends the stored
            questions and `providedQuestions` short-circuits above, so RG's and ABLM's re-measures
            cannot acquire a money question. That is structural, not a guard I added. */
         if (providedQuestions && providedQuestions.length) {
-          questions = providedQuestions;
+          /* Verbatim — except that a full measure can never carry a judged question, however it
+             was pasted. A repeat (no lead_id) has an empty exclusion set and is untouched. */
+          questions = isMeasurement ? disjoint(providedQuestions) : providedQuestions;
         } else if (isBaseline || isMeasurement) {
-          /* THE UNSEEDED PAID BASELINE / FULL MEASUREMENT. Flagged money questions via the two-call
-             generator, so the week-eight before/after can include or exclude them by choice. */
+          /* THE PAID BASELINE (home town, fresh) / THE FULL MEASURE. Flagged money questions via
+             the two-call generator, so the before/after can include or exclude them by choice. */
           const mixed = await generateWithMoney(
-            businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
-            businessScope, country,
+            businessName, businessType, locationText, hasWebsite, specialisms, ask(questionCount),
+            businessScope, country, questionCount, coverage,
           );
-          questions = mixed.questions;
-          moneyGenerated.push(...mixed.money);
+          questions = disjoint(mixed.questions).slice(0, questionCount);
+          const kept = new Set(questions);
+          moneyGenerated.push(...mixed.money.filter((q) => kept.has(q)));
         } else {
           questions = await generateQuestions(
             businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
@@ -817,6 +828,14 @@ Deno.serve(async (req) => {
           );
         }
       }
+      if (isMeasurement && pointer) {
+        /* Recorded on the run so the audit says, in its own row, what it is disjoint from and that
+           it is NOT comparable — a reader must never mistake it for the "after". */
+        fullMeasureNote = { baseline_audit_id: pointer, excluded: baselineAsked.length, comparable: false };
+        const leaked = questions.filter((q) => !disjoint([q]).length);
+        if (leaked.length) console.error(`[create-ai-audit] INVARIANT: ${leaked.length} baseline question(s) survived exclusion — ${leaked.join(" | ")}`);
+      }
+    }
       const auditRow: Record<string, unknown> = {
         user_id: userId,
         lead_id: leadId,
@@ -913,66 +932,14 @@ Deno.serve(async (req) => {
        Only the CALLER decides this - default is unchanged, so every existing path still scans. */
     /* A market audit has no website by definition, so the SEO scan is unreachable for it — the
        skip is structural rather than a flag. skipSeo still applies to the per-business batch. */
-    /* THE FINAL GATE. Whatever path produced `questions` — LLM, templates, a verbatim repeat, a
-       seed top-up, or the multi-area concatenation — no two rows may be the same question in
+    /* THE FINAL GATE. Whatever path produced `questions` — LLM, templates, a verbatim repeat, or
+       the multi-town concatenation — no two rows may be the same question in
        different capitals. There was no dedupe here at all, which is how one audit could queue both
        casings. Original spelling is preserved; only the identity is normalised. */
-    /* ══ THE LIKE-FOR-LIKE REFUSAL, SERVER-SIDE (2026-09-12, Paul's spec) ═══════════════════════
-       🔴 THIS CHECK USED TO EXIST ONLY IN THE SPA ("Warn, never block", AiAudit.tsx), which is a UI
-       preference rather than a guarantee: the queue backstop, the Stripe webhook and every other
-       caller of this function bypassed it entirely. §4's rule — ask not whether the guard is
-       correct, but whether the case it guards can reach it.
-
-       ⛔ IT RUNS ONLY FOR A MULTI-RUN RE-MEASURE ON A LEAD WITH A RECORDED BASELINE. A baseline
-       creating itself, a market audit, an outreach hook and a free check have nothing to be
-       like-for-like with and are untouched.
-
-       ⛔ AND IT COMPARES AGAINST THE ASKED SET, WHICH IS WHY THE LEGITIMATE CASES ARE NOT
-       MISMATCHES. A town the allocation ceiling dropped and a question the intent guards rejected
-       were never queued, so they are not in the baseline's asked set and cannot read as a change.
-       See baselineReplay.ts for the four cases and why each is handled the way it is. */
-    if (isMeasurement && baselineTargetRuns > 1 && leadId) {
-      const { data: leadRow } = await service
-        .from("outreach_leads").select("baseline_audit_id").eq("id", leadId).maybeSingle();
-      const pointer = (leadRow as { baseline_audit_id?: string | null } | null)?.baseline_audit_id ?? null;
-      if (pointer) {
-        /* Ground truth: the questions on the baseline's FIRST run. The contract records the
-           INTENDED set, not the asked one (it has no such field for work-guarantee clients), so the
-           queue is the only honest source — see baselineReplay.ts. */
-        const { data: firstRun } = await service
-          .from("ai_audit_runs").select("id").eq("audit_id", pointer)
-          .order("run_number", { ascending: true }).limit(1).maybeSingle();
-        let baselineAsked: string[] = [];
-        if (firstRun?.id) {
-          const { data: bq } = await service
-            .from("ai_audit_queue").select("question").eq("run_id", firstRun.id).order("created_at", { ascending: true });
-          baselineAsked = ((bq ?? []) as Array<{ question: string }>).map((r) => (r.question ?? "").trim()).filter(Boolean);
-        }
-        const verdict = judgeRemeasure({
-          proposed: questions,
-          baselineAsked,
-          targetRuns: baselineTargetRuns,
-          overrideReason: typeof body.question_change_reason === "string" ? body.question_change_reason : null,
-        });
-        if (!verdict.allow) {
-          console.warn(`[create-ai-audit] re-measure refused for lead ${leadId}: ${verdict.detail}`);
-          /* Recorded, not only logged — the CLI has no `functions logs` (§4), and a refusal nobody
-             can read afterwards is the shape that kept the free-check lane dead for two days. */
-          try {
-            await service.from("client_error_reports").insert({
-              error_id: "remeasure_refused",
-              message: verdict.detail.slice(0, 1000),
-              context: { lead_id: leadId, baseline_audit_id: pointer, reason: verdict.reason },
-            });
-          } catch { /* reporting must never turn a refusal into a retryable error */ }
-          return json({ ok: false, error: verdict.reason, detail: verdict.detail }, 409);
-        }
-        /* ⚠️ ALLOWED, BUT THE REASON TRAVELS WITH THE AUDIT. A Quick diagnostic must be excluded
-           from the before/after and an override must be able to say WHY the set changed — neither
-           is expressible later if only the questions are stored. */
-        remeasureNote = { reason: verdict.reason, counts: verdict.countsAsMeasurement, detail: verdict.detail };
-      }
-    }
+    /* ⛔ THE LIKE-FOR-LIKE REFUSAL MOVED. Until 2026-09-12 any multi-run `measurement` on a lead
+       with a pointer had to REPLAY the baseline or be refused. Under the three-type model a full
+       measure must be DISJOINT from the baseline (enforced above), and the replay is its own
+       purpose — the queue-fired day-28 `remeasure`, which judgeRemeasure gates (slice 4). */
 
     const finalQ = dedupeQuestions(questions);
     if (finalQ.duplicates.length) {
@@ -1001,6 +968,7 @@ Deno.serve(async (req) => {
     /* Same schema-free mechanism (results is jsonb). A diagnostic carries counts:false so the
        comparison can refuse to COUNT it without refusing to run it. */
     if (remeasureNote) runResults.remeasure = remeasureNote;
+    if (fullMeasureNote) runResults.full_measure = fullMeasureNote;
     /* Same schema-free mechanism as `measurement` above (results is jsonb — no migration). Inert
        downstream: the queue keys on results.seo and the report on results.seo.categories. */
     if (moneyQueued.length) runResults.money_questions = moneyQueued;
@@ -1085,17 +1053,6 @@ Deno.serve(async (req) => {
       unit_cost_usd: estCost,
       engines: AUDIT_ENGINES,
       ...truncationReport,
-      /* Mirrors truncationReport's shape: absent entirely on a normal call, so a caller cannot
-         learn to ignore a permanently-present "seeded: false". */
-      ...(seededQuestions.length || rejectedSeeds.length
-        ? {
-            seeded: true,
-            seeded_count: seededQuestions.length,
-            seeded_questions: seededQuestions,
-            rejected_seed_count: rejectedSeeds.length,
-            rejected_seeds: rejectedSeeds,
-          }
-        : {}),
     });
   } catch (e) {
     console.error("[create-ai-audit] error:", e);
@@ -1114,9 +1071,10 @@ Deno.serve(async (req) => {
    in their OWN call means the flag is a fact about which call produced the string, not an inference.
    The extra gpt-4o-mini call is noise next to the Apify question runs.
 
-   ⛔ SEEDS ARE NEVER DISPLACED. The caller passes the number of slots the GENERATOR will fill
-   (share minus seeds), so a seeded baseline's seeds — which are BaselineContract.scoredQuestions,
-   the refund test — cannot lose a slot to a money question.
+   ⛔ THE MONEY SHARE IS TAKEN ON THE REAL SHARE. The caller passes `moneySlots` — the number it
+   will actually keep — separately from `count`, which a full measure over-asks so its target
+   survives the baseline-exclusion filter. Without the split, an over-asked 32 would carry a
+   32-sized money share into a 20-question measure.
 
    ⚠️ OVER-REQUEST THEN SLICE, on both halves. generateQuestions clamps to MIN_QUESTION_COUNT (3), so
    asking for 1 returns 3. The money half asks for max(3, moneyN) with moneyExact set to that SAME
@@ -1135,19 +1093,21 @@ async function generateWithMoney(
   count: number,
   scope: BusinessScope,
   country: string | null,
-  /* ⛔ THE SLOTS THE GENERATOR WILL ACTUALLY FILL, for the share calculation only — `count` is still
-   *  how many questions to produce. On a SEEDED baseline the pool must be `count` long (applySeed
-   *  needs enough to reach target if seeds are rejected) while the money share must be a quarter of
-   *  the TOP-UP, not of the whole audit, or the seeds' slots would be counted twice.
-   *  Defaults to `count`, so an unseeded caller behaves the obvious way. */
+  /* ⛔ THE SLOTS THE CALLER WILL ACTUALLY KEEP, for the share calculation only — `count` is how
+   *  many to PRODUCE, and a full measure over-asks (overAskFor) so its target survives the
+   *  baseline-exclusion filter. The money share is taken on the real share, not the over-ask, or a
+   *  20-question measure asked for as 32 would carry 8 money questions instead of 5.
+   *  Defaults to `count`, so an ordinary caller behaves the obvious way. */
   moneySlots: number = count,
+  /** The coverage directive, threaded to BOTH calls — the full measure's baseline exclusion. */
+  coverage = "",
 ): Promise<{ questions: string[]; money: string[] }> {
   const total = Math.max(0, Math.floor(Number(count) || 0));
   const moneyN = Math.min(total, baselineMoneyQuestionShare(moneySlots));
   if (moneyN <= 0) {
     // Too small to spend a slot on a buying-moment query — byte-identical to the old behaviour.
     const only = await generateQuestions(
-      businessName, businessType, locationText, hasWebsite, specialisms, total, scope, country,
+      businessName, businessType, locationText, hasWebsite, specialisms, total, scope, country, coverage,
     );
     return { questions: only.slice(0, total), money: [] };
   }
@@ -1155,18 +1115,19 @@ async function generateWithMoney(
   const standard = standardN > 0
     ? (await generateQuestions(
         businessName, businessType, locationText, hasWebsite, specialisms,
-        Math.max(MIN_QUESTION_COUNT, standardN), scope, country,
+        Math.max(MIN_QUESTION_COUNT, standardN), scope, country, coverage,
       )).slice(0, standardN)
     : [];
   const askMoney = Math.max(MIN_QUESTION_COUNT, moneyN);
   const money = (await generateQuestions(
     businessName, businessType, locationText, hasWebsite, specialisms,
-    askMoney, scope, country, "", askMoney, askMoney,
+    askMoney, scope, country, coverage, askMoney, askMoney,
   )).slice(0, moneyN);
-  /* ⛔ MONEY FIRST, AND IT IS LOAD-BEARING ON THE SEEDED PATHS. applySeed keeps the seeds, then
-     fills the remaining slots from this pool IN ORDER and stops at target. With money last, a
-     baseline whose seeds filled most of the target would generate money questions and then discard
-     every one of them — the feature silently absent on exactly the audits that carry a seed.
+  /* ⛔ MONEY FIRST, AND IT IS LOAD-BEARING. Callers slice this pool IN ORDER to their target
+     after the baseline-exclusion filter, so whatever is last is what gets cut. With money last, a
+     measure whose over-ask mostly survived the filter would generate money questions and then
+     discard every one of them — the feature silently absent on exactly the audits that need it.
+     (Seeding, which had the same property, was deleted 2026-09-12.)
      Order is otherwise cosmetic: queue rows are read back by created_at and every consumer reads
      the whole set. */
   console.log(`[create-ai-audit] baseline mixed set: ${money.length} money + ${standard.length} standard of ${total} requested (share taken on ${moneySlots} slot(s))`);

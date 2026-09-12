@@ -21,10 +21,10 @@
 const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
 /** Paid baseline shape, from the shared question-count policy. */
-import { BASELINE_QUESTIONS, BASELINE_RUNS } from "../../../src/lib/auditQuestionCounts.ts";
+import { BASELINE_QUESTIONS, BASELINE_RUNS, FULL_MEASURE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { findPaidBaseline, findAmbiguousMultiRun } from "../../../src/lib/auditKind.ts";
-import { allocateAreas, decideGuarantee, type BaselineContract } from "../../../src/lib/baselineContract.ts";
-import { FINDABLE_SETUP_PRICE_GBP } from "../../../src/lib/findableOffer.ts";
+import { type BaselineContract } from "../../../src/lib/baselineContract.ts";
+import { fullMeasureAllocation } from "../../../src/lib/fullMeasure.ts";
 import { pickAuditTown } from "./place-town.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 
@@ -161,7 +161,7 @@ export async function advanceBaseline(service: Client, auditId: string, source =
        non-measurement, which is exactly the behaviour this function had before. Failing closed that
        way keeps paid baselines correct on a DB that has not got the column. */
     const AUDIT_COLS_BASE =
-      "id, user_id, lead_id, business_name, business_type, location_text, country, has_website, website, specialism, business_scope, baseline_target_runs, baseline";
+      "id, user_id, lead_id, business_name, business_type, location_text, country, has_website, website, specialism, business_scope, baseline_target_runs, baseline, audit_purpose, created_at";
     // deno-lint-ignore no-explicit-any
     let audit: any = null;
     let aErr: { message?: string } | null = null;
@@ -226,10 +226,19 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     if (usable.length >= target) {
       // Enough runs: average the FIRST `target` of them and store the snapshot.
       const snapshot = await aggregateRuns(service, usable.slice(0, target).map((r) => r.id));
-      const { error: upErr } = await service
+      /* ⛔ CONDITIONAL, AND THE WINNER IS THE ONLY ONE THAT HANDS OFF. `advanceBaseline` runs from
+         two places every 30s tick (finalisation and the sweep), so two ticks can both read
+         `baseline IS NULL` and both arrive here. `.is("baseline", null)` makes exactly one write
+         land; `.select()` tells us whether it was ours. Everything that must happen ONCE when a
+         baseline is frozen — starting the full measure, filling the day-28 date — hangs off
+         `won`, never off "this code ran". */
+      const { data: finalisedRows, error: upErr } = await service
         .from("ai_audits")
         .update({ baseline: snapshot, baseline_completed_at: new Date().toISOString() })
-        .eq("id", auditId);
+        .eq("id", auditId)
+        .is("baseline", null)
+        .select("id");
+      const won = !upErr && Array.isArray(finalisedRows) && finalisedRows.length === 1;
       if (upErr) {
         console.warn("[baseline] snapshot write failed:", upErr.message);
         await record({ action: "error", detail: `snapshot write failed: ${upErr.message}`, runs_usable: usable.length, runs_target: target });
@@ -238,6 +247,8 @@ export async function advanceBaseline(service: Client, auditId: string, source =
           `${snapshot.summary.named_cells}/${snapshot.summary.answered_cells} named cells ` +
           `(${(snapshot.summary.named_rate * 100).toFixed(1)}%) across ${snapshot.summary.questions} questions`);
         await record({ action: "finalised", detail: `${snapshot.runs_counted} runs averaged`, runs_usable: usable.length, runs_target: target });
+        if (won) await onBaselineFrozen(service, audit as FrozenBaseline);
+        else console.log(`[baseline] audit ${auditId}: another tick finalised it first — no hand-off from this one`);
       }
       return;
     }
@@ -329,6 +340,122 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     console.error("[baseline] advance error:", msg);
     await record({ action: "error", detail: `threw: ${msg}` });
   }
+}
+
+/** The columns onBaselineFrozen needs, as advanceBaseline selects them. */
+export interface FrozenBaseline {
+  id: string;
+  user_id: string;
+  lead_id: string | null;
+  business_name: string | null;
+  business_type: string | null;
+  location_text: string | null;
+  country: string | null;
+  has_website: boolean | null;
+  website: string | null;
+  specialism: string | null;
+  business_scope: string | null;
+  audit_purpose?: string | null;
+  created_at?: string | null;
+}
+
+/**
+ * ⛔ EVERYTHING THAT HAPPENS EXACTLY ONCE WHEN A BASELINE FREEZES. Called by advanceBaseline only
+ * from the tick whose conditional write finalised the audit (`won`), so a second tick that read
+ * the same state a moment earlier cannot run this twice. Order is structural here: the full
+ * measure cannot exist before the baseline it must be disjoint from, because this is the only
+ * place that starts it.
+ */
+export async function onBaselineFrozen(service: Client, audit: FrozenBaseline): Promise<void> {
+  if (audit.audit_purpose !== "baseline" || !audit.lead_id) return;
+  try {
+    await startFullMeasure(service, audit);
+  } catch (e) {
+    console.error(`[baseline] full measure start threw for audit ${audit.id}:`, e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * THE FULL MEASURE — FULL_MEASURE_QUESTIONS x MEASUREMENT_RUNS across the home town and the
+ * client's picked areas, AFTER the baseline is frozen. Never compared to anything; finds which
+ * questions and towns are winnable so we know where to build pages.
+ *
+ * ⛔ THE BASELINE'S ASKED SET IS EXCLUDED SERVER-SIDE. create-ai-audit reads
+ * outreach_leads.baseline_audit_id itself for any measurement with a lead_id, so this caller
+ * cannot forget to pass it and no caller can pass a different one.
+ * ⛔ ONE PER BASELINE. A measurement audit created after the baseline already exists → skip.
+ * The conditional finalisation upstream makes the double-call itself rare; this makes it inert.
+ */
+export async function startFullMeasure(service: Client, audit: FrozenBaseline): Promise<{ ok: boolean; audit_id?: string; skipped?: string; error?: string }> {
+  const leadId = audit.lead_id as string;
+  const { data: existing } = await service
+    .from("ai_audits").select("id, created_at")
+    .eq("lead_id", leadId).eq("audit_purpose", "measurement")
+    .gte("created_at", audit.created_at ?? "1970-01-01")
+    .limit(1);
+  if ((existing ?? []).length) {
+    console.log(`[baseline] lead ${leadId}: full measure already exists (${(existing as Array<{ id: string }>)[0].id}) — not starting another`);
+    return { ok: true, skipped: "already_has_full_measure" };
+  }
+  /* The picked towns, from the newest PAID questionnaire for this lead. Absent → home town only. */
+  const { data: onb } = await service
+    .from("onboarding_responses").select("areas_list")
+    .eq("lead_id", leadId).eq("status", "paid")
+    .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+  const areas = Array.isArray((onb as { areas_list?: unknown } | null)?.areas_list)
+    ? ((onb as { areas_list: unknown[] }).areas_list.filter((a): a is string => typeof a === "string"))
+    : [];
+  const home = (audit.location_text ?? "").trim();
+  if (!home) return { ok: false, error: "baseline has no town" };
+  const { allocation, dropped } = fullMeasureAllocation(home, areas);
+  if (dropped.length) console.warn(`[baseline] lead ${leadId}: full measure cannot fit ${dropped.length} area(s) at ${FULL_MEASURE_QUESTIONS}: ${dropped.join(", ")}`);
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+      "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+      "x-internal-job": "1",
+    },
+    body: JSON.stringify({
+      user_id: audit.user_id,
+      lead_id: leadId,
+      business_name: audit.business_name,
+      business_type: audit.business_type,
+      location_text: home,
+      specialisms: audit.specialism ?? "",
+      country: audit.country ?? null,
+      website: audit.website ?? null,
+      has_website: audit.has_website === true,
+      ...(audit.business_scope ? { business_scope: audit.business_scope } : {}),
+      purpose: "measurement",
+      question_count: FULL_MEASURE_QUESTIONS,
+      skip_seo: true,
+      /* The town came from the client's own questionnaire via the baseline — the same evidence the
+         baseline's own exemption rests on. Without this a client Google cannot resolve is gated. */
+      town_confirmed: true,
+      ...(allocation.length > 1 ? { areas: allocation } : {}),
+    }),
+  });
+  const body = await res.text();
+  let out: { ok?: boolean; audit_id?: string; error?: unknown } = {};
+  try { out = JSON.parse(body); } catch { /* kept verbatim below */ }
+  if (!res.ok || !out?.ok || !out?.audit_id) {
+    const why = typeof out?.error === "string" ? out.error : body.slice(0, 200);
+    console.error(`[baseline] full measure start failed for lead ${leadId}: ${res.status} ${why}`);
+    try {
+      await service.from("client_error_reports").insert({
+        error_id: "full_measure_start_failed",
+        message: why.slice(0, 1000),
+        context: { lead_id: leadId, baseline_audit_id: audit.id, http_status: res.status },
+      });
+    } catch { /* reporting must never mask the original failure */ }
+    return { ok: false, error: `create-ai-audit refused: ${why}` };
+  }
+  console.log(`[baseline] full measure ${out.audit_id} started for lead ${leadId}: ${allocation.map((a) => `${a.town}:${a.questions}`).join(" ")}`);
+  return { ok: true, audit_id: out.audit_id };
 }
 
 /**
@@ -515,94 +642,18 @@ export async function startPaidBaseline(
     console.log(`[baseline] lead ${leadId}: town "${locationText}" via ${picked.source}`);
     const scopeIsLocal = !NON_TOWN.has(locationText.toLowerCase());
 
-    /* SEED FROM THE AUDIT THE PROSPECT ACTUALLY READ.
-       The outreach audit's questions are the report that sold them. Generating ten fresh ones here
-       meant the numbers that closed the sale were not the numbers the money-back guarantee is
-       measured on — while the pitch says, in writing, that we re-measure the same way at 8 weeks.
-       These are a SEED, not the set: create-ai-audit guards each one and generates the rest up to
-       BASELINE_QUESTIONS. A lead with no earlier audit sends nothing and gets all ten generated,
-       exactly as before.
-
-       Best-effort throughout. A failure here must never stop a paid client's baseline starting; the
-       worst case is the old behaviour, which is a working baseline on freshly generated questions. */
-    let seedQuestions: string[] = [];
-    /* WHICH audit the seed came from, and which town it measured. Load-bearing for a LEGACY
-       outcome-guarantee client: his refund test is "named in more AI answers after 8 weeks than
-       today", and "today" is that audit — which may be a DIFFERENT TOWN from the areas he has since
-       asked for. RG Locksmiths was sold on a Wisbech audit and has since picked Huntingdon,
-       St Neots and Peterborough, so the scored set and the new main town genuinely differ. */
-    let seedAuditId: string | null = null;
-    let seedTown: string | null = null;
-    try {
-      const { data: priorAudits } = await service
-        .from("ai_audits").select("id, baseline_target_runs, created_at, location_text")
-        .eq("lead_id", leadId).order("created_at", { ascending: false });
-      // <= 1 target run is an ORDINARY audit. Never seed from another baseline: those questions are
-      // already a measurement, and copying them would chain one guarantee onto another.
-      const outreach = ((priorAudits ?? []) as Array<{ id: string; baseline_target_runs: number | null; location_text: string | null }>)
-        .find((a) => Number(a.baseline_target_runs ?? 0) <= 1);
-      if (outreach) {
-        seedAuditId = outreach.id;
-        seedTown = (outreach.location_text ?? "").trim() || null;
-        const { data: latestRun } = await service
-          .from("ai_audit_runs").select("id").eq("audit_id", outreach.id)
-          .order("run_number", { ascending: false }).limit(1).maybeSingle();
-        if (latestRun) {
-          const { data: qRows } = await service
-            .from("ai_audit_queue").select("question").eq("run_id", (latestRun as { id: string }).id)
-            .order("created_at", { ascending: true });
-          const seen = new Set<string>();
-          for (const r of qRows ?? []) {
-            const q = String((r as { question?: string }).question ?? "").trim();
-            const key = q.toLowerCase();
-            if (q && !seen.has(key)) { seen.add(key); seedQuestions.push(q); }
-          }
-        }
-      }
-      console.log(`[audit-baseline] lead ${leadId}: seeding baseline with ${seedQuestions.length} outreach question(s)`);
-    } catch (e) {
-      seedQuestions = [];
-      console.error(`[audit-baseline] seed lookup failed for lead ${leadId} (non-blocking):`, (e as Error).message);
-    }
-
-    /* ── THE BASELINE CONTRACT ─────────────────────────────────────────────────────────────────
-       The client picked services AND a priority-ordered list of towns (onboarding areas_list).
-       Measuring only the main town gave them work aimed at three towns and a measurement of one.
-
-       CEILING, NOT SCALING: MULTI_AREA_CEILING questions however many towns they picked, so a
-       client naming eight towns costs exactly what one naming three costs, and gets thinner
-       coverage per town rather than a bigger bill against a fixed price.
-
-       SEED-PRESERVING (Paul's decision, 2026-08-04): every seeded question is kept verbatim on the
-       main town's share; the remaining budget buys the extra areas. The guarantee is now WORK-based,
-       so nothing rides on which specific questions moved - EXCEPT for legacy outcome-guarantee
-       clients, whose scored set is frozen in the contract and must never drift.
-
-       Frozen at day 0 and read VERBATIM at week eight (the re-run path above repeats the stored
-       questions), so the yardstick cannot move underneath a client between the two measurements. */
-    const MULTI_AREA_CEILING = 12;
+    /* ── HOME TOWN ONLY, GENERATED FRESH (Paul, 2026-09-12) ─────────────────────────────────────
+       The baseline is BASELINE_QUESTIONS questions about the town the client trades from, and
+       nothing else. It is the refund's measuring stick, frozen and replayed verbatim at day 28.
+       ⛔ NOT SEEDED from the outreach hook: the hook is throwaway and never compared, so carrying
+       its questions forward tied the judged set to a 3-question prospecting audit.
+       ⛔ NOT SPREAD ACROSS THE PICKED TOWNS: at two questions a town the extras diluted the refund
+       set with the questions the client was least likely to win. The towns are recorded on the
+       contract and measured by the FULL MEASURE that starts the moment this baseline freezes
+       (onBaselineFrozen), where winnability decides which towns get pages. */
     const rawAreas = Array.isArray((row as { areas_list?: unknown }).areas_list)
       ? ((row as { areas_list: unknown[] }).areas_list.filter((a): a is string => typeof a === "string"))
       : [];
-    const { guarantee, reason: guaranteeReason } = decideGuarantee(
-      typeof lead.amount_paid === "number" ? lead.amount_paid : null,
-      FINDABLE_SETUP_PRICE_GBP,
-      typeof (row as { guarantee_kind?: unknown }).guarantee_kind === "string"
-        ? (row as { guarantee_kind: "work" | "outcome" }).guarantee_kind
-        : null,
-    );
-    /* THE SCORED SET IS NOT NEGOTIABLE. For a legacy OUTCOME client the seeded questions ARE the
-       refund test, so the main town's share must be large enough to carry every one of them —
-       otherwise the allocation would silently drop part of the set the promise is settled on.
-       Work-guarantee clients need no such floor: nothing rides on which questions moved. */
-    const seedFloor = guarantee === "outcome" ? Math.min(seedQuestions.length, MULTI_AREA_CEILING) : 0;
-    const { allocation, dropped } = allocateAreas(locationText, rawAreas, MULTI_AREA_CEILING, seedFloor);
-    const multiArea = allocation.length > 1;
-    const questionTotal = multiArea ? allocation.reduce((sum, a) => sum + a.questions, 0) : BASELINE_QUESTIONS;
-    if (multiArea) {
-      console.log(`[baseline] multi-area: ${allocation.map((a) => `${a.town}:${a.questions}`).join(" ")}`
-        + `${dropped.length ? ` | DROPPED (not measured): ${dropped.join(", ")}` : ""} | guarantee=${guarantee} (${guaranteeReason})`);
-    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
@@ -625,14 +676,9 @@ export async function startPaidBaseline(
         has_website: !!lead.website,
         ...(scopeIsLocal ? { business_scope: "local" } : {}),
         purpose: "baseline",
-        question_count: questionTotal,
-        // Only sent when there is more than one town — a single-area baseline stays byte-for-byte
-        // the shape it has always been.
-        ...(multiArea ? { areas: allocation } : {}),
+        question_count: BASELINE_QUESTIONS,
         baseline_target_runs: BASELINE_RUNS,
-        // Omitted entirely when there is nothing to seed, so a lead with no earlier audit takes the
-        // untouched generate-all-ten path rather than an empty-array edge case.
-        ...(seedQuestions.length ? { questions: seedQuestions } : {}),
+        // No `areas`, no `questions`: single town, generated fresh. See the block above.
       }),
     });
     const body = await res.text();
@@ -644,88 +690,45 @@ export async function startPaidBaseline(
       return { ok: false, error: `create-ai-audit refused: ${why}` };
     }
     console.log(`[baseline] started paid baseline ${out.audit_id} for onboarding ${onboardingId} (${source})`);
-    /* ── FREEZE THE CONTRACT ───────────────────────────────────────────────────────────────────
-       Written ONCE, immediately after the audit exists, and read verbatim at week eight rather
-       than re-derived. What it protects:
-         - the yardstick cannot move if the allocation rule, the ceiling or the areas change later;
-         - a LEGACY outcome-guarantee client's scored set is explicit. scoredQuestions is present
-           ONLY for guarantee === 'outcome': for that client the measured set IS the refund test
-           ("named in more AI answers after 8 weeks than today"), so it is frozen as the questions
-           actually queued for the main town. Work-guarantee clients get no scored set at all,
-           because the promise is the audit, the work and the re-measurement - not a naming result -
-           so nothing rides on which particular questions moved.
-         - areasDropped is recorded, so "measured but not scored" can be stated on screen instead
-           of an area quietly vanishing.
-       Best-effort and migration-tolerant: if baseline_contract is not there yet the baseline still
-       runs and behaves exactly as it did before, which is the single-town shape. */
+    /* ── FREEZE THE CONTRACT (v2) ──────────────────────────────────────────────────────────────
+       Written ONCE, immediately after the audit exists. Since 2026-09-12 the document records
+       intent and provenance, not the refund test: the judged set is the ASKED set on this audit's
+       first run, read through outreach_leads.baseline_audit_id (baselineReplay.ts), never a field
+       here. What v2 protects is the record of WHAT WAS DECIDED — home town only, these areas
+       deferred to the full measure, these money questions flagged — so a later reader is not left
+       guessing why a client with four towns has a one-town baseline.
+       Best-effort and migration-tolerant: if baseline_contract cannot be written the baseline
+       still runs exactly the same. */
     try {
       const queued = await service
         .from("ai_audit_queue").select("question")
         .eq("audit_id", out.audit_id).order("created_at", { ascending: true });
       const askedAll = ((queued.data ?? []) as Array<{ question: string }>)
         .map((q) => (q.question ?? "").trim()).filter(Boolean);
-      /* The seeds AS QUEUED, matched case-insensitively so a re-cased seed still counts. This is
-         the refund test for an outcome client: the questions from the audit that sold them, and
-         nothing else. If a seed was rejected by the guards it is legitimately absent, and the
-         count stored here says so rather than implying a set that was never asked. */
       const askedKeys = new Map(askedAll.map((q) => [q.trim().toLowerCase(), q]));
-      const scored = seedQuestions
-        .map((q) => askedKeys.get(q.trim().toLowerCase()))
-        .filter((q): q is string => !!q);
-      /* ⛔ THE MONEY QUESTIONS, THROUGH THE SAME askedKeys PASS AS `scored` ABOVE — deliberately the
-         same intersection, so the two lists are built by one rule and neither can name a question
-         that was not queued. create-ai-audit reports them; they are re-checked here rather than
-         trusted, because this is the frozen document the week-eight comparison reads.
-         ⛔ DISJOINT FROM `scored` BY CONSTRUCTION, not by a filter: `scored` is the SEEDS and these
-         are GENERATED, so a money question can never be part of the refund test. Nothing below
-         subtracts one from the other, and nothing should — if they ever overlapped it would mean a
-         seed had been generated as a money question, which is a bug to surface, not to hide.
-         ⚠️ Recorded so the before/after can be computed on all questions OR standard-only. That
-         choice is NOT made here. */
+      /* THE MONEY QUESTIONS, intersected with what was actually queued so the list can never name
+         a question the guards rejected. Recorded so the before/after can be computed on all
+         questions OR standard-only — a choice deliberately NOT made here. */
       const moneyAsked = Array.isArray((out as { money_questions?: unknown }).money_questions)
         ? ((out as { money_questions: unknown[] }).money_questions
             .map((q) => (typeof q === "string" ? askedKeys.get(q.trim().toLowerCase()) : undefined))
             .filter((q): q is string => !!q))
         : [];
       const contract: BaselineContract = {
-        version: 1,
-        guarantee,
-        guaranteeReason,
+        version: 2,
         mainTown: locationText,
         areasRequested: rawAreas,
-        allocation,
-        areasDropped: dropped,
-        ceiling: MULTI_AREA_CEILING,
-        seededQuestions: seedQuestions,
-        // Omitted when empty: absent means "not recorded", which is what every pre-2026-08-31
-        // contract is, and that is a different claim from "there were none".
+        allocation: [{ town: locationText, questions: BASELINE_QUESTIONS, isMain: true }],
+        areasDropped: rawAreas,
+        areasMeasuredInFullMeasure: rawAreas,
+        ceiling: BASELINE_QUESTIONS,
         ...(moneyAsked.length ? { moneyQuestions: moneyAsked } : {}),
-        // OUTCOME clients only. The main town's share is what was sold and what the refund reads.
-        ...(guarantee === "outcome"
-          ? { scoredQuestions: scored, scoredFromAuditId: seedAuditId, scoredTown: seedTown }
-          : {}),
         createdAt: new Date().toISOString(),
       };
       const { error: cErr } = await service.from("ai_audits")
         .update({ baseline_contract: contract }).eq("id", out.audit_id);
       if (cErr) console.warn(`[baseline] baseline_contract not stored (${cErr.message}) — baseline unaffected`);
-      else {
-        console.log(`[baseline] contract frozen for audit ${out.audit_id}: guarantee=${guarantee}, ${allocation.length} town(s), ${contract.scoredQuestions?.length ?? 0} scored, ${moneyAsked.length} money question(s) flagged`);
-        /* A money question that is ALSO a seed would mean the refund test had acquired a
-           buying-moment question. Cannot happen the way the two are built — logged loudly rather
-           than silently tolerated if it ever does. */
-        const overlap = moneyAsked.filter((q) => scored.some((sq) => sq.trim().toLowerCase() === q.trim().toLowerCase()));
-        if (overlap.length) {
-          console.error(`[baseline] MONEY/SCORED OVERLAP on audit ${out.audit_id} — the refund set contains ${overlap.length} money question(s): ${overlap.join(" | ")}`);
-        }
-        if (guarantee === "outcome") {
-          console.log(`[baseline] LEGACY OUTCOME CLIENT: refund test is ${scored.length} of ${seedQuestions.length} seeded question(s)`
-            + ` from audit ${seedAuditId ?? "(none)"} in "${seedTown ?? "(unknown town)"}"; delivery areas are ${allocation.map((a) => a.town).join(", ")}`);
-          if (scored.length < seedQuestions.length) {
-            console.error(`[baseline] SCORED SET SHORT: ${seedQuestions.length - scored.length} seeded question(s) were not queued — the refund test is narrower than what was sold. Audit ${out.audit_id}.`);
-          }
-        }
-      }
+      else console.log(`[baseline] contract v2 frozen for audit ${out.audit_id}: "${locationText}" x ${BASELINE_QUESTIONS}, ${rawAreas.length} area(s) deferred to the full measure, ${moneyAsked.length} money question(s) flagged`);
     } catch (e) {
       console.warn(`[baseline] contract write threw (non-blocking):`, e instanceof Error ? e.message : e);
     }

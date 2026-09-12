@@ -2,7 +2,7 @@ import { SCORED_ENGINES } from '@/lib/auditReport';
 /* ============================================================
    PAID BASELINE, AS DELIVERY WORK
 
-   A paid signup runs a 10-question, 2-engine, 3-run baseline and the result went nowhere anyone
+   A paid signup runs a 12-question (home town), 2-engine, 3-run baseline and the result went nowhere anyone
    could see. This folds it into the only question that matters for delivery: for each question, on
    each engine, how many of the three runs named the business — and who got named instead.
 

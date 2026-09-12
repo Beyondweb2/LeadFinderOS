@@ -3,18 +3,14 @@
 
    The properties this suite exists for, in order of what they protect:
    ⛔ money questions are a MINORITY at every baseline size (0.25, vs the hook's 0.4);
-   ⛔ a SEEDED baseline never loses a seed to a money question — the seeds ARE
-      BaselineContract.scoredQuestions, the refund test, so displacing one would change what a
-      client's money-back guarantee is measured on;
-   ⛔ applySeed keeps the money questions it is given, which is only true because the generator
-      returns them FIRST — with money last, a heavily-seeded baseline discards every one of them;
    ⛔ a small multi-area allocation gets ZERO money questions by the floor, not by a special case.
+   (The seeded-baseline properties that used to live here went with baseline seeding on
+   2026-09-12 — a baseline is generated fresh for the home town now.)
    ============================================================ */
 import {
   moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionShareAt,
   MONEY_QUESTION_SHARE, BASELINE_MONEY_QUESTION_SHARE, MONEY_QUESTION_MIN_COUNT,
 } from "../src/lib/moneyQuestions.ts";
-import { applySeed } from "../src/lib/seedGuard.ts";
 import { AREA_MIN_QUESTIONS } from "../src/lib/baselineContract.ts";
 
 let f = 0;
@@ -44,50 +40,11 @@ for (const bad of [null, undefined, NaN, -5, "abc"]) {
 ok(moneyQuestionShareAt(20, 0) === 0, "a zero share yields none");
 ok(moneyQuestionShareAt(20, NaN) === 0, "⛔ an unreadable share yields NONE, never a default sprinkling");
 
-console.log("\n── ⛔ A MULTI-AREA BASELINE'S SMALL AREAS GET NONE, BY THE FLOOR ──");
+console.log("\n── ⛔ A MULTI-TOWN FULL MEASURE'S SMALL AREAS GET NONE, BY THE FLOOR ──");
 ok(AREA_MIN_QUESTIONS < MONEY_QUESTION_MIN_COUNT,
   `an area's floor (${AREA_MIN_QUESTIONS}) is below the money floor (${MONEY_QUESTION_MIN_COUNT}), so minimum areas are excluded automatically`);
 ok(baselineMoneyQuestionShare(AREA_MIN_QUESTIONS) === 0,
   `⛔ an area with the minimum ${AREA_MIN_QUESTIONS} questions gets 0 money questions`);
-
-console.log("\n── ⛔ SEEDS ARE NEVER DISPLACED (the refund test is untouched) ──");
-{
-  // The real shape: a 20-question baseline seeded with 15 outreach questions. The generator is
-  // asked for a 20-long pool but the money share is taken on the 5-slot TOP-UP.
-  const target = 20;
-  const seeds = Array.from({ length: 15 }, (_, i) => `locksmith job number ${i + 1} in Huntingdon UK`);
-  const topUp = target - seeds.length;
-  const moneyN = baselineMoneyQuestionShare(topUp);
-  ok(moneyN === 1, `top-up of ${topUp} → ${moneyN} money question (a quarter of the TOP-UP, not of 20)`);
-
-  // Money FIRST, exactly as generateWithMoney returns it.
-  const money = Array.from({ length: moneyN }, (_, i) => `emergency locksmith number ${i + 1} in Huntingdon UK`);
-  const standard = Array.from({ length: target - moneyN }, (_, i) => `locksmith service ${i + 1} in Huntingdon UK`);
-  const pool = [...money, ...standard];
-
-  const outcome = applySeed(seeds, pool, target, "locksmith", "Huntingdon UK");
-  ok(outcome.questions.length === target, `the audit is still ${target} questions`);
-  ok(outcome.seeded.length === seeds.length, `⛔ all ${seeds.length} seeds survived — scoredQuestions is unchanged`);
-  for (const s of seeds) ok(outcome.questions.includes(s), `  seed kept: "${s.slice(0, 28)}…"`);
-  for (const m of money) {
-    ok(outcome.questions.includes(m), `⛔ money question SURVIVED applySeed: "${m.slice(0, 28)}…"`);
-  }
-  // The property the ordering exists for.
-  const kept = new Set(outcome.questions);
-  ok(money.every((m) => kept.has(m)), "⛔ money-first ordering means applySeed keeps every money question");
-}
-
-console.log("\n── ⛔ AND WITH MONEY LAST IT WOULD HAVE BEEN SILENTLY DROPPED (the bug avoided) ──");
-{
-  const target = 20;
-  const seeds = Array.from({ length: 15 }, (_, i) => `locksmith job number ${i + 1} in Huntingdon UK`);
-  const money = ["emergency locksmith number 1 in Huntingdon UK"];
-  const standard = Array.from({ length: 19 }, (_, i) => `locksmith service ${i + 1} in Huntingdon UK`);
-  const poolMoneyLast = [...standard, ...money];
-  const outcome = applySeed(seeds, poolMoneyLast, target, "locksmith", "Huntingdon UK");
-  ok(!outcome.questions.includes(money[0]),
-    "⛔ money LAST → dropped entirely; this is why generateWithMoney returns money first");
-}
 
 console.log("\n── THE FLAG CAN NEVER NAME AN UNQUEUED QUESTION ──");
 {
