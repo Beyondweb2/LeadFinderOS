@@ -17,21 +17,23 @@
 
 /** 🔴 THE ONE PRICE EVERYONE PAYS, in GBP. One-off, not recurring.
  *
- *  History: £49.99 → £99 (2026-08-04) → **£49.99 flat (2026-09-03)**.
+ *  History: £49.99 → £99 (2026-08-04) → £49.99 flat (2026-09-03) → **£99 flat (2026-09-12)**.
  *
- *  ⛔ THERE IS NO LONGER A SECOND PRICE, AND THAT IS THE POINT OF THIS CHANGE. Until today the
- *  product had a FOUNDER price (£49.99, for a lead with a completed audit) and a FULL price (£99,
- *  for everyone else), derived per-lead by offer-price.ts. Removed on Paul's instruction, approved
- *  by Rich: one flat price, whether they arrive from their report, the homepage, or a cold link.
+ *  ⛔ THERE IS NO SECOND PRICE. One flat figure, whether they arrive from their report, the
+ *  homepage, or a cold link. The founder/full split was removed on 2026-09-03 and must not come
+ *  back: the ?lead= tag decides IDENTITY, never money, which is what lets a lead-less visitor buy.
  *
- *  ⚠️ AND REMOVING THE SPLIT IS WHAT UNBLOCKS SIGN-UP WITHOUT A ?lead= TAG. The tag used to decide
- *  the PRICE as well as the identity, so a lead-less arrival could not be charged correctly and the
- *  checkout refused it. With one price there is nothing for the tag to decide about money, and the
- *  only remaining requirement is a trade + town so the week-eight guarantee has something to
- *  measure against — which the pre-payment screen now asks for when there is no tag.
+ *  ⛔ £99 NOW INCLUDES THE WEBSITE BUILD (Paul, 2026-09-12). Until today a customer who ticked
+ *  "build my site" was charged a SEPARATE £49.99 build line from a Stripe Price object. That line
+ *  is gone from findable-checkout entirely — the tick now adds only the £9.99/month hosting
+ *  subscription. So this number is the whole one-off charge in both shapes of the sale, which is
+ *  exactly why it may not be quietly raised without pricing the build work into it.
  *
- *  ⛔ £99 IS NOT CHARGED TO ANYBODY. If a £99 figure appears anywhere in copy, it is stale. */
-export const FINDABLE_SETUP_PRICE_GBP = 49.99;
+ *  ⚠️ THIS FIGURE APPEARS INSIDE THE GUARANTEE SENTENCE BELOW, as the amount refunded. Those two
+ *  cannot be allowed to disagree, and a comment will not stop them — scripts/check-cross-repo-sync.mjs
+ *  asserts that the guarantee text contains this number. Change one, the check fails until you
+ *  change the other. */
+export const FINDABLE_SETUP_PRICE_GBP = 99;
 
 /* The guarantee, WORK-based: we promise the audit, the work and the re-measurement, never the
    outcome. Anywhere this sentence is shown to a client must render it from this constant, not a
@@ -55,16 +57,44 @@ export const FINDABLE_SETUP_PRICE_GBP = 49.99;
    never a different one; a "subset" could be neither.
    ⛔ NEVER MAKE THEM DIVERGE IN CONTENT. If the marketing line needs different words, the
    contractual one changes first and the marketing one extends it. The sync check fails otherwise. */
+/* 🔴 THE PROMISE CHANGED SHAPE ON 2026-09-12, AND THIS IS THE ONE NOTE TO READ BEFORE EDITING IT.
+   It used to guarantee the WORK — "the audit, the work, and the re-measurement ... or a full refund"
+   — and explicitly disclaimed the outcome ("We do not promise you will be named. The engines decide
+   that, and anyone who promises it is guessing").
+
+   It is now conditional on the MEASUREMENT MOVING. Paul's instruction, confirmed on the record:
+   if the number has not gone up at four weeks, the customer can claim the setup fee back. That is a
+   change to what we OWE, not a change of wording, and it has three consequences somebody will
+   otherwise rediscover the hard way:
+     · The refund is now triggered by something we do not control, so the four-week re-measurement
+       has to actually happen on the SAME questions and engines or the claim cannot be adjudicated.
+       audit-baseline.ts's stored question set is what makes that checkable — do not loosen it.
+     · Every hedge that used to sit beside this sentence was deleted in the same pass. Re-adding one
+       ("we can't promise", "the engines decide") next to a conditional refund reads as walking it
+       back, which is worse than either wording alone.
+     · findable.live/refunds is the customer-facing statement of this and must not contradict it.
+       If this sentence changes, that page changes in the same commit.
+   ⚠️ £99 IS WRITTEN INTO THE TEXT because a customer reading a refund promise needs the amount in
+   it. check-cross-repo-sync.mjs asserts the number here matches FINDABLE_SETUP_PRICE_GBP. */
 export const FINDABLE_GUARANTEE =
-  "We guarantee the audit, the work, and the re-measurement at week four with " +
-  "before-and-after evidence, or a full refund. We do not promise you will be named.";
+  "We measure how often AI names you before we start, then re-measure after four weeks on the " +
+  "same questions and the same engines. If that number has not gone up, you can claim your £99 back.";
 
 /** The site's version: the contractual sentence plus the line that makes the point rather than the
  *  promise. Byte-identical to findable-site's GUARANTEE, asserted by the sync check. */
+/* The site's version: the contractual sentence plus HOW to claim. Byte-identical to findable-site's
+   GUARANTEE, asserted by the sync check.
+   ⚠️ THE EXTRA SENTENCE NOW ADDS AN OBLIGATION, WHICH THE OLD ONE DID NOT. The previous tail merely
+   disclaimed a promise, so the shorter contractual string could never owe less than the marketing
+   one. This tail states a 14-day claim window — a LIMIT on the promise, so the prefix rule still
+   holds in the safe direction (the contractual version, seen at Stripe, is the more generous one).
+   ⛔ Keep it that way. If a future tail ever WIDENS the promise, it belongs in FINDABLE_GUARANTEE
+   instead, or a customer agrees to one thing at checkout and reads a bigger one on the page. */
 export const FINDABLE_GUARANTEE_FULL =
-  "We guarantee the audit, the work, and the re-measurement at week four with " +
-  "before-and-after evidence, or a full refund. We do not promise you will be " +
-  "named. The engines decide that, and anyone who promises it is guessing.";
+  "We measure how often AI names you before we start, then re-measure after four weeks on the " +
+  "same questions and the same engines. If that number has not gone up, you can claim your £99 back. " +
+  "Email us within 14 days of receiving your four week results and we will show you both sets of " +
+  "numbers and refund you.";
 
 /* ⛔ WHERE A PROSPECT'S REPORT LIVES. findable.live/report/<auditId> — a Cloudflare Pages Function in
    the findable-site repo (functions/report/[id].ts) that proxies the render-audit-report edge

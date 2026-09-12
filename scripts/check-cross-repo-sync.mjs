@@ -271,8 +271,35 @@ function checkPrefix() {
   return true;
 }
 
+/* ⛔ THE REFUND AMOUNT IS WRITTEN INSIDE THE GUARANTEE SENTENCE, so the promise can now contradict
+   the price without either constant being "wrong" on its own. Added 2026-09-12 with the move to a
+   measured refund: the sentence says "you can claim your £99 back", and if FINDABLE_SETUP_PRICE_GBP
+   is ever changed without the text, we would charge one amount and promise to refund another — in
+   the one string a customer agrees to at Stripe checkout.
+   ⚠️ IT CANNOT BE SOLVED BY INTERPOLATION. `read()` parses these constants as plain double-quoted
+   string literals; a template literal building the price in would make the constant unreadable to
+   this script and silently drop the cross-repo guarantee check with it. So the number is typed, and
+   this is what stops it rotting.
+   ⚠️ Matches the price as it would be WRITTEN (99, or 49.99) rather than any £ figure in the text,
+   so a future sentence mentioning another amount does not accidentally satisfy it. */
+function checkRefundAmount() {
+  const price = read(path.join(LFOS, 'findableOffer.ts'), 'FINDABLE_SETUP_PRICE_GBP', 'number');
+  const text = read(path.join(LFOS, 'findableOffer.ts'), 'FINDABLE_GUARANTEE', 'string');
+  const wanted = `£${price}`;
+  if (!text.includes(wanted)) {
+    console.error(`\nFAIL  the guarantee does not name the price it promises to refund.`);
+    console.error(`  FINDABLE_SETUP_PRICE_GBP = ${price}, so the guarantee should contain "${wanted}".`);
+    console.error(`  guarantee: ${JSON.stringify(text)}`);
+    console.error('  Charging one amount and promising to refund another is the worst version of this drift.');
+    return false;
+  }
+  console.log(`PASS  the guarantee names the charged price (${wanted})`);
+  return true;
+}
+
 let failed = 0;
 if (!checkPrefix()) failed++;
+if (!checkRefundAmount()) failed++;
 for (const pair of PAIRS) {
   let mine, theirs;
   try {
@@ -307,10 +334,10 @@ for (const pair of PAIRS) {
 
 failed += checkGroups();
 
-// pairs + the guarantee prefix + the same-repo groups
-const TOTAL = PAIRS.length + 1 + SAME_REPO_GROUPS.length;
+// pairs + the guarantee prefix + the refund-amount check + the same-repo groups
+const TOTAL = PAIRS.length + 2 + SAME_REPO_GROUPS.length;
 if (failed) {
   console.error(`\n${failed} of ${TOTAL} checks failed.`);
   process.exit(1);
 }
-console.log(`\nAll ${TOTAL} checks pass: ${PAIRS.length} cross-repo, ${SAME_REPO_GROUPS.length} same-repo, plus the guarantee prefix.`);
+console.log(`\nAll ${TOTAL} checks pass: ${PAIRS.length} cross-repo, ${SAME_REPO_GROUPS.length} same-repo, plus the guarantee prefix and the refund amount.`);

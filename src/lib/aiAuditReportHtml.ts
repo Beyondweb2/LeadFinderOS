@@ -1077,6 +1077,9 @@ ${REPORT_CHROME_CSS_CORE}
   .cta .close{ margin-top:10px; font-size:14px; font-weight:700; color:#fff; }
   /* Contact buttons — side by side, stacking on narrow screens. On-palette (yellow + white). */
   .cta-actions{ display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
+  /* The promise, under the buttons: read after deciding to look, not competing with the heading. */
+  .cta-promise{ margin:16px 0 0; padding-top:14px; border-top:1px solid rgba(255,255,255,.16);
+                font-size:13px; line-height:1.55; color:#c7d3ea; max-width:66ch; }
   .cta-btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px;
     padding:13px 22px; border-radius:10px; font-size:15px; font-weight:700; line-height:1;
     text-decoration:none; border:1px solid transparent; }
@@ -1282,6 +1285,15 @@ ${d.hidePitch ? "" : `
         <a class="cta-btn site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">See how it works</a>
         <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp us</a>
       </div>
+      <!-- 🔴 THE GUARANTEE IS BACK ON THE REPORT (2026-09-12). When the founder-offer block was
+           deleted on 2026-09-02 the guarantee went with it, and nobody noticed: this file kept
+           IMPORTING FINDABLE_GUARANTEE and rendering it nowhere, so for ten days the document a
+           prospect reads first carried no promise at all while the marketing site and the Stripe
+           page both did. A dead import is not a compile error, which is exactly why it survived.
+           ⛔ VERBATIM FROM THE CONSTANT, never paraphrased and never shortened. It is the same
+           sentence findable-checkout puts in the Stripe line-item description, so what a prospect
+           reads here is what they agree to at payment. If it does not fit, change the layout. -->
+      <p class="cta-promise">${esc(FINDABLE_GUARANTEE)}</p>
     </section>`}
 
     ${siteFooter}

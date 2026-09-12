@@ -96,13 +96,16 @@ interface DashboardMetrics {
    guarding. (And never write the declaration pattern out in a comment: the script's regex takes the
    FIRST match in the file, comments included — that exact mistake broke the guard for ten minutes
    on 2026-08-19.) */
-const FOUNDER_PRICE_GBP = 49.99;
+const FOUNDER_PRICE_GBP = 99;
 /* ⛔ EVERY PRICE THE FOUNDER OFFER HAS EVER CHARGED, besides the current one. The tile counts places
    taken across ALL of them — Paul's call 2026-08-19, after the price move (£19.99 → £49.99 on
    2026-08-12) made RG Locksmiths' sale vanish from the tile: it read "1 of 10 taken" with two paying
    customers in the bank, the exact kind of false number this dashboard is being purged of.
-   Append here when the founder price moves again; never remove an entry a sale was taken at. */
-const FOUNDER_PRICES_HISTORICAL_GBP = [19.99];
+   Append here when the founder price moves again; never remove an entry a sale was taken at.
+   ⚠️ 49.99 APPENDED 2026-09-12 with the move to £99. It is the price the flat-rate era charged
+   between 2026-09-03 and today, and RG's £19.99 is the founder-era one before that. Dropping
+   either would make a real sale vanish from the tile — the exact fault this list exists for. */
+const FOUNDER_PRICES_HISTORICAL_GBP = [19.99, 49.99];
 /* ⛔ THE WEBSITE ADD-ON MADE AN EXACT-AMOUNT MATCH UNWORKABLE (2026-09-03). A customer who ticks
    "add a new website" pays the AI price PLUS a £49.99 build PLUS their first £9.99 of hosting in
    one session, so amount_paid lands at £109.97 and an exact match against [49.99, 19.99] would

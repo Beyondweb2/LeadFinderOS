@@ -31,8 +31,14 @@ ${u}
 
 Takes about two minutes and we handle the rest. Any questions, let me know`;
 
+/* ⛔ DISPLAY ONLY — META RENDERS THE REAL MESSAGE FROM ITS OWN REGISTERED COPY. Editing this string
+   changes what the OPERATOR reads in the Inbox transcript and nothing a prospect receives. The
+   registered body must be edited BY HAND in WhatsApp Manager whenever the price moves, and it has
+   already drifted once (it sat at £19.99 for weeks after the price moved to £49.99).
+   ⚠️ UPDATED 2026-09-12 for the flat £99 with the measured refund. The old text sold a founder
+   discount ("the next ten businesses at £49.99 instead of £99") — a tier that no longer exists. */
 const reEngageBody = (b: string, u: string) =>
-  `Hi ${b}, following up on the AI visibility report we sent over. We're doing the next ten businesses at £49.99 instead of £99, in exchange for honest feedback on the work. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
+  `Hi ${b}, following up on the AI visibility report we sent over. It's £99 one-off to get started: we measure how often AI names you, build your pages, then re-measure after four weeks on the same questions. If that number hasn't gone up you can claim your £99 back. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
 
 // ── Findable, no link ─────────────────────────────────────────────────────
 const initialContactBody = (b: string, _u: string) =>
