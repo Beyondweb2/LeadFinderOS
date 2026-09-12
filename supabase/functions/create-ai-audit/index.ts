@@ -15,6 +15,8 @@ import {
   WIZARD_MIN_QUESTIONS,
   WIZARD_MAX_QUESTIONS,
   BASELINE_QUESTIONS,
+  FULL_MEASURE_QUESTIONS,
+  GENERATOR_ABSOLUTE_MAX_QUESTIONS,
 } from "../../../src/lib/auditQuestionCounts.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
@@ -70,19 +72,20 @@ const BASELINE_MIN_QUESTION_COUNT = 6;
 const BASELINE_MAX_QUESTION_COUNT = 20;
 const BASELINE_DEFAULT_QUESTION_COUNT = BASELINE_QUESTIONS;
 
-/* FULL MEASUREMENT — the operator's DELIBERATE bulk citation gather (AI Audit page, "Full
-   measurement" mode). Reuses the whole existing pipeline — one ai_audit_queue row per question,
-   both engines per row, drained by process-ai-audit-queue at ≤24 in flight, stored + scored
-   exactly like any audit. Operator-JWT callable (like a market audit), NOT internal-only like a
-   baseline. A large DISTINCT question set for BREADTH, run once per gather (twice per client
-   lifecycle: start + re-measure).
-   ⛔ v1 CEILING STAYS UNDER THE PER-RUN CAP_USD ($1 in process-ai-audit-queue): 75 × $0.0104 = $0.78,
-   leaving headroom for the odd retry (a run that exceeds $1 drops its tail as 'cost_cap'). 200
-   questions need auto-splitting across runs — a deliberate later step, not this first version.
+/* FULL MEASURE — 20 questions x MEASUREMENT_RUNS, day 0, AFTER the baseline is frozen. Finds which
+   questions and towns are winnable so we know where to build pages; NEVER compared to anything.
+   Reuses the whole pipeline — one ai_audit_queue row per question, both engines per row, drained
+   by process-ai-audit-queue at <=24 in flight. Operator-JWT callable (the AI Audit page's Full
+   mode) as well as internal.
+   ⛔ FIXED AT FULL_MEASURE_QUESTIONS — min, max and default are the SAME number, derived from the
+   shared policy module, so no caller can ask for a different size and the screen cannot offer one
+   the generator will not honour. It used to be 10..75 with a default of 40 while generateQuestions
+   hard-capped every call at 20 (now the NAMED GENERATOR_ABSOLUTE_MAX_QUESTIONS), so "40" was a
+   number the screen said and the queue never did.
    ⛔ SEO IS FORCED OFF for this purpose (it is per-site, once, and would eat the run's budget). */
-const MEASUREMENT_MIN_QUESTION_COUNT = 10;
-const MEASUREMENT_MAX_QUESTION_COUNT = 75;
-const MEASUREMENT_DEFAULT_QUESTION_COUNT = 40;
+const MEASUREMENT_MIN_QUESTION_COUNT = FULL_MEASURE_QUESTIONS;
+const MEASUREMENT_MAX_QUESTION_COUNT = FULL_MEASURE_QUESTIONS;
+const MEASUREMENT_DEFAULT_QUESTION_COUNT = FULL_MEASURE_QUESTIONS;
 /* ⛔ HOW MANY TIMES A FULL MEASUREMENT ASKS EACH QUESTION (per engine). 3 = the proven number the
    paid baseline uses; frequency ("named 4 of 6") not a single lucky ask. Paul tunes this. Cost
    scales ~linearly with it (more Apify runs). */
@@ -1322,8 +1325,9 @@ async function generateWithMoney(
 }
 
 /**
- * Generate `count` audit questions via OpenAI (gpt-4o-mini, tool-calling). `count` is
- * clamped to 6..12 (default 8). Model output is untrusted — validated to at least
+ * Generate `count` audit questions via OpenAI (gpt-4o-mini, tool-calling). `count` is the
+ * caller's already-policy-clamped number, bounded here only by GENERATOR_ABSOLUTE_MAX_QUESTIONS
+ * (the model is asked for exactly n). Model output is untrusted — validated to at least
  * `count` non-empty strings then sliced to exactly `count`; ANY failure (config,
  * network, non-OK, parse, validation) falls back to the deterministic template set so
  * the audit always has questions.
@@ -1355,11 +1359,14 @@ async function generateQuestions(
   moneyExact: number | null = null,
 ): Promise<string[]> {
   // The CALLER has already applied the right POLICY ceiling: MAX_QUESTION_COUNT for the outreach
-  // hook, BASELINE_MAX_QUESTION_COUNT for a paid baseline. Re-clamping here with clampCount's
-  // default max silently capped every paid baseline at 5 — measured live, a baseline that asked
-  // for 10 got exactly 5. Keep an ABSOLUTE upper bound so an absurd value is still refused, but
-  // never re-apply the outreach policy to a baseline.
-  const n = clampCount(count, MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT);
+  // hook, BASELINE_MAX_QUESTION_COUNT for a paid baseline, FULL_MEASURE_QUESTIONS for a measure.
+  // Re-clamping here with clampCount's default max silently capped every paid baseline at 5 —
+  // measured live, a baseline that asked for 10 got exactly 5. Keep an ABSOLUTE upper bound so an
+  // absurd value is still refused, but never re-apply a policy ceiling here.
+  // ⛔ THE ABSOLUTE BOUND IS NAMED, NOT BORROWED. This line used BASELINE_MAX_QUESTION_COUNT (20)
+  // as its "absurd" guard, so a measurement policy of 75 generated 20 and nothing said so.
+  // scripts/question-ceilings.test.ts asserts every policy ceiling sits at or below this one.
+  const n = clampCount(count, MIN_QUESTION_COUNT, GENERATOR_ABSOLUTE_MAX_QUESTIONS);
   /* ⛔ HOW MANY BUYING-MOMENT QUESTIONS THIS AUDIT GETS. 0 unless the caller opted in, which is
      what keeps market audits, paid baselines and every verbatim repeat byte-identical. */
   const moneyN = typeof moneyExact === "number" && moneyExact > 0
