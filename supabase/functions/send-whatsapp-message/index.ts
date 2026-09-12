@@ -82,6 +82,74 @@ Deno.serve(async (req) => {
 
     const to = toWhatsAppNumber(rawPhone, country);
     if (!to) return json({ ok: false, error: "invalid_phone" }, 400);
+
+    /* ══ mode 'test_send' — THE ONLY HONEST WAY TO PROVE A TEMPLATE ACTUALLY SENDS ═══════════════
+       Built 2026-09-12 on the `instantly-push` mode:'auth_probe' precedent, and for the same
+       reason that one exists: every other path through this function reads a lead, writes rows and
+       mutates lead status, so "does video_template work" could previously only be answered by
+       messaging a real prospect and seeing what happened.
+
+       ⛔ WHAT IT DOES NOT TOUCH, and this list IS the feature:
+         · no lead is read, and NO LEAD IS ADOPTED BY PHONE LOOKUP — this returns before the
+           conversation lookup below, which would otherwise attach a bare number to whatever lead
+           happens to own it;
+         · no whatsapp_messages row, no whatsapp_sends row;
+         · no lead status change (the live path sets report_sent on success — not here);
+         · no queue, no pacing clock, no suppression state.
+       It builds the payload with the REAL claimTemplatePayload and posts it with the REAL
+       sendViaGraph, so what it proves is the thing we needed proven: our header component, our
+       variable order, and Meta accepting both.
+
+       ⛔ HARD-GATED TO ONE NUMBER, AND IT FAILS CLOSED. The phone must equal WHATSAPP_TEST_NUMBER.
+       With that secret UNSET the mode refuses outright rather than defaulting to "any number the
+       caller typed" — because the failure this guards is a mistyped digit reaching a stranger, and
+       an admin typo is exactly as damaging as a hostile call. Absence is never permission.
+       ⚠️ ADMIN ONLY, using the same user_roles check every other admin mode here uses.
+       ⚠️ It sends a REAL message and costs a real template send. It is a diagnostic, not a preview:
+       there is no dry-run, because a dry-run would prove nothing about Meta. */
+    if (body.mode === "test_send") {
+      const { data: roleRow } = await service
+        .from("user_roles").select("role").eq("user_id", operatorId).eq("role", "admin").maybeSingle();
+      if (!roleRow) return json({ ok: false, error: "admin_only" }, 403);
+
+      const allowed = toWhatsAppNumber(Deno.env.get("WHATSAPP_TEST_NUMBER") ?? "", "UK");
+      if (!allowed) return json({ ok: false, error: "test_number_not_configured" }, 400);
+      if (to !== allowed) return json({ ok: false, error: "phone_not_the_test_number" }, 403);
+
+      if (!templateName) return json({ ok: false, error: "empty_message" }, 400);
+      const entry = WA_TEMPLATES[templateName];
+      if (!entry) return json({ ok: false, error: "unknown_template", detail: templateName }, 400);
+
+      /* Literal values, straight from the caller. This mode deliberately resolves NOTHING from the
+         database — supplying the variables by hand is what keeps it lead-free, and it also lets a
+         specific trade/town be driven through the normaliser on purpose. */
+      const v = (body.vars ?? {}) as Record<string, string>;
+      let payload: Record<string, unknown>;
+      try {
+        payload = claimTemplatePayload(templateName, entry.lang, v.name ?? "", v.url ?? "", {
+          trade: v.trade, town: v.town, auditUrl: v.audit_url,
+          competitors: v.competitors, onboardingUrl: v.onboarding_url, contactName: v.contact_first_name,
+        }) as Record<string, unknown>;
+      } catch (e) {
+        /* The trade/town guards throw here exactly as they do on the live path, so a test send is
+           refused for the same reasons a real one would be — which is part of what it proves. */
+        return json({ ok: false, error: "payload_refused", detail: (e as Error).message }, 400);
+      }
+
+      const env = resolveWhatsAppEnv();
+      if (!env.live) {
+        return json({ ok: false, error: "not_live", detail: "WHATSAPP_TEST_MODE is on, or the WhatsApp secrets are missing — nothing was sent." }, 400);
+      }
+      const r = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);
+      console.log(`[send-whatsapp-message] test_send ${templateName} -> ${to}: ${r.ok ? "ok " + r.messageId : "FAILED " + r.error}`);
+      return json({
+        ok: r.ok, mode: "test_send", template: templateName, to,
+        messageId: r.messageId, failCode: r.failCode ?? null, error: r.error,
+        /* Echoed so the payload that was actually posted is inspectable without a redeploy. */
+        payload,
+      });
+    }
+
     if (!text && !templateName) return json({ ok: false, error: "empty_message" }, 400);
 
     // --- Ownership check: the operator must own this conversation ---
