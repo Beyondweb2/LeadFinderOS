@@ -269,14 +269,21 @@ Happy to fit around you.`;
    against findable-site — but it cannot reach a string inside a Meta-registered template, exactly
    like the Stripe payment-link description in §6. Change the price and this template has to be
    re-registered at Meta BY HAND, and this copy updated with it.
-   ✅ £19.99 → £49.99 ON 2026-08-12; RE-REGISTRATION AT META CONFIRMED BY PAUL 2026-08-17 — the
-   registered body is the £49.99 version and re_engage is cleared for sends.
+   ✅ £19.99 → £49.99 ON 2026-08-12; RE-REGISTRATION AT META CONFIRMED BY PAUL 2026-08-17.
    ✅ SYNCED 2026-08-17 to the registered body Paul pasted character-for-character from WhatsApp
    Manager — including its single-paragraph shape (no line breaks). If Meta's editor actually
    shows line breaks that the paste flattened, correct THIS string from the editor, never from
-   memory. */
+   memory.
+   🔴 UPDATED 2026-09-12 FOR THE FLAT £99 AND THE MEASURED REFUND — AND META HAS NOT BEEN UPDATED
+   YET. The old body sold "the next ten businesses at £49.99 instead of £99", a founder tier that no
+   longer exists at all. Until Paul re-registers this template in WhatsApp Manager, PROSPECTS STILL
+   RECEIVE THE OLD WORDING and this string is what the operator reads, so the two genuinely disagree
+   right now. That is the known cost of updating the half we control; leaving both stale would have
+   been worse, because the Inbox record would keep asserting a discount nobody can buy.
+   ⛔ THE SAME SENTENCE EXISTS AT src/lib/templateBodies.ts (the SPA's copy). Change both together —
+   two display copies of one registered template is exactly the drift this comment block is about. */
 const reEngageBody = (b: string, u: string) =>
-  `Hi ${b}, following up on the AI visibility report we sent over. We're doing the next ten businesses at £49.99 instead of £99, in exchange for honest feedback on the work. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
+  `Hi ${b}, following up on the AI visibility report we sent over. It's £99 one-off to get started: we measure how often AI names you, build your pages, then re-measure after four weeks on the same questions. If that number hasn't gone up you can claim your £99 back. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
 
 /* payment_recieved — the registered body, pasted character-for-character by Paul from WhatsApp
    Manager 2026-08-17 (the first time this wording has existed anywhere in the repo). The template
