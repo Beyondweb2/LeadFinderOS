@@ -3739,16 +3739,33 @@ reach the thing the button promised.
   `grid-cols-[minmax(0,1fr)_auto]`, so the vertical video takes its own width instead of half the
   panel. Desktop **1,032px → 860px**; **mobile 892 → 936px** (the panel's own padding — the one
   place this change costs height, accepted).
-- 🔴 **ONE ADJACENT PAIR NOW SHARES A SURFACE, KNOWINGLY: ProofSection → Pricing, both navy.** The
-  explainer was the only light section between them and nothing replaced it: ~2,229px of continuous
-  dark on desktop. ⛔ **No single flip closes it** — Pricing light collides with the Guarantee, the
-  proof light collides with #why-this-works. Three ways out, none taken: (a) leave it; (b) flip all
-  four of Pricing / Guarantee / #check / #faq, which takes the white card off the ask and makes the
-  FAQ the page's last dark band; (c) **reorder to hero, stats, video, how, why, proof, guarantee,
-  pricing, faq, check** — alternates perfectly with no surface change at all, but reverses the
-  recorded decision to put the FAQ BELOW the ask. **(c) is the one to look at first.**
+- ⛔ **THE SEAM THE MOVE OPENED WAS CLOSED BY REORDERING, NOT BY REPAINTING (Paul, same day).**
+  Moving the explainer left ProofSection → Pricing adjacent and both navy (~2,200px of continuous
+  dark); the explainer had been the only light section between them. **No single flip closes that**
+  — Pricing light collides with the Guarantee, the proof light collides with #why-this-works — and
+  the smallest repaint that alternates again flips all four of Pricing / Guarantee / #check / #faq.
+  ⛔ **That repaint was refused for one reason: it takes the white card off #check**, and the ask is
+  the last thing on that page that may be weakened. **The order is now hero, stats, video, how, why,
+  proof, GUARANTEE, PRICING, FAQ, CHECK** — perfect alternation with every section keeping the
+  treatment it was given, verified live at 1440×900 and 390×844.
+- 🔴 **AND IT REVERSES THE "FAQ BELOW THE ASK" DECISION, ON PURPOSE. Do not put it back.** The FAQ
+  had been moved below #check precisely because it is the longest section and was delaying the one
+  action the page exists to produce. It is above the ask again — Paul's call, knowing that. What is
+  genuinely different: **#check is now the LAST section before the footer**, so the ask is where the
+  page ENDS rather than something the FAQ pushes past. ⚠️ **The three moves are ONE decision**: put
+  the FAQ back below #check and the navy wall returns unless ProofSection and Pricing are separated
+  some other way. index.astro carries the old reasoning verbatim beside the new.
   ⚠️ I reported this seam correctly in the read-only pass and then wrote a comment claiming #how
   had absorbed it. It had not. Both comments are corrected; the claim is measured, not assumed.
+- **The report's "See how it works" now points at `https://findable.live/#video`**, not the bare
+  origin (`REPORT_EXPLAINER_URL`, render-audit-report **v90**). ⚠️ **It degrades QUIETLY**: a browser
+  given an unknown fragment loads the page and stays at the top, which is exactly where this button
+  used to land — so if #video is ever removed or renamed, nothing will tell you. `report-origin.test`
+  still passes (the origin constant is untouched; the anchor is built from it).
+- ⚠️ **CLAUDE.md §2's Management-API token path is WRONG on this machine.** It says the token is read
+  from `~/.supabase/access-token`; that file does not exist (only `telemetry.json` and `traces/`),
+  while `npx supabase projects list` authenticates fine. So the documented route for running SQL
+  yourself could not be used — worth fixing before the next session relies on it.
 - ⚠️ **THE SAME FACT IS STATED SEVEN TIMES ON THE HOME PAGE** (Paul: real, worth fixing, not this
   pass). "We re-ask the same questions four weeks later and show you both" appears in #how card 04,
   #how's closing line, ProofSection's closing paragraph, Pricing's tick 7, Pricing's guarantee band,
