@@ -247,13 +247,45 @@ We ran a full report on your business for AI and SEO visibility: ${u}
 We could get you showing up in those results - it's mostly stuff we handle at our end.
 Want me to explain?`;
 
-/* video_template - the approved outreach hook. Display-only (Meta renders what the prospect
-   actually reads); kept close to the registered body so the operator transcript matches. */
+/* 🔴 audit_result_hook - HISTORY, NOT COPY. The body approved 2026-09-02, and what the 135 rows
+   sent under that name actually contained. Replaced at Meta on 2026-09-12 by `video_template`,
+   which carries DIFFERENT approved words (below) plus a video header.
+   ⛔ The rename was assumed to be name-plus-header, so one body was made to serve both. It is not:
+   the approved copy is a different message. A body is the record of a send and may only be written
+   from the registered copy, never inferred. Do not "update" this one. */
 const auditResultHookBody = (b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
   `Hi, is this ${b || "your business"}? We ran a free AI visibility audit for you.
 When people ask ChatGPT or Google's AI for a ${trade || "provider"} in ${town || "your area"}, it's naming other firms, not you.
 Here's your result: ${u}
 More on how we can fix it, and how to get started: https://findable.live`;
+
+/* video_template - the APPROVED body, pasted from WhatsApp Manager 2026-09-12, character for
+   character. English, Marketing, VIDEO header, four variables: {{1}} business name, {{2}} trade
+   (bare singular lowercase noun), {{3}} town, {{4}} audit link.
+   ⚠️ THE ASTERISKS AND EMOJI ARE PART OF THE APPROVED COPY - the asterisks are WhatsApp bold
+   markup, not decoration. Stripping any of them makes the operator transcript differ from what the
+   prospect received. MIRRORED in src/lib/templateBodies.ts; the parity test asserts they match.
+   ⚠️ The video header is NOT in this string - it is a payload component built from
+   VIDEO_TEMPLATE_HEADER_URL, because a header is structure and this is text. */
+const videoTemplateBody = (b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
+  `Hi ${b || "your business"} 👋
+
+I ran a quick AI visibility check on your business and found something you'll probably want to see.
+
+When people ask ChatGPT or Gemini for a ${trade || "provider"} in ${town || "your area"}, you're not showing up as often as you should be.
+
+I've put the full findings together for you here:
+
+📋 *Your free AI visibility audit*
+${u}
+
+🌐 https://findable.live/
+
+It's completely free to look through, no signup or obligation.
+
+Have a read, and if you want I'll explain what's causing it and how we'd fix it.
+
+Paul, Findable.`;
 
 /* onboarding_followup - the APPROVED wording, supplied 2026-07-28. Display-only, like every body
    in this map: Meta renders what the customer actually reads from the approved template, so the
@@ -311,15 +343,13 @@ Happy to fit around you.`;
 const reEngageBody = (b: string, u: string) =>
   `Hi ${b}, following up on the AI visibility report we sent over. We're doing the next ten businesses at £49.99 instead of £99, in exchange for honest feedback on the work. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
 
-/* 🔴 re_engage_49's REGISTERED BODY IS NOT KNOWN TO THIS CODEBASE YET, AND THIS IS NOT A GUESS.
-   Paul supplied the template's NAME and its single variable, not its approved copy. Inventing
-   plausible words would put a confident transcript of a message nobody sent into the Inbox — the
-   precise drift these mirrored bodies exist to prevent.
-   ⛔ Replace it the moment the approved body is pasted from WhatsApp Manager, character for
-   character, and mirror it into src/lib/templateBodies.ts in the same commit — the parity test
-   asserts the two are identical. */
+/* re_engage_49 - the APPROVED body, pasted from WhatsApp Manager 2026-09-12, character for
+   character. English, Marketing, no header, ONE variable: {{1}} business name.
+   MIRRORED in src/lib/templateBodies.ts; the parity test asserts the two are identical. */
 const reEngage49Body = (b: string, _u: string) =>
-  `[re_engage_49 sent to ${b || 'this business'} — the approved WhatsApp copy is not stored in the app yet, so the exact wording is not shown here.]`;
+  `Hi ${b || "your business"}, it's Paul from Findable.
+
+Where did we get to with this? Happy to pick it back up, or leave it if now's not the time.`;
 
 /* payment_recieved — the registered body, pasted character-for-character by Paul from WhatsApp
    Manager 2026-08-17 (the first time this wording has existed anywhere in the repo). The template
@@ -371,7 +401,9 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
   audit_reply: auditReplyBody,
-  video_template: auditResultHookBody,
+  video_template: videoTemplateBody,
+  /* The 135 rows sent before the 2026-09-12 rename carry the old name and its OWN, different words. */
+  audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,
 };
 
