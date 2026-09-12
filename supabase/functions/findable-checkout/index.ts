@@ -257,44 +257,46 @@ Deno.serve(async (req) => {
     const back = `${origin}/onboarding/${effectiveLeadId ? `${backSegment}?lead=${effectiveLeadId}` : ""}`;
 
     const form = new URLSearchParams();
-    /* ══ THE WEBSITE ADD-ON ══════════════════════════════════════════════════════════════════
+    /* ══ THE WEBSITE TICK ════════════════════════════════════════════════════════════════════
+       🔴 THE BUILD IS NO LONGER A LINE ITEM (Paul, 2026-09-12). Until today the tick added TWO
+       Stripe prices: a £49.99 one-off build and the £9.99/month hosting. The build is now included
+       in FINDABLE_SETUP_PRICE_GBP, so the tick adds HOSTING ONLY and FINDABLE_WEBSITE_PRICE_ID is
+       no longer read by this function at all.
+       ⚠️ THE SECRET IS DELIBERATELY NOT DELETED, only unread. It is the Stripe account's record of
+       what past customers were charged, and removing it from the dashboard would orphan their
+       invoices. Nothing here will ever add it to a session again.
        ⛔ READ FROM THE ROW, NEVER FROM THE REQUEST. `body` is not consulted for this and must not
-       be: the standing rule on this endpoint is that the browser never decides money (see the
-       price note below - there is no parameter through which a discount can be asked for, and there
-       must be none through which a £59.98 upsell can be either). The tick was saved server-side at
-       submit; this reads it back.
+       be: the standing rule on this endpoint is that the browser never decides money — there is no
+       parameter through which a discount can be asked for, and there must be none through which a
+       recurring charge can be either. The tick was saved server-side at submit; this reads it back.
        ⚠️ STRICTLY `=== true`. Absent (a pre-migration row, or a submit that predates the field),
        null, "false", 0 - every one of them means NOT ticked. Absence is never a purchase.
-       ⚠️ AND IT DEGRADES IF THE PRICE IDS ARE MISSING. The two Stripe prices live in secrets; if
-       either is unset we charge the AI line ALONE rather than guessing an amount or refusing the
-       payment outright. A customer who ticked the box and got only the audit is a phone call; a
-       customer charged for a subscription we cannot name a price for is a refund and a chargeback. */
+       ⚠️ AND IT DEGRADES IF THE PRICE ID IS MISSING. The hosting price lives in a secret; if it is
+       unset we charge the setup line ALONE rather than guessing an amount or refusing the payment
+       outright. A customer who ticked the box and got no hosting line is a phone call; a customer
+       charged for a subscription we cannot name a price for is a refund and a chargeback. */
     const wantsWebsite = (ob as { website_addon?: unknown }).website_addon === true;
     /* ⛔ IT MUST BE A PRICE ID, NOT A PRODUCT ID, AND THAT IS NOT A THEORETICAL MISTAKE — IT IS THE
-       ONE THAT ACTUALLY HAPPENED (2026-09-03, first live test). FINDABLE_WEBSITE_PRICE_ID was set
-       to `prod_VBse8QguSes2Zr` and Stripe answered
+       ONE THAT ACTUALLY HAPPENED (2026-09-03, first live test). A *_PRICE_ID secret was set to
+       `prod_VBse8QguSes2Zr` and Stripe answered
          400 resource_missing on line_items[1][price]: No such price: 'prod_...'
        so the whole checkout failed. The dashboard shows a product's id far more prominently than
        its price's, and the two look alike, so a paste error here is the expected failure — and
        without this guard it lands as a dead Buy button at the exact moment someone decides to pay.
-       ⚠️ AN UNUSABLE ID IS TREATED AS AN UNSET ONE, deliberately: the add-on drops and the AI line
-       still sells. A customer who wanted a website and got only the audit is a phone call; a
-       customer who could not pay at all is gone. Both cases are recorded with the reason. */
+       ⚠️ AN UNUSABLE ID IS TREATED AS AN UNSET ONE, deliberately: the hosting line drops and the
+       setup line still sells. Recorded with the reason either way. */
     const PRICE_ID_RE = /^price_[A-Za-z0-9]+$/;
-    const rawWebsitePriceId = (Deno.env.get("FINDABLE_WEBSITE_PRICE_ID") ?? "").trim();
     const rawHostingPriceId = (Deno.env.get("FINDABLE_HOSTING_PRICE_ID") ?? "").trim();
-    const websitePriceId = PRICE_ID_RE.test(rawWebsitePriceId) ? rawWebsitePriceId : "";
     const hostingPriceId = PRICE_ID_RE.test(rawHostingPriceId) ? rawHostingPriceId : "";
-    const addOnReady = wantsWebsite && !!websitePriceId && !!hostingPriceId;
+    const addOnReady = wantsWebsite && !!hostingPriceId;
     if (wantsWebsite && !addOnReady) {
       /* Names the offending value's SHAPE, never the value: a secret's contents do not belong in an
          error table, but "you pasted a prod_ id" is exactly what the operator needs to read. */
       const shapeOf = (v: string) => !v ? "unset" : (v.startsWith("prod_") ? "a PRODUCT id (prod_) - needs the PRICE id (price_)" : `unrecognised (starts "${v.slice(0, 6)}")`);
-      console.error(`[findable-checkout] ${onboardingId} ticked the website add-on but the price ids are unusable - website: ${shapeOf(rawWebsitePriceId)}, hosting: ${shapeOf(rawHostingPriceId)} - charging the AI line only`);
+      console.error(`[findable-checkout] ${onboardingId} ticked the website option but the hosting price id is unusable - ${shapeOf(rawHostingPriceId)} - charging the setup line only`);
       await recordRefusal("checkout_addon_unconfigured", {
         onboarding_id: onboardingId, lead_id: effectiveLeadId,
-        website_price_id: websitePriceId ? "ok" : shapeOf(rawWebsitePriceId),
-        hosting_price_id: hostingPriceId ? "ok" : shapeOf(rawHostingPriceId),
+        hosting_price_id: shapeOf(rawHostingPriceId),
       });
     }
 
@@ -356,24 +358,23 @@ Deno.serve(async (req) => {
       form.set("line_items[0][quantity]", "1");
     }
 
-    /* ══ THE ADD-ON LINES ═════════════════════════════════════════════════════════════════════
-       ⛔ THE GUARANTEE IS ON THE AI LINE AND NOWHERE ELSE (Paul's decision, 2026-09-03). The
-       £49.99 audit is guaranteed - the work, the re-measurement, or the money back. The website
-       build is a DELIVERED PRODUCT and hosting is an ongoing service they can cancel; attaching
-       "or a full refund" to either would promise something we never agreed. So these two lines
-       carry their own plain descriptions, and FINDABLE_GUARANTEE is not referenced here.
-       ⛔ AND THE AI LINE MUST STAY INLINE price_data. A dashboard Price ID has no description
+    /* ══ THE HOSTING LINE ═════════════════════════════════════════════════════════════════════
+       🔴 ONE ADD-ON LINE NOW, NOT TWO (2026-09-12). The £49.99 build line is gone — the build is
+       included in the setup price — so the tick adds hosting and nothing else.
+       ⛔ THE GUARANTEE IS ON THE SETUP LINE AND NOWHERE ELSE. Hosting is an ongoing service they
+       can cancel at any time; attaching a refund promise to it would promise something we never
+       agreed. This line carries its own description from its Stripe Price, and FINDABLE_GUARANTEE
+       is deliberately not referenced here.
+       ⛔ AND THE SETUP LINE MUST STAY INLINE price_data. A dashboard Price ID has no description
        field of ours, so moving it would DROP the guarantee text from the Stripe page silently -
-       the FINDABLE_SETUP_PRICE_ID trap CLAUDE.md §11 records. These two use Price IDs precisely
-       because they carry no guarantee to lose.
-       ⚠️ If the guarantee is ever claimed: refund the £49.99 AI portion and cancel the hosting
-       subscription. The website build is NOT refunded. Written here because this is the file that
-       decides what the customer agreed to. */
+       the FINDABLE_SETUP_PRICE_ID trap CLAUDE.md §11 records. Hosting uses a Price ID precisely
+       because it carries no guarantee to lose.
+       ⚠️ IF THE REFUND IS CLAIMED: refund the setup fee and cancel the hosting subscription.
+       Monthly payments already taken are not refunded, and findable.live/refunds says so in those
+       words. Written here because this is the file that decides what the customer agreed to. */
     if (addOnReady) {
-      form.set("line_items[1][price]", websitePriceId);
+      form.set("line_items[1][price]", hostingPriceId);
       form.set("line_items[1][quantity]", "1");
-      form.set("line_items[2][price]", hostingPriceId);
-      form.set("line_items[2][quantity]", "1");
     }
 
     const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
