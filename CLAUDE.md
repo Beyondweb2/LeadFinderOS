@@ -419,6 +419,14 @@ typecheck at baseline does not mean the build passes.
 an explicit `.ts` extension** (`'./directoryFacts.ts'`), never `@/`. Vite resolves that form too, so
 it costs the SPA nothing — `auditReport.ts` has always done it this way, which is why it deploys.
 Before deploying, walk the transitive import closure from the entrypoint and grep it for `@/`.
+🔴 **AND THE EXTENSIONLESS FORM IS THE OTHER HALF OF THAT RULE — IT BIT ON 2026-09-12, ON A BRAND-NEW
+`src/lib` FILE, WITH THIS PARAGRAPH ALREADY IN THE FILE.** `baselineReplay.ts` imported
+`'./seedGuard'`; tsc, `npm run build` and the tsx test runner ALL resolved it, so the whole gate read
+green and the commit went to `main` — and only then did the deploy answer *Module not found … Maybe
+add a '.ts' extension*. **`main` therefore carried a server-side refusal that was not live, while
+`create-ai-audit` sat on its previous version and every local signal said the work had shipped.**
+Grep a NEW file's relative imports before deploying; the bundler names only the FIRST offender, so
+fix and re-grep the whole closure rather than fix and re-deploy.
 
 **CLOUDFLARE PAGES CAN SIT ON A PUSH FOR 15+ MINUTES — that is not the ~90-second lag §4 describes.**
 Commit `56134630` was verified on `origin/main`, built clean locally, and the live site still served the
@@ -3710,3 +3718,76 @@ The four commits behind the AI Audit page's before/after panel. Pure folds in
 - ⛔ **THE LOCK WARNS; IT NEVER REFUSES.** A legitimate reason to change the set exists (a town the
   client stopped serving), and a tool that blocked would be worked around. **What must not happen is
   changing it by accident.**
+
+---
+
+## 18. 🔴 ONE PAYMENT, ONE BASELINE — the loop, the pointer, the replay and the refusal (2026-09-12)
+
+**Paul paid once on lead `50826b1a` and got TEN paid baselines**, 343 queue rows, ~$3.70 of Apify,
+one more every queue tick until the onboarding row was reset by hand. Nothing threw and nothing
+logged a duplicate.
+
+- ⛔ **NEITHER GUARD WAS WRONG. TOGETHER THEY WERE A LOOP.** `create-ai-audit` marked every
+  MULTI-RUN audit `is_measurement` (so an unmarked 3-run free check could not pass as a baseline);
+  `startPaidBaseline` recognised a baseline as multi-run **AND NOT** `is_measurement`. So the writer
+  marked the audit it had just made and the reader then excluded it, every tick, for ever.
+  - **The fix is one shared module, `src/lib/auditKind.ts`, read by both**, and the baseline test is
+    now **POSITIVE** (`baseline_contract` present) rather than an absence. `measurementFlagFor`
+    keys on the PURPOSE alone — `is_measurement` is what the audit is FOR, never how many runs it
+    does.
+  - ⛔ **AND THE TEST IS A ROUND TRIP, NOT TWO UNIT TESTS** (`scripts/audit-kind.test.ts`). Each
+    file already asserted its own rule — in comments, one of which had been false for weeks. The
+    only assertion that could have caught this is *take what the writer sets, hand it to the reader,
+    require the reader to recognise it.* It drives ten backstop ticks and asserts exactly one audit.
+  - **Ambiguity now REFUSES and writes `client_error_reports`** instead of quietly buying another
+    baseline. Visible and wrong beats invisible and expensive.
+- 🔴 **`baseline_contract` IDENTIFIES NOTHING — it is written to EVERY audit `startPaidBaseline`
+  creates**, so ten runaway baselines produced ten contracts and none was authoritative. (It is on
+  **`ai_audits`**, not `onboarding_responses`; an earlier note in this file had the table wrong.)
+  ABLM is the same gap on a real client: 28 runs, 10 question sets, a 21 Jul vs 28 Aug pair
+  comparing **ZERO** questions.
+- **`outreach_leads.baseline_audit_id` is the answer, and its ABSENCE is an answer too.**
+  `SQL_FOR_PAUL_baseline_pointer.sql` — the column, an AFTER INSERT **claim trigger** and a BEFORE
+  UPDATE **immutability trigger**.
+  - ⛔ **IT HAD TO BE A TRIGGER, NOT APPLICATION CODE.** Two tables cannot be written by one
+    PostgREST statement, so an edge function can only ever insert-then-update — the best-effort hole
+    `baseline_contract` already has. A trigger runs inside the INSERT's own transaction: the pointer
+    cannot exist without the audit and cannot fail separately from it.
+  - ⛔ **AND IMMUTABILITY CANNOT BE A CONSTRAINT.** A CHECK sees only the row being written, never
+    the value it replaces; UNIQUE forbids two leads sharing a pointer, which is a different rule.
+    The claim uses `WHERE baseline_audit_id IS NULL` (first baseline wins, later ones are no-ops)
+    and the guard REJECTS any statement that MOVES a non-null pointer. Clearing to NULL is allowed —
+    that is how a wrong pointer is corrected, and how `ON DELETE SET NULL` works.
+- ⛔ **THE REPLAY READS THE QUEUE, NOT THE CONTRACT — because the contract stores the INTENDED set
+  and the queue is the ASKED one.** `baseline_contract` holds `seededQuestions` (intent) and, for
+  outcome clients only, `scoredQuestions`; **no field holds the full asked set.** The baseline's
+  FIRST run's queue rows are ground truth. ⚠️ That also makes a town dropped by the allocation
+  ceiling and a question the intent guards rejected **non-mismatches BY CONSTRUCTION** — they were
+  never queued, so they are not in the asked set. ⚠️ When asked < intended the summary says
+  **"replaying N of M"**; a short set is a valid yardstick for those N and must not be described as
+  the whole measurement.
+- ⛔ **THE LOCK CHECK MOVED SERVER-SIDE.** §17's lock warns from `AiAudit.tsx`, which is a UI
+  preference: the queue backstop, the Stripe webhook and every other caller of `create-ai-audit`
+  bypassed it. `judgeRemeasure` (`src/lib/baselineReplay.ts`) now runs **in create-ai-audit**, gated
+  on `isMeasurement && baselineTargetRuns > 1 && leadId`, returning **409** and recording the reason
+  in `client_error_reports`. Four things legitimately get through:
+  a dropped town and a guard-rejected question (not mismatches at all, see above); a **Quick 1-run
+  re-audit**, which is ALLOWED but carries `countsAsMeasurement: false` — refused a place in the
+  before/after, not refused execution; and a **named operator override** of ≥10 characters, recorded
+  on the audit. ⛔ **An override is WORDS, never a flag** — a boolean lets any caller wave a change
+  through with no record.
+- ⛔ **IT NEVER FALLS BACK TO GENERATION.** A replay that generated a fresh set when it could not
+  find the baseline would reproduce the drift it exists to stop, while looking like it worked.
+- 🔴 **THE BACKFILL DOES NOT GUESS, AND THAT IS THE POINT.**
+  `SQL_FOR_PAUL_baseline_backfill_audit.sql` (read-only) grades every paid lead
+  `ONE_CLEAN_BASELINE` / `ONE_SET_MANY_AUDITS` / `AMBIGUOUS` / `NO_MULTI_RUN` from an
+  order-independent `md5` set_key over run-1 questions, and suggests a pointer **only** where the
+  data is unambiguous. A wrong pointer silently changes what a refund is measured against; a NULL
+  one makes the re-measure refuse out loud.
+- ⚠️ **`create-ai-audit` also writes `audit_purpose` now** (baseline | measurement | market | audit)
+  — the column the claim trigger reads. It is in the shed list, so the function is migration-
+  tolerant: without the SQL the key is dropped and the refusal simply never fires.
+- ⚠️ **AND §17'S "the generator has no temperature" IS FALSE — it is `temperature: 0.7`.** That is
+  why ten identical inputs produced 8, 8, 10, 10, 9, 9, 8, 10, 9, 9 questions. §17's conclusion
+  still holds for a re-measure (it reuses the previous run's set verbatim rather than regenerating),
+  but the stated reason was wrong.
