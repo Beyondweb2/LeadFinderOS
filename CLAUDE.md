@@ -3797,8 +3797,32 @@ The four commits behind the AI Audit page's before/after panel. Pure folds in
   "both delivery and measurement"). (3) `derive-audit` v23 is still DEPLOYED with no source
   (`functions delete` awaits Paul's word), and `measurement_locks` still EXISTS in the DB (Paul's
   `DROP TABLE`, after the SPA that stopped reading it was confirmed live — it is).
-- **Deployed 2026-09-12:** `create-ai-audit` v106, `process-ai-audit-queue` v152, `stripe-webhook`
-  v82, `bulk-jobs` v55, `whatsapp-status` v74, `findable-onboarding` v82, `page-generator` v46.
+- 🔴 **THE WELCOME PACK LIED TO PAYING CLIENTS FOR NINE DAYS, AND NOTHING COULD HAVE CAUGHT IT.**
+  `welcomePackHtml.ts` — a PDF the operator downloads and sends by hand (`WelcomePackButton`, no
+  stored copy) — carried a hand-written **8-week** guarantee ending *"no honest company can promise
+  AI will always name you"*: the cycle had been four weeks since 2026-09-03 and that hedge is the
+  one §1 forbids beside a conditional refund. RG Locksmiths and Ronnie both received it. The sync
+  check guards CONSTANTS; nothing read PROSE that restates one. It now renders `FINDABLE_GUARANTEE`
+  and **`scripts/client-copy-claims.test.ts`** scans the string literals of every client-facing
+  renderer (comments and HTML comments stripped) for eight weeks / 56 days / £49.99 / founder /
+  first-ten / two months / any hedge / Bing Places (§5: tested negative — the pack named it as a
+  profile we tidy, now removed). **Add any new client-facing renderer to that list.**
+- 🔴 **`re_engage_49` STILL SAYS "£49.99 INSTEAD OF £99" — AT META.** `templateBodies.ts` /
+  `whatsapp-send.ts` mirror the REGISTERED body, and the registered body is the 2026-08-17
+  re-registration at £49.99. Since 2026-09-12 the price is £99 flat, so a send quotes a price the
+  checkout does not charge — the "shown £49.99, charged £99" embarrassment §11 exists to prevent.
+  ⛔ **Do NOT "fix" the mirror in code** — that makes the Inbox lie about what the prospect got.
+  The fix is Paul re-registering (or retiring) the template at Meta, THEN the mirror. Until then
+  it should not be sent; the claims test deliberately excludes the mirror for this reason.
+- ⚠️ **Things no script can check, still hand-kept:** the Stripe **Payment Link**'s amount and
+  description (dashboard), and every Meta-registered template body. A client-facing claim that
+  lives outside this repo is a claim nobody is verifying.
+- **Deployed 2026-09-12:** `create-ai-audit` v106, `process-ai-audit-queue` v153, `stripe-webhook`
+  v82, `bulk-jobs` v55, `whatsapp-status` v74, `findable-onboarding` v82, `page-generator` v46,
+  `submissions` v31. `derive-audit` **deleted** from the project; `measurement_locks` **dropped**.
+  findable-site: the areas helper, `/refunds` and the (unmounted) `WhatWeDo` copy now say the refund
+  is judged in the home town only — Paul's wording, verified live on `/refunds` and in the
+  onboarding island's chunk.
 
 ---
 
