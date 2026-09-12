@@ -3,7 +3,7 @@ import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
 import { planBulkSend, groupSkips, type BulkCandidate } from '@/lib/inboxBulkSend';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConversation, type LeadLite } from '@/hooks/useInbox';
-import { getTemplateSendability, WA_TEMPLATE_REQS } from '@/lib/whatsappTemplates';
+import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -95,7 +95,7 @@ function templateLabel(name: string | null): string {
    ever been sent to a free-check prospect - it drives the "report sent" badge and the
    report-vs-reply ordering. A Set, because the next template carrying a report must join one list
    rather than three string comparisons. */
-const REPORT_TEMPLATES = new Set(['audit_reply', 'free_check_result', 'audit_result_hook', 'audit_reply_warm']);
+const REPORT_TEMPLATES = new Set(['audit_reply', 'free_check_result', 'video_template', 'audit_reply_warm']);
 
 // Clean display names for templates (incl. the legacy pre-rename name). Unknown → "Template".
 const TEMPLATE_DISPLAY: Record<string, string> = {
@@ -107,14 +107,15 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   barber_fresha_booksy: 'Fresha/Booksy switch',
   audit_reply: 'Audit reply (report)', // was falling through to a bare "Template" in the thread
   free_check_result: 'Free check result (report)', // same reason: it showed as a bare "Template"
-  audit_result_hook: 'Audit result hook (outreach)',
+  video_template: 'Audit result hook (outreach)',
   audit_reply_warm: 'Audit reply — warm (after the opener)',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
-  re_engage: 'Re-engage (gone quiet)',
+  re_engage_49: 'Re-engage (gone quiet)',
 };
 function friendlyTemplate(name: string | null | undefined): string {
-  return (name && TEMPLATE_DISPLAY[name]) || 'Template';
+  /* Canonicalised so a pre-rename row still gets its real label instead of the word 'Template'. */
+  return (name && TEMPLATE_DISPLAY[canonicalTemplate(name)]) || 'Template';
 }
 
 /** Conversation-list preview only: never surface a raw template name. A row whose stored body is
@@ -400,7 +401,7 @@ const Inbox = () => {
       if (m.direction === 'inbound') {
         latestInboundAt.set(key, Math.max(latestInboundAt.get(key) ?? 0, t));
       } else if (m.status !== 'failed') {
-        if (m.template_name && REPORT_TEMPLATES.has(m.template_name)) latestReportAt.set(key, Math.max(latestReportAt.get(key) ?? 0, t));
+        if (m.template_name && REPORT_TEMPLATES.has(canonicalTemplate(m.template_name))) latestReportAt.set(key, Math.max(latestReportAt.get(key) ?? 0, t));
         else if (m.template_name === 'hook_followup') hookSent.add(key);
       }
     }

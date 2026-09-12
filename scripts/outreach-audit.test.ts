@@ -109,7 +109,7 @@ eq("town falls back to address last", auditTownFor(LEAD({ derived_town: null, se
 
 // ── which templates need an audit: from DECLARED vars, never the name
 eq("audit_reply vars need audit", templateNeedsAudit(["trade", "competitors", "name", "url"]), true);
-eq("audit_result_hook vars need audit", templateNeedsAudit(["name", "trade", "town", "audit_url"]), true);
+eq("video_template vars need audit", templateNeedsAudit(["name", "trade", "town", "audit_url"]), true);
 eq("free_check_result vars need audit", templateNeedsAudit(["name", "trade", "town", "audit_url", "onboarding_url"]), true);
 eq("initial_contact does not", templateNeedsAudit(["name"]), false);
 eq("onboarding_followup does not", templateNeedsAudit(["name", "onboarding_url"]), false);

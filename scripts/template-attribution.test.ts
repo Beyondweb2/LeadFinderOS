@@ -96,7 +96,7 @@ ok(creditRepliesByTemplate([out('initial_contact')]).length === 0, 'a send with 
 }
 
 console.log('\n── REPORT OPENS ──');
-const REPORT = new Set(['audit_reply', 'audit_result_hook']);
+const REPORT = new Set(['audit_reply', 'video_template']);
 {
   clock = 0;
   const a = out('audit_reply');
@@ -113,12 +113,12 @@ const REPORT = new Set(['audit_reply', 'audit_result_hook']);
 {
   // Two links sent; the open goes to the newest one that preceded it, not the first.
   clock = 0;
-  const first = out('audit_result_hook');
+  const first = out('video_template');
   const second = out('audit_reply');
   const afterBoth = new Date(second.created_at).getTime() + 10_000;
   const afterFirst = new Date(first.created_at).getTime() + 1_000;
   ok(creditOpenToTemplate([first, second], REPORT, afterBoth) === 'audit_reply', 'the newest qualifying link wins');
-  ok(creditOpenToTemplate([first, second], REPORT, afterFirst) === 'audit_result_hook',
+  ok(creditOpenToTemplate([first, second], REPORT, afterFirst) === 'video_template',
     'an open between the two links belongs to the first — a later send cannot claim an earlier open');
 }
 
@@ -130,7 +130,7 @@ const REPORT = new Set(['audit_reply', 'audit_result_hook']);
      worse error. In real data report links are hours apart, so this costs nothing — but it is a
      property, not an accident, and a future "tighten the slack" change should start here. */
   clock = 0;
-  const first = out('audit_result_hook');
+  const first = out('video_template');
   const near = { ...out('audit_reply'), created_at: new Date(new Date(first.created_at).getTime() + 30_000).toISOString() };
   const between = new Date(first.created_at).getTime() + 5_000;
   ok(creditOpenToTemplate([first, near], REPORT, between) === 'audit_reply',

@@ -90,7 +90,7 @@ const GRAPH_VERSION = "v21.0";
        48  initial_contact   (the queue: 52 of the 85 landed on the +0 cron grid)
        30  audit_reply       ┐
         5  free text         ├ 37 reply-path sends, unpaced, any hour of day
-        2  re_engage         ┘
+        2  re_engage_49         ┘
    The queue itself only managed 48 that day — well under its simulated 77 — so the cap was not
    reached. But a day where the queue runs at pace AND replies run hot is 77 + 37 = 114, which at 100
    would have stopped the QUEUE mid-afternoon while the replies (correctly) carried on. 120 buys back
@@ -181,8 +181,8 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   // received booking_page_intro — a barber booking pitch. No lead was ever queued with it, so
   // nothing mis-sent, but the gap was live.
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
-  // audit_result_hook - the outreach hook. MIRRORS whatsapp-send.ts; change both together.
-  audit_result_hook: { lang: "en", vars: ["name", "trade", "town", "audit_url"] },
+  // video_template - the outreach hook. MIRRORS whatsapp-send.ts; change both together.
+  video_template: { lang: "en", vars: ["name", "trade", "town", "audit_url"] },
   // audit_reply_warm - the WARM audit message. MIRRORS whatsapp-send.ts; change both together.
   // THREE vars and NO name: {{1}} trade, {{2}} town, {{3}} audit link.
   audit_reply_warm: { lang: "en", vars: ["trade", "town", "audit_url"] },
@@ -192,9 +192,20 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      ⛔ CORRECTED FROM ONE VARIABLE 2026-08-11 against Meta #132000 (1 param sent, 2 expected). The
      comment that shipped with the guess said this list must be corrected in the same commit as
      WA_TEMPLATES if the count changed — this is that commit. */
-  re_engage: { lang: "en", vars: ["name", "onboarding_url"] },
+  /* ONE variable: {{1}} = business name. MIRRORS whatsapp-send.ts; change both together.
+     re_engage_49 replaced re_engage on 2026-09-12 and drops the onboarding link. */
+  re_engage_49: { lang: "en", vars: ["name"] },
   // "You said a call works" nudge. ONE variable: {{1}} = business name. No url.
   book_call: { lang: "en", vars: ["name"] },
+  /* free_check_result — the free-check result message, sent by process-ai-audit-queue / submissions,
+     NOT by this queue. Present here only to keep this map byte-identical to WA_TEMPLATES in
+     _shared/whatsapp-send.ts, which scripts/re-engage-vars.test.ts asserts in BOTH directions.
+     🔴 IT WAS MISSING ENTIRELY UNTIL 2026-09-12, and the test that exists to catch exactly that had
+     been printing "FAILURES" and exiting 0 for days — so the harness reported it green. The gap
+     never broke a send (this queue does not send it), but the parity guarantee the other entries
+     rely on was simply not holding. FIVE variables: {{1}} name, {{2}} trade, {{3}} town,
+     {{4}} audit link, {{5}} onboarding link. */
+  free_check_result: { lang: "en", vars: ["name", "trade", "town", "audit_url", "onboarding_url"] },
   /* Payment confirmation — sent by stripe-webhook when a Findable payment lands, NOT by this queue.
      ⛔ MISSPELLED AT META ON PURPOSE ("recieved"): the registered name is what Meta matches, so the
      typo is the correct string. Present here only to keep this map byte-identical to WA_TEMPLATES in
@@ -684,7 +695,7 @@ Deno.serve(async (req) => {
        🔴 THE GAP THIS CLOSES (measured 2026-09-02): the SPA writes lead statuses but has never
        written a single contact_suppressions row - it only ever READ that table, and blindly (see
        above). So `not_interested` set by hand was a label and nothing more. Four numbers marked
-       not_interested were sent audit_result_hook that afternoon, and the suppression guard had
+       not_interested were sent video_template that afternoon, and the suppression guard had
        nothing to match on. 28 suppression rows existed at the time, every one written by
        whatsapp-inbound's isDecline auto-detection - none by an operator.
 
@@ -873,7 +884,7 @@ Deno.serve(async (req) => {
             /* ⛔ THE EXTRA IS BUILT FROM WHAT THE TEMPLATE DECLARES, NOT FROM A GUESSED CLASS.
                This branch is entered on `vars.includes("trade") || vars.includes("competitors")` and
                used to hand over `{ trade, competitors }` unconditionally - right while audit_reply
-               was its only member. audit_result_hook also declares `trade`, so it lands here too and
+               was its only member. video_template also declares `trade`, so it lands here too and
                would have been sent with `town` and `audit_url` ABSENT: templateBodyParams throws on
                an empty audit_url, so the row would have failed flagged_error for every lead, however
                good its data. Safe, but permanently broken. Keying on the declared vars fills the
@@ -882,7 +893,26 @@ Deno.serve(async (req) => {
             if (tmpl.vars.includes("competitors")) auditExtra.competitors = vars.competitors;
             if (tmpl.vars.includes("town")) auditExtra.town = vars.town;
             if (tmpl.vars.includes("audit_url")) auditExtra.auditUrl = vars.link;
-            payload = claimTemplatePayload(templateName, tmpl.lang, vars.business, vars.link, auditExtra);
+            /* ⛔ AN UNSAFE TRADE OR TOWN HOLDS THE LEAD, IT DOES NOT SEND IT WRONG (2026-09-12).
+               video_template's body is "for a {{2}} in {{3}}", so a plural trade or a town like
+               "Bourne uk" would reach a prospect as visibly broken copy. templateBodyParams throws
+               `unsafe_template_var:<reason>:<value>`; catching it HERE turns that into the same
+               drop-with-a-reason every other guard on this path uses, so the drip never stalls and
+               the row carries why it was held.
+               ⚠️ NAMED SEPARATELY from flagged_error on purpose: this is our data being unusable,
+               not Meta refusing us, and the two want different fixes. */
+            try {
+              payload = claimTemplatePayload(templateName, tmpl.lang, vars.business, vars.link, auditExtra);
+            } catch (e) {
+              const msg = (e as Error).message ?? "";
+              if (msg.startsWith("unsafe_template_var:")) {
+                console.warn(`[whatsapp] HELD ${row.lead_id} (${templateName}): ${msg}`);
+                await finish("flagged_unsafe_var", msg);
+                results[row.lead_id] = "flagged_unsafe_var";
+                continue;
+              }
+              throw e;
+            }
             renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors, undefined, vars.town);
             businessName = vars.business;
             claimUrl = vars.link;
@@ -893,7 +923,7 @@ Deno.serve(async (req) => {
                THREW ("refusing to send a follow-up with no link"). The per-row catch turned that into
                flagged_error, so it refused rather than sending a broken link — right outcome, wrong
                reason, and unfixable by anything on the lead.
-               Live for `onboarding_followup` since the day it was registered; re_engage now shares
+               Live for `onboarding_followup` since the day it was registered; re_engage_49 now shares
                the variable, and set_first_reply_template validates against WA_TEMPLATES, so the
                reply rule can be pointed at either one — which is what makes this reachable.
                ⚠️ SAME RESOLVER AS THE INBOX PATH, so both refuse on the same facts: no lead, no
@@ -983,7 +1013,7 @@ Deno.serve(async (req) => {
     if (paused) return json({ ok: true, skipped: "paused", ...statusPayload });
     if (!windowOpen && !force) return json({ ok: true, skipped: "outside_window", ...statusPayload });
     /* == AUDIT AHEAD OF THE SEND =============================================================
-       audit_result_hook's {{4}} is the lead's report link, so the audit must exist before the
+       video_template's {{4}} is the lead's report link, so the audit must exist before the
        message can be built. This starts the audits the drip is about to need, capped at
        OUTREACH_AUDIT_CONCURRENCY in flight, at 3 questions x 1 run.
 
@@ -1334,7 +1364,7 @@ Deno.serve(async (req) => {
     }
 
     /* ⛔ `auditUrl` AND `town` BELONG HERE TOO, AND LEAVING THEM OUT COST A REAL SEND. This type
-       carried only trade/competitors/onboardingUrl, so when audit_result_hook (vars: name, trade,
+       carried only trade/competitors/onboardingUrl, so when video_template (vars: name, trade,
        town, audit_url) came through this path, templateBodyParams found audit_url empty and threw
        "refusing to send a result with no link". Measured live 2026-09-02 13:08 on Nabars Locksmith:
        failed_temporary, nothing delivered.
@@ -1367,7 +1397,7 @@ Deno.serve(async (req) => {
         /* 🔴 NO COMPLETED AUDIT. THIS USED TO DEQUEUE UNCONDITIONALLY, AND THAT WAS THE BUG.
            `status: "not_contacted"` is right for a lead that can NEVER be audited - a gated lead
            must not stall a one-send-per-tick drip - and wrong for one that simply has not been
-           audited YET. Measured 2026-09-02: 16 leads sat queued on audit_result_hook with zero
+           audited YET. Measured 2026-09-02: 16 leads sat queued on video_template with zero
            completed audits, and every one would have been silently un-queued, one per tick, having
            received nothing.
            The two cases are now told apart: an audit in flight (or startable) leaves the lead
@@ -1433,7 +1463,7 @@ Deno.serve(async (req) => {
        WhatsApp conversation — whatever lead row it arrives on. 11 of the 25 had already REPLIED.
        🔴 IT WAS `templateName === "initial_contact"` UNTIL 2026-09-02, AND THAT NAME IS WHY IT
             FAILED. When it was written, initial_contact was the only cold opener the queue could carry.
-            The audit-first flow then began queueing `audit_result_hook`, and a guard keyed to a NAME
+            The audit-first flow then began queueing `video_template`, and a guard keyed to a NAME
             rather than to a PROPERTY stopped applying to the traffic that had replaced it. Nothing was
             deleted or bypassed - 16 hook sends walked past it, 12 to numbers already in conversation,
             9 of those had replied and 4 were marked not_interested.
@@ -1441,7 +1471,7 @@ Deno.serve(async (req) => {
             UNKNOWN template as COLD, and is the same predicate the enqueue filter and
             send-whatsapp-message read - so the three cannot drift apart again.
           - Continuations are exempt because guarding them would make them unsendable to their only
-            audience (re_engage exists FOR leads with history). That list lives in the leaf, not here.
+            audience (re_engage_49 exists FOR leads with history). That list lives in the leaf, not here.
        - .neq(status,'failed') mirrors pitchEverSent: a failed attempt is not a conversation, so a
          legitimate retry of THIS lead's own failed opener still passes.
        - Same drop-out-of-the-queue shape as every guard above (the drip must never stall), with

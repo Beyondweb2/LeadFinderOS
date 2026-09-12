@@ -4,7 +4,7 @@
    🔴 WHY THIS EXISTS. The phone-history seatbelt in process-whatsapp-queue was written on
    2026-08-18 as `if (templateName === "initial_contact")`, when initial_contact was the only cold
    opener the queue could carry. On 2026-09-02 the audit-first flow started queueing
-   `audit_result_hook` instead — and the guard, keyed to a NAME rather than to a PROPERTY, stopped
+   `video_template` instead — and the guard, keyed to a NAME rather than to a PROPERTY, stopped
    applying to the traffic that had replaced it. Measured that afternoon: 16 hook sends, 12 of them
    to numbers already in conversation, 9 of those had already replied and 4 were marked
    not_interested. No guard was deleted; the sends simply walked around the one that mattered.
@@ -23,7 +23,7 @@
 
    ⚠️ THIS IS NOT `TemplateGroup` AND MUST NOT BE MERGED WITH IT. whatsappTemplates.ts's `group`
    says so itself: "for optional visual labelling only, NOT for auto-hiding". It also disagrees with
-   this question on a real case — `re_engage` is group 'opener' while being, by design, a message to
+   this question on a real case — `re_engage_49` is group 'opener' while being, by design, a message to
    a lead who already has a conversation. A labelling field is not a safety field.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -46,11 +46,11 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
   "onboarding_followup",
   "questionnaire_followup",
   "payment_recieved", // Meta's registered spelling — do not "correct" it
-  /* ⚠️ re_engage is the one that looks wrong and is right. It exists to restart a conversation
+  /* ⚠️ re_engage_49 is the one that looks wrong and is right. It exists to restart a conversation
      that went quiet, so a guard reading "never message a number with history" would block the one
      template written for people who have history. Same reasoning as its needsAudit note in
      whatsappTemplates.ts. */
-  "re_engage",
+  "re_engage_49",
 ]);
 
 /** True when this template is a COLD approach — a first contact that must never land on a number

@@ -264,7 +264,23 @@ Deno.serve(async (req) => {
         if (tvars.includes("competitors")) auditExtra.competitors = a.competitors;
         if (tvars.includes("town")) auditExtra.town = a.town;
         if (tvars.includes("audit_url")) auditExtra.auditUrl = a.link;
-        payload = claimTemplatePayload(templateName, lang, a.business, a.link, auditExtra);
+        /* ⛔ THE SAME TRADE/TOWN HOLD AS THE QUEUE (2026-09-12), and it matters MORE here because
+           this is the manual path: the operator pressed send and is owed an answer. A plural trade
+           or a town like "Bourne uk" would render "for a Locksmiths in Bourne uk" to a prospect, so
+           templateBodyParams throws and this returns the reason to the UI instead of sending.
+           ⚠️ 200 with ok:false, matching every other refusal on this endpoint — the operator sees
+           why, and nothing is written to whatsapp_messages as though it went out. */
+        try {
+          payload = claimTemplatePayload(templateName, lang, a.business, a.link, auditExtra);
+        } catch (e) {
+          const msg = (e as Error).message ?? "";
+          if (msg.startsWith("unsafe_template_var:")) {
+            const [, reason, detail] = msg.split(":");
+            console.warn(`[send-whatsapp-message] HELD ${resolvedLeadId} (${templateName}): ${msg}`);
+            return json({ ok: false, error: "unsafe_template_var", reason, detail: detail ?? "" }, 200);
+          }
+          throw e;
+        }
         auditBusinessName = a.business;
         auditClaimUrl = a.link;
         storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors, undefined, a.town);

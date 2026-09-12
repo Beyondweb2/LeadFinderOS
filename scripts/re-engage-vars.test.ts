@@ -14,96 +14,87 @@
    ============================================================ */
 import {
   WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, TEMPLATES_ALLOWING_NO_FIRST_NAME,
-  WA_TEMPLATE_BODIES, renderTemplateBody, templateBodyParams,
+  WA_TEMPLATE_BODIES, renderTemplateBody, templateBodyParams, claimTemplatePayload,
 } from "../supabase/functions/_shared/whatsapp-send.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
 
 console.log("── THE SHAPE META EXPECTS ──");
+/* 🔴 re_engage BECAME re_engage_49 ON 2026-09-12, AND ITS VARIABLE COUNT WENT BACK TO ONE.
+   This block used to assert TWO variables, added on 2026-08-11 against a real Meta rejection
+   (#132000, "1 param sent, 2 expected"). That was correct for `re_engage`. `re_engage_49` is a
+   DIFFERENT registered template carrying {{1}} business name and no link at all, so sending two is
+   the same rejection pointing the other way. Both facts are true; only one is current. */
 {
-  const t = WA_TEMPLATES["re_engage"];
-  ok(!!t, "re_engage is registered at all");
-  ok(t.vars.length === 2, `TWO variables, which is what #132000 was about (${t.vars.length})`);
+  const t = WA_TEMPLATES["re_engage_49"];
+  ok(!!t, "re_engage_49 is registered at all");
+  ok(t.vars.length === 1, `ONE variable — #132000 in the other direction (${t.vars.length})`);
   ok(t.vars[0] === "name", "{{1}} = business name");
-  ok(t.vars[1] === "onboarding_url", "{{2}} = the onboarding link");
+  ok(!t.vars.includes("onboarding_url"), "the onboarding link is GONE — re_engage_49 carries no URL");
   ok(t.lang === "en", `lang matches the registration (${t.lang})`);
-  /* ⚠️ `url` would have gated the send on the lead having a GENERATED SITE. Distinct var, distinct
-     meaning — reusing it is what made onboarding_followup unsendable to its own audience once. */
-  ok(!t.vars.includes("url"), "⛔ NOT the claim-link var — re_engage must not require a generated site");
+  ok(!t.vars.includes("url"), "NOT the claim-link var — it must not require a generated site");
+  ok(!WA_TEMPLATES["re_engage"], "the OLD name is no longer a sendable template");
 }
 
 console.log("\n── THE PARAMS ACTUALLY SENT, IN ORDER ──");
 {
-  const t = WA_TEMPLATES["re_engage"];
-  const comps = templateBodyParams(t.vars, "NeiL Hughes driving tuition", "", {
-    onboardingUrl: "https://findable.live/onboarding/neil-hughes/?lead=7bd712c5",
-    templateName: "re_engage",
-  });
+  const t = WA_TEMPLATES["re_engage_49"];
+  const comps = templateBodyParams(t.vars, "NeiL Hughes driving tuition", "", { templateName: "re_engage_49" });
   const params = (comps[0] as { parameters: Array<{ text: string }> }).parameters;
-  ok(params.length === 2, `two parameters go on the wire (${params.length}) — this is the fix`);
+  ok(params.length === 1, `ONE parameter goes on the wire (${params.length})`);
   ok(params[0].text === "NeiL Hughes driving tuition", "{{1}} is the business name");
-  ok(params[1].text.includes("/onboarding/"), "{{2}} is the onboarding link");
 }
 
-console.log("\n── ⛔ IT REFUSES RATHER THAN SENDING A BROKEN MESSAGE ──");
-/* The whole message is a pointer to that link, so a blank {{2}} is worse than no send. */
+console.log("\n── AND IT REFUSES ON A BLANK BUSINESS NAME (the body opens \"Hi {{1}},\") ──");
 {
-  const t = WA_TEMPLATES["re_engage"];
+  ok(TEMPLATES_NEEDING_REAL_NAME.has("re_engage_49"), "re_engage_49 is in TEMPLATES_NEEDING_REAL_NAME");
+  ok(!TEMPLATES_NEEDING_REAL_NAME.has("re_engage"), "and the old name was not left behind in it");
   let threw = false;
   try {
-    templateBodyParams(t.vars, "NeiL Hughes driving tuition", "", { onboardingUrl: "", templateName: "re_engage" });
+    templateBodyParams(WA_TEMPLATES["re_engage_49"].vars, "", "", { templateName: "re_engage_49" });
   } catch { threw = true; }
-  ok(threw, "an EMPTY onboarding link refuses (throws) instead of sending {{2}} blank");
-
-  let threwWhitespace = false;
-  try {
-    templateBodyParams(t.vars, "NeiL Hughes driving tuition", "", { onboardingUrl: "   ", templateName: "re_engage" });
-  } catch { threwWhitespace = true; }
-  ok(threwWhitespace, "whitespace-only is refused too — trimmed, not truthy-tested");
-
-  let threwMissing = false;
-  try {
-    templateBodyParams(t.vars, "NeiL Hughes driving tuition", "", { templateName: "re_engage" });
-  } catch { threwMissing = true; }
-  ok(threwMissing, "⛔ the var ABSENT entirely also refuses — an absent link is not an empty string");
-}
-
-console.log("\n── ⛔ AND IT REFUSES ON A BLANK BUSINESS NAME (the body opens \"Hi {{1}},\") ──");
-{
-  ok(TEMPLATES_NEEDING_REAL_NAME.has("re_engage"),
-    "re_engage is in TEMPLATES_NEEDING_REAL_NAME");
-  let threw = false;
-  try {
-    templateBodyParams(WA_TEMPLATES["re_engage"].vars, "", "", { onboardingUrl: "https://x/onboarding/?lead=1", templateName: "re_engage" });
-  } catch { threw = true; }
-  ok(threw, "a blank name refuses rather than sending \"Hi your business, following up…\"");
-  /* The degrade is right for a mid-sentence name and wrong for a salutation — same reasoning as
-     book_call, which is the only other member of that set. */
+  ok(threw, "a blank name refuses rather than sending \"Hi your business, following up...\"");
   ok(TEMPLATES_NEEDING_REAL_NAME.has("book_call"), "book_call still in the set (unchanged)");
 }
 
-console.log("\n── THE PREVIEW MATCHES WHAT META SENDS ──");
+console.log("\n── THE VIDEO HEADER, WHICH IS WHAT MAKES video_template SENDABLE AT ALL ──");
+/* A template registered with a VIDEO header and sent with only a body is rejected outright. This
+   asserts the payload SHAPE, because nothing else can: the send itself cannot be exercised here. */
 {
-  ok(typeof WA_TEMPLATE_BODIES["re_engage"] === "function", "re_engage has a preview body");
-  const body = renderTemplateBody("re_engage", "NeiL Hughes driving tuition", "https://findable.live/onboarding/x/?lead=1");
-  ok(body.startsWith("Hi NeiL Hughes driving tuition, following up on the AI visibility report we sent over."),
-    "opens with the approved first line, {{1}} filled");
-  /* ⛔ £49.99 SINCE 2026-08-12, AND THE ASSERTION NAMES BOTH NUMBERS ON PURPOSE. The founder price
-     moved; the £99 anchor did not. Asserting the whole phrase rather than just the new number is
-     what would catch a future edit that "tidies" the anchor down to match the offer — the anchor is
-     FINDABLE_SETUP_PRICE_GBP and changing it is a different decision entirely.
-     ⚠️ THIS ASSERTS THE CODE'S PREVIEW STRING, NOT WHAT META SENDS. Meta renders the real message
-     from its own registered copy, so this passing means the Inbox transcript is right — it says
-     nothing about the prospect's phone until the template is re-registered by hand. */
-  ok(body.includes("£49.99 instead of £99"), "carries the approved offer line, at the new price");
-  ok(!body.includes("£19.99"), "and the old founder price is gone from the preview");
-  ok(body.includes("Five quick questions and we're started: https://findable.live/onboarding/x/?lead=1"),
-    "{{2}} is rendered inline where the approved copy puts it");
-  ok(body.trimEnd().endsWith("Happy to answer anything first if you'd rather."), "and the approved closing line");
-  ok(!body.includes("{{"), "no unfilled placeholders left in the preview");
-  /* The old placeholder wording must be gone, or the Inbox keeps showing a message nobody sent. */
-  ok(!body.includes("Paul here from Findable"), "⛔ the placeholder preview is gone");
+  const payload = claimTemplatePayload("video_template", "en", "RG Locksmiths", "", {
+    trade: "Locksmiths", town: "Huntingdon", auditUrl: "https://findable.live/report/abc",
+  }) as { template: { components: Array<Record<string, unknown>> } };
+  const comps = payload.template.components;
+  ok(comps.length === 2, `header + body, in that order (${comps.length} components)`);
+  ok(comps[0].type === "header", "the HEADER comes first — Meta requires that order");
+  const hp = (comps[0] as { parameters: Array<{ type: string; video?: { link?: string } }> }).parameters;
+  ok(hp.length === 1 && hp[0].type === "video", "one video parameter");
+  ok(typeof hp[0].video?.link === "string" && String(hp[0].video?.link).startsWith("https://findable.live/"),
+    `a public LINK, not a media id (${hp[0].video?.link})`);
+  ok(!JSON.stringify(comps[0]).includes('"id"'), "no media id — those expire after 30 days");
+  ok(comps[1].type === "body", "the body follows");
+  const bp = (comps[1] as { parameters: Array<{ text: string }> }).parameters;
+  ok(bp.length === 4, `four body params (${bp.length})`);
+  ok(bp[0].text === "RG Locksmiths", "{{1}} business name");
+  /* THE NORMALISER IS IN THE PAYLOAD PATH, not merely available to it. "Locksmiths" went in. */
+  ok(bp[1].text === "locksmith", `{{2}} is singular and lowercase (got ${JSON.stringify(bp[1].text)})`);
+  ok(bp[2].text === "Huntingdon", "{{3}} town");
+  ok(bp[3].text.startsWith("https://findable.live/report/"), "{{4}} report link");
+}
+
+console.log("\n── AN UNSAFE TRADE OR TOWN BLOCKS THE SEND ──");
+{
+  let threw = false;
+  try {
+    claimTemplatePayload("video_template", "en", "X", "", { trade: "kava cafe, pool bar", town: "Bath", auditUrl: "https://findable.live/report/a" });
+  } catch (e) { threw = String((e as Error).message).startsWith("unsafe_template_var:"); }
+  ok(threw, "a trade that cannot be singularised throws unsafe_template_var");
+  let threwTown = false;
+  try {
+    claimTemplatePayload("video_template", "en", "X", "", { trade: "Plumbers", town: "Bourne uk", auditUrl: "https://findable.live/report/a" });
+  } catch (e) { threwTown = String((e as Error).message).startsWith("unsafe_template_var:"); }
+  ok(threwTown, '"Bourne uk" throws rather than rendering verbatim');
 }
 
 console.log("\n── hook_followup: same TWO-VAR PERSONAL-GREETING SHAPE AS questionnaire_followup ──");

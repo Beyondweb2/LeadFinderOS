@@ -10,6 +10,7 @@ import { isPaidLead } from '@/lib/leadPayment';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { creditRepliesByTemplate, creditOpenToTemplate, creditEventToTemplate, OPEN_ATTRIBUTION_SLACK_MS } from '@/lib/templateAttribution';
 import { foldArmComparison, type ArmComparison, type ArmLeadInput } from '@/lib/armComparison';
+import { canonicalTemplate } from '@/lib/whatsappTemplates';
 
 /* ============================================================
    CAMPAIGN METRICS, DERIVED FROM MESSAGES
@@ -39,18 +40,18 @@ const SIGNUP_TEMPLATES = new Set(['onboarding_followup']);
    MEASURABLE. Report opens can only be attributed against the moment the link went out, so this
    set decides both the denominator and which opens count. Taken from the variable registry in
    _shared/whatsapp-send.ts, where each of these carries a report URL: audit_reply has `url`,
-   audit_result_hook and free_check_result have `audit_url`.
+   video_template and free_check_result have `audit_url`.
    ⚠️ IT IS DELIBERATELY WIDER THAN PITCH_TEMPLATES. The first version of this used audit_reply
    alone, because that is the pitch. Measured against the live table, that was wrong in a way that
    mattered: links sent 577 -> 653, opened 366 -> 408, and the opens we could not attribute at all
    fell from 55 to 13 — because most of those "unexplained" opens were leads sent their report by
-   audit_result_hook, which became the outreach hook and never got added here.
+   video_template, which became the outreach hook and never got added here.
    ⚠️ SO: IF A NEW TEMPLATE EVER CARRIES A REPORT LINK, ADD IT HERE. Forgetting does not throw; it
    silently moves real prospect opens into the unattributed bucket and understates the rate. */
 /* ⚠️ audit_reply_warm ADDED 2026-09-07 WITH THE TEMPLATE ITSELF. Its {{3}} is the report link, so
    forgetting it here does not throw — it silently moves real prospect opens into the unattributable
    bucket and understates the open rate, which is the failure this set's own comment records. */
-const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'audit_result_hook', 'free_check_result', 'audit_reply_warm']);
+const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'video_template', 'free_check_result', 'audit_reply_warm']);
 
 /* ⛔ THE DAY PAGE-HIT LOGGING WENT LIVE. Every site-visit rate is measured from here, because a
    send that predates it had no way to be counted and would drag its template's rate to a meaningless
@@ -257,7 +258,18 @@ export function useCampaignStats() {
             .order('id', { ascending: true }).range(from, to)),
       ]);
       leads = (leadsRes.rows);
-      messages = (msgsRes.rows);
+      /* ⛔ CANONICALISE THE TEMPLATE NAME ONCE, HERE, AND EVERY COUNT BELOW INHERITS IT.
+         Two templates were re-registered at Meta under new names on 2026-09-12, and 135 + 20 rows
+         in this very table still carry the old ones. Every consumer downstream compares against a
+         literal — REPORT_LINK_TEMPLATES, PITCH_TEMPLATES, SIGNUP_TEMPLATES, the per-template
+         buckets, last-touch attribution and the A/B arms — so canonicalising at any ONE of those
+         would have left the others quietly short. Doing it at the read is the only place that
+         cannot be partially applied.
+         ⚠️ It rewrites nothing in the database: the stored row is the receipt of what Meta was
+         actually told, and it stays that way. See TEMPLATE_RENAMES. */
+      messages = msgsRes.rows.map((m) => (
+        m.template_name ? { ...m, template_name: canonicalTemplate(m.template_name) } : m
+      ));
       audits = (auditsRes.rows);
     } catch (e) {
       console.error('Campaign stats fetch failed (non-blocking):', e);
@@ -360,7 +372,7 @@ export function useCampaignStats() {
     replyRatePct: null, pitchReplyRatePct: null, repliedToPaidPct: null, reachedToPaidPct: null,
     reportOpenRatePct: null,
     byTemplate: {},
-    armComparison: { arms: { audit_result_hook: { leads: 0, leadsTracked: 0, reportOpened: 0, siteVisits: 0, signups: 0 },
+    armComparison: { arms: { video_template: { leads: 0, leadsTracked: 0, reportOpened: 0, siteVisits: 0, signups: 0 },
                              audit_reply_warm: { leads: 0, leadsTracked: 0, reportOpened: 0, siteVisits: 0, signups: 0 } },
                      bothArms: 0, hasData: false },
   });
