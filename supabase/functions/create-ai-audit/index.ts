@@ -6,6 +6,7 @@ import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanc
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { applySeed, dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
+import { measurementFlagFor } from "../../../src/lib/auditKind.ts";
 import { moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
 import {
@@ -993,13 +994,21 @@ Deno.serve(async (req) => {
          column is missing the insert retries without it — but then it is UNMARKED, so the guarantee
          guard would not fire, which is exactly why create-ai-audit is deployed only AFTER the column
          exists (SQL-first). */
-      /* 🔴 AND THE SAME MARK IS REQUIRED FOR ANY multi-run NON-baseline AUDIT, not only a
-         purpose:"measurement" one. audit-baseline.ts:457 skips a paid baseline when the lead
-         already has an audit with `baseline_target_runs > 1 && is_measurement !== true` — so an
-         UNMARKED 3-run free-check audit would make a prospect who later PAYS never receive their
-         day-0 guarantee measurement. That prospect converting is the funnel's success case, which
-         is exactly why this must not be left keyed to the purpose flag. */
-      if (isMeasurement || baselineTargetRuns > 1) auditRow.is_measurement = true;
+      /* 🔴 THIS USED TO BE `if (isMeasurement || baselineTargetRuns > 1)` AND IT COST ~£3.70 AND TEN
+         DUPLICATE BASELINES ON ONE PAYMENT (2026-09-12). The second clause was added so an unmarked
+         3-run FREE-CHECK audit could not be mistaken for a baseline — correct about that case, and
+         wrong about its own scope: a paid baseline sends baseline_target_runs:3, so it marked
+         ITSELF as a measurement, which is the one condition startPaidBaseline's idempotency guard
+         excludes. It could never see the audit it had just created, and the queue backstop made
+         another every tick until the onboarding row was reset by hand.
+         ⛔ THE FLAG IS THE PURPOSE NOW, AND ONLY THE PURPOSE. The free-check collision it was
+         widened for is handled where it belongs — by `findPaidBaseline` testing for the marker a
+         baseline POSITIVELY carries (its frozen contract) instead of for the absence of this one.
+         ⛔ AND THE RULE LIVES IN src/lib/auditKind.ts WITH THE READER. Two guards in two files,
+         agreeing only by comment, is what broke — and the comment in audit-baseline.ts had been
+         false since the day this line was widened. scripts/audit-kind.test.ts drives the round
+         trip: what this writes must be what that recognises. */
+      if (measurementFlagFor(isMeasurement)) auditRow.is_measurement = true;
       let { data: audit, error: insErr } = await service
         .from("ai_audits").insert(auditRow).select("id, business_name").single();
       // Shed a missing new column (either one) and retry, longest-name-first so one miss can't mask another.
