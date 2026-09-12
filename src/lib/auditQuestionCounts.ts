@@ -37,3 +37,38 @@ export const WIZARD_DEFAULT_QUESTIONS = 3;
  */
 export const BASELINE_QUESTIONS = 10;
 export const BASELINE_RUNS = 3;
+
+/**
+ * FULL MEASURE — day 0, AFTER the baseline is frozen, 20 questions x MEASUREMENT_RUNS. Finds which
+ * questions (and which of the client's towns) are winnable so we know where to build pages. It is
+ * NEVER compared to anything: the refund is judged on the baseline's set and nothing else.
+ *
+ * ⛔ FIXED, NOT A DIAL. It was operator-selectable 10..75 (default 40) and that meant two things
+ * disagreed: the screen offered 75 while the generator hard-capped every call at 20 (see
+ * GENERATOR_ABSOLUTE_MAX_QUESTIONS below), so "40" produced whatever the two-call money split
+ * happened to yield. One number, imported by the SPA and the edge function alike.
+ *
+ * ⛔ DISJOINT FROM THE BASELINE BY CONSTRUCTION (Paul, 2026-09-12). A 12 x 3 baseline already gives
+ * every judged question 6 answer cells against MIN_CELLS_FOR_QUESTION_CLAIM = 4, so it is a valid
+ * winnability read on its own. The full measure excludes the baseline's asked set — a coverage
+ * directive to the model AND a code-level filter — so it never re-measures the judged questions,
+ * and never contains them (a measurement that contains the refund set is a comparable one).
+ */
+export const FULL_MEASURE_QUESTIONS = 20;
+
+/**
+ * ⛔ THE GENERATOR'S ABSOLUTE CEILING — the most questions ONE model call may be asked for.
+ *
+ * WHY IT IS NAMED. create-ai-audit's generateQuestions re-clamped every call with the BASELINE
+ * ceiling (20) as an "absurd value" guard, while the measurement policy allowed 75. So raising a
+ * policy maximum silently changed nothing: a 40-question request generated 20. A cap that is not
+ * named cannot be reasoned about, and a policy ceiling above it is a lie the screen tells.
+ *
+ * THE RULE, pinned by scripts/question-ceilings.test.ts: every POLICY ceiling in this file and in
+ * create-ai-audit is <= this number. Raise this first if a policy ever needs to go higher, and the
+ * test says so rather than the generator quietly truncating.
+ *
+ * 40 leaves room above FULL_MEASURE_QUESTIONS (20) for the money/standard two-call split, which
+ * over-requests each half and slices, without letting an absurd request reach the model.
+ */
+export const GENERATOR_ABSOLUTE_MAX_QUESTIONS = 40;

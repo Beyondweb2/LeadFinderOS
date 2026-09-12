@@ -43,7 +43,7 @@ import { tradeWord } from '@/lib/trade';
 import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
-import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS } from '@/lib/auditQuestionCounts';
+import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS } from '@/lib/auditQuestionCounts';
 /* The LLM "playbook" (playbookHtml.ts + the generate-playbook edge function) was DELETED
    2026-09-09. It recommended Bing Places — zero citations across 10,615 — and ICAEW to an ACCA
    firm. The evidence-derived playbook at /playbook/:id is the only one now. */
@@ -86,20 +86,13 @@ const QUESTION_COUNT_OPTIONS = Array.from(
 const clampQuestionCount = (n: number) =>
   Math.min(MAX_QUESTION_COUNT, Math.max(MIN_QUESTION_COUNT, Math.round(n) || DEFAULT_QUESTION_COUNT));
 
-/* FULL MEASUREMENT mode — the deliberate bulk citation gather. Higher ceiling than the quick
-   wizard, mirroring MEASUREMENT_* in create-ai-audit. v1 stays ≤75 so a single run stays under the
-   queue's per-run $1 Apify cap; the run is paced by the queue (≤24 scrapes in flight), never fired
-   at once. Quick audit is completely unchanged. */
-const FULL_MIN_QUESTIONS = 10;
-const FULL_MAX_QUESTIONS = 75;
-const FULL_DEFAULT_QUESTIONS = 40;
-/* 20 is here for a reason: it is the BASELINE repeat ceiling, so a 20-question measurement is
-   the largest one whose runs 2 and 3 carried the full set even BEFORE the advanceBaseline purpose fix
-   (2026-08-28). Kept as an option because it is the safe choice on any deploy where that fix is not
-   live. */
-const FULL_QUESTION_OPTIONS = [10, 20, 25, 40, 60, 75];
-const clampFullCount = (n: number) =>
-  Math.min(FULL_MAX_QUESTIONS, Math.max(FULL_MIN_QUESTIONS, Math.round(n) || FULL_DEFAULT_QUESTIONS));
+/* FULL MEASUREMENT mode — day 0, after the baseline is frozen: the winnability gather. ⛔ FIXED at
+   FULL_MEASURE_QUESTIONS, from the shared policy module create-ai-audit clamps against. There is
+   no dial: it was 10..75 (default 40) while the server's generator hard-capped every call at 20,
+   so the screen offered sizes the queue never ran. A persisted count from that era is clamped to
+   the fixed value on read (clampFullCount), so the first press after this deploy cannot send 40. */
+const FULL_MEASURE_COUNT = FULL_MEASURE_QUESTIONS;
+const clampFullCount = (_n: number) => FULL_MEASURE_COUNT;
 
 // value = the Country name stored/passed to the audit; the edge toCountryCode /
 // COUNTRY_TO_ISO2 map converts every name to lowercase ISO-2 uniformly. label = display.
@@ -295,14 +288,14 @@ const AiAudit = () => {
   const fullMode = auditMode === 'full';
   const [questionCount, setQuestionCount] = useState<number>(() => {
     const m = persisted?.auditMode ?? 'quick';
-    const raw = persisted?.questionCount ?? (m === 'full' ? FULL_DEFAULT_QUESTIONS : DEFAULT_QUESTION_COUNT);
+    const raw = persisted?.questionCount ?? (m === 'full' ? FULL_MEASURE_COUNT : DEFAULT_QUESTION_COUNT);
     return m === 'full' ? clampFullCount(raw) : clampQuestionCount(raw);
   });
   /* Switch mode: reset the count to that mode's default and clear any previewed questions so the
      review step regenerates at the new count/purpose. Quick↔Full only; never touches a run in flight. */
   const switchAuditMode = useCallback((next: 'quick' | 'full') => {
     setAuditMode(next);
-    setQuestionCount(next === 'full' ? FULL_DEFAULT_QUESTIONS : DEFAULT_QUESTION_COUNT);
+    setQuestionCount(next === 'full' ? FULL_MEASURE_COUNT : DEFAULT_QUESTION_COUNT);
     setQuestions([]); setPreviewMoney([]);
   }, []);
 
@@ -2476,25 +2469,30 @@ const AiAudit = () => {
                       onClick={() => switchAuditMode('full')}
                       icon={<ListChecks className="h-4 w-4" />}
                       label="Full measurement"
-                      hint={`up to ${FULL_MAX_QUESTIONS} questions · before/after gather`}
+                      hint={`${FULL_MEASURE_COUNT} questions × 3 runs · where to build`}
                     />
                   </div>
                 </div>
 
-                {/* Number of questions. Quick: WIZARD 3–5. Full: MEASUREMENT 10–75 (server clamps to
-                    match). Full stays ≤75 so one run stays under the queue's per-run $1 Apify cap. */}
+                {/* Number of questions. Quick: WIZARD 3–5, operator's choice. Full: FIXED at
+                    FULL_MEASURE_QUESTIONS — no selector, the number is stated. The server derives
+                    its min, max and default from the same constant, so there is nothing to disagree. */}
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">How many questions?</Label>
                   <div className="flex items-center gap-3">
-                    <Select
-                      value={String(questionCount)}
-                      onValueChange={(v) => setQuestionCount(fullMode ? clampFullCount(Number(v)) : clampQuestionCount(Number(v)))}
-                    >
-                      <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {(fullMode ? FULL_QUESTION_OPTIONS : QUESTION_COUNT_OPTIONS).map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    {fullMode ? (
+                      <span className="inline-flex h-9 w-24 items-center justify-center rounded-md border bg-muted/40 text-sm font-medium">{FULL_MEASURE_COUNT}</span>
+                    ) : (
+                      <Select
+                        value={String(questionCount)}
+                        onValueChange={(v) => setQuestionCount(clampQuestionCount(Number(v)))}
+                      >
+                        <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {QUESTION_COUNT_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <span className="text-[11px] text-muted-foreground">
                       We'll generate {questionCount} search question{questionCount === 1 ? '' : 's'}
                       {unitCost > 0 ? ` · est. cost ~$${(questionCount * unitCost).toFixed(2)}` : ''}.
@@ -2502,9 +2500,10 @@ const AiAudit = () => {
                   </div>
                   {fullMode && (
                     <p className="text-[11px] text-muted-foreground/80">
-                      Full measurement gathers citations across ChatGPT, Gemini &amp; Google AI and is
-                      <strong> paced through the send queue</strong> (max ~24 running at once) — it won't fire all at
-                      once. Run this once at the start and again at the end to show before/after. SEO scan is skipped.
+                      A full measure asks {FULL_MEASURE_COUNT} questions across ChatGPT and Gemini, three runs each, and is
+                      <strong> paced through the queue</strong> (max ~24 running at once). It finds which questions
+                      and towns are winnable so we know where to build pages. It is never compared to anything —
+                      the refund is judged on the frozen baseline, not this. SEO scan is skipped.
                     </p>
                   )}
                 </div>
