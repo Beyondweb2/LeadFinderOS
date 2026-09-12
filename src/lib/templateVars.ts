@@ -50,6 +50,13 @@ export const TRADE_SINGULAR: Readonly<Record<string, string>> = {
   "mobile mechanic": "mobile mechanic",
   "mobile valeting": "mobile valeter",
   "mobile valeting and detailing": "mobile valeter",
+  /* ⚠️ MAPPED, NOT BLOCKED (Paul, 2026-09-12). "hospitality" passes every mechanical rule — it is
+     singular, lowercase and consonant-initial — and still renders "for a hospitality in Bath",
+     because it is an ABSTRACT NOUN naming a sector rather than a countable business. No rule
+     catches that: the fix is a word, so it belongs in the map, which is what the map is for.
+     ⚠️ "hospitality business" keeps the consonant-initial "a" and claims nothing the audit did not
+     measure — a kava bar and a hotel are both hospitality businesses. */
+  hospitality: "hospitality business",
 };
 
 /* A value naming SEVERAL trades cannot become "a <noun>" at all, whatever we do to its plurals:

@@ -54,6 +54,9 @@ for (const [input, want] of [
   ["Driving instructors", "driving instructor"],
   ["Mobile mechanics", "mobile mechanic"],
   ["Mobile valeting and detailing", "mobile valeter"],
+  /* An ABSTRACT sector noun, mapped rather than blocked: it passes every mechanical rule and
+     still reads "for a hospitality in Bath". No rule catches that; a word does. */
+  ["hospitality", "hospitality business"],
 ] as const) {
   const r = normaliseTrade(input);
   ok(r.ok && r.value === want, `${JSON.stringify(input)} -> ${JSON.stringify(want)}`);
