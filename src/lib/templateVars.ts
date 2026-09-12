@@ -58,11 +58,63 @@ export const TRADE_SINGULAR: Readonly<Record<string, string>> = {
    map entry if he wants those leads sendable. */
 const MULTI_CLAUSE = /[,&/]|\band\b/;
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   🔴 {{2}} MAY NEVER START WITH A VOWEL SOUND, AND THAT IS A CONSTRAINT FROM META, NOT A STYLE
+   CHOICE. DO NOT "FIX" THIS BY DELETING THE CHECK.
+
+   video_template's APPROVED body hardcodes the article:
+
+       "When people ask ChatGPT or Gemini for a {{2}} in {{3}}, ..."
+
+   `a` is in the registered text at Meta. {{2}} is a bare singular lowercase noun with no article of
+   its own, so the moment it begins with a vowel sound the sentence reads "for a accountant in
+   Peterborough" — to a prospect, on the first message they ever get from us. Measured 2026-09-12:
+   that is 113 of 968 audits (12%), almost all accountants and electricians.
+
+   ⛔ THE TEMPLATE IS NOT BEING EDITED (Paul's decision, 2026-09-12). Changing the body means a new
+   Meta submission and re-review, and he is only contacting trades that take "a" — locksmith,
+   plumber, driving instructor, mobile mechanic, mobile valeter — all of which read correctly today.
+   So the code's job is to REFUSE the ones that do not, exactly as it refuses "kava cafe, pool bar"
+   and "Bourne uk". A held lead he can see beats 113 messages saying "for a accountant".
+
+   ⚠️ THE WORKAROUND, FOR WHEN THOSE TRADES ARE WANTED: add a TRADE_SINGULAR entry mapping the value
+   to a CONSONANT-INITIAL phrase that means the same thing, e.g.
+       electrician  ->  "local electrical company"
+       accountant   ->  "local accountancy firm"
+   That keeps the approved body untouched and needs no Meta review. It is a copy decision, so Paul
+   makes it; the map is where it lands.
+   ⚠️ And it is a vowel SOUND, not a vowel letter: "a university tutor" and "an hour" both break a
+   naive first-letter test, which is why the two exception lists below exist.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Looks vowel-initial, sounds consonant-initial — these take "a". */
+const CONSONANT_SOUND_DESPITE_VOWEL = /^(?:uni|use|usu|uti|utu|eu|ewe|one)/;
+/** Looks consonant-initial, sounds vowel-initial — these take "an". */
+const VOWEL_SOUND_DESPITE_CONSONANT = /^(?:hour|honest|honou?r|heir)/;
+
+/** Would this word be preceded by "an" rather than "a"? */
+function startsWithVowelSound(word: string): boolean {
+  if (VOWEL_SOUND_DESPITE_CONSONANT.test(word)) return true;
+  if (CONSONANT_SOUND_DESPITE_VOWEL.test(word)) return false;
+  return /^[aeiou]/.test(word);
+}
+
 /* Words that must never have a trailing "s" stripped: the result would not be a word.
    ⚠️ THE LENGTH RULE IS THE REAL GUARD. "gas" → "ga" is the failure this prevents, and a minimum
    of four characters before stripping covers it without needing to enumerate English. The explicit
    endings are the ones where a short word would still pass that bar. */
 const KEEP_TRAILING_S = /(?:ss|us|is)$/;
+
+/* 4. THE ARTICLE, applied to EVERY path out of normaliseTrade. See the long note above
+      CONSONANT_SOUND_DESPITE_VOWEL: the approved body says "for a {{2}}", so a vowel-sound trade is
+      unsendable until it is mapped to a consonant-initial phrase. Checked on the FIRST word,
+      because that is the one the article touches. */
+function articleCheck(value: string, original: string): VarCheck {
+  if (startsWithVowelSound(value.split(" ")[0])) {
+    return { ok: false, reason: "trade_starts_with_vowel_sound", detail: original };
+  }
+  return { ok: true, value };
+}
 
 /**
  * Turn a stored `business_type` into something that can follow "a " in a sentence.
@@ -75,9 +127,14 @@ export function normaliseTrade(raw: string | null | undefined): VarCheck {
   const lower = trimmed.toLowerCase();
 
   /* 1. The map wins. Checked BEFORE the multi-clause block on purpose: "mobile valeting and
-        detailing" contains " and " and would otherwise be refused, but it has a known answer. */
+        detailing" contains " and " and would otherwise be refused, but it has a known answer.
+        ⛔ A MAPPED VALUE IS STILL ARTICLE-CHECKED. The first version returned here immediately,
+        which quietly defeated the whole point of step 4: `accountants -> accountant` and
+        `electricians -> electrician` are correct singularisations AND vowel-initial, so the two
+        trades the block exists for were the two that skipped it. The map says what a trade is
+        CALLED; it does not say the approved sentence can carry it. */
   const mapped = TRADE_SINGULAR[lower];
-  if (mapped) return { ok: true, value: mapped };
+  if (mapped) return articleCheck(mapped, trimmed);
 
   if (/\d/.test(lower)) return { ok: false, reason: "trade_has_digits", detail: trimmed };
   if (MULTI_CLAUSE.test(lower)) return { ok: false, reason: "trade_not_a_single_noun", detail: trimmed };
@@ -103,7 +160,9 @@ export function normaliseTrade(raw: string | null | undefined): VarCheck {
   if (out.length >= 4 && out.endsWith("s") && !KEEP_TRAILING_S.test(out)) {
     return { ok: false, reason: "trade_still_plural", detail: trimmed };
   }
-  return { ok: true, value };
+
+  /* 4. THE ARTICLE — see articleCheck. */
+  return articleCheck(value, trimmed);
 }
 
 /* ── THE TOWN ────────────────────────────────────────────────────────────────────────────────────

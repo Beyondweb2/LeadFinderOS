@@ -31,9 +31,34 @@ as *possibly describing something deleted*. Grep before you believe it.
 | **5 barber WhatsApp templates** | Removed from the sendable picker (all needed a claim link no lead has). History still renders them via `TEMPLATE_DISPLAY` |
 
 ### What is NEW and load-bearing
-- **`npm test`** (78 suites) and **`npm run check`** (typecheck-vs-baseline + build + tests). There
-  was no way to run the tests before; four were failing silently. **Run `npm run check` before
-  claiming anything works.**
+- **`npm test`** (85 suites) and **`npm run check`** (typecheck-vs-baseline + build + tests).
+  **Run `npm run check` before claiming anything works.**
+- 🔴 **THE HARNESS ITSELF WAS BROKEN ON WINDOWS UNTIL 2026-09-12, IN TWO PLACES, AND BOTH FAILED
+  TOWARDS "everything is fine".** Fixed in `scripts/run-tests.mjs` and
+  `scripts/check-typecheck-baseline.mjs` — both now pass `shell: true` on win32.
+  - `spawn('npx', …)` cannot find `npx.cmd`, so all 83 tsx suites died `ENOENT` and the run read
+    **"1/84 suites passed"** — which looks like a catastrophically broken codebase rather than a
+    broken runner, and invites you to stop trusting the suite.
+  - The baseline checker captured **nothing**, concluded *"typecheck: 0 errors, baseline 9 — 9
+    baseline errors no longer occur, re-record the baseline"*, and would have recorded an EMPTY
+    baseline from a run that never happened.
+  - ⛔ **AND 40 OF 83 SUITES COULD NOT FAIL THE BUILD AT ALL.** They print `FAIL`/`N FAILURES` via
+    the house `ok()` helper and never set an exit code, so the runner called them PASS.
+    `re-engage-vars.test.ts` had been printing 3 FAILURES for days while `npm run check` was green.
+    The runner now grades on **printed failures as well as exit code** (`FAILURE_IN_OUTPUT`), which
+    is why this is fixed for the 41st suite somebody writes and not just the 40 that exist.
+- ⚠️ **FIVE SUITES ARE KNOWN-STALE AND EXPECTED TO FAIL — do not lose an hour on them.** They went
+  red the moment the runner started working; every one asserts something a deliberate change
+  deleted, so the TEST is wrong, not the product. Triaged 2026-09-12; fixing them was not in scope.
+  | Suite | Why it fails |
+  |---|---|
+  | `audit-push.test.ts` | asserts `site_gen`, a bulk-job type the 2026-09-09 barber deletion removed |
+  | `coverage-lead-counts.test.ts` | asserts Coverage's `measured` rung, deleted in the same pass (§0) |
+  | `report-attribution.test.ts` | asserts report copy that has since been rewritten |
+  | `verdict.test.ts` | same — report wording ("once in 6 answers") that no longer renders |
+  | `site-origin.test.ts` | needs **Deno**, which is not on PATH on this machine; passes under Deno |
+  **So the honest green number is 80/85.** If you make a change and see 80/85, you have broken
+  nothing; if you see 79, you have.
 - **`scripts/typecheck-baseline.txt`** — the 9 deliberate errors are ENFORCED now, compared as a
   LIST. §3's "baseline is 14" is stale; it is 9, and the gate tells you.
 - **`scripts/report-origin.test.ts`** — every audit-report URL must be findable.live.

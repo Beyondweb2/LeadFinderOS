@@ -47,15 +47,15 @@ Takes about two minutes and we handle the rest. Any questions, let me know`;
 const reEngageBody = (b: string, u: string) =>
   `Hi ${b}, following up on the AI visibility report we sent over. We're doing the next ten businesses at £49.99 instead of £99, in exchange for honest feedback on the work. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
 
-/* 🔴 re_engage_49's REGISTERED BODY IS NOT KNOWN TO THIS CODEBASE YET, AND THIS IS DELIBERATELY NOT
-   A GUESS. Paul supplied the template's NAME and its one variable, not its approved copy. Inventing
-   plausible words here is exactly the drift this file exists to prevent: the Inbox would show a
-   confident transcript of a message that was never sent, which is worse than showing nothing.
-   ⛔ SO IT STATES WHAT IS KNOWN — the template and the business name it was sent with — and says
-   the copy is unavailable. Replace this the moment the approved body is pasted from WhatsApp
-   Manager, character for character, and add it to scripts/template-bodies-parity.test.ts. */
+/* re_engage_49 — the APPROVED body, pasted by Paul from WhatsApp Manager 2026-09-12 and mirrored
+   here character for character. English, Marketing, no header, ONE variable: {{1}} business name.
+   ⚠️ It held an explicit "copy not stored" placeholder for a few hours rather than a plausible
+   guess, which is the right state for an unknown body — the Inbox showing nothing beats the Inbox
+   showing a confident transcript of a message nobody sent. */
 const reEngage49Body = (b: string, _u: string) =>
-  `[re_engage_49 sent to ${b || 'this business'} — the approved WhatsApp copy is not stored in the app yet, so the exact wording is not shown here.]`;
+  `Hi ${b || 'your business'}, it's Paul from Findable.
+
+Where did we get to with this? Happy to pick it back up, or leave it if now's not the time.`;
 
 // ── Findable, no link ─────────────────────────────────────────────────────
 const initialContactBody = (b: string, _u: string) =>
@@ -68,14 +68,48 @@ We ran a full report on your business for AI and SEO visibility: ${u}
 We could get you showing up in those results - it's mostly stuff we handle at our end.
 Want me to explain?`;
 
-/* video_template - the outreach hook (approved 2026-09-02). Mirrors the Deno-side body in
-   _shared/whatsapp-send.ts; both are DISPLAY ONLY, since Meta renders what the prospect reads.
-   Only reached for a legacy row whose body was never stored - a real send stores its own text. */
+/* 🔴 audit_result_hook — HISTORY, NOT COPY. This is the body approved on 2026-09-02 and it is what
+   the 135 rows sent under that name actually contained. The template was replaced on 2026-09-12 by
+   `video_template`, which carries DIFFERENT approved words (below) and a video header.
+   ⛔ I ASSUMED THESE TWO SHARED A BODY AND WROTE THAT DOWN AS A FACT. The rename looked like a
+   rename plus a header, so one entry was made to serve both names. Paul then supplied the approved
+   copy and it is a different message entirely. The lesson is the file's own rule: a body is the
+   record of a send, so it may only ever be written from the registered copy, never inferred from
+   what a template used to say. Do not "update" this one — it is what those 135 prospects read. */
 const auditResultHookBody = (b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
   `Hi, is this ${b || 'your business'}? We ran a free AI visibility audit for you.
 When people ask ChatGPT or Google's AI for a ${trade || 'provider'} in ${town || 'your area'}, it's naming other firms, not you.
 Here's your result: ${u}
 More on how we can fix it, and how to get started: https://findable.live`;
+
+/* video_template — the APPROVED body, pasted by Paul from WhatsApp Manager 2026-09-12 and mirrored
+   here character for character. English, Marketing, VIDEO header, four variables:
+   {{1}} business name, {{2}} trade (bare singular lowercase noun), {{3}} town, {{4}} audit link.
+   ⚠️ THE ASTERISKS AND THE EMOJI ARE PART OF THE APPROVED COPY. `*Your free AI visibility audit*`
+   is WhatsApp bold markup, not decoration, and 👋 📋 🌐 are in the registered text. Stripping any
+   of them makes the operator's transcript differ from what the prospect received.
+   ⚠️ DISPLAY ONLY, like every body here — Meta renders the real message from its own registered
+   copy. The video header itself is NOT part of this string; it is a payload component built in
+   _shared/whatsapp-send.ts from VIDEO_TEMPLATE_HEADER_URL. */
+const videoTemplateBody = (b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
+  `Hi ${b || 'your business'} 👋
+
+I ran a quick AI visibility check on your business and found something you'll probably want to see.
+
+When people ask ChatGPT or Gemini for a ${trade || 'provider'} in ${town || 'your area'}, you're not showing up as often as you should be.
+
+I've put the full findings together for you here:
+
+📋 *Your free AI visibility audit*
+${u}
+
+🌐 https://findable.live/
+
+It's completely free to look through, no signup or obligation.
+
+Have a read, and if you want I'll explain what's causing it and how we'd fix it.
+
+Paul, Findable.`;
 
 /* audit_reply_warm — the WARM audit message (Meta 1509669747584736, approved 2026-09-07). It is
    video_template MINUS the "is this the right number" opening, because it only ever goes to a
@@ -153,7 +187,7 @@ export const READABLE_TEMPLATE_BODIES: Record<
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
   audit_reply: auditReplyBody,
-  video_template: auditResultHookBody,
+  video_template: videoTemplateBody,
   /* The 135 rows sent before the 2026-09-12 rename carry the old name and the SAME words. */
   audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,

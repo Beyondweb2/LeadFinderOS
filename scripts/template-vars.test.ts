@@ -47,16 +47,39 @@ for (const [raw, count] of STORED_TRADES) {
 }
 ok(sendable + blocked === 968, `all 968 audits accounted for (${sendable} sendable, ${blocked} blocked)`);
 
-console.log("\n── THE FOUR PAUL NAMED EXPLICITLY ──");
+console.log("\n-- THE TRADES PAUL IS ACTUALLY CONTACTING: all take \"a\" --");
 for (const [input, want] of [
   ["Locksmiths", "locksmith"], ["locksmiths", "locksmith"],
   ["Plumbers", "plumber"], ["plumbers", "plumber"],
   ["Driving instructors", "driving instructor"],
-  ["Accountants", "accountant"], ["accountant", "accountant"],
+  ["Mobile mechanics", "mobile mechanic"],
+  ["Mobile valeting and detailing", "mobile valeter"],
 ] as const) {
   const r = normaliseTrade(input);
   ok(r.ok && r.value === want, `${JSON.stringify(input)} -> ${JSON.stringify(want)}`);
 }
+
+console.log("\n-- A VOWEL-SOUND TRADE BLOCKS, BECAUSE THE APPROVED BODY HARDCODES \"for a\" --");
+/* 113 of 968 audits. The template is NOT being edited (Paul, 2026-09-12), so the code refuses
+   rather than sending "for a accountant in Peterborough". */
+for (const vowel of ["Accountants", "accountant", "Accountant", "electrician", "electricians", "architect", "optician", "estate agent"]) {
+  const r = normaliseTrade(vowel);
+  ok(!r.ok && r.reason === "trade_starts_with_vowel_sound",
+    `${JSON.stringify(vowel)} blocks (${r.ok ? "SENT: " + r.value : r.reason})`);
+}
+/* THE MAP DOES NOT EXEMPT IT, and that was a real bug for one commit: `accountants` and
+   `electricians` ARE in TRADE_SINGULAR (their singular forms are correct), and returning early on
+   a map hit meant the two trades this block exists for were the two that skipped it. */
+ok(!!TRADE_SINGULAR["accountants"], "accountants IS in the map (its singular form is correct)");
+ok(!normaliseTrade("accountants").ok, "  ...and is STILL blocked - a map hit is not an exemption");
+
+console.log("\n-- VOWEL SOUND, NOT VOWEL LETTER --");
+/* The exception lists exist because "a university" and "an hour" both defeat a first-letter test. */
+ok(normaliseTrade("university tutor").ok, '"university tutor" SENDS - "a university", consonant sound');
+ok(normaliseTrade("used car dealer").ok, '"used car dealer" SENDS - "a used car dealer"');
+ok(normaliseTrade("utility engineer").ok, '"utility engineer" SENDS - "a utility engineer"');
+ok(!normaliseTrade("hour").ok, '"hour" BLOCKS - "an hour", vowel sound behind a consonant');
+ok(!normaliseTrade("heir hunter").ok, '"heir hunter" BLOCKS - "an heir hunter"');
 
 console.log("\n── THE FALLBACK RULE, on shapes the fixture does not contain ──");
 const fb = (s: string) => { const r = normaliseTrade(s); return r.ok ? r.value : `BLOCKED:${r.reason}`; };
