@@ -25,6 +25,9 @@ import { BASELINE_QUESTIONS, BASELINE_RUNS, FULL_MEASURE_QUESTIONS } from "../..
 import { findPaidBaseline, findAmbiguousMultiRun } from "../../../src/lib/auditKind.ts";
 import { type BaselineContract } from "../../../src/lib/baselineContract.ts";
 import { fullMeasureAllocation } from "../../../src/lib/fullMeasure.ts";
+import { isRemeasureDue, utcDateISO } from "../../../src/lib/remeasureDue.ts";
+import { remeasureDueFill, workIncompleteFor } from "../../../src/lib/remeasureFill.ts";
+import { planReplay } from "../../../src/lib/baselineReplay.ts";
 import { pickAuditTown } from "./place-town.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 
@@ -368,6 +371,26 @@ export interface FrozenBaseline {
  */
 export async function onBaselineFrozen(service: Client, audit: FrozenBaseline): Promise<void> {
   if (audit.audit_purpose !== "baseline" || !audit.lead_id) return;
+  /* ⛔ THE ONE-TIME FILL OF THE DAY-28 DATE — WHERE remeasure_due_date IS NULL, and nowhere else.
+     The value comes from remeasureFill.ts (the only +REMEASURE_OFFSET_DAYS in the system); the
+     write is conditional in the database as well, so a stored date — RG's hand-set 2026-10-06,
+     Ronnie's 2026-10-13 — cannot be touched even if the read above raced an operator's edit.
+     The tick that fires the replay (fireDueRemeasures) READS this column and computes nothing. */
+  try {
+    const { data: lr } = await service
+      .from("outreach_leads").select("remeasure_due_date").eq("id", audit.lead_id).maybeSingle();
+    const fill = remeasureDueFill((lr as { remeasure_due_date?: string | null } | null)?.remeasure_due_date, new Date().toISOString());
+    if (fill) {
+      const { data: written } = await service
+        .from("outreach_leads").update({ remeasure_due_date: fill })
+        .eq("id", audit.lead_id).is("remeasure_due_date", null).select("id");
+      console.log(`[baseline] lead ${audit.lead_id}: remeasure_due_date ${(written ?? []).length ? `set to ${fill}` : "already set — left alone"}`);
+    } else {
+      console.log(`[baseline] lead ${audit.lead_id}: remeasure_due_date already stored — left alone`);
+    }
+  } catch (e) {
+    console.error(`[baseline] remeasure_due_date fill threw for lead ${audit.lead_id}:`, e instanceof Error ? e.message : e);
+  }
   try {
     await startFullMeasure(service, audit);
   } catch (e) {
@@ -456,6 +479,157 @@ export async function startFullMeasure(service: Client, audit: FrozenBaseline): 
   }
   console.log(`[baseline] full measure ${out.audit_id} started for lead ${leadId}: ${allocation.map((a) => `${a.town}:${a.questions}`).join(" ")}`);
   return { ok: true, audit_id: out.audit_id };
+}
+
+/** Write one client_error_reports row per (error_id, lead) per hour, so a persistent refusal leaves
+ *  a readable trail rather than 120 rows an hour at the 30-second tick. */
+async function reportOnceAnHour(service: Client, errorId: string, leadId: string, message: string, context: Record<string, unknown>): Promise<void> {
+  try {
+    const since = new Date(Date.now() - 60 * 60_000).toISOString();
+    const { data: recent } = await service
+      .from("client_error_reports").select("id")
+      .eq("error_id", errorId).gte("created_at", since)
+      .contains("context", { lead_id: leadId }).limit(1);
+    if (recent && (recent as unknown[]).length) return;
+    await service.from("client_error_reports").insert({ error_id: errorId, message: message.slice(0, 1000), context: { lead_id: leadId, ...context, at: new Date().toISOString() } });
+  } catch (e) {
+    console.error(`[remeasure] could not record ${errorId}:`, e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * THE DAY-28 REPLAY — fire and stamp. Runs every queue tick beside ensureBaselinesForPaidOnboardings.
+ *
+ * ⛔ IT READS THE STORED DATE AND COMPUTES NOTHING. isRemeasureDue (remeasureDue.ts) has no date
+ * arithmetic by test; the DB filter below mirrors it. RG Locksmiths' stored 2026-10-06 is what
+ * fires him, never the +28 his baseline would have implied (2026-09-08). SC Plumbing is refunded
+ * with a NULL date and must never fire; both the query and the predicate refuse him.
+ *
+ * ⛔ THE POINTER IS THE IDEMPOTENCY, NOT THIS FUNCTION. At 2,880 ticks a day the read gate
+ * (`remeasure_audit_id IS NULL`) is necessary and not sufficient. The claim trigger sets the pointer
+ * in the replay audit's own insert transaction, and the partial unique index on
+ * ai_audits(lead_id) WHERE audit_purpose = 'remeasure' refuses a second insert at the database.
+ * create-ai-audit turns that 23505 into 409 already_remeasured.
+ *
+ * ⛔ WORK UNFINISHED DOES NOT DELAY IT. The promise is calendar-based; an unticked delivery
+ * checklist is STAMPED on the replay (results.remeasure.work_incomplete) so the number tells the
+ * truth about our own delivery.
+ */
+export async function fireDueRemeasures(service: Client, limit = 3): Promise<number> {
+  const today = utcDateISO(Date.now());
+  const { data, error } = await service
+    .from("outreach_leads")
+    .select("id, user_id, business_name, baseline_audit_id, remeasure_audit_id, remeasure_due_date, status, is_archived, amount_paid, delivery_checklist")
+    .not("baseline_audit_id", "is", null)
+    .is("remeasure_audit_id", null)
+    .lte("remeasure_due_date", today)
+    .eq("is_archived", false)
+    .neq("status", "refunded")
+    .gt("amount_paid", 0)
+    .order("remeasure_due_date", { ascending: true })
+    .limit(limit);
+  if (error) {
+    console.warn("[remeasure] due-replay read skipped:", error.message);
+    return 0;
+  }
+  const rows = (data ?? []) as Array<{
+    id: string; user_id: string; business_name: string | null; baseline_audit_id: string | null; remeasure_audit_id: string | null;
+    remeasure_due_date: string | null; status: string | null; is_archived: boolean | null; amount_paid: number | null;
+    delivery_checklist: Record<string, boolean> | null;
+  }>;
+  let fired = 0;
+  for (const lead of rows) {
+    /* Belt and braces: the pure predicate is what the test pins; the query above only narrows. */
+    const verdict = isRemeasureDue(lead, today);
+    if (!verdict.due) { console.log(`[remeasure] lead ${lead.id}: not due (${verdict.reason}) despite matching the query`); continue; }
+    const pointer = lead.baseline_audit_id as string;
+
+    const { data: base } = await service
+      .from("ai_audits")
+      .select("id, user_id, business_name, business_type, location_text, country, has_website, website, specialism, business_scope, baseline_completed_at")
+      .eq("id", pointer).maybeSingle();
+    const b = base as {
+      id: string; user_id: string; business_name: string | null; business_type: string | null; location_text: string | null;
+      country: string | null; has_website: boolean | null; website: string | null; specialism: string | null; business_scope: string | null;
+      baseline_completed_at: string | null;
+    } | null;
+    if (b && !b.baseline_completed_at) {
+      await reportOnceAnHour(service, "remeasure_baseline_not_frozen", lead.id, "The day-28 date arrived but the baseline has not finished measuring.", { baseline_audit_id: pointer, due: lead.remeasure_due_date });
+      continue;
+    }
+    let asked: string[] = [];
+    if (b) {
+      const { data: firstRun } = await service
+        .from("ai_audit_runs").select("id").eq("audit_id", pointer)
+        .order("run_number", { ascending: true }).limit(1).maybeSingle();
+      if (firstRun?.id) {
+        const { data: qs } = await service
+          .from("ai_audit_queue").select("question").eq("run_id", (firstRun as { id: string }).id).order("created_at", { ascending: true });
+        asked = ((qs ?? []) as Array<{ question: string }>).map((r) => (r.question ?? "").trim()).filter(Boolean);
+      }
+    }
+    const plan = planReplay({ pointer, auditExists: !!b, askedQuestions: asked });
+    if (!plan.ok) {
+      await reportOnceAnHour(service, "remeasure_refused", lead.id, plan.summary, { baseline_audit_id: pointer, reason: plan.reason, due: lead.remeasure_due_date });
+      continue;
+    }
+    const work = workIncompleteFor(lead.delivery_checklist);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+        "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+        "x-internal-job": "1",
+      },
+      body: JSON.stringify({
+        user_id: b!.user_id ?? lead.user_id,
+        lead_id: lead.id,
+        business_name: b!.business_name ?? lead.business_name,
+        business_type: b!.business_type,
+        location_text: b!.location_text,
+        specialisms: b!.specialism ?? "",
+        country: b!.country ?? null,
+        website: b!.website ?? null,
+        has_website: b!.has_website === true,
+        ...(b!.business_scope ? { business_scope: b!.business_scope } : {}),
+        purpose: "remeasure",
+        questions: plan.questions,           // the baseline's ASKED set, verbatim
+        question_count: plan.asked,
+        skip_seo: true,
+        town_confirmed: true,
+        remeasure_context: {
+          due_date: lead.remeasure_due_date,
+          replay: plan.summary,
+          asked: plan.asked,
+          intended: plan.intended,
+          short: plan.short,
+          work_incomplete: work.incomplete,
+          missing_checklist: work.missing,
+          fired_at: new Date().toISOString(),
+        },
+      }),
+    });
+    const text = await res.text();
+    let out: { ok?: boolean; audit_id?: string; error?: unknown; detail?: unknown } = {};
+    try { out = JSON.parse(text); } catch { /* kept verbatim below */ }
+    if (!res.ok || !out?.ok || !out?.audit_id) {
+      const why = typeof out?.error === "string" ? `${out.error}${out.detail ? ` — ${String(out.detail).slice(0, 200)}` : ""}` : text.slice(0, 200);
+      /* already_remeasured is the race resolving correctly, not a failure — logged, not reported. */
+      if (typeof out?.error === "string" && out.error === "already_remeasured") {
+        console.log(`[remeasure] lead ${lead.id}: replay already exists — another tick won`);
+        continue;
+      }
+      await reportOnceAnHour(service, "remeasure_start_failed", lead.id, why, { baseline_audit_id: pointer, http_status: res.status, due: lead.remeasure_due_date });
+      continue;
+    }
+    fired++;
+    console.log(`[remeasure] lead ${lead.id} (${lead.business_name ?? "?"}): day-28 replay ${out.audit_id} started — ${plan.summary}${work.incomplete ? ` — WORK INCOMPLETE: ${work.missing.join(", ")}` : ""}`);
+  }
+  if (fired) console.log(`[remeasure] fired ${fired} day-28 replay(s)`);
+  return fired;
 }
 
 /**
