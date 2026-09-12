@@ -27,12 +27,17 @@ const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "u
 /** Everything a reader could see: the bodies of template literals and quoted strings, with JS
  *  comments and HTML comments removed first. Identifiers (founderOfferSection) are not strings. */
 function renderedText(src: string): string {
-  const noJs = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  /* ⚠️ HTML comments are stripped from the WHOLE source FIRST. The report nests template literals
+     (`${d.hidePitch ? "" : `…`}`), so a lazy backtick pairing splits a comment across captures and
+     its text survives the strip — which is exactly how the first run of this test "found" the
+     retired founder pitch inside a design comment the renderer never emits (stripHtmlComments). */
+  const noHtml = src.replace(/<!--[\s\S]*?-->/g, "");
+  const noJs = noHtml.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   const literals: string[] = [];
   for (const m of noJs.matchAll(/`([\s\S]*?)`/g)) literals.push(m[1]);
   for (const m of noJs.matchAll(/'((?:[^'\\\n]|\\.)*)'/g)) literals.push(m[1]);
   for (const m of noJs.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)) literals.push(m[1]);
-  return literals.join("\n").replace(/<!--[\s\S]*?-->/g, "");
+  return literals.join("\n");
 }
 
 const RENDERERS: Array<[string, string]> = [

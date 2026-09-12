@@ -410,7 +410,7 @@ export async function maybeSendFreeCheckResult(
       [`Could not build the onboarding link for lead <code>${lead.id}</code>, so the result email was NOT sent.`,
        `Set FINDABLE_SITE_ORIGIN (or FINDABLE_ALLOWED_ORIGINS) on the function and re-run.`],
     );
-    return { kind: "flagged", reason: "no site origin — cannot build the founder-price link" };
+    return { kind: "flagged", reason: "no site origin — cannot build the sign-up link" };
   }
 
   /* ⛔ NO `?? lead.search_keyword` HERE EITHER. That fallback is the other half of the 2026-09-02
