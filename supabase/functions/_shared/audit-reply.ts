@@ -165,7 +165,7 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
      is a different field with a different history: an audit created through the wizard carries the
      trade that was typed into it, while the LEAD row can still have none. Three leads are in exactly
      that state, so this pitch could be sent, followed, and paid for — and then startPaidBaseline
-     would refuse with skipped:"no_business_type", leaving an 8-week guarantee with no baseline.
+     would refuse with skipped:"no_business_type", leaving a four-week guarantee with no baseline.
      findable-checkout refuses that payment as a last line of defence, but this is the common path
      and it should fail here, before a prospect is ever pointed at a report.
      Mirrors audit-baseline.ts's bizType expression character for character. Nothing is inferred. */

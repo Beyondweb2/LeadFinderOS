@@ -1477,7 +1477,7 @@ const Inbox = () => {
                       card: sending an existing client back to checkout wastes their time, and
                       findable-checkout refuses it as already_client anyway.
                       The dot is NOT decoration. It is the only always-visible sign that this lead has
-                      no trade stored, which means no baseline can run after they pay and the 8-week
+                      no trade stored, which means no baseline can run after they pay and the four-week
                       guarantee cannot be measured. Orange for that; amber for the cosmetic warnings. */}
                   {activeLead && signupLink && !signupLink.paid && (
                     <button

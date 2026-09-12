@@ -478,8 +478,8 @@ ${pb.missingAddress ? `    <div class="warn">No address on file — every signup
       same question also disagree with each other, which is why the re-audit repeats the whole set
       rather than spot-checking.</p>
       <p class="note"><b>Our promise.</b> ${FINDABLE_GUARANTEE} The same sentence the payer sees
-      at checkout. No client has completed a full eight-week cycle yet, so there are no results to
-      point at, and we would rather say that than imply otherwise.</p>
+      at checkout. Any results we show come from completed four-week cycles, and we would rather
+      point at none than imply otherwise.</p>
     </section>
 
     <footer class="site-foot">

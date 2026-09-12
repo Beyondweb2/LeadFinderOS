@@ -196,9 +196,9 @@ export interface OutreachLead {
   delivery_notes?: string | null;
   /* ── DELIVERY COCKPIT (2026-08-18) — the client-delivery cockpit in LeadDetailDialog. All
      owner-RLS on outreach_leads, written via updateLead like every other field here.
-     `remeasure_due_date` is a TYPED column (not JSONB) on purpose: it is the 8-week guarantee
+     `remeasure_due_date` is a TYPED column (not JSONB) on purpose: it is the four-week guarantee
      clock and must be queryable for a future "due soon across all clients" view. */
-  remeasure_due_date?: string | null;          // YYYY-MM-DD; defaults to baseline + 56 days, editable
+  remeasure_due_date?: string | null;          // YYYY-MM-DD; filled ONCE at baseline finalisation (+28, WHERE NULL); RG's +56 is stored by hand; editable
   delivery_checklist?: Record<string, boolean> | null;  // the 5 manual milestone ticks
   delivery_ref?: Record<string, string> | null;         // NON-SECRET reference info (login email, host, access notes)
   // Lead-detail journey markers (manual milestones set in the detail popup).

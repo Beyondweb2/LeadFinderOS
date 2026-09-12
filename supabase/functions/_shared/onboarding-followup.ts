@@ -142,7 +142,7 @@ export async function resolveOnboardingFollowupVars(service: any, leadId: string
   /* NO TRADE, NO SEND — the worst failure in the funnel, so it is refused rather than warned about.
      This template's whole job is to walk someone into paying. If they pay without a trade on the
      lead, startPaidBaseline returns skipped:"no_business_type" and no baseline is ever created — so
-     a guarantee whose evidence is the week-eight re-measurement has been sold with nothing to
+     a guarantee whose evidence is the four-week re-measurement has been sold with nothing to
      measure it against, and that only surfaces at week 8, in front of the customer.
 
      The expression MIRRORS audit-baseline.ts's own bizType line exactly:

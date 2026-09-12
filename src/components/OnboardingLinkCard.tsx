@@ -27,7 +27,7 @@ export interface OnboardingLinkLead {
  *
  * The link was being typed by hand, and the failure is silent rather than loud: a wrong or missing
  * ?lead= does not error, it just makes a known prospect anonymous. The flow still runs, they can
- * still pay, and only afterwards does it emerge that no baseline exists and the 8-week guarantee
+ * still pay, and only afterwards does it emerge that no baseline exists and the four-week guarantee
  * cannot be measured. So the link is generated, shown, and copied — never retyped.
  */
 
