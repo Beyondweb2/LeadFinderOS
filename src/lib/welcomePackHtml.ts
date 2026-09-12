@@ -218,8 +218,8 @@ function planPage2(name: string): string {
       <p>When AI can&rsquo;t answer from a website, it leans on the big directories and review sites.
       If you&rsquo;re missing from the ones that matter for your trade, or your details don&rsquo;t line
       up across them, AI has less reason to trust you and name you.</p>
-      <p>We make sure you&rsquo;re listed and consistent on the ones that count: the big general
-      profiles like Google Business Profile and Bing Places, plus the directories and review sites that
+      <p>We make sure you&rsquo;re listed and consistent on the ones that count: your Google
+      Business Profile, plus the directories and review sites that
       matter specifically for your trade. If you&rsquo;re already on them, we tidy them up. If
       you&rsquo;re not, we get you on.</p>
 
