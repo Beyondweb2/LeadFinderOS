@@ -258,6 +258,11 @@ Checks:
       (SWC) said "Expected a semicolon"; tsc recovered and reported the same 14 semantic errors.
       **Always run `npm run build` as well** — it is the only check that catches this class of fault.
       Related: never put a backtick inside a template literal, even in a comment inside one.
+      🔴 **THAT LAST SENTENCE BIT AGAIN ON 2026-09-12, IN `aiAuditReportHtml.ts`, IN AN HTML COMMENT
+      EXPLAINING THE CODE.** Writing `` `startBtn` `` inside a `<!-- -->` that lives inside the
+      returned template literal TERMINATED THE STRING, and tsc reported nine syntax errors — the
+      same COUNT as the clean baseline, so a count-only check would have read green. **Put prose
+      about a template literal OUTSIDE it**, or name variables without backticks.
 - [ ] **`deno check --sloppy-imports` on EVERY changed edge function file.** Capture the exit code
       **directly**, not through a pipe — a pipe reports the pipe's status, not Deno's.
       **`npm run typecheck` does NOT cover `supabase/functions`.** That gap put checkout down for 15 hours.
@@ -3281,6 +3286,44 @@ with it.
 - **Deployed for it:** `render-audit-report`, `process-whatsapp-queue`, `send-whatsapp-message`,
   `process-ai-audit-queue` — the transitive closure, walked by following relative imports.
   `apply-seo-paste` and `notify-onboarding-submit` matched a grep **in comments only** (§4).
+
+---
+
+## 13b. ✅ THE REPORT'S QUESTION PAGES ARE OPERATOR-ONLY, AND THE CTA (2026-09-12)
+
+- ⛔ **THE PER-QUESTION PAGES ("page 2") NO LONGER GO TO A PROSPECT — GATED ON `internal`, NOT
+  DELETED.** `QUESTIONS_PER_PAGE` is 3, so a 12-question baseline added FOUR full sheets after the
+  CTA and read as clutter on the document that asks for the sale.
+  - 🔴 **DELETING THEM WOULD HAVE SILENTLY TAKEN THE ONLY WINNABILITY VIEW IN THE PRODUCT.**
+    `winBlock` renders only inside a question card; nothing else renders it. A block that renders
+    nowhere is not a compile error — the same trap that left `FINDABLE_GUARANTEE` imported and
+    unrendered for ten days on this very file.
+  - ⛔ **THE POINTER SENTENCE IS GATED ON THE SAME CONDITION AS THE PAGES.** It used to be gated on
+    the DATA existing while the pages are gated on `internal` — two conditions for one promise, so a
+    prospect report would have said "listed on the next page" with no next page.
+  - ⚠️ **THE COST, STATED AND ACCEPTED (Paul):** those cards were the ONLY place the report showed
+    which SOURCES each engine read. Page 1 carries no citations at all, so a prospect no longer sees
+    them anywhere. If that is revisited, the fix is a sources summary on page 1, not un-gating.
+  - ✅ Nothing else depends on the pages: the before/after and re-measure comparison read QUEUE ROWS
+    (`compareMeasurements(QueueRowLite[])`), never `questionBreakdown`, whose only consumer is this
+    renderer. No test asserts page-2 content.
+- **The CTA is "Ready to get found?"** — three steps, the explainer line, and Get started / See how
+  it works / WhatsApp me, over the byte-locked `FINDABLE_GUARANTEE`.
+  - ⛔ **IT MUST READ CORRECTLY WITH NO "Get started" BUTTON**, which is the common case: `offerUrl`
+    is set ONLY by `render-audit-report`, so the in-app preview, the PDF, the before/after iframes
+    and the welcome pack all render without it. The copy names only the two buttons that always
+    render, and the three steps describe what WE do rather than steps the reader takes.
+  - 🔴 **"Watch the two minute explainer" IS A PROMISE KEPT BY findable.live, AND AS OF 2026-09-12
+    THAT PAGE DOES NOT KEEP IT.** `/media/findable-hook.mp4` serves 200 `video/mp4`, but **nothing
+    on the site embeds it** — no `<video>` element anywhere in findable-site, no reference on the
+    home page; it exists as the WhatsApp template's header asset. Paul is adding it. **If the video
+    ever leaves that page, that line comes with it.**
+  - ⚠️ **The trade/town subject line was deleted with the old CTA, and its MEASUREMENTS are kept as
+    a comment** where it stood: `businessType` is stored PLURAL on 649 of 778 audits (83%), so
+    `${article(t)} ${t}` printed *"a Locksmiths in Ashby-de-la-Zouch"* on four reports in five. Any
+    future CTA naming a trade needs that rule back.
+  - **Deploy list: `render-audit-report` ONLY** — re-walked 2026-09-12 by real `from "…"` statements;
+    no `_shared` module reaches `aiAuditReportHtml.ts`.
 
 ---
 
