@@ -22,6 +22,7 @@ const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
 /** Paid baseline shape, from the shared question-count policy. */
 import { BASELINE_QUESTIONS, BASELINE_RUNS } from "../../../src/lib/auditQuestionCounts.ts";
+import { findPaidBaseline, findAmbiguousMultiRun } from "../../../src/lib/auditKind.ts";
 import { allocateAreas, decideGuarantee, type BaselineContract } from "../../../src/lib/baselineContract.ts";
 import { FINDABLE_SETUP_PRICE_GBP } from "../../../src/lib/findableOffer.ts";
 import { pickAuditTown } from "./place-town.ts";
@@ -435,27 +436,62 @@ export async function startPaidBaseline(
     if (!leadId) return { ok: false, skipped: "no_lead_id" };
 
     /* Already has one? Nothing to do — this is what makes retries safe.
-       ⛔ THE GUARANTEE GUARD (2026-08-22). A Full Measurement reuses baseline_target_runs (multi-run),
-       so a measurement audit on this lead ALSO has baseline_target_runs>1. Without excluding it, this
-       idempotency check would treat the measurement as "already has a baseline" and SKIP the real
-       paid guarantee measurement — the paying client would never get their day-0. is_measurement is
-       set at creation (create-ai-audit) precisely to tell them apart; a real paid baseline never has
-       it. Migration-tolerant: if the column is not present the select is retried without it and every
-       row reads as non-measurement (the pre-guard behaviour) — but create-ai-audit only marks
-       measurements once the column exists, so in practice the guard is always live here. */
-    let existing: Array<{ id: string; baseline_target_runs: number | null; is_measurement?: boolean | null }> | null = null;
+
+       🔴 THE COMMENT THAT USED TO BE HERE WAS FALSE, AND IT COST ~£3.70 AND TEN DUPLICATE BASELINES
+       ON ONE PAYMENT (2026-09-12). It said "a real paid baseline never has is_measurement" — true
+       when it was written, false from the day create-ai-audit widened that flag to every multi-run
+       audit. The guard below tested `is_measurement !== true`, the paid baseline marked itself
+       `is_measurement`, so this could never see the audit it had just created and the queue backstop
+       bought another every tick. It also sent a later session to the wrong answer when asked how to
+       identify a baseline, because the comment read as a specification.
+
+       ⛔ THE TEST IS POSITIVE NOW: a baseline is recognised by the marker it CARRIES (its frozen
+       contract), not by the absence of a flag that belongs to something else. Both halves of the
+       rule live in src/lib/auditKind.ts with create-ai-audit's writer, because two guards in two
+       files agreeing only by comment is exactly the shape that failed.
+
+       ⛔ AND AMBIGUITY NOW STOPS THE SPEND INSTEAD OF BUYING ANOTHER. A multi-run audit with no
+       contract is either a 3-run FREE CHECK or a baseline whose contract write failed — and those
+       are indistinguishable on the row. The old guard resolved that by creating a baseline, which
+       is the EXPENSIVE direction and silent with it. It now refuses and says so: a held baseline is
+       a line in the operator's error list, which is recoverable; ten baselines is money gone. */
+    let existing:
+      | Array<{ id: string; baseline_target_runs: number | null; is_measurement?: boolean | null; baseline_contract?: unknown }>
+      | null = null;
     let eErr: { message?: string } | null = null;
     ({ data: existing, error: eErr } = await service
-      .from("ai_audits").select("id, baseline_target_runs, is_measurement").eq("lead_id", leadId));
-    if (eErr && /is_measurement/i.test(eErr.message ?? "")) {
-      console.warn("[baseline] is_measurement column not present yet — reading without it (guard degraded)");
+      .from("ai_audits").select("id, baseline_target_runs, is_measurement, baseline_contract").eq("lead_id", leadId));
+    if (eErr && /is_measurement|baseline_contract/i.test(eErr.message ?? "")) {
+      /* ⚠️ MIGRATION-TOLERANT, AND IT FAILS CLOSED NOW. Without these columns nothing can tell a
+         baseline from a free check, so every multi-run audit reads as ambiguous and the baseline is
+         HELD rather than duplicated. The pre-guard behaviour was to create one, which is the
+         failure this whole change exists to invert. */
+      console.warn("[baseline] kind columns not present yet — every multi-run audit will read as ambiguous");
       ({ data: existing, error: eErr } = await service
         .from("ai_audits").select("id, baseline_target_runs").eq("lead_id", leadId));
     }
     if (eErr) return { ok: false, error: `audit lookup failed: ${eErr.message}` };
-    const already = ((existing ?? []) as Array<{ id: string; baseline_target_runs: number | null; is_measurement?: boolean | null }>)
-      .find((a) => Number(a.baseline_target_runs ?? 0) > 1 && a.is_measurement !== true);
+    const already = findPaidBaseline(existing);
     if (already) return { ok: true, audit_id: already.id, skipped: "already_has_baseline" };
+    const ambiguous = findAmbiguousMultiRun(existing);
+    if (ambiguous) {
+      /* Recorded, not merely returned: the backstop calls this every tick and its return value is
+         only logged. Without a row in client_error_reports this is invisible exactly as the loop
+         was — and the CLI has no `functions logs` (§4). Best-effort so a failed report can never
+         turn a refusal-to-spend into an error that retries. */
+      const detail = `lead ${leadId}: multi-run audit ${ambiguous.id} has no baseline contract — `
+        + `cannot tell a free-check audit from a baseline, so NO baseline was started. `
+        + `Delete or contract-stamp that audit, or start the baseline by hand.`;
+      console.warn(`[baseline] ambiguous multi-run audit — ${detail}`);
+      try {
+        await service.from("client_error_reports").insert({
+          error_id: "baseline_ambiguous_multi_run",
+          message: detail.slice(0, 1000),
+          context: { onboarding_id: onboardingId, lead_id: leadId, audit_id: ambiguous.id, source },
+        });
+      } catch { /* reporting must never fail the refusal */ }
+      return { ok: true, skipped: `ambiguous_multi_run_audit:${ambiguous.id}` };
+    }
 
     /* ⛔ THE BASELINE WAITS FOR THE ANSWERS IT IS MEASURED ON. This is the guarantee path: week
        eight is compared against this run, so it must be scoped to the town the customer confirmed
