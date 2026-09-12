@@ -31,14 +31,31 @@ ${u}
 
 Takes about two minutes and we handle the rest. Any questions, let me know`;
 
-/* ⛔ DISPLAY ONLY — META RENDERS THE REAL MESSAGE FROM ITS OWN REGISTERED COPY. Editing this string
-   changes what the OPERATOR reads in the Inbox transcript and nothing a prospect receives. The
-   registered body must be edited BY HAND in WhatsApp Manager whenever the price moves, and it has
-   already drifted once (it sat at £19.99 for weeks after the price moved to £49.99).
-   ⚠️ UPDATED 2026-09-12 for the flat £99 with the measured refund. The old text sold a founder
-   discount ("the next ten businesses at £49.99 instead of £99") — a tier that no longer exists. */
+/* ⛔ DISPLAY ONLY — META RENDERS THE REAL MESSAGE FROM ITS OWN REGISTERED COPY. Editing these
+   strings changes what the OPERATOR reads in the Inbox transcript and nothing a prospect receives.
+
+   🔴 TWO BODIES, BECAUSE THERE ARE TWO TEMPLATES AND THE OLD ONE'S HISTORY IS REAL.
+   `re_engage` was replaced at Meta by `re_engage_49` on 2026-09-12, but 21 rows in
+   whatsapp_messages were sent under the OLD template and genuinely contained the OLD words. The
+   transcript for those rows must keep showing what was actually sent — mapping them onto the new
+   template's copy would falsify the record to save a function.
+
+   ⚠️ AND I BROKE THAT ONCE ALREADY: on 2026-09-12 I rewrote this single body to the £99 wording, a
+   version Meta was never given, so those 21 historic rows started displaying a message nobody
+   received. The £49.99 text below is restored verbatim from commit 036cfc4f because it is what the
+   prospects were actually sent. Do not "update" it — it is history, not copy. */
 const reEngageBody = (b: string, u: string) =>
-  `Hi ${b}, following up on the AI visibility report we sent over. It's £99 one-off to get started: we measure how often AI names you, build your pages, then re-measure after four weeks on the same questions. If that number hasn't gone up you can claim your £99 back. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
+  `Hi ${b}, following up on the AI visibility report we sent over. We're doing the next ten businesses at £49.99 instead of £99, in exchange for honest feedback on the work. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
+
+/* 🔴 re_engage_49's REGISTERED BODY IS NOT KNOWN TO THIS CODEBASE YET, AND THIS IS DELIBERATELY NOT
+   A GUESS. Paul supplied the template's NAME and its one variable, not its approved copy. Inventing
+   plausible words here is exactly the drift this file exists to prevent: the Inbox would show a
+   confident transcript of a message that was never sent, which is worse than showing nothing.
+   ⛔ SO IT STATES WHAT IS KNOWN — the template and the business name it was sent with — and says
+   the copy is unavailable. Replace this the moment the approved body is pasted from WhatsApp
+   Manager, character for character, and add it to scripts/template-bodies-parity.test.ts. */
+const reEngage49Body = (b: string, _u: string) =>
+  `[re_engage_49 sent to ${b || 'this business'} — the approved WhatsApp copy is not stored in the app yet, so the exact wording is not shown here.]`;
 
 // ── Findable, no link ─────────────────────────────────────────────────────
 const initialContactBody = (b: string, _u: string) =>
@@ -51,7 +68,7 @@ We ran a full report on your business for AI and SEO visibility: ${u}
 We could get you showing up in those results - it's mostly stuff we handle at our end.
 Want me to explain?`;
 
-/* audit_result_hook - the outreach hook (approved 2026-09-02). Mirrors the Deno-side body in
+/* video_template - the outreach hook (approved 2026-09-02). Mirrors the Deno-side body in
    _shared/whatsapp-send.ts; both are DISPLAY ONLY, since Meta renders what the prospect reads.
    Only reached for a legacy row whose body was never stored - a real send stores its own text. */
 const auditResultHookBody = (b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
@@ -61,10 +78,10 @@ Here's your result: ${u}
 More on how we can fix it, and how to get started: https://findable.live`;
 
 /* audit_reply_warm — the WARM audit message (Meta 1509669747584736, approved 2026-09-07). It is
-   audit_result_hook MINUS the "is this the right number" opening, because it only ever goes to a
+   video_template MINUS the "is this the right number" opening, because it only ever goes to a
    lead who has already answered the opener, so asking again reads as though we were not listening.
    ⛔ THREE VARIABLES, NOT FOUR, AND THE BUSINESS NAME IS NOT ONE OF THEM. Registered at Meta as
-   {{1}} trade, {{2}} town, {{3}} audit link. audit_result_hook's {{1}} is the business name; this
+   {{1}} trade, {{2}} town, {{3}} audit link. video_template's {{1}} is the business name; this
    body never says it. Copying the hook's var list across would have shifted every parameter by one
    and sent the trade where Meta expects a name.
    ⚠️ DISPLAY ONLY, like every body here — Meta renders what the prospect reads from its own
@@ -123,6 +140,7 @@ export const READABLE_TEMPLATE_BODIES: Record<
 > = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
+  re_engage_49: reEngage49Body,
   payment_recieved: paymentRecievedBody,
   questionnaire_followup: (b, _u, _t, _c, first) => questionnaireFollowupBody(first ?? '', b),
   hook_followup: (b, _u, _t, _c, first) => hookFollowupBody(first ?? '', b),
@@ -135,6 +153,8 @@ export const READABLE_TEMPLATE_BODIES: Record<
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
   audit_reply: auditReplyBody,
+  video_template: auditResultHookBody,
+  /* The 135 rows sent before the 2026-09-12 rename carry the old name and the SAME words. */
   audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,
 };
@@ -145,7 +165,7 @@ export interface ReadableBodyOpts {
   trade?: string | null;
   competitors?: string | null;
   firstName?: string | null;
-  /** audit_result_hook's {{3}}. Only this body reads it; the rest ignore the extra argument. */
+  /** video_template's {{3}}. Only this body reads it; the rest ignore the extra argument. */
   town?: string | null;
 }
 
@@ -170,6 +190,14 @@ export function readableTemplateBody(
   opts: ReadableBodyOpts = {},
 ): string {
   if (!isPlaceholderBody(body)) return (body ?? '').trim();
+  /* ⛔ THE BODY LOOKUP DOES **NOT** CANONICALISE, and that is the opposite of the label lookup on
+     purpose. A label answers "what kind of message is this" — a renamed template is still the
+     same kind. A BODY is the words that were actually sent, and a `re_engage` row from August did
+     not contain re_engage_49's copy. Canonicalising here would rewrite history to fit the
+     registry. Old keys therefore stay in READABLE_TEMPLATE_BODIES for as long as rows carry them.
+     ⚠️ video_template is the exception that needs no exception: its body is unchanged by the
+     rename (only a video header was added), so one entry serves both names — which is why
+     `audit_result_hook` maps to the same function below. */
   const fn = templateName ? READABLE_TEMPLATE_BODIES[templateName] : undefined;
   if (!fn) return '';
   return fn(

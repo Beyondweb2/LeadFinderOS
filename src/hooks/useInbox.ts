@@ -26,11 +26,11 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
 export const WA_REPLY_TEMPLATES = [
   { name: 'initial_contact', label: 'Initial contact (opener)' },
   { name: 'audit_reply', label: 'Audit reply (report + competitors)' },
-  { name: 'audit_result_hook', label: 'Audit result hook (outreach)' },
+  { name: 'video_template', label: 'Audit result hook (outreach)' },
   { name: 'audit_reply_warm', label: 'Audit reply — warm (after the opener)' },
   { name: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
   { name: 'book_call', label: 'Arrange a call' },
-  { name: 're_engage', label: 'Re-engage (gone quiet)' },
+  { name: 're_engage_49', label: 'Re-engage (gone quiet)' },
 ];
 
 

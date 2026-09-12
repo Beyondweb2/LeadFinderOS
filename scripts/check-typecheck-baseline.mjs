@@ -39,7 +39,18 @@ function normalise(line) {
     .trim();
 }
 
-const res = spawnSync('npx', ['tsc', '--noEmit'], { cwd: ROOT, encoding: 'utf8' });
+/* 🔴 `shell: true` ON WINDOWS — THE SAME ENOENT THAT BLINDED scripts/run-tests.mjs, and here it was
+   worse than a visible failure. `spawnSync('npx', …)` cannot find `npx.cmd`, so tsc never ran, the
+   captured output was empty, and this script concluded "typecheck: 0 errors, baseline 9" and
+   printed "9 baseline error(s) no longer occur. If you fixed these on purpose, re-record the
+   baseline". Following that advice would have recorded an EMPTY baseline from a run that never
+   happened — after which every one of the nine deliberate errors, and every new one, would have
+   been reported as a regression against nothing.
+   ⚠️ A GREEN-LOOKING GATE THAT NEVER EXECUTES IS THE WORST OF THE THREE STATES here: red is
+   informative, an error is informative, "0 errors" is a lie with a suggestion attached. */
+const res = spawnSync('npx', ['tsc', '--noEmit'], {
+  cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32',
+});
 const output = `${res.stdout ?? ''}${res.stderr ?? ''}`;
 const actual = output.split('\n').filter((l) => l.includes('error TS')).map(normalise).sort();
 

@@ -17,7 +17,7 @@ const A = (...statuses: Array<string | null>): AuditRowForStatus =>
   ({ lead_id: "l1", ai_audit_runs: statuses.map((s) => ({ status: s })) });
 
 // ── templates that need no audit show nothing at all
-for (const t of ["initial_contact", "onboarding_followup", "booking_page_intro", "re_engage", "book_call"]) {
+for (const t of ["initial_contact", "onboarding_followup", "booking_page_intro", "re_engage_49", "book_call"]) {
   eq(`${t} -> not_needed`, auditStatusFor(t, []), "not_needed");
   eq(`${t} ignores audits`, auditStatusFor(t, [A("complete")]), "not_needed");
 }
@@ -27,7 +27,7 @@ for (const t of [null, undefined, "", "some_new_template"]) {
 }
 
 // ── the audit-class templates
-for (const t of ["audit_result_hook", "audit_reply"]) {
+for (const t of ["video_template", "audit_reply"]) {
   eq(`${t} no audits -> none`, auditStatusFor(t, []), "none");
   eq(`${t} complete -> ready`, auditStatusFor(t, [A("complete")]), "ready");
   eq(`${t} capped -> ready`, auditStatusFor(t, [A("capped")]), "ready");
@@ -37,7 +37,7 @@ for (const t of ["audit_result_hook", "audit_reply"]) {
   eq(`${t} cancelled -> failed`, auditStatusFor(t, [A("cancelled")]), "failed");
 }
 
-const T = "audit_result_hook";
+const T = "video_template";
 
 // ── ⛔ READY NEEDS POSITIVE EVIDENCE. Every unreadable shape must NOT read as ready.
 eq("audit row with no runs -> running", auditStatusFor(T, [{ lead_id: "l1", ai_audit_runs: [] }]), "running");

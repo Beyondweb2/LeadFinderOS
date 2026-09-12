@@ -4,6 +4,8 @@
 // shape. process-whatsapp-queue itself is intentionally NOT modified in this build;
 // it can adopt this helper in a later cleanup.
 
+import { normaliseTrade, normaliseTown } from "../../../src/lib/templateVars.ts";
+
 export const GRAPH_VERSION = "v21.0";
 
 /** UK phone → E.164 digits (no '+', as Meta wants). Mirrors send-reminders /
@@ -41,11 +43,30 @@ export function resolveWhatsAppEnv() {
 // onboarding_followup unsendable to exactly the leads it is for.
 export type TemplateVar = "name" | "url" | "trade" | "competitors" | "onboarding_url" | "contact_first_name" | "town" | "audit_url";
 
+/* ⛔ THE VIDEO HEADER'S URL, IN ONE PLACE (Paul, 2026-09-12).
+   `video_template` is registered at Meta with a VIDEO header, which means the send MUST carry a
+   header component or Meta rejects it outright — a body-only payload is not "a message without the
+   video", it is an error.
+
+   ⛔ A PUBLIC LINK, NOT A MEDIA ID, AND THAT IS PAUL'S CALL RATHER THAN A DEFAULT. An uploaded
+   media id expires after 30 days, so it would need a re-upload path, a stored id, an expiry check
+   and a failure mode for the day it lapses — machinery whose only job is to keep working. A link is
+   fetched by Meta at send time and simply keeps working. The cost is that the URL must stay
+   publicly reachable: if the file 404s, every send of this template fails.
+
+   ⚠️ META'S REQUIREMENTS FOR THE FILE, so the upload is right first time: MP4 (H.264 video, AAC
+   audio), **16MB or under**, publicly reachable over HTTPS with no redirect and no auth. Anything
+   larger is rejected at send time, not at registration.
+   ⚠️ IT IS SERVED FROM findable-site's `public/` DIRECTORY, so `public/media/findable-hook.mp4`
+   becomes this URL. That repo's 404 fallback does not apply to real files in public/. */
+export const VIDEO_TEMPLATE_HEADER_URL = "https://findable.live/media/findable-hook.mp4";
+
 /** Approved template allowlist — mirrors process-whatsapp-queue. `vars` is the BODY
  *  variable order for THIS template ({{1}} = vars[0], {{2}} = vars[1], …). The four
  *  original templates are {{1}}=name, {{2}}=url; keep that order for them (they're
- *  live). `lang` MUST match the template's registered language in Meta exactly. */
-export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
+ *  live). `lang` MUST match the template's registered language in Meta exactly.
+ *  `headerVideoUrl` is set ONLY for a template registered with a VIDEO header. */
+export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; headerVideoUrl?: string }> = {
   booking_page_intro: { lang: "en", vars: ["name", "url"] },
   no_website_barbers: { lang: "en", vars: ["name", "url"] },
   barber_poor_website: { lang: "en", vars: ["name", "url"] },
@@ -59,7 +80,7 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
   // Reply-to-a-reply: 4 vars — {{1}} trade, {{2}} competitors, {{3}} business name, {{4}} report link.
   // Vars resolved server-side per-lead from the lead's own completed audit (see resolveAuditReplyVars).
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
-  /* audit_result_hook — the OUTREACH hook, approved at Meta 2026-09-02. Registered from the
+  /* video_template — the OUTREACH hook, approved at Meta 2026-09-02. Registered from the
      variable order in WhatsApp Manager, NOT inferred: {{1}} business name, {{2}} trade, {{3}} town,
      {{4}} audit link.
      ⛔ ITS SAMPLE IN WHATSAPP MANAGER SHOWS {{4}} AS findable.live/a/<id> AND THAT PATH IS DEAD —
@@ -68,12 +89,12 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
      findable.live/report/<auditId>. Do not "match the sample".
      ⚠️ It shares `trade` with audit_reply, which is what both send paths used to KEY ON to decide
      the payload shape - see the var-driven build in each. */
-  audit_result_hook: { lang: "en", vars: ["name", "trade", "town", "audit_url"] },
+  video_template: { lang: "en", vars: ["name", "trade", "town", "audit_url"], headerVideoUrl: VIDEO_TEMPLATE_HEADER_URL },
   /* audit_reply_warm — the WARM audit message, approved at Meta 2026-09-07 (id 1509669747584736).
-     Same job as audit_result_hook but for a lead who has ALREADY answered the opener, so it drops
+     Same job as video_template but for a lead who has ALREADY answered the opener, so it drops
      the "is this the right number" line.
      ⛔ THREE VARS AND NO `name`, TAKEN FROM WHATSAPP MANAGER RATHER THAN INFERRED FROM ITS SIBLING:
-     {{1}} trade, {{2}} town, {{3}} audit link. audit_result_hook leads with the business name and
+     {{1}} trade, {{2}} town, {{3}} audit link. video_template leads with the business name and
      this one does not, so reusing its var list would put the trade in {{1}} where Meta expects a
      name and shift every parameter by one — a message that sends "200 OK" and reads as gibberish.
      ⚠️ {{3}} is findable.live/report/<auditId>, from resolveAuditReplyVars' `link`, exactly as the
@@ -93,10 +114,16 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }>
      one-variable guess was flagged as a guess when it shipped and this is the flag being cashed —
      the registration is the authority, not the shape of a similar template.
      ⚠️ `onboarding_url`, NOT `url`. They are distinct on purpose: `url` means the claim/site link and
-     gates the send on the lead having a generated site, which re_engage must not require. The
+     gates the send on the lead having a generated site, which re_engage_49 must not require. The
      onboarding link is built from the lead id alone, resolved per-lead by
      resolveOnboardingFollowupVars, which REFUSES rather than returning a partial. */
-  re_engage: { lang: "en", vars: ["name", "onboarding_url"] },
+  /* ⛔ ONE VARIABLE AGAIN, AND THE HISTORY OF THIS LINE IS WHY IT NEEDS A COMMENT. It was one var,
+     was CORRECTED to two on 2026-08-11 against a real Meta rejection (#132000, "1 param sent, 2
+     expected"), and is one again because `re_engage_49` is a DIFFERENT registered template from
+     the `re_engage` it replaced: Paul re-registered it on 2026-09-12 carrying {{1}} business name
+     and no link. Sending the old two against it is the same #132000 in the other direction.
+     ⚠️ The onboarding URL is GONE from this message, so nothing here needs resolveOnboarding*. */
+  re_engage_49: { lang: "en", vars: ["name"] },
   /* ⛔ THE NAME IS MISSPELLED AT META AND THAT SPELLING IS LOAD-BEARING: "recieved", i before e.
      Meta matches the registered name exactly, so "payment_received" would fail template-not-found.
      Do NOT "fix" it here — it can only be corrected by re-registering at Meta and changing both
@@ -153,7 +180,7 @@ export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
    "Hi your business, Paul here from findable" is worse than sending nothing, because it is
    visibly automated in a message whose whole purpose is to sound like a person. For these,
    an empty name refuses rather than degrades. */
-export const TEMPLATES_NEEDING_REAL_NAME = new Set(["book_call", "re_engage"]);
+export const TEMPLATES_NEEDING_REAL_NAME = new Set(["book_call", "re_engage_49"]);
 
 /* TEMPLATES WHOSE contact_first_name GREETING MAY DEGRADE TO "there".
    The mirror of TEMPLATES_NEEDING_REAL_NAME, one level down: for most personal-greeting templates a
@@ -220,7 +247,7 @@ We ran a full report on your business for AI and SEO visibility: ${u}
 We could get you showing up in those results - it's mostly stuff we handle at our end.
 Want me to explain?`;
 
-/* audit_result_hook - the approved outreach hook. Display-only (Meta renders what the prospect
+/* video_template - the approved outreach hook. Display-only (Meta renders what the prospect
    actually reads); kept close to the registered body so the operator transcript matches. */
 const auditResultHookBody = (b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
   `Hi, is this ${b || "your business"}? We ran a free AI visibility audit for you.
@@ -259,7 +286,7 @@ You mentioned a call would work - what time suits you best?
 
 Happy to fit around you.`;
 
-/* re_engage — the wording Meta approved, supplied by Paul 2026-08-11 and reproduced exactly.
+/* re_engage_49 — the wording Meta approved, supplied by Paul 2026-08-11 and reproduced exactly.
    b = {{1}} business name, u = {{2}} that lead's onboarding URL (passed in the claimUrl slot by
    every caller, same convention as onboarding_followup). Display-only: Meta renders the real message
    from its own copy, so nothing in this string can change a send — but it IS what the operator reads
@@ -274,16 +301,25 @@ Happy to fit around you.`;
    Manager — including its single-paragraph shape (no line breaks). If Meta's editor actually
    shows line breaks that the paste flattened, correct THIS string from the editor, never from
    memory.
-   🔴 UPDATED 2026-09-12 FOR THE FLAT £99 AND THE MEASURED REFUND — AND META HAS NOT BEEN UPDATED
-   YET. The old body sold "the next ten businesses at £49.99 instead of £99", a founder tier that no
-   longer exists at all. Until Paul re-registers this template in WhatsApp Manager, PROSPECTS STILL
-   RECEIVE THE OLD WORDING and this string is what the operator reads, so the two genuinely disagree
-   right now. That is the known cost of updating the half we control; leaving both stale would have
-   been worse, because the Inbox record would keep asserting a discount nobody can buy.
-   ⛔ THE SAME SENTENCE EXISTS AT src/lib/templateBodies.ts (the SPA's copy). Change both together —
-   two display copies of one registered template is exactly the drift this comment block is about. */
+   🔴 SUPERSEDED 2026-09-12 (LATER THE SAME DAY): THE TEMPLATE WAS RE-REGISTERED AS re_engage_49.
+   This body is now HISTORY — it is what the 21 rows sent under the old `re_engage` actually
+   contained, restored verbatim from commit 036cfc4f so the Inbox transcript for those rows keeps
+   showing the message that was really sent.
+   ⛔ DO NOT "UPDATE" IT. Earlier that day I rewrote this single body to the £99 wording, a version
+   Meta was never given, which made 21 historic rows display a message nobody received. A body here
+   is a record of a send, not copy to be maintained. */
 const reEngageBody = (b: string, u: string) =>
-  `Hi ${b}, following up on the AI visibility report we sent over. It's £99 one-off to get started: we measure how often AI names you, build your pages, then re-measure after four weeks on the same questions. If that number hasn't gone up you can claim your £99 back. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
+  `Hi ${b}, following up on the AI visibility report we sent over. We're doing the next ten businesses at £49.99 instead of £99, in exchange for honest feedback on the work. A few quick questions and we're up and running: ${u} Happy to answer anything first if you'd rather.`;
+
+/* 🔴 re_engage_49's REGISTERED BODY IS NOT KNOWN TO THIS CODEBASE YET, AND THIS IS NOT A GUESS.
+   Paul supplied the template's NAME and its single variable, not its approved copy. Inventing
+   plausible words would put a confident transcript of a message nobody sent into the Inbox — the
+   precise drift these mirrored bodies exist to prevent.
+   ⛔ Replace it the moment the approved body is pasted from WhatsApp Manager, character for
+   character, and mirror it into src/lib/templateBodies.ts in the same commit — the parity test
+   asserts the two are identical. */
+const reEngage49Body = (b: string, _u: string) =>
+  `[re_engage_49 sent to ${b || 'this business'} — the approved WhatsApp copy is not stored in the app yet, so the exact wording is not shown here.]`;
 
 /* payment_recieved — the registered body, pasted character-for-character by Paul from WhatsApp
    Manager 2026-08-17 (the first time this wording has existed anywhere in the repo). The template
@@ -298,10 +334,10 @@ We'll get started and be back to you within a few days to get your Google profil
 Anything in the meantime, just reply here.`;
 
 /* audit_reply_warm — the WARM audit message (Meta 1509669747584736, approved 2026-09-07). It is
-   audit_result_hook MINUS the "is this the right number" opening, because it only ever goes to a
+   video_template MINUS the "is this the right number" opening, because it only ever goes to a
    lead who has already answered the opener, so asking again reads as though we were not listening.
    ⛔ THREE VARIABLES, NOT FOUR, AND THE BUSINESS NAME IS NOT ONE OF THEM. Registered at Meta as
-   {{1}} trade, {{2}} town, {{3}} audit link. audit_result_hook's {{1}} is the business name; this
+   {{1}} trade, {{2}} town, {{3}} audit link. video_template's {{1}} is the business name; this
    body never says it. Copying the hook's var list across would have shifted every parameter by one
    and sent the trade where Meta expects a name.
    ⚠️ DISPLAY ONLY, like every body here — Meta renders what the prospect reads from its own
@@ -314,6 +350,7 @@ More on how we can fix it, and how to get started: https://findable.live`;
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string) => string> = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
+  re_engage_49: reEngage49Body,
   payment_recieved: paymentRecievedBody,
   /* Body lives in src/lib/questionnaireFollowup.ts (the SPA preview imports the same function);
      this adapter maps the bodies-map calling convention onto it. */
@@ -334,7 +371,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
   audit_reply: auditReplyBody,
-  audit_result_hook: auditResultHookBody,
+  video_template: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,
 };
 
@@ -343,9 +380,9 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
 export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string): string {
   const fn = WA_TEMPLATE_BODIES[templateName];
   /* `town` is a 6th positional rather than a new object: every existing body function ignores extra
-     arguments, so adding it cannot change a single stored transcript. audit_result_hook is the only
+     arguments, so adding it cannot change a single stored transcript. video_template is the only
      body that reads it - without it the transcript would say "in your area" while the message the
-     prospect received named their town, which is the display drift 11 already records for re_engage. */
+     prospect received named their town, which is the display drift 11 already records for re_engage_49. */
   return fn ? fn(businessName, claimUrl, trade, competitors, contactFirstName, town) : `[${templateName}]`;
 }
 
@@ -369,7 +406,18 @@ export function templateBodyParams(
   const resolve = (v: TemplateVar) => {
     switch (v) {
       case "url": return claimUrl;
-      case "trade": return extra?.trade ?? "";
+      /* ⛔ NORMALISED AND GUARDED, BECAUSE video_template's body reads "for a {{2}} in {{3}}".
+         `ai_audits.business_type` is what the operator typed — 78% of the 968 stored values are not
+         lowercase and the four commonest are PLURAL, so the untouched value rendered "for a
+         Locksmiths in Huntingdon" on most sends. normaliseTrade maps the known trades and
+         singularises the rest; a value it cannot make safe THROWS rather than sending wrong.
+         ⚠️ The throw is caught at both send sites and recorded as a skip with its reason, so a
+         blocked lead is visible rather than silently unsent. See src/lib/templateVars.ts. */
+      case "trade": {
+        const t = normaliseTrade(extra?.trade);
+        if (!t.ok) throw new Error(`unsafe_template_var:${t.reason}:${t.detail}`);
+        return t.value;
+      }
       case "competitors": return extra?.competitors ?? "";
       /* The one variable that names a PERSON. For most templates a blank first name throws (same
          contract as onboarding_url below — callers refuse readably first, this stops a forgetful new
@@ -392,7 +440,17 @@ export function templateBodyParams(
       /* free_check_result's town. Blank is allowed to degrade rather than throw: the sentence still
          reads without it, and a free-check submitter who left the town vague is not a reason to
          withhold their result. */
-      case "town": return (extra?.town ?? "").trim();
+      case "town": {
+        const raw = (extra?.town ?? "").trim();
+        /* ⚠️ BLANK STILL DEGRADES, and that carve-out is deliberate rather than an oversight: the
+           comment above is free_check_result's contract, and a free-check submitter who left their
+           town vague must still get their result. Only a NON-BLANK town that is not a place name is
+           blocked — "Bourne uk" (4 audits) and "GF3a" (1), which would otherwise render verbatim. */
+        if (!raw) return "";
+        const t = normaliseTown(raw);
+        if (!t.ok) throw new Error(`unsafe_template_var:${t.reason}:${t.detail}`);
+        return t.value;
+      }
       /* free_check_result's report link — findable.live/report/<auditId>, built by reportPublicUrl.
          It said "/a/<auditId>" until 2026-09-02: a path that is now a deliberate 404 on
          findable.live, and on a leftover barber domain before that. The caller was fixed and this
@@ -456,9 +514,21 @@ export function claimTemplatePayload(
   const entry = WA_TEMPLATES[templateName];
   if (!entry) throw new Error(`unknown_template:${templateName} — not registered in WA_TEMPLATES, refusing to guess its variables`);
   const vars = entry.vars;
+  /* ⛔ THE HEADER COMPONENT COMES FIRST, and Meta requires the ORDER header-then-body. A template
+     registered with a VIDEO header and sent with only a body is rejected; the reverse — sending a
+     header for a template that has none — is rejected too. So this is driven by the registry entry
+     rather than by the caller: the one place that knows a template's shape decides its payload. */
+  const components: Record<string, unknown>[] = [];
+  if (entry.headerVideoUrl) {
+    components.push({
+      type: "header",
+      parameters: [{ type: "video", video: { link: entry.headerVideoUrl } }],
+    });
+  }
+  components.push(...templateBodyParams(vars, businessName, claimUrl, { ...extra, templateName }));
   return {
     type: "template",
-    template: { name: templateName, language: { code: lang }, components: templateBodyParams(vars, businessName, claimUrl, { ...extra, templateName }) },
+    template: { name: templateName, language: { code: lang }, components },
   };
 }
 

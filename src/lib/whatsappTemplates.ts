@@ -7,6 +7,42 @@
 // deliberate mirror because the SPA can't import Deno edge code (same pattern as src/lib/aggregators.ts).
 // KEEP IN SYNC with WA_TEMPLATES when a template's variable shape changes.
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   🔴 TEMPLATES THAT WERE RE-REGISTERED AT META UNDER A NEW NAME, AND THE HISTORY THAT CARRIES THE
+   OLD ONE (2026-09-12).
+
+   Paul re-registered two templates: `audit_result_hook` -> `video_template` (now with a video
+   header) and `re_engage` -> `re_engage_49` (now one variable). Renaming the code is the easy half.
+   The half that fails SILENTLY is that the database is full of the old names:
+
+       whatsapp_sends.template        135 audit_result_hook   20 re_engage
+       whatsapp_messages.template_name 135 audit_result_hook   21 re_engage
+
+   Every read-side consumer compares a stored name against a literal, so a bare rename would have:
+     · emptied the COLD arm of the A/B comparison (armComparison.AB_ARMS) — 135 sends, the entire
+       arm, reading as "no data" rather than as an error;
+     · dropped 135 sends out of REPORT_LINK_TEMPLATES, moving their real report opens into the
+       "not attributable" bucket — the exact failure §14 records for forgetting a template;
+     · blanked the Inbox label for 156 rows;
+     · broken last-touch attribution for the same rows.
+   None of that throws. The numbers would just quietly get smaller.
+
+   ⛔ SO THE STORED NAME IS CANONICALISED ON READ, NEVER MIGRATED IN THE DATABASE. The rows are the
+   record of what was actually sent, and `audit_result_hook` IS what Meta was told at the time —
+   rewriting them would falsify the receipt to tidy up a display concern.
+   ⚠️ ONE DIRECTION ONLY: old -> new. Adding a reverse entry would make two live templates collapse
+   into one. ⚠️ An unknown name passes through untouched: absence is not a rename. */
+export const TEMPLATE_RENAMES: Readonly<Record<string, string>> = {
+  audit_result_hook: 'video_template',
+  re_engage: 're_engage_49',
+};
+
+/** The current name for a template, given whatever name a stored row happens to carry. */
+export function canonicalTemplate(name: string | null | undefined): string {
+  const n = (name ?? '').trim();
+  return TEMPLATE_RENAMES[n] ?? n;
+}
+
 export type TemplateGroup = 'site' | 'opener' | 'audit';
 
 export interface TemplateReq {
@@ -28,9 +64,9 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },
-  // audit_result_hook - the outreach hook. Same shape as audit_reply: its link IS the report link,
+  // video_template - the outreach hook. Same shape as audit_reply: its link IS the report link,
   // so it needs the lead's completed audit and never a share_token.
-  audit_result_hook:      { needsUrl: false, needsAudit: true,  group: 'audit' },
+  video_template:      { needsUrl: false, needsAudit: true,  group: 'audit' },
   /* audit_reply_warm - the warm audit message. needsAudit because its {{3}} IS the report link, so
      the queue must not send it before the audit completes (queueAuditStatus reads this flag). */
   audit_reply_warm:       { needsUrl: false, needsAudit: true,  group: 'audit' },
@@ -47,7 +83,7 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
      exactly the leads it is for — the same mistake onboarding_followup's comment records above.
      ⚠️ needsAudit stays FALSE deliberately. If it is ever changed to true, a quiet lead with no
      completed audit becomes unreachable by the one template written for them. */
-  re_engage:              { needsUrl: false, needsAudit: false, group: 'opener' },
+  re_engage_49:              { needsUrl: false, needsAudit: false, group: 'opener' },
 };
 
 export interface SendabilityLead {

@@ -29,12 +29,12 @@
    ============================================================================================== */
 
 /** The templates under test. Order is display order: cold first, then warm. */
-export const AB_ARMS = ['audit_result_hook', 'audit_reply_warm'] as const;
+export const AB_ARMS = ['video_template', 'audit_reply_warm'] as const;
 export type AbArm = typeof AB_ARMS[number];
 const ARM_SET: ReadonlySet<string> = new Set(AB_ARMS);
 
 export const ARM_LABELS: Record<AbArm, string> = {
-  audit_result_hook: 'Cold (audit result hook)',
+  video_template: 'Cold (video hook)',
   audit_reply_warm: 'Warm (audit reply, after the opener)',
 };
 
@@ -103,7 +103,7 @@ export function armFor(sends: ArmSend[]): { arm: AbArm; at: number } | 'both' | 
  * recorded visit, so that lead is counted in `leads` but not in `leadsTracked`.
  */
 export function foldArmComparison(rows: ArmLeadInput[], trackingStart: number): ArmComparison {
-  const arms = { audit_result_hook: empty(), audit_reply_warm: empty() } as Record<AbArm, ArmTotals>;
+  const arms = { video_template: empty(), audit_reply_warm: empty() } as Record<AbArm, ArmTotals>;
   let bothArms = 0;
 
   for (const r of rows) {

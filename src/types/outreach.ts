@@ -463,7 +463,7 @@ export function canonicalFilterValue(value: StatusFilterValue): StatusFilterValu
 export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   { value: 'initial_contact', label: 'Initial contact (opener)' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
-  { value: 'audit_result_hook', label: 'Audit result hook (outreach)' },
+  { value: 'video_template', label: 'Audit result hook (outreach)' },
   { value: 'audit_reply_warm', label: 'Audit reply — warm (after the opener)' },
   { value: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
   /* The OPENER follow-up: a business that got the initial_contact opener and never replied. Bulk-
@@ -473,9 +473,9 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   { value: 'contact_followup', label: 'No-reply follow-up (chase the opener)' },
   { value: 'book_call', label: 'Arrange a call' },
   /* Re-engage a lead who went quiet. ⚠️ THE DOC COMMENT ABOVE THIS LIST IS ALREADY WRONG for four
-     of the entries — book_call, initial_contact and re_engage carry ONE variable (business name)
+     of the entries — book_call, initial_contact and re_engage_49 carry ONE variable (business name)
      and audit_reply carries four. Left as-is rather than rewritten mid-task, but do not trust it. */
-  { value: 're_engage', label: 'Re-engage (gone quiet)' },
+  { value: 're_engage_49', label: 'Re-engage (gone quiet)' },
 ];
 
 /** The old barber-sites product. NOT sendable — label-only, so historic rows read as words rather

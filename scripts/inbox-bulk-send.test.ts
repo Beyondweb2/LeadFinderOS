@@ -25,7 +25,7 @@ const withAudit = (...leadIds: string[]) => ({
 });
 
 console.log('\n── THE COLD GATE REFUSES THE WHOLE BATCH ──');
-for (const cold of ['initial_contact', 'audit_result_hook', 'made_up_template', '', '   ']) {
+for (const cold of ['initial_contact', 'video_template', 'made_up_template', '', '   ']) {
   const p = planBulkSend([c('1', 'l1'), c('2', 'l2')], cold, noAudits);
   ok(p.send.length === 0, `"${cold.trim() || '(blank)'}" sends to nobody`);
   ok(!!p.refusal, `"${cold.trim() || '(blank)'}" is refused with a stated reason`);

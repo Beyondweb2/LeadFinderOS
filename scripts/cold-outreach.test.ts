@@ -3,7 +3,7 @@
 
    ⛔ THE BUG THIS PINS (2026-09-02): the phone-history seatbelt read
    `templateName === "initial_contact"`. The audit-first flow began queueing
-   `audit_result_hook`, and the guard — keyed to a name, not a property — stopped applying.
+   `video_template`, and the guard — keyed to a name, not a property — stopped applying.
    12 of 16 hook sends went to numbers already in conversation; 4 were marked not_interested.
 
    ⛔ AND THE DEFAULT MUST BE COLD. Written as a list of cold templates, the NEXT template added
@@ -17,7 +17,7 @@ const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" :
 
 console.log("── THE TWO TEMPLATES THIS INCIDENT WAS ABOUT ──");
 ok(isColdOutreachTemplate("initial_contact"), "initial_contact is cold (the original guard)");
-ok(isColdOutreachTemplate("audit_result_hook"), "audit_result_hook is cold — THE FIX");
+ok(isColdOutreachTemplate("video_template"), "video_template is cold — THE FIX");
 
 console.log("\n── EVERY OTHER COLD OPENER THE QUEUE CAN CARRY ──");
 for (const t of ["book_call", "booking_page_intro", "no_website_barbers", "barber_poor_website",
@@ -30,8 +30,8 @@ for (const t of ["audit_reply", "hook_followup", "contact_followup", "report_fol
                  "onboarding_followup", "questionnaire_followup", "payment_recieved"]) {
   ok(!isColdOutreachTemplate(t), `${t} is a continuation`);
 }
-ok(!isColdOutreachTemplate("re_engage"),
-   "re_engage is a continuation — it EXISTS for leads with history, so guarding it would block its only audience");
+ok(!isColdOutreachTemplate("re_engage_49"),
+   "re_engage_49 is a continuation — it EXISTS for leads with history, so guarding it would block its only audience");
 
 console.log("\n── ABSENCE IS COLD (the safe direction, and the reason this file exists) ──");
 ok(isColdOutreachTemplate(null), "null is cold");
@@ -45,8 +45,8 @@ ok(!isColdOutreachTemplate("audit_reply "), "trailing space trims to a real cont
 
 console.log("\n── SUBSTRING TRAPS (CLAUDE.md §4: 'bing' matches plumbing) ──");
 ok(isColdOutreachTemplate("audit_reply_v2"), "audit_reply_v2 is NOT audit_reply — no prefix matching");
-ok(isColdOutreachTemplate("re_engage_cold"), "re_engage_cold is NOT re_engage");
-ok(isColdOutreachTemplate("pre_engage"), "pre_engage does not match re_engage as a substring");
+ok(isColdOutreachTemplate("re_engage_cold"), "re_engage_cold is NOT re_engage_49");
+ok(isColdOutreachTemplate("pre_engage"), "pre_engage does not match re_engage_49 as a substring");
 
 console.log("\n── THE SET ITSELF ──");
 /* ⛔ THE EXACT SET, NOT ITS SIZE. This was `size === 8`, a tripwire meant to force a deliberate
@@ -65,7 +65,7 @@ const EXPECTED_CONTINUATIONS = [
   "onboarding_followup",
   "questionnaire_followup",
   "payment_recieved", // Meta's registered spelling — do not "correct" it
-  "re_engage",
+  "re_engage_49",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));
@@ -78,7 +78,7 @@ ok(
     : `all ${actual.length} continuations are the expected ones`,
 );
 ok(!CONTINUATION_TEMPLATES.has("initial_contact"), "the opener is never in the exempt set");
-ok(!CONTINUATION_TEMPLATES.has("audit_result_hook"), "the hook is never in the exempt set");
+ok(!CONTINUATION_TEMPLATES.has("video_template"), "the hook is never in the exempt set");
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);
 if (f) process.exit(1);

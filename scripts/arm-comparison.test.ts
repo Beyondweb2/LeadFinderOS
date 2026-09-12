@@ -16,7 +16,7 @@ import {
 let fails = 0;
 const ok = (c: boolean, l: string) => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
 
-const H = 'audit_result_hook', W = 'audit_reply_warm';
+const H = 'video_template', W = 'audit_reply_warm';
 const T0 = Date.parse('2026-09-10T09:00:00Z');   // an arm send, comfortably after tracking start
 const TRACK = Date.parse('2026-09-06T00:00:00Z');
 const min = (n: number) => n * 60_000;
