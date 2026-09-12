@@ -9,7 +9,7 @@ import {
 } from "../_shared/targeting-straggler.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
 import { refreshApifyUsage } from "../_shared/enrichment/apify-usage.ts";
-import { advanceBaseline, sweepStalledBaselines, ensureBaselinesForPaidOnboardings } from "../_shared/audit-baseline.ts";
+import { advanceBaseline, sweepStalledBaselines, ensureBaselinesForPaidOnboardings, fireDueRemeasures } from "../_shared/audit-baseline.ts";
 import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
@@ -212,6 +212,16 @@ Deno.serve(async (req) => {
       await ensureBaselinesForPaidOnboardings(service);
     } catch (e) {
       console.error("[process-ai-audit-queue] paid-baseline backstop failed:", e instanceof Error ? e.message : String(e));
+    }
+
+    // 0a4) DAY-28 REPLAYS — fire and stamp (Paul, 2026-09-12). Reads outreach_leads.remeasure_due_date
+    //      and computes nothing; refuses refunded, archived and unpaid; one replay per baseline,
+    //      enforced by the claim trigger + partial unique index, not by this tick. One cheap query
+    //      when nothing is due, which is every tick but a handful a month.
+    try {
+      await fireDueRemeasures(service);
+    } catch (e) {
+      console.error("[process-ai-audit-queue] day-28 replay tick failed:", e instanceof Error ? e.message : String(e));
     }
 
     // NOTE: the SEO step used to live HERE, before question draining, and it returned from the

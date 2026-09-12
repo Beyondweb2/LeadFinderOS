@@ -7,6 +7,7 @@ import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
 import { excludeAsked, overAskFor } from "../../../src/lib/fullMeasure.ts";
+import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
 import { measurementFlagFor } from "../../../src/lib/auditKind.ts";
 import { moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
@@ -287,7 +288,14 @@ Deno.serve(async (req) => {
        operator triggers from the AI Audit page. Its ceiling is explicit below, so a public caller
        still cannot exceed it. */
     const isMeasurement: boolean = body.purpose === "measurement";
-    const questionCount = isBaseline
+    /* THE DAY-28 REPLAY — INTERNAL ONLY, fired by process-ai-audit-queue (fireDueRemeasures) against
+       outreach_leads.baseline_audit_id on the STORED remeasure_due_date. It must carry the
+       baseline's asked set verbatim (judgeRemeasure gates it below), it runs MEASUREMENT_RUNS times,
+       it skips SEO, it is exempt from the town gate on the baseline's own evidence, and it writes
+       audit_purpose = 'remeasure' so the claim trigger sets outreach_leads.remeasure_audit_id in the
+       insert's own transaction and the partial unique index refuses a second one at the database. */
+    const isRemeasure: boolean = isInternal && body.purpose === "remeasure";
+    const questionCount = (isBaseline || isRemeasure)
       ? clampCount(body.question_count ?? body.questionCount,
           BASELINE_MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT, BASELINE_DEFAULT_QUESTION_COUNT)
       : isMeasurement
@@ -297,7 +305,7 @@ Deno.serve(async (req) => {
     // The provided-questions cap must match, or a baseline REPEAT run (which passes the first
     // run's questions verbatim so the three runs are like-for-like) would silently truncate
     // 10 questions to 5 and average two different question sets.
-    const MAX_QUESTIONS = isBaseline
+    const MAX_QUESTIONS = (isBaseline || isRemeasure)
       ? BASELINE_MAX_QUESTION_COUNT
       : isMeasurement ? MEASUREMENT_MAX_QUESTION_COUNT
       : MAX_QUESTION_COUNT;
@@ -322,7 +330,7 @@ Deno.serve(async (req) => {
       : 0;
     const baselineTargetRuns = isBaseline
       ? Math.min(5, Math.max(1, typeof body.baseline_target_runs === "number" ? Math.round(body.baseline_target_runs) : 1))
-      : isMeasurement ? MEASUREMENT_RUNS
+      : (isMeasurement || isRemeasure) ? MEASUREMENT_RUNS
       : internalTargetRuns;
     /* SILENT TRUNCATION WAS THE REAL BUG, not the number. The cap is a cost ceiling and stays, but
        quietly returning fewer questions than were asked for is how a before/after ends up built on a
@@ -360,14 +368,14 @@ Deno.serve(async (req) => {
        internal-caller gate. Applied at the run insert below. */
     // Full measurement forces SEO off — it is a per-site scan (once, not per-question) and would eat
     // the per-run cost budget; the mode is about the AI citation gather, not the website grade.
-    const skipSeo: boolean = body.skip_seo === true || isMeasurement;
+    const skipSeo: boolean = body.skip_seo === true || isMeasurement || isRemeasure;
     /* ⛔ ONE PREDICATE GOVERNS BOTH ENDS — the preview the operator reviews and the run that
        actually happens. Money questions are for the ordinary per-business audit only: a paid
        baseline is the guarantee's day-0 and must not change character under a client
        mid-contract, and a full measure is the winnability read. The wizard previews with
        `preview: true` and then confirms by sending `questions` VERBATIM, so both ends reading this
        one value is what makes preview == run. */
-    const moneyQuestionCount = (!isBaseline && !isMeasurement) ? questionCount : 0;
+    const moneyQuestionCount = (!isBaseline && !isMeasurement && !isRemeasure) ? questionCount : 0;
     /* MULTI-TOWN FULL MEASURE. audit-baseline's startFullMeasure sends the allocation from
        fullMeasureAllocation: [{town, questions, isMain}]. The MAIN town keeps location_text; each
        extra area gets its own generated questions for the same services. Absent (every other
@@ -409,7 +417,7 @@ Deno.serve(async (req) => {
     /* !isMeasurement, same reason as !isBaseline: a full measurement must be its OWN audit so the
        start and re-measure gathers are two distinct, comparable audits on the lead — not extra runs
        bolted onto an old 3-question outreach audit. */
-    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement) {
+    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isRemeasure) {
       const { data: candidates } = await service
         .from("ai_audits")
         .select("id, baseline_target_runs, created_at")
@@ -625,7 +633,9 @@ Deno.serve(async (req) => {
          and their town, and that is better evidence than a derived one, not worse. A business
          Google has never heard of is precisely the customer who most needs telling that AI cannot
          find them. */
-      if (lead && !isBaseline && !townConfirmed && townGated(lead)) {
+      /* ⛔ THE REPLAY IS EXEMPT: its town is the baseline's, which came from the client's own
+         questionnaire. Without this a client Google cannot resolve is gated at day 28. */
+      if (lead && !isBaseline && !isRemeasure && !townConfirmed && townGated(lead)) {
         return json({ ok: false, error: `town_unverified: ${TOWN_GATE_REASON}` }, 409);
       }
     }
@@ -636,7 +646,7 @@ Deno.serve(async (req) => {
     let questions: string[] = [];
     /* Set by the like-for-like check below; stored on the run so the before/after can tell a
        counted re-measurement from a diagnostic or an overridden set. */
-    let remeasureNote: { reason: string; counts: boolean; detail: string } | null = null;
+    let remeasureNote: Record<string, unknown> | null = null;
     let fullMeasureNote: Record<string, unknown> | null = null;
     /* THE MONEY QUESTIONS THIS AUDIT GENERATED, verbatim. Accumulated across the generation
        branches (a multi-town measure generates per area), intersected with what is actually queued further
@@ -654,19 +664,36 @@ Deno.serve(async (req) => {
     if (Array.isArray(body.money_questions)) {
       moneyGenerated.push(...(body.money_questions as unknown[]).filter((q): q is string => typeof q === "string" && !!q.trim()));
     }
-    /* ⛔ THE BASELINE POINTER, READ ONCE FOR ANY MEASUREMENT ON A LEAD. Two things hang off it:
-       the full measure's EXCLUSION (it must be disjoint from the judged set) and the ORDER gate
-       (a paying lead cannot be full-measured before its baseline is frozen). Ground truth for the
-       asked set is the baseline's FIRST run's queue rows — the contract records intent, not what
-       was asked (baselineReplay.ts). */
+    /* ⛔ THE BASELINE POINTER, READ ONCE FOR ANY MEASUREMENT OR REPLAY ON A LEAD. Three things
+       hang off it: the full measure's EXCLUSION (it must be disjoint from the judged set), the
+       ORDER gate (a paying lead cannot be full-measured before its baseline is frozen), and the
+       REPLAY's like-for-like refusal (a day-28 remeasure must ask exactly the asked set). Ground
+       truth for the asked set is the baseline's FIRST run's queue rows — the contract records
+       intent, not what was asked (baselineReplay.ts). */
     let pointer: string | null = null;
     let pointerFrozen = false;
     let baselineAsked: string[] = [];
-    if (isMeasurement && leadId) {
-      const { data: leadRow } = await service
-        .from("outreach_leads").select("baseline_audit_id, amount_paid").eq("id", leadId).maybeSingle();
-      pointer = (leadRow as { baseline_audit_id?: string | null } | null)?.baseline_audit_id ?? null;
-      const leadPaid = Number((leadRow as { amount_paid?: number | null } | null)?.amount_paid ?? 0) > 0;
+    if (isRemeasure && !leadId) return json({ ok: false, error: "remeasure_requires_lead" }, 400);
+    if ((isMeasurement || isRemeasure) && leadId) {
+      /* MIGRATION-TOLERANT, the house pattern (§3 SQL-first): remeasure_audit_id is Slice 0's
+         hand-run column. If it is not there yet, read without it — a client's full measure must
+         not 409 because the day-28 column has not landed. The replay itself still cannot run
+         without it (the tick's own read fails closed), which is the right direction. */
+      let leadRow: unknown = null;
+      {
+        const first = await service
+          .from("outreach_leads").select("baseline_audit_id, remeasure_audit_id, amount_paid").eq("id", leadId).maybeSingle();
+        if (first.error && /remeasure_audit_id/i.test(first.error.message ?? "")) {
+          console.warn("[create-ai-audit] outreach_leads.remeasure_audit_id not present — reading without it (run the Slice 0 SQL)");
+          leadRow = (await service.from("outreach_leads").select("baseline_audit_id, amount_paid").eq("id", leadId).maybeSingle()).data;
+        } else {
+          leadRow = first.data;
+        }
+      }
+      const lr = leadRow as { baseline_audit_id?: string | null; remeasure_audit_id?: string | null; amount_paid?: number | null } | null;
+      pointer = lr?.baseline_audit_id ?? null;
+      const alreadyReplayed = lr?.remeasure_audit_id ?? null;
+      const leadPaid = Number(lr?.amount_paid ?? 0) > 0;
       if (pointer) {
         const { data: base } = await service
           .from("ai_audits").select("baseline_completed_at").eq("id", pointer).maybeSingle();
@@ -680,24 +707,49 @@ Deno.serve(async (req) => {
           baselineAsked = ((bq ?? []) as Array<{ question: string }>).map((r) => (r.question ?? "").trim()).filter(Boolean);
         }
       }
+      const refuse = async (error: string, detail: string, extra: Record<string, unknown> = {}) => {
+        try {
+          await service.from("client_error_reports").insert({
+            error_id: error,
+            message: detail.slice(0, 1000),
+            context: { lead_id: leadId, baseline_audit_id: pointer, baseline_frozen: pointerFrozen, purpose: body.purpose, ...extra },
+          });
+        } catch { /* reporting must never turn a refusal into a retryable error */ }
+        return json({ ok: false, error, detail }, 409);
+      };
+      if (isRemeasure) {
+        /* ⛔ THE REPLAY'S GATES, IN THE ORDER A HUMAN WANTS THEM. No pointer → nothing to replay
+           (never "pick one"). Already replayed → the pointer is the idempotency; a second tick that
+           raced the first stops here, and the partial unique index stops it at the database if it
+           got past. Not frozen → the before side is still being measured. Then like-for-like. */
+        if (!pointer) return await refuse("no_baseline_recorded", "No baseline is recorded for this client, so there is nothing to replay. Set the baseline pointer to the audit that should be the before side.");
+        if (alreadyReplayed) return await refuse("already_remeasured", `This client's day-28 replay already exists (${alreadyReplayed}). One replay per baseline, ever.`, { remeasure_audit_id: alreadyReplayed });
+        if (!pointerFrozen) return await refuse("baseline_not_frozen", "This client's baseline has not finished measuring; the replay waits for a frozen before side.");
+        if (!providedQuestions?.length) return await refuse("remeasure_requires_questions", "A replay must carry the baseline's asked questions verbatim; none were supplied.");
+        const verdict = judgeRemeasure({
+          proposed: providedQuestions,
+          baselineAsked,
+          targetRuns: MEASUREMENT_RUNS,
+          overrideReason: typeof body.question_change_reason === "string" ? body.question_change_reason : null,
+        });
+        if (!verdict.allow) return await refuse(verdict.reason, verdict.detail);
+        /* ⚠️ ALLOWED, AND THE RECORD TRAVELS WITH THE AUDIT: why it counts, what it replays, and
+           whether the work was finished when it fired (fire-and-stamp — an unfinished delivery
+           never delays the promise's timing, it is written on the number instead). */
+        const ctx = (body.remeasure_context && typeof body.remeasure_context === "object") ? body.remeasure_context as Record<string, unknown> : {};
+        remeasureNote = { reason: verdict.reason, counts: verdict.countsAsMeasurement, detail: verdict.detail, baseline_audit_id: pointer, ...ctx };
+      }
       /* ⛔ ORDER MATTERS AND IS NOT NEGOTIABLE (Paul, 2026-09-12): the baseline is frozen BEFORE
          the full measurement runs. If the judged set were picked after seeing which questions are
          winnable, the before/after would be self-serving and a client could say so. So a PAYING
          lead with no frozen baseline cannot be full-measured — refused, recorded, never queued.
          A prospect (nothing paid) may still be measured from the wizard: there is no refund set to
          protect. */
-      if (leadPaid && !(pointer && pointerFrozen)) {
+      if (isMeasurement && leadPaid && !(pointer && pointerFrozen)) {
         const why = !pointer
           ? "This client has no recorded baseline. The full measure runs after the baseline freezes, never before it."
           : "This client's baseline is still measuring. The full measure starts by itself the moment it freezes.";
-        try {
-          await service.from("client_error_reports").insert({
-            error_id: "full_measure_before_baseline",
-            message: why,
-            context: { lead_id: leadId, baseline_audit_id: pointer, baseline_frozen: pointerFrozen },
-          });
-        } catch { /* reporting must never turn a refusal into a retryable error */ }
-        return json({ ok: false, error: "baseline_not_frozen", detail: why }, 409);
+        return await refuse("baseline_not_frozen", why);
       }
     }
 
@@ -882,7 +934,7 @@ Deno.serve(async (req) => {
          agreeing only by comment, is what broke — and the comment in audit-baseline.ts had been
          false since the day this line was widened. scripts/audit-kind.test.ts drives the round
          trip: what this writes must be what that recognises. */
-      if (measurementFlagFor(isMeasurement)) auditRow.is_measurement = true;
+      if (measurementFlagFor(isMeasurement || isRemeasure)) auditRow.is_measurement = true;
       /* ⛔ THE PURPOSE, PERSISTED — AND IT IS WHAT CLAIMS THE BASELINE POINTER (2026-09-12).
          There was no purpose column on ai_audits at all, which is precisely why nothing could
          identify THE baseline for a lead: `baseline_contract` is written to every audit
@@ -897,7 +949,7 @@ Deno.serve(async (req) => {
          ⚠️ Migration-tolerant like its neighbours: the shed-and-retry below drops it if the column
          is not there yet, and without the column the trigger does not exist either, so the whole
          feature is simply absent rather than half-present. */
-      auditRow.audit_purpose = isBaseline ? "baseline" : isMeasurement ? "measurement" : "audit";
+      auditRow.audit_purpose = isBaseline ? "baseline" : isRemeasure ? "remeasure" : isMeasurement ? "measurement" : "audit";
       let { data: audit, error: insErr } = await service
         .from("ai_audits").insert(auditRow).select("id, business_name").single();
       // Shed a missing new column (either one) and retry, longest-name-first so one miss can't mask another.
@@ -909,6 +961,14 @@ Deno.serve(async (req) => {
         delete auditRow[missing];
         ({ data: audit, error: insErr } = await service
           .from("ai_audits").insert(auditRow).select("id, business_name").single());
+      }
+      /* ⛔ THE DATABASE SAID NO, AND THAT IS THE ANSWER. The partial unique indexes (one 'remeasure',
+         and optionally one 'baseline', per lead) refuse a duplicate insert with 23505 whatever any
+         tick believed. Report it as what it is — the thing already exists — not as a 500 to retry. */
+      if (insErr && ((insErr as { code?: string }).code === "23505" || /uq_ai_audits_one_/.test(insErr.message ?? ""))) {
+        const what = String(auditRow.audit_purpose ?? "audit");
+        console.warn(`[create-ai-audit] duplicate ${what} for lead ${leadId} refused by the database: ${insErr.message}`);
+        return json({ ok: false, error: what === "remeasure" ? "already_remeasured" : `already_has_${what}`, detail: insErr.message }, 409);
       }
       if (insErr || !audit) return json({ ok: false, error: insErr?.message ?? "audit_insert_failed" }, 500);
       auditId = audit.id;
