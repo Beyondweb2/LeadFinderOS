@@ -149,26 +149,6 @@ const SAME_REPO_GROUPS = [
     ],
   },
   {
-    /* ⛔ THIS PAIR BROKE PRODUCTION ON 2026-08-06, WITH A COMMENT ON BOTH SIDES ASKING FOR IT.
-       The measure button creates MARKET_AUDIT_MIN_AUDITS audits back to back, a second apart, for the
-       same trade and town — sequentially on purpose, because the coverage directive needs the first
-       audit's queue rows to exist before the second is generated. create-ai-audit's cooldown allows
-       MARKET_COOLDOWN_ALLOWANCE per trade+town per window.
-       If the allowance is BELOW the minimum, the button is structurally unable to finish: the guard
-       refuses the flow's own second audit and the market is stranded on one — which is the exact
-       "not enough measured yet" state the rebuild existed to prevent, caused by its own guard.
-       Norwich got one audit that way. A comment on each naming the other did not stop it, and a
-       comment is what is being replaced here. */
-    what: 'the market audit count and the cooldown allowance',
-    why: 'The measure button creates MARKET_AUDIT_MIN_AUDITS audits in a row; create-ai-audit refuses more than MARKET_COOLDOWN_ALLOWANCE per window. An allowance below the minimum makes the button unable to complete, silently, and strands the market on one audit.',
-    places: [
-      /* Moved to a zero-dep leaf 2026-08-19 so Coverage's "Measured" rung and the panel share one
-         number; marketView.ts re-exports it, but this parser needs the DECLARATION site. */
-      { file: path.join(LFOS_ROOT, 'src', 'lib', 'marketAuditThreshold.ts'), name: 'MARKET_AUDIT_MIN_AUDITS', kind: 'number', role: 'how many the button CREATES' },
-      { file: path.join(LFOS_ROOT, 'supabase', 'functions', 'create-ai-audit', 'index.ts'), name: 'MARKET_COOLDOWN_ALLOWANCE', kind: 'number', role: 'how many the server ALLOWS' },
-    ],
-  },
-  {
     /* ⛔ THIS PAIR HAD ALREADY DRIFTED WHEN THE CHECK WAS WRITTEN. marketView was re-measured to
        $0.0104 per question and sources.ts was left at $0.0125, so the app quoted the operator one
        price while the server reserved another against the spend cap — a 20% gap between the number
@@ -190,17 +170,6 @@ const SAME_REPO_GROUPS = [
     places: [
       { file: path.join(LFOS_ROOT, 'src', 'lib', 'marketView.ts'), name: 'SEO_SCAN_USD', kind: 'number', role: 'SHOWN in the batch estimate' },
       { file: path.join(LFOS_ROOT, 'supabase', 'functions', '_shared', 'enrichment', 'sources.ts'), name: 'SEO_SCAN_USD_PER_SCAN', kind: 'number', role: 'RESERVED, and the usage fallback' },
-    ],
-  },
-  {
-    /* The window itself. Less dangerous than the allowance — a mismatch only makes the panel's
-       message wrong about how long to wait — but it is the same two-copies-one-value shape, and it
-       costs one entry to cover. */
-    what: 'the market cooldown window',
-    why: 'The panel states this to the operator and create-ai-audit enforces it. A mismatch means the refusal message names a wait that is not the real one.',
-    places: [
-      { file: path.join(LFOS_ROOT, 'src', 'lib', 'marketView.ts'), name: 'MARKET_COOLDOWN_MS', kind: 'expression', role: 'stated by the panel' },
-      { file: path.join(LFOS_ROOT, 'supabase', 'functions', 'create-ai-audit', 'index.ts'), name: 'MARKET_COOLDOWN_MS', kind: 'expression', role: 'enforced by the server' },
     ],
   },
 ];

@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { parseQuestionPaste, pasteLineCount } from '@/lib/questionPaste';
-import { isMeasurementSource, runsForReAuditMode, defaultReAuditMode, type ReAuditMode } from '@/lib/measurementRuns';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -50,7 +49,6 @@ import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, F
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMeasurementLock } from '@/hooks/useMeasurementLock';
 import { ToastAction } from '@/components/ui/toast';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -60,7 +58,6 @@ import {
   auditProtection, PROTECTION_WORDING,
   type AuditProtectionFacts, type ProtectionVerdict,
 } from '@/lib/auditProtection';
-import { describeLock, diffAgainstLock } from '@/lib/measurementLock';
 
 // AI Visibility Audit — a stacked/conversational wizard: answered steps stay visible
 // and answering one reveals the next below it (no per-step Next). Generates search
@@ -358,14 +355,6 @@ const AiAudit = () => {
   // is a worse failure than losing a few typed edits.
   const [reAuditOpen, setReAuditOpen] = useState(false);
   const [reAuditQuestions, setReAuditQuestions] = useState<string[]>([]);
-  /* ⛔ ONE VALUE FEEDS THE PRICE AND THE ACTION. The cost line multiplies by runs derived from
-     THIS, and confirmReAudit passes THIS to reAuditFromSource, which writes baseline_target_runs
-     from the same helper — so the number shown is the number charged. Two parallel booleans is how
-     a screen ends up saying "× 1 run" while the server runs three.
-     ⚠️ Plain useState, not persisted: it is seeded from the source audit each time the dialog
-     opens (startReAudit), and a remembered choice from another audit is exactly the wrong default
-     on a paid action. */
-  const [reAuditMode, setReAuditMode] = useState<ReAuditMode>('quick');
   /* Paste-a-list: the raw textarea and its open/closed state. Parsed by the pure
      parseQuestionPaste (blank lines dropped, list markers stripped, duplicates collapsed) into the
      SAME editable rows below, so pasted questions can still be tweaked or deleted before running.
@@ -996,19 +985,10 @@ const AiAudit = () => {
       if (!error) leadIsPaying = isPaidLead(data as { amount_paid?: number | null; status?: string | null } | null);
     }
 
-    let hasMeasurementLock: boolean | null = null;
-    {
-      const { data, error } = await (supabase as unknown as SupabaseClient)
-        .from('measurement_locks').select('id').eq('business_name', a.business_name).limit(1);
-      /* A missing TABLE (the lock migration is hand-run too) is a failed check, not "no lock". */
-      if (!error) hasMeasurementLock = ((data as unknown[] | null) ?? []).length > 0;
-    }
-
     return {
       baselineTargetRuns: a.baseline_target_runs ?? null,
       isMeasurement: a.is_measurement ?? null,
       leadIsPaying,
-      hasMeasurementLock,
     };
   }, []);
 
@@ -1381,9 +1361,6 @@ const AiAudit = () => {
       .map((r) => (r.question ?? '').trim())
       .filter((q) => { if (!q) return false; const k = q.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
     setReAuditQuestions(seed.length ? seed : ['']);
-    /* Opens on whatever the SOURCE implies, so leaving the toggle alone reproduces exactly the
-       behaviour this button had before the picker existed. */
-    setReAuditMode(defaultReAuditMode(listSource.find((a) => a.id === auditId) ?? null));
     setReAuditOpen(true);
   };
 
@@ -1416,15 +1393,11 @@ const AiAudit = () => {
     if (clean.length === 0) { toast({ title: 'Add at least one question', variant: 'destructive' }); return; }
     setReAuditBusy(true);
     try {
-      /* ⛔ THE SHARED HELPER OWNS THE FIXED LOGIC. reAuditFromSource (src/lib/reAudit.ts) reads the
-         source audit's markers, applies the exact type-aware check (is_measurement === true ||
-         baseline_target_runs > 1), mints the copy and calls create-ai-audit with purpose:'measurement'
-         when it is a measurement. The Baseline page's "Re-run this measurement" calls the SAME helper,
-         so the two paths cannot drift back into the 5-question / 1-run bug. */
+      /* A re-audit is a ONE-RUN quick diagnostic on a fresh copy (src/lib/reAudit.ts). The 3-run
+         "measurement" mode went on 2026-09-12: re-measuring a baseline is the queue's day-28
+         replay, and a full measure is never compared, so there was nothing left for it to do. */
       const res = await reAuditFromSource(supabase as unknown as SupabaseClient, {
-        /* The SAME value the cost line priced. reAuditFromSource turns it into the copy row's
-           is_measurement + baseline_target_runs, so a 3-run price cannot become a 1-run audit. */
-        sourceAuditId: auditId, userId: user.id, questions: clean, mode: reAuditMode,
+        sourceAuditId: auditId, userId: user.id, questions: clean,
       });
       if (!res.ok) throw new Error('error' in res ? res.error : 're-audit failed');
 
@@ -1731,21 +1704,8 @@ const AiAudit = () => {
   }, [savedAudits, searchExtras]);
 
   const openAuditRow = listSource.find((a) => a.id === auditId) ?? null;
-  /* Runs + cost for the re-audit estimate, from the CHOSEN mode (not the source's own markers)
-     through the SAME helper reAuditFromSource writes baseline_target_runs with — so the figure
-     approved here is the figure actually spent, whichever mode is picked.
-     `reAuditSourceIsMeasurement` is kept separately: it is what the SOURCE was, used only to warn
-     when a real measurement is being downgraded to a single run. */
-  const reAuditSourceIsMeasurement = isMeasurementSource(openAuditRow);
-  const reAuditRuns = runsForReAuditMode(reAuditMode, openAuditRow?.baseline_target_runs ?? null);
-  /* ⛔ THE PRE-SPEND CHECK. Re-measures already reuse the exact questions - create-ai-audit takes
-     a supplied list verbatim and otherwise repeats the previous run's set, and the generator has no
-     randomness. What was missing is a way to see, BEFORE paying, that the list about to run is the
-     one the baseline was measured on. The list in this dialog is editable (deliberately: a client
-     can stop serving a town), so the only way it drifts is by hand - and this is what makes that
-     visible instead of surfacing later as unmatched rows in the comparison. */
-  const reAuditLock = useMeasurementLock(openAuditRow?.business_name ?? '', null);
-  const reAuditDiff = diffAgainstLock(reAuditLock.lock, reAuditQuestions);
+  /* One run, always — a re-audit is a quick diagnostic. */
+  const reAuditRuns = 1;
   const reAuditEstUsd = reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION * reAuditRuns;
 
   // The re-run editor is open only for the run it was opened for (persisted flag is run-scoped),
@@ -2994,45 +2954,10 @@ const AiAudit = () => {
                     Questions are copied exactly as they were asked, including any misspellings, so the
                     comparison is like-for-like. Edit them only if you want to measure something different.
                   </p>
-                  {/* ⛔ MODE — the same ChoiceButton pair the New-audit flow uses, so the two
-                      screens offer this choice identically. Quick = 1 run; Full measurement = the
-                      source's repeat target (3 for a fresh one). The price below reads this. */}
-                  <div className="space-y-1.5">
-                    <span className="text-xs text-muted-foreground">How thorough?</span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <ChoiceButton
-                        active={reAuditMode === 'quick'}
-                        onClick={() => setReAuditMode('quick')}
-                        icon={<Sparkles className="h-4 w-4" />}
-                        label="Quick"
-                        hint="1 run · cheapest check"
-                      />
-                      <ChoiceButton
-                        active={reAuditMode === 'measurement'}
-                        onClick={() => setReAuditMode('measurement')}
-                        icon={<ListChecks className="h-4 w-4" />}
-                        label="Full measurement"
-                        hint={`${runsForReAuditMode('measurement', openAuditRow?.baseline_target_runs ?? null)} runs · every question, every run`}
-                      />
-                    </div>
-                    {/* ⚠️ A DOWNGRADE IS ALLOWED BUT NAMED. Cheaper, so it can never overspend —
-                        but a 1-run "after" against a 3-run "before" is not a like-for-like
-                        comparison, and that is a measurement error, not a saving. Warn, never block. */}
-                    {reAuditSourceIsMeasurement && reAuditMode === 'quick' && (
-                      <p className="text-[11px] text-amber-600">
-                        This audit was measured over several runs. A 1-run re-audit is cheaper but
-                        won&rsquo;t compare cleanly against it — a single run swings on luck, which is
-                        why the before was repeated.
-                      </p>
-                    )}
-                    {!reAuditSourceIsMeasurement && reAuditMode === 'measurement' && (
-                      <p className="text-[11px] text-muted-foreground">
-                        Upgrading a single-run audit: the new one repeats every question on all{' '}
-                        {runsForReAuditMode('measurement', openAuditRow?.baseline_target_runs ?? null)} runs, so it
-                        becomes a proper baseline to measure future work against. The original stays as it is.
-                      </p>
-                    )}
-                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    One run. A re-audit is a quick look, not a measurement — it is left out of every
+                    before/after. The day-28 re-measure of a paid baseline runs itself from the queue.
+                  </p>
                   {/* PASTE A LIST — one question per line; numbered/bulleted lines are cleaned. */}
                   <div className="rounded-md border border-border/60 bg-background/60 p-2">
                     {!pasteOpen ? (
@@ -3070,38 +2995,6 @@ const AiAudit = () => {
                       </div>
                     )}
                   </div>
-                  {/* The locked baseline, and whether this list still matches it. */}
-                  {reAuditLock.lock && (
-                    <div className={`rounded-md border px-2.5 py-2 text-xs ${
-                      reAuditDiff.identical
-                        ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                        : 'border-amber-300 bg-amber-50 text-amber-900'
-                    }`}>
-                      <div className="font-medium">
-                        {reAuditDiff.identical ? 'Matches the locked baseline' : 'Differs from the locked baseline'}
-                      </div>
-                      <div className="mt-0.5">{reAuditDiff.summary}</div>
-                      <div className="mt-0.5 text-[11px] opacity-80">Locked: {describeLock(reAuditLock.lock)}</div>
-                      {reAuditDiff.missing.length > 0 && (
-                        <ul className="mt-1 list-disc pl-4 text-[11px]">
-                          {reAuditDiff.missing.slice(0, 6).map((q) => <li key={q}>dropped: {q}</li>)}
-                          {reAuditDiff.missing.length > 6 && <li>and {reAuditDiff.missing.length - 6} more</li>}
-                        </ul>
-                      )}
-                      {reAuditDiff.added.length > 0 && (
-                        <ul className="mt-1 list-disc pl-4 text-[11px]">
-                          {reAuditDiff.added.slice(0, 6).map((q) => <li key={q}>new: {q}</li>)}
-                          {reAuditDiff.added.length > 6 && <li>and {reAuditDiff.added.length - 6} more</li>}
-                        </ul>
-                      )}
-                      {/* The run count is part of like-for-like too, not just the wording. */}
-                      {reAuditRuns !== reAuditLock.lock.runs && (
-                        <div className="mt-1 text-[11px] font-medium">
-                          This will run {reAuditRuns} run{reAuditRuns === 1 ? '' : 's'}; the baseline was measured over {reAuditLock.lock.runs}.
-                        </div>
-                      )}
-                    </div>
-                  )}
                   <div className="space-y-2">
                     {reAuditQuestions.map((q, i) => (
                       <div key={i} className="flex items-center gap-2">
@@ -3120,14 +3013,8 @@ const AiAudit = () => {
                   </Button>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
                     <div className="text-xs text-muted-foreground">
-                      {/* ⛔ THE ESTIMATE MUST PRICE WHAT THE SERVER WILL ACTUALLY DO. It used to say
-                          "× 1 run" and multiply by 1 while create-ai-audit ran MEASUREMENT_RUNS (3)
-                          on the measurement path — a 47-question Solene re-audit priced at ~47p
-                          against a real ~£1.17. The run count now comes from runsForReAuditMode over
-                          the CHOSEN mode — the very same call reAuditFromSource uses to write the new
-                          row's baseline_target_runs — so the price and the charge are one number, not
-                          two that agree today. scripts/check-measurement-runs.mjs still fails the
-                          build if the UI's MEASUREMENT_RUNS and create-ai-audit's ever diverge. */}
+                      {/* One run, so the estimate is questions × the per-question figure. The 3-run
+                          "measurement" mode that once priced here is gone (2026-09-12). */}
                       <span className="font-medium text-foreground">
                         {reAuditQuestions.filter((q) => q.trim()).length} question{reAuditQuestions.filter((q) => q.trim()).length === 1 ? '' : 's'}
                         {' × '}{reAuditRuns} run{reAuditRuns === 1 ? '' : 's'}
@@ -3139,8 +3026,7 @@ const AiAudit = () => {
                       </span>
                       {' '}(~£{(reAuditEstUsd * 0.8).toFixed(2)})
                       <span className="block text-[10px] text-muted-foreground/70">
-                        ${RE_AUDIT_EST_USD_PER_QUESTION}/question × {reAuditRuns} run{reAuditRuns === 1 ? '' : 's'}
-                        {reAuditRuns > 1 ? ' (measurement — each question is asked on every run, matching the original baseline)' : ''},
+                        ${RE_AUDIT_EST_USD_PER_QUESTION}/question × {reAuditRuns} run,
                         from measured spend (81 runs, mean $0.042/run). Varies per run — the actual figure
                         is recorded when it finishes.
                       </span>

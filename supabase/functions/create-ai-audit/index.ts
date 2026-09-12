@@ -50,19 +50,6 @@ const DEFAULT_QUESTION_COUNT = OUTREACH_HOOK_QUESTIONS;
 // audit reach 50+ percentage points, where one flipped cell moves the rate 10 points. These
 // higher bounds apply ONLY to trusted internal callers that ask for purpose='baseline'
 // (see BASELINE_PURPOSE below), so no public caller can raise its own cost ceiling.
-/** Ceiling for a STANDALONE MARKET AUDIT (no business attached). Mirrors
- *  MARKET_AUDIT_QUESTION_COUNT in src/lib/marketView.ts — one audit of a market wants breadth, and
- *  8 x $0.0125 = $0.10 is the figure the market dialog quotes. */
-const MARKET_MAX_QUESTION_COUNT = 8;
-/** ⚠️ MIRRORS MARKET_COOLDOWN_MS in src/lib/marketView.ts. Stated here rather than imported to keep
- *  this function's dependency closure unchanged, exactly as MARKET_MAX_QUESTION_COUNT above is.
- *  Change one, change the other — the panel's copy is only what it SAYS, this is what it DOES. */
-const MARKET_COOLDOWN_MS = 10 * 60 * 1000;
-/** ⛔ HOW MANY MARKET AUDITS ONE MEASUREMENT IS. The cooldown allows this many per trade+town per
- *  window and refuses the next. It MUST equal MARKET_AUDIT_MIN_AUDITS in src/lib/marketView.ts — the
- *  measure button creates exactly that many, sequentially, and an allowance below it blocks the
- *  button's own second audit. That is not hypothetical: it happened on 2026-08-06. */
-const MARKET_COOLDOWN_ALLOWANCE = 2;
 const BASELINE_MIN_QUESTION_COUNT = 6;
 /* 20, raised from 12. A re-measurement supplies its OWN question set so the before and after
    compare like with like, and ABLM's set was 16 — at 12 the last four were dropped SILENTLY,
@@ -287,17 +274,6 @@ Deno.serve(async (req) => {
     // purpose='baseline' (paid client) unlocks the wider question bounds. INTERNAL ONLY:
     // findable-onboarding calls this server-side with the service key, so a public caller
     // cannot opt itself into 10-12 questions and triple our Apify spend.
-    /* ⚠️ NOT GATED ON isInternal, AND THAT WAS THE BUG. It was, and the only caller is the market
-       panel in the operator's own browser: supabase.functions.invoke sends the USER's JWT, never the
-       service key, so isInternal was always false, marketOnly was always false, and every market
-       audit fell through to the business_name check and 400'd — the exact guard this branch exists
-       to bypass.
-
-       Safe to allow any AUTHENTICATED caller: the !isInternal path above already rejects anyone
-       without a valid session with a 401, and a market audit is 8 questions (~10p) against a wizard
-       audit's 5 that the same session can already trigger. It cannot touch a lead (no lead_id), and
-       the question ceiling below is explicit rather than inherited. */
-    const marketOnly: boolean = body.market_only === true;
     const isBaseline = isInternal && body.purpose === "baseline";
     /* ⛔ THE CALLER HAS A TOWN THE CUSTOMER TYPED. Exempts the town gate below, on exactly the same
        principle the baseline exemption already rests on: the gate exists to stop an audit running
@@ -307,32 +283,24 @@ Deno.serve(async (req) => {
        disable the gate everywhere (CLAUDE.md §8 lists bulk-jobs and the whatsapp-inbound chain
        doing exactly that). A browser cannot reach this. */
     const townConfirmed = isInternal && body.town_confirmed === true;
-    /* FULL MEASUREMENT — operator-callable (NOT gated on isInternal, exactly like market_only): a
-       deliberate bulk gather the operator triggers from the AI Audit page. Its higher ceiling is
-       explicit below, so a public caller still cannot exceed it. */
+    /* FULL MEASURE — operator-callable (NOT gated on isInternal): the winnability gather the
+       operator triggers from the AI Audit page. Its ceiling is explicit below, so a public caller
+       still cannot exceed it. */
     const isMeasurement: boolean = body.purpose === "measurement";
-    /* A MARKET AUDIT HAS ITS OWN CEILING. The wizard bounds are 3..5, so the 8 questions the market
-       dialog quotes (and charges for) would have been silently clamped to 5 — the panel promising one
-       thing and the queue doing another. MARKET_MAX_QUESTION_COUNT mirrors MARKET_AUDIT_QUESTION_COUNT
-       in src/lib/marketView.ts; it is stated here rather than imported to keep this function's
-       dependency closure unchanged. Still a hard ceiling: a caller cannot ask for 20. */
     const questionCount = isBaseline
       ? clampCount(body.question_count ?? body.questionCount,
           BASELINE_MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT, BASELINE_DEFAULT_QUESTION_COUNT)
       : isMeasurement
         ? clampCount(body.question_count ?? body.questionCount,
             MEASUREMENT_MIN_QUESTION_COUNT, MEASUREMENT_MAX_QUESTION_COUNT, MEASUREMENT_DEFAULT_QUESTION_COUNT)
-      : marketOnly
-        ? clampCount(body.question_count ?? body.questionCount,
-            MIN_QUESTION_COUNT, MARKET_MAX_QUESTION_COUNT, MARKET_MAX_QUESTION_COUNT)
-        : clampCount(body.question_count ?? body.questionCount);
+      : clampCount(body.question_count ?? body.questionCount);
     // The provided-questions cap must match, or a baseline REPEAT run (which passes the first
     // run's questions verbatim so the three runs are like-for-like) would silently truncate
     // 10 questions to 5 and average two different question sets.
     const MAX_QUESTIONS = isBaseline
       ? BASELINE_MAX_QUESTION_COUNT
       : isMeasurement ? MEASUREMENT_MAX_QUESTION_COUNT
-      : marketOnly ? MARKET_MAX_QUESTION_COUNT : MAX_QUESTION_COUNT;
+      : MAX_QUESTION_COUNT;
     /* How many runs make up this audit. Stored as baseline_target_runs; the queue's completion hook
        (advanceBaseline) fires the remaining runs with the SAME questions and averages them. Absent/0
        → an ordinary single-run audit.
@@ -393,48 +361,13 @@ Deno.serve(async (req) => {
     // Full measurement forces SEO off — it is a per-site scan (once, not per-question) and would eat
     // the per-run cost budget; the mode is about the AI citation gather, not the website grade.
     const skipSeo: boolean = body.skip_seo === true || isMeasurement;
-    /* MARKET-POPULATING AUDIT. Set by the market panel's batch (via bulk-jobs params). It turns on
-       cross-audit intent coverage: generation is told what this trade+town has already been asked
-       so it covers new ground. Deliberately NOT applied to baselines — a paid client's set must be
-       stable and seed-driven, and two businesses in one market getting different questions is right
-       for mapping a market and wrong for measuring a client. */
-    const isMarket: boolean = body.purpose === "market";
     /* ⛔ ONE PREDICATE GOVERNS BOTH ENDS — the preview the operator reviews and the run that
-       actually happens. Money questions are for the ordinary per-business audit only.
-
-       WHY IT IS A NAMED CONST AND NOT THE BRANCH POSITION IT USED TO BE. The run's opt-in sat in
-       the `else` after the marketOnly branch, on the reasoning that a market audit takes its own
-       path. That was WRONG for one caller: bulk-jobs sends `purpose: "market"` WITHOUT
-       `market_only` (index.ts ~536), so a market PANEL BATCH had isMarket true, marketOnly false,
-       fell through to the else, and was getting money questions — exactly the audits Coverage
-       grades a town from. Branch position is not a predicate; this is.
-
-       ⛔ AND IT IS WHAT MAKES PREVIEW == RUN. The wizard previews with `preview: true` (no money
-       count before this) and then confirms by sending `questions` VERBATIM, so whatever the preview
-       generated is what runs. With the preview generic and the run opted in, the feature was
-       invisible on the one path an operator uses by hand. Both now read this same value, so the
-       questions reviewed, edited and asked cannot differ.
-       ⚠️ isBaseline: a paid baseline is the guarantee's day-0 and must not change character under a
-       client mid-contract. isMarket: a town's grade is calibrated on head terms. */
-    const moneyQuestionCount = (!isMarket && !isBaseline && !isMeasurement) ? questionCount : 0;
-    /* ── A STANDALONE MARKET AUDIT: a trade and a town, NO business, NO CRM row ────────────────
-       The market view used to populate a town by adding 5 businesses to the CRM and auditing each
-       — leads the operator never chose to contact, in a town they were only assessing. This is the
-       replacement: ONE audit of the market itself.
-
-       ai_audits.business_name is NOT NULL, so the row carries a readable SENTINEL. Nothing keys off
-       that string: the is_market COLUMN is what every consumer reads, because a report guard resting
-       on a name prefix is not a guard (see isMarketAudit in src/lib/auditReport.ts).
-
-       What follows from having no business, all of it correct rather than worked around:
-         - the named count stays 0 (nothing to match) — flagged as a market audit everywhere it is
-           rendered, so 0 never reads as a failed audit;
-         - the SEO scan skips for free (no website on the sentinel, and maybeRunSeoStep requires one);
-         - extract-competitors improves — no self-name to exclude from the competitor list;
-         - lead_id is null, which makes the audit_reply WhatsApp and the D2 completion send
-           unreachable by their own existing gates.
-       INTERNAL ONLY: it decides what gets measured and spends on Apify. */
-
+       actually happens. Money questions are for the ordinary per-business audit only: a paid
+       baseline is the guarantee's day-0 and must not change character under a client
+       mid-contract, and a full measure is the winnability read. The wizard previews with
+       `preview: true` and then confirms by sending `questions` VERBATIM, so both ends reading this
+       one value is what makes preview == run. */
+    const moneyQuestionCount = (!isBaseline && !isMeasurement) ? questionCount : 0;
     /* MULTI-AREA BASELINE. audit-baseline sends the allocation it froze into the baseline contract:
        [{town, questions, isMain}]. The MAIN town keeps location_text and the verbatim seed; each
        extra area gets its own generated questions for the same services. Absent (every other
@@ -447,57 +380,7 @@ Deno.serve(async (req) => {
         .map((a) => ({ town: (a.town as string).trim(), questions: Math.floor(Number(a.questions)), isMain: a.isMain === true }))
       : [];
 
-    /* THE SENTINEL. Written here rather than by the caller so its shape is owned in one place and
-       a market audit can never arrive with a real business's name on it by accident. */
-    const marketSentinel = marketOnly
-      ? `[market] ${(businessType || "trade").trim()} · ${(locationText || "unknown town").trim()}`
-      : "";
-    if (marketOnly && !businessType) return json({ ok: false, error: "business_type required for a market audit" }, 400);
-
-    /* ⛔ THE REPEAT-PRESS GUARD, AND IT HAS TO LIVE HERE. The market panel spends ~21p on one press
-       with no confirm dialog, which is the right trade at this price — but only if pressing it twice
-       cannot spend it twice. A client-side lock does NOT hold: component state resets on reload, and
-       "pressed it repeatedly" in practice means reload-and-press. So the refusal is the server's.
-       ⚠️ TEN MINUTES, longer than the ~5 minute typical run, so it can never fire against an audit
-       that has already finished and been read. Same window as findable-onboarding's cooldown.
-       ⚠️ IT RETURNS 429 WITH A NAMED CODE, not a generic failure: the panel turns `market_cooldown`
-       into "already measuring X in Y, started N minutes ago", which is the difference between a
-       button that looks broken and one that has already done what was asked. */
-    if (marketOnly && businessType && locationText) {
-      const since = new Date(Date.now() - MARKET_COOLDOWN_MS).toISOString();
-      const { data: recent } = await service
-        .from("ai_audits").select("id, created_at")
-        .eq("user_id", userId).eq("is_market", true)
-        .eq("business_type", businessType).ilike("location_text", locationText)
-        .gte("created_at", since)
-        .order("created_at", { ascending: false }).limit(MARKET_COOLDOWN_ALLOWANCE + 1);
-      const within = (recent ?? []) as Array<{ id: string; created_at: string }>;
-      /* ⛔ AN ALLOWANCE, NOT A LOCK, AND THE FIRST VERSION GOT THIS WRONG IN PRODUCTION. It refused
-         on the FIRST match, so it blocked the measure button's own SECOND audit — the two are created
-         one after the other, a second apart, with the same trade and town, and by then audit one is
-         already in the table. Norwich got exactly one audit on 2026-08-06 for this reason, leaving
-         the market on a count the view refuses to call a shape from: the failure the whole rebuild
-         existed to prevent, caused by its own guard.
-         The guard's purpose was never "one audit per window" — it is "no more than a measurement's
-         worth per window". A measurement is MARKET_COOLDOWN_ALLOWANCE audits, so that many pass and
-         the next one does not. A repeated press still cannot run away. */
-      const hit = within.length >= MARKET_COOLDOWN_ALLOWANCE ? within[0] : undefined;
-      if (hit) {
-        const ageMs = Date.now() - new Date(hit.created_at).getTime();
-        console.log(`[create-ai-audit] market cooldown: "${businessType}" in "${locationText}" started ${Math.round(ageMs / 1000)}s ago`);
-        return json({
-          ok: false,
-          error: "market_cooldown",
-          audit_id: hit.id,
-          audits_in_window: within.length,
-          allowance: MARKET_COOLDOWN_ALLOWANCE,
-          started_at: hit.created_at,
-          age_seconds: Math.round(ageMs / 1000),
-          cooldown_seconds: Math.round(MARKET_COOLDOWN_MS / 1000),
-        }, 429);
-      }
-    }
-    if (!businessName && !marketOnly && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
+    if (!businessName && !reuseAuditId) return json({ ok: false, error: "business_name required" }, 400);
 
     /* ── REUSE THE LEAD'S EXISTING AUDIT INSTEAD OF MINTING A DUPLICATE ─────────
        The Inbox audit button, the outreach bulk runner and the wizard's "Run audit" all posted a
@@ -829,47 +712,16 @@ Deno.serve(async (req) => {
          The `>= questionCount` test is what keeps runs 2 and 3 byte-for-byte unchanged — they send
          the full stored set, so they take the verbatim branch exactly as before. Only a SHORT
          supplied set on a baseline is treated as a seed, which no existing caller sends. */
-      /* WHAT THIS MARKET HAS ALREADY BEEN ASKED. Market audits only, and best-effort: a failure
-         here just means the generator gets no coverage hint and behaves exactly as before.
-         Measured need: six Hastings locksmith audits produced 18 questions covering five intents,
-         with the generic head question asked six times, while car keys / safes / uPVC / key cutting
-         / commercial work were never asked at all. */
+      /* Coverage hint for the generator. Empty here; the full-measure exclusion (slice 1b of
+         the 2026-09-12 measurement work) is what fills it — the baseline's asked set, so the
+         measure never re-asks the judged questions. */
       let coverage = "";
-      if (isMarket && businessType && locationText) {
-        try {
-          const { data: sameMarket } = await service
-            .from("ai_audits").select("id")
-            .eq("user_id", userId).eq("business_type", businessType).ilike("location_text", locationText);
-          const otherIds = ((sameMarket ?? []) as Array<{ id: string }>).map((a) => a.id);
-          if (otherIds.length) {
-            const { data: askedRows } = await service
-              .from("ai_audit_queue").select("question").in("audit_id", otherIds).limit(400);
-            const asked = ((askedRows ?? []) as Array<{ question: string }>)
-              .map((r) => (r.question ?? "").trim()).filter(Boolean);
-            coverage = coverageDirective(asked, businessType);
-            if (coverage) {
-              console.log(`[create-ai-audit] market coverage: steering away from ${dedupeQuestions(asked).questions.length} question(s) already asked for "${businessType}" in "${locationText}"`);
-            }
-          }
-        } catch (e) {
-          console.warn("[create-ai-audit] coverage lookup failed (generation unaffected):", e instanceof Error ? e.message : e);
-        }
-      }
       const isSeeding = isBaseline && !!providedQuestions?.length && providedQuestions.length < questionCount;
       /* ORDER MATTERS. The multi-area branch must be tested BEFORE isSeeding: a multi-area baseline
          normally arrives WITH a short seed, so the single-town seeded branch would win and the extra
          areas would be silently dropped — the exact failure this work exists to remove. The
          multi-area branch does its own seeding for the main town's share. */
-      if (marketOnly) {
-        /* NO NAME IN THE PROMPT. generateQuestions uses the name only to infer a specialism when
-           none is given; for a market audit there is no business to infer from and no name that
-           should shape the questions. Scope is forced LOCAL (a trade in a town always is) and the
-           count is the market default, so one audit covers the market's intents rather than three.
-           Coverage is on via `coverage`, so a second market audit of the same town asks new
-           intents instead of repeating these. */
-        questions = await generateQuestions("", businessType, locationText, false, specialisms, questionCount, "local", country, coverage);
-        console.log(`[create-ai-audit] MARKET audit: ${questions.length} question(s) for "${businessType}" in "${locationText}", no business attached`);
-      } else if (areaAllocation.length > 1) {
+      if (areaAllocation.length > 1) {
         /* MULTI-AREA, SEED-PRESERVING. The main town's share carries the verbatim seed (topped up
            if the seed is short); every extra area is generated for the same services in that town.
            One LLM call per area, gpt-4o-mini — the Apify question runs dominate the bill, not this.
@@ -938,9 +790,6 @@ Deno.serve(async (req) => {
         /* ⛔ THE ONLY CALL SITE THAT ASKS FOR MONEY QUESTIONS — the ordinary per-business NEW audit.
            Eight call sites reach generateQuestions; the other seven pass nothing and are therefore
            byte-identical to before. Excluded deliberately, each for its own reason:
-             · marketOnly (its own branch above) — a market audit grades a TOWN, and Coverage's
-               verdicts are calibrated on head terms. Changing its question mix would change what
-               "measured" means at the same time as changing what a report measures.
              · isBaseline / isSeeding — a paid baseline is the guarantee's day-0. Its character must
                not shift under a client mid-contract.
              · the multi-area baseline branch — same reason.
@@ -971,11 +820,11 @@ Deno.serve(async (req) => {
       const auditRow: Record<string, unknown> = {
         user_id: userId,
         lead_id: leadId,
-        business_name: marketOnly ? marketSentinel : businessName,
+        business_name: businessName,
         /* SET EXPLICITLY ON BOTH PATHS. The column is NOT NULL with a default, but PostgREST lists
            it as required, so relying on the default would leave the ordinary insert path depending
            on behaviour that is not guaranteed at this layer. Cheap certainty. */
-        is_market: marketOnly,
+        is_market: false,
         business_type: businessType || null,
         location_text: locationText || null,
         country,
@@ -1030,7 +879,7 @@ Deno.serve(async (req) => {
          ⚠️ Migration-tolerant like its neighbours: the shed-and-retry below drops it if the column
          is not there yet, and without the column the trigger does not exist either, so the whole
          feature is simply absent rather than half-present. */
-      auditRow.audit_purpose = isBaseline ? "baseline" : isMeasurement ? "measurement" : marketOnly ? "market" : "audit";
+      auditRow.audit_purpose = isBaseline ? "baseline" : isMeasurement ? "measurement" : "audit";
       let { data: audit, error: insErr } = await service
         .from("ai_audits").insert(auditRow).select("id, business_name").single();
       // Shed a missing new column (either one) and retry, longest-name-first so one miss can't mask another.
@@ -1142,7 +991,7 @@ Deno.serve(async (req) => {
     const moneyQueued = Array.from(new Set(
       moneyGenerated.map((q) => queuedKeys.get(q.trim().toLowerCase())).filter((q): q is string => !!q),
     ));
-    const runResults: Record<string, unknown> = (skipSeo || marketOnly)
+    const runResults: Record<string, unknown> = skipSeo
       ? { seo: { skipped: "seo_scan_not_requested", checked_at: new Date().toISOString() } }
       : {};
     /* Tag full-measurement runs so the start-vs-re-measure before/after can find them later,

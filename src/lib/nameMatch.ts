@@ -86,7 +86,7 @@ export function tokensContain(hay: string[], needle: string[]): boolean {
    same lie pointing the other direction.
 
    ✅ THE RULE: try the LONGEST proper prefix of the core that is still DISTINCTIVE — the same
-   question derivable.ts asks. Strip the trade, the town and legal suffixes, then require BOTH:
+   question the (since-deleted) derivable.ts asked. Strip the trade, the town and legal suffixes, then require BOTH:
      * ≥4 characters of substance, and
      * at least one token that could actually NAME a firm: alphabetic, ≥2 chars, not a service word.
    The second test is what makes it safe. Without it the rule matched "24 hour" against "open 24

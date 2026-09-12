@@ -5,11 +5,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Target, RefreshCw, ArrowLeftRight, FileText } from 'lucide-react';
+import { Loader2, Target, ArrowLeftRight, FileText } from 'lucide-react';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { reAuditFromSource, RE_AUDIT_EST_USD_PER_QUESTION } from '@/lib/reAudit';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isAggregatorUrl } from '@/lib/aggregators';
@@ -77,8 +76,6 @@ export default function Baseline() {
   const [view, setView] = useState<BaselineView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [confirming, setConfirming] = useState(false);   // "Re-run this measurement" confirm step
-  const [reRunBusy, setReRunBusy] = useState(false);
   /* THE CLIENT REPORT, shown over this page on request. Deliberately NOT persisted: it is a view
      you opened, and springing it open on return is the "never restore an interruption" rule. The
      queue rows are kept from the page's own load so opening it costs no extra read. */
@@ -151,31 +148,6 @@ export default function Baseline() {
       });
     } finally {
       setReportBusy(false);
-    }
-  };
-
-  /* Re-run THIS baseline as a full measurement, via the SAME shared helper the AI Audit page's
-     Re-audit uses (reAuditFromSource) — so the fixed logic (all questions, all runs, purpose:
-     'measurement') cannot drift. Targets THIS page's auditId and THIS baseline's exact question list;
-     mints a NEW audit (the "after"), leaving this baseline untouched; then jumps to the new run so it
-     can be watched. Gated in the UI on baseline_target_runs > 1 so it only fires for real measurements. */
-  const runReMeasure = async () => {
-    if (!auditId || !user || reRunBusy) return;
-    setReRunBusy(true);
-    try {
-      const res = await reAuditFromSource(supabase as unknown as SupabaseClient, {
-        sourceAuditId: auditId,
-        userId: user.id,
-        questions: (view?.questions ?? []).map((q) => q.question),
-      });
-      if (!res.ok) throw new Error('error' in res ? res.error : 're-audit failed');
-      toast({ title: 'Re-measurement started', description: 'A new measurement is running — opening it now.' });
-      navigate(res.runId ? `/ai-audit?runId=${res.runId}` : '/ai-audit');
-    } catch (e) {
-      toast({ title: "Couldn't start the re-measurement", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
-    } finally {
-      setReRunBusy(false);
-      setConfirming(false);
     }
   };
 
@@ -313,32 +285,11 @@ export default function Baseline() {
           </Button>
         </div>
 
-        {/* Re-run this measurement — full 3-run re-measure of THIS baseline, via the shared helper.
-            Only for real measurements (baseline_target_runs > 1); a confirm step guards the spend. */}
-        {(audit.baseline_target_runs ?? 0) > 1 && (
-          <div className="flex flex-wrap items-center gap-2">
-            {!confirming ? (
-              <Button variant="outline" size="sm" onClick={() => setConfirming(true)} disabled={reRunBusy}>
-                <RefreshCw className="mr-2 h-4 w-4" /> Re-run this measurement
-              </Button>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
-                <span className="text-xs text-muted-foreground">
-                  Runs a full {audit.baseline_target_runs}-run measurement of these {view.questions.length} questions
-                  {' '}(~${(view.questions.length * (audit.baseline_target_runs ?? view.runsCounted) * RE_AUDIT_EST_USD_PER_QUESTION).toFixed(2)}
-                  {' '}/ ~{Math.round(view.questions.length * (audit.baseline_target_runs ?? view.runsCounted) * RE_AUDIT_EST_USD_PER_QUESTION * 80)}p Apify, estimate).
-                  {' '}Creates a new audit for the &ldquo;after&rdquo; — this baseline is untouched.
-                </span>
-                <Button size="sm" onClick={runReMeasure} disabled={reRunBusy}>
-                  {reRunBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {reRunBusy ? 'Starting…' : 'Yes, run it'}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setConfirming(false)} disabled={reRunBusy}>Cancel</Button>
-              </div>
-            )}
-          </div>
-        )}
-
+        {/* ⛔ THERE IS NO "RE-RUN THIS MEASUREMENT" BUTTON ANY MORE (2026-09-12). The day-28
+            replay of a paid baseline is fired by process-ai-audit-queue against the lead's
+            baseline_audit_id on the stored remeasure_due_date, and refused server-side if the
+            question set differs. A hand-fired copy here was a second route to a comparable audit
+            that nothing recorded. */}
         {/* Band counts — the shape of the work at a glance, worst first. */}
         <div className="flex flex-wrap gap-1.5">
           {BANDS.filter((b) => view.bandCounts[b] > 0).map((b) => (

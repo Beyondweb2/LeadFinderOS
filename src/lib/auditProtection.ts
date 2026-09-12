@@ -24,11 +24,9 @@
  *  shows `reasons[0]`, so the order is what the operator reads. */
 export type ProtectionReason =
   | 'paid_baseline'
-  | 'locked_measurement'
   | 'measurement'
   | 'paying_customer'
-  | 'unknown_paying_status'
-  | 'unknown_lock_status';
+  | 'unknown_paying_status';
 
 /** The facts the decision needs. Every one may be `null`, meaning "could not tell" — which
  *  protects. The caller must NOT collapse a failed read into `false`. */
@@ -42,10 +40,6 @@ export interface AuditProtectionFacts {
    *  `null` = the check did not run or failed. An audit with no lead at all is `false`, not
    *  `null` — "no lead" is a known answer, not an unknown one. */
   leadIsPaying: boolean | null;
-  /** Is there a `measurement_locks` row for this business name? (CLAUDE.md §17.) A locked
-   *  measurement's question set is the agreed like-for-like; the audit it was taken from is the
-   *  reference. `null` = the check did not run or failed. */
-  hasMeasurementLock: boolean | null;
 }
 
 export interface ProtectionVerdict {
@@ -63,16 +57,12 @@ export interface ProtectionVerdict {
 export const PROTECTION_WORDING: Record<ProtectionReason, string> = {
   paid_baseline:
     'This is a paid baseline — the "before" measurement a customer\'s guarantee is written against.',
-  locked_measurement:
-    'This business has a locked measurement, and this audit is part of that like-for-like set.',
   measurement:
     'This is a before/after measurement. Archiving it would break the comparison it belongs to.',
   paying_customer:
     'This audit belongs to a paying customer.',
   unknown_paying_status:
     'Could not check whether this audit belongs to a paying customer, so it is being kept.',
-  unknown_lock_status:
-    'Could not check whether this business has a locked measurement, so it is being kept.',
 };
 
 /**
@@ -92,19 +82,16 @@ export function auditProtection(facts: AuditProtectionFacts): ProtectionVerdict 
     reasons.push('paid_baseline');
   }
 
-  if (facts.hasMeasurementLock === true) reasons.push('locked_measurement');
-
   /* Strictly `=== true`. `null` is handled below as uncertainty, never as false. */
   if (facts.isMeasurement === true) reasons.push('measurement');
 
   if (facts.leadIsPaying === true) reasons.push('paying_customer');
 
-  /* The two "could not tell" cases. They are appended AFTER the positive reasons so that an
+  /* The "could not tell" case. It is appended AFTER the positive reasons so that an
      audit which is both provably a baseline and unverifiable on payment still leads with the
      fact rather than with the doubt. */
   const uncertainReasons: ProtectionReason[] = [];
   if (facts.leadIsPaying === null) uncertainReasons.push('unknown_paying_status');
-  if (facts.hasMeasurementLock === null) uncertainReasons.push('unknown_lock_status');
 
   const all = [...reasons, ...uncertainReasons];
 

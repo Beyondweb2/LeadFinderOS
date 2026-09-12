@@ -554,99 +554,6 @@ export async function handleInboundMessages(
                          audit path below returns early. */
                       await prepareMockup();
                       const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-                      /* ══ SERVE THE TOWN'S MARKET AUDIT BEFORE PAYING FOR A NEW ONE ═══════════
-                         ⛔ THE HOLE THIS CLOSES. The check above is `.eq("lead_id", leadId)`, and a
-                         MARKET audit has lead_id NULL — measured: 40 market audits, all 40 unattached.
-                         So a lead added from Market View by the per-row "Add to CRM" button (addOne,
-                         which creates the lead and runs no audit) always looked un-audited here and
-                         always bought a fresh one, even though the town it sits in had already been
-                         measured. That is the "works sometimes, not others" — it depended entirely on
-                         which button put the lead in the CRM.
-
-                         derive-audit is the already-built path: it copies the town's answers into a
-                         real audit row for THIS lead, recomputing `named` against the prospect's own
-                         name (a market audit's stored flags are against its placeholder name), and
-                         refuses when a negative would be unpublishable — canDeriveReport in
-                         _shared/derivable.ts. £0, no Apify, no Google.
-
-                         ⛔ IT IS TRIED, NOT ASSUMED. Every refusal it can return — no_market_audit,
-                         market_audit_unfinished, no_trade_or_town, name_not_distinctive,
-                         too_few_answers — falls through to the paid audit below, unchanged. The gate
-                         decides; this code does not second-guess it, and does not duplicate it.
-
-                         ⛔ AND THE UPGRADE IS DONE HERE, BECAUSE NOTHING ELSE WILL. The parked
-                         `awaiting_audit` row is normally rescued by the completion hook in
-                         process-ai-audit-queue — but a derived audit never enters that queue (its
-                         rows are inserted status 'done' directly), so no completion will ever fire
-                         for it. Leaving the upgrade to that hook would park the pitch forever: the
-                         audit would exist, cost nothing, and never be sent. */
-                      let servedFromMarket = false;
-                      try {
-                        const dres = await fetch(`${supabaseUrl}/functions/v1/derive-audit`, {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
-                            "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
-                            "x-internal-job": "1",
-                          },
-                          // acting_user_id is REQUIRED on derive-audit's internal branch, and it is
-                          // the lead's own owner — never a hardcoded operator.
-                          body: JSON.stringify({ lead_id: leadId, acting_user_id: leadRow.user_id }),
-                        });
-                        const dbody = await dres.json().catch(() => ({})) as { ok?: boolean; error?: string; message?: string; audit_id?: string; named_datapoints?: number; total_datapoints?: number };
-                        if (dres.ok && dbody?.ok === true) {
-                          /* The derived run is status 'complete', so this lead now satisfies exactly
-                             the same hasCompletedAudit test the top of this ladder uses. Queue the
-                             pitch on the SAME 3-minute delay as the audit-ready path, so a decline
-                             arriving in the meantime still cancels it.
-                             ⛔ SEND MODE ONLY, AND THE `if` IS NOT DECORATION. The update below is
-                             scoped `.eq("status", "awaiting_audit")`, which an audit_only row is
-                             not — so running it in audit_only mode would match ZERO rows, report NO
-                             error (an update that matches nothing is not a failure), and print
-                             "pitch queued, fires in ~3 min" about a message that will never exist.
-                             The guard is here to stop the LOG lying, not to stop a send; the send
-                             was already impossible. */
-                          const { error: upErr } = willSend
-                            ? await service.from("whatsapp_auto_replies")
-                                .update({ status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString() })
-                                .eq("lead_id", leadId).eq("status", "awaiting_audit")
-                            : { error: null };
-                          if (upErr) {
-                            /* Derived but not queued. Flag it rather than leave a row nothing will
-                               ever pick up — the audit is real and free, so this is a send to
-                               recover by hand, not a measurement to redo. */
-                            await service.from("whatsapp_auto_replies")
-                              .update({ status: "flagged_error", reason: `derived audit ${dbody.audit_id ?? ""} but queueing the pitch failed: ${(upErr as { message?: string }).message ?? ""}`.slice(0, 300) })
-                              .eq("lead_id", leadId).eq("status", "awaiting_audit");
-                            console.error(`[auto-reply] lead ${leadId}: derived but could not queue the pitch:`, (upErr as { message?: string }).message);
-                          } else {
-                            console.log(
-                              `[auto-reply] lead ${leadId}: SERVED from the town's market audit `
-                              + `(${dbody.named_datapoints ?? "?"}/${dbody.total_datapoints ?? "?"} named, $0 spent) — `
-                              + (willSend
-                                ? "pitch queued, fires in ~3 min."
-                                : `mode '${mode}': audit ready NOW, nothing queued — send the template by hand.`),
-                            );
-                          }
-                          servedFromMarket = true;
-                        } else {
-                          // A refusal, not a failure. Named in the log so "why did this one cost 8p"
-                          // is answerable without re-running anything.
-                          console.log(
-                            `[auto-reply] lead ${leadId}: not derivable (${dbody?.error ?? `HTTP ${dres.status}`}`
-                            + `${dbody?.message ? ` — ${dbody.message}` : ""}) — running a paid audit instead.`,
-                          );
-                        }
-                      } catch (e) {
-                        // derive-audit unreachable: never a reason to skip the pitch. Fall through.
-                        console.warn(`[auto-reply] lead ${leadId}: derive-audit call failed, falling back to a paid audit: ${(e as Error).message}`);
-                      }
-
-                      /* ⛔ A GUARD, NOT A `continue`. Skipping the rest of the loop iteration would
-                         work today only because nothing follows this block — and the next person to
-                         add something after it would have it silently skipped for derived leads. */
-                      if (!servedFromMarket) {
                       try {
                         const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
                           method: "POST",
@@ -686,7 +593,6 @@ export async function handleInboundMessages(
                           .update({ status: "flagged_error", reason: `auto-audit start error: ${(e as Error).message}`.slice(0, 300) })
                           .eq("lead_id", leadId).eq("status", "awaiting_audit");
                         console.error(`[auto-reply] chain audit start error for lead ${leadId}:`, (e as Error).message);
-                      }
                       }
                     }
                   }

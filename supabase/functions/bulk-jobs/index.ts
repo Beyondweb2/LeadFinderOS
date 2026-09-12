@@ -79,7 +79,6 @@ const PUSH_ONLY_DEFAULT_LIMIT = Number.POSITIVE_INFINITY;
  *  refusal falls through to the paid audit unchanged — see the call site in phase A.
  *  A kill switch rather than a hardcoded `true` so a bad market audit can be taken out of the loop in
  *  one line without reverting the batch runner. */
-const DERIVE_FIRST = true;
 const TIME_BUDGET_MS = 90_000;   // stop starting new WAVES once elapsed passes this…
 const WAVE_HEADROOM_MS = 55_000; // …minus headroom, so one full parallel wave + persist still fits under the 150s limit
 const SWEEP_BUDGET_MS = 60_000; // sweep stops CLAIMING new jobs past this, so one invocation (claim + a chunk) stays well under 150s
@@ -469,69 +468,6 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
        the email's hook is who AI names instead of them, and it carries no website grade at all, so a
        $0.04 Apify scan per lead would be bought and never read. 25 leads = $1.00 of nothing. */
     const skipSeo = paramSkipSeo || job.job_type === "audit_and_push";
-    /* ⚠️ BUT IT IS NOT A MARKET BATCH. purpose:'market' turns on cross-audit intent coverage, which
-       is right for the market panel and wrong for outreach. It stays keyed on the PARAM — the thing
-       only the market panel sends — not on the derived skipSeo above. Deriving both from one flag is
-       how an unrelated behaviour would have hitched a ride on a cost decision. */
-    const marketPurpose = paramSkipSeo && job.job_type === "audit";
-
-    /* ══ TRY THE TOWN'S MARKET AUDIT FIRST — £0 INSTEAD OF ~8p ═════════════════════════════════
-       ⛔ WHAT THIS REPLACES. Phase A bought a separate audit per business: 3 questions ($0.031) plus
-       the extract-competitors cleaner ($0.070) = ~8p each, ~£2.00 for a 25-lead batch — while ONE
-       market audit of the same trade and town costs 12p and covers every business in it. derive-audit
-       copies that audit's stored answers into a real audit row for this lead, recomputing `named`
-       against the prospect's own name, so the report is about them and nothing is re-measured.
-
-       ⛔ EVERY REFUSAL FALLS THROUGH TO THE PAID AUDIT, and there are several: no_market_audit (the
-       town was never measured), market_audit_unfinished, no_trade_or_town, name_not_distinctive
-       (canDeriveReport refuses a name that is only its trade and town — common for accountants), and
-       too_few_answers. A refusal is NOT a skip: the lead still gets audited, just at full price. A
-       missing market audit therefore degrades this whole batch to exactly its old behaviour and cost,
-       which is the point — no crash, no lead left un-audited, no silent gap in the push.
-
-       ⛔ AND A DERIVED AUDIT IS `done_audit`, NOT `done`. It returns a COMPLETED run immediately (no
-       queue, no cron), so unlike create-ai-audit there is nothing to wait for — but on
-       audit_and_push the item must still hand over to phase B rather than complete. resolveAwaiting
-       owns that transition; returning the same shape create-ai-audit's success returns keeps both job
-       types on one path.
-       ⚠️ SAME INTERNAL HEADERS as the create-ai-audit call below, and acting_user_id is the JOB's
-       owner — derive-audit requires it on the internal branch and scopes every read to it. */
-    if (DERIVE_FIRST) {
-      try {
-        const dres = await fetch(`${SUPABASE_URL}/functions/v1/derive-audit`, {
-          method: "POST",
-          headers: internalHeaders,
-          body: JSON.stringify({ lead_id: lead.id, acting_user_id: job.user_id }),
-        });
-        const dbody = await dres.json().catch(() => ({})) as {
-          ok?: boolean; error?: string; audit_id?: string; run_id?: string;
-          named_datapoints?: number; total_datapoints?: number;
-        };
-        if (dres.ok && dbody?.ok === true && dbody.audit_id) {
-          console.log(
-            `[bulk-jobs] lead ${lead.id}: DERIVED from the town's market audit `
-            + `(${dbody.named_datapoints ?? "?"}/${dbody.total_datapoints ?? "?"} named, $0 spent) — no paid audit.`,
-          );
-          /* ⛔ THE SAME SHAPE create-ai-audit's SUCCESS RETURNS, snake_case included. resolveAwaiting
-             looks the run up by `audit_id` off the item, so a camelCase key here would store nothing
-             and the item would wait for a run it could never find — an audit paid for (or in this
-             case derived) and a push that never happens. */
-          return {
-            status: "awaiting_audit",
-            audit_id: String(dbody.audit_id),
-            run_id: dbody.run_id ? String(dbody.run_id) : undefined,
-          };
-        }
-        console.log(
-          `[bulk-jobs] lead ${lead.id}: not derivable (${dbody?.error ?? `HTTP ${dres.status}`})`
-          + ` — running a paid audit instead.`,
-        );
-      } catch (e) {
-        /* Unreachable derive-audit must never cost a lead its audit. Fall through and pay. */
-        console.warn(`[bulk-jobs] lead ${lead.id}: derive-audit call failed, falling back to a paid audit: ${(e as Error).message}`);
-      }
-    }
-
     const res = await fetch(`${SUPABASE_URL}/functions/v1/create-ai-audit`, {
       method: "POST",
       headers: internalHeaders,
@@ -546,10 +482,6 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
         website: website || undefined,
         question_count: questionCount,
         ...(skipSeo ? { skip_seo: true } : {}),
-        /* purpose='market' turns on cross-audit intent coverage in create-ai-audit. Sent for the
-           market panel's batches only (it asks for skip_seo, which nothing else does), so ordinary
-           outreach bulk audits keep generating exactly as before. */
-        ...(marketPurpose ? { purpose: "market" } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));

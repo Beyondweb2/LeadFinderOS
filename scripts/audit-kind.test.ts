@@ -103,7 +103,7 @@ ok(findPaidBaseline([paidBaseline(), fc]) !== null,
    "…but the real baseline still wins the idempotency check, so no duplicate is bought");
 
 console.log("\n── A CONTRACT THAT IS NOT A CONTRACT ──");
-/* An empty stamp must not count — the same rule isUsableLock applies to measurement_locks. A
+/* An empty stamp must not count — an empty object is absence, never a record. A
    baseline that validated on `{}` would make the guard pass on a write that stored nothing. */
 for (const [label, c] of [["null", null], ["undefined", undefined], ["empty object", {}],
                           ["empty string", ""], ["a number", 7]] as const) {
