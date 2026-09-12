@@ -1282,13 +1282,19 @@ ${d.hidePitch ? "" : `
          it does - the three steps describe what WE do, not steps the reader has to take, and the
          second line points only at the two buttons that ALWAYS render.
 
-         AND IT DEPENDS ON SOMETHING OUTSIDE THIS REPO: "the two minute explainer" is a promise kept
-         by findable.live, where "See how it works" lands. Checked 2026-09-12 - the file at
-         /media/findable-hook.mp4 serves 200 video/mp4, but NOTHING ON THE SITE EMBEDS IT: no video
-         element anywhere in findable-site and no reference on the home page. It exists as the
-         WhatsApp template's header asset. Paul is adding it. Until he has, that sentence is the
-         same fault just removed from page 1 - copy pointing at something that is not there - so if
-         the video ever leaves that page, this line goes with it. -->
+         IT DEPENDS ON SOMETHING OUTSIDE THIS REPO, AND IT BRIEFLY POINTED AT NOTHING. "See how it
+         works" lands on findable.live, and when this copy first shipped that page had NO VIDEO on
+         it - zero video elements, zero iframes, no reference to findable-hook.mp4 - while the file
+         itself served a clean 200. It existed only as the WhatsApp template's header asset.
+         Fixed the same day: findable-site now has an Explainer section above Pricing. If that
+         section is ever removed, this line goes with it.
+
+         AND IT NO LONGER CLAIMS A LENGTH. It said "the two minute explainer"; the file is 49
+         SECONDS. Paul offered "60 second" as the alternative and I did not take it - 49 is not 60
+         either, and this sentence is deployed from a different repo to the video it describes, so a
+         number here goes stale the moment the cut changes and nobody is standing next to it to
+         notice. The length IS claimed on findable.live ("under a minute"), which is true at 49s and
+         sits directly above the player, where a re-cut cannot be made without seeing it. -->
 ${d.hidePitch ? "" : `
     <!-- 🔴 STRIPPED BACK TO A HEADING, ONE LINE AND TWO BUTTONS (2026-09-02, Paul's call). What
          was here: "Ready to get started?", three paragraphs, Email us / WhatsApp us / Who we are,
@@ -1308,7 +1314,7 @@ ${d.hidePitch ? "" : `
     <section class="cta">
       <h3>Ready to <span class="y">get found</span>?</h3>
       <p>Three steps. We measure where you stand, build the pages AI reads, then re-measure after four weeks so you can see the difference.</p>
-      <p>Watch the two minute explainer, or just ask me anything.</p>
+      <p>Watch the explainer, or just ask me anything.</p>
       <div class="cta-actions">
         ${startBtn}
         <a class="cta-btn site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">See how it works</a>

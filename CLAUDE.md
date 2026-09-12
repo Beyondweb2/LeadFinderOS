@@ -3313,11 +3313,20 @@ with it.
     is set ONLY by `render-audit-report`, so the in-app preview, the PDF, the before/after iframes
     and the welcome pack all render without it. The copy names only the two buttons that always
     render, and the three steps describe what WE do rather than steps the reader takes.
-  - 🔴 **"Watch the two minute explainer" IS A PROMISE KEPT BY findable.live, AND AS OF 2026-09-12
-    THAT PAGE DOES NOT KEEP IT.** `/media/findable-hook.mp4` serves 200 `video/mp4`, but **nothing
-    on the site embeds it** — no `<video>` element anywhere in findable-site, no reference on the
-    home page; it exists as the WhatsApp template's header asset. Paul is adding it. **If the video
-    ever leaves that page, that line comes with it.**
+  - ✅ **THE EXPLAINER LINE POINTED AT NOTHING FOR A FEW HOURS, AND THE VIDEO IS NOW ON THE SITE.**
+    `/media/findable-hook.mp4` served a clean 200 `video/mp4` while **nothing embedded it** — zero
+    `<video>` elements, zero iframes, no reference on the home page; it existed only as the WhatsApp
+    template's header asset. findable-site now has **`Explainer.astro`, a `section#video` above
+    Pricing** (native `<video>`, no autoplay, `preload="metadata"`, `playsinline`, capped at 340px
+    wide because the file is 1080×1920 VERTICAL and would otherwise render ~1100px tall).
+    **If that section is removed, the report's CTA line must go with it.**
+  - ⛔ **THE LENGTH IS CLAIMED ON THE SITE AND NOWHERE ELSE, AND THAT SPLIT IS THE POINT.** The CTA
+    said "the two minute explainer"; the file is **49 seconds**. The report now claims NO length
+    ("Watch the explainer") because it deploys from a different repo to the video it describes, so a
+    number there goes stale the moment the cut changes with nobody standing next to it. The site
+    heading says "under a minute" — true at 49s, and directly above the player, where a re-cut
+    cannot happen without seeing it. **Re-cut past 60 seconds and that heading is the line that
+    becomes false.**
   - ⚠️ **The trade/town subject line was deleted with the old CTA, and its MEASUREMENTS are kept as
     a comment** where it stood: `businessType` is stored PLURAL on 649 of 778 audits (83%), so
     `${article(t)} ${t}` printed *"a Locksmiths in Ashby-de-la-Zouch"* on four reports in five. Any
