@@ -12,13 +12,20 @@
    below reads the STRING LITERALS of each renderer (comments and HTML comments stripped, so the
    design commentary that never reaches a prospect cannot trip it) and fails on any stale claim.
 
-   ⚠️ src/lib/templateBodies.ts is DELIBERATELY NOT HERE. It mirrors what Meta has registered, and
-   re_engage_49 genuinely still says "£49.99 instead of £99" at Meta — the mirror is TRUE and the
-   template is WRONG. Fixing the mirror would make the Inbox lie about what the prospect receives;
-   the fix is Paul re-registering or retiring the template. Recorded in CLAUDE.md §19.
+   ⚠️ src/lib/templateBodies.ts IS NOT SCANNED AS A FILE, AND THAT IS DELIBERATE. It is the Inbox's
+   mirror of what was SENT, and it keeps the OLD `re_engage` body ("£49.99 instead of £99") because
+   21 August rows genuinely contained those words — rewriting it would falsify the transcript
+   (I did exactly that once on 2026-09-12 and had to restore it). Meta is current: `re_engage_49`
+   carries a one-variable body with no price, mirrored below character for character. So the
+   property that matters is not "the file has no £49.99" but "NO SENDABLE TEMPLATE'S BODY does" —
+   and that is asserted at the bottom, against WA_TEMPLATE_REQS, the sendable list.
+   (A first version of this header claimed Meta still said £49.99. It did not; I had read the
+   historical mirror and called it the live template. Paul caught it.)
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from "node:fs";
 import { FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP } from "../src/lib/findableOffer.ts";
+import { READABLE_TEMPLATE_BODIES } from "../src/lib/templateBodies.ts";
+import { WA_TEMPLATE_REQS } from "../src/lib/whatsappTemplates.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -82,6 +89,30 @@ ok(/four weeks|week four/.test(FINDABLE_GUARANTEE), "…and four weeks");
 const playbook = read("src/lib/playbookDoc.ts");
 ok(/\$\{FINDABLE_GUARANTEE\}/.test(playbook), "the playbook document renders FINDABLE_GUARANTEE");
 ok(!/No client has completed/.test(renderedText(playbook)), "…and no longer asserts how many clients have completed a cycle (a sentence that goes stale by itself)");
+
+console.log("\n── NO SENDABLE WHATSAPP TEMPLATE QUOTES A RETIRED PRICE OR A HEDGE ──");
+/* The sendable list is WA_TEMPLATE_REQS. A body is rendered with a neutral name so a stale claim
+   cannot hide behind an interpolation. The historical `re_engage` body is NOT in this list — it is
+   not sendable — and that is asserted too, because the day it becomes sendable again it becomes a
+   "shown £49.99, charged £99" send. */
+const sendable = Object.keys(WA_TEMPLATE_REQS);
+ok(sendable.length > 0, `WA_TEMPLATE_REQS lists ${sendable.length} sendable template(s)`);
+ok(!sendable.includes("re_engage"), "the OLD `re_engage` is not sendable (its £49.99 body is history for 21 rows, not copy)");
+ok(sendable.includes("re_engage_49"), "re_engage_49 is the sendable one");
+type BodyFn = (b: string, u: string) => string;
+const bodies = READABLE_TEMPLATE_BODIES as unknown as Record<string, BodyFn | undefined>;
+for (const name of sendable) {
+  const render = bodies[name];
+  if (!render) { console.log(`  (no mirrored body for ${name} — nothing to scan)`); continue; }
+  const text = render("Example Business", "https://example.invalid/x");
+  for (const [re, why] of STALE) {
+    const m = text.match(re);
+    ok(!m, `sendable template ${name}: no "${m?.[0] ?? re.source}" — ${why}`.slice(0, 160));
+  }
+}
+const re49 = bodies["re_engage_49"]?.("Example Business", "") ?? "";
+ok(/Where did we get to with this\? Happy to pick it back up, or leave it if now.s not the time\./.test(re49) && !/£/.test(re49),
+   "re_engage_49's mirror is the one-variable, no-price body Paul registered");
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);
 if (f) process.exit(1);

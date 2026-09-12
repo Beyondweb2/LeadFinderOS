@@ -3807,13 +3807,16 @@ The four commits behind the AI Audit page's before/after panel. Pure folds in
   renderer (comments and HTML comments stripped) for eight weeks / 56 days / £49.99 / founder /
   first-ten / two months / any hedge / Bing Places (§5: tested negative — the pack named it as a
   profile we tidy, now removed). **Add any new client-facing renderer to that list.**
-- 🔴 **`re_engage_49` STILL SAYS "£49.99 INSTEAD OF £99" — AT META.** `templateBodies.ts` /
-  `whatsapp-send.ts` mirror the REGISTERED body, and the registered body is the 2026-08-17
-  re-registration at £49.99. Since 2026-09-12 the price is £99 flat, so a send quotes a price the
-  checkout does not charge — the "shown £49.99, charged £99" embarrassment §11 exists to prevent.
-  ⛔ **Do NOT "fix" the mirror in code** — that makes the Inbox lie about what the prospect got.
-  The fix is Paul re-registering (or retiring) the template at Meta, THEN the mirror. Until then
-  it should not be sent; the claims test deliberately excludes the mirror for this reason.
+- ⚠️ **THE `re_engage` £49.99 BODY IN `templateBodies.ts` / `whatsapp-send.ts` IS HISTORY, NOT A
+  LIVE TEMPLATE — AND I MISREAD IT AS ONE (2026-09-12, evening).** `re_engage_49` at Meta is a
+  one-variable body with no price ("Where did we get to with this?…"), mirrored exactly. The OLD
+  `re_engage` body is kept ONLY so the Inbox renders what 21 August rows actually contained; it is
+  not in `WA_TEMPLATE_REQS` (not sendable) and `re-engage-vars.test.ts` asserts the old name is not
+  in `WA_TEMPLATES` either. ⛔ Do not "update" or delete the historical body — that falsifies 21
+  transcripts (done once by mistake that day and restored). `client-copy-claims.test.ts` pins the
+  property that matters: **no SENDABLE template body quotes a retired price or a hedge**, and
+  `re_engage` is not sendable. Paul caught the misreading; the earlier version of this bullet said
+  the opposite and was wrong.
 - ⚠️ **Things no script can check, still hand-kept:** the Stripe **Payment Link**'s amount and
   description (dashboard), and every Meta-registered template body. A client-facing claim that
   lives outside this repo is a claim nobody is verifying.
