@@ -7,6 +7,7 @@ import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { applySeed, dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
 import { measurementFlagFor } from "../../../src/lib/auditKind.ts";
+import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
 import { moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
 import {
@@ -746,6 +747,9 @@ Deno.serve(async (req) => {
     let auditId: string;
     let auditBusinessName = businessName;
     let questions: string[] = [];
+    /* Set by the like-for-like check below; stored on the run so the before/after can tell a
+       counted re-measurement from a diagnostic or an overridden set. */
+    let remeasureNote: { reason: string; counts: boolean; detail: string } | null = null;
     /* Populated only on the baseline seeding path. Surfaced on the response so a rejected seed is
        VISIBLE rather than a silent fallback — the whole failure this guards against is a bad
        question entering the guarantee unnoticed, and a guard you cannot see firing is barely a
@@ -1009,12 +1013,27 @@ Deno.serve(async (req) => {
          false since the day this line was widened. scripts/audit-kind.test.ts drives the round
          trip: what this writes must be what that recognises. */
       if (measurementFlagFor(isMeasurement)) auditRow.is_measurement = true;
+      /* ⛔ THE PURPOSE, PERSISTED — AND IT IS WHAT CLAIMS THE BASELINE POINTER (2026-09-12).
+         There was no purpose column on ai_audits at all, which is precisely why nothing could
+         identify THE baseline for a lead: `baseline_contract` is written to every audit
+         startPaidBaseline creates, so ten runaway baselines produced ten contracts and none was
+         authoritative.
+         ⛔ IT IS SET IN THIS INSERT, NOT AFTER IT. A DB trigger on ai_audits reads this value and
+         claims `outreach_leads.baseline_audit_id` in the SAME TRANSACTION, so the pointer cannot
+         exist without the audit and cannot fail separately from it — which is the hole
+         baseline_contract's best-effort update has and the reason a failed contract write now reads
+         as ambiguous (auditKind.ts). Two tables cannot be written by one PostgREST statement; a
+         trigger is the only way to make it one write.
+         ⚠️ Migration-tolerant like its neighbours: the shed-and-retry below drops it if the column
+         is not there yet, and without the column the trigger does not exist either, so the whole
+         feature is simply absent rather than half-present. */
+      auditRow.audit_purpose = isBaseline ? "baseline" : isMeasurement ? "measurement" : marketOnly ? "market" : "audit";
       let { data: audit, error: insErr } = await service
         .from("ai_audits").insert(auditRow).select("id, business_name").single();
       // Shed a missing new column (either one) and retry, longest-name-first so one miss can't mask another.
       let guard = 0;
       while (insErr && guard++ < 3) {
-        const missing = ['baseline_target_runs', 'is_measurement'].find((c) => c in auditRow && (insErr!.message ?? '').includes(c));
+        const missing = ['baseline_target_runs', 'is_measurement', 'audit_purpose'].find((c) => c in auditRow && (insErr!.message ?? '').includes(c));
         if (!missing) break;
         console.warn(`[create-ai-audit] column ${missing} missing — retrying insert without it`);
         delete auditRow[missing];
@@ -1046,6 +1065,63 @@ Deno.serve(async (req) => {
        seed top-up, or the multi-area concatenation — no two rows may be the same question in
        different capitals. There was no dedupe here at all, which is how one audit could queue both
        casings. Original spelling is preserved; only the identity is normalised. */
+    /* ══ THE LIKE-FOR-LIKE REFUSAL, SERVER-SIDE (2026-09-12, Paul's spec) ═══════════════════════
+       🔴 THIS CHECK USED TO EXIST ONLY IN THE SPA ("Warn, never block", AiAudit.tsx), which is a UI
+       preference rather than a guarantee: the queue backstop, the Stripe webhook and every other
+       caller of this function bypassed it entirely. §4's rule — ask not whether the guard is
+       correct, but whether the case it guards can reach it.
+
+       ⛔ IT RUNS ONLY FOR A MULTI-RUN RE-MEASURE ON A LEAD WITH A RECORDED BASELINE. A baseline
+       creating itself, a market audit, an outreach hook and a free check have nothing to be
+       like-for-like with and are untouched.
+
+       ⛔ AND IT COMPARES AGAINST THE ASKED SET, WHICH IS WHY THE LEGITIMATE CASES ARE NOT
+       MISMATCHES. A town the allocation ceiling dropped and a question the intent guards rejected
+       were never queued, so they are not in the baseline's asked set and cannot read as a change.
+       See baselineReplay.ts for the four cases and why each is handled the way it is. */
+    if (isMeasurement && baselineTargetRuns > 1 && leadId) {
+      const { data: leadRow } = await service
+        .from("outreach_leads").select("baseline_audit_id").eq("id", leadId).maybeSingle();
+      const pointer = (leadRow as { baseline_audit_id?: string | null } | null)?.baseline_audit_id ?? null;
+      if (pointer) {
+        /* Ground truth: the questions on the baseline's FIRST run. The contract records the
+           INTENDED set, not the asked one (it has no such field for work-guarantee clients), so the
+           queue is the only honest source — see baselineReplay.ts. */
+        const { data: firstRun } = await service
+          .from("ai_audit_runs").select("id").eq("audit_id", pointer)
+          .order("run_number", { ascending: true }).limit(1).maybeSingle();
+        let baselineAsked: string[] = [];
+        if (firstRun?.id) {
+          const { data: bq } = await service
+            .from("ai_audit_queue").select("question").eq("run_id", firstRun.id).order("created_at", { ascending: true });
+          baselineAsked = ((bq ?? []) as Array<{ question: string }>).map((r) => (r.question ?? "").trim()).filter(Boolean);
+        }
+        const verdict = judgeRemeasure({
+          proposed: questions,
+          baselineAsked,
+          targetRuns: baselineTargetRuns,
+          overrideReason: typeof body.question_change_reason === "string" ? body.question_change_reason : null,
+        });
+        if (!verdict.allow) {
+          console.warn(`[create-ai-audit] re-measure refused for lead ${leadId}: ${verdict.detail}`);
+          /* Recorded, not only logged — the CLI has no `functions logs` (§4), and a refusal nobody
+             can read afterwards is the shape that kept the free-check lane dead for two days. */
+          try {
+            await service.from("client_error_reports").insert({
+              error_id: "remeasure_refused",
+              message: verdict.detail.slice(0, 1000),
+              context: { lead_id: leadId, baseline_audit_id: pointer, reason: verdict.reason },
+            });
+          } catch { /* reporting must never turn a refusal into a retryable error */ }
+          return json({ ok: false, error: verdict.reason, detail: verdict.detail }, 409);
+        }
+        /* ⚠️ ALLOWED, BUT THE REASON TRAVELS WITH THE AUDIT. A Quick diagnostic must be excluded
+           from the before/after and an override must be able to say WHY the set changed — neither
+           is expressible later if only the questions are stored. */
+        remeasureNote = { reason: verdict.reason, counts: verdict.countsAsMeasurement, detail: verdict.detail };
+      }
+    }
+
     const finalQ = dedupeQuestions(questions);
     if (finalQ.duplicates.length) {
       console.warn(`[create-ai-audit] ${finalQ.duplicates.length} case-duplicate question(s) dropped before queueing: ${finalQ.duplicates.join(" | ")}`);
@@ -1070,6 +1146,9 @@ Deno.serve(async (req) => {
        WITHOUT a schema change (results is jsonb). Inert to everything downstream: the queue's SEO
        step keys on results.seo and the report on results.seo.categories — neither reads this. */
     if (isMeasurement) runResults.measurement = true;
+    /* Same schema-free mechanism (results is jsonb). A diagnostic carries counts:false so the
+       comparison can refuse to COUNT it without refusing to run it. */
+    if (remeasureNote) runResults.remeasure = remeasureNote;
     /* Same schema-free mechanism as `measurement` above (results is jsonb — no migration). Inert
        downstream: the queue keys on results.seo and the report on results.seo.categories. */
     if (moneyQueued.length) runResults.money_questions = moneyQueued;
