@@ -76,10 +76,18 @@ export interface AiAuditReportData {
   /** True when competitor names are withheld because the run's list could not be trusted.
    *  Absent on older payloads -> false, which is exactly what those documents already showed. */
   namesWithheld?: boolean;
-  /* The full question-by-question detail — the client-facing "page 2". Each completed question,
-     whether AI named the business (on any scored engine), and the real rival firms it named in
-     that answer. Optional so a payload built before this existed still renders — absent means the
-     detail page is simply omitted, never a half-built section. */
+  /* The full question-by-question detail. Each completed question, whether AI named the business
+     (on any scored engine), and the real rival firms it named in that answer. Optional so a payload
+     built before this existed still renders — absent means the detail pages are simply omitted,
+     never a half-built section.
+     🔴 IT IS NO LONGER CLIENT-FACING (2026-09-12, Paul). It used to be "page 2" on every prospect
+     report and read as clutter at the moment the document is asking for the sale — a 12-question
+     baseline ran to four extra sheets. The DATA is still built and still carried on the payload;
+     only the RENDER is now gated on `internal`, because the operator's per-question winnability
+     signal (winBlock) lives inside these cards and is the only winnability view in the product.
+     ⚠️ SO A PROSPECT NO LONGER SEES WHICH SOURCES THE ENGINES READ. These cards were the only
+     place the report showed citations; page 1 has none. Stated and accepted — see the note above
+     `questionDetail`. */
   questionBreakdown?: {
     question: string; namedYou: boolean; namedCount?: number; answers?: number;
     rivals: string[]; citations?: { domain: string; url: string }[];
@@ -583,8 +591,11 @@ export function renderReportHtml(d: AiAuditReportData): string {
      a client named X times it sat two inches under the "named X times" headline saying "wasn't
      named", which read as cherry-picking and lost trust (Wilson's, and the reason David flagged it).
      The fix is to state the WHOLE audit, using the SAME numbers as the hero (d.named / d.total), so
-     the two cannot disagree. The per-question detail — every question with how often you were named
-     — lives on page 2 (questionDetail), not here, so nothing is shown twice.
+     the two cannot disagree.
+     ⚠️ THE "nothing is shown twice" REASONING IS SPENT ON THE CLIENT DOCUMENT (2026-09-12). It used
+     to be safe to keep this summary short because the per-question detail followed on page 2; that
+     detail is now operator-only, so on a prospect report THIS BOX IS THE ONLY PER-QUESTION-ADJACENT
+     statement there is. Do not thin it further without replacing what it says.
      ⚠️ The audit-wide competitor leaders line is KEPT (it was the good part) with its counts, and
      the denominator is stated so the reader can size it. */
   let gutbox = "";
@@ -606,7 +617,12 @@ export function renderReportHtml(d: AiAuditReportData): string {
         : "";
       body += ` The firms AI named most often instead were ${list}${denom}.`;
     }
-    const pointer = (d.questionBreakdown?.length ?? 0) > 0
+    /* ⛔ THE POINTER IS GATED ON THE SAME CONDITION AS THE PAGES IT POINTS AT, AND THAT MATTERS
+       MORE THAN IT LOOKS. It was gated on the DATA existing (`questionBreakdown?.length > 0`) while
+       the pages it names are now gated on `internal` — two different conditions for one promise, so
+       a prospect report would carry "listed on the next page" with no next page. A sentence that
+       names a thing must be true or absent; there is no third option on a document we send. */
+    const pointer = d.internal === true && (d.questionBreakdown?.length ?? 0) > 0
       ? ` <span class="gb-more">Every question, and how often AI named you in each, is listed on the next page.</span>`
       : "";
     gutbox = `
@@ -639,37 +655,24 @@ export function renderReportHtml(d: AiAuditReportData): string {
   // apostrophe, &), then esc() for HTML-attribute safety. Single-param each → no & separator.
   // Addresses come from REPORT_CONTACT_* at the top of this file — one place to change.
   const emailHref = esc(`mailto:${REPORT_CONTACT_EMAIL}?subject=${encodeURIComponent(`AI Visibility - ${d.businessName}`)}`);
-  /* ⛔ THE SENTENCE DEGRADES, IT NEVER PRINTS A GAP. businessType "may be \"\"" by its own type
-     comment and locationText is absent on every payload built before today, so all four
-     combinations are written out rather than interpolated hopefully. The generic tail is a real
-     sentence, not a placeholder: "a business like yours" is the wording this file already uses
-     elsewhere for exactly this case.
-     ⚠️ "an" before a vowel - "an electrician", not "a electrician". A one-character tell that the
-     document was generated carelessly, on the line that asks for the sale. */
-  const ctaTrade = (d.businessType ?? "").trim();
-  const ctaTown = (d.locationText ?? "").trim();
-  /* ⚠️ REUSES THE FILE'S OWN `article()` (line ~182) RATHER THAN A LOCAL COPY. My first version
-     declared `const article = ...` here and SHADOWED that function, which broke `article(type)` in
-     the explainer above with "This expression is not callable" - a duplicate helper that also
-     disabled the original. One a/an rule in this file. */
-  /* ⛔ NO ARTICLE BEFORE A PLURAL TRADE, AND THIS IS THE COMMON CASE NOT AN EDGE ONE. Measured over
-     the 778 audits that carry a trade: 649 of them - 83% - are stored plural ("Locksmiths",
-     "Plumbers", "Accountants", "Driving instructors"). So `${article(trade)} ${trade}` printed
-     "a Locksmiths in Ashby-de-la-Zouch" on four reports out of five, on the one line that asks for
-     the sale. Dropping the article reads correctly either way: "for Locksmiths in X", "for a
-     plumber in X".
-     ⚠️ `ss` is excluded so a singular like "business" keeps its article; a genuinely singular word
-     ending in one s ("gas") loses it, which reads oddly but never ungrammatically. */
-  /* Plural, or a gerund used as a mass noun. Measured over the 129 non-plural trades: 114 are
-     countable singulars ("plumber" 53, "accountant" 43, "electrician" 12) where the article is
-     right, and 9 are "mobile valeting"/"mobile valeting and detailing" where "a mobile valeting" is
-     wrong. The `ing$` clause fixes those and any future "plumbing"/"roofing" without a curated
-     list.
-     ⚠️ RESIDUAL, STATED: "hospitality" and "shoe repairs & watch battery replacement" still take an
-     article - 2 of 778 audits. A mass-noun list is not worth carrying for that, but if a real
-     client ever reads badly here, this is the line to widen. */
-  const pluralTrade = /[^s]s$/i.test(ctaTrade) || /ing$/i.test(ctaTrade);
-  const tradePhrase = pluralTrade ? esc(ctaTrade) : `${article(ctaTrade)} ${esc(ctaTrade)}`;
+/* 🔴 THE TRADE/TOWN CTA SUBJECT WAS DELETED WITH THE OLD CTA (2026-09-12) — and the MEASUREMENTS
+     behind it are kept here because the next CTA that names a trade will need them, and they cost
+     real reports to learn:
+       · `businessType` is stored PLURAL on 649 of the 778 audits that carry one — 83%. So
+         `${article(t)} ${t}` printed "a Locksmiths in Ashby-de-la-Zouch" on four reports in five,
+         on the line that asks for the sale. Dropping the article reads correctly either way.
+       · The test that worked: `/[^s]s$/i.test(t) || /ing$/i.test(t)` — the `ing$` clause catches
+         "mobile valeting", where "a mobile valeting" is wrong; `ss` is excluded so "business" keeps
+         its article. Residual, stated: "hospitality" still takes one, 2 of 778.
+       · businessType may be "" and locationText is absent on older payloads, so all four
+         combinations had to be written out, ending in a real sentence ("a business like yours"),
+         never an interpolated gap.
+     ⛔ DELETED RATHER THAN LEFT UNUSED. The new copy names neither trade nor town, so ctaTrade,
+     ctaTown, pluralTrade, tradePhrase and ctaSubject all became unreferenced — and `noUnusedLocals`
+     is off, so nothing would have said so. This file has already paid for that once: it kept
+     IMPORTING FINDABLE_GUARANTEE and rendering it nowhere for ten days. Knowledge belongs in a
+     comment; code that runs and is read by nothing does not.
+     ⚠️ `article()` (line ~182) is UNTOUCHED and still used by the explainer at the top. */
   /* ⛔ THE GET-STARTED BUTTON, AND IT IS A PRICE GUARD AS MUCH AS A LINK (wired 2026-09-03).
      `offerUrl` is /onboarding/<slug>/?lead=<leadId>, and the `?lead=` is what makes
      offerPriceForLead quote the FOUNDER price - without it that same flow charges the full price.
@@ -693,13 +696,6 @@ export function renderReportHtml(d: AiAuditReportData): string {
     console.warn("[report] get-started button omitted: no per-lead onboarding url (no lead_id, or the site origin is not configured)");
   }
 
-  const ctaSubject = ctaTrade && ctaTown
-    ? `${tradePhrase} in ${esc(ctaTown)}`
-    : ctaTrade
-      ? tradePhrase
-      : ctaTown
-        ? `a business in ${esc(ctaTown)}`
-        : "a business like yours";
   const waHref = esc(`https://wa.me/${REPORT_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
 
   // ── QUESTION-BY-QUESTION DETAIL (page 2) — every question asked, whether AI named the business,
@@ -866,7 +862,22 @@ export function renderReportHtml(d: AiAuditReportData): string {
     </li>`;
   };
 
-  const questionDetail = qb.length === 0 ? "" : qChunks.map((chunk, pi) => `
+  /* 🔴 OPERATOR-ONLY SINCE 2026-09-12 (Paul's call). These sheets used to go to every prospect and
+     read as clutter on the document that asks for the sale — QUESTIONS_PER_PAGE is 3, so a
+     12-question baseline added FOUR full sheets after the CTA.
+     ⛔ GATED, NOT DELETED, AND THE REASON IS winBlock. The per-question winnability signal renders
+     only inside these cards (`d.internal === true && q.winnability`), and it is the ONLY winnability
+     view in the product — deleting the cards would have taken it with them, silently, because a
+     block that renders nowhere is not a compile error. Same trap that left FINDABLE_GUARANTEE
+     imported-and-unrendered for ten days.
+     ⚠️ WHAT IT COSTS A PROSPECT, STATED: these cards are the ONLY place the report shows which
+     SOURCES each engine read. Page 1 carries no citations at all, so a prospect report no longer
+     shows them anywhere. Accepted deliberately; if that is ever reconsidered, the fix is a
+     sources summary on page 1, not un-gating these pages.
+     ⚠️ `internal` is set ONLY by the in-app operator preview (AiAudit.tsx). render-audit-report —
+     the route a prospect actually opens — never sets it, which is the same flag that already kept
+     winnability off customer documents, so this inherits a rule that was already load-bearing. */
+  const questionDetail = d.internal !== true || qb.length === 0 ? "" : qChunks.map((chunk, pi) => `
     <div class="sheet qpage">
       ${waveBand(`Questions &amp; sources${qChunks.length > 1 ? ` &middot; page ${pi + 1} of ${qChunks.length}` : ""}`)}
       <section class="qbreak">
@@ -1261,6 +1272,23 @@ ${d.hidePitch ? "" : `
 
     <!-- CTA -->
     <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
+    <!-- NOTE FOR THE CTA BELOW, KEPT OUTSIDE THE TEMPLATE LITERAL. It cannot live inside the
+         backticked string because naming a variable in backticks TERMINATES THE STRING - the exact
+         trap CLAUDE.md section 3 records, and it broke this file for one edit on 2026-09-12.
+
+         WHY THE COPY IS SAFE WITH NO "Get started" BUTTON. startBtn is empty on every render path
+         except render-audit-report: there is no offerUrl in the in-app preview, the PDF, the
+         before/after iframes or the welcome pack. So the copy has to read correctly without it, and
+         it does - the three steps describe what WE do, not steps the reader has to take, and the
+         second line points only at the two buttons that ALWAYS render.
+
+         AND IT DEPENDS ON SOMETHING OUTSIDE THIS REPO: "the two minute explainer" is a promise kept
+         by findable.live, where "See how it works" lands. Checked 2026-09-12 - the file at
+         /media/findable-hook.mp4 serves 200 video/mp4, but NOTHING ON THE SITE EMBEDS IT: no video
+         element anywhere in findable-site and no reference on the home page. It exists as the
+         WhatsApp template's header asset. Paul is adding it. Until he has, that sentence is the
+         same fault just removed from page 1 - copy pointing at something that is not there - so if
+         the video ever leaves that page, this line goes with it. -->
 ${d.hidePitch ? "" : `
     <!-- 🔴 STRIPPED BACK TO A HEADING, ONE LINE AND TWO BUTTONS (2026-09-02, Paul's call). What
          was here: "Ready to get started?", three paragraphs, Email us / WhatsApp us / Who we are,
@@ -1278,12 +1306,13 @@ ${d.hidePitch ? "" : `
          ⚠️ Email us and Who we are went with it. WhatsApp keeps the same wa.me href it always had,
          prefilled with the business name, so the one route that was actually used is unchanged. -->
     <section class="cta">
-      <h3>Want us to <span class="y">fix this</span>?</h3>
-      <p>We&rsquo;ll get you showing up when people ask AI for ${ctaSubject}.</p>
+      <h3>Ready to <span class="y">get found</span>?</h3>
+      <p>Three steps. We measure where you stand, build the pages AI reads, then re-measure after four weeks so you can see the difference.</p>
+      <p>Watch the two minute explainer, or just ask me anything.</p>
       <div class="cta-actions">
         ${startBtn}
         <a class="cta-btn site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">See how it works</a>
-        <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp us</a>
+        <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp me</a>
       </div>
       <!-- 🔴 THE GUARANTEE IS BACK ON THE REPORT (2026-09-12). When the founder-offer block was
            deleted on 2026-09-02 the guarantee went with it, and nobody noticed: this file kept
