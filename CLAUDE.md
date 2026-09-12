@@ -74,7 +74,12 @@ as *possibly describing something deleted*. Grep before you believe it.
 - **Supabase CLI is authenticated** — reads and deploys both work. Use it; stop inferring.
 - **findable-site is symlinked** at `/home/paulj/projects/findable-site` → the Windows copy, so
   `check-cross-repo-sync.mjs` runs (9/9 pass; price and guarantee agree).
-- **Deno is installed** at `~/.deno/bin/deno` for `deno check`.
+- 🔴 **DENO IS NOT ON THIS MACHINE.** This line said it was installed at `~/.deno/bin/deno`; on the
+  Windows host that path does not exist and `deno` is not on PATH, so **`deno check` cannot be run
+  here at all** and §3's checklist item is unsatisfiable. §4's rule is what carries the weight
+  instead: **the deploy is the only real gate for an edge function.** ⚠️ And the failure is quiet —
+  `~/.deno/bin/deno check … ; echo exit=$?` prints `exit=0` from the **echo**, not from Deno, which
+  is §3's own capture-the-exit-code-directly warning biting on the command meant to check it.
 - ⚠️ **Nothing is deployed.** SPA deploys on push; edge functions need
   `npx supabase functions deploy <name>` — `extract-competitors` is the one with a real pending fix.
 - See **`HANDOVER_NEXT.md`** (untracked) for the resume plan and the open decisions.
@@ -1409,6 +1414,25 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   - 🔴 **DEPLOYS HELD: `send-whatsapp-message` + `process-whatsapp-queue` carry the entry in git
     but are NOT deployed with it** until Paul confirms Meta approval. Until then a button press
     fails safe with the deployed version's `unknown_template`. Everything else shipped.
+
+- ✅ **`send-whatsapp-message` mode `test_send` — ONE REAL SEND, TO ONE NUMBER, WRITING NOTHING**
+  (built 2026-09-12 on `instantly-push`'s `auth_probe` precedent). It returns BEFORE the
+  conversation lookup, so no lead is read or adopted by phone, no `whatsapp_messages` or
+  `whatsapp_sends` row is written and no status moves — while still building the payload with the
+  real `claimTemplatePayload` and posting it with the real `sendViaGraph`. It echoes the posted
+  payload so the header component and variable order are inspectable without a redeploy.
+  - ⛔ **THE DESTINATION IS `WHATSAPP_TEST_NUMBER`, READ FROM THE SECRET, NEVER FROM THE REQUEST.**
+    It first required the caller to supply a MATCHING phone, and that was unusable for its only
+    job: **`supabase secrets list` returns SHA-256 DIGESTS**, so nobody operating the function can
+    read the number back to retype it — and retyping was the sole way to get a digit wrong. A
+    supplied phone is now an optional confirmation that must still match. Unset secret → refuse.
+  - ⚠️ **ADMIN-JWT ONLY, AND THERE IS NO UI FOR IT**, so running it means minting an operator
+    session (§8's magic-link route) — a real sign-in on Paul's account. Tell him, and revoke.
+  - ⚠️ **It costs a real template send and there is no dry-run**, deliberately: a dry-run proves
+    nothing about Meta, which is the only thing this mode exists to prove.
+  - ✅ **Proven live 2026-09-12**: `video_template` accepted, `wamid.HBgMNDQ3OTQzMjYyNzQy…`, and the
+    before/after row counts plus a targeted per-number and per-wamid search came back **0 rows in
+    every table** — the counts prove no NET change, the targeted search proves no row at all.
 
 ---
 
