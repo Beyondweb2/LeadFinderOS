@@ -58,21 +58,49 @@ as *possibly describing something deleted*. Grep before you believe it.
 
 ## 1. What the business is
 
-- Paul sells **AI visibility** to local UK businesses. **£49.99, one-off, ONE FLAT PRICE FOR
-  EVERYONE** since 2026-09-03 — the founder-vs-full split is deleted and **£99 is charged to
-  nobody** (§11; history £49.99 → £99 on 2026-08-04 → flat £49.99). Price + guarantee wording live
-  in **`src/lib/findableOffer.ts`** — one constant, shared by the SPA docs and the checkout/webhook
+- Paul sells **AI visibility** to local UK businesses. **£99, one-off, ONE FLAT PRICE FOR EVERYONE**
+  since 2026-09-12 — the founder-vs-full split stays deleted (history £49.99 → £99 on 2026-08-04 →
+  flat £49.99 on 09-03 → **flat £99 on 09-12**). Price + guarantee wording live in
+  **`src/lib/findableOffer.ts`** — one constant, shared by the SPA docs and the checkout/webhook
   edge functions. findable-site (separate repo) carries its own copy; changing either means a
-  matching pass in the other.
-- **There is an OPTIONAL WEBSITE ADD-ON: £49.99 build + £9.99/month hosting** — the product's first
-  recurring charge, live since 2026-09-03. A ticked checkout is `mode: subscription`, £109.97 today
-  and £9.99/month after, confirmed from Stripe's own `amount_total` (§11).
+  matching pass in the other, and `scripts/check-cross-repo-sync.mjs` fails the build on any drift.
+  ⚠️ **THIS BULLET SAID "£49.99 … and £99 is charged to nobody" FOR NINE DAYS AFTER THAT STOPPED
+  BEING TRUE**, which is the exact inversion §0 warns about: confident prose describing the opposite
+  of what the code does, on the first page anyone reads. The constants were right the whole time.
+- **THE WEBSITE BUILD IS INCLUDED IN THE £99 SINCE 2026-09-12** — the separate £49.99 build line
+  item is **deleted from `findable-checkout`** and `WEBSITE_BUILD_PRICE_GBP` is gone from
+  findable-site. Ticking "build my site" now adds **hosting only**.
+- **£9.99/month hosting** is the product's only recurring charge, live since 2026-09-03. A ticked
+  checkout is still `mode: subscription` (one line now, not three): **£99 today, £9.99/month after**.
+  Unticked is `mode: payment`.
+- **£49.99/month continuing work is OPTIONAL and COPY-ONLY IN THIS CODEBASE.** A real Stripe price
+  exists (Paul holds it) but it is sent **BY HAND as a Payment Link at week four**, after the
+  customer has seen their results — which is what the site's own copy promises. ⛔ Do not wire it
+  into the checkout: doing so would make that promise false.
 - Audit whether **ChatGPT and Gemini name them** when a customer asks for their trade in their town.
 - Fix what AI reads: pages on **their own site**, a page per service per town, plus consistency in
   the sources the evidence says matter for that trade.
-- **Re-measure at 4 WEEKS** (since 2026-09-03; it was 8). The guarantee is **WORK-based** (audit +
-  work + re-measurement with evidence, or a full refund) — it does NOT promise being named. Never
-  write copy that promises the outcome.
+- **Re-measure at 4 WEEKS** (since 2026-09-03; it was 8).
+- 🔴 **THE GUARANTEE IS NO LONGER WORK-BASED. SINCE 2026-09-12 THE REFUND IS CONDITIONAL ON THE
+  MEASUREMENT GOING UP**, on Paul's instruction and confirmed by him on the record. It used to
+  promise the audit + the work + the re-measurement and explicitly disclaim the outcome; it now
+  says: we measure before we start, we re-measure after four weeks on the same questions and the
+  same engines, and **if that number has not gone up the customer can claim their £99 back, by
+  emailing within 14 days of receiving their four-week results.**
+  - ⛔ **EVERY HEDGE WENT WITH IT** — "we do not promise you will be named", "the engines decide
+    that", "anyone who promises it is guessing" are deleted from both repos. **Do not reintroduce
+    one next to a conditional refund**: a promise with a disclaimer stapled to it reads as walking
+    it back, which is worse than either wording alone. The old "never write copy that promises the
+    outcome" rule is SUPERSEDED for the refund sentence specifically.
+  - ⛔ **`findable.live/refunds` IS THE CUSTOMER-FACING AUTHORITY** and carries Paul's exact
+    wording. Nothing on either site may contradict it; if the guarantee constant changes, that page
+    changes in the same commit.
+  - ⚠️ **The refund now turns on something we do not control**, so the four-week re-measurement has
+    to genuinely run on the SAME questions — `audit-baseline.ts`'s stored set and §17's measurement
+    lock are what make a claim adjudicable. Do not loosen them.
+  - ⚠️ **£99 is written INSIDE the guarantee string**, so the promise and the price can now
+    disagree with nothing throwing. `check-cross-repo-sync.mjs` asserts the text contains
+    `FINDABLE_SETUP_PRICE_GBP` — that is why the check counts 10 now, not 9.
   - The functional half is **`REMEASURE_OFFSET_DAYS = 28`** (`src/lib/deliveryCockpit.ts`); the
     words are `FINDABLE_GUARANTEE` ("the re-measurement at week four"), byte-locked to
     findable-site's copy by `scripts/check-cross-repo-sync.mjs`.
@@ -2943,11 +2971,32 @@ by the single account below.** §6's paginate rule, caught in this file's own no
 
 ---
 
-## 11. 🔴 THE PRICE — ONE FLAT £49.99 SINCE 2026-09-03, PLUS THE FIRST RECURRING CHARGE
+## 11. 🔴 THE PRICE — ONE FLAT £99 SINCE 2026-09-12, PLUS THE HOSTING SUBSCRIPTION
 
-🔴 **READ THIS BLOCK BEFORE THE FOUNDER-PRICE HISTORY BELOW IT. Two things this section spent weeks
-asserting are no longer true.** Both changed on 2026-09-03; the older text is kept underneath
-because the reasoning still teaches, but where they disagree, this wins.
+🔴 **THE PRICE MOVED AGAIN ON 2026-09-12: £49.99 → £99, AND THE BUILD IS NOW INSIDE IT.** This
+section was written on 09-03 and its first line said "one flat £49.99 … £99 is charged to nobody" —
+the exact opposite of today. Read this preamble before anything below it, and treat the rest of the
+section as the reasoning rather than the current figures.
+
+**WHAT IS TRUE TODAY (verified against the constants, not the prose):**
+
+| | |
+|---|---|
+| `FINDABLE_SETUP_PRICE_GBP` | **99** — charged and displayed, one-off, everyone |
+| The website build | **included in the £99.** `FINDABLE_WEBSITE_PRICE_ID` is no longer read by `findable-checkout` at all |
+| Hosting | **£9.99/month**, `FINDABLE_HOSTING_PRICE_ID`, the only line the tick now adds |
+| Continuing work | **£49.99/month, OPTIONAL, copy-only here** — a real Stripe price exists but is sent by hand as a Payment Link at week four. No code path bills it |
+| The guarantee | **outcome-conditional**: if the measured number has not gone up at four weeks, the £99 is claimable, by email **within 14 days of receiving the four-week results** |
+
+- ⚠️ **THE SECRET IS NOT DELETED, ONLY UNREAD.** `FINDABLE_WEBSITE_PRICE_ID` still exists in the
+  Supabase secret list deliberately: it is the Stripe account's record of what earlier customers
+  were charged, and removing it would orphan their invoices. Nothing will add it to a session again.
+- ⛔ **DEPLOY ORDER ON 09-12 WAS DISPLAY-BEFORE-CHARGE, because the price ROSE.** findable-site went
+  first, so any gap read "shown £99, charged £49.99" — a pleasant surprise. The 09-03 note below
+  inverted it for the same reason in the other direction. **Always ask which way the gap
+  embarrasses you**; that is the rule, not the order.
+
+<details><summary>THE 09-03 FLAT-£49.99 ERA — superseded by the table above, kept for the reasoning</summary>
 
 **1. THE FOUNDER-VS-FULL SPLIT IS GONE. Everyone pays `FINDABLE_SETUP_PRICE_GBP` = 49.99, one-off,
 whatever they arrive from** — their report, the homepage, or a cold link. £99 is charged to nobody.
@@ -3056,6 +3105,8 @@ right and was fixed here.
   nothing to read afterwards — a payment Stripe rejected left one edge-log line and a bare
   `checkout_failed` at the client. §4's "a catch-all error message is worse than no message", on
   the one path carrying all the revenue. The message is **stored, never returned**.
+
+</details>
 
 ---
 
