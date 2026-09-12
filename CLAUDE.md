@@ -3721,6 +3721,59 @@ The four commits behind the AI Audit page's before/after panel. Pure folds in
 
 ---
 
+## 20. 🟡 findable-site HOME PAGE — the explainer moved up, and two things left open (2026-09-12)
+
+The video is the **third** section now (hero → stats → video → #how), on Paul's call. The reason is
+not reading order: **the report's CTA button links to `https://findable.live` with NO anchor**
+(`aiAuditReportHtml.ts`, `REPORT_SITE_URL`), so every prospect who presses "See how it works" on
+their own report lands at the top of the page — at slot 6 that was five sections of scrolling to
+reach the thing the button promised.
+
+- ⛔ **THE VIDEO SITS IN A DARK PANEL, NOT A DARK SECTION, AND THE SECTION IS STILL `bg-panel-2`.**
+  Costed before choosing: the page alternates navy/light perfectly, so **there is no adjacent pair
+  of light sections anywhere on it** and a dark section cannot be inserted without colliding. The
+  minimum repair was #how → light, #why-this-works → dark, the proof → light — which takes
+  white-cards-on-navy off #how and puts the white report sheets on grey, where their
+  `ring-1 ring-white/25` is built for a dark ground. A `bg-band` panel inside the light section buys
+  the same contrast for free. **Copy left, video right** from `lg` on
+  `grid-cols-[minmax(0,1fr)_auto]`, so the vertical video takes its own width instead of half the
+  panel. Desktop **1,032px → 860px**; **mobile 892 → 936px** (the panel's own padding — the one
+  place this change costs height, accepted).
+- 🔴 **ONE ADJACENT PAIR NOW SHARES A SURFACE, KNOWINGLY: ProofSection → Pricing, both navy.** The
+  explainer was the only light section between them and nothing replaced it: ~2,229px of continuous
+  dark on desktop. ⛔ **No single flip closes it** — Pricing light collides with the Guarantee, the
+  proof light collides with #why-this-works. Three ways out, none taken: (a) leave it; (b) flip all
+  four of Pricing / Guarantee / #check / #faq, which takes the white card off the ask and makes the
+  FAQ the page's last dark band; (c) **reorder to hero, stats, video, how, why, proof, guarantee,
+  pricing, faq, check** — alternates perfectly with no surface change at all, but reverses the
+  recorded decision to put the FAQ BELOW the ask. **(c) is the one to look at first.**
+  ⚠️ I reported this seam correctly in the read-only pass and then wrote a comment claiming #how
+  had absorbed it. It had not. Both comments are corrected; the claim is measured, not assumed.
+- ⚠️ **THE SAME FACT IS STATED SEVEN TIMES ON THE HOME PAGE** (Paul: real, worth fixing, not this
+  pass). "We re-ask the same questions four weeks later and show you both" appears in #how card 04,
+  #how's closing line, ProofSection's closing paragraph, Pricing's tick 7, Pricing's guarantee band,
+  the Guarantee's third deliverable, and four FAQ answers. Each is defensible alone; together the
+  claim stops landing. The two cheapest to cut are #how's closing line (the card above already says
+  it) and Pricing's tick 7 (the band is directly below it).
+- **Pricing's heading lost the number**: "£99, or your money back." → **"Pay once. If the number
+  doesn't move, claim it back."** ⛔ The rejected alternative, *"One price, and you can claim it
+  back"*, states the refund with **no condition** in the largest type on the section, while
+  `/refunds` makes it conditional on the measured number — and that section's own rule is that a
+  summary may be shorter, never different. "The number", not "it": at that point the reader has met
+  the eyebrow and nothing else, and the thing measured is introduced *below*, in the band.
+- ⚠️ **`check-cross-repo-sync.mjs` EXISTS IN BOTH REPOS, EACH READING ACROSS TO THE OTHER — AND I
+  UPDATED ONLY ONE.** Deleting market audits (§19, slice 5) removed `MARKET_COOLDOWN_ALLOWANCE` and
+  `MARKET_COOLDOWN_MS`; LeadFinderOS's copy dropped those groups in the deletion commit, findable-
+  site's did not, so it failed **2 of 7 against a file that was correct**. The drift the pair exists
+  to catch, in the pair itself. **Change one, change the other.**
+- ⚠️ **StatsBand, WhatWeDo and therefore ImageSlot render on NO page in this repo.** `index.astro`
+  said StatsBand "lives at /research" and `Guarantee.astro` said ImageSlot was "still used by
+  StatsBand and WhatWeDo" — true of the imports, false about the site: `research.astro` writes its
+  own content. Both comments corrected. `WhyThisWorks.astro` also named a wave at the foot of #how
+  that has not existed since 2026-08-20.
+
+---
+
 ## 19. ✅ THE THREE-TYPE MEASUREMENT MODEL — built and live 2026-09-12 (Paul's spec, seven slices)
 
 **Nothing else exists.** Every measurement is one of three, and the code refuses the fourth:
