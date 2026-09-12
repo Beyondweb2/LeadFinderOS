@@ -27,7 +27,13 @@
    valid yardstick for those 9 and must not be described as anything else.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { dedupeQuestions } from './seedGuard';
+/* ⛔ EXPLICIT .ts, BECAUSE THIS FILE IS REACHABLE FROM AN EDGE FUNCTION. The Supabase bundler
+   refuses a bare relative specifier — `Module not found … Maybe add a '.ts' extension` — and it
+   refuses it at DEPLOY time, which is the only gate that sees it: tsc, vite and the test runner
+   all resolve the extensionless form happily. This exact deploy failed once (2026-09-12);
+   §4 already records the rule and it still cost a round trip. Vite resolves the .ts form too,
+   so writing it this way costs the SPA nothing. */
+import { dedupeQuestions } from './seedGuard.ts';
 
 /** Why a replay cannot proceed. Every one of these is a REFUSAL, never a fallback. */
 export type ReplayRefusal =
