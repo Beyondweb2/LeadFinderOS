@@ -8,7 +8,11 @@ import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from 
 import { dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
 import { excludeAsked, overAskFor } from "../../../src/lib/fullMeasure.ts";
 import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
-import { measurementFlagFor } from "../../../src/lib/auditKind.ts";
+import {
+  measurementFlagFor,
+  BASELINE_AUDIT_PURPOSE, MEASUREMENT_AUDIT_PURPOSE, REMEASURE_AUDIT_PURPOSE,
+  FREE_CHECK_AUDIT_PURPOSE, ORDINARY_AUDIT_PURPOSE,
+} from "../../../src/lib/auditKind.ts";
 import { moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
 import {
@@ -295,6 +299,18 @@ Deno.serve(async (req) => {
        audit_purpose = 'remeasure' so the claim trigger sets outreach_leads.remeasure_audit_id in the
        insert's own transaction and the partial unique index refuses a second one at the database. */
     const isRemeasure: boolean = isInternal && body.purpose === "remeasure";
+    /* THE FREE CHECK — INTERNAL ONLY, fired by findable-onboarding (free-check-audit.ts). In every
+       other respect it is an ordinary hook audit (3 questions, money question kept, 3 runs via
+       `target_runs`), but it is written as `audit_purpose = 'free_check'` because two readers key
+       on that value and on nothing else (2026-09-13):
+         · maybeSendFreeCheckResult sends the visitor their result ONLY for an audit created as the
+           free check — a baseline, a measurement, a replay or a manual re-audit on the same lead
+           sends them nothing;
+         · auditKind grades it 'free_check', so a later payment on the lead is baselined rather
+           than held as "ambiguous multi-run".
+       It also forces the SEO skip on every run (see skipSeo), so runs 2 and 3 cannot buy the scan
+       run 1 deliberately declined. */
+    const isFreeCheck: boolean = isInternal && body.purpose === FREE_CHECK_AUDIT_PURPOSE;
     const questionCount = (isBaseline || isRemeasure)
       ? clampCount(body.question_count ?? body.questionCount,
           BASELINE_MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT, BASELINE_DEFAULT_QUESTION_COUNT)
@@ -368,7 +384,12 @@ Deno.serve(async (req) => {
        internal-caller gate. Applied at the run insert below. */
     // Full measurement forces SEO off — it is a per-site scan (once, not per-question) and would eat
     // the per-run cost budget; the mode is about the AI citation gather, not the website grade.
-    const skipSeo: boolean = body.skip_seo === true || isMeasurement || isRemeasure;
+    /* ⛔ THE FREE CHECK FORCES IT TOO (2026-09-13). Run 1 was posted with skip_seo:true and
+       skipped; runs 2 and 3 are posted by advanceBaseline, which never sent the flag, so on a
+       business with a website they bought the ~4p scan run 1 declined and the report grew a website
+       section the free check was designed not to have. Keying the skip on the PURPOSE makes it
+       structural for every run of the audit, the way it already is for a measurement. */
+    const skipSeo: boolean = body.skip_seo === true || isMeasurement || isRemeasure || isFreeCheck;
     /* ⛔ ONE PREDICATE GOVERNS BOTH ENDS — the preview the operator reviews and the run that
        actually happens. Money questions are for the ordinary per-business audit only: a paid
        baseline is the guarantee's day-0 and must not change character under a client
@@ -949,7 +970,11 @@ Deno.serve(async (req) => {
          ⚠️ Migration-tolerant like its neighbours: the shed-and-retry below drops it if the column
          is not there yet, and without the column the trigger does not exist either, so the whole
          feature is simply absent rather than half-present. */
-      auditRow.audit_purpose = isBaseline ? "baseline" : isRemeasure ? "remeasure" : isMeasurement ? "measurement" : "audit";
+      auditRow.audit_purpose = isBaseline ? BASELINE_AUDIT_PURPOSE
+        : isRemeasure ? REMEASURE_AUDIT_PURPOSE
+        : isMeasurement ? MEASUREMENT_AUDIT_PURPOSE
+        : isFreeCheck ? FREE_CHECK_AUDIT_PURPOSE
+        : ORDINARY_AUDIT_PURPOSE;
       let { data: audit, error: insErr } = await service
         .from("ai_audits").insert(auditRow).select("id, business_name").single();
       // Shed a missing new column (either one) and retry, longest-name-first so one miss can't mask another.

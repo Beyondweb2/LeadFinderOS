@@ -75,6 +75,13 @@ verify_jwt = false
 [functions.findable-checkout]
 verify_jwt = false
 
+# notify-onboarding-submit: cron-only (x-internal-job + CRON_SECRET, enforced by the handler). It ran
+# live with verify_jwt = false (read from `supabase functions list` 2026-09-13) while ABSENT from this
+# file, so any redeploy could have flipped it to the platform default and killed the operator email
+# silently — the same shape as the three entries below. Recorded here so the value is explicit.
+[functions.notify-onboarding-submit]
+verify_jwt = false
+
 # ⛔ THESE THREE WERE MISSING, AND THE OMISSION IS WHAT KILLED THEIR INTERNAL CALLERS — 2026-08-14.
 # A function absent from this file deploys with the platform default, verify_jwt = TRUE, so the
 # platform demands a JWT-shaped bearer before the handler runs. All three worked for weeks because
