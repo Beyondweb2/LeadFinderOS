@@ -32,7 +32,10 @@ export const REMEASURE_AMBER_DAYS = 7;
  *    pages     — DERIVED, one line per client_pages row; a page is "built" when its status is live.
  *                Nothing is stored under this key any more (an old `pages: true` is ignored).
  *    remeasure — the week-four clock (remeasure_due_date) beside a manual "checked" tick */
-export type DeliveryItemKind = 'tick' | 'pages' | 'remeasure';
+/*    stamp     — DERIVED from a timestamp the SYSTEM writes (outreach_leads.remeasure_results_sent_at,
+ *                written once by the results sender). Never a manual tick: the stamp starts the
+ *                client's 14-day claim window, so a person must not be able to fake or undo it. */
+export type DeliveryItemKind = 'tick' | 'pages' | 'remeasure' | 'stamp';
 export interface DeliveryChecklistItem { key: string; label: string; hint: string; kind: DeliveryItemKind }
 
 /* ⛔ ONE LIST, TWO SCREENS (2026-09-13, Paul's brief). The lead card's cockpit and the Dashboard's
@@ -53,11 +56,11 @@ export const DELIVERY_CHECKLIST_ITEMS: DeliveryChecklistItem[] = [
   { key: 'pages', label: 'Pages built', hint: 'One line per planned page (the page-plan queue). Tick a page when it is live on their site', kind: 'pages' },
   { key: 'website', label: 'Website', hint: 'Site built or fixed where there was none / it was blocking', kind: 'tick' },
   { key: 'remeasure', label: 'Week-four re-measure', hint: 'Fires itself on the stored due date (RG Locksmiths: eight weeks, by his contract). Tick once you have checked the replay', kind: 'remeasure' },
-  { key: 'results_sent', label: 'Results sent', hint: 'The four-week results have gone to the client', kind: 'tick' },
+  { key: 'results_sent', label: 'Results sent', hint: 'Stamped by the system when the four-week results email goes out (outreach_leads.remeasure_results_sent_at). Starts the client\'s 14-day claim window. Not a tick.', kind: 'stamp' },
 ];
 
-/** The items a person ticks — everything except the derived pages line. */
-export const TICKABLE_ITEMS: DeliveryChecklistItem[] = DELIVERY_CHECKLIST_ITEMS.filter((i) => i.kind !== 'pages');
+/** The items a person ticks — everything except the derived pages line and the system stamp. */
+export const TICKABLE_ITEMS: DeliveryChecklistItem[] = DELIVERY_CHECKLIST_ITEMS.filter((i) => i.kind === 'tick' || i.kind === 'remeasure');
 
 export type DeliveryChecklist = Record<string, boolean>;
 

@@ -33,8 +33,8 @@
    SPA-ONLY. It imports baselineView, which imports the `@/` alias — see CLAUDE.md §4. Do not
    import this from an edge function without fixing that first.
    ============================================================ */
-import { buildBaselineView, type QueueRowLite } from './baselineView';
-import { SCORED_ENGINES, citationIsClient, domainOfSafe } from './auditReport';
+import { buildBaselineView, type QueueRowLite } from './baselineView.ts';
+import { SCORED_ENGINES, citationIsClient, domainOfSafe } from './auditReport.ts';
 
 /** Measured sampling swing, in percentage points — see the header. Movement inside this band is
  *  not evidence. Paul tunes it only against re-measured run data, never to make a result read

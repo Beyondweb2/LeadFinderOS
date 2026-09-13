@@ -117,3 +117,11 @@ export const GBP_ADD_STEPS =
   `Open your Google Business Profile, go to Users, click Add, enter ${GBP_MANAGER_EMAIL}, and choose `
   + 'Manager. That is the whole job — you stay the owner, you never share a password, and you can '
   + 'remove us in two clicks at any time.';
+
+/* ⛔ THE CLAIM SENTENCE, ON ITS OWN (2026-09-13). It is the second sentence of FINDABLE_GUARANTEE and
+   the sentence /refunds states; the four-week results email and document say it verbatim when the
+   number has not gone up. BYTE-LOCKED to findable-site's REFUND_CLAIM_SENTENCE by
+   scripts/check-cross-repo-sync.mjs in both repos, and client-copy-claims.test.ts asserts the
+   guarantee still ends with it — so the promise a client is measured against, the page that states
+   the policy and the email that starts the 14-day clock cannot say three different things. */
+export const REMEASURE_CLAIM_SENTENCE = "If that number has not gone up, email us within 14 days of your four week results and we'll refund your £99.";

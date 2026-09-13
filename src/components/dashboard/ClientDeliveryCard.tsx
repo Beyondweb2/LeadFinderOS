@@ -45,7 +45,12 @@ export function ClientDeliveryCard({ leads, onChanged }: { leads: OutreachLead[]
   );
   const refundedCount = useMemo(() => leads.filter((l) => isPaid(l) && !l.is_archived && l.status === 'refunded').length, [leads]);
 
-  const pointerIds = useMemo(() => paying.map((l) => l.baseline_audit_id).filter((id): id is string => !!id).sort(), [paying]);
+  /* Both pointers: the baseline (for "baseline done") and the day-28 replay (for "results held" —
+     a replay that has finished with no stamp on the lead is one the sender routed to a task). */
+  const pointerIds = useMemo(
+    () => [...new Set(paying.flatMap((l) => [l.baseline_audit_id, l.remeasure_audit_id]).filter((id): id is string => !!id))].sort(),
+    [paying],
+  );
   const baselines = useQuery({
     queryKey: ['client-baselines', user?.id ?? null, pointerIds.join(',')],
     enabled: !!user && pointerIds.length > 0,
@@ -144,6 +149,11 @@ export function ClientDeliveryCard({ leads, onChanged }: { leads: OutreachLead[]
                   pagesLoading={pagesLoading}
                   onTogglePage={(id, built) => void togglePage(id, built)}
                   remeasure={{ dueISO: due, fired: !!l.remeasure_audit_id }}
+                  results={{
+                    sentAt: l.remeasure_results_sent_at ?? null,
+                    // Held = the replay has finalised and nothing was stamped: the sender routed it to a task.
+                    held: !l.remeasure_results_sent_at && !!(l.remeasure_audit_id && baselines.data?.[l.remeasure_audit_id]?.baseline_completed_at),
+                  }}
                   baselineDone={!!b?.baseline_completed_at}
                   baselineDoneLabel={b?.baseline_completed_at ? new Date(b.baseline_completed_at).toLocaleDateString('en-GB') : null}
                 />

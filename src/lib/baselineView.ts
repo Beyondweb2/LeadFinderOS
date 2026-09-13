@@ -1,4 +1,4 @@
-import { SCORED_ENGINES } from '@/lib/auditReport';
+import { SCORED_ENGINES } from './auditReport.ts';
 /* ============================================================
    PAID BASELINE, AS DELIVERY WORK
 
