@@ -23,7 +23,7 @@
    Flipping it is a deliberate commit and deploy, never a runtime switch.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP, type MeasurementComparison } from './measurementCompare.ts';
-import { FINDABLE_SETUP_PRICE_GBP, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
+import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
 import { defaultRemeasureDue } from './deliveryCockpit.ts';
 import { parseAmountPaid } from './leadPayment.ts';
 
@@ -162,6 +162,17 @@ export function claimWindowCloseIso(sentAtIso: string | null | undefined): strin
   return new Date(t + REMEASURE_CLAIM_WINDOW_DAYS * 86_400_000).toISOString();
 }
 
+/* ══ WHEN THE MONTHLY STARTS ═════════════════════════════════════════════════════════════════════
+   ⛔ THE BILLING ANCHOR AND THE CLAIM WINDOW ARE THE SAME INSTANT, COMPUTED BY THE SAME FUNCTION.
+   That is the whole safety property of the delayed-monthly model: a client cannot be charged while
+   still entitled to claim, because the first charge lands exactly when the entitlement ends. Two
+   functions that agreed today would drift the first time either was edited; one function cannot.
+
+   ⛔ IT IS DERIVED FROM THE RESULTS STAMP, NEVER FROM THE CHECKOUT DATE. The replay lands on day 28
+   normally, later whenever it holds, and day 56 for RG by contract — anchoring to checkout would
+   charge those clients inside their own window. */
+export const monthlyStartIso = claimWindowCloseIso;
+
 /* ══ THE WORDS ═══════════════════════════════════════════════════════════════════════════════════
    Drafted for Paul's approval (2026-09-13). The refund sentence is REMEASURE_CLAIM_SENTENCE —
    byte-locked to findable-site's REFUND_CLAIM_SENTENCE and rendered on /refunds — so the email, the
@@ -175,6 +186,9 @@ export interface ResultsCopyInput {
   wentUp: boolean;
   withinNoise: boolean;
   documentUrl: string;
+  /** When the monthly starts — the day the claim window closes. Absent for a client who has no
+   *  monthly (anyone who paid before 2026-09-13), and then the email says nothing about billing. */
+  monthlyStartsOn?: string | null;
 }
 
 /* ⛔ THE CLAIM PARAGRAPH — ONE SENTENCE OF OURS IN FRONT OF ONE SENTENCE THAT IS LOCKED.
@@ -218,6 +232,17 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
         ? `Your number has not gone up. The change is inside the ${NOISE_BAND_PP}-point swing we see between repeat measurements with no work done, so we count it as no movement.`
         : `Your number has not gone up.`,
       resultsClaimParagraph(),
+    );
+  }
+  /* ⛔ THIS EMAIL IS THE 14-DAY NOTICE, AND IT IS THE ONLY ONE THAT ARRIVES THAT FAR AHEAD.
+     Stripe's own trial-ending event fires three days out and nothing can move it, so the honest
+     place to name the date and the amount is here, at the moment the clock actually starts.
+     ⛔ IT NAMES THE SAME DAY THE CLAIM WINDOW CLOSES, because they ARE the same day by
+     construction (monthlyStartIso is claimWindowCloseIso). Saying so plainly is what stops it
+     reading as a second, hidden deadline. */
+  if (i.monthlyStartsOn) {
+    out.push(
+      `That same day — ${i.monthlyStartsOn} — your monthly starts, at £${FINDABLE_MONTHLY_GBP} a month. It covers the work we keep doing every week to add another way for people to find you. Cancel any time before then and it never begins.`,
     );
   }
   out.push(`Paul, findable`);

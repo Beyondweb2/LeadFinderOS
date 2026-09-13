@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
-import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
+import { CARD_SAVED_NOTICE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
    "where does the public site live" was settled after the pages.dev incident, and it applies the
@@ -317,15 +317,31 @@ Deno.serve(async (req) => {
        ⚠️ Subscription mode always creates a Stripe CUSTOMER; payment mode may not. That id is new
        durable state and the webhook stores it - without it we could never cancel or answer "is this
        customer still paying". */
-    form.set("mode", addOnReady ? "subscription" : "payment");
+    /* 🔴 ALWAYS `payment` SINCE 2026-09-13 — THE SUBSCRIPTION IS NOT CREATED HERE ANY MORE.
+       Under the delayed-monthly model the first £29.99 starts 14 days after the four-week results
+       were SENT, and that date is unknowable at checkout: the replay lands on day 28 normally,
+       later whenever it holds, and day 56 for RG by contract. A Checkout Session fixes its trial
+       length at creation, so no number put here could express the offer.
+       ⛔ NOTHING RECURRING IS CREATED UNTIL THE OBLIGATION EXISTS. The subscription is created by
+       API when the results actually go out (_shared/remeasure-results.ts). A client who claims
+       their refund, or whose results never send, has no subscription to cancel because none was
+       ever made. That is structural: it does not depend on an update landing correctly.
+       ⛔ WHAT THIS SESSION DOES INSTEAD: takes the £99 and RETAINS THE CARD. Both settings below
+       are payment-mode only and both are required — without the customer there is nobody to bill
+       later, and without setup_future_usage the card is not kept, so the monthly could never start
+       and the failure would surface four weeks later as silence. */
+    form.set("mode", "payment");
+    form.set("customer_creation", "always");
+    form.set("payment_intent_data[setup_future_usage]", "off_session");
+    /* ⛔ AND THE CUSTOMER IS TOLD, ON THE PAGE WHERE THE CARD IS ENTERED. Saving a card without
+       saying so is the indefensible part of this, and Stripe's submit message is the only place
+       the words sit beside the card field itself. */
+    form.set("custom_text[submit][message]", CARD_SAVED_NOTICE);
     /* Metadata rides on the SUBSCRIPTION too, not just the session: customer.subscription.* and
        invoice.* events carry the subscription, and without this a churn event could not be traced
        back to a lead. The session metadata below covers checkout.session.completed. */
-    if (addOnReady) {
-      form.set("subscription_data[metadata][onboarding_id]", onboardingId);
-      if (effectiveLeadId) form.set("subscription_data[metadata][lead_id]", effectiveLeadId);
-      form.set("subscription_data[metadata][product]", "findable_hosting");
-    }
+    /* The subscription's own metadata is set where the subscription is now created, in
+       _shared/remeasure-results.ts. Nothing recurring exists here to attach it to. */
     form.set("success_url", `${back}${back.includes("?") ? "&" : "?"}paid=1`);
     // The cancel URL carries the onboarding row, the success URL deliberately does not.
     //
@@ -382,10 +398,13 @@ Deno.serve(async (req) => {
        ⚠️ IF THE REFUND IS CLAIMED: refund the setup fee and cancel the hosting subscription.
        Monthly payments already taken are not refunded, and findable.live/refunds says so in those
        words. Written here because this is the file that decides what the customer agreed to. */
-    if (addOnReady) {
-      form.set("line_items[1][price]", hostingPriceId);
-      form.set("line_items[1][quantity]", "1");
-    }
+    /* 🔴 THE HOSTING LINE HAS MOVED OFF THIS SESSION (2026-09-13). It was billed from day one,
+       which put a charge inside the refund window; it now starts on the SAME anchor as the monthly,
+       on one invoice, so a client deciding whether to claim has paid exactly £99 and nothing else.
+       The tick is still read and recorded above — it is the record of what they bought, and the
+       subscription builder reads it when the results go out.
+       ⚠️ `hostingPriceId` is validated HERE and used THERE, deliberately: a bad price id is worth
+       discovering while somebody is watching a checkout, not four weeks later in a background tick. */
 
     const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
@@ -410,7 +429,7 @@ Deno.serve(async (req) => {
         stripe_param: se?.param ?? null,
         stripe_type: se?.type ?? null,
         http_status: res.status,
-        mode: addOnReady ? "subscription" : "payment",
+        mode: "payment",
         website_addon: wantsWebsite,
       });
       return json({ ok: false, error: "checkout_failed" }, 502);
@@ -437,7 +456,7 @@ Deno.serve(async (req) => {
           amount_total_minor: created.amount_total ?? null,
           currency: created.currency ?? null,
           website_addon: wantsWebsite,
-          addon_charged: addOnReady,
+          addon_deferred_to_results: addOnReady,
           ai_line_gbp: offer.gbp,
         },
       });
