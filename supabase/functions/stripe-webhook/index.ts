@@ -1,7 +1,7 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
-import { FINDABLE_SETUP_PRICE_GBP, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
    to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
    service branch, so a webhook cannot call it; and giving the function that sends WhatsApp a new
@@ -489,6 +489,37 @@ Deno.serve(async (req) => {
      would let the reminder and the failure notice land in different inboxes for one person.
      ⚠️ Every send here is non-fatal and recorded: a message that cannot go must never 500 back to
      Stripe, which would retry an event that changes no state. */
+  /* ⛔ A ONE-TAP CANCEL LINK, AND IT FAILS SOFT (2026-09-13). Paul activated the Customer portal
+     with cancel and update-payment-method ticked, so a real link is better than "reply to this
+     email" — somebody who wants to stop should not have to ask a human for permission.
+     ⛔ BUT A BROKEN LINK IS WORSE THAN NO LINK. If Stripe refuses (portal deactivated later, no
+     default configuration, a customer id that no longer exists) this returns null and the caller
+     falls back to the reply-to wording. It must never send a reminder whose only escape route is a
+     URL that errors, and it must never fail the reminder itself.
+     ⚠️ Sessions are short-lived by design; this is created at send time, per email, never stored. */
+  const portalCancelUrl = async (customerId: string | null | undefined): Promise<string | null> => {
+    const id = (customerId ?? "").trim();
+    if (!id || !stripeSecret) return null;
+    try {
+      const body = new URLSearchParams({ customer: id, return_url: REPORT_PUBLIC_ORIGIN }).toString();
+      const res = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${stripeSecret}`, "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      });
+      const text = await res.text().catch(() => "");
+      if (!res.ok) {
+        await recordPaymentFailure("portal_session_failed", { customer: id, status: res.status, error: text.slice(0, 300) });
+        return null;
+      }
+      const url = String((JSON.parse(text) as { url?: unknown }).url ?? "").trim();
+      return url || null;
+    } catch (e) {
+      console.error("[stripe-webhook] portal session failed:", e instanceof Error ? e.message : String(e));
+      return null;
+    }
+  };
+
   const emailClientForLead = async (
     leadId: string,
     what: string,
@@ -951,7 +982,8 @@ Deno.serve(async (req) => {
             await recordPaymentFailure("monthly_reminder_skipped", { lead_id: leadId, subscription: sub.id, to, starts_on: startsOn });
             break;
           }
-          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl: null });
+          const cancelUrl = await portalCancelUrl(idFrom((sub as { customer?: unknown }).customer));
+          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl });
           const sent = await postResend({
             from: "Findable <reports@findable.live>", to: [to], reply_to: ADMIN_EMAIL,
             subject: mail.subject,
@@ -1005,6 +1037,11 @@ Deno.serve(async (req) => {
              invoice.payment_failed, which is only a card that needs replacing. */
           const leadId = await findableLeadForSubscription(sub.id, (sub.metadata?.lead_id as string) ?? null);
           if (leadId) {
+            /* ⛔ READ THE PRIOR STATUS BEFORE OVERWRITING IT. The update below sets `canceled`, so
+               a read taken afterwards can never see the `past_due` that says this was a payment
+               failure — it would report "cancelled on purpose" for every card death. */
+            const { data: before } = await service.from("outreach_leads").select("subscription_status").eq("id", leadId).maybeSingle();
+            const wasPastDue = String((before as { subscription_status?: string | null } | null)?.subscription_status ?? "") === "past_due";
             await setFindableSubscription(leadId, {
               subscription_status: "canceled",
               subscription_renews_at: null,
@@ -1018,9 +1055,27 @@ Deno.serve(async (req) => {
                ⚠️ ABSENT READS AS "NOT A PAYMENT FAILURE": an unknown reason gets the neutral
                cancellation wording, which is true either way, rather than asserting a card problem
                nobody has evidence of. */
+            /* ⛔ THE BRANCH DOES NOT RELY ON STRIPE'S REASON ALONE, AND THAT IS DELIBERATE.
+               `cancellation_details.reason` should be `payment_failure` when the retries give up —
+               but it could not be verified from here without a real failed subscription, and the
+               field decides which of two emails a real client receives. Telling somebody whose card
+               died that they asked to cancel is the failure that must not happen on an unverified
+               assumption (CLAUDE.md §4: verify the claim, do not inherit it).
+               ⛔ SO OUR OWN RECORD IS THE SECOND WITNESS. invoice.payment_failed wrote `past_due`
+               to this lead when the first retry failed, days earlier. A cancel that follows a
+               past_due IS a payment failure whatever Stripe calls it, and a cancel-after-retries
+               cannot happen without at least one failed invoice — so the two together cover the
+               case the reason field was supposed to cover on its own.
+               ⚠️ AND THE REAL VALUE IS RECORDED EITHER WAY. The first live cancellation writes what
+               Stripe actually sent into client_error_reports, which is how this note gets corrected
+               from evidence rather than re-argued. */
             const reason = String(((sub as { cancellation_details?: { reason?: unknown } }).cancellation_details?.reason) ?? "");
-            await emailClientForLead(leadId, "monthly_ended", subscriptionEndedEmail({ becauseOfPayment: reason === "payment_failure" }), {
-              subscription: sub.id, cancellation_reason: reason || "(none given)",
+            const becauseOfPayment = reason === "payment_failure" || wasPastDue;
+            await emailClientForLead(leadId, "monthly_ended", subscriptionEndedEmail({ becauseOfPayment }), {
+              subscription: sub.id,
+              cancellation_reason: reason || "(none given)",
+              was_past_due: wasPastDue,
+              branched_as: becauseOfPayment ? "payment_failure" : "cancelled_on_purpose",
             });
           }
           break;
