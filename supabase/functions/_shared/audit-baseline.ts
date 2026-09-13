@@ -17,6 +17,15 @@
 // which point the average is written to ai_audits.baseline. Sequential by design — each run
 // takes minutes and there is no reason to hammer Apify in parallel.
 
+/* ⛔ HOW LONG AFTER ONE RUN STARTS BEFORE THE NEXT ONE DOES (2026-09-13, Paul's call).
+   Three minutes, and the number is measured rather than picked: the runs were already ~4 minutes
+   apart in practice (median of 242 gaps) and the ±5-point noise band was measured on runs 5-29
+   minutes apart, so 3 sits inside the range the band actually describes. CLAUDE.md §25.
+   ⚠️ RAISING IT COSTS WALL CLOCK, LOWERING IT LEAVES THE EVIDENCE. Below ~1 minute there is no
+   measured behaviour at all to appeal to — 2 of 242 observed gaps, on runs that share too few
+   questions to compare. Do not set it to 0 without new data. */
+export const RUN_STAGGER_MS = 3 * 60 * 1000;
+
 /** The engines whose named/answered signal counts toward the baseline. Mirrors the report. */
 const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
@@ -105,7 +114,7 @@ export async function aggregateRuns(service: Client, runIds: string[]): Promise<
 export interface BaselineAdvanceOutcome {
   at: string;
   source: string;                 // "finalise" (the completion hook) or "sweep" (the safety net)
-  action: "finalised" | "started_run" | "waiting_in_flight" | "waiting_no_data" | "error";
+  action: "finalised" | "started_run" | "waiting_in_flight" | "waiting_stagger" | "waiting_no_data" | "error";
   detail?: string;
   runs_usable?: number;
   runs_target?: number;
@@ -204,7 +213,10 @@ export async function advanceBaseline(service: Client, auditId: string, source =
 
     // Runs that actually produced data. `results` is read for run 1's SEO marker (see the repeat).
     const { data: runs } = await service
-      .from("ai_audit_runs").select("id, run_number, status, results")
+      /* ⛔ created_at IS LOAD-BEARING SINCE THE STAGGER. Without it every run reads as having no
+         start time, `sinceNewest` becomes Infinity and the stagger fires on EVERY tick — the guard
+         would look present and do nothing. Caught before shipping; do not slim this select. */
+      .from("ai_audit_runs").select("id, run_number, status, results, created_at")
       .eq("audit_id", auditId).order("run_number", { ascending: true });
     const all = (runs ?? []) as Array<{ id: string; status: string; results?: unknown }>;
     const usable = all.filter((r) => r.status === "complete" || r.status === "capped");
@@ -218,13 +230,49 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     const firstRunSeo = firstRunResults.seo as { skipped?: unknown } | undefined;
     const firstRunSkippedSeo = !!(firstRunSeo && typeof firstRunSeo === "object" && firstRunSeo.skipped);
 
-    if (usable.length < target && inFlight.length > 0) {
-      // IDEMPOTENCY. This is what makes the periodic sweep safe: a repeat is already queued or
-      // draining, so starting another would fan out a fresh run on every cron tick.
+    /* ⛔ THE STAGGER (2026-09-13). The next run starts RUN_STAGGER_MS after the newest one STARTED,
+       not when it finished. Three minutes keeps a real interval between samples — inside the range
+       the noise band was actually measured over — while overlapping the runs, which is where the
+       wall clock saving comes from. §25 has the measurements.
+       ⛔ NOT ZERO, DELIBERATELY. Firing all three at one instant buys ~2 more minutes and takes the
+       sampling outside anything ever measured; the flip-rate evidence is far too thin to support it.
+       ⛔ AND THE RACE IS RESOLVED BY THE DATABASE, NOT BY THIS TEST. advanceBaseline runs from two
+       places on every 30-second tick and both can pass this at once. `run_number` is a
+       read-then-write; uq_ai_audit_runs_audit_run_number is what makes exactly one insert land, and
+       create-ai-audit answers the loser's 23505 with a quiet 200 skip. Without that index this
+       predicate would silently buy a fourth run. */
+    if (usable.length < target && all.length >= target) {
+      // Every run has been STARTED; we are only waiting for them to land. Nothing to post.
       await record({ action: "waiting_in_flight", detail: `${inFlight.length} run(s) still going`, runs_usable: usable.length, runs_target: target });
       return;
     }
-    if (usable.length === 0) {
+    const starts = all
+      .map((r) => new Date((r as { created_at?: string }).created_at ?? "").getTime())
+      .filter((t) => Number.isFinite(t));
+    const sinceNewest = starts.length ? Date.now() - Math.max(...starts) : Number.POSITIVE_INFINITY;
+    if (usable.length < target && all.length > 0 && sinceNewest < RUN_STAGGER_MS) {
+      await record({
+        action: "waiting_stagger",
+        detail: `next run due in ${Math.max(0, Math.ceil((RUN_STAGGER_MS - sinceNewest) / 1000))}s`,
+        runs_usable: usable.length,
+        runs_target: target,
+      });
+      return;
+    }
+    /* 🔴 THIS CHECK USED TO BLOCK THE STAGGER, AND THE TEST CAUGHT IT BEFORE IT SHIPPED.
+       It predates the change and was harmless while runs were sequential: with a run in flight the
+       in-flight branch above always fired first, so `usable === 0` was only ever reached by an audit
+       with nothing running. Under the stagger the common case is exactly run 1 started three minutes
+       ago and not yet landed — usable 0, one run in flight — and returning here would have meant run
+       2 still waited for run 1 to finish. The predicate would have looked changed and done nothing.
+       ⛔ SO IT GUARDS EXACTLY ONE THING NOW: an audit with NO runs at all, which this function
+       cannot extend (run 1 is startPaidBaseline's job). The all-started case it used to cover is
+       already caught by the in-flight branch above, and starting a staggered run reads no results,
+       so it belongs above this line rather than below it.
+       ⚠️ THE FIRST NARROWING WAS `all.length >= target`, WHICH LET A ZERO-RUN AUDIT FALL THROUGH TO
+       START A REPEAT. Harmless (create-ai-audit now refuses a repeat with no previous run) but not
+       intended; `=== 0` says what is actually meant. */
+    if (usable.length === 0 && all.length === 0) {
       await record({ action: "waiting_no_data", detail: "no complete or capped run yet", runs_usable: 0, runs_target: target });
       return;
     }
