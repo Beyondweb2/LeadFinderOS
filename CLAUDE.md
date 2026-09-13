@@ -57,8 +57,8 @@ as *possibly describing something deleted*. Grep before you believe it.
   | `report-attribution.test.ts` | asserts report copy that has since been rewritten |
   | `verdict.test.ts` | same — report wording ("once in 6 answers") that no longer renders |
   | `site-origin.test.ts` | needs **Deno**, which is not on PATH on this machine; passes under Deno |
-  **So the honest green number is 80/85.** If you make a change and see 80/85, you have broken
-  nothing; if you see 79, you have.
+  **So the honest green number is 84/89 (2026-09-13 pm; was 80/85 — four suites added since).** If
+  you make a change and see 84/89, you have broken nothing; if you see 83, you have.
 - **`scripts/typecheck-baseline.txt`** — the 9 deliberate errors are ENFORCED now, compared as a
   LIST. §3's "baseline is 14" is stale; it is 9, and the gate tells you.
 - **`scripts/report-origin.test.ts`** — every audit-report URL must be findable.live.
@@ -4179,3 +4179,99 @@ report renderer, the free-check result, the AI Audit pills or the town badge.
     audited against Liverpool, 27 km out. 55 stay unknown, mostly typed forms the gazetteer will
     never carry ("Hull", "Brighton", "Stoke", "Sutton Coldfield") — an alias table in
     `normaliseTownName` is the fix for those.
+  - ⛔ **PARKED BY PAUL 2026-09-13, NOT RUN — and the INSERT above is WRONG as drafted.** `uk_towns`
+    is the **ONS Built-Up Areas 2022** list (`ons_code text NOT NULL UNIQUE`, E63… codes; the table
+    comment says so). The Major Towns and Cities layer uses **J01… TCITY15 codes** — a different
+    geography — so its codes must not be mixed in, and an INSERT without a genuine `ons_code` fails
+    on NOT NULL; a duplicate code fails the whole statement on UNIQUE. **The right source is
+    `BUA_2022_GB`** (same ArcGIS host, fields BUA22CD/BUA22NM/LAT/LONG, 8,545 rows, GB-wide so
+    Edinburgh and Glasgow are in it; Belfast is NOT — Northern Ireland needs its own source or is
+    dropped). Nothing in code reads `ons_code`; the lookup keys on `name`. Reason for the park:
+    the gate has never refused a free check, and adding the cities switches it ON for the biggest
+    markets mid-test (84 verdicts change). Pick up with: BUA22 codes + centroids for the 21 names,
+    de-dupe against existing codes, one idempotent INSERT, then re-run `scripts/_distance-rerun.ts`.
+
+---
+
+## 23. ✅ THE FIVE FIXES AFTER THE FIRST END-TO-END TEST — internal measurements, the fill, the labels, the client card, the stored task (2026-09-13, afternoon)
+
+Paul's brief after the free-check → pay → baseline → full-measure chain passed live. All five built,
+deployed and confirmed the same afternoon. Deployed: `render-audit-report` v94, `create-ai-audit`
+v111, `process-ai-audit-queue` v158, `process-whatsapp-queue` v125, `whatsapp-status` v76,
+`submissions` v36, `stripe-webhook` v85, `findable-onboarding` v87. Honest green is **84/89** now
+(the same five known-stale suites fail; two suites were added — `question-fill`, `lead-status-patch`).
+
+- 🔴 **THE PUBLIC RENDERER SERVED THE CLIENT DOCUMENT FOR ANY AUDIT ID, INCLUDING A FULL MEASURE.**
+  `findable.live/report/d3453511…` rendered AD Locksmithing's 18-question winnable-questions audit
+  as a client report; the only protection was that nothing sent the link. **`isInternalMeasurement`
+  (`src/lib/auditKind.ts`) is the one predicate**: purpose `measurement` / `remeasure`, or the
+  legacy shape multi-run + `is_measurement` (RG's 26 Aug and 8 Sep re-measures). Read by the
+  renderer (**403 + operator-only notice, `no-store`, before any run row is read**, verified live:
+  d3453511 → 403, c0343d99 and c39bc81c → 200 with `class="src"`), the Baseline screen (no "View
+  client report"; heading says what it is) and the cockpit.
+  - 🔴 **THE COCKPIT'S "BASELINE REPORT" LINK POINTED AT THE FULL MEASURE.** It resolved "the newest
+    audit with a run target" — which under §19 is the full measure at day 0. RG's cockpit opened his
+    26 Aug measurement, not his 11 Aug baseline. **It reads `outreach_leads.baseline_audit_id`
+    first now**, and never falls back to an internal measurement. That is why d3453511 appeared
+    under a `/baseline/` URL: the route serves any audit id; the LINK was wrong.
+  - **The operator label is `INTERNAL_MEASUREMENT_LABEL` = "Winnable questions audit (internal)"**
+    (pill + Baseline heading). ⛔ The stored value stays `measurement` — the pointer trigger and the
+    partial unique index read it.
+- 🔴 **WHY THE BASELINE QUEUED 11 OF 12 AND THE MEASURE 18 OF 20.** Two model calls (money +
+  standard) → concatenate → **slice to target → THEN dedupe**, with nothing to top up. Not a guard
+  (guards top up from templates), not a miscount. **`src/lib/questionFill.ts` owns the order now:
+  exclude → dedupe → slice → top up** from the deterministic templates (town always present), at
+  every slice site in `create-ai-audit` (`fillGenerated`), with counts logged. Identity at
+  GENERATION is by **intent** (`questionIntentKey`: trailing plurals folded per word) so "safe
+  installation" / "safes installation" and "service" / "services" no longer queue twice.
+  ⛔ **`questionKey` (the replay's identity, `excludeAsked`) is UNTOUCHED** — a stored question and
+  its day-28 replay are byte-identical and must stay matched by the old rule. Cost of the plural
+  fold: zero spend, ~40 lines, one accepted merge ("locks" = "lock"); a stemmer was rejected.
+  - 🔴 **THE FINALISER WIPED THE RUN NOTES.** `process-ai-audit-queue` built `results` from scratch
+    at finalisation, so `full_measure: { comparable: false }` and `money_questions`, written by
+    create-ai-audit at creation, were gone from every finalised run — neither live measurement run
+    carried its "not comparable" flag. It spreads the row's existing `results` first now. ⚠️ The
+    two September runs already finalised are NOT backfilled; the flag exists on runs from v158 on.
+  - ⚠️ **Dropped strings live only in `console.warn`** and the CLI cannot read logs, so which two
+    questions the measure lost is unknowable; the mechanism is proven by the test, not by a row.
+- **AI OVERVIEW: switched off in the actor INPUT, present in the OUTPUT.** The actor returns the
+  block whenever Google showed one and the probe keys pick it up (4 of 11 baseline questions, 8 of
+  18 measure). Display-only, never scored — `SCORED_ENGINES` is chatgpt + gemini, and the bands,
+  the named rate and the report figure read only those. Recorded already at `auditReport.ts:1109`.
+- **THE WEEK-8 STRING THE SWEEP MISSED WAS AN OPERATOR SCREEN.** `baselineView.ts`'s HELD band said
+  "week-8 comparison"; `client-copy-claims.test.ts` scanned only the eight client-facing renderers,
+  by design. It now has **`OPERATOR_SCREENS`** too (whole comment-stripped source — JSX text is not a
+  string literal) with one allowed true sentence (RG's eight weeks by contract). **Add any new
+  operator screen to that list.** The two "· free" suffixes (a SPEND label, house convention from
+  Coverage — it read as a price on a paid client's screen) are gone from the Baseline buttons.
+- ✅ **THE DASHBOARD HAS A PER-CLIENT VIEW: `ClientDeliveryCard`.** Paying = `amount_paid > 0`, not
+  archived, not `refunded` (refunded counted, not shown). Per client: the week-four light, **the door
+  to `/baseline/<baseline_audit_id>`** (pointer only — a lead with no pointer says "no baseline
+  yet"), the lead card, the page plan, and the checklist.
+  - ⛔ **ONE LIST, ONE COMPONENT, TWO HOMES.** `DELIVERY_CHECKLIST_ITEMS` (`src/lib/deliveryCockpit.ts`)
+    is rendered by `DeliveryChecklistList` in BOTH the lead card's cockpit and the card, stored where
+    it always was (`outreach_leads.delivery_checklist`). Paul's order: baseline checked → baseline
+    sent → directories → GBP → **pages (derived, one line per `client_pages` row, ticked live
+    directly on the row via `useClientPages`)** → website → week-four re-measure → results sent.
+    Three new keys landed on RG's existing map without touching it; an old stored `pages: true` is
+    ignored (`checklistDone` counts `TICKABLE_ITEMS` only).
+  - ⚠️ **"Results sent" is a manual tick until the four-week sender exists** (§19 open item 1);
+    when it does, it should STAMP this rather than a person ticking it. "Baseline checked" is a
+    deliberate human gate — the baseline must never auto-send.
+  - ⚠️ A page's "built" tick writes `client_pages.status` live ↔ planned **directly** (owner RLS
+    `for all`); the page-generator's `plan_update` whitelists only planned/held/removed on purpose.
+- 🔴 **625 LEADS CARRIED AN OVERDUE `send_draft` NEXT ACTION THAT NOBODY SET.** `whatsapp-inbound`
+  wrote it on every reply, `statusUpdatePatch` on a hand-set "replied", and nothing cleared it when
+  the operator answered. The card had hidden them since 2026-07-28 (`isRedundantAutoReply`) but
+  every Outreach row still showed "Respond", sorted by it and counted it overdue. **Both writers are
+  gone; a stored next_action is only ever something a person set.** Paul cleared the 625 by SQL.
+  `statusUpdatePatch` moved to the pure `src/lib/statusPatch.ts` (re-exported) so it is testable.
+  - **The card gains "Clear all stored tasks"** (owner-scoped update where `next_action` is set,
+    count reported) and **a dismiss on derived rows** (reply / chase / quoted — never Deliver) that
+    marks the lead `closed` after a confirm: derived rows are evidence, and the only honest way to
+    make one go is to change the lead's status.
+  - **Why the two "messes" accumulated:** stored tasks were written on every reply and cleared by
+    nothing; derived reply rows never expire because a conversation ending on the prospect's
+    message stays "unanswered" until the lead is closed; chase rows were Paul's own test
+    submissions; the questionnaire card's 50 rows were 43 test submissions (move37.fun addresses).
+    Bulk delete for submissions **already existed** (Delete selected / Delete all, paid rows kept).
