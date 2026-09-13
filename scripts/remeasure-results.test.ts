@@ -5,7 +5,7 @@
 import { compareMeasurements, MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP } from '../src/lib/measurementCompare.ts';
 import type { QueueRowLite } from '../src/lib/baselineView.ts';
 import {
-  remeasureResultsDecision, numberWentUp, claimWindowCloseIso, resultsEmailParagraphs, resultsDocumentMeaning,
+  remeasureResultsDecision, numberWentUp, claimWindowCloseIso, resultsEmailParagraphs, resultsDocumentMeaning, resultsClaimParagraph,
   resultsEmailSubject, REMEASURE_RESULTS_COPY_APPROVED, REMEASURE_CLAIM_WINDOW_DAYS,
 } from '../src/lib/remeasureResults.ts';
 import { FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE } from '../src/lib/findableOffer.ts';
@@ -83,15 +83,28 @@ console.log('── The words ──');
 {
   const base = { businessName: 'RG Locksmiths', town: 'Huntingdon', beforeNamed: 23, beforeAnswered: 72, afterNamed: 31, afterAnswered: 96, questions: 12, documentUrl: 'https://findable.live/results/x' };
   const notUp = resultsEmailParagraphs({ ...base, wentUp: false, withinNoise: true });
-  ok(notUp.includes(REMEASURE_CLAIM_SENTENCE), 'not gone up → the email carries the claim sentence verbatim');
+  ok(notUp.some((p) => p.includes(REMEASURE_CLAIM_SENTENCE)), 'not gone up → the email carries the locked claim sentence verbatim');
   ok(notUp.some((p) => p.includes('has not gone up')), '…and says so plainly');
   ok(notUp.some((p) => p.includes(`${NOISE_BAND_PP}-point swing`)), '…and explains the band when the change was inside it');
+  /* ⛔ PAUL'S ORDER, 2026-09-13: verdict, then entitlement, then mechanism — never the offer first.
+     The lead-in is ours; the sentence it introduces is the locked one, whole and unedited. */
+  const verdictAt = notUp.findIndex((p) => p.includes('has not gone up'));
+  const claimAt = notUp.findIndex((p) => p.includes(REMEASURE_CLAIM_SENTENCE));
+  ok(verdictAt >= 0 && claimAt > verdictAt, 'the verdict comes BEFORE the claim paragraph');
+  ok(notUp[claimAt] === `That means the guarantee applies. ${REMEASURE_CLAIM_SENTENCE}`, 'the claim paragraph is the lead-in plus the locked sentence, nothing else');
+  ok(resultsClaimParagraph().endsWith(REMEASURE_CLAIM_SENTENCE), 'the locked sentence is never shortened or reworded');
   const up = resultsEmailParagraphs({ ...base, wentUp: true, withinNoise: false });
-  ok(!up.includes(REMEASURE_CLAIM_SENTENCE) && up.some((p) => p.includes('has gone up')), 'gone up → no claim sentence, says it went up');
+  ok(!up.some((p) => p.includes(REMEASURE_CLAIM_SENTENCE)) && up.some((p) => p.includes('has gone up')), 'gone up → no claim sentence, says it went up');
   ok(up.some((p) => p.includes('23 of 72')) && up.some((p) => p.includes('31 of 96')), 'both counts, each with its denominator');
   ok(resultsEmailSubject(base as never) === 'Your four-week results — RG Locksmiths', 'the subject');
-  ok(resultsDocumentMeaning({ ...base, wentUp: false, withinNoise: false }).includes(REMEASURE_CLAIM_SENTENCE), 'the document says the same sentence');
-  for (const p of [...notUp, ...up]) ok(!/eight|8 weeks|promise|guarantee/i.test(p), `no hedge, no old cycle: "${p.slice(0, 50)}"`);
+  ok(resultsDocumentMeaning({ ...base, wentUp: false, withinNoise: false }).some((p) => p.includes(REMEASURE_CLAIM_SENTENCE)), 'the document says the same sentence');
+  /* ⛔ "guarantee" AS A BARE NOUN IS ALLOWED IN EXACTLY ONE PLACE — Paul's approved lead-in, which
+     names the refund policy the client was sold. What must never appear is a PROMISE built on the
+     word, or the hedges CLAUDE.md §1 deleted. A blanket ban on the noun failed his own wording. */
+  for (const p of [...notUp, ...up]) {
+    ok(!/eight|8 weeks|promise|we guarantee|guaranteed/i.test(p), `no hedge, no old cycle: "${p.slice(0, 50)}"`);
+    ok(!/guarantee/i.test(p) || p === resultsClaimParagraph(), `"guarantee" only in the approved claim paragraph: "${p.slice(0, 50)}"`);
+  }
 }
 
 console.log('── The document renders both counts and the sentence, and no competitor names ──');

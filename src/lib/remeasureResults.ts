@@ -93,6 +93,20 @@ export interface ResultsCopyInput {
   documentUrl: string;
 }
 
+/* ⛔ THE CLAIM PARAGRAPH — ONE SENTENCE OF OURS IN FRONT OF ONE SENTENCE THAT IS LOCKED.
+   Paul asked for "That means the guarantee applies. Email us within 14 days and we'll refund your
+   £99." The second half CANNOT be written that way here. REMEASURE_CLAIM_SENTENCE is byte-locked to
+   findable-site's REFUND_CLAIM_SENTENCE (check-cross-repo-sync.mjs, both repos) and FINDABLE_GUARANTEE
+   is asserted to END with it — so the same string is /refunds' paragraph 2 AND the description on the
+   Stripe checkout. Shortening it there would drop "If that number has not gone up" from the policy
+   page and from the sale, leaving the customer-facing authority promising a refund with no condition
+   attached: the wording §20 already records as rejected on the pricing heading.
+   So the lead-in carries the reframe and the locked sentence follows it verbatim. The condition is
+   stated twice in a row by construction; that is the price of the lock, and it is the safe direction. */
+export function resultsClaimParagraph(): string {
+  return `That means the guarantee applies. ${REMEASURE_CLAIM_SENTENCE}`;
+}
+
 const pct = (n: number, d: number) => (d > 0 ? Math.round((100 * n) / d) : 0);
 
 export function resultsEmailSubject(i: ResultsCopyInput): string {
@@ -112,11 +126,14 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
   if (i.wentUp) {
     out.push(`Your number has gone up. The pages and listings we built are what the engines are now reading. Keep them live and we keep measuring.`);
   } else {
+    /* ⛔ THE ORDER IS PAUL'S, 2026-09-13: the verdict, then the entitlement, then the mechanism.
+       It used to read as an apology followed by an offer. "That means the guarantee applies" is
+       ours to write; the sentence after it is NOT — see the note above resultsClaimParagraph. */
     out.push(
       i.withinNoise
         ? `Your number has not gone up. The change is inside the ${NOISE_BAND_PP}-point swing we see between repeat measurements with no work done, so we count it as no movement.`
         : `Your number has not gone up.`,
-      REMEASURE_CLAIM_SENTENCE,
+      resultsClaimParagraph(),
     );
   }
   out.push(`Paul, findable`);
@@ -135,6 +152,6 @@ export function resultsDocumentMeaning(i: ResultsCopyInput): string[] {
     i.withinNoise
       ? `The number has not gone up. The change is inside the ${NOISE_BAND_PP}-point swing we see between repeat measurements with no work done, so we count it as no movement.`
       : `The number has not gone up.`,
-    REMEASURE_CLAIM_SENTENCE,
+    resultsClaimParagraph(),
   ];
 }
