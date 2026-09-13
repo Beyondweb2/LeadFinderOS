@@ -42,6 +42,18 @@ const SITE = path.join(HERE, '..', '..', 'findable-site', 'src', 'lib');
    a string built from concatenated literals, or a bare number. */
 const PAIRS = [
   {
+    /* ⛔ THE HUMAN'S NUMBER (2026-09-13). The report's "WhatsApp me" button and the site's founder
+       contact block must reach the same phone. The report pointed at the Business API line until
+       today, so a prospect pressing the one button that asks them to talk to a person got the
+       automated sender. Each repo held its own copy, which is how they drifted.
+       ⛔ NOT the sending number: templates still go out through the Business API. */
+    what: 'the contact WhatsApp number',
+    kind: 'string',
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_CONTACT_WHATSAPP' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'WHATSAPP_NUMBER' },
+    why: 'A prospect who presses "WhatsApp me" on their report and one who presses it on the site must reach the same person.',
+  },
+  {
     /* ⛔ ONE GUARANTEE, BYTE-LOCKED ACROSS BOTH REPOS. Until 2026-09-13 the site matched a longer
        FINDABLE_GUARANTEE_FULL and a prefix assertion tied the two LeadFinderOS constants together;
        Paul folded the claim window into the refund sentence and the two constants became one, so

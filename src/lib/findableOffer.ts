@@ -124,4 +124,20 @@ export const GBP_ADD_STEPS =
    scripts/check-cross-repo-sync.mjs in both repos, and client-copy-claims.test.ts asserts the
    guarantee still ends with it — so the promise a client is measured against, the page that states
    the policy and the email that starts the 14-day clock cannot say three different things. */
+/* ⛔ THE HUMAN'S NUMBER, NOT THE SENDING NUMBER. This is where a prospect or a client goes when a
+   document invites them to start a conversation: the report's "WhatsApp me" button, and
+   findable.live's founder contact block, which reads the same value as site.ts's WHATSAPP_NUMBER
+   and is byte-locked to this one by scripts/check-cross-repo-sync.mjs in both repos.
+
+   ⛔ IT IS NOT THE BUSINESS API NUMBER AND MUST NEVER BE SET TO ONE. Templates go out through the
+   Business API and that is unchanged; this is the number a HUMAN answers. Until 2026-09-13 the
+   report pointed at 447347041545, the Business API line, so every prospect who pressed the one
+   button on the document asking them to talk to a person reached the automated sender instead.
+   The site had always pointed at the personal number, so the two documents disagreed about how to
+   reach the same company — and each held its own copy, which is why they could.
+
+   E.164 digits only: wa.me rejects "+", spaces and dashes, so the digits ARE the link format.
+   ⚠️ Anything that DISPLAYS the number to a person must format it; never print this string raw. */
+export const FINDABLE_CONTACT_WHATSAPP = "447943262742";
+
 export const REMEASURE_CLAIM_SENTENCE = "If that number has not gone up, email us within 14 days of your four week results and we'll refund your £99.";
