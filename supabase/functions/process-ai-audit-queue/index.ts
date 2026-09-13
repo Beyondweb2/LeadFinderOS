@@ -864,7 +864,8 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     // Preserve any SEO block the SEO step wrote (order-independent — either step may run
     // first; both merge rather than overwrite).
     const { data: runNow } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
-    const existingSeo = runNow?.results && typeof runNow.results === "object" ? (runNow.results as Row).seo : undefined;
+    const existingResults: Row = runNow?.results && typeof runNow.results === "object" ? (runNow.results as Row) : {};
+    const existingSeo = existingResults.seo;
 
     // MEASURED actor spend for this run: the sum of what Apify charged for each question,
     // not an estimate. null when no question reported a figure (older rows, or all failed).
@@ -874,7 +875,15 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       if (typeof c === "number") actorCostUsd = Number(((actorCostUsd ?? 0) + c).toFixed(6));
     }
 
+    /* ⛔ SPREAD WHAT THE ROW ALREADY HOLDS, THEN WRITE THE COMPUTED KEYS OVER IT (2026-09-13).
+       This object used to be built from scratch, so every note create-ai-audit wrote INTO
+       results at creation was wiped the moment the run finalised: `full_measure` (the flag that
+       says a full measure is NOT comparable to the baseline), `money_questions` (which queued
+       questions are the buying-moment ones). Neither live measurement run carried its note. The
+       computed keys (engines/summary/questions/seo) win; everything else survives — the same
+       read-modify-write shape stampCleaningFailure and audit-baseline already use on this column. */
     const results = {
+      ...existingResults,
       engines: DEFAULT_ENGINES,
       summary: {
         named_datapoints: named,
