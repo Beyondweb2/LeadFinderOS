@@ -58,28 +58,28 @@ const PACK_CSS = `
   /* gold rounded number squares */
   .wp-rows{ display:flex; flex-direction:column; gap:12px; margin:10px 0 0; }
   .wp-row{ display:flex; gap:12px; align-items:flex-start; }
-  .wp-num{ flex:0 0 auto; width:30px; height:30px; border-radius:8px; background:var(--gold,#f2c14e);
-    color:#3a2d05; font-weight:900; font-size:15px; display:flex; align-items:center; justify-content:center; }
+  .wp-num{ flex:0 0 auto; width:30px; height:30px; border-radius:8px; background:var(--gold);
+    color:var(--on-gold); font-weight:900; font-size:15px; display:flex; align-items:center; justify-content:center; }
   .wp-rowbody{ min-width:0; }
   .wp-rowtitle{ font-size:14px; font-weight:800; color:var(--ink); }
   .wp-rowline{ font-size:13px; color:var(--muted); margin:2px 0 0; line-height:1.5; }
 
   /* info boxes */
-  .wp-box{ border:1px solid var(--line); background:#f8fafc; border-radius:10px; padding:12px 14px; margin:12px 0; }
-  .wp-box-navy{ border:1px solid var(--line); border-left:4px solid var(--blue,#16407e); background:#fff;
+  .wp-box{ border:1px solid var(--line); background:var(--panel-tint); border-radius:10px; padding:12px 14px; margin:12px 0; }
+  .wp-box-navy{ border:1px solid var(--line); border-left:4px solid var(--blue); background:var(--paper);
     border-radius:10px; padding:12px 14px; margin:12px 0; }
   .wp-boxtitle{ font-size:10.5px; font-weight:900; letter-spacing:.07em; text-transform:uppercase;
     color:var(--blue-2); margin:0 0 7px; }
   .wp-ticks{ list-style:none; margin:0; padding:0; }
   .wp-ticks li{ font-size:13px; color:var(--ink); line-height:1.5; padding:3px 0 3px 22px; position:relative; }
-  .wp-ticks li:before{ content:"\\2713"; position:absolute; left:0; top:3px; color:var(--green,#1f8a4c); font-weight:900; }
+  .wp-ticks li:before{ content:"\\2713"; position:absolute; left:0; top:3px; color:var(--green); font-weight:900; }
 
   /* monospace boxes */
   .wp-mono{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px;
-    background:#0f2547; color:#eaf1ff; border-radius:8px; padding:11px 13px; margin:8px 0;
+    background:var(--mono-bg); color:var(--mono-text); border-radius:8px; padding:11px 13px; margin:8px 0;
     white-space:pre-wrap; word-break:break-word; line-height:1.5; }
   .wp-mono-light{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px;
-    background:#f1f5f9; color:#1e293b; border:1px solid var(--line); border-radius:8px;
+    background:var(--panel-tint-2); color:var(--mono-light-text); border:1px solid var(--line); border-radius:8px;
     padding:10px 12px; margin:8px 0; white-space:pre-wrap; word-break:break-word; }
   .wp-monolabel{ font-size:10px; font-weight:900; letter-spacing:.07em; text-transform:uppercase;
     color:var(--blue-2); margin:10px 0 0; }
@@ -92,8 +92,8 @@ const PACK_CSS = `
   .wp-col ol li{ font-size:12.5px; color:var(--ink); line-height:1.5; margin:2px 0; }
   .wp-col ul{ list-style:none; margin:0; padding:0; }
   .wp-col ul li{ font-size:12.5px; color:var(--ink); line-height:1.5; margin:0 0 7px; }
-  .wp-do .wp-coltitle{ color:var(--green,#1f8a4c); }
-  .wp-dont .wp-coltitle{ color:var(--red,#c0392b); }
+  .wp-do .wp-coltitle{ color:var(--green); }
+  .wp-dont .wp-coltitle{ color:var(--red); }
   .wp-guar{ font-size:12px; font-weight:800; color:var(--blue-2); margin:16px 0 0; }
 
   @media (max-width:520px){ .wp-wrap{ padding:14px 18px 18px; } }
@@ -115,7 +115,7 @@ function sheet(bandMeta: string, inner: string, foot: string): string {
         <div class="band-meta">${bandMeta}</div>
       </div>
       <svg class="wave" viewBox="0 0 1200 38" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" fill="#ffffff"/>
+        <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" style="fill:var(--paper)"/>
       </svg>
     </header>
     <section class="wp-wrap">${inner}</section>

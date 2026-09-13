@@ -46,10 +46,10 @@ const EXTRA_CSS = `
   /* Honesty pills. Filled, not outlined — these must survive a greyscale office printer. */
   .flag{ font-size:9.5px; font-weight:900; letter-spacing:.06em; text-transform:uppercase;
     border-radius:999px; padding:2px 8px; white-space:nowrap; }
-  .flag-thin{ background:var(--amber); color:#fff; }
-  .flag-unver{ background:var(--red); color:#fff; }
-  .flag-done{ background:var(--green); color:#fff; }
-  .flag-client{ background:var(--blue); color:#fff; }
+  .flag-thin{ background:var(--amber); color:var(--on-band); }
+  .flag-unver{ background:var(--red); color:var(--on-band); }
+  .flag-done{ background:var(--green); color:var(--on-band); }
+  .flag-client{ background:var(--blue); color:var(--on-band); }
 
   .host{ font-size:11.5px; color:var(--faint); font-weight:700; }
   .url{ margin-top:3px; font-size:11px; color:var(--blue-2); font-weight:700; word-break:break-all; }
@@ -94,8 +94,8 @@ const EXTRA_CSS = `
   .seo-find li:last-child{ border-bottom:0; }
   .sev{ font-size:9px; font-weight:900; letter-spacing:.05em; text-transform:uppercase;
     border-radius:999px; padding:1px 7px; margin-right:6px; white-space:nowrap; }
-  .sev-high{ background:var(--red); color:#fff; }
-  .sev-med{ background:var(--amber); color:#fff; }
+  .sev-high{ background:var(--red); color:var(--on-band); }
+  .sev-med{ background:var(--amber); color:var(--on-band); }
   .sev-low{ background:#eef1f6; color:var(--muted); }
   .seo-name{ font-weight:800; color:var(--ink); }
   .seo-detail{ display:block; margin-top:1px; font-size:11.5px; color:var(--muted); line-height:1.4; }

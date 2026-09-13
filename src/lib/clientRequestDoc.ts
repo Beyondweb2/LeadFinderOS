@@ -140,9 +140,9 @@ const EXTRA_CSS = `
     color:var(--faint); font-weight:800; }
   .det-v{ flex:1 1 auto; font-size:14px; color:var(--ink); font-weight:600; word-break:break-word; }
   .det-have{ flex:0 0 auto; font-size:9.5px; font-weight:900; letter-spacing:.06em; text-transform:uppercase;
-    border-radius:999px; padding:2px 9px; background:#eef1f6; color:var(--muted); white-space:nowrap; }
+    border-radius:999px; padding:2px 9px; background:var(--page); color:var(--muted); white-space:nowrap; }
   .det.miss .det-v{ color:var(--red); font-weight:900; }
-  .det.miss .det-have{ background:var(--red); color:#fff; }
+  .det.miss .det-have{ background:var(--red); color:var(--on-band); }
   /* ⛔ THE BASIS MUST SUBTRACT ITS OWN MARGIN. This rule was flex:0 0 100% with margin-left:162px,
      and a flex-basis resolves against the CONTAINER's content box while the margin sits OUTSIDE it —
      so the line box was 100% wide starting 162px in, i.e. 162px wider than the page. Every wrapped
@@ -164,7 +164,7 @@ const EXTRA_CSS = `
   .ask-h{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
   .ask-name{ font-size:16px; font-weight:850; color:var(--ink); letter-spacing:-.01em; }
   .ask-cost{ flex:0 0 auto; font-size:9.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
-    border-radius:999px; padding:2px 9px; white-space:nowrap; background:var(--blue); color:#fff; }
+    border-radius:999px; padding:2px 9px; white-space:nowrap; background:var(--blue); color:var(--on-band); }
   .ask-cost.free{ background:var(--green); }
   /* The two that stop the work, and the one that never does. A client skimming the pills alone must
      be able to tell which is which — that is the whole point of marking them. */
@@ -189,14 +189,14 @@ const EXTRA_CSS = `
     border-bottom:1px solid var(--line); }
   .seo-find li:last-child{ border-bottom:0; }
   .sev{ flex:0 0 auto; font-size:9px; font-weight:900; letter-spacing:.05em; text-transform:uppercase;
-    border-radius:999px; padding:2px 8px; color:#fff; background:var(--muted); }
+    border-radius:999px; padding:2px 8px; color:var(--on-band); background:var(--muted); }
   .sev.high{ background:var(--red); }
   .sev.med{ background:var(--amber); }
   .sev.low{ background:var(--muted); }
   /* One line per finding. .sf-d — the scanner's recommendation — was deleted with its field. */
   .sf-t{ flex:1 1 200px; font-size:13px; font-weight:750; color:var(--ink); }
   .ask-ev{ margin:6px 0 0; padding:8px 12px; background:var(--page); border-radius:8px;
-    font-size:13px; line-height:1.5; color:#334155; font-weight:600; }
+    font-size:13px; line-height:1.5; color:var(--ink-2); font-weight:600; }
   .ask-body{ margin:8px 0 0; font-size:13.5px; line-height:1.55; color:var(--muted); }
   .ask-body p{ margin:0 0 8px; }
   .ask-body p:last-child{ margin-bottom:0; }

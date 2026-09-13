@@ -23,10 +23,16 @@ export function esc(s: string): string {
 /** The full token + layout + print stylesheet, without the <style> tags. */
 export const DOC_CSS = `
   :root{
-    --blue:#1a3d7c; --blue-2:#2a5aa8; --yellow:#ffd23f;
-    --ink:#0f172a; --muted:#5b6472; --faint:#9aa3b2; --line:#e9edf3;
+    /* THE BRAND: DARK WITH GOLD, LIGHT BODY (Paul, 2026-09-13) — the same values as the audit
+       report's REPORT_CHROME_CSS_CORE, so the client request sheet and the operator playbook cannot
+       look like a different company from the report. --blue keeps its name (a dozen rules read
+       it) and carries charcoal; the blue tints are the site's neutral panels. */
+    --blue:#101114; --blue-2:#2C2D34; --yellow:#FFD13F;
+    --ink:#0f172a; --ink-2:#334155; --muted:#5b6472; --faint:#9aa3b2; --line:#e9edf3;
     --red:#e11d2a; --amber:#c2820b; --green:#15a34a; --paper:#ffffff; --page:#eef1f6;
-    --foot:#102a58;
+    --foot:#0A0B0D;
+    --on-band:#ffffff; --on-band-faint:#9C9FA7; --foot-text:#c9cbd1;
+    --red-tint:#fff5f5; --blue-tint:#f0f1f3; --panel-tint:#f4f5f7;
   }
   *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   html,body{ margin:0; padding:0; }
@@ -37,15 +43,15 @@ export const DOC_CSS = `
     box-shadow:0 8px 40px rgba(15,23,42,.12); }
 
   /* Header band — matches the report */
-  .band{ position:relative; background:var(--blue); color:#fff; padding:26px 40px 40px; }
+  .band{ position:relative; background:var(--blue); color:var(--on-band); padding:26px 40px 40px; }
   .band-row{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
   .wordmark{ font-size:27px; font-weight:900; letter-spacing:-.02em; color:var(--yellow); }
-  .wordmark .dot{ color:#fff; }
-  .band-meta{ font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#b9c8e4; font-weight:700; }
+  .wordmark .dot{ color:var(--on-band); }
+  .band-meta{ font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--on-band-faint); font-weight:700; }
   .wave{ position:absolute; left:0; right:0; bottom:-1px; width:100%; height:38px; display:block; }
 
   /* Internal-only banner */
-  .internal-flag{ background:#fff5f5; color:var(--red); font-size:11px; font-weight:800; letter-spacing:.08em;
+  .internal-flag{ background:var(--red-tint); color:var(--red); font-size:11px; font-weight:800; letter-spacing:.08em;
     text-transform:uppercase; padding:8px 40px; border-bottom:1px solid var(--line); }
 
   /* For-business header + summary */
@@ -53,7 +59,7 @@ export const DOC_CSS = `
   .head .for{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; }
   .head h1{ margin:4px 0 2px; font-size:26px; font-weight:900; letter-spacing:-.02em; color:var(--ink); }
   .head .vert{ font-size:13px; color:var(--muted); font-weight:600; }
-  .summary{ padding:12px 40px 20px; font-size:16px; line-height:1.5; color:#334155; font-weight:600; max-width:64ch; }
+  .summary{ padding:12px 40px 20px; font-size:16px; line-height:1.5; color:var(--ink-2); font-weight:600; max-width:64ch; }
 
   /* Consistent section headers */
   .sec-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:800; margin:0 0 4px; }
@@ -73,23 +79,23 @@ export const DOC_CSS = `
   .act-top{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
   .act-do{ font-size:14px; font-weight:800; color:var(--ink); }
   .pillar{ flex:0 0 auto; font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
-    color:var(--blue); background:#eaf1fc; border-radius:999px; padding:2px 9px; white-space:nowrap; }
+    color:var(--blue); background:var(--blue-tint); border-radius:999px; padding:2px 9px; white-space:nowrap; }
   .act-why{ margin-top:2px; font-size:12.5px; line-height:1.45; color:var(--muted); }
   .act-dep{ margin-top:3px; font-size:11px; color:var(--faint); font-weight:700; }
   /* Priority ranking — leverage for THIS business. HIGH stands out (solid blue), LOW recedes. */
   .act-tags{ display:flex; align-items:center; gap:6px; flex:0 0 auto; }
   .prio{ font-size:9.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; border-radius:999px; padding:2px 7px; white-space:nowrap; }
-  .prio-high{ background:var(--blue); color:#fff; }
-  .prio-medium{ background:#eef1f6; color:var(--muted); }
-  .prio-low{ background:#f4f5f7; color:var(--faint); border:1px solid var(--line); }
+  .prio-high{ background:var(--blue); color:var(--on-band); }
+  .prio-medium{ background:var(--page); color:var(--muted); }
+  .prio-low{ background:var(--panel-tint); color:var(--faint); border:1px solid var(--line); }
   .act.p-low .act-do{ color:var(--muted); font-weight:700; }   /* low-leverage actions recede */
   .act.p-low .act-why{ color:var(--faint); }
   /* Lead-time pills — same sizing as .prio. "Slow-burn · start now" is emphasised (filled
      amber) so the start-early signal stands out; fast/medium are muted. */
   .lead{ font-size:9.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; border-radius:999px; padding:2px 7px; white-space:nowrap; }
-  .lead-slow{ background:var(--amber); color:#fff; }
-  .lead-fast{ background:#eef1f6; color:var(--muted); }
-  .lead-medium{ background:#f4f5f7; color:var(--faint); border:1px solid var(--line); }
+  .lead-slow{ background:var(--amber); color:var(--on-band); }
+  .lead-fast{ background:var(--page); color:var(--muted); }
+  .lead-medium{ background:var(--panel-tint); color:var(--faint); border:1px solid var(--line); }
 
   /* Per-task step-by-step (internal view) — an indented numbered sub-list under each action. */
   .act-steps{ margin:6px 0 2px; padding:0 0 0 20px; }
@@ -127,8 +133,8 @@ export const DOC_CSS = `
 
   .site-foot{ background:var(--foot); padding:14px 40px 16px; }
   .site-foot .row{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
-    font-size:11.5px; color:#c7d5ee; font-weight:600; }
-  .site-foot .row b{ color:#fff; }
+    font-size:11.5px; color:var(--foot-text); font-weight:600; }
+  .site-foot .row b{ color:var(--on-band); }
 
   @page{ size:A4; margin:11mm; }
   @media print{
@@ -136,7 +142,7 @@ export const DOC_CSS = `
        flag, footer) to print WITHOUT the user ticking Chrome's "Background graphics". */
     html,body,.sheet,.band,.internal-flag,.block,.pillar,.prio,.lead,.wk-dot,.site-foot{
       -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
-    body{ background:#fff; }
+    body{ background:var(--paper); }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
     .band,.head,.summary,.plan,.block,.notes,.site-foot{ break-inside:avoid; }
     .dir,.act,.skip-item{ break-inside:avoid; }
@@ -150,7 +156,7 @@ export const docBand = (meta: string): string => `    <header class="band">
         <div class="band-meta">${esc(meta)}</div>
       </div>
       <svg class="wave" viewBox="0 0 1200 38" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" fill="#ffffff"/>
+        <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" style="fill:var(--paper)"/>
       </svg>
     </header>`;
 

@@ -4127,3 +4127,55 @@ report renderer, the free-check result, the AI Audit pills or the town badge.
   has never applied to the biggest markets, and 25 km was never Newcastle's problem. Free-check-lane
   refusals recorded: zero, ever. Coverage-page population sort reads the same table, so adding
   cities changes Coverage too.
+
+### 22c. Same day, later: the audit book is paginated, the documents are charcoal and gold, the gazetteer has its cities (2026-09-13)
+
+- ⛔ **THE AUDIT BOOK IS PAGINATED, NOT CAPPED.** `AiAudit.tsx` fetched the newest 1,000 audits and
+  stopped; the book stood at 969 with one bulk job of 25 leaving it six away. At 1,001 the oldest
+  audit silently left the list. It now reads through `fetchAllRows` like the runs and the reports
+  (stable sort, `id` tiebreaker). **Not slower today**: 969 rows is still one request (~0.8–1.0 s
+  measured); past 1,000 it is two (+~0.3 s), and the 5-second reload while a run drains repeats
+  that. `AUDIT_FETCH_LIMIT` is 50,000 now and only feeds the "capped" label. The real fix (page the
+  LIST, poll only in-flight audits) is still owed.
+- ⛔ **EVERY CUSTOMER DOCUMENT IS DARK-WITH-GOLD ON A LIGHT BODY. BLUE IS GONE.** Paul's spec:
+  NOT a dark report — the body stays light; everything that was Findable blue (#1a3d7c, the pale
+  blue tints, the navy footer #102a58) is the site's charcoal (#101114 band, #0A0B0D footer) and
+  gold (#FFD13F). Two steps, deliberately: **(1) every raw hex became a token with its old value**
+  (26 in the report renderer, plus the welcome pack, page plan, client request sheet stylesheet
+  and the before/after export), **(2) the token VALUES moved.** `--blue` KEEPS ITS NAME and carries
+  charcoal — 20 rules and three documents read it. The before/after export (`measurementExport.ts`)
+  gained the shared band and footer; it had none and looked like a different company.
+  - ✅ **RENDER-CHECKED BY PIXEL, NOT CSS**, in headless Chromium over all eight paths (client
+    report, its print variant, in-app preview, welcome pack + print, page plan, client request
+    sheet, before/after export + print) with real AD Locksmithing data: band #101114, footer
+    #0A0B0D, body #ffffff, Get-started button #FFD13F, wordmark gold, **zero pixels of any retired
+    blue** in any screenshot, video hidden and poster shown in print. The scratch tool is
+    `scripts/_render-check.ts` (untracked; Playwright lives in findable-site's node_modules).
+  - **Contrast on charcoal**, re-checked for every pairing that used to sit on blue: white 18:1,
+    `--on-band-muted` #c9cbd1 11:1, gold 13:1, charcoal text on the gold button 12:1. Nothing stops
+    passing. **Amber never sits on a dark surface in any document**, so the amber→gold-on-dark rule
+    had nowhere to apply; it is written at the token block for the day one moves.
+  - **Print needs nothing new.** The band and footer were already dark and already forced with
+    print-color-adjust; charcoal prints exactly as navy did. Confirmed by pixel in print emulation.
+  - 🔴 **THE BACKTICK TRAP BIT AGAIN WRITING THIS**: a CSS comment inside the token block said
+    `--color-band` in backticks and terminated the stylesheet — tsc read "9 baseline errors no
+    longer occur" (the same count-looks-fine failure §3 records) and esbuild said "Expected ;".
+    No backticks in any comment inside a template literal. Ever.
+- ⛔ **THE GAZETTEER: 21 CITIES HANDED TO PAUL AS ONE INSERT.** ONS "Major Towns and Cities (Dec
+  2015) V2" has 112 entries with centroids and NO populations; 81 already resolve (the lookup strips
+  ONS's "(District)" suffix, so "Cambridge (Cambridge)" IS Cambridge — the earlier note in §6i was
+  wrong and is corrected). **18 genuinely missing** (Birmingham, Bradford, Brighton and Hove,
+  Bristol, Cardiff, Coventry, Derby, Kingston upon Hull, Leeds, Leicester, Liverpool, London,
+  Manchester, Newcastle upon Tyne, Nottingham, Plymouth, Sheffield, Stoke-on-Trent) plus
+  Edinburgh, Glasgow, Belfast from Wikipedia coordinates. **Deliberately NOT inserted**: Newport
+  (three Newports already make the name ambiguous — a fourth changes nothing) and Sutton Coldfield
+  ("Royal Sutton Coldfield" exists; an alias belongs in the lookup, not a duplicate row).
+  **Population is NULL on all 21**: Coverage's size filter EXCLUDES null-population rows and its
+  sort puts them last, so Coverage is unchanged until Census 2021 built-up-area populations are
+  added — a follow-up, not a regression.
+  - **Distance re-run over 665 measurable audits** (863 leads carry coordinates now, not 44):
+    before → ok 485 / warn 10 / block 31 / unknown 139; after → ok 561 / warn 17 / **block 32** /
+    unknown 55. **84 verdicts change; ONE becomes a block**: Russell Dane Gas Heating & Plumbing,
+    audited against Liverpool, 27 km out. 55 stay unknown, mostly typed forms the gazetteer will
+    never carry ("Hull", "Brighton", "Stoke", "Sutton Coldfield") — an alias table in
+    `normaliseTownName` is the fix for those.
