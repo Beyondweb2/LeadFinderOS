@@ -4037,3 +4037,18 @@ Found by tracing the chain read-only before Paul's end-to-end test; fixed the sa
     this deploy is the proof** — read the hosted page's text, not the HTML shell. Not verified here.
 - **Verification that a baseline / full measure / replay / manual re-audit send NOTHING is the pure
   gate test** (`scripts/audit-kind.test.ts`), not a live run — nothing was spent to prove it.
+- ⛔ **UNCOUNTABLE TRADE WORDS BLOCK THE WHATSAPP VARIABLE; THE FORMS PEOPLE TYPE ARE MAPPED
+  (Paul, 2026-09-13, same day).** "plumbing" passed every guard in `templateVars.ts` and would
+  have rendered "for a plumbing in Andover" — a real word naming the WORK, not the person. Now:
+  `TRADE_SINGULAR` maps plumbing→plumber, locksmithing→locksmith, bookkeeping→bookkeeper,
+  driving lessons→driving instructor, car valeting→mobile valeter, and electrics→electrician /
+  accountancy→accountant (**both still HELD by the vowel rule** — map to a consonant-initial
+  phrase to send them). Anything unmapped whose LAST word ends in `-ing`, or sits in
+  `UNCOUNTABLE_TRADE_WORDS` (joinery, upholstery, dentistry, removals, dental, electrical, …),
+  blocks as `trade_uncountable`. The 24 stored `business_type` values (re-pulled that day, 968
+  audits) contained no further uncountable word beyond the two already mapped. Only edge code
+  reaches this file (via `whatsapp-send.ts`); the SPA does not.
+- ✅ **`free_check_result` IS APPROVED AND ACTIVE AT META (Paul, 2026-09-13)**, one message sent,
+  delivered and read. Its registered body carries "for a {{2}}", so the vowel-sound block is
+  correct for it too. Variables confirmed against WhatsApp Manager: name, trade, town, report
+  link, onboarding link — matching both registries.

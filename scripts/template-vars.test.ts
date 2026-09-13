@@ -11,7 +11,7 @@
    is what has to hold, which is why the generated-cases block below drives shapes the fixture does
    not contain. Re-pull the list rather than assuming this is still the whole world.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { normaliseTrade, normaliseTown, TRADE_SINGULAR } from "../src/lib/templateVars.ts";
+import { normaliseTrade, normaliseTown, TRADE_SINGULAR, UNCOUNTABLE_TRADE_WORDS } from "../src/lib/templateVars.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -136,6 +136,71 @@ ok(normaliseTown("Ukfield").ok, '"Ukfield" is not rejected for containing "uk"')
 ok(normaliseTown("Englefield Green").ok, '"Englefield Green" is not rejected for containing "england"-ish letters');
 for (const bad of ["", "   ", null, undefined]) {
   ok(!normaliseTown(bad as string | null | undefined).ok, `${JSON.stringify(bad)} blocks`);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   UNCOUNTABLE TRADE WORDS (Paul, 2026-09-13). "plumbing" passed every guard and rendered "for a
+   plumbing in Andover" — a real word that names the work, not the person. The forms people
+   actually type are MAPPED to the countable trade; anything uncountable and unmapped BLOCKS.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+console.log("\n── THE UNCOUNTABLE FORMS PEOPLE TYPE ARE MAPPED TO THE TRADE THEY MEAN ──");
+for (const [input, want] of [
+  ["plumbing", "plumber"], ["Plumbing", "plumber"],
+  ["locksmithing", "locksmith"],
+  ["bookkeeping", "bookkeeper"],
+  ["driving lessons", "driving instructor"],
+  ["car valeting", "mobile valeter"],
+] as const) {
+  const r = normaliseTrade(input);
+  ok(r.ok && r.value === want, `${JSON.stringify(input)} -> ${JSON.stringify(want)} — "for a ${want} in Andover"`);
+}
+/* ⛔ MAPPED CORRECTLY, AND STILL HELD BY THE ARTICLE RULE. The map says what the trade is called;
+   the approved body says "for a", and neither "electrician" nor "accountant" can follow it. */
+for (const [input, mappedTo] of [["electrics", "electrician"], ["accountancy", "accountant"]] as const) {
+  const r = normaliseTrade(input);
+  ok(!r.ok && r.reason === "trade_starts_with_vowel_sound",
+    `${JSON.stringify(input)} maps to "${mappedTo}" and is then HELD on the vowel (${r.ok ? "sent!" : r.reason})`);
+}
+
+console.log("\n── ANYTHING UNCOUNTABLE AND UNMAPPED BLOCKS — IT IS NEVER GUESSED AT ──");
+/* The real case first, as if the map entry were missing: the "-ing" net must catch it alone. */
+for (const word of [
+  "roofing", "plastering", "cleaning", "catering", "tiling", "guttering", "paving", "heating",
+  "valeting", "decorating", "landscaping", "detailing", "fitting", "Roofing", "ROOFING",
+]) {
+  const r = normaliseTrade(word);
+  ok(!r.ok && r.reason === "trade_uncountable", `${JSON.stringify(word)} blocks as trade_uncountable`);
+}
+/* Multi-word: the article attaches to the LAST word, so that is the one judged. */
+for (const phrase of ["gas heating", "carpet cleaning", "kitchen fitting", "emergency plumbing repairs"]) {
+  const r = normaliseTrade(phrase);
+  ok(!r.ok && r.reason === "trade_uncountable", `${JSON.stringify(phrase)} blocks on its last word`);
+}
+/* The curated set: activity nouns that do not end in -ing, plural-only trade nouns, adjectives. */
+for (const word of [
+  "joinery", "carpentry", "upholstery", "masonry", "dentistry", "physiotherapy", "aesthetics",
+  "security", "insurance", "removals", "repairs", "services", "maintenance",
+  "dental", "electrical", "veterinary", "financial", "legal",
+]) {
+  const r = normaliseTrade(word);
+  ok(!r.ok && r.reason === "trade_uncountable", `${JSON.stringify(word)} blocks as trade_uncountable`);
+}
+/* ⛔ AND THE NET MUST NOT CATCH REAL COUNTABLE TRADES. Every one of these takes "a". */
+for (const [input, want] of [
+  ["roofer", "roofer"], ["Roofers", "roofer"], ["plasterer", "plasterer"], ["cleaner", "cleaner"],
+  ["caterer", "caterer"], ["tiler", "tiler"], ["decorator", "decorator"], ["landscaper", "landscaper"],
+  ["joiner", "joiner"], ["carpenter", "carpenter"], ["dentist", "dentist"], ["physiotherapist", "physiotherapist"],
+  ["mobile mechanic", "mobile mechanic"], ["gas engineer", "gas engineer"], ["kitchen fitter", "kitchen fitter"],
+  ["bar", "bar"], ["barber", "barber"],
+] as const) {
+  const r = normaliseTrade(input);
+  ok(r.ok && r.value === want, `${JSON.stringify(input)} still sends as "${want}"`);
+}
+/* Invariant: no map VALUE is itself uncountable, or the map would produce the sentence it exists to prevent. */
+for (const [k, v] of Object.entries(TRADE_SINGULAR)) {
+  const lastWord = v.split(" ").slice(-1)[0];
+  ok(!/ing$/.test(lastWord) && !UNCOUNTABLE_TRADE_WORDS.has(lastWord),
+    `map value for ${JSON.stringify(k)} (${JSON.stringify(v)}) is a countable noun`);
 }
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
