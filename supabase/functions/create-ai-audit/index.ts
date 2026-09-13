@@ -7,6 +7,7 @@ import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
 import { excludeAsked, overAskFor } from "../../../src/lib/fullMeasure.ts";
+import { fillToTarget, dedupeByIntent } from "../../../src/lib/questionFill.ts";
 import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
 import {
   measurementFlagFor,
@@ -846,7 +847,8 @@ Deno.serve(async (req) => {
           if (area.isMain) continue;
           try {
             const mixed = await generateWithMoney(businessName, businessType, area.town, hasWebsite, specialisms, ask(area.questions), "local", country, area.questions, coverage);
-            const kept = disjoint(mixed.questions).slice(0, area.questions);
+            const kept = fillGenerated(`area "${area.town}"`, mixed.questions, area.questions, baselineAsked,
+              { type: businessType, loc: area.town, hasWebsite, specialisms, scope: "local", country });
             perArea.push(...kept);
             /* Only the ones that SURVIVED are flagged. An area whose allocation is under
                MONEY_QUESTION_MIN_COUNT gets none at all (baselineMoneyQuestionShare returns 0). */
@@ -862,7 +864,8 @@ Deno.serve(async (req) => {
           mainQs = disjoint(providedQuestions).slice(0, mainShare);
         } else {
           const mixed = await generateWithMoney(businessName, businessType, locationText, hasWebsite, specialisms, ask(mainShare), businessScope, country, mainShare, coverage);
-          mainQs = disjoint(mixed.questions).slice(0, mainShare);
+          mainQs = fillGenerated(`main town "${locationText}"`, mixed.questions, mainShare, baselineAsked,
+            { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country });
           const keptMain = new Set(mainQs);
           moneyGenerated.push(...mixed.money.filter((q) => keptMain.has(q)));
         }
@@ -891,7 +894,11 @@ Deno.serve(async (req) => {
             businessName, businessType, locationText, hasWebsite, specialisms, ask(questionCount),
             businessScope, country, questionCount, coverage,
           );
-          questions = disjoint(mixed.questions).slice(0, questionCount);
+          /* ⛔ FILL, DON'T SLICE (2026-09-13): exclude → dedupe by intent → slice → top up from the
+             templates. This is the site that queued AD Locksmithing's 11-of-12 baseline and
+             18-of-20 measure — the dedupe used to run after this slice, with nothing to top up. */
+          questions = fillGenerated(isBaseline ? "paid baseline" : "full measure", mixed.questions, questionCount, baselineAsked,
+            { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country });
           const kept = new Set(questions);
           moneyGenerated.push(...mixed.money.filter((q) => kept.has(q)));
         } else {
@@ -1214,8 +1221,40 @@ async function generateWithMoney(
      (Seeding, which had the same property, was deleted 2026-09-12.)
      Order is otherwise cosmetic: queue rows are read back by created_at and every consumer reads
      the whole set. */
-  console.log(`[create-ai-audit] baseline mixed set: ${money.length} money + ${standard.length} standard of ${total} requested (share taken on ${moneySlots} slot(s))`);
-  return { questions: [...money, ...standard], money };
+  /* ⛔ DEDUPED BY INTENT HERE, BEFORE ANY CALLER SLICES (2026-09-13). The two calls are
+     independent, so they can and do produce the same question ("locksmith in X" from both), and
+     the final case-dedupe used to run AFTER the slice to target — which is exactly why AD
+     Locksmithing's baseline queued 11 of 12 and its full measure 18 of 20. Callers fill to target
+     with fillToTarget (top-up from templates); this pass just makes sure the pool they slice has
+     no twins in it. Money stays first. */
+  const pooled = dedupeByIntent([...money, ...standard]);
+  if (pooled.duplicates.length) {
+    console.warn(`[create-ai-audit] ${pooled.duplicates.length} intent-duplicate(s) between the money and standard calls dropped before slicing: ${pooled.duplicates.join(" | ")}`);
+  }
+  console.log(`[create-ai-audit] baseline mixed set: ${money.length} money + ${standard.length} standard of ${total} requested (share taken on ${moneySlots} slot(s)); ${pooled.questions.length} distinct`);
+  return { questions: pooled.questions, money };
+}
+
+/* THE FILL, at every site that slices a generated pool to a target: exclude the baseline's asked
+   set → dedupe by intent → slice → top up from the deterministic templates (which always carry the
+   town, so a topped-up question is never town-less). Logged with counts; `short` > 0 means even
+   the templates ran dry, which is stated rather than hidden. */
+function fillGenerated(
+  label: string,
+  candidates: readonly string[],
+  target: number,
+  excluded: readonly string[],
+  tpl: { type: string; loc: string; hasWebsite: boolean; specialisms: string; scope: BusinessScope; country: string | null },
+): string[] {
+  // Over-generate the template list: it is deduped and exclusion-filtered too, so ask for plenty.
+  const topUp = target > 0 ? fallbackQuestions(tpl.type, tpl.loc, tpl.hasWebsite, tpl.specialisms, Math.max(target * 2, 12), tpl.scope, tpl.country) : [];
+  const fill = fillToTarget({ candidates, target, excluded, topUp });
+  if (fill.duplicates.length || fill.excluded.length || fill.toppedUp || fill.short) {
+    console.warn(`[create-ai-audit] ${label}: ${fill.questions.length}/${target} — dropped ${fill.duplicates.length} duplicate(s), excluded ${fill.excluded.length} judged, topped up ${fill.toppedUp} from templates${fill.short ? `, STILL SHORT BY ${fill.short}` : ""}`
+      + (fill.duplicates.length ? ` | dup: ${fill.duplicates.join(" | ")}` : "")
+      + (fill.excluded.length ? ` | excl: ${fill.excluded.join(" | ")}` : ""));
+  }
+  return fill.questions;
 }
 
 /**
