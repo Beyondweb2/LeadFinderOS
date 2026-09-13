@@ -1,5 +1,5 @@
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml';
-import { FINDABLE_GUARANTEE } from './findableOffer';
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, findableContactPhoneDisplay } from './findableOffer';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WELCOME PACK — ONE printable document for a client who has just paid:
@@ -381,7 +381,9 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
         <span>Prepared for <b>${esc(name)}</b></span>
         <span>Findable &middot; Welcome pack</span>
       </div>
-      <div class="note">Backed by our money-back guarantee. Any questions, just reply to the email this came with.</div>
+      <div class="note">Backed by our money-back guarantee. Any questions, message or email me
+        &mdash; <a href="https://wa.me/${FINDABLE_CONTACT_WHATSAPP}">${esc(findableContactPhoneDisplay())}</a>
+        or <a href="mailto:${esc(FINDABLE_CONTACT_EMAIL)}?subject=${encodeURIComponent(`Findable - ${name}`)}">${esc(FINDABLE_CONTACT_EMAIL)}</a>.</div>
     </footer>`;
 
   const packPages = [

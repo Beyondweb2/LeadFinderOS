@@ -15,7 +15,7 @@
 /* RELATIVE paths with explicit .ts extensions, NOT the "@/" alias: this file is bundled into
    render-audit-report and apply-seo-paste, and Deno cannot resolve the Vite alias. Both are
    dependency-free constant files, so nothing heavy joins those bundles. */
-import { FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE } from './findableOffer.ts';
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE } from './findableOffer.ts';
 
 export interface ReportEngineRow {
   label: string;   // "ChatGPT", "Gemini", "AI Overview", "Google"
@@ -362,7 +362,10 @@ function gradeCircle(grade: string, score: number | null, size: number, label: s
    line the moment a Findable inbox exists. The buttons are labelled "Email us"/"WhatsApp us",
    so neither value is DISPLAYED to the prospect; it is visible only in the link target.
    TODO(paul): set REPORT_CONTACT_EMAIL to the Findable inbox once findable.uk has mail. */
-const REPORT_CONTACT_EMAIL = "paul@move37.fun";
+/* ⛔ THE CONTACT EMAIL IS NOT DEFINED HERE ANY MORE either. It was a second, unlocked copy of the
+   site's CONTACT_EMAIL, and until 2026-09-13 it built a mailto: that this file rendered NOWHERE —
+   a dead constant that read as live, the same trap as the guarantee that sat imported and
+   unrendered for ten days. It is now FINDABLE_CONTACT_EMAIL, locked cross-repo, and RENDERED. */
 /* ⛔ THE CONTACT NUMBER IS NOT DEFINED HERE ANY MORE. It was 447347041545, the Business API line,
    so "WhatsApp me" reached the automated sender rather than a person. It now comes from
    FINDABLE_CONTACT_WHATSAPP, byte-locked to findable.live's own founder number. */
@@ -612,6 +615,9 @@ export const REPORT_CHROME_CSS_FOOT = `
   .site-foot .row b{ color:var(--on-band); font-weight:700; }
   .site-foot .row a{ color:var(--yellow); text-decoration:none; }
   .site-foot .note{ margin-top:8px; font-size:11px; font-weight:400; color:var(--foot-muted); }
+  /* The note carries the contact links in the welcome pack. Unstyled they render browser-default
+     blue on the near-black footer: unreadable and off-brand. Gold is 13:1 on this ground. */
+  .site-foot .note a{ color:var(--yellow); text-decoration:none; font-weight:700; }
   .site-foot .site-link{ margin-top:8px; font-size:11px; font-weight:400; color:var(--foot-muted); }
   .site-foot .site-link a{ color:var(--yellow); text-decoration:none; font-weight:700; }
 `;
@@ -738,7 +744,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   // Personalised one-tap contact links. encodeURIComponent for the URL params (spaces, hyphen,
   // apostrophe, &), then esc() for HTML-attribute safety. Single-param each → no & separator.
   // Addresses come from REPORT_CONTACT_* at the top of this file — one place to change.
-  const emailHref = esc(`mailto:${REPORT_CONTACT_EMAIL}?subject=${encodeURIComponent(`AI Visibility - ${d.businessName}`)}`);
+  const emailHref = esc(`mailto:${FINDABLE_CONTACT_EMAIL}?subject=${encodeURIComponent(`AI Visibility - ${d.businessName}`)}`);
 /* 🔴 THE TRADE/TOWN CTA SUBJECT WAS DELETED WITH THE OLD CTA (2026-09-12) — and the MEASUREMENTS
      behind it are kept here because the next CTA that names a trade will need them, and they cost
      real reports to learn:
@@ -1448,7 +1454,8 @@ ${d.hidePitch ? "" : `
          gets the standard funnel. That is the intended trade here - a short honest CTA over a stale
          price - but it IS a funnel change, not just copy.
 
-         ⚠️ Email us and Who we are went with it. WhatsApp keeps the same wa.me href it always had,
+         ⚠️ Who we are went with it. Email me came BACK on 2026-09-13 (Paul: the report must carry
+         an email route), and WhatsApp now points at the personal number, not the Business API line,
          prefilled with the business name, so the one route that was actually used is unchanged. -->
     <section class="cta">
       <h3>Ready to <span class="y">get found</span>?</h3>
@@ -1458,6 +1465,7 @@ ${d.hidePitch ? "" : `
         ${startBtn}
         <a class="cta-btn site" href="${esc(REPORT_EXPLAINER_URL)}" target="_blank" rel="noopener noreferrer">See how it works</a>
         <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp me</a>
+        <a class="cta-btn email" href="${emailHref}">Email me</a>
       </div>
       <!-- 🔴 THE GUARANTEE IS BACK ON THE REPORT (2026-09-12). When the founder-offer block was
            deleted on 2026-09-02 the guarantee went with it, and nobody noticed: this file kept
