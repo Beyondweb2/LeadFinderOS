@@ -35,6 +35,17 @@ const get = async (url) => {
   return res.text();
 };
 
+/* 🔴 WHITESPACE IS NORMALISED BEFORE MATCHING, AND THIS CAUGHT A VACUOUS PASS THE DAY IT WAS
+   ADDED. Rendered prose wraps wherever the SOURCE wrapped: ProofSection's lead is written across
+   two source lines, so the live HTML holds "that is the whole
+        guarantee" and the
+   contiguous string "that is the whole guarantee" appears NOWHERE in it. An `absent` check for
+   that string therefore PASSED against a page still plainly showing the sentence — the exact
+   false green this file exists to prevent, reproduced inside the file itself.
+   ⛔ SO EVERY BODY IS COLLAPSED TO SINGLE SPACES BEFORE EITHER TEST. A marker is then robust to
+   how the author happened to wrap the source, which is not a fact about the deploy. */
+const flatten = (body) => body.replace(/\s+/g, ' ');
+
 /* ── RESOLVERS. Each returns { url, body } or throws — and a throw is UNRESOLVED, never absent. ── */
 
 /** The page itself. The only target for which HTML is the right file. */
@@ -94,6 +105,14 @@ const TARGETS = [
              'href="#how" class="inline-flex items-center justify-center rounded-full border'],
   },
   {
+    name: 'findable.live · proof section lead',
+    resolve: page(`${SITE}/`),
+    /* The rendered text wraps across a source line, so the marker is the tail of the sentence —
+       the half that changed — not the whole thing. */
+    present: ['so you can see the'],
+    absent: ['that is the whole guarantee'],
+  },
+  {
     name: 'findable.live · FAQ + WhatWeDo wording',
     resolve: page(`${SITE}/`),
     present: ['fourteen days after you get your four week results',
@@ -119,8 +138,11 @@ for (const t of TARGETS) {
     console.log('            (this is NOT "absent" — nothing was checked)');
     continue;
   }
-  const { url, body } = resolved;
-  console.log(`\n${t.name}\n  file: ${url} (${body.length} bytes)`);
+  const { url, body: raw } = resolved;
+  const body = flatten(raw);
+  console.log(`
+${t.name}
+  file: ${url} (${raw.length} bytes)`);
   for (const m of t.present ?? []) {
     const n = body.split(m).length - 1;
     if (n === 0) failures += 1;
