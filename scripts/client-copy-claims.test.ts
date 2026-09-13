@@ -80,6 +80,44 @@ for (const [label, path] of RENDERERS) {
   }
 }
 
+console.log("\n── NO OPERATOR SCREEN CARRIES A STALE CLAIM EITHER (2026-09-13) ──");
+/* The renderer list above is the CLIENT boundary. This list is the operator's: the Baseline
+   screen's band descriptions said "keep it for the week-8 comparison" ten days after the cycle
+   became four weeks, and the client-facing sweep could not see it because baselineView.ts is not a
+   client document. An operator screen that states a stale fact is a lie the operator repeats to a
+   client on the phone. Scanned as WHOLE comment-stripped source (JSX text is not a string literal,
+   and a .tsx label sits in JSX), not just literals.
+   ALLOWED: exact strings that are TRUE and must stay — RG Locksmiths really is on eight weeks by
+   his contract (CLAUDE.md §1). Add to this list only a sentence that is true, never to silence one. */
+const OPERATOR_SCREENS: Array<[string, string]> = [
+  ["baseline bands (operator)", "src/lib/baselineView.ts"],
+  ["Baseline screen (operator)", "src/pages/Baseline.tsx"],
+  ["delivery cockpit logic (operator)", "src/lib/deliveryCockpit.ts"],
+  ["delivery cockpit (operator)", "src/components/LeadDeliveryCockpit.tsx"],
+  ["audit pills (operator)", "src/components/audit/AuditPills.tsx"],
+  ["page-plan queue logic (operator)", "src/lib/pagePlanQueue.ts"],
+  ["page-plan queue screen (operator)", "src/pages/PagePlanQueue.tsx"],
+  ["dashboard tasks (operator)", "src/lib/dashboardTasks.ts"],
+  ["next actions card (operator)", "src/components/dashboard/NextActionsCard.tsx"],
+];
+const OPERATOR_ALLOWED: string[] = [
+  "(RG Locksmiths: eight weeks, by his contract)",
+];
+function operatorText(src: string): string {
+  let s = src.replace(/<!--[\s\S]*?-->/g, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+  for (const a of OPERATOR_ALLOWED) s = s.split(a).join("");
+  return s;
+}
+for (const [label, path] of OPERATOR_SCREENS) {
+  const text = operatorText(read(path));
+  for (const [re, why] of STALE) {
+    const m = text.match(re);
+    ok(!m, `${label}: no "${m?.[0] ?? re.source}" — ${why}`.slice(0, 160));
+  }
+}
+ok(/week-four comparison/.test(read("src/lib/baselineView.ts")), "the HELD band says week-four (was week-8 until 2026-09-13)");
+
+
 console.log("\n── THE GUARANTEE APPEARS ONLY AS THE CONSTANT ──");
 const welcome = read("src/lib/welcomePackHtml.ts");
 ok(/esc\(FINDABLE_GUARANTEE\)/.test(welcome), "the welcome pack renders FINDABLE_GUARANTEE, escaped");

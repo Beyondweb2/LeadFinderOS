@@ -33,7 +33,7 @@ export const BAND_MEANING: Record<Band, string> = {
   absent: 'The engines answer this locally and never name you. The race exists and you are invisible.',
   one_engine: 'One engine names you every run and another never does — the same question already works elsewhere, so the difference is diagnosable.',
   fragile: 'You appear in some runs and not others. Present, but not reliably.',
-  held: 'Named on every engine in every run. Nothing to do; keep it for the week-8 comparison.',
+  held: 'Named on every engine in every run. Nothing to do; keep it for the week-four comparison.',
   no_race: 'No engine answers this locally, so there is nothing to win. Do not spend time here.',
 };
 

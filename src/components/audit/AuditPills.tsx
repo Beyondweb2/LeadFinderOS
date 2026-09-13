@@ -14,6 +14,7 @@
 import { Link } from 'react-router-dom';
 import { Eye, Loader2 } from 'lucide-react';
 import type { AuditLite, RunLite } from '@/types/auditBook';
+import { INTERNAL_MEASUREMENT_LABEL } from '@/lib/auditKind';
 
 export function RunningChip({ run }: { run: RunLite }) {
   return (
@@ -120,11 +121,23 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
           free check &middot; {counted ?? runsComplete}/{target || 3} runs
         </AssetPill>
       )}
-      {/* A FULL MEASURE OR DAY-28 REPLAY: a measurement, not the client's baseline. */}
+      {/* A FULL MEASURE OR DAY-28 REPLAY: an operator document, not the client's baseline. Named
+          as what it answers (Paul, 2026-09-13); the stored purpose stays 'measurement'. Links to
+          the operator view — there is no client document for it, by refusal. */}
       {isMeasurement && !isFreeCheck && (
-        <AssetPill title={audit.baseline_completed_at ? `Measurement finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')}` : 'Measurement still running'}>
-          measurement &middot; {counted ?? runsComplete}/{target}
-        </AssetPill>
+        audit.baseline_completed_at
+          ? <Link
+              to={`/baseline/${audit.id}`}
+              state={{ from: run?.id ? `/ai-audit?runId=${run.id}` : '/ai-audit', fromLabel: 'AI Audit' }}
+              onClick={(e) => e.stopPropagation()}
+              title={`Finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')} — open the operator view`}
+              className="underline decoration-dotted underline-offset-2 hover:no-underline"
+            >
+              <AssetPill>{INTERNAL_MEASUREMENT_LABEL} &middot; {counted ?? runsComplete}/{target}</AssetPill>
+            </Link>
+          : <AssetPill title="Still running">
+              {INTERNAL_MEASUREMENT_LABEL} &middot; {counted ?? runsComplete}/{target}
+            </AssetPill>
       )}
       {/* PAID CLIENT'S BASELINE. Errors win: a stalled baseline is what needs attention. */}
       {isClientBaseline && (
