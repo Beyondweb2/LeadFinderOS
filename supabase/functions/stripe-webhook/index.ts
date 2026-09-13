@@ -92,6 +92,22 @@ async function resolveBarberEmail(service: any, site: PaidSite): Promise<string 
  *  The barber notifier below keeps its own paul@yoursites.uk deliberately — it is a working,
  *  money-verified path and changing where its mail lands is not worth the risk today. */
 const ADMIN_EMAIL = "paul@move37.fun";
+/* 🔴 THE SENDER, AND IT COST THE "PAID £99" EMAIL ON 2026-09-13. Every operator notification from
+   this function went out as `noreply@lead-finder-app.com` — the OLD barber product's domain, which
+   is not verified on the Resend account RESEND_API_KEY belongs to. Resend does not degrade on an
+   unverified sender, it REFUSES: HTTP 403 "The lead-finder-app.com domain is not verified", every
+   time, for ever. So Paul was told a paying customer had not paid (a separate fault, corrected
+   below) and never received the email that would have contradicted it.
+
+   ⛔ THIS IS THE SECOND TIME, AND THE FIRST FIX MISSED THIS FILE. free-check-result.ts carries the
+   whole record of the same fault on 2026-09-02, three operator notifications lost; that file moved
+   to findable.live and stripe-webhook was left behind, because nobody swept for the domain. The
+   address below is the one that demonstrably delivered on the night this was found.
+   ⚠️ The two BARBER sends further down still use the old domain and are deliberately untouched —
+   dead product, and changing what they claim to be is not a deliverability fix. */
+const FROM_OPERATOR = "Findable alerts <alerts@findable.live>";
+/** Written to notify_error once a late payment has been corrected, so it is corrected exactly once. */
+const CORRECTED_MARK = "corrected:";
 
 /* ⛔ "recieved", i BEFORE e — THE TYPO IS THE REGISTERED NAME AT META AND IS THEREFORE CORRECT.
    Meta matches the template name exactly; the correctly-spelled "payment_received" would fail
@@ -153,7 +169,7 @@ async function notifyOfFindablePayment(opts: {
       `<p style="margin:10px 0 0;color:#475569">Setup is promised within two working days.</p>` +
       `</div>`;
     const out = await postResend({
-      from: "LeadFinder Pro <noreply@lead-finder-app.com>",
+      from: FROM_OPERATOR,
       to: [ADMIN_EMAIL],
       subject: `PAID ${amount} — ${name}${opts.note ? " (NOT LINKED)" : ""}`,
       text, html,
@@ -683,8 +699,8 @@ Deno.serve(async (req) => {
                and after the money write — it must never be the reason a payment is retried. */
             try {
               const { data: paidRow } = await service.from("onboarding_responses")
-                .select("contact_email, lead_id").eq("id", onboardingId).maybeSingle();
-              const pr = paidRow as { contact_email?: string | null; lead_id?: string | null } | null;
+                .select("contact_email, lead_id, business_name").eq("id", onboardingId).maybeSingle();
+              const pr = paidRow as { contact_email?: string | null; lead_id?: string | null; business_name?: string | null } | null;
               const em = (pr?.contact_email ?? "").trim().toLowerCase().replace(/[,()]/g, "");
               const ors: string[] = [];
               if (em) ors.push(`contact_email.ilike.${em}`);
@@ -700,6 +716,75 @@ Deno.serve(async (req) => {
                   .or("source.is.null,source.neq.free_check")
                   .select("id");
                 if (Array.isArray(retired) && retired.length) console.log(`[stripe-webhook] retired ${retired.length} unpaid sibling submission(s) for ${onboardingId}`);
+
+                /* 🔴 AND THE ROWS THAT WERE ALREADY EMAILED GET A CORRECTION (2026-09-13).
+                   The retirement above carries `.is("notify_sent_at", null)` — deliberately, because
+                   an email cannot be unsent — so a row already reported "not paid" is skipped and
+                   nothing has ever contradicted it. On 13 Sep White Sparks Electrical was reported
+                   as having reached the payment screen and stopped, 52 MINUTES BEFORE the £99
+                   landed, and the record stood. Paul's words: he would have chased a real locksmith
+                   for money the man had already sent.
+                   ⛔ NO AMOUNT OF FAMILY LOGIC COULD HAVE PREVENTED THAT ONE. The notifier judged
+                   the whole family correctly and found no payment, because at 20:09 there was no
+                   payment to find. A claim about the future is not wrong when it is made; it goes
+                   wrong later. The only honest repair is to say so afterwards, which is what this
+                   does — the inverted twin of the query above, same family, opposite side of the
+                   `notify_sent_at` test, so the two together cover every sibling exactly once. */
+                const { data: misreported } = await service.from("onboarding_responses")
+                  .select("id, created_at, notify_sent_at")
+                  .or(ors.join(","))
+                  .neq("id", onboardingId)
+                  .not("notify_sent_at", "is", null)
+                  .or("source.is.null,source.neq.free_check")
+                  /* ONCE PER ROW, EVER. Stripe redelivers a webhook on any non-2xx and on its own
+                     retry schedule, and every write above this is idempotent by construction - a
+                     correction email is not, so it needs its own mark. The stamp is written after a
+                     SUCCESSFUL send rather than before it: there is no loop to guard against here,
+                     and a correction that Resend refused must be free to go on the next delivery
+                     rather than being silently marked done. */
+                  .or(`notify_error.is.null,notify_error.not.ilike.*${CORRECTED_MARK}*`);
+                const wrong = (misreported ?? []) as Array<{ id: string; notify_sent_at: string | null }>;
+                if (wrong.length) {
+                  const payerName = (pr?.business_name ?? "").trim() || "A client";
+                  const when = wrong
+                    .map((w) => String(w.notify_sent_at ?? "").replace("T", " ").slice(0, 16) + " UTC")
+                    .join(", ");
+                  const lines = [
+                    `${payerName} HAS paid - ignore the earlier "not paid" email.`,
+                    ``,
+                    `  Sent in error: ${when}`,
+                    `  They paid:     GBP ${amountGbp.toFixed(2)}`,
+                    ``,
+                    `They restarted the form, so an earlier attempt was reported as abandoned before this`,
+                    `payment arrived. Nothing is wrong with their account - do not chase them.`,
+                  ];
+                  const esc2 = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                  const corr = await postResend({
+                    from: FROM_OPERATOR,
+                    to: [ADMIN_EMAIL],
+                    /* THE SUBJECT MUST NOT MATCH THE ONE IT CORRECTS. Gmail threads identical
+                       subjects from one sender, so a correction can collapse under the very message
+                       it contradicts and read as never arriving - the recorded Gmail trap. */
+                    subject: `CORRECTION - ${payerName} HAS paid (ignore the earlier email)`,
+                    text: lines.join("\n") + "\n",
+                    html:
+                      `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1e293b">` +
+                      lines.map((l) => `<p style="margin:0 0 4px">${esc2(l) || "&nbsp;"}</p>`).join("") +
+                      `</div>`,
+                  });
+                  /* Recorded either way, like the PAID email itself: a correction that silently
+                     failed would leave the false report standing with nothing to show for it. */
+                  if (corr.ok) {
+                    await service.from("onboarding_responses")
+                      .update({ notify_error: `${CORRECTED_MARK} they paid on submission ${onboardingId} after this was sent` })
+                      .in("id", wrong.map((w) => w.id));
+                  }
+                  await recordPaymentFailure(corr.ok ? "payment_correction_sent" : "payment_correction_failed", {
+                    onboarding_id: onboardingId, lead_id: findableLeadId ?? null,
+                    corrected_rows: wrong.map((w) => w.id), sent_in_error_at: when,
+                    ...(corr.ok ? { provider_message_id: corr.id } : { http_status: corr.status, error: corr.error }),
+                  });
+                }
               }
             } catch (e) {
               console.error("[stripe-webhook] sibling retirement failed (non-fatal):", (e as Error).message);
