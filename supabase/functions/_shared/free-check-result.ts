@@ -36,12 +36,15 @@ import { onboardingUrl, resolveSiteOrigin } from "./onboarding-followup.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, claimTemplatePayload, sendViaGraph, WA_TEMPLATES } from "./whatsapp-send.ts";
 import { checkSuppressed } from "./suppression.ts";
 import { freeCheckSendGate } from "../../../src/lib/auditKind.ts";
+import { measuringState, MEASURING_STALL_MS } from "../../../src/lib/measuringState.ts";
 
 /** The Meta template carrying the result. 5 vars, in this order:
  *  {{1}} business name · {{2}} trade · {{3}} town · {{4}} audit link · {{5}} onboarding link. */
 /** How long to wait for an in-flight run before sending with what completed. Well beyond
- *  MAX_RUN_AGE_MS (12 min) plus a retry, so it only ever releases a genuinely abandoned run. */
-export const FREE_CHECK_RESULT_MAX_WAIT_MS = 45 * 60 * 1000;
+ *  MAX_RUN_AGE_MS (12 min) plus a retry, so it only ever releases a genuinely abandoned run.
+ *  ⛔ AN ALIAS, NOT A SECOND NUMBER: the report renderer reads the same constant, so the email and
+ *  the page cannot disagree about whether a run is abandoned. */
+export const FREE_CHECK_RESULT_MAX_WAIT_MS = MEASURING_STALL_MS;
 
 export const FREE_CHECK_TEMPLATE = "free_check_result";
 
@@ -268,24 +271,16 @@ export async function maybeSendFreeCheckResult(
   const thisRun = runs.find((r) => r.id === runId);
   if (!thisRun) return { kind: "skipped", reason: "run row missing" };
 
-  /* ⛔ SETTLED IS A POSITIVE LIST, and anything unrecognised counts as STILL IN FLIGHT. Measured
-     over 847 live runs the statuses are complete / failed / cancelled / capped, plus the transient
-     pending / running. Treating an unknown status as settled would send early on exactly the state
-     we could not identify; treating it as in-flight means we wait, which is recoverable. */
-  const SETTLED = new Set(["complete", "failed", "cancelled", "capped"]);
-  const target = Math.max(1, Number(audit.baseline_target_runs ?? 1) || 1);
+  /* ⛔ THE SAME PREDICATE THE REPORT RENDERS FROM (src/lib/measuringState.ts, 2026-09-13). Settled
+     is a positive list (complete / failed / cancelled / capped — anything unrecognised is still in
+     flight), and a run wedged past MEASURING_STALL_MS is treated as abandoned. Sharing the rule is
+     what makes the email and the page it links to agree: before this, the 45-minute release here
+     could send "your result is ready" while render-audit-report — which had no stall rule — kept
+     counting that run as live. */
+  const state = measuringState(runs, audit.baseline_target_runs);
+  const target = state.runsTarget;
   const completed = runs.filter((r) => r.status === "complete");
-  const inFlight = runs.filter((r) => !SETTLED.has(String(r.status)));
-
-  /* ⚠️ THE STALE RELEASE EXISTS SO ONE STUCK RUN CANNOT SILENCE THE RESULT FOREVER. Waiting on
-     in-flight runs is right, but a run wedged in `running` would mean the prospect never hears back
-     at all. Set well beyond MAX_RUN_AGE_MS (12 min) and its retry, so it only fires on a genuinely
-     abandoned run - the queue's own stall sweep normally settles these first. */
-  const oldestInFlightMs = inFlight.length
-    ? Math.max(...inFlight.map((r) => Date.now() - new Date(r.created_at).getTime()))
-    : 0;
-  const stalled = oldestInFlightMs > FREE_CHECK_RESULT_MAX_WAIT_MS;
-  if (completed.length < target && inFlight.length > 0 && !stalled) {
+  if (completed.length < target && state.measuring) {
     return {
       kind: "skipped",
       reason: `waiting for the measurement to finish (${completed.length} of ${target} runs done)`,

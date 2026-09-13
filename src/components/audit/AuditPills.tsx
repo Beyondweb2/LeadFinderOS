@@ -91,6 +91,20 @@ function GradePill({ grade }: { grade: string }) {
 export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | null }) {
   const target = Number(audit.baseline_target_runs ?? 0);
   const counted = audit.baseline_runs_counted;
+  /* ⛔ THE KIND COMES FROM audit_purpose, NEVER FROM THE RUN COUNT (Paul, 2026-09-13). This pill
+     read "client · baseline 0/3" on AD Locksmithing — an unpaid free check — because it keyed on
+     `baseline_target_runs > 1` and had the word "client" hard-coded. A 3-run free check, a paid
+     baseline and a full measure are all multi-run; run count is a cost decision, kind is a
+     purpose. Same assumption the baseline guard shed the same morning (src/lib/auditKind.ts).
+     ⚠️ LEGACY ROWS (purpose null — every audit before 2026-09-12) keep the old reading: multi-run
+     and not is_measurement → the client baseline pill, which is RG's and Ronnie's baselines;
+     multi-run and is_measurement → a plain measurement pill. Neither promises payment on its own;
+     the separate `lead_paid` pill below is the one that reads the money. */
+  const purpose = String(audit.audit_purpose ?? '').trim().toLowerCase();
+  const isFreeCheck = purpose === 'free_check';
+  const isClientBaseline = purpose === 'baseline' || (!purpose && target > 1 && audit.is_measurement !== true);
+  const isMeasurement = purpose === 'measurement' || purpose === 'remeasure' || (!purpose && target > 1 && audit.is_measurement === true);
+  const runsComplete = audit.runs.filter((r) => r.status === 'complete').length;
   return (
     <>
       {/* ENGAGEMENT first: it is the signal most likely to change what the operator does next. */}
@@ -100,8 +114,20 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
           title={`Report opened ${new Date(audit.first_opened_at).toLocaleString('en-GB')}${audit.open_count ? ` - ${audit.open_count} view${audit.open_count === 1 ? '' : 's'}` : ''}`}
         />
       )}
-      {/* PAID CLIENT. Errors win: a stalled baseline is what needs attention. */}
-      {target > 1 && (
+      {/* A FREE CHECK: multi-run, and NOT a client. Says what it is and how far it has got. */}
+      {isFreeCheck && (
+        <AssetPill title={`Free check from findable.live — ${runsComplete} of ${target || 3} runs complete`}>
+          free check &middot; {counted ?? runsComplete}/{target || 3} runs
+        </AssetPill>
+      )}
+      {/* A FULL MEASURE OR DAY-28 REPLAY: a measurement, not the client's baseline. */}
+      {isMeasurement && !isFreeCheck && (
+        <AssetPill title={audit.baseline_completed_at ? `Measurement finalised ${new Date(audit.baseline_completed_at).toLocaleString('en-GB')}` : 'Measurement still running'}>
+          measurement &middot; {counted ?? runsComplete}/{target}
+        </AssetPill>
+      )}
+      {/* PAID CLIENT'S BASELINE. Errors win: a stalled baseline is what needs attention. */}
+      {isClientBaseline && (
         audit.baseline_error
           ? <ClientPill bad title={audit.baseline_error}>baseline failed</ClientPill>
           /* A FINISHED baseline links to the operator view, because until now it was measured and
@@ -129,7 +155,7 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
          an audit and NO outreach_leads row (ABLM, the only delivery client) this is the ONLY
          route to that document, because the lead dialog's Playbook pill is keyed on a LEAD id.
          The route survives on every row. If the row menu ever loses it, put the chip back. */}
-      {audit.lead_paid === true && target <= 1 && <ClientPill title="This lead has paid">client</ClientPill>}
+      {audit.lead_paid === true && !isClientBaseline && <ClientPill title="This lead has paid">client</ClientPill>}
       {/* ASSETS: facts, not signals. */}
       {audit.report_slug && <AssetPill title={`Published at /r/${audit.report_slug}`}>report</AssetPill>}
       {/* REMOVED 2026-07-30: the `playbook` asset pill. It was never a link — just a marker saying an

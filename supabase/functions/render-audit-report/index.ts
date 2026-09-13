@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
+import { measuringState } from "../../../src/lib/measuringState.ts";
 import { showOffer } from "../../../src/lib/buyOffer.ts";
 import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
 
@@ -50,7 +51,7 @@ const REPORT_PUBLIC_ORIGIN = "https://findable.live";
 const shareUrlFor = (_supabaseUrl: string, auditId: string) =>
   `${REPORT_PUBLIC_ORIGIN}/report/${auditId}`;
 
-function htmlResponse(html: string, status = 200): Response {
+function htmlResponse(html: string, status = 200, opts: { noStore?: boolean } = {}): Response {
   // Return the HTML as a STRING body (Deno encodes string bodies as UTF-8) with an explicit
   // text/html; charset=utf-8 header. IMPORTANT: a Uint8Array / TextEncoder().encode() body made the
   // Supabase edge runtime serve the response as `text/plain` (dropping our content-type), so the
@@ -63,8 +64,11 @@ function htmlResponse(html: string, status = 200): Response {
       // Belt and braces with the document's own robots meta: a header protects only this route,
       // a meta travels with the file. A prospect's competitors must never reach a search index.
       "x-robots-tag": "noindex, nofollow, noarchive, nosnippet",
-      // Short cache: the page renders live, but a few minutes of CDN/edge caching is fine.
-      "cache-control": status === 200 ? "public, max-age=120" : "public, max-age=0, must-revalidate",
+      // Short cache: the page renders live, but a few minutes of CDN/edge caching is fine —
+      // EXCEPT while the measurement is still going (noStore), when the page changes by the minute.
+      "cache-control": opts.noStore
+        ? "no-store"
+        : status === 200 ? "public, max-age=120" : "public, max-age=0, must-revalidate",
     },
   });
 }
@@ -150,7 +154,7 @@ Deno.serve(async (req) => {
       // cheaper founder offer.
       // baseline_target_runs decides the website section: graded for a paid baseline, plain issues
       // for everything a prospect sees before paying (seoStyleForAudit).
-      .select("id, business_name, business_type, location_text, specialism, website, is_market, lead_id, baseline_target_runs, is_measurement")
+      .select("id, business_name, business_type, location_text, specialism, website, has_website, is_market, lead_id, baseline_target_runs, is_measurement")
       .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
     /* ⛔ THE PUBLIC RENDERER REFUSES MARKET AUDITS. This is the one an outsider could reach with a
@@ -173,14 +177,50 @@ Deno.serve(async (req) => {
        runs; buildReportData groups by question and aggregates across them so "named X of Y" is the
        real frequency (questions × scored engines × runs), not one lucky ask. For a single-run audit
        this is just that one run's rows — identical to before. */
+    /* Every run's id AND status/created_at: the ids scope the queue read, the statuses decide
+       whether the measurement is still going (below). */
     const { data: allRuns } = await service
-      .from("ai_audit_runs").select("id").eq("audit_id", audit.id);
-    const runIds = ((allRuns ?? []) as Array<{ id: string }>).map((r) => r.id);
+      .from("ai_audit_runs").select("id, status, created_at").eq("audit_id", audit.id);
+    const runRows = (allRuns ?? []) as Array<{ id: string; status: string; created_at: string }>;
+    const runIds = runRows.map((r) => r.id);
     const { data: qrows } = await service
       .from("ai_audit_queue")
       .select("id, question, status, result")
       .in("run_id", runIds.length ? runIds : [run.id]).order("created_at", { ascending: true });
     const queueRows = (qrows ?? []) as QueueRow[];
+
+    /* ── THE LEAD, READ ONCE, FOR TWO FACTS ─────────────────────────────────────────────────────
+       (a) `amount_paid` — does this reader get the offer (CLAUDE.md §6: paid = amount_paid > 0).
+       (b) `website` + `place_id` — the website slot's THREE-WAY answer (2026-09-13). The audit's own
+           website column is a snapshot copied from the lead at creation, and for AD Locksmithing it
+           was blank because Google never resolved the business, so the report told a firm WITH a
+           site that we would build them one. Now: a site on the audit OR the lead → true; no site
+           but a place_id → Google was consulted and returned none → false; no place_id → nobody
+           ever looked → null, and the report says nothing about their website.
+       Fully guarded: a failed read leaves amountPaid 0 (the offer shows — a prospect seeing no
+       offer is a lost sale) and the website unknown (silence, never a guess). */
+    let amountPaid = 0;
+    let leadWebsite = "";
+    let leadPlaceId: string | null = null;
+    const leadId = (audit as { lead_id?: string | null }).lead_id ?? null;
+    if (leadId) {
+      const { data: lead } = await service
+        .from("outreach_leads").select("amount_paid, website, place_id").eq("id", leadId).maybeSingle();
+      const l = lead as { amount_paid?: unknown; website?: string | null; place_id?: string | null } | null;
+      amountPaid = Number(l?.amount_paid ?? 0) || 0;
+      leadWebsite = String(l?.website ?? "").trim();
+      leadPlaceId = l?.place_id ? String(l.place_id) : null;
+    }
+    const auditWebsite = String(audit.website ?? "").trim();
+    const ownWebsite = auditWebsite || leadWebsite;
+    /* No lead (a wizard audit): the operator answered the website question themselves, so the
+       stored boolean IS a real answer and is used as given. */
+    const hasWebsite: boolean | null = ownWebsite
+      ? true
+      : leadId
+        ? (leadPlaceId ? false : null)
+        : ((audit as { has_website?: unknown }).has_website === true ? true
+          : (audit as { has_website?: unknown }).has_website === false ? false : null);
 
     // 5) build the report data with the SHARED logic (identical to the in-app report), then render.
     const data = buildReportData(queueRows, run as RunRow, {
@@ -189,7 +229,8 @@ Deno.serve(async (req) => {
       locationText: audit.location_text ?? "",
       specialisms: audit.specialism ?? "",
       isAggregatorUrl,
-      ownWebsite: audit.website ?? "",
+      ownWebsite,
+      hasWebsite,
       /* Graded only for a paid baseline; every prospect-facing report gets the plain issues list. */
       seoStyle: seoStyleForAudit(
         (audit as { baseline_target_runs?: unknown }).baseline_target_runs,
@@ -198,20 +239,16 @@ Deno.serve(async (req) => {
     });
     if (!data) return unavailable("This audit hasn’t completed yet — check back shortly.");
 
-    /* ── DOES THIS READER GET THE FOUNDER OFFER? ────────────────────────────────────────────────
-       Not a client, and the offer still running. `amount_paid > 0` is the app-wide definition of
-       paid (CLAUDE.md §6); the audit-id list in buyOffer.ts covers the two audits with NO lead
-       row, where there is structurally no payment to read — ABLM being the one that matters.
-       One extra query, and only when a lead is attached. Fully guarded: if it fails we treat the
-       reader as UNPAID, which shows the offer. That is the right way round — a prospect seeing no
-       offer is a lost sale, and the two client audits are caught by id rather than by this query. */
-    let amountPaid = 0;
-    const leadId = (audit as { lead_id?: string | null }).lead_id ?? null;
-    if (leadId) {
-      const { data: lead } = await service
-        .from("outreach_leads").select("amount_paid").eq("id", leadId).maybeSingle();
-      amountPaid = Number((lead as { amount_paid?: unknown } | null)?.amount_paid ?? 0) || 0;
-    }
+    /* ── STILL MEASURING? (2026-09-13) ─────────────────────────────────────────────────────────
+       AD Locksmithing's report read "4 of 12 answers" while run 3 was going and "5 of 18" twenty
+       minutes later, with nothing on the page saying it was partial. While a run is genuinely in
+       flight the renderer withholds every figure and says how many runs are done, and this response
+       is NOT cached — a two-minute CDN cache on a page that changes every few minutes is how an
+       early open stays wrong after the run has finished. Same predicate the free-check sender uses
+       to decide when to email, so the link and the email agree (including the stall release). */
+    const state = measuringState(runRows, (audit as { baseline_target_runs?: unknown }).baseline_target_runs);
+    if (state.measuring) data.measuring = { runsDone: state.runsDone, runsTarget: state.runsTarget };
+
     data.showOffer = showOffer({ auditId: audit.id, amountPaid });
 
     /* ── WHERE THE OFFER BUTTON GOES ────────────────────────────────────────────────────────────
@@ -245,7 +282,7 @@ Deno.serve(async (req) => {
     // Genuine render succeeded → record the open (non-bot only). Awaited but fully guarded, so a
     // tracking failure can never break the report the visitor came for.
     await recordAuditOpen(service, audit.id, req.headers.get("user-agent") ?? "");
-    return htmlResponse(renderReportHtml(data));
+    return htmlResponse(renderReportHtml(data), 200, { noStore: !!data.measuring });
   } catch (e) {
     console.error("[render-audit-report] error:", e instanceof Error ? e.message : e);
     return unavailable("Something went wrong rendering this report.");

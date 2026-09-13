@@ -113,7 +113,16 @@ export interface AiAuditReportData {
   seo?: AiAuditSeo;              // optional website-SEO section; slot renders only when present
   /** False when the business has no website at all. The SEO slot then shows what we will BUILD
    *  them instead of rendering nothing: a site is part of the setup, and silence sells nothing. */
-  hasWebsite?: boolean;
+  /** THREE STATES (2026-09-13): true = has a site (the "full check comes with the work" slot);
+   *  false = Google was consulted and there is none (the "we'll build you one" slot); null/absent =
+   *  unknown, and the report says NOTHING about their website. False is asserted, never inferred
+   *  from a blank column — the blank is what told AD Locksmithing they had no site when they do. */
+  hasWebsite?: boolean | null;
+  /** STILL MEASURING (2026-09-13). Set by the caller when a run is genuinely in flight
+   *  (src/lib/measuringState.ts). The renderer then WITHHOLDS every figure — hero, "who AI named",
+   *  the website slot, the fix section that branches on the count — and shows a banner saying how
+   *  many runs are done, because a number that will change must not appear at all. */
+  measuring?: { runsDone: number; runsTarget: number } | null;
   /* ⛔ HOW THE WEBSITE SLOT IS PRESENTED. 'graded' (the DEFAULT) is the original: grade circles,
      /100 scores and a lead sentence naming the grade. 'issues' drops all of that and prints the
      findings alone under a plain heading.
@@ -380,6 +389,13 @@ const REPORT_SITE_URL = "https://findable.live";
  *  also means nothing here will TELL you the anchor has gone. findable-site's Explainer header
  *  carries the matching warning. */
 const REPORT_EXPLAINER_URL = `${REPORT_SITE_URL}/#video`;
+/* The explainer file and its poster, served from findable-site's public/media (the same files the
+   site's #video section and the WhatsApp video header use). The report page itself is served from
+   findable.live/report/, so these are same-origin there and plain cross-origin media in the in-app
+   preview — both fine for <video> and <img>. If either file moves, the site's Explainer.astro and
+   whatsapp-send.ts's VIDEO_TEMPLATE_HEADER_URL move with it. */
+const REPORT_EXPLAINER_VIDEO_URL = `${REPORT_SITE_URL}/media/findable-hook.mp4`;
+const REPORT_EXPLAINER_POSTER_URL = `${REPORT_SITE_URL}/media/findable-hook-poster.jpg`;
 
 const SEV_COLOUR: Record<SeoFinding["severity"], string> = { high: "var(--red)", med: "var(--amber)", low: "var(--muted)" };
 
@@ -560,6 +576,8 @@ export const REPORT_CHROME_CSS_FOOT = `
   .site-foot .row b{ color:#fff; font-weight:700; }
   .site-foot .row a{ color:var(--yellow); text-decoration:none; }
   .site-foot .note{ margin-top:8px; font-size:11px; font-weight:400; color:#8fa4c8; }
+  .site-foot .site-link{ margin-top:8px; font-size:11px; font-weight:400; color:#8fa4c8; }
+  .site-foot .site-link a{ color:var(--yellow); text-decoration:none; font-weight:700; }
 `;
 
 export const REPORT_CHROME_CSS_PRINT = `  @page{ size:A4; margin:10mm; }
@@ -569,6 +587,13 @@ export const REPORT_CHROME_CSS_PRINT = `  @page{ size:A4; margin:10mm; }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
     .sheet + .sheet{ break-before:page; page-break-before:always; }
     .band,.site-foot{ break-inside:avoid; }
+    /* A PDF cannot play video: hide the player, show the poster as a clickable caption.
+       The link survives print-to-PDF; the play button would not. */
+    .vid video{ display:none !important; }
+    .vid .vid-poster{ display:block !important; width:196px; text-decoration:none; color:var(--ink); }
+    .vid .vid-poster img{ display:block; width:196px; border-radius:12px; }
+    .vid .vid-poster span{ display:block; margin-top:6px; font-size:11px; line-height:1.4; color:var(--blue); text-decoration:underline; }
+    .vid-row{ break-inside:avoid; }
   }`;
 
 /** The blue Findable header band with the wave bottom edge. NOTE: metaHtml is the right-hand
@@ -587,12 +612,16 @@ export function renderWaveBand(metaHtml: string): string {
 
 /** The dark "Prepared for <client>" footer. metaHtml is the right-hand line, pre-escaped. */
 export function renderSiteFooter(opts: { businessName: string; metaHtml: string; note: string }): string {
+  /* The site link (Paul, 2026-09-13): this footer is shared by the report, the welcome pack and the
+     page-plan document, so one line here puts findable.live on all three. Labelled, never a bare
+     URL, and on the footer's own row so it prints on every sheet. */
   return `<footer class="site-foot">
       <div class="row">
         <span>Prepared for <b>${esc(opts.businessName)}</b></span>
         <span>${opts.metaHtml}</span>
       </div>
       <div class="note">${opts.note}</div>
+      <div class="site-link"><a href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">findable.live</a> &middot; Findable measures how often AI names local businesses, and fixes what it reads.</div>
     </footer>`;
 }
 
@@ -1045,6 +1074,24 @@ ${REPORT_CHROME_CSS_CORE}
 
   /* WHAT WE DO &mdash; the solution reveal (the money section): a tinted full-width band with a
      heavy brand-blue top rule so it visibly BREAKS from the section above; white card inside. */
+  /* STILL MEASURING — replaces the hero, "who AI named", the website slot and the fix section
+     while a run is in flight. Amber, not red: nothing is wrong, it is simply not finished. */
+  .measuring{ margin:0 28px 20px; padding:18px 22px; border:1px solid var(--amber); border-left-width:6px; border-radius:12px; background:#fff8ea; }
+  .measuring .sec-eyebrow{ color:var(--amber); }
+  .measuring .sec-title{ font-size:24px; font-weight:700; color:var(--ink); margin:0 0 10px; }
+  .measuring p{ margin:0 0 8px; font-size:14px; line-height:1.55; color:var(--muted); max-width:70ch; }
+  .measuring .measuring-progress{ color:var(--ink); }
+  .measuring .measuring-progress b{ font-size:16px; }
+  /* THE EXPLAINER BESIDE THE THREE STEPS. The video is 1080x1920 (vertical), so it takes its own
+     narrow column and the steps stack beside it; on a phone it sits above them. */
+  .vid-row{ display:flex; gap:22px; align-items:flex-start; }
+  .vid{ flex:0 0 196px; }
+  .vid video{ display:block; width:196px; aspect-ratio:9/16; border-radius:12px; background:#000; box-shadow:0 4px 18px rgba(15,23,42,.14); }
+  .vid .vid-poster{ display:none; }
+  .vid-row .steps{ flex:1; grid-template-columns:1fr; gap:14px; }
+  .vid-row .steps::before{ display:none; }
+  .vid-row .step{ text-align:left; display:flex; gap:12px; align-items:flex-start; }
+  .vid-row .step-ic{ margin:0; flex:0 0 46px; }
   .dowe{ padding:22px 28px 24px; border-top:3px solid var(--blue); background:var(--page); }
   .dowe h2{ margin-bottom:14px; }
   .dowe-panel{ background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:18px 22px 20px; box-shadow:0 4px 24px rgba(15,23,42,.06); }
@@ -1157,9 +1204,11 @@ ${REPORT_CHROME_CSS_FOOT}
     .hero-num{ align-items:flex-start; }
     .hero-rule{ display:none; }
     .num{ font-size:72px; }
-    /* 2 · Fix steps → single column; hide the horizontal connector line. */
+    /* 2 · Fix steps → single column; hide the horizontal connector line. The video stacks above. */
     .steps{ grid-template-columns:1fr; gap:14px; }
     .steps::before{ display:none; }
+    .vid-row{ flex-direction:column; align-items:center; }
+    .measuring{ margin-left:18px; margin-right:18px; }
     /* 3 · Stakes stats → single column. */
     .stats{ grid-template-columns:1fr; }
     /* 4 · Contact buttons → stacked, full-width, comfortable tap target. */
@@ -1186,7 +1235,14 @@ ${REPORT_CHROME_CSS_PRINT}
     ${renderWaveBand(`AI Visibility Report &middot; ${esc(d.generatedAtLabel)}`)}
 
     <div class="explainer">We asked AI the kinds of questions customers ask when they&rsquo;re looking for ${article(type)} <b>${esc(type)}</b>, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
-
+${d.measuring ? `
+    <!-- STILL MEASURING: every figure below this point is withheld. See AiAuditReportData.measuring. -->
+    <section class="measuring">
+      <div class="sec-eyebrow">Still measuring</div>
+      <div class="sec-title">We&rsquo;re not finished asking yet.</div>
+      <p>AI gives different answers to the same question on different days, so we ask every question ${d.measuring.runsTarget === 1 ? "and check the answer" : `${inWords(d.measuring.runsTarget)} times`} before we show you a number &mdash; otherwise the figure would change under you between one visit and the next.</p>
+      <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
+    </section>` : `
     <!-- HERO -->
     <div class="hero">
       <div class="hero-num">
@@ -1209,11 +1265,14 @@ ${REPORT_CHROME_CSS_PRINT}
 ${gutbox}
     <!-- ============================================================================
          SEO SECTION SLOT &mdash; renders results.seo when present (overall grade + three
-         category grades + a radar of the three scores + the lead findings). Renders
-         nothing when d.seo is absent, so AI-only audits (e.g. the bar) don't break.
+         category grades + a radar of the three scores + the lead findings). With no scan
+         it is THREE-WAY on d.hasWebsite: true = "the full check comes with the work",
+         false = "we'll build you one", null/unknown = NOTHING. Silence beats a guess: the
+         old two-way branch read a blank website column as "no website" and told a business
+         with a site that we would build them one (AD Locksmithing, 2026-09-13).
          ============================================================================ -->
-${d.seo ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : seoSection(d.seo)) : d.hasWebsite === false ? noWebsiteSection() : siteCheckPendingSection()}
-
+${d.seo ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : seoSection(d.seo)) : d.hasWebsite === false ? noWebsiteSection() : d.hasWebsite === true ? siteCheckPendingSection() : ""}
+`}
     <!-- WHY THIS MATTERS (stakes) -->
     <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
 ${d.hidePitch ? "" : `
@@ -1238,7 +1297,7 @@ ${d.hidePitch ? "" : `
 
     <!-- WHAT WE DO (solution) &mdash; the confident turn from problem to fix -->
     <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
-${d.hidePitch ? "" : `
+${d.hidePitch || d.measuring ? "" : `
     <section class="dowe">
       <div class="sec-eyebrow">The fix</div>
       <!-- The title names the ARGUMENT this section makes, not an inventory. It read "Here's what we
@@ -1266,24 +1325,46 @@ ${d.hidePitch ? "" : `
              each town" and "structured data" belong.
              ⚠️ Keep quantities, deliverables and anything with a number OUT of these three. The moment
              one appears here it is duplicated below, because the offer list is exhaustive by design. -->
-        <div class="steps">
-          <div class="step">
-            <div class="step-ic"><span class="ic">${icListed}</span><span class="badge">1</span></div>
-            <div class="step-n">Step 1</div>
-            <div class="st">It quotes pages, not businesses</div>
-            <p>AI answers from sources it can read. If nothing of yours says plainly what you do, there is nothing for it to quote.</p>
+        <!-- THE EXPLAINER BESIDE THREE CONCRETE STEPS (Paul, 2026-09-13). This replaced three
+             abstract claims ("it quotes pages, not businesses" / "it has to be able to read you" /
+             "it has to agree with itself") which read as weak on the document that sells. The three
+             steps are now what we MEASURE, what we BUILD and what we RE-MEASURE — the shape of the
+             guarantee — and they overlap "What's included" below on purpose: that list is the
+             inventory someone weighs against the price, this is the method. Keep quantities and
+             prices out of these three; the offer list is exhaustive by design.
+             ⛔ VIDEO ON SCREEN, POSTER IN PRINT. The report is also printed to PDF and a PDF cannot
+             play video, so the print stylesheet hides the player and shows the poster as a link
+             with a caption. The poster is the same 1080x1920 frame the site uses.
+             ⛔ NO LENGTH CLAIMED HERE (CLAUDE.md 13b): the file is re-cut in another repo. -->
+        <div class="vid-row">
+          <div class="vid">
+            <video controls preload="metadata" playsinline poster="${esc(REPORT_EXPLAINER_POSTER_URL)}" src="${esc(REPORT_EXPLAINER_VIDEO_URL)}">
+              Your browser cannot play this video. <a href="${esc(REPORT_EXPLAINER_URL)}">Watch it at findable.live</a>.
+            </video>
+            <a class="vid-poster" href="${esc(REPORT_EXPLAINER_URL)}" target="_blank" rel="noopener noreferrer">
+              <img src="${esc(REPORT_EXPLAINER_POSTER_URL)}" alt="The Findable explainer video" />
+              <span>Watch the explainer at findable.live</span>
+            </a>
           </div>
-          <div class="step">
-            <div class="step-ic"><span class="ic">${icStruct}</span><span class="badge">2</span></div>
-            <div class="step-n">Step 2</div>
-            <div class="st">It has to be able to read you</div>
-            <p>Plain wording, and your details written so an engine can tell who you are, what you do and where &mdash; without guessing.</p>
-          </div>
-          <div class="step">
-            <div class="step-ic"><span class="ic">${icNamed}</span><span class="badge">3</span></div>
-            <div class="step-n">Step 3</div>
-            <div class="st">And it has to agree with itself</div>
-            <p>Where your details differ between the sources AI reads, it has no reason to be confident about you. Where they match, it has.</p>
+          <div class="steps">
+            <div class="step">
+              <div class="step-ic"><span class="ic">${icNamed}</span><span class="badge">1</span></div>
+              <div class="step-n">What we measure</div>
+              <div class="st">How often AI names you</div>
+              <p>We ask ChatGPT and Gemini the questions your customers ask for ${article(type)} ${esc(type)}${d.locationText ? ` in ${esc(d.locationText)}` : ""}, and record who is named. The questions are written down before any work starts.</p>
+            </div>
+            <div class="step">
+              <div class="step-ic"><span class="ic">${icListed}</span><span class="badge">2</span></div>
+              <div class="step-n">What we build</div>
+              <div class="st">Pages AI can quote</div>
+              <p>Pages on your own site that say plainly what you do and where, your details made to agree everywhere AI reads, and the listings that matter for your trade put right.</p>
+            </div>
+            <div class="step">
+              <div class="step-ic"><span class="ic">${icStruct}</span><span class="badge">3</span></div>
+              <div class="step-n">What we re-measure</div>
+              <div class="st">The same questions, four weeks on</div>
+              <p>Same questions, same engines, so the before and after mean something. You see both sets of numbers, and the refund turns on whether yours went up.</p>
+            </div>
           </div>
         </div>
       </div>

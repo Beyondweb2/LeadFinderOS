@@ -2509,9 +2509,9 @@ export function OutreachTable({
                             <Badge
                               variant="outline"
                               className="flex-shrink-0 border-destructive/40 text-[10px] font-normal text-destructive"
-                              title="Google was asked and cannot confirm where this business is. Excluded from outreach and audits until the town is fixed (edit the lead, or re-run town verification)."
+                              title="Google was asked where this business is and could not confirm a town — the town on the lead is what was typed or searched, not a Google-confirmed one. Excluded from outreach and audits until it is confirmed (edit the lead, or re-run town verification)."
                             >
-                              town unverified
+                              Google couldn&rsquo;t confirm the town
                             </Badge>
                           )}
                           {lead.status === 'interested' && (

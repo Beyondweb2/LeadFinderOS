@@ -51,7 +51,8 @@ ok(!townGated({ derived_town: "Huntingdon" }), "verified never gates");
 console.log("── The settled set is the writer's, not a copy ──");
 ok(SETTLED_TOWN_NOTES.has("no_town_in_address") && SETTLED_TOWN_NOTES.has("no_place_id") && SETTLED_TOWN_NOTES.size === 2,
   "SETTLED_TOWN_NOTES is exactly the two permanent answers (grow it in place-details.ts, never here)");
-ok(TOWN_GATE_REASON.includes("town unverified"), "the shared gate reason names itself");
+ok(/Google could not confirm the town/.test(TOWN_GATE_REASON), "the shared gate reason says what it means: Google could not confirm, not that the operator typed it wrong");
+ok(!/unverified/.test(TOWN_GATE_REASON), "…and no longer carries the word 'unverified', which read as blame");
 
 if (f > 0) { console.log(`\n${f} FAILURE${f === 1 ? "" : "S"}`); process.exit(1); }
 console.log("\nALL PASS");
