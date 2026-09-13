@@ -42,6 +42,16 @@ const SITE = path.join(HERE, '..', '..', 'findable-site', 'src', 'lib');
    a string built from concatenated literals, or a bare number. */
 const PAIRS = [
   {
+    /* ⛔ THE CONTACT EMAIL (2026-09-13). Locked for the same reason as the number beside it: two
+       copies with the same value and nothing enforcing it is a drift waiting for the day the
+       address changes. The report renders it as "Email me"; the site as its contact link. */
+    what: 'the contact email',
+    kind: 'string',
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_CONTACT_EMAIL' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'CONTACT_EMAIL' },
+    why: 'The report and the site must invite a prospect to the same inbox.',
+  },
+  {
     /* ⛔ THE HUMAN'S NUMBER (2026-09-13). The report's "WhatsApp me" button and the site's founder
        contact block must reach the same phone. The report pointed at the Business API line until
        today, so a prospect pressing the one button that asks them to talk to a person got the

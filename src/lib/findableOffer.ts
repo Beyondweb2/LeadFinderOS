@@ -138,6 +138,23 @@ export const GBP_ADD_STEPS =
 
    E.164 digits only: wa.me rejects "+", spaces and dashes, so the digits ARE the link format.
    ⚠️ Anything that DISPLAYS the number to a person must format it; never print this string raw. */
+/** The contact number as a person should SEE it: "+44 7943 262742". The stored constant is wa.me's
+ *  format (digits only), which is unreadable on a printed page, and hand-formatting it at each call
+ *  site is how a document ends up displaying one number and linking to another. UK mobiles only;
+ *  anything else is returned with a "+" and left alone rather than mangled into a wrong shape. */
+export function findableContactPhoneDisplay(): string {
+  const d = FINDABLE_CONTACT_WHATSAPP;
+  const m = /^44(7\d{3})(\d{6})$/.exec(d);
+  return m ? `+44 ${m[1]} ${m[2]}` : `+${d}`;
+}
+
+/* ⛔ THE HUMAN'S INBOX, LOCKED THE SAME WAY AND FOR THE SAME REASON. findable.live's CONTACT_EMAIL
+   held the same value with nothing enforcing it, one line above the WhatsApp number that had
+   already drifted. Locked 2026-09-13 before it could.
+   ⚠️ It is a personal address because findable.live has no mailbox yet. Swap it HERE and the site
+   fails its own check until it is swapped there too, which is the point. */
+export const FINDABLE_CONTACT_EMAIL = "paul@move37.fun";
+
 export const FINDABLE_CONTACT_WHATSAPP = "447943262742";
 
 export const REMEASURE_CLAIM_SENTENCE = "If that number has not gone up, email us within 14 days of your four week results and we'll refund your £99.";
