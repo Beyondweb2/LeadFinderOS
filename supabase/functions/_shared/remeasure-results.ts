@@ -25,6 +25,7 @@ import { compareMeasurements, type MeasurementComparison } from "../../../src/li
 import type { QueueRowLite } from "../../../src/lib/baselineView.ts";
 import {
   remeasureResultsDecision, numberWentUp, resultsEmailSubject, resultsEmailParagraphs, REMEASURE_CLAIM_WINDOW_DAYS,
+  currentTermsVerdict, type CurrentTermsVerdict,
 } from "../../../src/lib/remeasureResults.ts";
 import { REPORT_PUBLIC_ORIGIN } from "../../../src/lib/findableOffer.ts";
 import { reportOnceAnHour } from "./audit-baseline.ts";
@@ -44,11 +45,13 @@ export const resultsPublicUrl = (remeasureAuditId: string) => `${REPORT_PUBLIC_O
 
 export interface RemeasureBundle {
   audit: { id: string; lead_id: string | null; business_name: string | null; website: string | null; location_text: string | null; audit_purpose: string | null; baseline_target_runs: number | null; baseline_completed_at: string | null; created_at: string };
-  lead: { id: string; business_name: string | null; email: string | null; website: string | null; baseline_audit_id: string | null; remeasure_audit_id: string | null; remeasure_results_sent_at: string | null; search_location: string | null; derived_town: string | null };
+  lead: { id: string; business_name: string | null; email: string | null; website: string | null; baseline_audit_id: string | null; remeasure_audit_id: string | null; remeasure_results_sent_at: string | null; search_location: string | null; derived_town: string | null; amount_paid: number | string | null; remeasure_due_date: string | null };
   baselineRuns: Array<{ id: string; status: string | null; created_at: string }>;
   replayRuns: Array<{ id: string; status: string | null; created_at: string }>;
   comparison: MeasurementComparison;
   town: string | null;
+  /** Whether this client is provably on the terms this document describes. */
+  terms: CurrentTermsVerdict;
 }
 
 /** Load everything the sender and the public renderer need. Null (with a reason) when this audit is
@@ -62,12 +65,25 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
   if (String(audit.audit_purpose ?? "").toLowerCase() !== "remeasure") return { bundle: null, reason: `audit_purpose is '${audit.audit_purpose ?? "null"}', not remeasure` };
   if (!audit.lead_id) return { bundle: null, reason: "replay has no lead" };
   const { data: l } = await service.from("outreach_leads")
-    .select("id, business_name, email, website, baseline_audit_id, remeasure_audit_id, remeasure_results_sent_at, search_location, derived_town")
+    .select("id, business_name, email, website, baseline_audit_id, remeasure_audit_id, remeasure_results_sent_at, search_location, derived_town, amount_paid, remeasure_due_date")
     .eq("id", audit.lead_id).maybeSingle();
   const lead = l as RemeasureBundle["lead"] | null;
   if (!lead) return { bundle: null, reason: "lead not found" };
   if (lead.remeasure_audit_id !== audit.id) return { bundle: null, reason: "the lead's remeasure pointer names a different audit" };
   if (!lead.baseline_audit_id) return { bundle: null, reason: "the lead has no baseline pointer" };
+
+  /* ⛔ THE TERMS COME FROM THE BASELINE AUDIT, NEVER THE REPLAY. The contract is written once, when
+     the baseline is created; the replay carries none. Read here so the sender and the public page
+     cannot disagree about whether this client is on today's offer. */
+  const { data: bl } = await service.from("ai_audits")
+    .select("baseline_contract, baseline_completed_at")
+    .eq("id", lead.baseline_audit_id).maybeSingle();
+  const terms = currentTermsVerdict({
+    contract: (bl as { baseline_contract?: unknown } | null)?.baseline_contract ?? null,
+    amountPaid: lead.amount_paid,
+    baselineFrozenAt: (bl as { baseline_completed_at?: string | null } | null)?.baseline_completed_at ?? null,
+    remeasureDueDate: lead.remeasure_due_date,
+  });
 
   const runsOf = async (auditId: string) => ((await service.from("ai_audit_runs").select("id, status, created_at").eq("audit_id", auditId).order("run_number", { ascending: true })).data ?? []) as Array<{ id: string; status: string | null; created_at: string }>;
   const rowsOf = async (auditId: string) => ((await service.from("ai_audit_queue").select("run_id, question, engines, status, result").eq("audit_id", auditId).order("id", { ascending: true })).data ?? []) as QueueRowLite[];
@@ -77,7 +93,7 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
   const businessName = (audit.business_name ?? lead.business_name ?? "").trim();
   const comparison = compareMeasurements(baselineRows, replayRows, { businessName, ownWebsite: audit.website ?? lead.website ?? "" });
   const town = (audit.location_text ?? lead.derived_town ?? lead.search_location ?? "").trim() || null;
-  return { bundle: { audit, lead, baselineRuns, replayRuns, comparison, town }, reason: null };
+  return { bundle: { audit, lead, baselineRuns, replayRuns, comparison, town, terms }, reason: null };
 }
 
 async function emailOperator(subject: string, lines: string[]): Promise<void> {
@@ -105,11 +121,17 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
   const unsettled = replayRuns.filter((r) => r.status === "pending" || r.status === "running").length;
   if (unsettled > 0) return { kind: "skipped", reason: `${unsettled} replay run(s) still in flight` };
 
-  const decision = remeasureResultsDecision({ replayRuns, replayTarget: audit.baseline_target_runs, comparison });
+  const decision = remeasureResultsDecision({ replayRuns, replayTarget: audit.baseline_target_runs, comparison, terms: bundle.terms });
   const businessName = (audit.business_name ?? lead.business_name ?? "your business").trim();
   if (!decision.send) {
     await reportOnceAnHour(service, "remeasure_results_held", lead.id, decision.reason, { remeasure_audit_id: audit.id, kind: decision.kind, matched: comparison.matchedCount, before: comparison.before, after: comparison.after, movement: comparison.movement });
-    await emailOperator(`FOUR-WEEK RESULTS HELD — ${businessName}`, [
+    /* A terms refusal gets its OWN subject. It is not a transient hold that clears itself next
+       tick: it means this client is not on the offer the document describes, and only Paul can
+       answer it. Filed under the same subject as a thin question, it would be skimmed past. */
+    const subject = decision.kind === "terms_differ"
+      ? `FOUR-WEEK RESULTS — SEND BY HAND — ${businessName}`
+      : `FOUR-WEEK RESULTS HELD — ${businessName}`;
+    await emailOperator(subject, [
       `The day-28 replay for <b>${businessName}</b> has finished but the results were NOT sent.`,
       `Reason: ${decision.reason}.`,
       `Pooled: ${comparison.before.named} of ${comparison.before.answered} before → ${comparison.after.named} of ${comparison.after.answered} after (${comparison.movement}).`,
