@@ -811,13 +811,28 @@ Deno.serve(async (req) => {
             console.warn(`[create-ai-audit] previous run had ${prev.duplicates.length} case-duplicate question(s), not repeated: ${prev.duplicates.join(" | ")}`);
           }
         }
+        /* 🔴 A REPEAT THAT CANNOT READ THE PREVIOUS QUESTIONS NOW REFUSES. IT USED TO GENERATE.
+           The comment that stood here argued the opposite — "degrade rather than refuse: failing it
+           strands the guarantee" — and it had the direction wrong. Generating a fresh set does not
+           strand the guarantee, it BREAKS it: the refund rests on the day-28 replay repeating the
+           baseline's asked set verbatim, so a different set measured under the same audit id is not
+           a degraded measurement but a different one, presented as the same. And it failed silently.
+           ⛔ A HELD AUDIT PAUL CAN SEE BEATS AN AUDIT THAT SILENTLY MEASURED SOMETHING ELSE
+           (Paul, 2026-09-13). Recorded to client_error_reports, refused with 409, no run created.
+           ⚠️ THE REPEAT PATH ONLY. A NEW audit still generates — that is what a first run is for.
+           This guard is on REPEATING, never on generating. */
         if (questions.length < MIN_QUESTION_COUNT) {
-          // The stored scope is honoured, but 'local' without a usable stored town would build
-          // town-less "[service] in " questions. Degrade to classifier scope rather than refuse:
-          // this path is a paid baseline's repeat run, and failing it strands the guarantee.
-          const genScope: BusinessScope = reRunScope === "local" && !hasUsableTown((audit.location_text as string) ?? "")
-            ? null : reRunScope;
-          questions = await generateQuestions(audit.business_name ?? "", audit.business_type ?? "", audit.location_text ?? "", audit.has_website === true, specialisms, questionCount, genScope, (audit.country as string | null) ?? country);
+          const detail = latestRun
+            ? `a repeat of audit ${auditId} read only ${questions.length} usable question(s) from its previous run (minimum ${MIN_QUESTION_COUNT})`
+            : `a repeat of audit ${auditId} has no previous run to read questions from`;
+          console.error(`[create-ai-audit] REFUSED: ${detail}`);
+          try {
+            await service.from("client_error_reports").insert({
+              error_id: "repeat_questions_unreadable",
+              context: { audit_id: auditId, questions_found: questions.length, minimum: MIN_QUESTION_COUNT },
+            });
+          } catch { /* the refusal must not depend on the record landing */ }
+          return json({ ok: false, error: "repeat_questions_unreadable", detail }, 409);
         }
       }
     } else {
@@ -1068,6 +1083,17 @@ Deno.serve(async (req) => {
       .insert({ audit_id: auditId, user_id: userId, run_number: runNumber, status: "pending", results: runResults })
       .select("id")
       .single();
+    /* ⛔ A LOST RACE IS NOT AN ERROR (2026-09-13). Runs are STAGGERED now rather than chained to
+       each other's completion, so advanceBaseline can fire from two places on one 30-second tick and
+       both compute the same `run_number` — it is a read-then-write. The unique index
+       uq_ai_audit_runs_audit_run_number makes exactly one insert land; the loser gets 23505 and must
+       back off QUIETLY, because the other tick is already doing this work.
+       ⛔ 200, NOT 500. A 500 would be recorded as a failed audit and could drive a retry that races
+       again. The body says plainly that nothing was created and why. */
+    if (runErr && ((runErr as { code?: string }).code === "23505" || /uq_ai_audit_runs_audit_run_number/.test(runErr.message ?? ""))) {
+      console.log(`[create-ai-audit] run ${runNumber} of audit ${auditId} already exists — another tick won the race, backing off`);
+      return json({ ok: true, skipped: "run_already_started", audit_id: auditId, run_number: runNumber });
+    }
     if (runErr || !run) return json({ ok: false, error: runErr?.message ?? "run_insert_failed" }, 500);
     const runId = run.id;
 
