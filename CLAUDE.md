@@ -57,8 +57,8 @@ as *possibly describing something deleted*. Grep before you believe it.
   | `report-attribution.test.ts` | asserts report copy that has since been rewritten |
   | `verdict.test.ts` | same — report wording ("once in 6 answers") that no longer renders |
   | `site-origin.test.ts` | needs **Deno**, which is not on PATH on this machine; passes under Deno |
-  **So the honest green number is 84/89 (2026-09-13 pm; was 80/85 — four suites added since).** If
-  you make a change and see 84/89, you have broken nothing; if you see 83, you have.
+  **So the honest green number is 85/90 (2026-09-13 late pm; was 80/85 — five suites added since).** If
+  you make a change and see 85/90, you have broken nothing; if you see 84, you have.
 - **`scripts/typecheck-baseline.txt`** — the 9 deliberate errors are ENFORCED now, compared as a
   LIST. §3's "baseline is 14" is stale; it is 9, and the gate tells you.
 - **`scripts/report-origin.test.ts`** — every audit-report URL must be findable.live.
@@ -4275,3 +4275,88 @@ v111, `process-ai-audit-queue` v158, `process-whatsapp-queue` v125, `whatsapp-st
     message stays "unanswered" until the lead is closed; chase rows were Paul's own test
     submissions; the questionnaire card's 50 rows were 43 test submissions (move37.fun addresses).
     Bulk delete for submissions **already existed** (Delete selected / Delete all, paid rows kept).
+
+---
+
+## 24. ✅ THE PAYMENT EMAIL SAID "NOT PAID", AND THE FOUR-WEEK RESULTS NOW HAVE A SENDER (2026-09-13, late afternoon)
+
+Deployed: `notify-onboarding-submit` v35, `stripe-webhook` v87, `process-ai-audit-queue` v159,
+**`render-remeasure-results` v1 (new)**, plus every function in `findableOffer.ts`'s import closure
+(`findable-checkout` v49, `findable-onboarding` v88, `submissions` v37, `render-audit-report` v95,
+`process-whatsapp-queue` v126, `send-whatsapp-message` v87, `instantly-push` v51, `market-view` v63,
+`page-generator` v50, `run-seo-scan` v48). findable-site deployed (master `a0a4788`). Honest green is
+**85/90** (the same five stale suites; `remeasure-results` added).
+
+- 🔴 **PAUL PAID £108.99 ON 12 SEP AND WAS EMAILED "QUESTIONNAIRE SUBMITTED, NOT PAID".** Not a
+  webhook race. `notify-onboarding-submit` judged each submission ROW alone, and he had restarted the
+  form: a 12:35 row with no lead (checkout refused twice, `checkout_refused_no_lead`) turned twenty
+  minutes old at 12:55, **one minute before its 12:54 sibling paid at 12:56**. Judged alone the first
+  row was "true" and read as a lie. The second candidate: the lead was reset to unpaid by hand at
+  13:02 (the ten-baseline clean-up), so the 12:54 row's own 13:14 re-check also saw an unpaid lead.
+  The rows that would say which are gone (this morning's narrow delete removed both, and the
+  ten-baseline clean-up deleted the audits and reset the lead) — the timeline above is from
+  `client_error_reports`, which survived.
+  - ⛔ **ONE PERSON IS ONE FAMILY** (`familyOf`): every non-free-check row sharing a contact email
+    or a lead. A family with a paid member is retired, never emailed; a row is **not judged while a
+    newer sibling is still inside its 20-minute window** (deferred, unclaimed); when one email does
+    go out, the unpaid siblings are retired as covered by it. `stripe-webhook` retires the siblings at
+    payment time too (belt and braces). Free checks are outside the family on purpose.
+  - ⚠️ **`neq` DROPS NULLS** — the sibling-retirement filter uses `.or("source.is.null,source.neq.free_check")`
+    because a sign-up row's `source` is NULL and `.not("source","eq","free_check")` would have skipped
+    exactly the rows the fix exists for. SQL three-valued logic, in PostgREST clothing.
+  - ✅ **THE PAID EMAIL LEAVES A TRACE NOW**: `client_error_reports` `payment_email_sent` (with the
+    Resend id) / `payment_email_failed`. Until today its outcome existed only in an edge log nobody
+    can read, which is why "was it ever sent?" for 12 Sep is unanswerable — the code path ran
+    (`!alreadyPaid`), Paul's inbox is the only evidence.
+  - **There is no customer payment EMAIL** — the customer's confirmation is the `payment_recieved`
+    WhatsApp alone. The two payment emails both go to Paul.
+- ✅ **THE FOUR-WEEK RESULTS ARE SENT — CLAIM FIRST, SEND, STAMP ONCE** (`_shared/remeasure-results.ts`,
+  hooked into `process-ai-audit-queue`'s finalisation loop; same pattern as the free-check result).
+  Lane: the audit is `purpose = remeasure` AND the lead's own `remeasure_audit_id` names it AND every
+  run is settled. Comparison: `compareMeasurements(baseline rows, replay rows)` — **both engines
+  pooled, Paul's call, stated knowing RG's pair reads +0.3 pooled**.
+  - ⛔ **THE STAMP IS `outreach_leads.remeasure_results_sent_at`**, written by `.is(null).select()`
+    — the once-only guarantee at 2,880 ticks a day. It is the START of the client's 14-day window;
+    the close is `claimWindowCloseIso` (derived, never stored). A Resend refusal CLEARS the stamp
+    and flags Paul: a failed email must not start a clock the client cannot see.
+  - 🔴 **SQL NOT YET RUN (handed to Paul in chat):**
+    `alter table public.outreach_leads add column if not exists remeasure_results_sent_at timestamptz;`
+    Until it runs the claim update errors and the sender HOLDS (task + operator email) — never a
+    silent send with no stamp.
+  - ⛔ **"GONE UP" = `movement === 'improved'`, i.e. BEYOND `NOISE_BAND_PP`.** Inside the band is
+    NOT gone up — the client qualifies for the refund, and is told so in the /refunds words. That is
+    the reading Paul chose ("On RG that produced +0.3 and he would qualify. I know."). Do not soften
+    it into "unchanged".
+  - ⛔ **IT HOLDS TO A TASK, NEVER SENDS, WHEN THE NUMBER CANNOT BE PROVEN** (`remeasureResultsDecision`):
+    replay gave up (complete runs < target, or a failed/capped run), no shared question, ANY matched
+    question with fewer than `MIN_CELLS_FOR_QUESTION_CLAIM` cells on either side, no address, claim
+    failed, Resend refused. A hold = `client_error_reports` `remeasure_results_held` (once per lead
+    per hour) + an operator email; the Deliver card reads a finalised replay with no stamp as
+    **"results held — needs you"**.
+  - 🔴 **THE WORDS ARE GATED: `REMEASURE_RESULTS_COPY_APPROVED = false`** (`src/lib/remeasureResults.ts`).
+    Every finished replay holds as a task until Paul approves the draft (email paragraphs +
+    document "what this means" live in that file, one source for both). Flipping it is a commit and
+    a deploy of `process-ai-audit-queue`, never a runtime switch. **RG is due 2026-10-06** — approve
+    before then or his results will hold.
+  - ⛔ **THE CLAIM SENTENCE IS ONE CONSTANT IN EACH REPO, BYTE-LOCKED**: `REMEASURE_CLAIM_SENTENCE`
+    (`findableOffer.ts`) ↔ `REFUND_CLAIM_SENTENCE` (site `site.ts`), a `check-cross-repo-sync.mjs`
+    PAIR in both repos; `/refunds` renders the constant instead of retyped text; the guarantee is
+    asserted to END with it (`client-copy-claims.test.ts`). The email and document say it verbatim
+    when the number has not gone up.
+  - **The document**: `render-remeasure-results` (public, `verify_jwt = false`, in config.toml)
+    serves `src/lib/remeasureResultsHtml.ts` — report chrome, both counts with denominators, the
+    per-question table, the meaning paragraphs, no competitor names — at
+    **findable.live/results/<remeasureAuditId>** via findable-site `functions/results/[id].ts`
+    (a clone of the report proxy; the raw function URL is text/plain at the gateway). ⛔ **The stamp
+    is the publish switch**: an unsent replay, a non-replay or a junk id all answer "Results
+    unavailable" with no number. Verified live: preview and production both 404 for a baseline id.
+    ⚠️ Production served the Astro 404 for ~3 minutes after the deploy while the preview URL served
+    the function — propagation, not a routing fault. Probe again before diagnosing.
+  - 🔴 **`measurementCompare.ts` AND `baselineView.ts` WERE UNREACHABLE FROM AN EDGE FUNCTION** —
+    extensionless `./baselineView` / `./auditReport` imports and an `@/lib/auditReport` alias, the
+    §4 trap in files nobody had deployed before. Fixed to `.ts` relative imports; a closure walk
+    (`@/` or extensionless) over the new function found none afterwards. Walk it for any new
+    edge entrypoint.
+  - **Deliver checklist**: `results_sent` is kind **`stamp`** (system-written), never a tick;
+    `TICKABLE_ITEMS` is six; the card shows sent date + window close, or held, or not yet.
+  - **WhatsApp is a second step**, not built — it needs a new Meta template.
