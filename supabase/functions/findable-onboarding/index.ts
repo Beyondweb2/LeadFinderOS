@@ -713,6 +713,7 @@ Deno.serve(async (req) => {
             trade: clip(a.services, 200) ?? "",
             email: contactEmail,
             phone: clip(a.confirmed_phone, 40),
+            contactName: clip(a.contact_name, 120),
             /* Not subject to the free-check daily cap - see free-check-lead.ts. */
             purpose: "signup",
           });
@@ -746,6 +747,9 @@ Deno.serve(async (req) => {
             // Optional. Normalised and deduped inside createFreeCheckLead; a repeat submitter who
             // gives their number matches for free, before any Google spend.
             phone: clip(a.confirmed_phone, 40),
+            // Null on today's free-check form, which asks for a business name rather than a
+            // person's. Passed anyway so the two branches cannot drift if that form ever asks.
+            contactName: clip(a.contact_name, 120),
           });
           /* LINK THE ROW TO THE LEAD, for `matched` as well as `created`. The lead card's
              Questionnaire section, the dashboard and the notifier all key off lead_id, so a
@@ -890,14 +894,64 @@ Deno.serve(async (req) => {
          ("Ronnie — ask for Sharon") beats a form field. The onboarding row keeps the submitted
          value regardless, so both survive. Checked before shipping: contact_name was NULL on every
          lead (0 non-null, 0 blank strings), so .is(null) is the correct narrow form here too. */
+      /* ⛔ THE NAME FILLS AN EMPTY COLUMN AND NEVER REPLACES ONE — DELIBERATELY DIFFERENT FROM THE
+         PHONE BELOW, WHICH DOES REPLACE. The phone is a delivery channel: messaging a number they
+         did not give us is a failure, so theirs wins. A name is not a channel, and an operator's
+         hand-entered note ("Ronnie — ask for Sharon") is better information than a form field.
+         ⛔ A DISAGREEMENT IS RECORDED RATHER THAN RESOLVED. If the stored name differs from the one
+         they just typed, the column is left alone and the difference is appended to the notes, so
+         it is visible to a person instead of being silently dropped or silently overwritten. */
       const submittedName = clip(a.contact_name, 120);
       if (submittedName) {
         try {
-          await service.from("outreach_leads")
-            .update({ contact_name: submittedName })
-            .eq("id", leadId)
-            .is("contact_name", null);
+          const { data: nameRow } = await service.from("outreach_leads")
+            .select("contact_name, notes").eq("id", leadId).maybeSingle();
+          const nr = (nameRow ?? {}) as { contact_name?: string | null; notes?: string | null };
+          const stored = (nr.contact_name ?? "").trim();
+          if (!stored) {
+            await service.from("outreach_leads")
+              .update({ contact_name: submittedName })
+              .eq("id", leadId)
+              .is("contact_name", null);
+          } else if (stored.toLowerCase() !== submittedName.toLowerCase()) {
+            const note = `[${new Date().toISOString().slice(0, 10)}] they gave the name "${submittedName}" at signup; kept the stored "${stored}".`;
+            await service.from("outreach_leads")
+              .update({ notes: nr.notes ? `${nr.notes}
+${note}` : note })
+              .eq("id", leadId);
+          }
         } catch { /* non-fatal — onboarding_responses.contact_name is the source of truth */ }
+      }
+
+      /* ⛔ THE PHONE IS THE ONE FIELD THAT OVERWRITES, AND ONLY WHEN THEY DISAGREE (2026-09-13).
+         Every other write-through here is fill-empty-only, because an operator's hand-entered value
+         beats a form field. The phone is different: it is the number we will MESSAGE, the page
+         generator already prefers the confirmed answer when printing contact details, and a lead
+         whose WhatsApp goes to Google's scraped number while every page prints a different one is
+         the worst of both. So a number they typed that differs from the stored one WINS.
+         ⛔ AND THE OLD NUMBER IS NOT LOST. It is appended to the lead's notes before the update, so
+         "we used to have a different number for them" stays answerable — an overwrite that erases
+         the only other way to reach somebody is not a safe default.
+         ⚠️ SAME NUMBER, DIFFERENT PUNCTUATION IS NOT A DISAGREEMENT: the comparison is on digits
+         only, so "07700 900123" and "+44 7700 900123" do not trigger a pointless write. */
+      const submittedPhone = clip(a.confirmed_phone, 40);
+      if (submittedPhone) {
+        try {
+          const { data: cur } = await service.from("outreach_leads")
+            .select("phone, notes").eq("id", leadId).maybeSingle();
+          const row = (cur ?? {}) as { phone?: string | null; notes?: string | null };
+          const digits = (v: string | null | undefined) => String(v ?? "").replace(/\D/g, "").replace(/^0+/, "").replace(/^44/, "");
+          const existing = (row.phone ?? "").trim();
+          if (!existing) {
+            await service.from("outreach_leads").update({ phone: submittedPhone }).eq("id", leadId).is("phone", null);
+          } else if (digits(existing) !== digits(submittedPhone)) {
+            const note = `[${new Date().toISOString().slice(0, 10)}] phone replaced by the customer at signup; previous: ${existing}`;
+            await service.from("outreach_leads")
+              .update({ phone: submittedPhone, notes: row.notes ? `${row.notes}
+${note}` : note })
+              .eq("id", leadId);
+          }
+        } catch { /* non-fatal — onboarding_responses.confirmed_phone is the source of truth */ }
       }
 
       // An incomplete submission stops here: there is no confirmed area to audit against, and
