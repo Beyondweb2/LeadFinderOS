@@ -62,6 +62,39 @@ const Dashboard = () => {
     refetch();
   };
 
+  /* "Clear all stored tasks" (2026-09-13): every stored next_action on MY leads back to none, in
+     one owner-RLS update. Only rows that actually carry a task are touched (.neq none), so the
+     count that comes back is the real number cleared. Derived rows are not stored and are not
+     affected — they leave when the thing they describe is answered, paid or closed. */
+  const handleClearAllTasks = async (): Promise<number> => {
+    if (!user) return 0;
+    const { data, error } = await supabase
+      .from('outreach_leads')
+      .update({ next_action: 'none', next_action_date: null })
+      .eq('user_id', user.id)
+      .eq('is_archived', false)
+      .not('next_action', 'is', null)
+      .neq('next_action', 'none')
+      .select('id');
+    if (error) {
+      toast({ title: 'Could not clear tasks', description: error.message, variant: 'destructive' });
+      return 0;
+    }
+    refetch();
+    return data?.length ?? 0;
+  };
+
+  /* Dismiss a derived task = mark the lead closed (a DEAD status in dashboardTasks.ts, so the
+     reply / chase / quoted rules stop firing for it). The card confirms first. */
+  const handleDismissTask = async (leadId: string): Promise<void> => {
+    const { error } = await supabase.from('outreach_leads').update({ status: 'closed' }).eq('id', leadId);
+    if (error) {
+      toast({ title: 'Could not close the lead', description: error.message, variant: 'destructive' });
+      return;
+    }
+    refetch();
+  };
+
   if (isLoading || isSubscriptionLoading) {
     return (
       <div className="flex items-center justify-center h-full py-16">
@@ -136,7 +169,7 @@ const Dashboard = () => {
       <section>
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Activity &amp; next steps</h2>
         <div className="grid gap-3 sm:gap-4 grid-cols-1">
-          <NextActionsCard tasks={metrics.dashTasks} onClearTask={handleClearTask} />
+          <NextActionsCard tasks={metrics.dashTasks} onClearTask={handleClearTask} onClearAll={handleClearAllTasks} onDismiss={handleDismissTask} />
           {/* Beside Next Actions on purpose: its chase task is keyed on a LEAD and only fires after
               a day, so a lead-less submission never appears there at all. */}
           <SubmissionsCard />

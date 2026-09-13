@@ -190,13 +190,16 @@ export async function handleInboundMessages(
       // affects the message insert above.
       if (leadId) {
         try {
-          // Reply → 'replied' AND queue the operator to respond: next_action
-          // 'send_draft' due today (YYYY-MM-DD, matching record-site-event's
-          // toISOString().slice(0,10) date style).
-          const today = new Date().toISOString().slice(0, 10);
+          /* Reply → 'replied'. ⛔ NO next_action IS WRITTEN ANY MORE (2026-09-13). This used to
+             also set next_action 'send_draft' due today, and nothing ever cleared it when the
+             operator answered: 625 unarchived leads carried an overdue 'send_draft' by the time it
+             was noticed. The Dashboard's Next Actions card has derived "they replied and you have
+             not answered" from message timestamps since 2026-07-28 (src/lib/dashboardTasks.ts), so
+             the stored copy was pure duplication that only ever went stale. A stored next_action is
+             now something a PERSON set, and only a person clears it. */
           await service
             .from("outreach_leads")
-            .update({ status: "replied", next_action: "send_draft", next_action_date: today })
+            .update({ status: "replied" })
             .eq("id", leadId)
             .not("status", "in", NO_DOWNGRADE);
         } catch (e) {

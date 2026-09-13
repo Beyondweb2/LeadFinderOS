@@ -157,9 +157,11 @@ export function awaitingReply(t: LeadMessageTimes | undefined): boolean {
 }
 
 /* THE ONE SUPPRESSION APPLIED TO A STORED TASK.
-   'send_draft' ("Respond") is the value whatsapp-inbound writes automatically on an inbound reply.
-   It is the only next_action nobody chose, and it is the one that piles up, because answering
-   someone never cleared it. Where the lead has inbound history, rule 3 above decides the same thing
+   'send_draft' ("Respond") WAS the value whatsapp-inbound wrote automatically on an inbound reply
+   (and statusUpdatePatch on a hand-set 'replied') until 2026-09-13 — the only next_action nobody
+   chose, and the one that piled up (625 overdue rows), because answering someone never cleared it.
+   Neither writer sets it any more; the rule below stays for the rows that already carry it and
+   for anyone who picks "Respond" by hand. Where the lead has inbound history, rule 3 above decides the same thing
    from evidence and decides it better, so the stored copy is pure duplication:
      - still awaiting a reply  -> the reply rule already shows the row; a second would say it twice
      - already answered        -> the task is done, which is the bug that put nine dead rows on the card
