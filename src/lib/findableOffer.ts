@@ -148,11 +148,45 @@ export function findableContactPhoneDisplay(): string {
   return m ? `+44 ${m[1]} ${m[2]}` : `+${d}`;
 }
 
+/* ⛔ THE THREE-DAY NOTICE, AND WHY IT IS THE SECOND ONE AND NOT THE ONLY ONE (2026-09-13).
+   Stripe's `customer.subscription.trial_will_end` fires exactly three days before and the interval
+   cannot be changed. Three days' warning of a first charge forty-two days after paying is too
+   late on its own — so the four-week results email carries the date and the amount fourteen days
+   ahead, and this is the reminder, not the announcement.
+   ⚠️ Rendered by the webhook. Plain, no selling, and the date and amount are in the first line. */
+export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null }): { subject: string; paragraphs: string[] } {
+  return {
+    subject: `Your Findable monthly starts on ${i.startsOn}`,
+    paragraphs: [
+      `Hi,`,
+      `Your monthly payment of £${FINDABLE_MONTHLY_GBP} starts on ${i.startsOn}.`,
+      `It covers the work we keep doing every week to add another way for people to find you: pages improved on what the newer data shows, new pages where there is something worth going after, and an eye on who else is being named.`,
+      i.cancelUrl
+        ? `If you would rather stop, you can cancel here before that date and nothing is taken: ${i.cancelUrl}`
+        : `If you would rather stop, reply to this email before that date and nothing is taken.`,
+      `Paul, findable`,
+    ],
+  };
+}
+
 /* ⛔ THE HUMAN'S INBOX, LOCKED THE SAME WAY AND FOR THE SAME REASON. findable.live's CONTACT_EMAIL
    held the same value with nothing enforcing it, one line above the WhatsApp number that had
    already drifted. Locked 2026-09-13 before it could.
    ⚠️ It is a personal address because findable.live has no mailbox yet. Swap it HERE and the site
    fails its own check until it is swapped there too, which is the point. */
+/* ⛔ WHAT THE CUSTOMER IS TOLD ON THE PAGE WHERE THEY ENTER THEIR CARD (2026-09-13). The checkout
+   retains the card so the monthly can start after the four-week results; saying so beside the card
+   field is the condition on doing that at all. Rendered by Stripe as the submit message, and by
+   findable.live on its own pre-pay screen, so the two cannot describe different arrangements.
+   ⚠️ IT NAMES WHAT IS TAKEN TODAY AND WHAT IS NOT. "Nothing else is taken until after you have seen
+   your four-week results" is the whole promise; a vaguer line ("we may charge you later") would be
+   true and useless. ⛔ Do not add the word "maintain" to this or anything downstream of it. */
+export const CARD_SAVED_NOTICE =
+  "You pay £99 today. We keep your card on file so your monthly can start later — nothing else is taken until after you have seen your four-week results, and you can cancel before it does.";
+
+/** The delayed monthly. Starts on the day the claim window closes, never before. */
+export const FINDABLE_MONTHLY_GBP = 29.99;
+
 export const FINDABLE_CONTACT_EMAIL = "paul@move37.fun";
 
 export const FINDABLE_CONTACT_WHATSAPP = "447943262742";

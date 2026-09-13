@@ -6,10 +6,10 @@ import { compareMeasurements, MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP } from
 import type { QueueRowLite } from '../src/lib/baselineView.ts';
 import {
   remeasureResultsDecision, numberWentUp, claimWindowCloseIso, resultsEmailParagraphs, resultsDocumentMeaning, resultsClaimParagraph,
-  currentTermsVerdict, LEGACY_TERMS_LABEL,
+  currentTermsVerdict, LEGACY_TERMS_LABEL, monthlyStartIso,
   resultsEmailSubject, REMEASURE_RESULTS_COPY_APPROVED, REMEASURE_CLAIM_WINDOW_DAYS,
 } from '../src/lib/remeasureResults.ts';
-import { FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE } from '../src/lib/findableOffer.ts';
+import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, REMEASURE_CLAIM_SENTENCE, CARD_SAVED_NOTICE, monthlyStartingSoonEmail } from '../src/lib/findableOffer.ts';
 import { renderRemeasureResultsHtml } from '../src/lib/remeasureResultsHtml.ts';
 
 let f = 0;
@@ -141,6 +141,35 @@ console.log("-- The terms gate: only the current offer passes --");
   const brokenToo = remeasureResultsDecision({ replayRuns: [{ status: 'failed' }], replayTarget: 3, comparison: c, copyApproved: true, terms: currentTermsVerdict(RG) });
   ok(brokenToo.send === false && brokenToo.kind === 'terms_differ', 'terms are reported BEFORE a broken replay — the terminal reason wins');
   ok(remeasureResultsDecision({ replayRuns: [{ status: 'complete' }], replayTarget: 1, comparison: c, copyApproved: false, terms: currentTermsVerdict(AD) }).send === false, 'the copy gate still refuses even a current-terms client');
+}
+
+console.log("-- The delayed monthly: one clock, not two --");
+{
+  /* ⛔ THE PROPERTY THAT MAKES THE MODEL SAFE: the first charge lands exactly when the right to
+     claim ends, because both come from the SAME function. Asserting the reference identity, not
+     just equal outputs — two functions that agree today drift the first time either is edited. */
+  ok(monthlyStartIso === claimWindowCloseIso, 'the billing anchor IS the claim-window function, not a copy of it');
+  const sent = '2026-10-11T09:00:00.000Z';
+  ok(monthlyStartIso(sent) === '2026-10-25T09:00:00.000Z', 'results sent 11 Oct -> monthly starts 25 Oct');
+  ok(monthlyStartIso(null) === null && monthlyStartIso('junk') === null, 'no stamp / unreadable stamp -> no billing date');
+
+  const base = { businessName: 'RG Locksmiths', town: 'Huntingdon', beforeNamed: 23, beforeAnswered: 72, afterNamed: 31, afterAnswered: 96, questions: 12, documentUrl: 'https://findable.live/results/x', wentUp: true, withinNoise: false };
+  const withMonthly = resultsEmailParagraphs({ ...base, monthlyStartsOn: '25 October 2026' });
+  ok(withMonthly.some((p) => p.includes('25 October 2026') && p.includes(String(FINDABLE_MONTHLY_GBP))), 'the results email names the date AND the amount');
+  ok(withMonthly.some((p) => /cancel/i.test(p)), '...and says how to stop it');
+  const noMonthly = resultsEmailParagraphs({ ...base, monthlyStartsOn: null });
+  ok(!noMonthly.some((p) => /monthly/i.test(p)), 'a client with no monthly is told nothing about billing');
+  ok(noMonthly.length === withMonthly.length - 1, 'exactly one paragraph is added, never a reshuffle');
+
+  const rem = monthlyStartingSoonEmail({ businessName: 'RG Locksmiths', startsOn: '25 October 2026', cancelUrl: null });
+  ok(rem.subject.includes('25 October 2026'), 'the three-day reminder names the date in its subject');
+  ok(rem.paragraphs[1].includes(String(FINDABLE_MONTHLY_GBP)) && rem.paragraphs[1].includes('25 October 2026'), '...and the amount and date in its first line');
+
+  /* ⛔ PAUL'S STANDING RULE: maintenance is the first thing anyone cuts. */
+  for (const text of [...withMonthly, ...rem.paragraphs, CARD_SAVED_NOTICE]) {
+    ok(!/maintain|maintenance/i.test(text), `no "maintain": "${text.slice(0, 44)}"`);
+  }
+  ok(/99/.test(CARD_SAVED_NOTICE) && /nothing else is taken/i.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today and what is not');
 }
 
 console.log('── The words ──');

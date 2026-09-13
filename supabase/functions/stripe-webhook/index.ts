@@ -1,7 +1,7 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
-import { FINDABLE_SETUP_PRICE_GBP } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_SETUP_PRICE_GBP, monthlyStartingSoonEmail } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
    to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
    service branch, so a webhook cannot call it; and giving the function that sends WhatsApp a new
@@ -871,6 +871,55 @@ Deno.serve(async (req) => {
            problem. Writing "canceled" here would cut off a customer who is about to pay, and it is
            customer.subscription.deleted that says they are actually gone. */
         await setFindableSubscription(leadId, { subscription_status: "past_due" }, "invoice.payment_failed");
+        break;
+      }
+      /* ⛔ THE THREE-DAY REMINDER, BUILT AND NOT ASSUMED (2026-09-13). Stripe can send a
+         trial-ending email of its own, but that is a Dashboard setting nobody here can read, and a
+         first charge forty-two days after paying is exactly the shape that produces a chargeback.
+         This fires from the event, which always fires, three days before trial_end.
+         ⚠️ IT IS THE SECOND NOTICE. The four-week results email named the date and the amount
+         fourteen days earlier, at the moment the clock started — Stripe's three days cannot be
+         moved, so the early warning had to come from our side.
+         ⚠️ Non-fatal throughout: a reminder that fails must never 500 the webhook back to Stripe
+         and cause a retry storm on an event that changes no state. */
+      case "customer.subscription.trial_will_end": {
+        const sub = event.data.object as Stripe.Subscription;
+        if ((sub.metadata?.generated_site_id as string) || "") break;   // barber product, not ours
+        const leadId = await findableLeadForSubscription(sub.id ?? null, (sub.metadata?.lead_id as string) || null);
+        if (!leadId) { console.log(`[stripe-webhook] trial_will_end for ${sub.id} matched no Findable lead - ignored`); break; }
+        try {
+          const { data: leadRow } = await service.from("outreach_leads")
+            .select("business_name, email").eq("id", leadId).maybeSingle();
+          const lead = leadRow as { business_name?: string | null; email?: string | null } | null;
+          /* The billing address is the onboarding contact first, exactly as the results email
+             resolves it — the two must reach the same person or the reminder lands nowhere. */
+          const { data: obRows } = await service.from("onboarding_responses")
+            .select("contact_email, status, created_at").eq("lead_id", leadId).not("contact_email", "is", null)
+            .order("created_at", { ascending: false }).limit(10);
+          const rows = (obRows ?? []) as Array<{ contact_email: string | null; status: string | null }>;
+          const paidRow = rows.find((r) => ["paid", "payment_received", "in_delivery", "completed"].includes(String(r.status ?? "")));
+          const to = ((paidRow ?? rows[0])?.contact_email ?? "").trim().toLowerCase() || ((lead?.email ?? "").trim().toLowerCase() || "");
+          const endTs = typeof sub.trial_end === "number" ? sub.trial_end * 1000 : NaN;
+          const startsOn = Number.isFinite(endTs)
+            ? new Date(endTs).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+            : "";
+          if (!to || !to.includes("@") || !startsOn) {
+            await recordPaymentFailure("monthly_reminder_skipped", { lead_id: leadId, subscription: sub.id, to, starts_on: startsOn });
+            break;
+          }
+          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl: null });
+          const sent = await postResend({
+            from: "Findable <reports@findable.live>", to: [to], reply_to: ADMIN_EMAIL,
+            subject: mail.subject,
+            text: mail.paragraphs.join(String.fromCharCode(10,10)),
+            html: mail.paragraphs.map((p) => `<p>${p}</p>`).join(""),
+          });
+          await recordPaymentFailure(sent.ok ? "monthly_reminder_sent" : "monthly_reminder_failed", {
+            lead_id: leadId, subscription: sub.id, to, starts_on: startsOn, provider_message_id: sent.id, error: sent.error,
+          });
+        } catch (e) {
+          console.error("[stripe-webhook] trial_will_end reminder failed:", e instanceof Error ? e.message : String(e));
+        }
         break;
       }
       case "customer.subscription.updated": {
