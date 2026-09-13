@@ -9,7 +9,7 @@ import {
   currentTermsVerdict, LEGACY_TERMS_LABEL, monthlyStartIso,
   resultsEmailSubject, REMEASURE_RESULTS_COPY_APPROVED, REMEASURE_CLAIM_WINDOW_DAYS,
 } from '../src/lib/remeasureResults.ts';
-import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, REMEASURE_CLAIM_SENTENCE, CARD_SAVED_NOTICE, monthlyStartingSoonEmail } from '../src/lib/findableOffer.ts';
+import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, REMEASURE_CLAIM_SENTENCE, CARD_SAVED_NOTICE, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from '../src/lib/findableOffer.ts';
 import { renderRemeasureResultsHtml } from '../src/lib/remeasureResultsHtml.ts';
 
 let f = 0;
@@ -170,6 +170,38 @@ console.log("-- The delayed monthly: one clock, not two --");
     ok(!/maintain|maintenance/i.test(text), `no "maintain": "${text.slice(0, 44)}"`);
   }
   ok(/99/.test(CARD_SAVED_NOTICE) && /nothing else is taken/i.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today and what is not');
+}
+
+console.log("-- Billing notices: the right message, and never the wrong one --");
+{
+  const withLink = monthlyStartingSoonEmail({ businessName: 'X', startsOn: '25 October 2026', cancelUrl: 'https://billing.stripe.com/p/session_123' });
+  ok(withLink.paragraphs.some((p) => p.includes('https://billing.stripe.com/p/session_123')), 'the reminder carries the portal cancel link when there is one');
+  const noLink = monthlyStartingSoonEmail({ businessName: 'X', startsOn: '25 October 2026', cancelUrl: null });
+  ok(noLink.paragraphs.some((p) => /reply to this email/i.test(p)), 'and falls back to replying when the portal is unreachable');
+  ok(!noLink.paragraphs.some((p) => /http/i.test(p)), 'never a half-built or empty link');
+
+  const failed = paymentFailedEmail({ payUrl: 'https://invoice.stripe.com/i/abc' });
+  ok(/didn.t go through/i.test(failed.subject), 'the failure notice says what happened in the subject');
+  ok(failed.paragraphs.some((p) => /still a client/i.test(p)), "...and says they are STILL a client - Stripe is still retrying");
+  ok(!failed.paragraphs.some((p) => /cancel|stopped|ended/i.test(p)), '...and never uses cancellation words for a retryable failure');
+  ok(paymentFailedEmail({ payUrl: null }).paragraphs.some((p) => /reply to this email/i.test(p)), 'no invoice link -> reply-to fallback, never a broken link');
+
+  /* ⛔ THE TWO ENDINGS ARE NOT INTERCHANGEABLE. Telling someone who chose to leave that their card
+     failed, or someone whose card died that they asked to cancel, is the failure this branch
+     exists to prevent. */
+  const byCard = subscriptionEndedEmail({ becauseOfPayment: true });
+  const byChoice = subscriptionEndedEmail({ becauseOfPayment: false });
+  ok(byCard.paragraphs.some((p) => /card/i.test(p)), 'the card-failed ending says the card failed');
+  ok(!byChoice.paragraphs.some((p) => /card/i.test(p)), 'the deliberate-cancel ending never mentions a card');
+  ok(!byCard.paragraphs.some((p) => /you (asked|chose)/i.test(p)), 'the card-failed ending never claims they asked to cancel');
+  ok(byCard.subject !== byChoice.subject, 'the two endings are distinguishable before they are opened');
+  for (const m of [byCard, byChoice]) {
+    ok(m.paragraphs.some((p) => /stay exactly where they are/i.test(p)), 'both endings say the pages stay up');
+    ok(m.paragraphs.some((p) => /reply to this email/i.test(p)), 'both endings offer a way back');
+  }
+  for (const text of [...withLink.paragraphs, ...failed.paragraphs, ...byCard.paragraphs, ...byChoice.paragraphs]) {
+    ok(!/maintain|maintenance|upkeep/i.test(text), `no maintenance language: "${text.slice(0, 40)}"`);
+  }
 }
 
 console.log('── The words ──');
