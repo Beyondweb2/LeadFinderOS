@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
      · process-ai-audit-queue   (the automatic send, on run finalisation)
      · submissions              (the operator resend, below) */
 import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
+import { FREE_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WHO FILLED IN MY FORM? — the questionnaire submissions, for the operator dashboard.
@@ -192,7 +193,7 @@ Deno.serve(async (req) => {
           : Promise.resolve(empty),
         leadIds.length
           ? service.from("ai_audits")
-              .select("id, lead_id, created_at, baseline_target_runs, free_check_result")
+              .select("id, lead_id, created_at, baseline_target_runs, free_check_result, audit_purpose")
               .in("lead_id", leadIds)
           : Promise.resolve(empty),
         service.from("client_error_reports")
@@ -206,14 +207,22 @@ Deno.serve(async (req) => {
       const reasons = (reasonsRes.data ?? []) as Array<{ error_id: string; context: Record<string, unknown> }>;
       const leadName = new Map(leads.map((l) => [l.id, l.business_name]));
 
-      /* Each submission's OWN audit: same lead, created at or after the row. */
+      /* Each submission's OWN audit: same lead, created at or after the row.
+         ⛔ AN AUDIT CREATED AS THE FREE CHECK WINS OVER A NEWER ONE THAT WAS NOT (2026-09-13). Since
+         the purpose column, the free-check audit says so (`audit_purpose = 'free_check'`); newest-
+         first alone would hand this card the lead's PAID BASELINE the moment a prospect who took the
+         free check goes on to pay — and put the resend button under it. The sender refuses a
+         baseline whatever this picks, but the card must not mislabel one either. Legacy audits
+         (no purpose) still fall back to newest-first. */
       const auditFor = (leadId: string | null, submittedAt: string) => {
         if (!leadId) return null;
         const floor = new Date(submittedAt).getTime() - 60_000;
         const mine = audits
           .filter((a) => a.lead_id === leadId && new Date(String(a.created_at)).getTime() >= floor)
           .sort((x, y) => new Date(String(y.created_at)).getTime() - new Date(String(x.created_at)).getTime());
-        return mine[0] ?? null;
+        return mine.find((a) => a.audit_purpose === FREE_CHECK_AUDIT_PURPOSE)
+          ?? mine.find((a) => !a.audit_purpose)   // legacy: no purpose recorded, newest first
+          ?? null;
       };
 
       const auditIds = subs

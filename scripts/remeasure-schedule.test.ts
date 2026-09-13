@@ -108,7 +108,9 @@ ok(/await ensureBaselinesForPaidOnboardings\(service\);[\s\S]{0,600}await fireDu
 const server = stripComments(read("supabase/functions/create-ai-audit/index.ts"));
 ok(/const isRemeasure: boolean = isInternal && body\.purpose === "remeasure";/.test(server), "'remeasure' is an internal-only purpose");
 ok(/!isBaseline && !isRemeasure && !townConfirmed && townGated\(lead\)/.test(server), "the replay is exempt from the town gate");
-ok(/isRemeasure \? "remeasure"/.test(server), "audit_purpose = 'remeasure' is written — what the claim trigger and the unique index key on");
+/* Written as the named constant since 2026-09-13 (REMEASURE_AUDIT_PURPOSE in src/lib/auditKind.ts);
+   the literal is accepted too so this cannot fail on a spelling the trigger still reads. */
+ok(/isRemeasure \? (?:"remeasure"|REMEASURE_AUDIT_PURPOSE)/.test(server), "audit_purpose = 'remeasure' is written — what the claim trigger and the unique index key on");
 ok(/judgeRemeasure\(\{\s*proposed: providedQuestions,\s*baselineAsked,\s*targetRuns: MEASUREMENT_RUNS/.test(server), "the replay is gated by judgeRemeasure against the ASKED set");
 ok(/code === "23505"/.test(server) && /already_remeasured/.test(server), "a duplicate refused by the database is answered 409 already_remeasured, not 500");
 ok(/refuse\("already_remeasured"/.test(server) && /refuse\("no_baseline_recorded"/.test(server) && /refuse\("baseline_not_frozen"/.test(server), "the three named refusals exist and are recorded");

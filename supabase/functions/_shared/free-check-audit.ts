@@ -21,7 +21,8 @@
    quietly does less. `skipped` is the normal, expected outcome for a repeat submitter.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { normaliseTrade } from "../../../src/lib/freeCheckTrade.ts";
+import { respellTrade } from "../../../src/lib/freeCheckTrade.ts";
+import { FREE_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 
 /** Don't re-audit a business we already measured this recently. A week is long enough that a repeat
  *  submitter is asking a genuinely new question, and short enough that a real second enquiry a month
@@ -163,7 +164,7 @@ export type FireOutcome =
  *
  * ⛔ FOR A FREE CHECK THE SUBMITTED ANSWER IS THE SOURCE OF TRUTH, on new AND matched leads, and
  * there is NO fallback to a stored value. A blank trade refuses the audit; it is never filled in
- * from somewhere else. (`normaliseTrade` only respells obvious typos of what they typed — it will
+ * from somewhere else. (`respellTrade` only respells obvious typos of what they typed — it will
  * not substitute a different trade, and an unrecognised one passes through verbatim.)
  *
  * ⚠️ THE TOWN IS BELT-AND-BRACES, NOT THE PRIMARY GUARD. create-ai-audit already OVERRIDES the town
@@ -181,7 +182,7 @@ export async function fireFreeCheckAudit(
   if (!supabaseUrl) return { ok: false, error: "SUPABASE_URL not set" };
   if (!cronSecret) return { ok: false, error: "CRON_SECRET not set — the internal door is shut" };
 
-  const spelled = normaliseTrade(submitted.trade);
+  const spelled = respellTrade(submitted.trade);
   const businessType = spelled.trade;
   if (spelled.corrected) {
     console.log(`[free-check-audit] trade respelled "${spelled.submitted}" -> "${businessType}"`);
@@ -216,6 +217,13 @@ export async function fireFreeCheckAudit(
         has_website: !!(lead.website ?? "").trim(),
         question_count: FREE_CHECK_QUESTIONS,
         skip_seo: true,
+        /* ⛔ THE PURPOSE NAMES THE LANE (2026-09-13). create-ai-audit writes it as
+           `audit_purpose = 'free_check'`, and that value is what the result sender and the
+           baseline guard key on: only an audit created AS the free check ever emails the visitor,
+           and a free-check audit is never mistaken for — or held against — a paid baseline. It is
+           NOT "measurement": that purpose drops the money questions and this lane keeps them.
+           Internal-only in create-ai-audit, like every other purpose. */
+        purpose: FREE_CHECK_AUDIT_PURPOSE,
         /* ⛔ THREE RUNS, VIA THE INTERNAL-ONLY `target_runs`, NOT `purpose: "measurement"`.
            purpose:"measurement" also gets three runs — and silently DROPS the money questions
            (create-ai-audit: `moneyQuestionCount = (!isMarket && !isBaseline && !isMeasurement)`).

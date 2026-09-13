@@ -20,7 +20,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 /* The SAME decision function findable-checkout refuses payment with, so this email and that block
    can never disagree about who could be served. Relative path with the .ts extension — Deno cannot
    resolve the Vite "@/" alias. */
-import { normaliseTrade } from "../../../src/lib/freeCheckTrade.ts";
+import { respellTrade } from "../../../src/lib/freeCheckTrade.ts";
 import { serveDecision, serveInputFromRow, platformLabel, type ServeGateRow } from "../../../src/lib/serveGate.ts";
 
 const corsHeaders = {
@@ -207,7 +207,7 @@ Deno.serve(async (req) => {
          says both what was asked and what the visitor wrote. A silent respell would leave you
          unable to tell a typo from a trade you had not expected to see. */
       if (isFreeCheck && trade) {
-        const spelled = normaliseTrade(trade);
+        const spelled = respellTrade(trade);
         if (spelled.trade) {
           trade = spelled.corrected ? `${spelled.trade} (typed "${spelled.submitted}")` : spelled.trade;
         }
@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
           paid = paid || Number(l.amount_paid ?? 0) > 0 || PAID_STATUSES.has(String(l.status ?? ""));
           storedPhone = ((l.phone as string | null) ?? "").trim() || null;
           /* ⛔ A FREE CHECK IS ALWAYS REPORTED ON THE TRADE THAT WAS TYPED — because that is the
-             trade it was MEASURED on. free-check-audit.ts runs `normaliseTrade(submitted.trade)`
+             trade it was MEASURED on. free-check-audit.ts runs `respellTrade(submitted.trade)`
              unconditionally, so preferring the lead's curated category here prints one trade on the
              alert and audits a different one. Live proof: the 09:30 submission typed "hospitalty"
              while the lead's search_keyword says "bar".

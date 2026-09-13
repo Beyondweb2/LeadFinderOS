@@ -180,8 +180,14 @@ export interface TradeNormalisation {
  *
  * ⛔ It never returns a trade the visitor did not type some form of. Blank input returns blank —
  * the caller must refuse to audit rather than substitute anything.
+ *
+ * ⚠️ RENAMED FROM `normaliseTrade` ON 2026-09-13. src/lib/templateVars.ts exports a DIFFERENT
+ * `normaliseTrade` — the one that lowercases, singularises and BLOCKS a trade for a WhatsApp
+ * template variable. Two functions with one name and opposite contracts (this one never blocks
+ * and never changes the word; that one does both) is a trap for the next reader, so this one is
+ * named for what it does: it respells.
  */
-export function normaliseTrade(submitted: unknown): TradeNormalisation {
+export function respellTrade(submitted: unknown): TradeNormalisation {
   const raw = typeof submitted === "string" ? submitted.trim().replace(/\s+/g, " ") : "";
   if (!raw) return { trade: "", corrected: false, submitted: "" };
 

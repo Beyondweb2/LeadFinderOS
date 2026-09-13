@@ -35,6 +35,7 @@ import { isAggregatorUrl } from "./aggregators.ts";
 import { onboardingUrl, resolveSiteOrigin } from "./onboarding-followup.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, claimTemplatePayload, sendViaGraph, WA_TEMPLATES } from "./whatsapp-send.ts";
 import { checkSuppressed } from "./suppression.ts";
+import { freeCheckSendGate } from "../../../src/lib/auditKind.ts";
 
 /** The Meta template carrying the result. 5 vars, in this order:
  *  {{1}} business name · {{2}} trade · {{3}} town · {{4}} audit link · {{5}} onboarding link. */
@@ -156,10 +157,12 @@ export async function maybeSendFreeCheckResult(
      enrichment_source column — see the note further down for why that was wrong and what it cost.) */
   let { data: audit } = await service
     .from("ai_audits")
-    .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, free_check_result, is_measurement")
+    .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, free_check_result, is_measurement, audit_purpose")
     .eq("id", auditId).maybeSingle();
-  /* ⚠️ free_check_result may not exist yet (SQL pending). PostgREST fails the WHOLE select on an
-     unknown column, so retry without it rather than reading "no audit" and never sending. */
+  /* ⚠️ free_check_result / audit_purpose may not exist yet (SQL pending). PostgREST fails the WHOLE
+     select on an unknown column, so retry without them rather than reading "no audit" and never
+     sending. Without audit_purpose the gate below reads "no recorded purpose" and the automatic
+     path does not send — the safe direction for a DB that cannot say what the audit is. */
   if (!audit) {
     const { data: legacy } = await service
       .from("ai_audits")
@@ -168,6 +171,21 @@ export async function maybeSendFreeCheckResult(
     audit = legacy as typeof audit;
   }
   if (!audit?.lead_id) return { kind: "skipped", reason: "no lead on this audit" };
+
+  /* ══ 1a — IS THIS AUDIT THE FREE CHECK? ═════════════════════════════════════════════════════
+     🔴 FOUND 2026-09-13, BEFORE IT REACHED A CUSTOMER. This function used to identify the lane by
+     the LEAD (does it have a free-check submission row?), and the queue calls it for every
+     completed run of every audit with a lead. So for anyone who had ever filled in the form, their
+     paid BASELINE, their FULL MEASURE, their DAY-28 REPLAY and any re-audit an operator ran would
+     each have emailed and texted them "Your AI visibility check" with a fresh report link.
+     ⛔ THE GATE IS THE AUDIT'S OWN PURPOSE. create-ai-audit writes `audit_purpose = 'free_check'`
+     for the audit findable-onboarding fires and for nothing else; only that audit sends. The rule
+     is `freeCheckSendGate` in src/lib/auditKind.ts, pure and tested against all five purposes.
+     ⚠️ The operator RESEND (force) is allowed through for an audit with no recorded purpose or an
+     ordinary one — that is how the pre-change stranded free checks can still be sent by hand — and
+     is refused for a baseline, measurement or replay even when forced. */
+  const lane = freeCheckSendGate((audit as { audit_purpose?: unknown }).audit_purpose, { forced });
+  if (!lane.send) return { kind: "skipped", reason: lane.reason };
 
   const { data: lead } = await service
     .from("outreach_leads")
@@ -220,10 +238,11 @@ export async function maybeSendFreeCheckResult(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  /* ⛔ NO SUBMISSION, NO SEND — and this is the gate now. It fails closed for the right reason: a
-     result email must only ever go to somebody who asked for one, and the submission row is the
-     record of the asking. An audit with no free-check submission behind it (a prospecting audit, a
-     baseline) must never trigger this. */
+  /* ⛔ NO SUBMISSION, NO SEND — the second gate, and it fails closed for the right reason: a result
+     email must only ever go to somebody who asked for one, and the submission row is the record of
+     the asking (and the ONLY source of the address and number it goes to). The FIRST gate, above,
+     is the audit's own purpose — this row alone used to be the whole test, which is what let a
+     paying customer's baseline read as an unsent free check. */
   if (!sub) return { kind: "skipped", reason: "no free-check submission for this lead" };
   const submittedEmail = ((sub?.contact_email as string | null) ?? "").trim();
   const submittedPhone = ((sub?.confirmed_phone as string | null) ?? "").trim();
@@ -536,7 +555,7 @@ export async function maybeSendFreeCheckResult(
     console.warn(`[free-check-result] submitted phone ${JSON.stringify(phone)} has no country prefix — WhatsApp skipped, email only`);
   }
   if (!phone) {
-    textPending = "no phone on the lead";
+    textPending = "no phone on the submission (the form's phone field was left blank)";
   } else if (!to) {
     textPending = `phone not sendable as WhatsApp: ${phone}`;
   } else if (!WA_TEMPLATES[FREE_CHECK_TEMPLATE]) {

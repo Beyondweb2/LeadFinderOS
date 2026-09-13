@@ -22,7 +22,7 @@ const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
 /** Paid baseline shape, from the shared question-count policy. */
 import { BASELINE_QUESTIONS, BASELINE_RUNS, FULL_MEASURE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
-import { findPaidBaseline, findAmbiguousMultiRun } from "../../../src/lib/auditKind.ts";
+import { findPaidBaseline, findAmbiguousMultiRun, FREE_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { type BaselineContract } from "../../../src/lib/baselineContract.ts";
 import { fullMeasureAllocation } from "../../../src/lib/fullMeasure.ts";
 import { isRemeasureDue, utcDateISO } from "../../../src/lib/remeasureDue.ts";
@@ -189,16 +189,34 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     /* Read ONCE, next to the target, so the purpose sent on the repeat below cannot drift from the
        audit it belongs to. A missing column (see the tolerant select above) reads as false. */
     const isMeasurementAudit = (audit as { is_measurement?: boolean | null } | null)?.is_measurement === true;
+    /* ⛔ THE REPEAT CARRIES THE AUDIT'S OWN PURPOSE (2026-09-13). A free check's runs 2 and 3 used
+       to be posted as "baseline" — harmless on the reuse path (create-ai-audit never UPDATEs the
+       audit row) but it meant the request described a different audit from the one it extended.
+       Sending 'free_check' back keeps create-ai-audit's per-purpose rules (the forced SEO skip)
+       applying to every run. Baselines and measurements are unchanged. */
+    const storedPurpose = typeof (audit as { audit_purpose?: unknown } | null)?.audit_purpose === "string"
+      ? String((audit as { audit_purpose?: string }).audit_purpose) : "";
+    const repeatPurpose = storedPurpose === FREE_CHECK_AUDIT_PURPOSE
+      ? FREE_CHECK_AUDIT_PURPOSE
+      : isMeasurementAudit ? "measurement" : "baseline";
     if (!audit || !(target > 1)) return;          // not a paid baseline audit
     if (audit.baseline) return;                    // already finalised
 
-    // Runs that actually produced data.
+    // Runs that actually produced data. `results` is read for run 1's SEO marker (see the repeat).
     const { data: runs } = await service
-      .from("ai_audit_runs").select("id, run_number, status")
+      .from("ai_audit_runs").select("id, run_number, status, results")
       .eq("audit_id", auditId).order("run_number", { ascending: true });
-    const all = (runs ?? []) as Array<{ id: string; status: string }>;
+    const all = (runs ?? []) as Array<{ id: string; status: string; results?: unknown }>;
     const usable = all.filter((r) => r.status === "complete" || r.status === "capped");
     const inFlight = all.filter((r) => r.status === "pending" || r.status === "running");
+    /* Did run 1 decline the SEO scan? create-ai-audit stamps `results.seo = { skipped: … }` at run
+       creation when skip_seo was set, so the marker exists before the run does — readable here even
+       while run 1 is still going. Anything else (a graded scan, a failure marker, nothing yet) reads
+       as "did not skip", and the repeat is posted without the flag exactly as before. */
+    const firstRunResults = (all[0]?.results && typeof all[0].results === "object")
+      ? all[0].results as Record<string, unknown> : {};
+    const firstRunSeo = firstRunResults.seo as { skipped?: unknown } | undefined;
+    const firstRunSkippedSeo = !!(firstRunSeo && typeof firstRunSeo === "object" && firstRunSeo.skipped);
 
     if (usable.length < target && inFlight.length > 0) {
       // IDEMPOTENCY. This is what makes the periodic sweep safe: a repeat is already queued or
@@ -303,8 +321,15 @@ export async function advanceBaseline(service: Client, auditId: string, source =
            ⚠️ Safe on the reuse path: create-ai-audit honours an EXPLICIT body.audit_id regardless of
            purpose (the !isMeasurement guard at :476 only blocks AUTO-discovering a reuse target),
            and it never UPDATEs ai_audits, so a repeat cannot rewrite the audit's own markers. */
-        purpose: isMeasurementAudit ? "measurement" : "baseline",
+        purpose: repeatPurpose,
         question_count: questions.length,
+        /* ⛔ A REPEAT SKIPS THE SCAN IF RUN 1 DID (2026-09-13). This post carried no skip_seo, so a
+           free check — run 1 posted with skip_seo:true — bought the ~4p scan on run 2 for any
+           business with a website, and the report the visitor opened (rendered off the LAST run)
+           grew a website section run 1 was designed not to have. The flag is read off the FIRST
+           run's own marker rather than typed per purpose, so whatever run 1 decided, runs 2 and 3
+           decide the same. (A paid baseline's run 1 scans, so its repeats keep inheriting it.) */
+        ...(firstRunSkippedSeo ? { skip_seo: true } : {}),
         business_scope: audit.business_scope ?? undefined,
         // MUST accompany business_scope. Sending scope='local' without it is what killed every
         // repeat run: create-ai-audit's local-scope guard reads the REQUEST's location, so the
@@ -711,12 +736,15 @@ export async function startPaidBaseline(
        is the EXPENSIVE direction and silent with it. It now refuses and says so: a held baseline is
        a line in the operator's error list, which is recoverable; ten baselines is money gone. */
     let existing:
-      | Array<{ id: string; baseline_target_runs: number | null; is_measurement?: boolean | null; baseline_contract?: unknown }>
+      | Array<{ id: string; baseline_target_runs: number | null; is_measurement?: boolean | null; baseline_contract?: unknown; audit_purpose?: string | null }>
       | null = null;
     let eErr: { message?: string } | null = null;
+    /* `audit_purpose` is what tells a free check ('free_check') from a baseline ('baseline') since
+       2026-09-13 — read it, so a prospect who took the free check and then paid gets measured
+       instead of held. Shed with the other two if the column is not there. */
     ({ data: existing, error: eErr } = await service
-      .from("ai_audits").select("id, baseline_target_runs, is_measurement, baseline_contract").eq("lead_id", leadId));
-    if (eErr && /is_measurement|baseline_contract/i.test(eErr.message ?? "")) {
+      .from("ai_audits").select("id, baseline_target_runs, is_measurement, baseline_contract, audit_purpose").eq("lead_id", leadId));
+    if (eErr && /is_measurement|baseline_contract|audit_purpose/i.test(eErr.message ?? "")) {
       /* ⚠️ MIGRATION-TOLERANT, AND IT FAILS CLOSED NOW. Without these columns nothing can tell a
          baseline from a free check, so every multi-run audit reads as ambiguous and the baseline is
          HELD rather than duplicated. The pre-guard behaviour was to create one, which is the
@@ -733,18 +761,20 @@ export async function startPaidBaseline(
       /* Recorded, not merely returned: the backstop calls this every tick and its return value is
          only logged. Without a row in client_error_reports this is invisible exactly as the loop
          was — and the CLI has no `functions logs` (§4). Best-effort so a failed report can never
-         turn a refusal-to-spend into an error that retries. */
-      const detail = `lead ${leadId}: multi-run audit ${ambiguous.id} has no baseline contract — `
-        + `cannot tell a free-check audit from a baseline, so NO baseline was started. `
+         turn a refusal-to-spend into an error that retries.
+         ⛔ ONCE PER LEAD PER HOUR (2026-09-13). It used to insert on every tick — a row every 30
+         seconds for as long as the paid row sat there, which is not a report, it is noise that
+         buries the next real one. reportOnceAnHour keys on lead_id, so a held lead leaves one line
+         an hour: still visible, still recoverable, no longer a flood.
+         ⚠️ Since 2026-09-13 a FREE CHECK no longer lands here: it is written as
+         audit_purpose = 'free_check' and auditKind ignores it. What still does is a baseline whose
+         contract write failed, or a legacy multi-run audit from before the purpose column existed. */
+      const detail = `lead ${leadId}: multi-run audit ${ambiguous.id} claims to be a baseline (or predates `
+        + `audit_purpose) and has no baseline contract, so NO baseline was started. `
         + `Delete or contract-stamp that audit, or start the baseline by hand.`;
       console.warn(`[baseline] ambiguous multi-run audit — ${detail}`);
-      try {
-        await service.from("client_error_reports").insert({
-          error_id: "baseline_ambiguous_multi_run",
-          message: detail.slice(0, 1000),
-          context: { onboarding_id: onboardingId, lead_id: leadId, audit_id: ambiguous.id, source },
-        });
-      } catch { /* reporting must never fail the refusal */ }
+      await reportOnceAnHour(service, "baseline_ambiguous_multi_run", leadId, detail,
+        { onboarding_id: onboardingId, audit_id: ambiguous.id, source });
       return { ok: true, skipped: `ambiguous_multi_run_audit:${ambiguous.id}` };
     }
 
