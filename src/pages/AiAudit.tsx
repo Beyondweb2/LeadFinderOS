@@ -31,6 +31,7 @@ import { ReportBeforeAfter } from '@/components/ReportBeforeAfter';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
+import { measuringState } from '@/lib/measuringState';
 import { poolRuns, engineSummary, type PooledInput } from '@/lib/pooledRuns';
 import { isPaidLead } from '@/lib/leadPayment';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
@@ -130,7 +131,7 @@ const AUDIT_SEARCH_LIMIT = 200;
    costing 20 minutes of dead submissions: code shipped ahead of its columns.
    `auditSelectFallback` sheds the new column and the list keeps working, unarchived. */
 const AUDIT_SELECT_BASE =
-  'id, business_name, business_type, location_text, country, has_website, website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted, is_measurement';
+  'id, business_name, business_type, location_text, country, has_website, website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted, is_measurement, audit_purpose';
 const AUDIT_SELECT = `${AUDIT_SELECT_BASE}, archived_at`;
 
 /** True when a PostgREST error is "that column does not exist" (42703) rather than anything else.
@@ -151,6 +152,7 @@ type RawAuditRow = AuditRow & {
   baseline_completed_at: string | null;
   baseline_error: string | null;
   baseline_runs_counted: string | null;
+  audit_purpose?: string | null;
 };
 
 /** Above this many businesses the list is long enough to need searching. Below it the box would be
@@ -645,6 +647,18 @@ const AiAudit = () => {
     },
   });
   const savedAudits = auditListQuery.data?.audits ?? EMPTY_AUDITS;
+  /* ⛔ A REPORT SNAPSHOT TAKEN WHILE A RUN IS IN FLIGHT CARRIES THE STILL-MEASURING FLAG (2026-09-13).
+     Same predicate render-audit-report uses for the live page (src/lib/measuringState.ts), read off
+     the list's own run rows, so the preview shows the banner and the PDF button disables instead of
+     freezing "4 of 12" on a report that will say "5 of 18" four minutes later. An audit the list has
+     not loaded reads as not measuring — the live page is the authority for prospects either way. */
+  const attachMeasuring = useCallback((data: AiAuditReportData, auditIdForRuns: string | null) => {
+    if (!auditIdForRuns) return;
+    const a = savedAudits.find((x) => x.id === auditIdForRuns);
+    if (!a) return;
+    const st = measuringState(a.runs, a.baseline_target_runs);
+    if (st.measuring) data.measuring = { runsDone: st.runsDone, runsTarget: st.runsTarget };
+  }, [savedAudits]);
   /** True when the audits query came back full, i.e. older audits exist beyond it. Drives an
    *  honest label instead of a count that silently stops growing. */
   const auditsCapped = auditListQuery.data?.capped ?? false;
@@ -1559,6 +1573,7 @@ const AiAudit = () => {
       ownWebsite: audit.website ?? '',
     });
     if (!data) { toast({ title: 'No completed results to report yet', variant: 'destructive' }); return; }
+    attachMeasuring(data, audit.id);
     data.internal = true; // snapshot default — OVERRIDDEN at render/print by AiAuditReport's Client/Internal toggle (showInternal); Client is what shows unless the operator switches
     setReports((prev) => ({ ...prev, [rid]: data }));
     setReportRunId(rid);
@@ -1969,6 +1984,7 @@ const AiAudit = () => {
       seoStyle: openSeoStyle,
     });
     if (!data) { toast({ title: 'No completed results to report yet', variant: 'destructive' }); return; }
+    attachMeasuring(data, aId ?? null);
     data.internal = true; // operator preview — winnability shown here, never on the client doc
     setReports((prev) => ({ ...prev, [runId]: data }));
     setReportRunId(runId);
@@ -1998,6 +2014,7 @@ const AiAudit = () => {
         toast({ title: 'Nothing to rebuild yet', description: 'This run has no completed results.', variant: 'destructive' });
         return;
       }
+      attachMeasuring(data, aId ?? null);
       data.internal = true; // snapshot default — OVERRIDDEN at render/print by AiAuditReport's Client/Internal toggle (showInternal); Client is what shows unless the operator switches
       setReports((prev) => ({ ...prev, [rid]: data }));
       toast({ title: 'Report regenerated', description: 'Rebuilt from the latest run data.' });

@@ -11,6 +11,10 @@ export interface AuditRow { id: string; business_name: string; business_type: st
   /** The client's own site. Selected so the report's "Cited as a source" figure can tell a
    *  citation of their OWN domain from a citation of somebody else's. May be null. */
   website?: string | null;
+  /** What the audit was FOR — 'baseline' | 'measurement' | 'remeasure' | 'free_check' | 'audit'
+   *  (src/lib/auditKind.ts). Written by create-ai-audit since 2026-09-12; null on older rows. The
+   *  row pills key on this, never on the run count: a 3-run free check is not a paying client. */
+  audit_purpose?: string | null;
   /** MARKET audit: a trade and a town with no business attached. Its named count is 0 by
    *  construction, so nothing here may render it as a business's result — see isMarketAudit. */
   is_market?: boolean | null;

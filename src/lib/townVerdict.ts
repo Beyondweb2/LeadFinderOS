@@ -51,5 +51,8 @@ export function townGated(row: TownVerdictRow | null | undefined): boolean {
 
 /** One reason string for every gate, so the operator reads the same sentence everywhere a lead is
  *  held back. Raw and specific — never a wrapper (the catch-all-error lesson, CLAUDE.md §4). */
+/* ⚠️ REWORDED 2026-09-13 (Paul): "town unverified" read as though the OPERATOR had typed something
+   wrong. What it means is that Google was asked and could not confirm a town — the typed or searched
+   town is still on the lead, it just is not Google-confirmed. Say that. */
 export const TOWN_GATE_REASON =
-  "town unverified — Google was asked and cannot confirm where this business is; fix the town on the lead, then retry";
+  "Google could not confirm the town — it was asked where this business is and cannot say; the town on the lead is unconfirmed. Fix or confirm the town on the lead, then retry";

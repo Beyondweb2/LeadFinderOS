@@ -872,6 +872,10 @@ export function buildReportData(
        would guess (a 3-run measurement is not the same fact as baseline_target_runs > 1).
        ⚠️ Absent → 'graded', the pre-existing output. */
     seoStyle?: 'graded' | 'issues';
+    /** Does the business have a website? true / false only when the caller KNOWS (a site on file, or
+     *  Google was consulted and returned none); null = unknown, and the report then says nothing
+     *  about their website. Omit to derive true from `ownWebsite` and null otherwise. */
+    hasWebsite?: boolean | null;
   },
 ): AiAuditReportData | null {
   /* ⛔ A RUN WE CANNOT PROVE WAS CLEANED PRINTS NO RIVAL NAMES AT ALL. Paul's rule, 2026-08-28:
@@ -1203,6 +1207,14 @@ export function buildReportData(
     })(),
     // No own website → the report offers to build one instead of leaving a gap. Derived from the
     // website the caller passes, which is the same value that decides whether a scan runs at all.
-    hasWebsite: !!(ctx.ownWebsite && ctx.ownWebsite.trim()),
+    /* ⛔ THREE STATES, NOT TWO (2026-09-13). This was `!!ownWebsite`, so an EMPTY website column read
+       as "no website" and the report told AD Locksmithing — who has a site — that we would build them
+       one. An empty string is absence, not a fact: a caller that KNOWS (render-audit-report reads the
+       lead's website and whether Google was ever consulted) passes true/false; a caller that does not
+       pass anything gets true when a site is known and NULL otherwise, and the renderer says nothing
+       about their website on null. False is only ever asserted, never inferred from a blank. */
+    hasWebsite: ctx.hasWebsite !== undefined
+      ? ctx.hasWebsite
+      : (ctx.ownWebsite && ctx.ownWebsite.trim() ? true : null),
   };
 }

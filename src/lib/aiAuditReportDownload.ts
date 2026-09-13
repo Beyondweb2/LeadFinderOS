@@ -54,6 +54,13 @@ function printHtmlAsPdf(html: string, title: string): void {
 /** Save the standalone report as a PDF (print-to-PDF — vector, design-preserving). Prints whichever
  *  version the operator is viewing — the Client/Internal toggle in AiAuditReport sets `d.internal`. */
 export function downloadReportHtml(d: AiAuditReportData): void {
+  /* ⛔ LAST LINE OF DEFENCE: a snapshot taken while a run was in flight must not become a PDF. The
+     preview's button is disabled in that state; this stops a caller that forgets. The rendered
+     document would only carry the still-measuring banner anyway, but a banner is not a report. */
+  if (d.measuring) {
+    console.warn(`[report] refusing to print: still measuring (${d.measuring.runsDone} of ${d.measuring.runsTarget} runs done)`);
+    return;
+  }
   /* ⛔ CLIENT IS THE DEFAULT, AND THAT DEFAULT IS DEFENSIVE. Winnability is included ONLY when
      `internal` is EXPLICITLY true; an unset/false flag renders the CLIENT document. So a caller that
      forgets to pass a choice can never hand a client a report with the internal notes on it — the

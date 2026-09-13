@@ -1559,7 +1559,10 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   - **Internal links**: Home (`{site}`) + Contact (`{site}contact/`, operator-confirmable per client)
     as real `<a>`. hrefs live in tags so they don't affect the density check.
   - **Local areas**: there is NO verified neighbourhood source — the audit stores COMPETITORS +
-    `answer_text` junk, `uk_towns` only has "East of England"/lat-lng (Cambridge isn't even in it),
+    `answer_text` junk, `uk_towns` only has "East of England"/lat-lng (⚠️ this line said "Cambridge
+    isn't even in it" — FALSE, checked 2026-09-13: Cambridge IS present; what is absent is every
+    major CITY — London, Birmingham, Manchester, Leeds, Bristol, Liverpool, Sheffield, Nottingham,
+    Newcastle upon Tyne — see §22),
     and RG's own site just says "surrounding areas". So neighbourhoods are an OPTIONAL operator field
     (`local_areas`, per-client, persisted), woven in verbatim, invent-none; empty → "the surrounding
     area". ⛔ Do NOT try to mine neighbourhoods from the audit — proven three ways they aren't there,
@@ -4052,3 +4055,75 @@ Found by tracing the chain read-only before Paul's end-to-end test; fixed the sa
   delivered and read. Its registered body carries "for a {{2}}", so the vowel-sound block is
   correct for it too. Variables confirmed against WhatsApp Manager: name, trade, town, report
   link, onboarding link — matching both registries.
+
+---
+
+## 22. ✅ THE REPORT STOPPED RENDERING PARTIAL RESULTS AS FINAL, AND STOPPED GUESSING ABOUT WEBSITES (2026-09-13)
+
+Six bugs Paul parked while testing; four fixed here, two reported (§22b). Read before touching the
+report renderer, the free-check result, the AI Audit pills or the town badge.
+
+- 🔴 **THE REPORT RENDERED A PARTIAL COUNT AS FINAL.** AD Locksmithing's free check opened at 11:40
+  read "4 out of 12 answers"; at 11:44, "5 out of 18". Run 3 was in flight. `buildReportData`
+  counts whatever queue rows have answers, so the denominator grows run by run, and nothing said so.
+  - ⛔ **ONE PREDICATE, THREE READERS: `src/lib/measuringState.ts`.** `measuringState(runs, target)`
+    = a run is pending/running (unknown statuses count as in flight) and not stalled past
+    `MEASURING_STALL_MS` (45 min). Read by **render-audit-report** (withholds every figure — hero,
+    "who AI named", website slot, the fix section — behind a "Still measuring, N of M rounds done"
+    banner, and serves `cache-control: no-store` while it does), by **free-check-result** (its wait
+    rule; `FREE_CHECK_RESULT_MAX_WAIT_MS` is now an alias of the same constant, so the email and the
+    page agree about the stall release), and by **AiAudit.tsx** (`attachMeasuring` on all three
+    snapshot paths → the preview shows the banner and the PDF button disables;
+    `downloadReportHtml` refuses as the last line). A number that will change must not appear.
+  - ⚠️ An operator appending a run to a finished audit puts it back into "measuring" until that run
+    settles — deliberately: the number is about to change.
+- 🔴 **THE REPORT TOLD A BUSINESS WITH A WEBSITE THAT IT HAD NONE.** `hasWebsite` was `!!website`
+  on the audit's snapshot column, so a BLANK read as "no website" and rendered "we'll build you
+  one". The blank was because Google never resolved the business (place resolution refused on a
+  town mismatch), so Place Details never ran. The SEO skip was NOT the cause — the "not scanned yet"
+  branch already existed and renders whenever a site is known.
+  - ⛔ **THREE STATES NOW.** render-audit-report reads the lead's `website` and `place_id` (one read,
+    shared with the paid check): a site on the audit or the lead → true ("full check comes with the
+    work"); no site but a `place_id` → Google was consulted → false ("we'll build you one"); no
+    `place_id` → nobody looked → **null, and the report says nothing about their website.** A wizard
+    audit (no lead) keeps its operator-entered boolean. `buildReportData` accepts `ctx.hasWebsite`;
+    absent, it derives true from `ownWebsite` and NULL otherwise — false is never inferred from a
+    blank. **No migration**: `has_website` is `NOT NULL DEFAULT false` and stays that way; the lead
+    row is the tri-state.
+  - **Counted before fixing:** two free-check results ever sent; one false (AD Locksmithing). Across
+    all lanes, 98 audits carried no website; 8 of those leads have one, all Facebook/YouTube/Yell
+    pages the product deliberately treats as not an own website — so those were right by the rule.
+- ⛔ **THE ROW PILL KEYS ON `audit_purpose`, NOT RUN COUNT.** "client · baseline 0/3" rendered on
+  an unpaid free check because `AuditPills` keyed on `baseline_target_runs > 1` with "client"
+  hard-coded. Now: `'free_check'` → "free check · n/3 runs"; `'measurement'`/`'remeasure'` →
+  "measurement · n/3"; `'baseline'` → the client pill; legacy NULL purpose keeps the old reading
+  (multi-run + !is_measurement → client, which is RG and Ronnie). `audit_purpose` joined
+  `AUDIT_SELECT` and `AuditRow`.
+- **"town unverified" → "Google couldn't confirm the town."** Same predicate (`townVerdict`),
+  honest wording: it means Google was asked and could not confirm, not that the operator typed
+  it wrong. `TOWN_GATE_REASON` reworded to match; the test pins the new phrase and the absence of
+  "unverified".
+- **The footer carries findable.live** (`renderSiteFooter`, shared by the report, welcome pack and
+  page-plan document), and **the three abstract fix steps are replaced by the explainer video beside
+  three concrete steps** (what we measure / build / re-measure). Video on screen (`<video>` with the
+  site's poster, no autoplay); **in print the player is hidden and the poster renders as a link with
+  a caption** — a PDF cannot play video. No length is claimed (§13b). The steps overlap "What's
+  included" on purpose: that is the inventory, this is the method.
+
+### 22b. Reported, not built
+- **The row click spends nothing.** It is bound to `reopenAudit`, two reads. Zero unrequested
+  audits since 10 Sep. What looks like "starting an audit" is the list reloading its entire dataset
+  every 5 s while any run is in flight (`LIST_POLL_MS`), and opening a mid-test audit landing on its
+  running run's spinners.
+- **The AI Audit page loads 969 audits under a hard `AUDIT_FETCH_LIMIT = 1000`, plus every run and
+  every report, then repeats all of it every 5 s while draining.** At 1,001 audits the oldest fall
+  off the list silently (not deleted; still reachable by search and by URL). Recent rate: 60 audits
+  in the last 7 days, 295 in 14 — the cliff is days away, not weeks.
+- **A running audit IS openable** (latest run → per-question spinners, run picker with statuses);
+  what is missing is a header line: run N of M, X of Y questions returned, per engine.
+- 🔴 **THE DISTANCE GAZETTEER HAS NO MAJOR CITIES.** `uk_towns` (733 rows) lacks London, Birmingham,
+  Manchester, Leeds, Bristol, Liverpool, Sheffield, Nottingham and Newcastle upon Tyne (only
+  Newcastle-under-Lyme). For those the >25 km verdict is "unknown" and never blocks — so the gate
+  has never applied to the biggest markets, and 25 km was never Newcastle's problem. Free-check-lane
+  refusals recorded: zero, ever. Coverage-page population sort reads the same table, so adding
+  cities changes Coverage too.

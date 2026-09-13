@@ -80,8 +80,16 @@ export function AiAuditReport({ data, onBack, onDownload, onRegenerate, regenera
               {regenerating ? 'Regenerating…' : 'Regenerate'}
             </Button>
           )}
-          <Button size="sm" onClick={() => onDownload(showInternal)}>
-            <Download className="mr-2 h-4 w-4" /> {showInternal ? 'Download PDF · Internal' : 'Download PDF · Client'}
+          {/* ⛔ NO PDF WHILE A RUN IS IN FLIGHT (2026-09-13). A PDF freezes a number that is about to
+              change — AD Locksmithing's read "4 of 12" at 11:40 and "5 of 18" at 11:44. The preview
+              itself shows the still-measuring banner; the button says why it is off. */}
+          <Button
+            size="sm"
+            onClick={() => onDownload(showInternal)}
+            disabled={!!data.measuring}
+            title={data.measuring ? `Still measuring — ${data.measuring.runsDone} of ${data.measuring.runsTarget} runs done. The PDF would carry a number that is about to change.` : undefined}
+          >
+            <Download className="mr-2 h-4 w-4" /> {data.measuring ? 'PDF available when measuring finishes' : showInternal ? 'Download PDF · Internal' : 'Download PDF · Client'}
           </Button>
         </div>
       </div>
