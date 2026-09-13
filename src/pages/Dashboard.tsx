@@ -6,6 +6,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { PipelineCard } from '@/components/dashboard/PipelineCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
+import { ClientDeliveryCard } from '@/components/dashboard/ClientDeliveryCard';
 import { SubmissionsCard } from '@/components/dashboard/SubmissionsCard';
 import { FreeCheckProgressCard } from '@/components/dashboard/FreeCheckProgressCard';
 import { ChannelPerformanceCard } from '@/components/dashboard/ChannelPerformanceCard';
@@ -121,6 +122,14 @@ const Dashboard = () => {
           </div>
           <PipelineCard allLeads={metrics.allLeads} />
         </div>
+      </section>
+
+      {/* Paying clients — what each one needs next. Above "next steps" on purpose: a paying client's
+          delivery outranks prospecting admin, and this card is the only per-client view in the app
+          (2026-09-13). The door to the operator Baseline screen is here, through the pointer. */}
+      <section>
+        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Clients</h2>
+        <ClientDeliveryCard leads={metrics.allLeads} onChanged={refetch} />
       </section>
 
       {/* Next steps */}

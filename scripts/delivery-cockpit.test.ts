@@ -7,7 +7,8 @@
    ============================================================ */
 import {
   addDaysISO, defaultRemeasureDue, remeasureStatus, checklistDone,
-  REMEASURE_OFFSET_DAYS, REMEASURE_AMBER_DAYS, DELIVERY_CHECKLIST_ITEMS,
+  REMEASURE_OFFSET_DAYS, REMEASURE_AMBER_DAYS, DELIVERY_CHECKLIST_ITEMS, TICKABLE_ITEMS,
+  pagesProgress, isPageLine, isPageBuilt, pageStatusFor,
 } from '../src/lib/deliveryCockpit.ts';
 
 let f = 0;
@@ -41,9 +42,21 @@ ok(REMEASURE_AMBER_DAYS === 7, 'amber threshold is 7 days');
 console.log('── Checklist counting (unknown keys ignored) ──');
 ok(checklistDone(null) === 0, 'null checklist = 0');
 ok(checklistDone({}) === 0, 'empty = 0');
-ok(checklistDone({ directories: true, pages: true, gbp: false }) === 2, 'counts only the trues among known items');
+ok(checklistDone({ directories: true, pages: true, gbp: false }) === 1, 'counts only the trues among TICKABLE items — a stored pages:true (pre-2026-09-13) is ignored, pages are derived now');
 ok(checklistDone({ directories: true, bogus: true } as Record<string, boolean>) === 1, 'an unknown key never inflates the count');
-ok(DELIVERY_CHECKLIST_ITEMS.length === 5 && DELIVERY_CHECKLIST_ITEMS.map((i) => i.key).includes('remeasure'), 'five milestones incl. re-measure');
+ok(checklistDone({ baseline_checked: true, baseline_sent: true, results_sent: true }) === 3, 'the three 2026-09-13 ticks count');
+console.log('── The shared list (cockpit AND dashboard card render THIS) ──');
+ok(DELIVERY_CHECKLIST_ITEMS.map((i) => i.key).join(',') === 'baseline_checked,baseline_sent,directories,gbp,pages,website,remeasure,results_sent',
+  "Paul's delivery order: baseline checked → sent → directories → GBP → pages → website → week-four → results sent");
+ok(DELIVERY_CHECKLIST_ITEMS.filter((i) => i.kind === 'pages').length === 1 && DELIVERY_CHECKLIST_ITEMS.filter((i) => i.kind === 'remeasure').length === 1, 'exactly one derived pages line and one re-measure clock line');
+ok(TICKABLE_ITEMS.length === 7 && !TICKABLE_ITEMS.some((i) => i.key === 'pages'), 'seven tickable items; pages is not one of them');
+ok(DELIVERY_CHECKLIST_ITEMS.every((i) => i.label && i.hint), 'every item has a label and a hint (the hint is the tooltip)');
+console.log('── Pages derived from client_pages ──');
+ok(pagesProgress([{ status: 'planned' }, { status: 'live' }, { status: 'held' }, { status: 'merged' }, { status: 'removed' }, { status: 'archived' }]).total === 3, 'planned/live/held are lines; merged/removed/archived are not');
+ok(pagesProgress([{ status: 'planned' }, { status: 'live' }, { status: 'live' }]).built === 2, 'built = live');
+ok(pagesProgress(null).total === 0 && pagesProgress([]).built === 0, 'no rows → 0/0, never a guess');
+ok(isPageLine('draft') && isPageLine('approved') && isPageBuilt('live') && !isPageBuilt('approved'), 'legacy capture statuses are lines; only live is built');
+ok(pageStatusFor(true) === 'live' && pageStatusFor(false) === 'planned', 'a tick flips live ↔ planned');
 
 if (f > 0) { console.log(`\n${f} FAILURE${f === 1 ? '' : 'S'}`); process.exit(1); }
 console.log('\nALL PASS');

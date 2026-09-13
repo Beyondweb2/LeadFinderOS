@@ -27,25 +27,59 @@ export const REMEASURE_OFFSET_DAYS = 28;
 /** Amber this many days out or fewer (still upcoming); red once overdue. Paul's spec 2026-08-18. */
 export const REMEASURE_AMBER_DAYS = 7;
 
-export interface DeliveryChecklistItem { key: string; label: string; hint: string }
+/** How an item is rendered and stored:
+ *    tick      — a manual tick in outreach_leads.delivery_checklist (the JSON map)
+ *    pages     — DERIVED, one line per client_pages row; a page is "built" when its status is live.
+ *                Nothing is stored under this key any more (an old `pages: true` is ignored).
+ *    remeasure — the week-four clock (remeasure_due_date) beside a manual "checked" tick */
+export type DeliveryItemKind = 'tick' | 'pages' | 'remeasure';
+export interface DeliveryChecklistItem { key: string; label: string; hint: string; kind: DeliveryItemKind }
 
-/* The five MAIN milestones — grouped, not per-directory. Manual tick-to-complete (v1). Order is
-   the delivery order. Adding an item here is safe: unknown keys in a stored checklist are ignored,
-   and a new key simply starts unticked. */
+/* ⛔ ONE LIST, TWO SCREENS (2026-09-13, Paul's brief). The lead card's cockpit and the Dashboard's
+   client delivery card BOTH render this list through the same component, so a milestone cannot
+   exist on one and not the other. Order is Paul's delivery order. Adding an item is safe: unknown
+   keys in a stored checklist are ignored and a new key starts unticked — which is how the three
+   new ticks (baseline checked / baseline sent / results sent) landed on RG's existing map without
+   touching it.
+   ⚠️ "Baseline checked" is a deliberate human gate: the baseline is the document a refund is
+   measured against, three copy faults were found in reports on the day this was built, and it
+   must never auto-send. "Results sent" is a manual tick until the four-week sender exists (CLAUDE.md
+   §19 open item 1); when it does, it should STAMP this rather than a person ticking it. */
 export const DELIVERY_CHECKLIST_ITEMS: DeliveryChecklistItem[] = [
-  { key: 'directories', label: 'Directories', hint: 'Listed on the directories the evidence says matter for this trade' },
-  { key: 'pages', label: 'Pages', hint: 'Service + area pages published on their own site' },
-  { key: 'gbp', label: 'GBP profile', hint: 'Google Business Profile claimed, verified and consistent with the pages' },
-  { key: 'website', label: 'Website', hint: 'Site built or fixed where there was none / it was blocking' },
-  { key: 'remeasure', label: 'Re-measure taken', hint: 'The four-week re-measurement has been run and evidenced (RG Locksmiths: eight weeks, by his contract)' },
+  { key: 'baseline_checked', label: 'Baseline done — checked', hint: 'The baseline has finished and you have read it. It is the document the refund is measured against, so it is checked by a person before anything is sent', kind: 'tick' },
+  { key: 'baseline_sent', label: 'Baseline sent', hint: 'The client has been sent their baseline. Nothing sends it automatically', kind: 'tick' },
+  { key: 'directories', label: 'Directories added', hint: 'Listed on the directories the evidence says matter for this trade', kind: 'tick' },
+  { key: 'gbp', label: 'Google Business Profile sorted', hint: 'Claimed, verified and consistent with the pages', kind: 'tick' },
+  { key: 'pages', label: 'Pages built', hint: 'One line per planned page (the page-plan queue). Tick a page when it is live on their site', kind: 'pages' },
+  { key: 'website', label: 'Website', hint: 'Site built or fixed where there was none / it was blocking', kind: 'tick' },
+  { key: 'remeasure', label: 'Week-four re-measure', hint: 'Fires itself on the stored due date (RG Locksmiths: eight weeks, by his contract). Tick once you have checked the replay', kind: 'remeasure' },
+  { key: 'results_sent', label: 'Results sent', hint: 'The four-week results have gone to the client', kind: 'tick' },
 ];
+
+/** The items a person ticks — everything except the derived pages line. */
+export const TICKABLE_ITEMS: DeliveryChecklistItem[] = DELIVERY_CHECKLIST_ITEMS.filter((i) => i.kind !== 'pages');
 
 export type DeliveryChecklist = Record<string, boolean>;
 
-/** How many of the five milestones are ticked (unknown keys ignored). */
+/** How many tickable milestones are ticked (unknown keys and the derived pages key ignored). */
 export function checklistDone(cl: DeliveryChecklist | null | undefined): number {
   if (!cl) return 0;
-  return DELIVERY_CHECKLIST_ITEMS.filter((i) => cl[i.key] === true).length;
+  return TICKABLE_ITEMS.filter((i) => cl[i.key] === true).length;
+}
+
+/* ── PAGES, derived from client_pages ────────────────────────────────────────────────────────────
+   A row is a page LINE when it is still a page the client will get: planned / held (the queue's
+   statuses) and the legacy capture statuses draft / approved / live. merged and removed are not
+   pages; archived is not a page any more. A line is BUILT when its status is live. */
+const PAGE_LINE_STATUSES = new Set(['planned', 'held', 'draft', 'approved', 'live']);
+export const isPageLine = (status: string | null | undefined): boolean => PAGE_LINE_STATUSES.has(String(status ?? ''));
+export const isPageBuilt = (status: string | null | undefined): boolean => String(status ?? '') === 'live';
+/** The status a page moves to when its tick flips. Un-ticking a live page returns it to planned. */
+export const pageStatusFor = (built: boolean): 'live' | 'planned' => (built ? 'live' : 'planned');
+
+export function pagesProgress(rows: ReadonlyArray<{ status: string | null | undefined }> | null | undefined): { built: number; total: number } {
+  const lines = (rows ?? []).filter((r) => isPageLine(r.status));
+  return { built: lines.filter((r) => isPageBuilt(r.status)).length, total: lines.length };
 }
 
 /** Add whole days to a YYYY-MM-DD (or full ISO) date, returning YYYY-MM-DD. UTC maths so a
