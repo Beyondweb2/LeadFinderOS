@@ -15,9 +15,11 @@ import { normalizeWaNumber } from '@/hooks/useInbox';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
 import { isDemoLead } from '@/lib/demoLeads';
 import {
-  DELIVERY_CHECKLIST_ITEMS, DELIVERY_REF_FIELDS, checklistDone, defaultRemeasureDue,
+  TICKABLE_ITEMS, DELIVERY_REF_FIELDS, checklistDone, defaultRemeasureDue,
   remeasureStatus, type DeliveryChecklist,
 } from '@/lib/deliveryCockpit';
+import { DeliveryChecklistList } from '@/components/delivery/DeliveryChecklist';
+import { useClientPages } from '@/hooks/useClientPages';
 import type { OutreachLead } from '@/types/outreach';
 import { auditKind, isInternalMeasurement } from '@/lib/auditKind';
 
@@ -34,7 +36,7 @@ import { auditKind, isInternalMeasurement } from '@/lib/auditKind';
    key/dashboard/backups.
    ============================================================ */
 
-interface BaselineAudit { id: string; created_at: string; isBaseline: boolean }
+interface BaselineAudit { id: string; created_at: string; isBaseline: boolean; completedAt: string | null }
 
 export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
   lead: OutreachLead;
@@ -63,11 +65,11 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
     if (isDemoLead(lead.id)) { setAuditLoading(false); return; }
     let alive = true;
     void (async () => {
-      type Row = { id: string; created_at: string; baseline_target_runs: number | null; is_market: boolean | null; is_measurement: boolean | null; audit_purpose: string | null };
+      type Row = { id: string; created_at: string; baseline_completed_at: string | null; baseline_target_runs: number | null; is_market: boolean | null; is_measurement: boolean | null; audit_purpose: string | null };
       // is_market / is_measurement / audit_purpose absent from generated types → through unknown.
       const { data } = await supabase
         .from('ai_audits')
-        .select('id, created_at, baseline_target_runs, is_market, is_measurement, audit_purpose')
+        .select('id, created_at, baseline_completed_at, baseline_target_runs, is_market, is_measurement, audit_purpose')
         .eq('lead_id', lead.id)
         .order('created_at', { ascending: false }) as unknown as { data: Row[] | null };
       if (!alive) return;
@@ -80,7 +82,7 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
         ?? rows.find((a) => auditKind(a) === 'paid_baseline' || auditKind(a) === 'multi_run_unmarked')
         ?? rows[0]
         ?? null;
-      setAudit(chosen ? { id: chosen.id, created_at: chosen.created_at, isBaseline: !!pointed || chosen.baseline_target_runs != null } : null);
+      setAudit(chosen ? { id: chosen.id, created_at: chosen.created_at, isBaseline: !!pointed || chosen.baseline_target_runs != null, completedAt: chosen.baseline_completed_at ?? null } : null);
       setAuditLoading(false);
     })();
     return () => { alive = false; };
@@ -122,6 +124,10 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
   const checklist: DeliveryChecklist = (lead.delivery_checklist as DeliveryChecklist) ?? {};
   const toggle = (key: string) =>
     void onUpdateLead(lead.id, { delivery_checklist: { ...checklist, [key]: !checklist[key] } } as Partial<OutreachLead>);
+  /* The client's planned pages, one line each — the same read the Dashboard's client card makes
+     for every paying client at once. A page's tick flips its client_pages status live ↔ planned. */
+  const leadIds = useMemo(() => [lead.id], [lead.id]);
+  const { pages, isLoading: pagesLoading, setPageBuilt } = useClientPages(leadIds);
 
   // ── REFERENCE INFO ────────────────────────────────────────────────────────────────────────
   const ref = (lead.delivery_ref as Record<string, string>) ?? {};
@@ -236,33 +242,25 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
         )}
       </section>
 
-      {/* ══ DELIVERY CHECKLIST — 5 manual milestones ══ */}
+      {/* ══ DELIVERY CHECKLIST — the SAME list and component as the Dashboard's client card ══ */}
       <section className={CARD}>
         <div className="flex items-center justify-between gap-2 mb-2.5">
           <div className="flex items-center gap-1.5">
             <ListChecks className="h-3.5 w-3.5 text-sky-400" />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Delivery</span>
           </div>
-          <span className="text-[11px] font-medium text-muted-foreground">{clDone}/{DELIVERY_CHECKLIST_ITEMS.length} done</span>
+          <span className="text-[11px] font-medium text-muted-foreground">{clDone}/{TICKABLE_ITEMS.length} done</span>
         </div>
-        <div className="space-y-1.5">
-          {DELIVERY_CHECKLIST_ITEMS.map((item) => {
-            const on = checklist[item.key] === true;
-            return (
-              <button key={item.key} onClick={() => toggle(item.key)}
-                className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-muted/40"
-                title={item.hint}>
-                <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${on ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-border'}`}>
-                  {on && <Check className="h-3 w-3" strokeWidth={3} />}
-                </span>
-                <span>
-                  <span className={`text-xs font-medium ${on ? 'text-foreground' : 'text-foreground/80'}`}>{item.label}</span>
-                  <span className="block text-[10.5px] text-muted-foreground/70">{item.hint}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <DeliveryChecklistList
+          checklist={checklist}
+          onToggle={toggle}
+          pages={pages}
+          pagesLoading={pagesLoading}
+          onTogglePage={(id, built) => void setPageBuilt(id, built)}
+          remeasure={{ dueISO: remeasureDue, fired: !!lead.remeasure_audit_id }}
+          baselineDone={!!audit?.completedAt}
+          baselineDoneLabel={audit?.completedAt ? new Date(audit.completedAt).toLocaleDateString('en-GB') : null}
+        />
       </section>
 
       {/* ══ REFERENCE INFO — non-secret only ══ */}

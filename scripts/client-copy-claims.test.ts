@@ -99,6 +99,9 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["page-plan queue screen (operator)", "src/pages/PagePlanQueue.tsx"],
   ["dashboard tasks (operator)", "src/lib/dashboardTasks.ts"],
   ["next actions card (operator)", "src/components/dashboard/NextActionsCard.tsx"],
+  ["client delivery card (operator)", "src/components/dashboard/ClientDeliveryCard.tsx"],
+  ["shared delivery checklist (operator)", "src/components/delivery/DeliveryChecklist.tsx"],
+  ["client pages hook (operator)", "src/hooks/useClientPages.ts"],
 ];
 const OPERATOR_ALLOWED: string[] = [
   "(RG Locksmiths: eight weeks, by his contract)",
