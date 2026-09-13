@@ -1,7 +1,7 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
-import { FINDABLE_SETUP_PRICE_GBP, monthlyStartingSoonEmail } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_SETUP_PRICE_GBP, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
    to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
    service branch, so a webhook cannot call it; and giving the function that sends WhatsApp a new
@@ -484,6 +484,41 @@ Deno.serve(async (req) => {
      matter most. The stored id is the one identifier every event carries.
      ⚠️ Falls back to metadata.lead_id when the id lookup finds nothing, which covers the window
      between a checkout and its own id-storing write, and any subscription created by hand. */
+  /* ⛔ ONE PLACE THAT EMAILS A CLIENT FROM THIS WEBHOOK, and it resolves the address the same way
+     the results email does — the onboarding contact first, the lead second. Two different lookups
+     would let the reminder and the failure notice land in different inboxes for one person.
+     ⚠️ Every send here is non-fatal and recorded: a message that cannot go must never 500 back to
+     Stripe, which would retry an event that changes no state. */
+  const emailClientForLead = async (
+    leadId: string,
+    what: string,
+    mail: { subject: string; paragraphs: string[] },
+    extra: Record<string, unknown> = {},
+  ): Promise<void> => {
+    try {
+      const { data: leadRow } = await service.from("outreach_leads").select("email").eq("id", leadId).maybeSingle();
+      const { data: obRows } = await service.from("onboarding_responses")
+        .select("contact_email, status, created_at").eq("lead_id", leadId).not("contact_email", "is", null)
+        .order("created_at", { ascending: false }).limit(10);
+      const rows = (obRows ?? []) as Array<{ contact_email: string | null; status: string | null }>;
+      const paidRow = rows.find((r) => ["paid", "payment_received", "in_delivery", "completed"].includes(String(r.status ?? "")));
+      const leadEmail = ((leadRow as { email?: string | null } | null)?.email ?? "").trim().toLowerCase();
+      const to = ((paidRow ?? rows[0])?.contact_email ?? "").trim().toLowerCase() || leadEmail;
+      if (!to || !to.includes("@")) { await recordPaymentFailure(`${what}_skipped`, { lead_id: leadId, reason: "no address", ...extra }); return; }
+      const sent = await postResend({
+        from: "Findable <reports@findable.live>", to: [to], reply_to: ADMIN_EMAIL,
+        subject: mail.subject,
+        text: mail.paragraphs.join(String.fromCharCode(10, 10)),
+        html: mail.paragraphs.map((para) => `<p>${para}</p>`).join(""),
+      });
+      await recordPaymentFailure(sent.ok ? `${what}_sent` : `${what}_failed`, {
+        lead_id: leadId, to, provider_message_id: sent.id, error: sent.error, ...extra,
+      });
+    } catch (e) {
+      console.error(`[stripe-webhook] ${what} email failed:`, e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const findableLeadForSubscription = async (
     subscriptionId: string | null,
     metaLeadId: string | null,
@@ -871,6 +906,15 @@ Deno.serve(async (req) => {
            problem. Writing "canceled" here would cut off a customer who is about to pay, and it is
            customer.subscription.deleted that says they are actually gone. */
         await setFindableSubscription(leadId, { subscription_status: "past_due" }, "invoice.payment_failed");
+        /* ⛔ AND THE CLIENT IS TOLD, BY US. Stripe can send its own failed-payment email, but that
+           is a Dashboard toggle nobody here can read, and silence is how somebody concludes they
+           have been cancelled when Stripe is still retrying.
+           ⛔ THE LINK IS THE INVOICE'S OWN hosted_invoice_url, NOT a billing-portal session: Stripe
+           generates it per invoice, it needs no Dashboard configuration at all, and it lets them
+           pay and replace the card in one page. A portal session would need the portal activated
+           first and would fail here if it were not. */
+        const payUrl = String((inv as { hosted_invoice_url?: unknown }).hosted_invoice_url ?? "").trim() || null;
+        await emailClientForLead(leadId, "monthly_payment_failed", paymentFailedEmail({ payUrl }), { subscription: subId, invoice: String(inv.id ?? "") });
         break;
       }
       /* ⛔ THE THREE-DAY REMINDER, BUILT AND NOT ASSUMED (2026-09-13). Stripe can send a
@@ -965,6 +1009,19 @@ Deno.serve(async (req) => {
               subscription_status: "canceled",
               subscription_renews_at: null,
             }, "customer.subscription.deleted");
+            /* ⛔ AND THEY ARE TOLD THEY HAVE STOPPED BEING A CLIENT. Paul's rule, 2026-09-13:
+               nobody should find out by noticing that nothing happened.
+               ⛔ TWO REASONS REACH THIS EVENT AND THEY ARE DIFFERENT MESSAGES. Stripe sets
+               cancellation_details.reason — `payment_failure` when the retries gave up,
+               `cancellation_requested` when the client chose to go. Sending the wrong one either
+               insults somebody who left deliberately or lies to somebody whose card died.
+               ⚠️ ABSENT READS AS "NOT A PAYMENT FAILURE": an unknown reason gets the neutral
+               cancellation wording, which is true either way, rather than asserting a card problem
+               nobody has evidence of. */
+            const reason = String(((sub as { cancellation_details?: { reason?: unknown } }).cancellation_details?.reason) ?? "");
+            await emailClientForLead(leadId, "monthly_ended", subscriptionEndedEmail({ becauseOfPayment: reason === "payment_failure" }), {
+              subscription: sub.id, cancellation_reason: reason || "(none given)",
+            });
           }
           break;
         }

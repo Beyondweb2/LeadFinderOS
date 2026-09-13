@@ -148,6 +148,56 @@ export function findableContactPhoneDisplay(): string {
   return m ? `+44 ${m[1]} ${m[2]}` : `+${d}`;
 }
 
+/* ⛔ THE PAYMENT FAILED, AND THEY ARE STILL A CLIENT (2026-09-13, Paul's wording). Sent from
+   invoice.payment_failed. Stripe is still retrying at this point — Smart Retries runs for days —
+   so the one thing this must not do is read like a cancellation. "Nothing changes in the meantime"
+   is the load-bearing sentence: without it, somebody whose card bounced assumes they have left and
+   is then charged four days later when a retry succeeds. */
+export function paymentFailedEmail(i: { payUrl: string | null }): { subject: string; paragraphs: string[] } {
+  return {
+    subject: "Your Findable payment didn't go through",
+    paragraphs: [
+      `Hi,`,
+      `Your monthly payment of £${FINDABLE_MONTHLY_GBP} didn't go through — usually the card has expired or the bank wanted a check.`,
+      `We'll try again over the next few days. Nothing changes in the meantime and you're still a client.`,
+      i.payUrl
+        ? `If it keeps failing you can update your card here: ${i.payUrl}`
+        : `If it keeps failing, reply to this email and I'll send you a new payment link.`,
+      `Paul, findable`,
+    ],
+  };
+}
+
+/* ⛔ AND WHEN IT FINALLY STOPS, THEY ARE TOLD. Paul's rule, 2026-09-13: nobody should find out they
+   stopped being a customer by noticing that nothing happened.
+   ⛔ TWO REASONS REACH THIS EVENT AND THEY ARE NOT THE SAME MESSAGE. `customer.subscription.deleted`
+   fires both when the retries give up and when the client cancels on purpose. Telling someone who
+   chose to leave that "your payments stopped working" is insulting; telling someone whose card died
+   that "you asked to cancel" is a lie. Stripe says which in cancellation_details.reason. */
+export function subscriptionEndedEmail(i: { becauseOfPayment: boolean }): { subject: string; paragraphs: string[] } {
+  return i.becauseOfPayment
+    ? {
+      subject: "Your Findable monthly has stopped",
+      paragraphs: [
+        `Hi,`,
+        `We tried your card a few times over the last week and it didn't go through, so your monthly has stopped and you won't be charged again.`,
+        `Your pages stay exactly where they are and nothing has been taken down. What stops is the weekly work and the measuring.`,
+        `If that wasn't what you wanted, reply to this email and we'll start it again — no need to explain anything.`,
+        `Paul, findable`,
+      ],
+    }
+    : {
+      subject: "Your Findable monthly has been cancelled",
+      paragraphs: [
+        `Hi,`,
+        `Your monthly is cancelled and you won't be charged again.`,
+        `Your pages stay exactly where they are and nothing has been taken down. What stops is the weekly work and the measuring.`,
+        `If you ever want it back, reply to this email and we'll pick it up where we left off.`,
+        `Paul, findable`,
+      ],
+    };
+}
+
 /* ⛔ THE THREE-DAY NOTICE, AND WHY IT IS THE SECOND ONE AND NOT THE ONLY ONE (2026-09-13).
    Stripe's `customer.subscription.trial_will_end` fires exactly three days before and the interval
    cannot be changed. Three days' warning of a first charge forty-two days after paying is too

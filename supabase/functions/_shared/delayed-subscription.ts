@@ -97,6 +97,29 @@ export async function createDelayedSubscription(
   const paymentMethodId = methods[0]?.id ?? "";
   if (!paymentMethodId) return { kind: "failed", reason: "the customer has no saved card — nothing to bill when the trial ends" };
 
+  /* ⛔ THE MONTHLY IS A REAL STRIPE PRICE, AND ITS AMOUNT IS CHECKED AGAINST OUR COPY BEFORE ANY
+     SUBSCRIPTION IS MADE. The Price id lives in a secret, so check-cross-repo-sync.mjs cannot read
+     it — this would be the fourth hand-kept copy of a price (CLAUDE.md §11) and the one that
+     decides what a card is actually charged. One GET closes that gap: if Stripe's amount or
+     interval disagrees with FINDABLE_MONTHLY_GBP, which is the number our emails and the website
+     state, nothing is created and Paul is told. Billing a figure we never quoted is worse than not
+     billing at all. */
+  const rawMonthly = (Deno.env.get("FINDABLE_MONTHLY_PRICE_ID") ?? "").trim();
+  if (!PRICE_ID_RE.test(rawMonthly)) {
+    return { kind: "failed", reason: `FINDABLE_MONTHLY_PRICE_ID is not a usable Price id (${rawMonthly ? "wrong shape — a prod_ id is the recorded paste error" : "not set"})` };
+  }
+  const price = await stripe(secret, `prices/${encodeURIComponent(rawMonthly)}`);
+  if (!price.ok) return { kind: "failed", reason: `could not read the monthly price: ${price.text.slice(0, 200)}` };
+  const expectedPence = Math.round(FINDABLE_MONTHLY_GBP * 100);
+  const actualPence = Number(price.json.unit_amount);
+  const interval = ((price.json.recurring ?? {}) as { interval?: string }).interval ?? "";
+  if (actualPence !== expectedPence || interval !== "month") {
+    return {
+      kind: "failed",
+      reason: `the Stripe price disagrees with our copy: Stripe says ${actualPence} pence / ${interval || "no"} interval, we tell clients £${FINDABLE_MONTHLY_GBP} a month`,
+    };
+  }
+
   const rawHosting = (Deno.env.get("FINDABLE_HOSTING_PRICE_ID") ?? "").trim();
   const hostingPriceId = PRICE_ID_RE.test(rawHosting) ? rawHosting : "";
   const hostingOn = wantsHosting && !!hostingPriceId;
@@ -110,10 +133,10 @@ export async function createDelayedSubscription(
        subscription ends rather than sitting in `unpaid` accruing invoices the client never agreed
        to. A client whose card died should stop being a client, not quietly build a debt. */
     "trial_settings[end_behavior][missing_payment_method]": "cancel",
-    "items[0][price_data][currency]": "gbp",
-    "items[0][price_data][unit_amount]": String(Math.round(FINDABLE_MONTHLY_GBP * 100)),
-    "items[0][price_data][recurring][interval]": "month",
-    "items[0][price_data][product_data][name]": "Findable — monthly",
+    /* The Price object, not inline price_data: this one is real in Stripe and its amount has just
+       been verified against the figure we publish. */
+    "items[0][price]": rawMonthly,
+    "items[0][quantity]": "1",
     "metadata[lead_id]": lead.id,
     "metadata[product]": "findable_monthly",
     "metadata[results_sent_at]": sentAtIso,
