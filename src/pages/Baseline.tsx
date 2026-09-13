@@ -20,6 +20,7 @@ import {
   type BaselineView, type Band, type QueueRowLite,
 } from '@/lib/baselineView';
 import { SEOHead } from '@/components/SEOHead';
+import { isInternalMeasurement, INTERNAL_MEASUREMENT_LABEL } from '@/lib/auditKind';
 
 /**
  * OPERATOR VIEW of a paid client's baseline — /baseline/:auditId.
@@ -56,6 +57,9 @@ interface AuditRow {
   // (absent from generated types) — read via the loosely-typed client below so it does not type-error.
   is_measurement: boolean | null;
   baseline_target_runs: number | null;
+  /* With is_measurement + baseline_target_runs, feeds isInternalMeasurement: a full measure or a
+     day-28 replay is an operator document, so this page must not offer a client report for it. */
+  audit_purpose: string | null;
   // Report context only — buildReportData needs the trade, the town and the client's own domain
   // (the last one enables the citation half of the "cited as a source" figure; without it this
   // report would show a LOWER cited count than the live client report, which does pass it).
@@ -159,7 +163,7 @@ export default function Baseline() {
       const client = supabase as unknown as SupabaseClient;
       const { data: a, error: aErr } = await client
         .from('ai_audits')
-        .select('id, lead_id, business_name, baseline, baseline_completed_at, is_measurement, baseline_target_runs, business_type, location_text, website')
+        .select('id, lead_id, business_name, baseline, baseline_completed_at, is_measurement, baseline_target_runs, audit_purpose, business_type, location_text, website')
         .eq('id', auditId).maybeSingle();
       if (aErr) throw aErr;
       if (!a) { setError('No audit with that id.'); setAudit(null); setView(null); return; }
@@ -233,12 +237,16 @@ export default function Baseline() {
   }
 
   const engineNames = [...new Set(view.questions.flatMap((q) => Object.keys(q.engines)))].sort();
+  /* A full measure / day-28 replay: operator document, no client report offered, labelled as
+     what it is rather than "Baseline" (this route serves both — the cockpit and Compare link here
+     for measurements too). */
+  const internalOnly = isInternalMeasurement(audit);
 
   return (
     <>
       <SEOHead
-        title={`Baseline — ${audit.business_name ?? 'client'}`}
-        description="Operator view of a paid client's baseline."
+        title={`${internalOnly ? INTERNAL_MEASUREMENT_LABEL : 'Baseline'} — ${audit.business_name ?? 'client'}`}
+        description={internalOnly ? 'Operator view of an internal measurement.' : "Operator view of a paid client's baseline."}
         noindex
       />
       <div className="mx-auto max-w-5xl space-y-4 py-4">
@@ -248,7 +256,12 @@ export default function Baseline() {
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold">{audit.business_name ?? 'Baseline'}</h1>
             <p className="text-xs text-muted-foreground">
-              {view.questions.length} questions · {view.runsCounted} runs
+              {/* What this audit IS, in the operator's words. The stored purpose stays 'measurement';
+                  the label is the only thing that changed (Paul, 2026-09-13). */}
+              <span className={internalOnly ? 'font-semibold text-amber-500' : 'font-semibold'}>
+                {internalOnly ? INTERNAL_MEASUREMENT_LABEL : 'Client baseline'}
+              </span>
+              {' · '}{view.questions.length} questions · {view.runsCounted} runs
               {view.measuredAt && ` · measured ${new Date(view.measuredAt).toLocaleDateString('en-GB')}`}
             </p>
           </div>
@@ -274,15 +287,20 @@ export default function Baseline() {
                 page's own `from` means Compare, and Baseline again after it, still know where
                 the operator actually started. */}
             <Link to={`/compare/${auditId}`} state={backState}>
-              <ArrowLeftRight className="mr-2 h-4 w-4" /> Before and after · free
+              <ArrowLeftRight className="mr-2 h-4 w-4" /> Before and after
             </Link>
           </Button>
-          {/* THE CLIENT REPORT. Free and read-only — it re-renders rows already loaded and calls
-              no paid API. Rendered in-app, so it does NOT count as a report open (see openReport). */}
-          <Button variant="outline" size="sm" onClick={openReport} disabled={reportBusy}>
-            {reportBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-            {reportBusy ? 'Building…' : 'View client report · free'}
-          </Button>
+          {/* THE CLIENT REPORT. Read-only — it re-renders rows already loaded and calls no paid
+              API. Rendered in-app, so it does NOT count as a report open (see openReport).
+              ⛔ NOT OFFERED FOR AN INTERNAL MEASUREMENT (2026-09-13). A full measure or a day-28
+              replay has no client document: the public renderer refuses it and this button must
+              not manufacture one. Same predicate as the renderer (src/lib/auditKind.ts). */}
+          {!internalOnly && (
+            <Button variant="outline" size="sm" onClick={openReport} disabled={reportBusy}>
+              {reportBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+              {reportBusy ? 'Building…' : 'View client report'}
+            </Button>
+          )}
         </div>
 
         {/* ⛔ THERE IS NO "RE-RUN THIS MEASUREMENT" BUTTON ANY MORE (2026-09-12). The day-28

@@ -190,3 +190,32 @@ export function freeCheckSendGate(auditPurpose: unknown, opts: { forced?: boolea
       : 'audit has no recorded purpose (created before 2026-09-13) — not sent automatically',
   };
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   IS THIS AUDIT AN INTERNAL WORKING DOCUMENT? (2026-09-13, Paul's brief.)
+
+   🔴 THE PUBLIC RENDERER SERVED THE CLIENT DOCUMENT FOR ANY AUDIT ID, INCLUDING A FULL MEASURE.
+   findable.live/report/<id> rendered AD Locksmithing's 18-question winnable-questions audit as a
+   client report, and the only thing stopping a client seeing it was that nothing sent the link.
+   That is luck, not protection. The full measure and the day-28 replay are OPERATOR documents: the
+   measure decides what to build and is deliberately disjoint from the judged set, the replay is
+   the "after" side of a refund decision. Neither is a thing a client is handed as "their report".
+
+   ⛔ ONE PREDICATE, READ BY EVERY SURFACE THAT COULD SHOW ONE: render-audit-report (refuses with an
+   operator-only notice), the Baseline screen (no "View client report" button), the lead card's
+   cockpit (its report links resolve from the baseline pointer, never a measurement), AuditPills
+   (the label). Written once so the four cannot drift — the same shape as freeCheckSendGate above.
+
+   ⚠️ LEGACY ROWS (purpose null, before 2026-09-12) are graded by the old rule: multi-run AND
+   is_measurement → measurement. That is RG's 26 Aug and 8 Sep re-measures. A single-run legacy
+   audit and a legacy client baseline are NOT internal — they are the prospect's and the client's
+   documents respectively. */
+export function isInternalMeasurement(row: AuditKindRow | null | undefined): boolean {
+  if (!row) return false;
+  return auditKind(row) === 'measurement';
+}
+
+/** The operator-facing NAME of a `measurement` / `remeasure` audit. The stored purpose value stays
+ *  `measurement` (the pointer triggers and the partial unique index read the column); only what a
+ *  person reads changes. "Winnable questions" is what the full measure answers — Paul, 2026-09-13. */
+export const INTERNAL_MEASUREMENT_LABEL = 'Winnable questions audit (internal)';

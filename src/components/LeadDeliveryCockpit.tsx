@@ -19,6 +19,7 @@ import {
   remeasureStatus, type DeliveryChecklist,
 } from '@/lib/deliveryCockpit';
 import type { OutreachLead } from '@/types/outreach';
+import { auditKind, isInternalMeasurement } from '@/lib/auditKind';
 
 /* ============================================================
    THE CLIENT DELIVERY COCKPIT — everything I need on a client, at a glance (Paul's spec 2026-08-18).
@@ -44,7 +45,15 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Resolve the lead's audit (prefer the PAID baseline; else the newest) for dates + links.
+  /* Resolve the lead's audit for dates + links.
+     ⛔ THE POINTER FIRST, NEVER "THE NEWEST AUDIT WITH A RUN TARGET" (2026-09-13). That rule picked
+     the newest multi-run audit, and under the three-type model the newest multi-run audit at day 0
+     is the FULL MEASURE — so this cockpit pointed RG at his 26 Aug measurement instead of his 11 Aug
+     baseline, and AD Locksmithing's "Baseline report" opened d3453511 under a /baseline/ URL. The
+     lead's baseline_audit_id is claimed by trigger inside the baseline's own insert and is the one
+     authoritative answer. Only a lead with NO pointer falls back — and then never to an internal
+     measurement (isInternalMeasurement), so the "Client report" link below can never resolve to a
+     document the public renderer refuses. */
   const [audit, setAudit] = useState<BaselineAudit | null>(null);
   const [auditLoading, setAuditLoading] = useState(true);
   const [questions, setQuestions] = useState<string[] | null>(null);
@@ -54,23 +63,28 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
     if (isDemoLead(lead.id)) { setAuditLoading(false); return; }
     let alive = true;
     void (async () => {
-      // is_market absent from generated types → through unknown, the AiAudit pattern.
+      type Row = { id: string; created_at: string; baseline_target_runs: number | null; is_market: boolean | null; is_measurement: boolean | null; audit_purpose: string | null };
+      // is_market / is_measurement / audit_purpose absent from generated types → through unknown.
       const { data } = await supabase
         .from('ai_audits')
-        .select('id, created_at, baseline_target_runs, is_market')
+        .select('id, created_at, baseline_target_runs, is_market, is_measurement, audit_purpose')
         .eq('lead_id', lead.id)
-        .order('created_at', { ascending: false }) as unknown as {
-          data: { id: string; created_at: string; baseline_target_runs: number | null; is_market: boolean | null }[] | null;
-        };
+        .order('created_at', { ascending: false }) as unknown as { data: Row[] | null };
       if (!alive) return;
-      const rows = (data ?? []).filter((a) => a.is_market !== true);
-      // Prefer the paid baseline (baseline_target_runs set); else the most recent audit.
-      const chosen = rows.find((a) => a.baseline_target_runs != null) ?? rows[0] ?? null;
-      setAudit(chosen ? { id: chosen.id, created_at: chosen.created_at, isBaseline: chosen.baseline_target_runs != null } : null);
+      const rows = (data ?? []).filter((a) => a.is_market !== true && !isInternalMeasurement(a));
+      const pointer = lead.baseline_audit_id ?? null;
+      const pointed = pointer ? rows.find((a) => a.id === pointer) ?? null : null;
+      // No pointer (a lead paid before the trigger existed, or unpaid): a recognised baseline by
+      // kind, else the newest audit that is NOT an internal measurement.
+      const chosen = pointed
+        ?? rows.find((a) => auditKind(a) === 'paid_baseline' || auditKind(a) === 'multi_run_unmarked')
+        ?? rows[0]
+        ?? null;
+      setAudit(chosen ? { id: chosen.id, created_at: chosen.created_at, isBaseline: !!pointed || chosen.baseline_target_runs != null } : null);
       setAuditLoading(false);
     })();
     return () => { alive = false; };
-  }, [lead.id]);
+  }, [lead.id, lead.baseline_audit_id]);
 
   const loadQuestions = async () => {
     setQuestionsOpen((o) => !o);
