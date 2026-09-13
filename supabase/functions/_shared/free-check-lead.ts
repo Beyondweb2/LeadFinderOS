@@ -62,6 +62,13 @@ export interface FreeCheckInput {
    *  — a typed "07700 900123" and a stored "+447700900123" are the same number, and an unnormalised
    *  compare would miss every duplicate and store a number the send path cannot dial. */
   phone?: string | null;
+  /** OPTIONAL, and typed by the visitor on the pre-pay panel. Set at CREATION for the same reason
+   *  the phone is: findable-onboarding's write-through keys on the REQUEST's lead_id, and a cold
+   *  signup has none — the lead does not exist until this function makes it. So the name was
+   *  captured on the onboarding row and never reached the lead, on every signup ever made.
+   *  ⚠️ It is the CONTACT's name, not the business's. It prints in the contact line of every page
+   *  the generator builds and is {{1}} in the questionnaire follow-up. */
+  contactName?: string | null;
   /* ⛔ WHY THE VISITOR IS HERE, AND IT CHANGES ONE THING ONLY: WHETHER THE DAILY CAP APPLIES.
      'free_check' (the default) is someone asking for a free audit, and the cap exists because each
      one costs real pence and nothing else rate-limits that form. 'signup' is someone ON THEIR WAY
@@ -324,6 +331,9 @@ export async function createFreeCheckLead(
     }
     if (placeId) row.place_id = placeId;
     if (phone) row.phone = phone;
+    /* Set on the INSERT, so it cannot be missed by a write-through that runs before the lead
+       exists. Nothing can be overwritten here by definition — the row is new. */
+    if (!blank(input.contactName)) row.contact_name = String(input.contactName).trim().slice(0, 120);
     if (website) row.website = website;
     if (rating !== null) row.rating = rating;
     if (reviewCount !== null) row.review_count = reviewCount;

@@ -212,11 +212,31 @@ async function sendFindablePaymentConfirmation(
       return;
     }
 
-    /* GUARD 2 — no phone is a clean skip, not an error. The questionnaire never asks for one, so
-       the lead row is the only source and a lead without one is a normal state. */
+    /* 🔴 GUARD 2 — AND THIS COMMENT WAS THE BUG REPORT. It read: "no phone is a clean skip, not an
+       error. The questionnaire never asks for one, so a lead without one is a normal state." That
+       stopped being true when the pre-pay panel began asking for the phone (2026-09-13), and while
+       it was true it was doing real damage: White Sparks Electrical paid £99 as a cold signup with
+       phone = null, this branch skipped, and the only trace was a console.warn — which the CLI
+       cannot read. Paul found out because no WhatsApp arrived.
+       ⛔ SO IT IS RECORDED NOW, NOT LOGGED. A paying customer we cannot reach on the channel that
+       carries the business is not a normal state and must never again be invisible. It is still a
+       skip rather than an error: the payment succeeded and the operator email goes either way. */
     const to = toWhatsAppNumber((lead.phone as string) ?? "", (lead.country as string) ?? null);
     if (!to) {
       console.warn(`${tag}: no usable WhatsApp number on the lead — confirmation skipped`);
+      try {
+        await service.from("client_error_reports").insert({
+          error_id: "payment_confirmation_unreachable",
+          context: {
+            lead_id: opts.leadId,
+            business_name: (lead.business_name as string) ?? null,
+            stored_phone: (lead.phone as string) ?? null,
+            why: "no usable WhatsApp number on the lead when the payment confirmation fired",
+          },
+        });
+      } catch (e) {
+        console.error(`${tag}: could not record the unreachable payer:`, e instanceof Error ? e.message : String(e));
+      }
       return;
     }
 
