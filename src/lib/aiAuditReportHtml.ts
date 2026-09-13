@@ -15,7 +15,7 @@
 /* RELATIVE paths with explicit .ts extensions, NOT the "@/" alias: this file is bundled into
    render-audit-report and apply-seo-paste, and Deno cannot resolve the Vite alias. Both are
    dependency-free constant files, so nothing heavy joins those bundles. */
-import { FINDABLE_GUARANTEE } from './findableOffer.ts';
+import { FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE } from './findableOffer.ts';
 
 export interface ReportEngineRow {
   label: string;   // "ChatGPT", "Gemini", "AI Overview", "Google"
@@ -363,7 +363,9 @@ function gradeCircle(grade: string, score: number | null, size: number, label: s
    so neither value is DISPLAYED to the prospect; it is visible only in the link target.
    TODO(paul): set REPORT_CONTACT_EMAIL to the Findable inbox once findable.uk has mail. */
 const REPORT_CONTACT_EMAIL = "paul@move37.fun";
-const REPORT_CONTACT_WHATSAPP = "447347041545";
+/* ⛔ THE CONTACT NUMBER IS NOT DEFINED HERE ANY MORE. It was 447347041545, the Business API line,
+   so "WhatsApp me" reached the automated sender rather than a person. It now comes from
+   FINDABLE_CONTACT_WHATSAPP, byte-locked to findable.live's own founder number. */
 /** Somewhere to go and check we are real. A prospect who reads the whole report and wants to know
  *  who wrote it had nowhere to click: two contact buttons, both of which mean starting a
  *  conversation. This is the third option, and the only one that costs them nothing.
@@ -778,7 +780,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     console.warn("[report] get-started button omitted: no per-lead onboarding url (no lead_id, or the site origin is not configured)");
   }
 
-  const waHref = esc(`https://wa.me/${REPORT_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
+  const waHref = esc(`https://wa.me/${FINDABLE_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
 
   // ── QUESTION-BY-QUESTION DETAIL (page 2) — every question asked, whether AI named the business,
   //    and the real rival firms it named instead. A clean addition; the first-page summary above is
