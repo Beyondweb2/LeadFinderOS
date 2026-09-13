@@ -111,11 +111,12 @@ import type { AuditRow, RunLite, AuditLite, BusinessGroup, LeadOption } from '@/
 import { AuditBookList } from '@/components/audit/AuditBookList';
 const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
 
-/** How many audits the landing list loads. Was 50, then 300; both silently truncated once the audit
- *  count passed them (300 hid the oldest 185 of 485 — ABLM and SC Plumbing among them). Raised well
- *  above the live count. The `auditsCapped` label still renders honestly if we ever approach it, and
- *  the server-side name search below now finds audits BEYOND this window regardless. */
-const AUDIT_FETCH_LIMIT = 1000;
+/** The ceiling the landing list can EVER load — fetchAllRows' runaway guard (50 pages × 1,000).
+ *  🔴 THIS WAS A HARD `.limit(1000)` UNTIL 2026-09-13, AND THE BOOK STOOD AT 969. Was 50, then 300
+ *  (which hid the oldest 185 of 485 — ABLM and SC Plumbing among them), then 1000; every one of
+ *  them silently dropped the oldest audits once the count passed it. The list is paginated now, so
+ *  this number only feeds the `auditsCapped` label, which can render only if 50,000 audits exist. */
+const AUDIT_FETCH_LIMIT = 50_000;
 
 /** How many name-matched audits the server search pulls in when a term is typed. Generous — a search
  *  should surface every match, not the newest few — but bounded so a one-letter term can't drag the
@@ -625,23 +626,39 @@ const AiAudit = () => {
     queryKey: auditListKey,
     enabled: !!user,
     queryFn: async () => {
-      const fetchWith = (select: string) => (supabase as unknown as SupabaseClient)
-        .from('ai_audits')
-        .select(select)
-        .order('created_at', { ascending: false })
-        .limit(AUDIT_FETCH_LIMIT);
+      /* ⛔ PAGINATED, NOT CAPPED (2026-09-13). This was `.limit(AUDIT_FETCH_LIMIT)` = 1000, and the
+         book stood at 969 audits with one bulk job of 25 leaving it six away from the cliff: at
+         1,001 the OLDEST audit simply stopped being fetched — not deleted, not archived, just absent
+         from the list, and its business with it if that was its only audit. Same paginated reader
+         the runs and the reports already use (fetchAllRows), same stable sort (`id` as the
+         tiebreaker, because an unstable order lets a page boundary skip a row — the reason that
+         helper exists). At the current size this is still ONE request; past 1,000 it becomes two.
+         The real fix — page the LIST, poll only the in-flight audits — is still to come; this is
+         the hour that stops an audit vanishing before then. */
+      const pageWith = (select: string) => fetchAllRows<RawAuditRow>('AiAudit (audits)', (from, to) =>
+        (supabase as unknown as SupabaseClient)
+          .from('ai_audits')
+          .select(select)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to));
 
-      const first = await fetchWith(AUDIT_SELECT);
       /* Column not there yet (migration unrun) → shed it and fetch again, rather than showing an
          empty book. `archivedReady` tells the UI to hide the archive controls instead of offering
-         a button that cannot work. */
-      const missing = isMissingArchivedColumn(first.error);
-      const archivedReady = !missing;
-      const rows = missing ? (await fetchWith(AUDIT_SELECT_BASE)).data : first.data;
-      const auditRows = ((rows ?? []) as unknown) as RawAuditRow[];
+         a button that cannot work. fetchAllRows THROWS the PostgREST error, so the shed is a catch. */
+      let archivedReady = true;
+      let fetched: { rows: RawAuditRow[]; truncated: boolean };
+      try {
+        fetched = await pageWith(AUDIT_SELECT);
+      } catch (e) {
+        if (!isMissingArchivedColumn(e as { code?: string; message?: string })) throw e;
+        archivedReady = false;
+        fetched = await pageWith(AUDIT_SELECT_BASE);
+      }
       return {
-        audits: await hydrateAudits(auditRows),
-        capped: auditRows.length >= AUDIT_FETCH_LIMIT,
+        audits: await hydrateAudits(fetched.rows),
+        /* Only true if the reader hit its runaway guard (50 pages = 50,000 audits). */
+        capped: fetched.truncated,
         archivedReady,
       };
     },
