@@ -160,7 +160,9 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Send email via Resend
     const emailResponse = await resend.emails.send({
-      from: "LeadFinder Pro <noreply@lead-finder-app.com>",
+      /* findable.live, not lead-finder-app.com: the old product's domain is not verified on this
+         Resend account and every send from it is refused 403 (see stripe-webhook FROM_OPERATOR). */
+      from: "Findable alerts <alerts@findable.live>",
       to: ["beyondwebcraft@outlook.com"],
       subject: subject,
       html: `
