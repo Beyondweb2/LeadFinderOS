@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
+import { ReviewQueueTab } from '@/components/ReviewQueueTab';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
 import { usePersistedScroll } from '@/hooks/usePersistedScroll';
@@ -62,6 +63,11 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Mobile bottom navigation */}
         <MobileBottomNav />
+
+        {/* ⛔ THE REVIEW QUEUE, HERE BECAUSE THIS SHELL MOUNTS ONCE. It renders nothing at all when
+            nobody is waiting, so it costs every other screen a single cheap RLS-scoped read and no
+            pixels. It is OUTSIDE <main>, so it never scrolls away and never covers the page. */}
+        <ReviewQueueTab />
 
       </div>
     </SidebarProvider>
