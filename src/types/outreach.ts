@@ -199,6 +199,12 @@ export interface OutreachLead {
      `remeasure_due_date` is a TYPED column (not JSONB) on purpose: it is the four-week guarantee
      clock and must be queryable for a future "due soon across all clients" view. */
   remeasure_due_date?: string | null;          // YYYY-MM-DD; filled ONCE at baseline finalisation (+28, WHERE NULL); RG's +56 is stored by hand; editable
+  /* The two POINTERS, claimed by DB trigger inside the audit's own insert (CLAUDE.md §18/§19).
+     baseline_audit_id is THE client's judged baseline; remeasure_audit_id is the day-28 replay.
+     ⛔ Anything that needs "the client's baseline" reads the pointer — never "the newest audit
+     with a run target", which is how the cockpit pointed RG at his 26 Aug measurement. */
+  baseline_audit_id?: string | null;
+  remeasure_audit_id?: string | null;
   delivery_checklist?: Record<string, boolean> | null;  // the 5 manual milestone ticks
   delivery_ref?: Record<string, string> | null;         // NON-SECRET reference info (login email, host, access notes)
   // Lead-detail journey markers (manual milestones set in the detail popup).

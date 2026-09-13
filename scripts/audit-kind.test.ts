@@ -25,6 +25,7 @@ import {
   measurementFlagFor, auditKind, findPaidBaseline, findAmbiguousMultiRun, freeCheckSendGate,
   BASELINE_AUDIT_PURPOSE, MEASUREMENT_AUDIT_PURPOSE, REMEASURE_AUDIT_PURPOSE,
   FREE_CHECK_AUDIT_PURPOSE, ORDINARY_AUDIT_PURPOSE,
+  isInternalMeasurement, INTERNAL_MEASUREMENT_LABEL,
   type AuditKindRow,
 } from "../src/lib/auditKind.ts";
 import { BASELINE_RUNS } from "../src/lib/auditQuestionCounts.ts";
@@ -209,6 +210,22 @@ for (const [label, purpose] of silent.slice(0, 3)) {
   const d = freeCheckSendGate(BASELINE_AUDIT_PURPOSE);
   ok(!d.send && /not a free check/.test(d.reason), "a refusal names why, so the skip reason reads as a decision, not a bug");
 }
+
+console.log("\n── AN INTERNAL MEASUREMENT IS RECOGNISED BY ONE PREDICATE (the public renderer, the Baseline screen, the cockpit) ──");
+/* The full measure and the day-28 replay are operator documents. findable.live/report/<id> rendered
+   one as a CLIENT report on 2026-09-13; the refusal keys on this. */
+ok(isInternalMeasurement({ audit_purpose: MEASUREMENT_AUDIT_PURPOSE, baseline_target_runs: 3, is_measurement: true }) === true, "a recorded full measure is internal");
+ok(isInternalMeasurement({ audit_purpose: REMEASURE_AUDIT_PURPOSE, baseline_target_runs: 3, is_measurement: true }) === true, "a recorded day-28 replay is internal");
+ok(isInternalMeasurement({ audit_purpose: MEASUREMENT_AUDIT_PURPOSE, baseline_target_runs: null, is_measurement: null }) === true, "the recorded purpose alone decides — no run count or flag needed");
+ok(isInternalMeasurement({ audit_purpose: BASELINE_AUDIT_PURPOSE, baseline_target_runs: 3, baseline_contract: { version: 2 } }) === false, "the client's baseline is NOT internal — it is the document a client is measured against");
+ok(isInternalMeasurement({ audit_purpose: FREE_CHECK_AUDIT_PURPOSE, baseline_target_runs: 3 }) === false, "a free check is the prospect's document, not internal");
+ok(isInternalMeasurement({ audit_purpose: ORDINARY_AUDIT_PURPOSE }) === false, "an ordinary audit is the prospect's report");
+/* Legacy rows (purpose null): RG's 26 Aug and 8 Sep re-measures are multi-run + is_measurement. */
+ok(isInternalMeasurement({ audit_purpose: null, baseline_target_runs: 3, is_measurement: true }) === true, "legacy multi-run + is_measurement (RG's re-measures) is internal");
+ok(isInternalMeasurement({ audit_purpose: null, baseline_target_runs: 3, is_measurement: false, baseline_contract: { v: 1 } }) === false, "legacy client baseline (RG 11 Aug, Ronnie) is not internal");
+ok(isInternalMeasurement({ audit_purpose: null, baseline_target_runs: null, is_measurement: true }) === false, "a legacy SINGLE-run audit is never internal, whatever the flag says — it is a prospect's report");
+ok(isInternalMeasurement(null) === false && isInternalMeasurement(undefined) === false, "absence is never internal (nothing to refuse, nothing to hide)");
+ok(INTERNAL_MEASUREMENT_LABEL === "Winnable questions audit (internal)", "the operator label is the one Paul chose");
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
 if (f) process.exit(1);
