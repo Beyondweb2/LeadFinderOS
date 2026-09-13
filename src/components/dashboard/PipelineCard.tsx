@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { GitBranch } from 'lucide-react';
 import { CampaignPicker } from '@/components/CampaignPicker';
+import { usePersistedState } from '@/hooks/usePersistedState';
 import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
 import { OUTREACH_STATUS_OPTIONS, type OutreachLead, type PipelineStatus } from '@/types/outreach';
 
@@ -27,11 +28,19 @@ export function PipelineCard({ allLeads }: PipelineCardProps) {
     [allLeads, campaignFilter],
   );
 
+  /* Persisted so "show all" survives a reload, same rule as the section collapses. */
+  const [showAll, setShowAll] = usePersistedState<boolean>('dashboard.pipeline.showAll', false, { tier: 'local' });
+
   const countByStatus = useMemo(() => {
     const m: Record<string, number> = {};
     for (const l of leads) m[l.status] = (m[l.status] ?? 0) + 1;
     return m;
   }, [leads]);
+
+  const hiddenCount = useMemo(
+    () => OUTREACH_STATUS_OPTIONS.filter(o => (countByStatus[o.value] ?? 0) === 0).length,
+    [countByStatus],
+  );
 
   // Headline — active/open leads only (drop not_interested / bounced / paid).
   const activeTotal = useMemo(
@@ -65,8 +74,15 @@ export function PipelineCard({ allLeads }: PipelineCardProps) {
       </CardHeader>
       <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-5 md:pt-0">
         {/* Per-status breakdown — matches the Outreach status filter list (order + labels) */}
+        {/* 🔴 ZERO-COUNT STATUSES ARE HIDDEN (2026-09-13, Paul's cut). It rendered all 21 options
+            every time, greying the empty ones to 50% — and measured against live data, 7 of the 21
+            are permanent zeroes, so a third of the card was furniture. The toggle keeps them
+            reachable, because "no leads are in this status" is a real answer and hiding it with no
+            way back would make the card quietly narrower than the Outreach filter it mirrors.
+            ⚠️ The full list stays the SOURCE — this filters what is drawn, never what is counted,
+            so the headline and the per-status numbers cannot disagree. */}
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:gap-y-2 pt-2 border-t border-border/50">
-          {OUTREACH_STATUS_OPTIONS.map(opt => {
+          {OUTREACH_STATUS_OPTIONS.filter(opt => showAll || (countByStatus[opt.value] ?? 0) > 0).map(opt => {
             const n = countByStatus[opt.value] ?? 0;
             return (
               <div key={opt.value} className={`flex items-center justify-between gap-2 ${n === 0 ? 'opacity-50' : ''}`}>
@@ -79,6 +95,16 @@ export function PipelineCard({ allLeads }: PipelineCardProps) {
             );
           })}
         </div>
+        {/* Only offered when something is actually hidden — a toggle that reveals nothing is noise. */}
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAll(!showAll)}
+            className="mt-2 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            {showAll ? 'Hide empty statuses' : `Show all ${OUTREACH_STATUS_OPTIONS.length} statuses (${hiddenCount} empty)`}
+          </button>
+        )}
       </CardContent>
     </Card>
   );

@@ -13,6 +13,7 @@ import { ChannelPerformanceCard } from '@/components/dashboard/ChannelPerformanc
 import { AuditFunnelCard } from '@/components/dashboard/AuditFunnelCard';
 import { CampaignStatsSection } from '@/components/dashboard/CampaignStatsSection';
 import { AdminZone } from '@/components/dashboard/AdminZone';
+import { DashboardSection } from '@/components/dashboard/DashboardSection';
 
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -141,60 +142,75 @@ const Dashboard = () => {
       </div>
 
       {/* Audit funnel — the current contacted→pitch→pay funnel leads the dashboard */}
-      <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Audit funnel</h2>
+      {/* OPEN: small, fixed height, and it is the headline. Paul kept it knowing it overlaps the
+          per-campaign funnel below — that overlap is not reason enough to cut it. */}
+      <DashboardSection storageKey="audit-funnel" title="Audit funnel" defaultOpen>
         <AuditFunnelCard funnel={metrics.auditFunnel} />
-      </section>
+      </DashboardSection>
 
       {/* Outreach performance — per-channel (what's working) + pipeline */}
-      <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Outreach performance</h2>
+      {/* COLLAPSED: reference figures, not a daily read. The pipeline breakdown in particular is
+          21 status rows of which 7 are permanent zeroes — see PipelineCard's own toggle. */}
+      <DashboardSection storageKey="outreach-performance" title="Outreach performance"
+        defaultOpen={false} collapsedHint="channels and pipeline">
         <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <ChannelPerformanceCard data={metrics.channelPerf} />
           </div>
           <PipelineCard allLeads={metrics.allLeads} />
         </div>
-      </section>
+      </DashboardSection>
 
       {/* Paying clients — what each one needs next. Above "next steps" on purpose: a paying client's
           delivery outranks prospecting admin, and this card is the only per-client view in the app
           (2026-09-13). The door to the operator Baseline screen is here, through the pointer. */}
-      <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Clients</h2>
+      {/* OPEN: the only per-client view in the app and the door to the Baseline screen. */}
+      <DashboardSection storageKey="clients" title="Clients" defaultOpen>
         <ClientDeliveryCard leads={metrics.allLeads} onChanged={refetch} />
-      </section>
+      </DashboardSection>
 
       {/* Next steps */}
-      <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Activity &amp; next steps</h2>
+      {/* OPEN. NextActionsCard already caps itself at max-h-[220px] and scrolls internally, so 43
+          live tasks cost ~220px, not 43 rows — it looked like the worst card and is one of the
+          smallest. FreeCheckProgressCard's own comment argues it must not sit behind a toggle, and
+          that argument stands: it answers "where has my test got to". */}
+      <DashboardSection storageKey="next-steps" title="Activity &amp; next steps" defaultOpen>
         <div className="grid gap-3 sm:gap-4 grid-cols-1">
           <NextActionsCard tasks={metrics.dashTasks} onClearTask={handleClearTask} onClearAll={handleClearAllTasks} onDismiss={handleDismissTask} />
-          {/* Beside Next Actions on purpose: its chase task is keyed on a LEAD and only fires after
-              a day, so a lead-less submission never appears there at all. */}
-          <SubmissionsCard />
           {/* ⛔ ABOVE THE FOLD OF THIS SECTION AND NOT BEHIND A TOGGLE (2026-09-07). It is the screen
               that answers "where has my test got to", and the whole reason it exists is that the
               answer was unavailable while an operator sat waiting. A collapsed panel would put it
               back one click from useless. It polls only while something is mid-flight. */}
           <FreeCheckProgressCard />
         </div>
-      </section>
+      </DashboardSection>
 
-      {/* Per-campaign monitoring — operator-level; admins only (same gate as Sites) */}
+      {/* ⚠️ SUBMISSIONS MOVED OUT OF "next steps" TO BE COLLAPSED SEPARATELY (2026-09-13), and the
+          reason it was grouped there still holds: its chase task is keyed on a LEAD and only fires
+          after a day, so a lead-less submission never appears in Next Actions at all. Adjacency is
+          what that argument needs, and adjacency is kept — it is the very next section. */}
+      <DashboardSection storageKey="submissions" title="Questionnaire submissions"
+        defaultOpen={false} collapsedHint="who filled the form">
+        <SubmissionsCard />
+      </DashboardSection>
+
+      {/* 🔴 COLLAPSED, AND THIS IS THE ONE THAT MADE THE PAGE "MASSIVE". It is the only card that
+          multiplies a large component by a row count: 13 campaigns x a 386-line CampaignStatsCard,
+          every one expanded, with no max-height anywhere in the chain. Nothing else on this page
+          grows like that. The per-campaign hide it already has is untouched. */}
       {isAdmin && (
-        <section>
-          <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Campaigns</h2>
+        <DashboardSection storageKey="campaigns" title="Campaigns"
+          defaultOpen={false} collapsedHint="per-campaign funnels">
           <CampaignStatsSection />
-        </section>
+        </DashboardSection>
       )}
 
       {/* Admin zone — rendered ONLY for admins (role-based useSubscription().isAdmin) */}
       {isAdmin && (
-        <section>
-          <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Admin</h2>
+        <DashboardSection storageKey="admin" title="Admin"
+          defaultOpen={false} collapsedHint="status, usage, recent events">
           <AdminZone />
-        </section>
+        </DashboardSection>
       )}
 
       {/* Quick Links */}
