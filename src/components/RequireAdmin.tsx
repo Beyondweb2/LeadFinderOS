@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 /**
  * Operator gate — the SINGLE source of truth for who may see the operator app.
  *
- * LeadFinderOS is internal-only (Move37), so access is ADMIN-ONLY: you must have a
+ * LeadFinderOS is internal-only, so access is ADMIN-ONLY: you must have a
  * `user_roles` row with role='admin'. This is a POSITIVE check (require admin), never
  * "block the known non-admins", so an unknown account can't slip in.
  *
