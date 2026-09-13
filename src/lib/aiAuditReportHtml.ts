@@ -546,11 +546,45 @@ function seoIssuesSection(seo: AiAuditSeo | undefined): string {
    ================================================================================================ */
 export const REPORT_CHROME_CSS_CORE = `
   :root{
-    --blue:#1a3d7c; --blue-2:#2a5aa8; --yellow:#ffd23f;
+    /* ══ THE BRAND: DARK WITH GOLD. LIGHT BODY. (Paul, 2026-09-13) ═══════════════════════════
+       Everything that used to be Findable BLUE (#1a3d7c, the pale blue tints, the navy footer) is
+       the site's charcoal now — its --color-band #101114, --color-foot #0A0B0D, gold #FFD13F — and
+       the body stays light and readable. --blue KEEPS ITS NAME because 20 rules and three
+       documents read it; renaming it would be a second edit for no pixel. Its VALUE is charcoal.
+       ⚠️ Text on the band/CTA/footer: white on #101114 is 18:1, --on-band-muted 11:1, gold 13:1,
+       charcoal text on a gold button 12:1 — every pairing that sat on blue was re-checked on
+       charcoal and passes. Amber (--amber, chosen for a LIGHT ground) never sits on a dark surface
+       in this document: the grade rings, the measuring banner and the severity dots are all on the
+       light body. If one ever moves onto the band, it needs gold there and amber in print.
+       ⚠️ PRINT NEEDS NOTHING NEW: the band and footer were already dark and already forced with
+       print-color-adjust; charcoal prints exactly as navy did. */
+    --blue:#101114; --blue-2:#2C2D34; --yellow:#FFD13F;
     --ink:#0f172a; --muted:#5b6472; --faint:#9aa3b2; --line:#e9edf3;
     --line-strong:#94a3b8; /* darker grey &mdash; for SEO graphics that must stay visible on the --page tint */
     --red:#e11d2a; --amber:#c2820b; --green:#15a34a; --paper:#ffffff; --page:#eef1f6;
-    --foot:#102a58;
+    --foot:#0A0B0D;
+    /* ── EVERY OTHER COLOUR IN THE DOCUMENT, NAMED (step 1 of the dark theme, 2026-09-13). ──
+       These carry exactly the values that used to sit inline, so this step changes no pixel. They
+       exist so a second token set (dark for screen, light for print) can swap ALL of them at once:
+       a recolour over a half-tokenised file is how one path looks right and the other five wrong.
+       ⚠️ Text on the band/footer/CTA is grouped as --on-band-* because those surfaces are dark;
+       the -tint tokens are the pale panels of the light body. (No backticks in this comment: a
+       backtick inside this template literal terminates the whole stylesheet — CLAUDE.md §3.) */
+    --ink-2:#334155;                                            /* body copy one step lighter than --ink */
+    /* On the charcoal surfaces: neutral greys from the site (its --color-faint / --color-panel-3),
+       replacing the blue-cast greys that suited navy. */
+    --on-band:#ffffff; --on-band-muted:#c9cbd1; --on-band-faint:#9C9FA7; --on-band-soft:#dcdee3;
+    --foot-text:#c9cbd1; --foot-muted:#9C9FA7;
+    --red-tint:#fff5f5; --red-tint-2:#fdeaea; --on-red-tint:#3d0f12;
+    --green-tint:#e7f6ee; --amber-tint:#fff8ea; --amber-tint-2:#fdf3dd;
+    /* The pale BLUE tints are the site's neutral panels now (--color-panel / --color-panel-2). */
+    --blue-tint:#f0f1f3; --blue-tint-2:#e9eaed;
+    --panel-tint:#f8fafc; --panel-tint-2:#f1f5f9;
+    --gold:#FFD13F; --on-gold:#3a2d05;
+    --gold-tint:#fffaeb; --gold-line:#e6c968; --on-gold-tint:#8a6d1a; --on-gold-tint-2:#6b5a1e;
+    /* The welcome pack's code boxes were navy; charcoal now (--color-navy-800), site ink on it. */
+    --mono-bg:#17181C; --mono-text:#F7F7F5; --mono-light-text:#1e293b;
+    --video-bg:#000000;
   }
   *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   html,body{ margin:0; padding:0; }
@@ -561,29 +595,29 @@ export const REPORT_CHROME_CSS_CORE = `
     box-shadow:0 8px 40px rgba(15,23,42,.12); }
 
   /* Header band &mdash; Findable blue with a yellow wordmark and a wave bottom edge */
-  .band{ position:relative; background:var(--blue); color:#fff; padding:22px 28px 34px; }
+  .band{ position:relative; background:var(--blue); color:var(--on-band); padding:22px 28px 34px; }
   .band-row{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
   .wordmark{ font-size:22px; font-weight:900; letter-spacing:-.02em; color:var(--yellow); }
-  .wordmark .dot{ color:#fff; }
-  .band-meta{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#b9c8e4; font-weight:700; }
+  .wordmark .dot{ color:var(--on-band); }
+  .band-meta{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--on-band-faint); font-weight:700; }
   .wave{ position:absolute; left:0; right:0; bottom:-1px; width:100%; height:38px; display:block; }
 `;
 
 export const REPORT_CHROME_CSS_FOOT = `
   .site-foot{ background:var(--foot); padding:12px 28px 14px; }
   .site-foot .row{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
-    font-size:11px; color:#c7d5ee; font-weight:400; }
-  .site-foot .row b{ color:#fff; font-weight:700; }
+    font-size:11px; color:var(--foot-text); font-weight:400; }
+  .site-foot .row b{ color:var(--on-band); font-weight:700; }
   .site-foot .row a{ color:var(--yellow); text-decoration:none; }
-  .site-foot .note{ margin-top:8px; font-size:11px; font-weight:400; color:#8fa4c8; }
-  .site-foot .site-link{ margin-top:8px; font-size:11px; font-weight:400; color:#8fa4c8; }
+  .site-foot .note{ margin-top:8px; font-size:11px; font-weight:400; color:var(--foot-muted); }
+  .site-foot .site-link{ margin-top:8px; font-size:11px; font-weight:400; color:var(--foot-muted); }
   .site-foot .site-link a{ color:var(--yellow); text-decoration:none; font-weight:700; }
 `;
 
 export const REPORT_CHROME_CSS_PRINT = `  @page{ size:A4; margin:10mm; }
   @media print{
     html,body,.sheet,.band,.site-foot{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
-    body{ background:#fff; }
+    body{ background:var(--paper); }
     .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
     .sheet + .sheet{ break-before:page; page-break-before:always; }
     .band,.site-foot{ break-inside:avoid; }
@@ -605,7 +639,7 @@ export function renderWaveBand(metaHtml: string): string {
         <div class="band-meta">${metaHtml}</div>
       </div>
       <svg class="wave" viewBox="0 0 1200 38" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" fill="#ffffff"/>
+        <path d="M0,14 C220,42 420,-4 640,15 C860,34 1010,4 1200,19 L1200,38 L0,38 Z" style="fill:var(--paper)"/>
       </svg>
     </header>`;
 }
@@ -696,7 +730,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   // don't render <text> in favicons. Carries its own brand mark so the report never falls back to
   // the site-root /favicon.ico (a stale Lovable asset).
   const favicon = "data:image/svg+xml," + encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#1a3d7c"/><path d="M20 8.5 Q14 8.5 14 13.5 L14 24.5 M9.5 14.8 H18.5" fill="none" stroke="#ffd23f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23" cy="22.5" r="2.4" fill="#fff"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#101114"/><path d="M20 8.5 Q14 8.5 14 13.5 L14 24.5 M9.5 14.8 H18.5" fill="none" stroke="#ffd23f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23" cy="22.5" r="2.4" fill="#fff"/></svg>',
   );
 
   // Personalised one-tap contact links. encodeURIComponent for the URL params (spaces, hyphen,
@@ -958,7 +992,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
 ${REPORT_CHROME_CSS_CORE}
 
   /* One-line explainer */
-  .explainer{ padding:16px 28px 4px; font-size:17px; line-height:1.4; color:#334155; font-weight:400; max-width:70ch; }
+  .explainer{ padding:16px 28px 4px; font-size:17px; line-height:1.4; color:var(--ink-2); font-weight:400; max-width:70ch; }
   .explainer b{ color:var(--blue); font-weight:700; }
 
   /* ── EMPHASIS SYSTEM (one rule, whole document) ───────────────────────────────
@@ -987,9 +1021,9 @@ ${REPORT_CHROME_CSS_CORE}
   .punch{ font-size:22px; line-height:1.2; font-weight:900; letter-spacing:-.01em; color:var(--ink); }
 
   /* GUT-PUNCH &mdash; a written summary of the worst answer (never the raw AI text) */
-  .gutbox{ margin:0 28px 16px; padding:14px 18px; background:#fff5f5; border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
+  .gutbox{ margin:0 28px 16px; padding:14px 18px; background:var(--red-tint); border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
   .gb-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--red); font-weight:700; margin-bottom:7px; }
-  .gb-sum{ margin:0 0 7px; font-size:14px; line-height:1.4; font-weight:400; color:#3d0f12; }
+  .gb-sum{ margin:0 0 7px; font-size:14px; line-height:1.4; font-weight:400; color:var(--on-red-tint); }
   .gb-sum .gb-q{ color:var(--ink); font-weight:700; }
   .gb-sum .rv{ color:var(--red); font-weight:700; white-space:normal; }
   /* The mention count beside each leader. Deliberately quieter than the name: it is the evidence
@@ -1015,8 +1049,8 @@ ${REPORT_CHROME_CSS_CORE}
   .qb-q{ font-size:14px; font-weight:700; color:var(--ink); line-height:1.35; }
   .qb-badge{ flex:0 0 auto; font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
     padding:3px 9px; border-radius:999px; white-space:nowrap; }
-  .qb-badge.yes{ background:#e7f6ee; color:var(--green); }
-  .qb-badge.no{ background:#fdeaea; color:var(--red); }
+  .qb-badge.yes{ background:var(--green-tint); color:var(--green); }
+  .qb-badge.no{ background:var(--red-tint-2); color:var(--red); }
   .qb-line{ margin-top:8px; font-size:13px; color:var(--muted); line-height:1.9; }
   .qb-split{ display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--ink); margin:2px 0 1px; }
   .qb-split-i b{ font-weight:800; }
@@ -1043,9 +1077,9 @@ ${REPORT_CHROME_CSS_CORE}
   /* INTERNAL winnability chip — only rendered in the operator preview (d.internal), never on the
      client document. A tinted strip so it reads as a separate, internal annotation. */
   .qb-win{ margin-top:10px; padding:8px 10px; border-radius:8px; border:1px dashed var(--line-strong);
-    background:#f8fafc; display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; }
+    background:var(--panel-tint); display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; }
   .qb-win-chip{ font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
-    padding:2px 8px; border-radius:999px; color:#fff; }
+    padding:2px 8px; border-radius:999px; color:var(--on-band); }
   .win-named .qb-win-chip{ background:var(--green); }
   .win-wide_open .qb-win-chip{ background:var(--green); }
   .win-locked .qb-win-chip{ background:var(--red); }
@@ -1076,7 +1110,7 @@ ${REPORT_CHROME_CSS_CORE}
      heavy brand-blue top rule so it visibly BREAKS from the section above; white card inside. */
   /* STILL MEASURING — replaces the hero, "who AI named", the website slot and the fix section
      while a run is in flight. Amber, not red: nothing is wrong, it is simply not finished. */
-  .measuring{ margin:0 28px 20px; padding:18px 22px; border:1px solid var(--amber); border-left-width:6px; border-radius:12px; background:#fff8ea; }
+  .measuring{ margin:0 28px 20px; padding:18px 22px; border:1px solid var(--amber); border-left-width:6px; border-radius:12px; background:var(--amber-tint); }
   .measuring .sec-eyebrow{ color:var(--amber); }
   .measuring .sec-title{ font-size:24px; font-weight:700; color:var(--ink); margin:0 0 10px; }
   .measuring p{ margin:0 0 8px; font-size:14px; line-height:1.55; color:var(--muted); max-width:70ch; }
@@ -1086,12 +1120,15 @@ ${REPORT_CHROME_CSS_CORE}
      narrow column and the steps stack beside it; on a phone it sits above them. */
   .vid-row{ display:flex; gap:22px; align-items:flex-start; }
   .vid{ flex:0 0 196px; }
-  .vid video{ display:block; width:196px; aspect-ratio:9/16; border-radius:12px; background:#000; box-shadow:0 4px 18px rgba(15,23,42,.14); }
+  .vid video{ display:block; width:196px; aspect-ratio:9/16; border-radius:12px; background:var(--video-bg); box-shadow:0 4px 18px rgba(15,23,42,.14); }
   .vid .vid-poster{ display:none; }
   .vid-row .steps{ flex:1; grid-template-columns:1fr; gap:14px; }
   .vid-row .steps::before{ display:none; }
-  .vid-row .step{ text-align:left; display:flex; gap:12px; align-items:flex-start; }
-  .vid-row .step-ic{ margin:0; flex:0 0 46px; }
+  /* Icon in the first column; label, title and copy STACKED in the second. (A flex row here put
+     the title in its own narrow column and wrapped it one word per line — seen in the render check.) */
+  .vid-row .step{ text-align:left; display:grid; grid-template-columns:46px minmax(0,1fr); column-gap:12px; align-items:start; }
+  .vid-row .step-ic{ margin:0; grid-column:1; grid-row:1 / span 3; }
+  .vid-row .step-n, .vid-row .st, .vid-row .step p{ grid-column:2; }
   .dowe{ padding:22px 28px 24px; border-top:3px solid var(--blue); background:var(--page); }
   .dowe h2{ margin-bottom:14px; }
   .dowe-panel{ background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:18px 22px 20px; box-shadow:0 4px 24px rgba(15,23,42,.06); }
@@ -1101,11 +1138,11 @@ ${REPORT_CHROME_CSS_CORE}
   .steps::before{ content:""; position:absolute; top:23px; left:16.67%; right:16.67%; height:2px; background:var(--line); z-index:0; }
   .step{ position:relative; text-align:center; }
   .step-ic{ position:relative; width:46px; height:46px; margin:0 auto 13px; z-index:1; }
-  .step .ic{ width:46px; height:46px; border-radius:14px; background:#eaf1fc; color:var(--blue);
+  .step .ic{ width:46px; height:46px; border-radius:14px; background:var(--blue-tint); color:var(--blue);
     display:flex; align-items:center; justify-content:center; }
   .step .ic svg{ width:25px; height:25px; }
   .badge{ position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%;
-    background:var(--blue); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    background:var(--blue); color:var(--on-band); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
     box-shadow:0 0 0 3px var(--paper); }
   .step-n{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:700; }
   .st{ font-size:14px; font-weight:700; color:var(--ink); margin:2px 0 5px; }
@@ -1146,25 +1183,25 @@ ${REPORT_CHROME_CSS_CORE}
   .find-detail{ font-size:14px; font-weight:400; line-height:1.45; color:var(--muted); }
 
   /* CLOSING CTA &mdash; Findable blue band with a yellow highlight */
-  .cta{ background:var(--blue); color:#fff; padding:20px 28px 20px; }
-  .cta h3{ margin:0 0 7px; font-size:22px; font-weight:700; color:#fff; letter-spacing:-.01em; }
+  .cta{ background:var(--blue); color:var(--on-band); padding:20px 28px 20px; }
+  .cta h3{ margin:0 0 7px; font-size:22px; font-weight:700; color:var(--on-band); letter-spacing:-.01em; }
   .cta h3 .y{ color:var(--yellow); }
-  .cta p{ margin:0 0 6px; font-size:14px; font-weight:400; color:#c7d3ea; max-width:66ch; }
-  .cta p b{ color:#fff; font-weight:700; }
-  .cta .close{ margin-top:10px; font-size:14px; font-weight:700; color:#fff; }
+  .cta p{ margin:0 0 6px; font-size:14px; font-weight:400; color:var(--on-band-muted); max-width:66ch; }
+  .cta p b{ color:var(--on-band); font-weight:700; }
+  .cta .close{ margin-top:10px; font-size:14px; font-weight:700; color:var(--on-band); }
   /* Contact buttons — side by side, stacking on narrow screens. On-palette (yellow + white). */
   .cta-actions{ display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
   /* The promise, under the buttons: read after deciding to look, not competing with the heading. */
   .cta-promise{ margin:16px 0 0; padding-top:14px; border-top:1px solid rgba(255,255,255,.16);
-                font-size:13px; line-height:1.55; color:#c7d3ea; max-width:66ch; }
+                font-size:13px; line-height:1.55; color:var(--on-band-muted); max-width:66ch; }
   .cta-btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px;
     padding:13px 22px; border-radius:10px; font-size:15px; font-weight:700; line-height:1;
     text-decoration:none; border:1px solid transparent; }
   .cta-btn.email{ background:var(--yellow); color:var(--blue); }
   /* The primary action. Own class, not .email - that name meant "Email us" and the button is gone. */
   .cta-btn.start{ background:var(--yellow); color:var(--blue); }
-  .cta-btn.wa{ background:#fff; color:var(--blue); }
-  .cta-btn.site{ background:transparent; color:#fff; box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.45); }
+  .cta-btn.wa{ background:var(--on-band); color:var(--blue); }
+  .cta-btn.site{ background:transparent; color:var(--on-band); box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.45); }
 
   /* FOOTER &mdash; a distinct darker navy bar so the text is clearly readable (no blue-on-blue) */
   /* THE FOUNDER OFFER reuses .cta wholesale — same navy ground, same yellow accent, same button
@@ -1174,13 +1211,13 @@ ${REPORT_CHROME_CSS_CORE}
   .offer-eyebrow{ color:var(--yellow); margin-bottom:6px; }
   .offer-gets{ margin-top:14px; }
   .offer-gets .offer-h{ font-size:12px; font-weight:700; letter-spacing:.06em;
-    text-transform:uppercase; color:#c7d3ea; margin-bottom:6px; }
+    text-transform:uppercase; color:var(--on-band-muted); margin-bottom:6px; }
   .offer-gets ul{ margin:0; padding-left:18px; max-width:66ch; }
-  .offer-gets li{ font-size:14px; line-height:1.55; color:#fff; margin-bottom:4px; }
+  .offer-gets li{ font-size:14px; line-height:1.55; color:var(--on-band); margin-bottom:4px; }
   .offer-gtee{ margin-top:16px; border-left:3px solid var(--yellow); padding:10px 14px;
-    background:rgba(255,255,255,.06); font-size:13px; line-height:1.55; color:#e6ecf7;
+    background:rgba(255,255,255,.06); font-size:13px; line-height:1.55; color:var(--on-band-soft);
     max-width:70ch; border-radius:0 6px 6px 0; }
-  .offer-after{ margin:10px 0 0; font-size:12.5px; color:#c7d3ea; max-width:66ch; }
+  .offer-after{ margin:10px 0 0; font-size:12.5px; color:var(--on-band-muted); max-width:66ch; }
 ${REPORT_CHROME_CSS_FOOT}
 
   /* MOBILE (~phones) — the report is opened mostly on phones via a WhatsApp link. Stack the

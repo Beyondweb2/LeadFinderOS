@@ -141,22 +141,22 @@ ${REPORT_CHROME_CSS_FOOT}
   .pp-job{ font-size:15px; font-weight:800; color:var(--ink); }
   .pp-label{ font-size:10.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
     padding:2px 9px; border-radius:999px; white-space:nowrap; }
-  .pp-build{ background:#e7f6ec; color:var(--green); }
-  .pp-gap{ background:#fdf3dd; color:var(--amber); }
-  .pp-defend{ background:#e8eefb; color:var(--blue-2); }
-  .pp-locked{ background:#fdeaec; color:var(--red); }
+  .pp-build{ background:var(--green-tint); color:var(--green); }
+  .pp-gap{ background:var(--amber-tint-2); color:var(--amber); }
+  .pp-defend{ background:var(--blue-tint-2); color:var(--blue-2); }
+  .pp-locked{ background:var(--red-tint-2); color:var(--red); }
   .pp-topic{ font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); font-weight:700; margin:2px 0 6px; }
   .pp-q{ font-size:13px; color:var(--ink); margin:3px 0; }
   .pp-counts{ color:var(--muted); font-size:12px; }
   .pp-src{ margin-top:7px; font-size:12px; color:var(--muted); }
   .pp-slabel{ font-weight:700; color:var(--blue); }
-  .pp-chip{ display:inline-block; background:#f1f5f9; border:1px solid var(--line); border-radius:999px;
-    padding:1px 8px; font-size:11px; color:#334155; margin:1px 2px 1px 0; }
+  .pp-chip{ display:inline-block; background:var(--panel-tint-2); border:1px solid var(--line); border-radius:999px;
+    padding:1px 8px; font-size:11px; color:var(--ink-2); margin:1px 2px 1px 0; }
   .pp-held{ margin-top:7px; font-size:12px; color:var(--amber); font-weight:600; }
-  .pp-int{ margin-top:8px; padding:8px 10px; background:#fffaeb; border:1px dashed #e6c968; border-radius:8px; }
-  .pp-int-chip{ display:inline-block; background:#fff; border:1px solid #e6c968; border-radius:999px;
-    padding:1px 8px; font-size:10.5px; font-weight:800; color:#8a6d1a; margin-right:6px; }
-  .pp-int-line{ font-size:11.5px; color:#6b5a1e; margin-top:4px; }
+  .pp-int{ margin-top:8px; padding:8px 10px; background:var(--gold-tint); border:1px dashed var(--gold-line); border-radius:8px; }
+  .pp-int-chip{ display:inline-block; background:var(--paper); border:1px solid var(--gold-line); border-radius:999px;
+    padding:1px 8px; font-size:10.5px; font-weight:800; color:var(--on-gold-tint); margin-right:6px; }
+  .pp-int-line{ font-size:11.5px; color:var(--on-gold-tint-2); margin-top:4px; }
   @media (max-width:520px){ .pp-wrap{ padding:14px 18px 18px; } }
 ${REPORT_CHROME_CSS_PRINT}
   @media print{

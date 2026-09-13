@@ -32,6 +32,7 @@ import {
   type QuestionMovement,
   type SideCounts,
 } from './measurementCompare';
+import { REPORT_CHROME_CSS_CORE, REPORT_CHROME_CSS_FOOT, renderWaveBand, renderSiteFooter } from './aiAuditReportHtml';
 
 /** What each verdict means in a file that has no colour and no tooltips. */
 export const MOVEMENT_EXPORT_LABELS: Record<Movement, string> = {
@@ -259,42 +260,67 @@ export function comparisonToPrintableHtml(
       <td><span class="chip ${VERDICT_CLASS[q.movement]}">${escHtml(MOVEMENT_EXPORT_LABELS[q.movement])}</span>${q.thin && q.before && q.after ? '<span class="thin">unproven on its own</span>' : ''}</td>
     </tr>`).join('');
 
+  /* ⛔ THE SHARED BRAND CHROME (Paul, 2026-09-13). This document used to be an unbranded table —
+     no band, no footer, its own greys and a pale BLUE "new" chip — so the before/after a client
+     receives looked like a different company from the report it follows. It now renders inside the
+     same .sheet, under the same charcoal band and over the same footer as the report, the welcome
+     pack and the page plan, reading its tokens from REPORT_CHROME_CSS_CORE. The table's own rules
+     below are prefixed `ba-` and use those tokens; nothing here is a raw colour any more.
+     ⚠️ Landscape stays: the comparison table is nine columns wide. */
+  const band = renderWaveBand(`Before and after &middot; ${escHtml(meta.exportedAt.slice(0, 10))}`);
+  const foot = renderSiteFooter({
+    businessName: meta.businessName || 'Unknown business',
+    metaHtml: `Exported ${escHtml(meta.exportedAt)}`,
+    note: 'Same questions, same engines, both times. The claim lives in the overall figure, never in a single row.',
+  });
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <title>Before and after</title>
 <style>
-  @page { size: A4 landscape; margin: 12mm; }
-  * { box-sizing: border-box; }
-  body { font: 12px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #14161a; margin: 0; }
-  h1 { font-size: 19px; margin: 0 0 2px; }
-  .who { color: #5a6069; font-size: 12px; margin: 0 0 14px; }
+${REPORT_CHROME_CSS_CORE}
+${REPORT_CHROME_CSS_FOOT}
+  .sheet{ max-width:1080px; }
+  .ba-wrap{ padding:16px 28px 22px; font-size:12px; line-height:1.45; }
+  .ba-wrap h1 { font-size: 19px; margin: 0 0 2px; color: var(--ink); }
+  .who { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
   .cards { display: flex; gap: 10px; margin-bottom: 12px; }
-  .card { flex: 1; border: 1px solid #dfe3e8; border-radius: 8px; padding: 9px 11px; }
-  .card-h { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; }
-  .big { font-size: 22px; font-weight: 700; margin-top: 2px; }
-  .big .of { font-size: 13px; font-weight: 400; color: #6b7280; }
-  .sub { font-size: 11px; color: #14161a; }
-  .meta { font-size: 10px; color: #6b7280; margin-top: 3px; }
-  .headline { border-left: 3px solid #14161a; padding: 7px 11px; background: #f6f7f9; font-size: 12.5px; font-weight: 600; margin-bottom: 8px; }
-  .warn { border-left: 3px solid #b45309; background: #fffbeb; padding: 6px 11px; font-size: 11px; margin-bottom: 8px; }
+  .card { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--paper); }
+  .card-h { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .big { font-size: 22px; font-weight: 700; margin-top: 2px; color: var(--ink); }
+  .big .of { font-size: 13px; font-weight: 400; color: var(--muted); }
+  .sub { font-size: 11px; color: var(--ink); }
+  .meta { font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .headline { border-left: 3px solid var(--blue); padding: 7px 11px; background: var(--panel-tint); font-size: 12.5px; font-weight: 600; margin-bottom: 8px; color: var(--ink); }
+  .warn { border-left: 3px solid var(--amber); background: var(--amber-tint); padding: 6px 11px; font-size: 11px; margin-bottom: 8px; }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; border-bottom: 1px solid #c9cfd6; padding: 0 6px 4px 0; }
-  td { border-bottom: 1px solid #eceff2; padding: 5px 6px 5px 0; vertical-align: top; }
+  th { text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-bottom: 1px solid var(--line-strong); padding: 0 6px 4px 0; }
+  td { border-bottom: 1px solid var(--line); padding: 5px 6px 5px 0; vertical-align: top; }
   /* Keep a question's row on one page - a split row is unreadable in a comparison. */
   tr { break-inside: avoid; }
   thead { display: table-header-group; }
   .q { max-width: 300px; }
   .n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .b { font-weight: 600; }
-  .chip { display: inline-block; font-size: 9.5px; padding: 1px 5px; border-radius: 999px; border: 1px solid #c9cfd6; white-space: nowrap; }
-  .v-up { background: #ecfdf5; border-color: #6ee7b7; }
-  .v-down { background: #fef2f2; border-color: #fca5a5; }
-  .v-noise, .v-flat { background: #f6f7f9; }
-  .v-new { background: #eff6ff; border-color: #93c5fd; }
-  .v-none { background: #fafafa; color: #6b7280; }
-  .thin { display: block; font-size: 9px; color: #6b7280; margin-top: 1px; }
-  .foot { margin-top: 12px; font-size: 10px; color: #6b7280; }
+  .chip { display: inline-block; font-size: 9.5px; padding: 1px 5px; border-radius: 999px; border: 1px solid var(--line-strong); white-space: nowrap; }
+  .v-up { background: var(--green-tint); border-color: var(--green); }
+  .v-down { background: var(--red-tint-2); border-color: var(--red); }
+  .v-noise, .v-flat { background: var(--panel-tint); }
+  /* "New this time" was a pale BLUE chip; neutral now — blue is gone from every document. */
+  .v-new { background: var(--blue-tint-2); border-color: var(--faint); }
+  .v-none { background: var(--panel-tint); color: var(--muted); }
+  .thin { display: block; font-size: 9px; color: var(--muted); margin-top: 1px; }
+  .foot { margin-top: 12px; font-size: 10px; color: var(--muted); }
+  @page { size: A4 landscape; margin: 12mm; }
+  @media print{
+    html,body,.sheet,.band,.site-foot{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    body{ background:var(--paper); }
+    .sheet{ margin:0; max-width:none; box-shadow:none; border-radius:0; }
+    .band,.site-foot{ break-inside:avoid; }
+  }
 </style></head><body>
+<div class="sheet">
+${band}
+<div class="ba-wrap">
   <h1>AI visibility — before and after</h1>
   <p class="who">${escHtml(meta.businessName || 'Unknown business')} · exported ${escHtml(meta.exportedAt)} · rows in ${order === 'asked' ? 'the order the questions were asked' : 'biggest-movers order'}</p>
   <div class="cards">
@@ -325,6 +351,9 @@ export function comparisonToPrintableHtml(
     ${c.matchedCount} question${c.matchedCount === 1 ? '' : 's'} asked both times;
     ${c.onlyBefore.length} not re-asked; ${c.onlyAfter.length} new this time.
   </p>
+</div>
+${foot}
+</div>
 </body></html>`;
 }
 
