@@ -1,8 +1,13 @@
 import { useMemo, useState, type MouseEvent } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarClock, CheckCircle, X, PackageCheck, MessageSquare, HandCoins, ListTodo, Tag, Receipt } from 'lucide-react';
+import { CalendarClock, CheckCircle, X, PackageCheck, MessageSquare, HandCoins, ListTodo, Tag, Receipt, Eraser, Archive } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { getLeadCustomAction } from '@/hooks/useCustomNextActions';
 import type { DashTask, TaskKind } from '@/lib/dashboardTasks';
@@ -14,6 +19,14 @@ interface NextActionsCardProps {
   /** Clear a lead's stored next_action. Only offered on tasks where something is actually
    *  stored (task.clearable) — a derived task has nothing to clear, so it has no X. */
   onClearTask?: (leadId: string) => void;
+  /** Clear EVERY stored next_action on the operator's leads at once (2026-09-13). Resolves to
+   *  how many rows changed, so the toast can say it. */
+  onClearAll?: () => Promise<number>;
+  /** DISMISS a derived task (reply / chase / quoted) by marking the lead `closed` — the only
+   *  honest way to make a derived row go away, because it is derived from evidence (their last
+   *  message, their unpaid submission) that does not change by pressing a button. Confirmed first:
+   *  closed is a DEAD status (dashboardTasks.ts) and takes the lead out of the Inbox's default view. */
+  onDismiss?: (leadId: string) => Promise<void>;
 }
 
 const KIND_ICON: Record<TaskKind, typeof MessageSquare> = {
@@ -35,12 +48,36 @@ const KIND_COLOUR: Record<TaskKind, string> = {
   fix_trades: 'text-muted-foreground/70',
 };
 
-export function NextActionsCard({ tasks, onClearTask }: NextActionsCardProps) {
+export function NextActionsCard({ tasks, onClearTask, onClearAll, onDismiss }: NextActionsCardProps) {
   const { campaigns } = useCampaigns();
   const navigate = useNavigate();
   const [sortBy, setSortBy] = useState<'priority' | 'name'>('priority');
   // Optimistically hide a manual task the user just cleared, until the parent's refetch lands.
   const [clearedIds, setClearedIds] = useState<Set<string>>(new Set());
+  // Derived rows the user dismissed (lead marked closed) — hidden until the refetch drops them.
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [pendingDismiss, setPendingDismiss] = useState<DashTask | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
+  const [clearedAllNote, setClearedAllNote] = useState<string | null>(null);
+
+  const runClearAll = async () => {
+    if (!onClearAll || clearingAll) return;
+    setClearingAll(true);
+    try {
+      const n = await onClearAll();
+      setClearedAllNote(n === 0 ? 'No stored tasks to clear.' : `Cleared ${n} stored task${n === 1 ? '' : 's'}.`);
+    } finally {
+      setClearingAll(false);
+    }
+  };
+
+  const runDismiss = async () => {
+    const t = pendingDismiss;
+    setPendingDismiss(null);
+    if (!t?.leadId || !onDismiss) return;
+    setDismissedIds((prev) => new Set(prev).add(t.leadId as string));
+    await onDismiss(t.leadId);
+  };
 
   const campaignById = useMemo(
     () => Object.fromEntries(campaigns.map((c) => [c.id, c.name])) as Record<string, string>,
@@ -50,9 +87,10 @@ export function NextActionsCard({ tasks, onClearTask }: NextActionsCardProps) {
   /* A cleared manual task hides immediately; the derived tasks on that same lead stay, because
      clearing a note you wrote does not mean their unanswered message went away. */
   const visible = useMemo(
-    () => tasks.filter((t) => !(t.clearable && t.leadId && clearedIds.has(t.leadId))),
-    [tasks, clearedIds],
+    () => tasks.filter((t) => !(t.clearable && t.leadId && clearedIds.has(t.leadId)) && !(t.leadId && dismissedIds.has(t.leadId))),
+    [tasks, clearedIds, dismissedIds],
   );
+  const storedCount = useMemo(() => tasks.filter((t) => t.clearable).length, [tasks]);
 
   const sorted = useMemo(() => {
     if (sortBy !== 'name') return visible; // already priority-ordered by the derivation
@@ -85,6 +123,7 @@ export function NextActionsCard({ tasks, onClearTask }: NextActionsCardProps) {
   };
 
   return (
+    <>
     <Card className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border-amber-500/20">
       <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
         <div className="flex items-center gap-2">
@@ -99,7 +138,16 @@ export function NextActionsCard({ tasks, onClearTask }: NextActionsCardProps) {
               <SelectItem value="name">Business A–Z</SelectItem>
             </SelectContent>
           </Select>
+          {/* Bulk clear of STORED tasks only (2026-09-13). Derived rows are evidence, not tasks;
+              they are dismissed one at a time by closing the lead (the X on each row). */}
+          {onClearAll && (
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => void runClearAll()} disabled={clearingAll}
+              title="Set every stored next action on your leads back to none. Derived rows (replies, chases) are not affected.">
+              <Eraser className="mr-1 h-3.5 w-3.5" /> {clearingAll ? 'Clearing…' : `Clear all stored tasks${storedCount ? ` (${storedCount})` : ''}`}
+            </Button>
+          )}
         </div>
+        {clearedAllNote && <p className="mt-1 text-[11px] text-muted-foreground">{clearedAllNote}</p>}
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
         {leadTasks.length > 0 && (
@@ -150,8 +198,20 @@ export function NextActionsCard({ tasks, onClearTask }: NextActionsCardProps) {
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
+                  ) : task.leadId && onDismiss && task.kind !== 'deliver' ? (
+                    /* DISMISS a derived row = mark the lead closed, after a confirm. Not offered on
+                       "Deliver" — a paying client with no baseline is never dismissed, it is fixed. */
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPendingDismiss(task); }}
+                      title="Dismiss: mark this lead closed"
+                      aria-label="Dismiss: mark this lead closed"
+                      className="shrink-0 mr-1 rounded p-1 text-muted-foreground/40 transition-colors hover:text-red-500 hover:bg-red-500/10"
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                    </button>
                   ) : (
-                    // Keeps the derived rows aligned with the clearable ones.
+                    // Keeps the rows aligned.
                     <span className="shrink-0 mr-1 w-[26px]" aria-hidden="true" />
                   )}
                 </div>
@@ -166,5 +226,22 @@ export function NextActionsCard({ tasks, onClearTask }: NextActionsCardProps) {
         )}
       </CardContent>
     </Card>
+    <AlertDialog open={!!pendingDismiss} onOpenChange={(o) => { if (!o) setPendingDismiss(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Dismiss {pendingDismiss?.business || 'this lead'}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This marks the lead <b>closed</b>. The row goes because the lead is closed, not because the
+            {' '}{pendingDismiss?.kind === 'reply' ? 'unanswered reply' : pendingDismiss?.kind === 'chase' ? 'unpaid submission' : 'quiet quote'} went away.
+            A closed lead leaves the Inbox&rsquo;s default view and is never chased again. You can reopen it from the lead card.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep it</AlertDialogCancel>
+          <AlertDialogAction onClick={() => void runDismiss()}>Mark closed</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

@@ -28,21 +28,11 @@ export function isFreshLead(l: Partial<Pick<OutreachLead,
     && !l.is_potential_work;
 }
 
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/** The DB patch for a status change (no side-effects, no I/O). */
-export function statusUpdatePatch(status: LeadStatus): Partial<OutreachLead> {
-  const updates: Partial<OutreachLead> = { status };
-  // "Replied" → same-day Send Draft next action (overwrites any existing).
-  if (status === 'replied') { updates.next_action = 'send_draft'; updates.next_action_date = ymd(new Date()); }
-  // "Site Sent" → next-day Follow-up (overwrites any existing).
-  if (status === 'site_sent') { const d = new Date(); d.setDate(d.getDate() + 1); updates.next_action = 'follow_up'; updates.next_action_date = ymd(d); }
-  // "Not Interested" → untrack (dead prospect) so the Tracked filter stays clean.
-  if (status === 'not_interested') updates.is_potential_work = false;
-  return updates;
-}
+/* statusUpdatePatch lives in the PURE module src/lib/statusPatch.ts (2026-09-13) so the tsx suite
+   can drive it without this file's Supabase client import; re-exported here so callers are
+   unchanged. "replied" no longer writes a 'send_draft' next action — see that file. */
+import { statusUpdatePatch } from './statusPatch';
+export { statusUpdatePatch };
 
 /**
  * Lightweight direct status writer for callers without the full useOutreach hook
