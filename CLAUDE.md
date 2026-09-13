@@ -115,8 +115,9 @@ as *possibly describing something deleted*. Grep before you believe it.
   MEASUREMENT GOING UP**, on Paul's instruction and confirmed by him on the record. It used to
   promise the audit + the work + the re-measurement and explicitly disclaim the outcome; it now
   says: we measure before we start, we re-measure after four weeks on the same questions and the
-  same engines, and **if that number has not gone up the customer can claim their £99 back, by
-  emailing within 14 days of receiving their four-week results.**
+  same engines, and **if that number has not gone up, they email us within 14 days of their
+  four-week results and we refund their £99.** (Wording as of 2026-09-13 — Paul cut "we will show
+  you both sets of numbers": the four-week results ARE both sets. One constant now, 236 chars, §21.)
   - ⛔ **EVERY HEDGE WENT WITH IT** — "we do not promise you will be named", "the engines decide
     that", "anyone who promises it is guessing" are deleted from both repos. **Do not reintroduce
     one next to a conditional refund**: a promise with a disclaimer stapled to it reads as walking
@@ -3048,7 +3049,7 @@ section as the reasoning rather than the current figures.
 | The website build | **included in the £99.** `FINDABLE_WEBSITE_PRICE_ID` is no longer read by `findable-checkout` at all |
 | Hosting | **£9.99/month**, `FINDABLE_HOSTING_PRICE_ID`, the only line the tick now adds |
 | Continuing work | **£49.99/month, OPTIONAL, copy-only here** — a real Stripe price exists but is sent by hand as a Payment Link at week four. No code path bills it |
-| The guarantee | **outcome-conditional**: if the measured number has not gone up at four weeks, the £99 is claimable, by email **within 14 days of receiving the four-week results** |
+| The guarantee | **outcome-conditional**: if the measured number has not gone up at four weeks, they email **within 14 days of their four-week results** and the £99 is refunded (wording of 2026-09-13, §21) |
 
 - ⚠️ **THE SECRET IS NOT DELETED, ONLY UNREAD.** `FINDABLE_WEBSITE_PRICE_ID` still exists in the
   Supabase secret list deliberately: it is the Stripe account's record of what earlier customers
@@ -3910,7 +3911,9 @@ logged a duplicate.
   `startPaidBaseline` recognised a baseline as multi-run **AND NOT** `is_measurement`. So the writer
   marked the audit it had just made and the reader then excluded it, every tick, for ever.
   - **The fix is one shared module, `src/lib/auditKind.ts`, read by both**, and the baseline test is
-    now **POSITIVE** (`baseline_contract` present) rather than an absence. `measurementFlagFor`
+    now **POSITIVE** (`baseline_contract` present) rather than an absence. ⛔ **SUPERSEDED 2026-09-13
+    (§21): the positive marker is `audit_purpose = 'baseline'`; the contract only decides whether a
+    RECOGNISED baseline is whole.** `measurementFlagFor`
     keys on the PURPOSE alone — `is_measurement` is what the audit is FOR, never how many runs it
     does.
   - ⛔ **AND THE TEST IS A ROUND TRIP, NOT TWO UNIT TESTS** (`scripts/audit-kind.test.ts`). Each
@@ -3969,3 +3972,68 @@ logged a duplicate.
   why ten identical inputs produced 8, 8, 10, 10, 9, 9, 8, 10, 9, 9 questions. §17's conclusion
   still holds for a re-measure (it reuses the previous run's set verbatim rather than regenerating),
   but the stated reason was wrong.
+
+---
+
+## 21. ✅ THE FREE CHECK MEETS THE BASELINE — two faults that would have hit the first real customer (2026-09-13)
+
+Found by tracing the chain read-only before Paul's end-to-end test; fixed the same day on his brief.
+**Both were in code as deployed, neither had fired yet** (no audit had been created since v106).
+
+- 🔴 **A FREE CHECK THEN A PAYMENT PRODUCED NO BASELINE.** §18's positive test recognised a baseline
+  by its CONTRACT, and graded every other multi-run audit ambiguous — which is exactly what a 3-run
+  free check is on those three columns. So the funnel's own happy path (free check → report → Get
+  started → pay) refused the baseline, and wrote `baseline_ambiguous_multi_run` **every 30-second
+  tick with no throttle**.
+  - ⛔ **THE KIND IS READ FROM `audit_purpose` NOW** (`src/lib/auditKind.ts`, the writer and both
+    readers). `'baseline'` + contract = paid baseline; `'baseline'` with NO contract = ambiguous
+    (a failed contract write — the case the refusal was built for, kept); `'measurement'` /
+    `'remeasure'` = measurement; **`'free_check'` = free check, ignored by the baseline guard**;
+    any other recorded purpose = ordinary. **Legacy rows (purpose NULL — every audit before
+    2026-09-12) keep the old three-column rule, refusal included**: a pre-09-12 free check still
+    holds a later payment until somebody looks. Stated, not hidden.
+  - ⛔ **`audit_purpose = 'free_check'` is a NEW value**, written by `create-ai-audit` when the
+    internal caller sends `purpose: "free_check"` (free-check-audit.ts does). The column is plain
+    `text`, no CHECK constraint; the pointer trigger reads only 'baseline' / 'remeasure'. The
+    repeat runs posted by `advanceBaseline` carry the audit's own purpose back.
+  - ⛔ **THE AMBIGUITY REPORT IS ONCE PER LEAD PER HOUR** (`reportOnceAnHour`), not per tick.
+  - ⚠️ **On 2026-09-13 every one of the 968 audits had `audit_purpose` NULL** — the column existed
+    (Slice 0 ran) but nothing had been created since the writer deployed. The first audit after
+    this deploy is the first row that carries a purpose. 3 leads carried a baseline pointer.
+- 🔴 **THE FREE-CHECK SENDER FIRED FOR EVERY AUDIT ON A FREE-CHECK LEAD.** It was gated on the LEAD
+  having a free-check submission row, and the queue pushes it for every completed run of every
+  audit with a lead — so a paid baseline, the full measure, the day-28 replay and any manual
+  re-audit on such a lead would each have emailed AND texted the form-filler "Your AI visibility
+  check" with a fresh report link.
+  - ⛔ **GATED ON THIS AUDIT'S PURPOSE** — `freeCheckSendGate` in auditKind.ts, pure, tested against
+    all five purposes plus null. Only `'free_check'` sends automatically. The operator RESEND
+    (`force`) is allowed through for a legacy (NULL) or `'audit'` purpose — that is how the two
+    pre-change stranded free checks can still be sent by hand — and **refused for baseline /
+    measurement / remeasure even when forced.** The submission-row gate still stands as the second
+    gate (it is the only source of the address and number).
+  - The Free checks card (`submissions` → `free_check_progress`) now prefers the audit whose purpose
+    is `'free_check'` over the newest one, so a later payment cannot relabel the baseline as the
+    free check's audit (the gate would have refused the resend anyway; the card must not mislabel).
+- ⛔ **RUNS 2 AND 3 OF A FREE CHECK NO LONGER BUY AN SEO SCAN.** `advanceBaseline` posted repeats
+  without `skip_seo`, so on a business with a website run 2 bought the ~4p scan run 1 declined and
+  the report (rendered off the LAST run) grew a website section. Two fixes, both structural:
+  `create-ai-audit` forces the skip for purpose `'free_check'`, and the repeat sends `skip_seo: true`
+  whenever run 1's `results.seo` is a skipped marker — read off the row, not typed per purpose.
+- ⚠️ **`respellTrade` (was `normaliseTrade`) in `src/lib/freeCheckTrade.ts`** — renamed because
+  `src/lib/templateVars.ts` exports a DIFFERENT `normaliseTrade` (lowercases, singularises, BLOCKS
+  for a WhatsApp variable). Consumers: free-check-audit.ts, notify-onboarding-submit.
+- **`[functions.notify-onboarding-submit] verify_jwt = false`** is in config.toml now (it ran live
+  with false while absent from the file — a redeploy could have flipped it).
+- ⛔ **THE GUARANTEE IS ONE CONSTANT AGAIN, 236 CHARACTERS.** Paul cut "we will show you both sets
+  of numbers and refund you" and folded the window in: *"…If that number has not gone up, email us
+  within 14 days of your four week results and we'll refund your £99."* `FINDABLE_GUARANTEE_FULL`
+  is DELETED, the prefix assertion is gone from BOTH sync scripts (TOTAL is +1 not +2), the site's
+  `GUARANTEE` is locked to `FINDABLE_GUARANTEE` directly. Also changed in the same pass: `/refunds`
+  (paragraph 2, meta description, and How to claim — "We will send you the before and after
+  numbers side by side" cut too), FAQ "What if it doesn't work?". **Every instance was listed
+  before editing; the two repos moved together.**
+  - ⚠️ **236 > 222.** 222 is the longest string PROVEN to render untruncated on Stripe's hosted page
+    (2026-08-06, a real session). Stripe documents no limit. **The first real Checkout Session after
+    this deploy is the proof** — read the hosted page's text, not the HTML shell. Not verified here.
+- **Verification that a baseline / full measure / replay / manual re-audit send NOTHING is the pure
+  gate test** (`scripts/audit-kind.test.ts`), not a live run — nothing was spent to prove it.
