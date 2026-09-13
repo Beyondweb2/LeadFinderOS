@@ -42,14 +42,16 @@ const SITE = path.join(HERE, '..', '..', 'findable-site', 'src', 'lib');
    a string built from concatenated literals, or a bare number. */
 const PAIRS = [
   {
-    /* ⛔ THE SITE CARRIES THE FULL VERSION. Its GUARANTEE must match FINDABLE_GUARANTEE_FULL, not the
-       contractual FINDABLE_GUARANTEE — see the prefix assertion below, which is what keeps the two
-       LeadFinderOS constants from becoming two different promises. */
-    what: 'the guarantee (full / marketing)',
+    /* ⛔ ONE GUARANTEE, BYTE-LOCKED ACROSS BOTH REPOS. Until 2026-09-13 the site matched a longer
+       FINDABLE_GUARANTEE_FULL and a prefix assertion tied the two LeadFinderOS constants together;
+       Paul folded the claim window into the refund sentence and the two constants became one, so
+       the site's GUARANTEE is checked against the contractual constant itself — the sentence
+       findable-checkout puts in the Stripe line-item description. */
+    what: 'the guarantee',
     kind: 'string',
-    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_GUARANTEE_FULL' },
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_GUARANTEE' },
     theirs: { file: path.join(SITE, 'site.ts'), name: 'GUARANTEE' },
-    why: 'This is the sentence the marketing site shows.',
+    why: 'The site shows this sentence and findable-checkout charges against it. A customer must not agree to one wording at checkout and read another on the page that sold it.',
   },
   {
     what: 'the setup price',
@@ -209,36 +211,11 @@ if (!fs.existsSync(SITE)) {
 }
 
 
-/* ⛔ THE PREFIX ASSERTION. Two guarantee constants are only honest if the contractual one is a strict
-   PREFIX of the marketing one — the site then says everything the contract says plus a line that adds
-   no obligation. A mere "subset" would allow the two to be different promises with words in common;
-   a prefix cannot. This is the assertion that makes the split safe, and it is checked rather than
-   intended, because "keep these in sync" as a comment is exactly what failed last time.
-   It runs in BOTH repos even though both constants live in LeadFinderOS: the site's copy is the thing
-   being anchored, so the check that guards it belongs wherever someone might edit either end. */
-function checkPrefix() {
-  const short = read(path.join(LFOS, 'findableOffer.ts'), 'FINDABLE_GUARANTEE', 'string');
-  const full = read(path.join(LFOS, 'findableOffer.ts'), 'FINDABLE_GUARANTEE_FULL', 'string');
-  if (!short || !full) {
-    console.error('FAIL  one of the guarantee constants is empty.');
-    return false;
-  }
-  if (!full.startsWith(short)) {
-    console.error('\nFAIL  the contractual guarantee is not a prefix of the marketing one.');
-    console.error(`  contractual (${short.length}): ${JSON.stringify(short)}`);
-    console.error(`  marketing   (${full.length}): ${JSON.stringify(full)}`);
-    let i = 0; while (i < short.length && short[i] === full[i]) i++;
-    console.error(`  diverges at character ${i}: ${JSON.stringify(short.slice(i, i + 60))}`);
-    console.error('  The contract must never promise something the site does not, or vice versa.');
-    return false;
-  }
-  if (full.length <= short.length) {
-    console.error('FAIL  the two guarantee constants are identical — one of them is pointless.');
-    return false;
-  }
-  console.log(`PASS  the contractual guarantee is a strict prefix of the marketing one (${short.length} of ${full.length} chars)`);
-  return true;
-}
+/* The PREFIX ASSERTION that stood here (contractual guarantee must be a strict prefix of the
+   marketing one) went on 2026-09-13 with FINDABLE_GUARANTEE_FULL itself: there is one guarantee
+   constant again, and the pair above checks it byte-for-byte against the site. If a second,
+   longer marketing version is ever reintroduced, bring the prefix check back with it — a "subset"
+   test is not enough, only a prefix cannot be a different promise. */
 
 /* ⛔ THE REFUND AMOUNT IS WRITTEN INSIDE THE GUARANTEE SENTENCE, so the promise can now contradict
    the price without either constant being "wrong" on its own. Added 2026-09-12 with the move to a
@@ -267,7 +244,6 @@ function checkRefundAmount() {
 }
 
 let failed = 0;
-if (!checkPrefix()) failed++;
 if (!checkRefundAmount()) failed++;
 for (const pair of PAIRS) {
   let mine, theirs;
@@ -304,9 +280,10 @@ for (const pair of PAIRS) {
 failed += checkGroups();
 
 // pairs + the guarantee prefix + the refund-amount check + the same-repo groups
-const TOTAL = PAIRS.length + 2 + SAME_REPO_GROUPS.length;
+/* +1 is the refund-amount check. (It was +2 while the guarantee prefix assertion existed.) */
+const TOTAL = PAIRS.length + 1 + SAME_REPO_GROUPS.length;
 if (failed) {
   console.error(`\n${failed} of ${TOTAL} checks failed.`);
   process.exit(1);
 }
-console.log(`\nAll ${TOTAL} checks pass: ${PAIRS.length} cross-repo, ${SAME_REPO_GROUPS.length} same-repo, plus the guarantee prefix and the refund amount.`);
+console.log(`\nAll ${TOTAL} checks pass: ${PAIRS.length} cross-repo, ${SAME_REPO_GROUPS.length} same-repo, plus the refund amount.`);

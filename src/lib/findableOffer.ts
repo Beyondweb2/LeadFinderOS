@@ -47,16 +47,16 @@ export const FINDABLE_SETUP_PRICE_GBP = 99;
    ⚠️ THEY HAD DRIFTED. This copy ended at "We do not promise you will be named."; the site's carried
    a further sentence — "The engines decide that, and anyone who promises it is guessing" — which is
    the strongest line in it. Restored here 2026-08-06, longer version wins. */
-/* ⛔ TWO CONSTANTS, AND THE SHORTER ONE IS A STRICT PREFIX OF THE LONGER. That property is the whole
-   reason this is safe, and scripts/check-cross-repo-sync.mjs asserts it rather than trusting it.
-   FINDABLE_GUARANTEE is CONTRACTUAL: the Stripe line item, the audit report, the client request
-   sheet. FINDABLE_GUARANTEE_FULL adds one sentence and is what the marketing site carries.
-   ⚠️ THE EXTRA SENTENCE ADDS NO OBLIGATION — it disclaims a promise that was never made — so the
-   contractual version is shorter without owing the customer less. That is the only test that
-   matters for a string somebody agrees to at checkout. A prefix can only ever be a shorter promise,
-   never a different one; a "subset" could be neither.
-   ⛔ NEVER MAKE THEM DIVERGE IN CONTENT. If the marketing line needs different words, the
-   contractual one changes first and the marketing one extends it. The sync check fails otherwise. */
+/* ⛔ ONE CONSTANT AGAIN (2026-09-13). There used to be two — FINDABLE_GUARANTEE (contractual: the
+   Stripe line item, the report, the client sheet) and FINDABLE_GUARANTEE_FULL (the site's copy, the
+   contractual one plus a claim-window sentence), with the sync script asserting the short one was a
+   strict prefix of the long one. Paul folded the claim window INTO the refund sentence and cut the
+   tail ("we will show you both sets of numbers" — they already hold both sets; that is what the
+   four-week results ARE), which left the two constants identical, so the split went. The site's
+   GUARANTEE is byte-locked to THIS constant now, and the prefix assertion is gone from both scripts.
+   ⛔ IT IS THE SENTENCE A CUSTOMER AGREES TO AT STRIPE CHECKOUT. Every rendering of the promise —
+   the Stripe description, the report, the welcome pack, the site, /refunds — must say exactly this.
+   A summary elsewhere may be SHORTER; it may never DIFFER. */
 /* 🔴 THE PROMISE CHANGED SHAPE ON 2026-09-12, AND THIS IS THE ONE NOTE TO READ BEFORE EDITING IT.
    It used to guarantee the WORK — "the audit, the work, and the re-measurement ... or a full refund"
    — and explicitly disclaimed the outcome ("We do not promise you will be named. The engines decide
@@ -75,26 +75,15 @@ export const FINDABLE_SETUP_PRICE_GBP = 99;
      · findable.live/refunds is the customer-facing statement of this and must not contradict it.
        If this sentence changes, that page changes in the same commit.
    ⚠️ £99 IS WRITTEN INTO THE TEXT because a customer reading a refund promise needs the amount in
-   it. check-cross-repo-sync.mjs asserts the number here matches FINDABLE_SETUP_PRICE_GBP. */
+   it. check-cross-repo-sync.mjs asserts the number here matches FINDABLE_SETUP_PRICE_GBP.
+   ⚠️ LENGTH: 236 characters (2026-09-13). Stripe documents no limit for the line-item description;
+   the longest string PROVEN to render untruncated on the hosted page is 222 (2026-08-06, read off a
+   real Checkout Session). This is 14 over that proof, so the first real Checkout Session after this
+   change is what proves it — read the hosted page's text, not the HTML shell. */
 export const FINDABLE_GUARANTEE =
   "We measure how often AI names you before we start, then re-measure after four weeks on the " +
-  "same questions and the same engines. If that number has not gone up, you can claim your £99 back.";
-
-/** The site's version: the contractual sentence plus the line that makes the point rather than the
- *  promise. Byte-identical to findable-site's GUARANTEE, asserted by the sync check. */
-/* The site's version: the contractual sentence plus HOW to claim. Byte-identical to findable-site's
-   GUARANTEE, asserted by the sync check.
-   ⚠️ THE EXTRA SENTENCE NOW ADDS AN OBLIGATION, WHICH THE OLD ONE DID NOT. The previous tail merely
-   disclaimed a promise, so the shorter contractual string could never owe less than the marketing
-   one. This tail states a 14-day claim window — a LIMIT on the promise, so the prefix rule still
-   holds in the safe direction (the contractual version, seen at Stripe, is the more generous one).
-   ⛔ Keep it that way. If a future tail ever WIDENS the promise, it belongs in FINDABLE_GUARANTEE
-   instead, or a customer agrees to one thing at checkout and reads a bigger one on the page. */
-export const FINDABLE_GUARANTEE_FULL =
-  "We measure how often AI names you before we start, then re-measure after four weeks on the " +
-  "same questions and the same engines. If that number has not gone up, you can claim your £99 back. " +
-  "Email us within 14 days of receiving your four week results and we will show you both sets of " +
-  "numbers and refund you.";
+  "same questions and the same engines. If that number has not gone up, email us within 14 days " +
+  "of your four week results and we'll refund your £99.";
 
 /* ⛔ WHERE A PROSPECT'S REPORT LIVES. findable.live/report/<auditId> — a Cloudflare Pages Function in
    the findable-site repo (functions/report/[id].ts) that proxies the render-audit-report edge
