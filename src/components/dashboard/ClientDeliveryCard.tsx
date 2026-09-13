@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useClientPages } from '@/hooks/useClientPages';
 import { DeliveryChecklistList } from '@/components/delivery/DeliveryChecklist';
 import { checklistDone, defaultRemeasureDue, TICKABLE_ITEMS, type DeliveryChecklist } from '@/lib/deliveryCockpit';
+import { currentTermsVerdict } from '@/lib/remeasureResults';
 import type { OutreachLead } from '@/types/outreach';
 
 /* ══ PAYING CLIENTS — what each one needs next (2026-09-13, Paul's brief) ═════════════════════
@@ -29,7 +30,7 @@ import type { OutreachLead } from '@/types/outreach';
 
    Paid = amount_paid > 0 (CLAUDE.md §6). Refunded clients are excluded and counted, not hidden. */
 
-interface BaselineFact { id: string; created_at: string; baseline_completed_at: string | null }
+interface BaselineFact { id: string; created_at: string; baseline_completed_at: string | null; baseline_contract?: unknown }
 
 const isPaid = (l: OutreachLead) => (Number(l.amount_paid) || 0) > 0;
 
@@ -56,7 +57,7 @@ export function ClientDeliveryCard({ leads, onChanged }: { leads: OutreachLead[]
     enabled: !!user && pointerIds.length > 0,
     queryFn: async (): Promise<Record<string, BaselineFact>> => {
       const client = supabase as unknown as SupabaseClient;
-      const { data, error } = await client.from('ai_audits').select('id, created_at, baseline_completed_at').in('id', pointerIds);
+      const { data, error } = await client.from('ai_audits').select('id, created_at, baseline_completed_at, baseline_contract').in('id', pointerIds);
       if (error) throw error;
       return Object.fromEntries(((data ?? []) as BaselineFact[]).map((b) => [b.id, b]));
     },
@@ -107,6 +108,12 @@ export function ClientDeliveryCard({ leads, onChanged }: { leads: OutreachLead[]
           const b = l.baseline_audit_id ? baselines.data?.[l.baseline_audit_id] ?? null : null;
           const baselineDate = b?.created_at ? b.created_at.slice(0, 10) : null;
           const due = l.remeasure_due_date ?? (baselineDate ? defaultRemeasureDue(baselineDate) : null);
+          const terms = currentTermsVerdict({
+            contract: b?.baseline_contract ?? null,
+            amountPaid: l.amount_paid,
+            baselineFrozenAt: b?.baseline_completed_at ?? null,
+            remeasureDueDate: l.remeasure_due_date,
+          });
           const clientPages = (pages ?? []).filter((p) => p.lead_id === l.id);
           const done = checklistDone(cl);
           const town = l.derived_town || l.search_location || null;
@@ -153,6 +160,11 @@ export function ClientDeliveryCard({ leads, onChanged }: { leads: OutreachLead[]
                     sentAt: l.remeasure_results_sent_at ?? null,
                     // Held = the replay has finalised and nothing was stamped: the sender routed it to a task.
                     held: !l.remeasure_results_sent_at && !!(l.remeasure_audit_id && baselines.data?.[l.remeasure_audit_id]?.baseline_completed_at),
+                    /* ⛔ THE SAME PREDICATE THE SENDER USES, read from rows this card already has:
+                       the lead carries the amount and the due date, and the baseline read carries
+                       the contract. No extra request, and no second copy of the rule — the card
+                       cannot say "will send" about a client the server will refuse. */
+                    legacyTerms: terms.current === true ? null : terms.reason,
                   }}
                   baselineDone={!!b?.baseline_completed_at}
                   baselineDoneLabel={b?.baseline_completed_at ? new Date(b.baseline_completed_at).toLocaleDateString('en-GB') : null}

@@ -6,6 +6,7 @@ import { compareMeasurements, MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP } from
 import type { QueueRowLite } from '../src/lib/baselineView.ts';
 import {
   remeasureResultsDecision, numberWentUp, claimWindowCloseIso, resultsEmailParagraphs, resultsDocumentMeaning, resultsClaimParagraph,
+  currentTermsVerdict, LEGACY_TERMS_LABEL,
   resultsEmailSubject, REMEASURE_RESULTS_COPY_APPROVED, REMEASURE_CLAIM_WINDOW_DAYS,
 } from '../src/lib/remeasureResults.ts';
 import { FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE } from '../src/lib/findableOffer.ts';
@@ -55,29 +56,92 @@ console.log('── Gone up means beyond the band, pooled ──');
   ok(c.withinNoise && !numberWentUp(c), 'inside the band is NOT gone up — the client would qualify for the refund (Paul, 2026-09-13)');
 }
 
+/* The terms gate has its own block below; these cases are about the NUMBERS, so they are
+   driven with a client who is provably on the current offer. */
+const OK = { current: true } as const;
 console.log('── The decision: holds when the number cannot be proven, sends when it can ──');
 {
   const before = rows(QS, 3, [1, 0, 0, 0]), after = rows(QS, 3, [3, 3, 0, 0]);
   const c = compareMeasurements(before, after, { businessName: 'X' });
-  ok(remeasureResultsDecision({ ...three(1, 1, 1), comparison: c }).send === false, 'HELD while the copy is not approved (the default)');
+  ok(remeasureResultsDecision({ ...three(1, 1, 1), comparison: c , terms: OK }).send === false, 'HELD while the copy is not approved (the default)');
   ok(REMEASURE_RESULTS_COPY_APPROVED === false, 'REMEASURE_RESULTS_COPY_APPROVED is false — nothing goes to a client until Paul approves the words');
-  const d = remeasureResultsDecision({ ...three(1, 1, 1), comparison: c, copyApproved: true });
+  const d = remeasureResultsDecision({ ...three(1, 1, 1), comparison: c, copyApproved: true , terms: OK });
   ok(d.send === true, 'sends once approved, three complete runs, 6 cells a side per question');
-  const gaveUp = remeasureResultsDecision({ replayRuns: [{ status: 'complete' }, { status: 'complete' }, { status: 'failed' }], replayTarget: 3, comparison: c, copyApproved: true });
+  const gaveUp = remeasureResultsDecision({ replayRuns: [{ status: 'complete' }, { status: 'complete' }, { status: 'failed' }], replayTarget: 3, comparison: c, copyApproved: true , terms: OK });
   ok(gaveUp.send === false && gaveUp.kind === 'replay_gave_up', 'a failed run holds: replay gave up');
-  const short = remeasureResultsDecision({ replayRuns: [{ status: 'complete' }, { status: 'complete' }], replayTarget: 3, comparison: c, copyApproved: true });
+  const short = remeasureResultsDecision({ replayRuns: [{ status: 'complete' }, { status: 'complete' }], replayTarget: 3, comparison: c, copyApproved: true , terms: OK });
   ok(short.send === false && short.kind === 'replay_gave_up', 'two of three runs holds');
   const thinAfter = compareMeasurements(before, rows(QS, 1, [1, 1, 0, 0]), { businessName: 'X' });  // 2 cells a side after
-  const thin = remeasureResultsDecision({ replayRuns: [{ status: 'complete' }], replayTarget: 1, comparison: thinAfter, copyApproved: true });
+  const thin = remeasureResultsDecision({ replayRuns: [{ status: 'complete' }], replayTarget: 1, comparison: thinAfter, copyApproved: true , terms: OK });
   ok(thin.send === false && thin.kind === 'unproven' && new RegExp(String(MIN_CELLS_FOR_QUESTION_CLAIM)).test(thin.reason), 'a side with fewer than MIN_CELLS_FOR_QUESTION_CLAIM cells on a question holds as unproven');
   const disjoint = compareMeasurements(before, rows(['other q'], 3, [0]), { businessName: 'X' });
-  const inc = remeasureResultsDecision({ ...three(1, 1, 1), comparison: disjoint, copyApproved: true });
+  const inc = remeasureResultsDecision({ ...three(1, 1, 1), comparison: disjoint, copyApproved: true , terms: OK });
   ok(inc.send === false && inc.kind === 'incomparable', 'no shared question holds as incomparable');
 }
 
 console.log('── The window is derived from the stamp ──');
 ok(claimWindowCloseIso('2026-10-06T09:00:00.000Z') === '2026-10-20T09:00:00.000Z', 'sent 6 Oct 09:00 → closes 20 Oct 09:00');
 ok(claimWindowCloseIso(null) === null && claimWindowCloseIso('junk') === null, 'no stamp / unreadable stamp → no window');
+
+/* ══ THE TERMS GATE ══════════════════════════════════════════════════════════════════════════════
+   A POSITIVE test for today's offer. Paul, 2026-09-13: the document would have been wrong three
+   ways for RG Locksmiths on 6 October — £99 back on a £19.99 sale, four weeks against his eight,
+   an outcome refund against his stored WORK guarantee — and his real numbers read 23 of 72 both
+   sides, so it would have offered him a refund he was never sold. Absence refuses: Ronnie has no
+   contract at all, so any test phrased as "is this client legacy?" would have let him through. */
+console.log("-- The terms gate: only the current offer passes --");
+{
+  /* Today's shape: contract v2 with no guarantee key, full price, the cycle the filler computes. */
+  const current = { contract: { version: 2, mainTown: 'Newcastle upon tyne' }, amountPaid: 99, baselineFrozenAt: '2026-09-13T05:50:34.177+00:00', remeasureDueDate: '2026-10-11' };
+  ok(currentTermsVerdict(current).current === true, 'v2 + full price + the current cycle → current terms');
+
+  const refused = (f: Parameters<typeof currentTermsVerdict>[0], what: string) => {
+    const v = currentTermsVerdict(f);
+    ok(v.current === false, `REFUSES: ${what}`);
+    return v.current === false ? v.reason : '';
+  };
+  refused({ ...current, contract: null }, 'no contract at all (Ronnie)');
+  refused({ ...current, contract: undefined }, 'an undefined contract');
+  refused({ ...current, contract: {} }, 'a contract with no version');
+  refused({ ...current, contract: [] }, 'an array where an object belongs');
+  refused({ ...current, contract: 'v2' }, 'a string where an object belongs');
+  refused({ ...current, contract: { version: 1 } }, 'a v1 contract even with no guarantee key');
+  refused({ ...current, contract: { version: 3 } }, 'a schema version nobody has written yet');
+  refused({ ...current, contract: { version: 2, guarantee: 'work' } }, 'v2 carrying a work guarantee');
+  refused({ ...current, contract: { version: 2, guarantee: 'outcome' } }, 'v2 carrying an outcome guarantee');
+  refused({ ...current, amountPaid: 49.99 }, 'a price below the current one');
+  refused({ ...current, amountPaid: 98.99 }, 'a penny below the current price');
+  refused({ ...current, amountPaid: null }, 'no amount recorded');
+  refused({ ...current, amountPaid: '' }, 'a blank amount');
+  refused({ ...current, amountPaid: 'free' }, 'an unreadable amount');
+  refused({ ...current, baselineFrozenAt: null }, 'no baseline completion date');
+  refused({ ...current, baselineFrozenAt: 'not a date' }, 'an unreadable completion date');
+  refused({ ...current, remeasureDueDate: null }, 'no stored due date');
+  refused({ ...current, remeasureDueDate: '2026-10-12' }, 'a due date one day off the current cycle');
+  ok(currentTermsVerdict({ ...current, amountPaid: 109.97 }).current === true, 'ALLOWS a price ABOVE the current one (the hosting add-on)');
+  ok(currentTermsVerdict({ ...current, amountPaid: '99' }).current === true, 'ALLOWS the amount as a string, the shape PostgREST returns');
+
+  /* ⛔ THE FOUR REAL ROWS, read from the live database on 2026-09-13. This is the confirmation
+     Paul asked for: refuse RG and Ronnie, refuse SC Plumbing twice over, allow AD on 11 October. */
+  const RG = { contract: { version: 1, guarantee: 'work', guaranteeReason: 'no recorded payment below the current £99 — work guarantee (the default)' }, amountPaid: 19.99, baselineFrozenAt: '2026-08-11T15:26:28.878+00:00', remeasureDueDate: '2026-10-06' };
+  const RONNIE = { contract: null, amountPaid: 49.99, baselineFrozenAt: '2026-08-18T13:41:55.789+00:00', remeasureDueDate: '2026-10-13' };
+  const SC = { contract: { version: 1, guarantee: 'work' }, amountPaid: 49.99, baselineFrozenAt: '2026-08-22T04:23:05.616+00:00', remeasureDueDate: null };
+  const AD = { contract: { version: 2 }, amountPaid: 99, baselineFrozenAt: '2026-09-13T05:50:34.177+00:00', remeasureDueDate: '2026-10-11' };
+  ok(currentTermsVerdict(RG).current === false, 'REAL ROW: RG Locksmiths is refused');
+  ok(currentTermsVerdict(RONNIE).current === false, 'REAL ROW: Ronnie is refused (no contract — never finished the questionnaire)');
+  ok(currentTermsVerdict(SC).current === false, 'REAL ROW: SC Plumbing is refused');
+  ok(currentTermsVerdict(AD).current === true, "REAL ROW: AD Locksmithing is ALLOWED - the one client on the current terms");
+  ok(currentTermsVerdict({ ...SC, contract: { version: 2 }, amountPaid: 99 }).current === false, '…and SC is refused a second way: no due date either');
+
+  /* The gate is IN FRONT of every other test, so a legacy client never even reaches the numbers. */
+  const c = compareMeasurements(rows(QS, 3, [1, 1, 0, 0]), rows(QS, 3, [1, 1, 0, 0]), { businessName: 'X' });
+  const legacy = remeasureResultsDecision({ replayRuns: [{ status: 'complete' }], replayTarget: 1, comparison: c, copyApproved: true, terms: currentTermsVerdict(RG) });
+  ok(legacy.send === false && legacy.kind === 'terms_differ', 'the decision refuses a legacy client with kind terms_differ');
+  ok(legacy.send === false && legacy.reason.startsWith(LEGACY_TERMS_LABEL), '…and the reason opens with the operator label the card shows');
+  const brokenToo = remeasureResultsDecision({ replayRuns: [{ status: 'failed' }], replayTarget: 3, comparison: c, copyApproved: true, terms: currentTermsVerdict(RG) });
+  ok(brokenToo.send === false && brokenToo.kind === 'terms_differ', 'terms are reported BEFORE a broken replay — the terminal reason wins');
+  ok(remeasureResultsDecision({ replayRuns: [{ status: 'complete' }], replayTarget: 1, comparison: c, copyApproved: false, terms: currentTermsVerdict(AD) }).send === false, 'the copy gate still refuses even a current-terms client');
+}
 
 console.log('── The words ──');
 {

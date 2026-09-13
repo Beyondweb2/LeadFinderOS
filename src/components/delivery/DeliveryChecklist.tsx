@@ -5,7 +5,7 @@ import {
   type DeliveryChecklist as ChecklistMap,
 } from '@/lib/deliveryCockpit';
 import type { ClientPageLine } from '@/hooks/useClientPages';
-import { claimWindowCloseIso } from '@/lib/remeasureResults';
+import { LEGACY_TERMS_LABEL, claimWindowCloseIso } from '@/lib/remeasureResults';
 
 /* ══ THE DELIVERY CHECKLIST — ONE COMPONENT, TWO HOMES (2026-09-13) ═══════════════════════════
    Rendered by the lead card's cockpit (Outreach / Inbox) AND the Dashboard's client delivery card,
@@ -28,7 +28,14 @@ export interface DeliveryChecklistProps {
   /** THE STAMP (outreach_leads.remeasure_results_sent_at) — written once by the results sender.
    *  null = not sent. `held` = the replay has finished but nothing was sent (the sender routed it
    *  to a task: copy not approved, replay gave up, or the number cannot be proven). */
-  results: { sentAt: string | null; held: boolean };
+  results: {
+    sentAt: string | null;
+    held: boolean;
+    /** ⛔ THE REASON THE SENDER WILL REFUSE THIS CLIENT, or null when they are on today's terms.
+     *  Shown INSTEAD of "not sent yet", which would be a lie: nothing is coming, and the operator
+     *  has to write to them by hand. Same predicate the server runs (currentTermsVerdict). */
+    legacyTerms?: string | null;
+  };
   /** Whether the client's baseline audit has finished — shown as a fact beside "Baseline checked". */
   baselineDone: boolean;
   baselineDoneLabel?: string | null;
@@ -117,6 +124,10 @@ export function DeliveryChecklistList({
                     </span>
                   ) : results.held ? (
                     <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-500">results held — needs you</span>
+                  ) : results.legacyTerms ? (
+                    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600" title={results.legacyTerms}>
+                      {LEGACY_TERMS_LABEL}
+                    </span>
                   ) : (
                     <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">not sent yet</span>
                   )}
