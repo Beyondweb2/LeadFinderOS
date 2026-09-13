@@ -57,7 +57,55 @@ export const TRADE_SINGULAR: Readonly<Record<string, string>> = {
      ⚠️ "hospitality business" keeps the consonant-initial "a" and claims nothing the audit did not
      measure — a kava bar and a hotel are both hospitality businesses. */
   hospitality: "hospitality business",
+  /* ⛔ THE UNCOUNTABLE FORMS PEOPLE ACTUALLY TYPE (Paul, 2026-09-13). "plumbing" is a real word
+     that passed every guard and rendered "for a plumbing in Andover" — it names the WORK, not the
+     person who does it. A free-check visitor types their trade themselves, so these arrive
+     verbatim ("Plumbing" is on a real submission). Each maps to the countable trade it means.
+     ⚠️ "electrics" and "accountancy" map correctly AND ARE STILL HELD, by the article rule below:
+     "electrician" and "accountant" start with a vowel sound and the approved body says "for a".
+     The map says what the trade is called; it does not say the sentence can carry it. To send
+     those, map them to a consonant-initial phrase instead (e.g. "local electrical company").
+     ⚠️ Anything uncountable that is NOT here BLOCKS — see UNCOUNTABLE_TRADE_ENDINGS and
+     UNCOUNTABLE_TRADE_WORDS below. A held lead Paul can see beats another "for a plumbing". */
+  plumbing: "plumber",
+  electrics: "electrician",
+  locksmithing: "locksmith",
+  accountancy: "accountant",
+  bookkeeping: "bookkeeper",
+  "driving lessons": "driving instructor",
+  "car valeting": "mobile valeter",
 };
+
+/* ══ UNCOUNTABLE TRADE WORDS BLOCK; THEY ARE NEVER GUESSED AT (Paul, 2026-09-13) ═════════════════
+   The map above catches the forms we have seen. Everything it has not seen still has to be safe,
+   and "safe" here means BLOCKED with a reason, because the alternative is the guess that produced
+   "for a plumbing". Two mechanical nets, applied to the LAST word after the map misses:
+
+   1. A word ending in "-ing" names an activity, never a person: roofing, plastering, cleaning,
+      catering, tiling, guttering, paving, heating, valeting, decorating, landscaping, fitting,
+      detailing. No trade anyone hires is a countable "-ing" noun, so the suffix alone is decisive.
+   2. A short curated list of the abstractions and adjectives that end some other way — the
+      "-ry"/"-cy" activity nouns (joinery, carpentry, upholstery, masonry, dentistry), the therapies,
+      the plural-only trade nouns ("removals", which the singulariser would otherwise turn into a
+      countable-looking "removal"), and the adjectives people type as if they were trades ("dental",
+      "electrical", "veterinary") — each of which passes the plural and article rules and still
+      cannot follow "a".
+   ⚠️ Every word here is ADDED to the map, never removed from it: listing "plumbing" in the block
+   set does nothing, because the map is consulted first and wins. Paul appends to both by hand. */
+const UNCOUNTABLE_TRADE_ENDINGS = /ing$/;
+export const UNCOUNTABLE_TRADE_WORDS: ReadonlySet<string> = new Set([
+  // activity nouns that do not end in -ing
+  "joinery", "carpentry", "upholstery", "masonry", "brickwork", "stonework", "groundwork",
+  "dentistry", "physiotherapy", "physio", "osteopathy", "chiropody", "podiatry", "chiropractic",
+  "aesthetics", "beauty", "massage", "nails", "lashes", "brows",
+  "security", "insurance", "storage", "haulage", "drainage", "insulation", "refrigeration",
+  "ventilation", "conveyancing", "recruitment", "signage", "printing", "photography",
+  // plural-only trade nouns (the singulariser would make these look countable)
+  "removals", "repairs", "services", "solutions", "maintenance", "installations",
+  // adjectives typed as trades
+  "dental", "electrical", "mechanical", "veterinary", "financial", "legal", "medical", "clinical",
+  "domestic", "commercial", "industrial", "residential",
+]);
 
 /* A value naming SEVERAL trades cannot become "a <noun>" at all, whatever we do to its plurals:
    "kava cafe, pool bar" and "Shoe repairs & watch battery replacement" are lists, not nouns.
@@ -146,10 +194,18 @@ export function normaliseTrade(raw: string | null | undefined): VarCheck {
   if (/\d/.test(lower)) return { ok: false, reason: "trade_has_digits", detail: trimmed };
   if (MULTI_CLAUSE.test(lower)) return { ok: false, reason: "trade_not_a_single_noun", detail: trimmed };
 
-  /* 2. Singularise the LAST word only — "driving instructors" is pluralised on "instructors", and
-        touching "driving" would produce nonsense. */
+  /* 1b. UNCOUNTABLE → BLOCK. Checked on the LAST word, before singularising, because that is the
+         word the article attaches to ("gas heating" is held on "heating"; "carpet cleaning" on
+         "cleaning"). The map has already had its chance above, so a listed word here is by
+         definition one nobody has decided a countable name for yet. */
   const words = lower.split(" ");
   const last = words[words.length - 1];
+  if (UNCOUNTABLE_TRADE_ENDINGS.test(last) || UNCOUNTABLE_TRADE_WORDS.has(last)) {
+    return { ok: false, reason: "trade_uncountable", detail: trimmed };
+  }
+
+  /* 2. Singularise the LAST word only — "driving instructors" is pluralised on "instructors", and
+        touching "driving" would produce nonsense. */
   if (last.endsWith("s") && !KEEP_TRAILING_S.test(last) && last.length >= 4) {
     words[words.length - 1] = last.slice(0, -1);
   }
