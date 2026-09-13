@@ -4360,3 +4360,70 @@ Deployed: `notify-onboarding-submit` v35, `stripe-webhook` v87, `process-ai-audi
   - **Deliver checklist**: `results_sent` is kind **`stamp`** (system-written), never a tick;
     `TICKABLE_ITEMS` is six; the card shows sent date + window close, or held, or not yet.
   - **WhatsApp is a second step**, not built — it needs a new Meta template.
+
+---
+
+## 25. 🔴 THE FOUR-MINUTE GAP BETWEEN REPEAT RUNS WAS NEVER A SAMPLING SAFEGUARD (2026-09-13, evening)
+
+**Read this before anyone "restores" sequential runs as a measurement protection. It never was one.**
+Measured across **49 multi-run audits, 242 consecutive-run gaps**: median **4.0 minutes**, with 186 of
+242 gaps between 1 and 5 minutes. Three runs are not three moments in any meaningful sense — they
+are three samples inside about a quarter of an hour.
+
+- ⛔ **AND `NOISE_BAND_PP = 5` WAS MEASURED ON RUNS IN THAT SAME RANGE.** The band's own
+  justification in `measurementCompare.ts` cites SW2 (0.15 → 0.10 → 0.15) and MK Plumbing
+  (0.35 → 0.35 → 0.30). Their real gaps: **SW2 6.2 and 5.1 minutes; MK 28.8 and 8.1 minutes.** So the
+  five points describe sampling MINUTES apart. It has never been a day-to-day figure and must not be
+  quoted as one.
+- ⛔ **THE ONLY RECORDED REASON FOR SEQUENCING IS POLITENESS TO APIFY.** `audit-baseline.ts`'s header
+  says: *"Sequential by design — each run takes minutes and there is no reason to hammer Apify in
+  parallel."* Nothing anywhere claims the gap protects the measurement. The mechanism is one line —
+  `if (usable.length < target && inFlight.length > 0) return;` — and it is a concurrency guard.
+- ⚠️ **THE EVIDENCE DOES NOT SETTLE WHETHER ZERO GAP WOULD BE WORSE, AND THAT IS WHY THE STAGGER IS
+  3 MINUTES RATHER THAN 0.** Flip rate between consecutive runs of one audit: **10.9% at ≤5 min
+  (7 pairs, 156 cells)** vs **8.7% at >60 min (9 pairs, 92 cells)**. Close-together runs disagree
+  slightly MORE, which is the opposite of the worry — and on that sample the difference is noise.
+  There is no usable sample of simultaneous runs: the only two sub-minute pairs are Ronnie's
+  replaced wrong-category runs and share too few questions to count. **Do not cite these numbers as
+  proof either way; cite them as the reason not to go to zero.**
+- **Real end-to-end wall clock, AD Locksmithing 2026-09-13:** baseline (11 q × 3) **13.3 min**, full
+  measure (18 q × 3) **18.0 min**, free check (3 q × 3) **15.7 min**. A client waits ~40 minutes from
+  payment to measured, and almost all of it is runs waiting for each other.
+
+### ⛔ THE STAGGER IS UNSAFE UNTIL ONE INDEX EXISTS — `run_number` IS A READ-THEN-WRITE
+`create-ai-audit` computes `runNumber = (lastRun?.run_number ?? 0) + 1` from a SELECT, and **nothing
+in the database stops two inserts producing the same number.** The only thing preventing it today is
+the in-flight guard the stagger would remove: `advanceBaseline` runs from TWO places every 30-second
+tick (the finalisation hook and the sweep), so with a time-based predicate both can see "3 minutes
+elapsed, one run exists" and both post run 2. Measured: **0 duplicate (audit_id, run_number) pairs in
+1,000 rows** — because the guard works, not because the schema forbids it.
+- **The fix is the same shape as `uq_ai_audits_one_remeasure_per_lead` (§19): let the INSERT be the
+  claim.** With a unique index the loser gets 23505 and backs off. ⚠️ `create-ai-audit` handles 23505
+  today only for the `ai_audits` insert (line ~1000); the **runs** insert has no such branch, so the
+  index and the handling ship together or a race surfaces as a 500.
+- ⛔ **SQL FIRST, CONFIRMED, THEN DEPLOY** (§3). The predicate stays sequential until the index is
+  live.
+
+### What was checked and is SAFE
+- ✅ **Questions are readable the instant a run exists.** A repeat reads the previous run's
+  `ai_audit_queue` rows, and those are written in the same instant as the run row — measured on AD's
+  baseline: **first and last queue row +0.0s after the run row, all three runs.** So the stagger can
+  key off "run started"; it does not need "run finished". The verbatim guarantee survives.
+  - 🔴 **THE ONE LANDMINE, PRE-EXISTING AND UNCHANGED BY THIS:** if that read returns fewer than
+    `MIN_QUESTION_COUNT`, create-ai-audit **silently GENERATES a fresh set** instead of repeating.
+    That is the only path by which runs 2 and 3 could ask different questions from run 1, and it
+    fails quietly. It is not made likelier by a stagger, but it is the thing to check first if a
+    re-measure ever reports `incomparable`.
+- ✅ **Finalisation does not care about overlap.** It fires on `usable.length >= target` — a COUNT of
+  complete/capped runs — never on "the previous run finished", and the freeze is a conditional
+  `.is("baseline", null)` write so exactly one tick wins. Overlapping runs change nothing.
+  ⚠️ `usable.slice(0, target)` averages the FIRST `target` runs, so a race that produced a 4th run
+  would pay for it and discard it.
+- ✅ **The in-flight ceiling is untouched and still does its job.** `AUDIT_IN_FLIGHT_CEILING = 24` of
+  Apify's 32, reserving 8 for directory scrapes and SEO — the reserve that existed because those
+  starved on 2026-07-26. A row that meets the ceiling is **deferred back to `pending`, never failed**
+  ("NOT A CAP AT ALL. The queue is busy"), so three overlapping 20-question runs queue in waves
+  rather than breaking. **Parallel therefore does NOT mean 60 at once**, and the saving is bounded by
+  the ceiling, not by the number of runs.
+- ✅ **Apify cost is per question** ($0.0125 budgeted, $0.01155 measured), so firing together costs
+  exactly what firing apart costs. There is no spend argument in either direction.
