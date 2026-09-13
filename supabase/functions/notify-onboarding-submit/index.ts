@@ -59,6 +59,57 @@ const BATCH = 20;
 const MAX_SEND_ATTEMPTS = 3;
 
 const PAID_STATUSES = new Set(["payment_received", "in_delivery", "completed"]);
+/** An onboarding row's own paid-class statuses (the webhook writes `paid`; useSubmissions reads all four). */
+const ROW_PAID_STATUSES = new Set(["paid", "payment_received", "in_delivery", "completed"]);
+
+/* ══ THE FAMILY RULE (2026-09-13) ═══════════════════════════════════════════════════════════════
+   🔴 PAUL PAID £108.99 ON 12 SEP AND WAS EMAILED "NOT PAID". Not a race with the webhook: this
+   function judged each submission ROW on its own. He had restarted the form — a first row at 12:35
+   with no lead (checkout refused twice), a second at 12:54 that paid at 12:56 — and the first row
+   turned twenty minutes old at 12:55, one minute before the payment landed on its sibling. Judged
+   alone it was true ("this row never paid") and read as a lie ("you did not pay").
+
+   One PERSON is one family: every non-free-check row sharing a contact email or a lead. The rule:
+     · a family with a paid member is never emailed about — every unpaid row is retired, and the
+       webhook's PAID email is the one notification (the webhook also retires them at payment time);
+     · a row is not judged while a NEWER sibling is still inside its own delay window — the person
+       is still on the form, so we wait for the last attempt to settle, then judge ONCE;
+     · when one email does go out, the other unpaid siblings are retired as covered by it.
+   Free checks are outside the family on purpose: a free check and a sign-up by the same address are
+   different journeys and the free-check alert must not be swallowed by a payment. */
+interface Sibling { id: string; status: string | null; created_at: string; lead_id: string | null; notify_sent_at: string | null }
+// deno-lint-ignore no-explicit-any
+async function familyOf(service: any, row: Row, cutoffIso: string): Promise<{ siblings: Sibling[]; paidVia: string | null; newerOpen: Sibling | null }> {
+  const email = (row.contact_email ?? "").trim().toLowerCase();
+  const ors: string[] = [];
+  if (email) ors.push(`contact_email.ilike.${email.replace(/[,()]/g, "")}`);
+  if (row.lead_id) ors.push(`lead_id.eq.${row.lead_id}`);
+  if (!ors.length) return { siblings: [], paidVia: null, newerOpen: null };
+  const { data, error } = await service
+    .from("onboarding_responses")
+    .select("id, status, created_at, lead_id, notify_sent_at, source")
+    .or(ors.join(","))
+    .neq("id", row.id);
+  if (error) {
+    // A failed family read must not block the alert — fall back to judging the row alone, as before.
+    console.warn(`[notify-onboarding-submit] family read failed for ${row.id}: ${error.message}`);
+    return { siblings: [], paidVia: null, newerOpen: null };
+  }
+  const siblings = ((data ?? []) as Array<Sibling & { source: string | null }>).filter((s) => s.source !== "free_check");
+  let paidVia: string | null = siblings.find((s) => ROW_PAID_STATUSES.has(String(s.status ?? "")))?.id ?? null;
+  if (!paidVia) {
+    // A sibling whose LEAD carries money is a paid family too (the row status can lag the lead).
+    const leadIds = [...new Set(siblings.map((s) => s.lead_id).filter((v): v is string => !!v && v !== row.lead_id))];
+    if (leadIds.length) {
+      const { data: leads } = await service.from("outreach_leads").select("id, amount_paid, status").in("id", leadIds);
+      const paidLead = ((leads ?? []) as Array<{ id: string; amount_paid: unknown; status: string | null }>)
+        .find((l) => Number(l.amount_paid ?? 0) > 0 || PAID_STATUSES.has(String(l.status ?? "")));
+      if (paidLead) paidVia = siblings.find((s) => s.lead_id === paidLead.id)?.id ?? paidLead.id;
+    }
+  }
+  const newerOpen = siblings.find((s) => s.created_at > row.created_at && s.created_at > cutoffIso && !s.notify_sent_at) ?? null;
+  return { siblings, paidVia, newerOpen };
+}
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -157,6 +208,15 @@ Deno.serve(async (req) => {
     let sent = 0, skippedPaid = 0, lostRace = 0, failed = 0;
 
     for (const row of rows) {
+      /* THE FAMILY, BEFORE THE CLAIM (see familyOf). A deferred row is left UNCLAIMED so it comes
+         back next tick; a paid family is claimed and retired below so it never comes back. */
+      const family = row.source === "free_check"
+        ? { siblings: [] as Sibling[], paidVia: null as string | null, newerOpen: null as Sibling | null }
+        : await familyOf(service, row, cutoff);
+      if (family.newerOpen) {
+        console.log(`[notify-onboarding-submit] ${row.id} deferred: newer submission ${family.newerOpen.id} from the same person is still inside its window`);
+        continue;
+      }
       /* CLAIM FIRST, ATOMICALLY. The conditional update is what makes double-sending impossible:
          two overlapping sweeps both issue it, the database serialises them, and only one gets a row
          back. Claiming BEFORE sending also means a crash mid-send costs one missed email rather than
@@ -238,11 +298,13 @@ Deno.serve(async (req) => {
          re-picked every minute until it burned all three attempts on an email nobody wants. It is
          given a terminal state instead, and the reason is stored rather than inferred: no email was
          sent and none is needed, which is not the same as a failure. */
-      if (paid) {
+      if (paid || family.paidVia) {
         skippedPaid += 1;
         await finish({
           notify_attempts: MAX_SEND_ATTEMPTS,
-          notify_error: "not sent: they paid inside the delay window, so the payment notification covers them",
+          notify_error: paid
+            ? "not sent: they paid inside the delay window, so the payment notification covers them"
+            : `not sent: the same person paid on another submission (${family.paidVia}), so the payment notification covers them`,
         });
         continue;
       }
@@ -540,6 +602,14 @@ Deno.serve(async (req) => {
           /* THE ONLY PLACE notify_sent_at IS EVER WRITTEN: the provider accepted it. The error is
              cleared so a row that succeeded on attempt 2 does not keep showing attempt 1's failure. */
           await finish({ notify_sent_at: new Date().toISOString(), notify_error: null });
+          /* ONE EMAIL PER FAMILY. The unpaid siblings (older attempts by the same person) are
+             retired as covered by this one, so a restarted form is never reported twice. */
+          const covered = family.siblings.filter((s) => !s.notify_sent_at && !ROW_PAID_STATUSES.has(String(s.status ?? ""))).map((s) => s.id);
+          if (covered.length) {
+            await service.from("onboarding_responses")
+              .update({ notify_attempts: MAX_SEND_ATTEMPTS, notify_error: `not sent: covered by the notification for ${row.id} (same person)` })
+              .in("id", covered).is("notify_sent_at", null);
+          }
         }
       } catch (e) {
         failed += 1;

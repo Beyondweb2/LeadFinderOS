@@ -43,18 +43,25 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-async function postResend(payload: Record<string, unknown>): Promise<void> {
+/** Posts to Resend and RETURNS the outcome (2026-09-13). It used to return void, so the PAID email's
+ *  success or failure lived only in a console log nobody can read — which is why "was the payment
+ *  email ever sent?" could not be answered for the 12 Sep payment. */
+async function postResend(payload: Record<string, unknown>): Promise<{ ok: boolean; status: number; id: string | null; error: string | null }> {
   const resendKey = Deno.env.get("RESEND_API_KEY");
-  if (!resendKey) { console.warn("[stripe-webhook] RESEND_API_KEY not set; skipping email"); return; }
+  if (!resendKey) { console.warn("[stripe-webhook] RESEND_API_KEY not set; skipping email"); return { ok: false, status: 0, id: null, error: "RESEND_API_KEY not set" }; }
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  const body = await res.text().catch(() => "");
   if (!res.ok) {
-    const b = await res.text().catch(() => "");
-    console.error("[stripe-webhook] Resend non-OK:", res.status, b.slice(0, 200));
+    console.error("[stripe-webhook] Resend non-OK:", res.status, body.slice(0, 200));
+    return { ok: false, status: res.status, id: null, error: body.slice(0, 300) };
   }
+  let id: string | null = null;
+  try { id = (JSON.parse(body) as { id?: string }).id ?? null; } catch { /* id stays null */ }
+  return { ok: true, status: res.status, id, error: null };
 }
 
 /** Resolve a REAL inbox for the barber: the owner's auth email, unless it's a synthetic
@@ -109,7 +116,15 @@ async function notifyOfFindablePayment(opts: {
   businessName: string; amountGbp: number; paidFor: string;
   trade: string | null; town: string | null; phone: string | null; email: string | null;
   note?: string | null;
+  /* THE TRACE (2026-09-13). The outcome is written to client_error_reports as `payment_email_sent`
+     or `payment_email_failed`, so "did the PAID email go?" is answerable from a row rather than
+     from the operator's inbox. `record` is the webhook's own recorder (event id attached). */
+  onboardingId?: string | null; leadId?: string | null;
+  record?: (errorId: string, ctx: Record<string, unknown>) => Promise<void>;
 }): Promise<void> {
+  const trace = async (errorId: string, ctx: Record<string, unknown>) => {
+    try { await opts.record?.(errorId, { onboarding_id: opts.onboardingId ?? null, lead_id: opts.leadId ?? null, amount_gbp: opts.amountGbp, ...ctx }); } catch { /* never affects the 200 */ }
+  };
   try {
     const name = opts.businessName.trim() || "A client";
     const amount = `£${opts.amountGbp.toFixed(2)}`;
@@ -137,16 +152,22 @@ async function notifyOfFindablePayment(opts: {
       (opts.note ? `<p style="margin:10px 0 0;color:#b45309"><strong>${esc(opts.note)}</strong></p>` : "") +
       `<p style="margin:10px 0 0;color:#475569">Setup is promised within two working days.</p>` +
       `</div>`;
-    await postResend({
+    const out = await postResend({
       from: "LeadFinder Pro <noreply@lead-finder-app.com>",
       to: [ADMIN_EMAIL],
       subject: `PAID ${amount} — ${name}${opts.note ? " (NOT LINKED)" : ""}`,
       text, html,
     });
-    console.log(`[stripe-webhook] findable payment email sent for ${name}`);
+    if (out.ok) {
+      console.log(`[stripe-webhook] findable payment email sent for ${name} (${out.id ?? "no id"})`);
+      await trace("payment_email_sent", { to: ADMIN_EMAIL, subject: `PAID ${amount} — ${name}`, provider_message_id: out.id });
+    } else {
+      await trace("payment_email_failed", { to: ADMIN_EMAIL, http_status: out.status, error: out.error });
+    }
   } catch (e) {
     // NEVER affects the webhook's 200. The money is already written by the time this runs.
     console.error("[stripe-webhook] notifyOfFindablePayment failed (non-blocking):", (e as Error).message);
+    await trace("payment_email_failed", { error: (e as Error).message });
   }
 }
 
@@ -567,6 +588,36 @@ Deno.serve(async (req) => {
               onboardingId,
               "findable onboarding -> paid",
             );
+            /* ⛔ RETIRE THE SAME PERSON'S OTHER UNPAID SUBMISSIONS (2026-09-13). A restarted form
+               leaves an older row behind, and notify-onboarding-submit judged rows one at a time —
+               so on 12 Sep the 12:35 attempt was reported "not paid" one minute before the 12:54
+               attempt paid. The notifier now judges the family too (belt), and this is the braces:
+               the moment money lands, every unpaid non-free-check row sharing this row's contact
+               email or lead is marked covered, so the PAID email is the one notification. Non-fatal
+               and after the money write — it must never be the reason a payment is retried. */
+            try {
+              const { data: paidRow } = await service.from("onboarding_responses")
+                .select("contact_email, lead_id").eq("id", onboardingId).maybeSingle();
+              const pr = paidRow as { contact_email?: string | null; lead_id?: string | null } | null;
+              const em = (pr?.contact_email ?? "").trim().toLowerCase().replace(/[,()]/g, "");
+              const ors: string[] = [];
+              if (em) ors.push(`contact_email.ilike.${em}`);
+              if (pr?.lead_id || findableLeadId) ors.push(`lead_id.eq.${pr?.lead_id || findableLeadId}`);
+              if (ors.length) {
+                const { data: retired } = await service.from("onboarding_responses")
+                  .update({ notify_attempts: 3, notify_error: `not sent: the same person paid on submission ${onboardingId}, so the payment notification covers them` })
+                  .or(ors.join(","))
+                  .neq("id", onboardingId)
+                  .is("notify_sent_at", null)
+                  .not("status", "in", "(paid,payment_received,in_delivery,completed)")
+                  // A NULL source is a sign-up row too: `neq` alone would drop NULLs (SQL three-valued logic).
+                  .or("source.is.null,source.neq.free_check")
+                  .select("id");
+                if (Array.isArray(retired) && retired.length) console.log(`[stripe-webhook] retired ${retired.length} unpaid sibling submission(s) for ${onboardingId}`);
+              }
+            } catch (e) {
+              console.error("[stripe-webhook] sibling retirement failed (non-fatal):", (e as Error).message);
+            }
 
             /* THE PAYER'S EMAIL, FOR FREE. Checkout collects an address for the receipt, so a
                completed session always carries one — and it is verified in the only sense that
@@ -687,6 +738,7 @@ Deno.serve(async (req) => {
                makes a Stripe retry silent. */
             if (!alreadyPaid) {
               await notifyOfFindablePayment({
+                onboardingId, leadId: findableLeadId || null, record: recordPaymentFailure,
                 businessName: ((leadForEmail?.business_name as string) ?? "").trim(),
                 amountGbp,
                 paidFor: paidForLabel,
