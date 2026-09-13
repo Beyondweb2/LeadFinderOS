@@ -287,6 +287,20 @@ Deploy:
 - [ ] **Redeploy every function that imports a shared module you changed**, and prove each one. They keep
       running old code until you do.
 - [ ] SPA auto-deploys on push to `main` (Cloudflare Pages).
+- [ ] 🔴 **findable-site DOES NOT. IT HAS NO CI AT ALL — `npm run deploy` IS THE ONLY WAY IT SHIPS.**
+      `"deploy": "astro build && npx wrangler pages deploy dist --project-name=findable-site"`.
+      There is no `.github/workflows`, no git integration, nothing watching `master`.
+      🔴 **THIS COST TWO ROUNDS ON 2026-09-13.** The hero-button commit was pushed, confirmed on
+      `origin/master`, and then watched for twenty minutes on a domain that was never going to
+      change — reported to Paul twice as "Cloudflare is sitting on the build", which §4 makes an
+      easy and wrong thing to believe. The assumption was that both repos behave like this one.
+      ⛔ **THE TELL, AND IT WAS IN THE FIRST PROBE: `findable-site.pages.dev` WAS ALSO STALE.**
+      A slow production rollout off a SUCCESSFUL build shows the new content on the preview domain
+      first. **Both stale means nothing was ever deployed**, not that deploying is slow. Check the
+      preview domain before blaming the pipeline, and if it is stale too, stop waiting.
+      ⚠️ And `npm run deploy` ships whatever is in the working tree at HEAD, not the commit you
+      pushed — wrangler warns `--commit-dirty` for exactly that reason. Build, verify the dist, then
+      deploy.
 
 ---
 
