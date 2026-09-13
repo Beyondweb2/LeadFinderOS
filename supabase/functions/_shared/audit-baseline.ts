@@ -37,6 +37,7 @@ import { fullMeasureAllocation } from "../../../src/lib/fullMeasure.ts";
 import { isRemeasureDue, utcDateISO } from "../../../src/lib/remeasureDue.ts";
 import { remeasureDueFill, workIncompleteFor } from "../../../src/lib/remeasureFill.ts";
 import { planReplay } from "../../../src/lib/baselineReplay.ts";
+import { REFUNDED_STATUS } from "../../../src/lib/leadPayment.ts";
 import { pickAuditTown } from "./place-town.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 
@@ -855,7 +856,7 @@ export async function startPaidBaseline(
     let lErr: any;
     ({ data: lead, error: lErr } = await service
       .from("outreach_leads")
-      .select("id, user_id, business_name, category, search_keyword, country, website, search_location, derived_town")
+      .select("id, user_id, business_name, category, search_keyword, country, website, search_location, derived_town, status")
       .eq("id", leadId).maybeSingle());
     /* MIGRATION-TOLERANT, and this is not theoretical: derived_town is added by a migration Paul
        applies BY HAND, so between this deploy and that SQL the column does not exist and PostgREST
@@ -866,13 +867,32 @@ export async function startPaidBaseline(
       console.warn("[baseline] derived_town column not present yet — reading without it");
       const retry = await service
         .from("outreach_leads")
-        .select("id, user_id, business_name, category, search_keyword, country, website, search_location")
+        .select("id, user_id, business_name, category, search_keyword, country, website, search_location, status")
         .eq("id", leadId).maybeSingle();
       lead = retry.data;
       lErr = retry.error;
     }
     if (lErr) return { ok: false, error: `lead read failed: ${lErr.message}` };
     if (!lead) return { ok: false, error: "lead not found" };
+
+    /* ⛔ A REFUNDED CLIENT NEVER GETS ANOTHER BASELINE, AND THIS IS THE ONLY PLACE THAT CAN SAY SO
+       FOR EVERY CALLER (2026-09-13). The refund leaves `onboarding_responses.status = 'paid'` alone
+       deliberately — it is the record of what they bought — and
+       `ensureBaselinesForPaidOnboardings` selects exactly that, every 30-second tick, with no idea
+       what the LEAD's status is. What stopped it buying a fresh audit for someone just refunded was
+       nothing but the pointer already existing: clear a wrong pointer, or delete the audit
+       (ON DELETE SET NULL does it for you), and the backstop would have started paying again.
+       ⛔ THE CHECK BELONGS HERE, NOT IN THE BACKSTOP. There are TWO callers — the backstop and the
+       Stripe webhook — so guarding the one where the fault was noticed is the
+       guard-written-as-today's-instance mistake this file records four times over. Put at the
+       property and every future caller inherits it.
+       ⚠️ POSITIVE TEST ON THE REFUNDED STATUS, never `!== 'paid'`: a paying client legitimately
+       moves through payment_received, in_delivery and completed, and a negative test would refuse
+       the baseline for all of them. Absence and an unknown status both pass, which is the safe
+       direction here — the money has already been taken. */
+    if (String(lead.status ?? "") === REFUNDED_STATUS) {
+      return { ok: true, skipped: "lead_refunded" };
+    }
 
     const bizType = ((lead.category as string) || (lead.search_keyword as string) || "").trim();
     if (!bizType) return { ok: false, skipped: "no_business_type" };

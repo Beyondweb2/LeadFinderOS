@@ -91,6 +91,13 @@ async function resolveBarberEmail(service: any, site: PaidSite): Promise<string 
 /** ONE address for anything this system tells the operator, matching notify-onboarding-submit.
  *  The barber notifier below keeps its own paul@yoursites.uk deliberately — it is a working,
  *  money-verified path and changing where its mail lands is not worth the risk today. */
+/* Stripe expands-or-not: a reference field is either the id string or the whole object. The
+   checkout case has its own local copy of this; this one is module scope so every case can use it
+   without each inventing its own reading of the same shape. */
+const idOfRef = (v: unknown): string | null =>
+  typeof v === "string" ? v
+    : (v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string" ? (v as { id: string }).id : null);
+
 const ADMIN_EMAIL = "paul@move37.fun";
 /* 🔴 THE SENDER, AND IT COST THE "PAID £99" EMAIL ON 2026-09-13. Every operator notification from
    this function went out as `noreply@lead-finder-app.com` — the OLD barber product's domain, which
@@ -858,6 +865,12 @@ Deno.serve(async (req) => {
               typeof v === "string" ? v : (v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string" ? (v as { id: string }).id : null);
             const stripeCustomerId = idOf(s.customer);
             const stripeSubscriptionId = idOf(s.subscription);
+            /* ⛔ THE PAYMENT INTENT IS STORED SO A LATER REFUND MAPS TO THIS PAYMENT EXACTLY.
+               `charge.refunded` carries a customer, and resolving by customer is what the fallback
+               does — but a customer who pays twice has two charges and the customer id cannot tell
+               them apart, so the refund would land on whichever lead the lookup happened to find.
+               The intent is the only identifier that is one-to-one with the money that moved. */
+            const stripePaymentIntentId = idOf(s.payment_intent);
             const boughtWebsite = !!stripeSubscriptionId;
             const paidForLabel = boughtWebsite
               ? "Findable - AI visibility (first cycle) + website build + hosting"
@@ -881,9 +894,10 @@ Deno.serve(async (req) => {
                  PostgREST 400 on a pre-migration database must not be able to lose a payment.
                  Without them we cannot cancel a subscription or answer "is this customer still
                  paying", so they are worth writing - just never at the payment's expense. */
-              if (stripeCustomerId || stripeSubscriptionId) {
+              if (stripeCustomerId || stripeSubscriptionId || stripePaymentIntentId) {
                 const subPatch: Record<string, unknown> = {};
                 if (stripeCustomerId) subPatch.stripe_customer_id = stripeCustomerId;
+                if (stripePaymentIntentId) subPatch.stripe_payment_intent_id = stripePaymentIntentId;
                 if (stripeSubscriptionId) {
                   subPatch.stripe_subscription_id = stripeSubscriptionId;
                   subPatch.subscription_status = "active";
@@ -1186,6 +1200,85 @@ Deno.serve(async (req) => {
           break;
         }
         await setPaid(siteId, false);
+        break;
+      }
+      /* ══ THE REFUND PAUL MADE IN STRIPE ═══════════════════════════════════════════════════════
+         ⛔ THE APP NEVER MOVES THE MONEY — Paul's call, 2026-09-13: "a button that moves £99 on a
+         click is a button I will eventually hit by accident", and he wants the Stripe record to be
+         the thing he did deliberately. So the refund action in the app is bookkeeping only and THIS
+         is the other half: the moment he refunds in Stripe, the app finds out. Before this a refund
+         updated nothing at all, which is worse than either extreme — the lead went on reading as a
+         paying customer, the day-28 replay would still have fired, and the tab would still have
+         been asking him to confirm a baseline for someone he had already paid back.
+
+         ⛔ RESOLVED BY PAYMENT INTENT FIRST, CUSTOMER ONLY AS A FALLBACK. The intent is one-to-one
+         with the money that moved; a customer who has paid twice has two charges and one customer
+         id, so resolving by customer alone could land the refund on the wrong payment. The fallback
+         exists for anyone who paid before the intent was stored, and it takes the OLDEST matching
+         lead deterministically rather than whichever row came back first.
+
+         ⚠️ PARTIAL REFUNDS ARE RECORDED, NOT ASSUMED TO BE FULL. Stripe sends this event for a
+         partial refund too. The amount actually returned is written, and the status only moves to
+         `refunded` when the whole charge went back — a £20 goodwill refund must not delete a client
+         from every revenue figure and cancel their re-measure. */
+      case "charge.refunded": {
+        const ch = event.data.object as Stripe.Charge;
+        const intentId = idOfRef(ch.payment_intent);
+        const customerId = idOfRef(ch.customer);
+        const refundedMinor = Number(ch.amount_refunded ?? 0);
+        const chargedMinor = Number(ch.amount ?? 0);
+        const fullyRefunded = refundedMinor > 0 && refundedMinor >= chargedMinor;
+
+        let lead: { id: string; business_name: string | null; status: string | null; refund_reason: string | null } | null = null;
+        if (intentId) {
+          const { data } = await service.from("outreach_leads")
+            .select("id, business_name, status, refund_reason").eq("stripe_payment_intent_id", intentId).maybeSingle();
+          lead = (data as typeof lead) ?? null;
+        }
+        if (!lead && customerId) {
+          const { data } = await service.from("outreach_leads")
+            .select("id, business_name, status, refund_reason").eq("stripe_customer_id", customerId)
+            .order("created_at", { ascending: true }).limit(1);
+          lead = ((data ?? [])[0] as typeof lead) ?? null;
+        }
+        if (!lead) {
+          /* ⛔ A REFUND WE CANNOT PLACE IS REPORTED, NEVER SWALLOWED. Money left the account and no
+             row in the CRM knows: that is exactly the state this whole event exists to end. */
+          await recordPaymentFailure("refund_lead_unresolved", {
+            charge_id: ch.id, payment_intent: intentId, customer: customerId,
+            amount_refunded_minor: refundedMinor, at: new Date().toISOString(),
+          });
+          break;
+        }
+
+        const patch: Record<string, unknown> = {
+          refunded_at: new Date().toISOString(),
+          refund_amount_gbp: refundedMinor / 100,
+          stripe_refund_id: idOfRef((ch.refunds as { data?: Array<{ id?: string }> } | null)?.data?.[0]) ?? null,
+        };
+        /* The status is the thing five readers act on (isPaidLead, the funnel, the Inbox exemption,
+           the tasks list and the replay gate), so only a FULL refund moves it. */
+        if (fullyRefunded) patch.status = "refunded";
+        /* ⚠️ NEVER OVERWRITE A REASON PAUL ALREADY TYPED. If he used the app's refund action first
+           and then refunded in Stripe, his words are the better record — this only fills a blank. */
+        if (!String(lead.refund_reason ?? "").trim()) {
+          patch.refund_reason = fullyRefunded
+            ? "Refunded in Stripe"
+            : `Partially refunded in Stripe (GBP ${(refundedMinor / 100).toFixed(2)} of ${(chargedMinor / 100).toFixed(2)})`;
+        }
+        const { error: refErr } = await service.from("outreach_leads").update(patch).eq("id", lead.id);
+        if (refErr) {
+          await recordPaymentFailure("refund_write_failed", {
+            lead_id: lead.id, charge_id: ch.id, error: refErr.message,
+          });
+        } else {
+          await recordPaymentFailure("refund_recorded", {
+            lead_id: lead.id, charge_id: ch.id, payment_intent: intentId,
+            amount_refunded_minor: refundedMinor, fully_refunded: fullyRefunded,
+            resolved_by: intentId ? "payment_intent" : "customer",
+          });
+          console.log(`[stripe-webhook] refund recorded for lead ${lead.id} (${fullyRefunded ? "full" : "partial"})`);
+        }
         break;
       }
       default:
