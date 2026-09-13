@@ -121,3 +121,9 @@ verify_jwt = true
 # function calls with CRON_SECRET.
 [functions.mockup]
 verify_jwt = true
+
+# The four-week results document (2026-09-13): findable.live/results/<remeasureAuditId> proxies
+# here. Public and unauthenticated like render-audit-report; it refuses anything that is not a
+# SENT remeasure (the stamp is the publish switch), so the handler is the gate, not the JWT.
+[functions.render-remeasure-results]
+verify_jwt = false

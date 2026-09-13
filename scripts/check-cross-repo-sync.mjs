@@ -54,6 +54,17 @@ const PAIRS = [
     why: 'The site shows this sentence and findable-checkout charges against it. A customer must not agree to one wording at checkout and read another on the page that sold it.',
   },
   {
+    /* ⛔ THE CLAIM SENTENCE (2026-09-13): the second sentence of the guarantee, rendered on /refunds
+       and said verbatim by the four-week results email and document when the number has not gone
+       up. The policy page, the email that starts the 14-day clock and the checkout wording must
+       not say three different things. */
+    what: 'the refund claim sentence',
+    kind: 'string',
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'REMEASURE_CLAIM_SENTENCE' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'REFUND_CLAIM_SENTENCE' },
+    why: 'The four-week results email tells a client how to claim in these words; /refunds states the policy in these words. They cannot differ.',
+  },
+  {
     what: 'the setup price',
     kind: 'number',
     mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_SETUP_PRICE_GBP' },

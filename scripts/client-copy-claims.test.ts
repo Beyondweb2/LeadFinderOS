@@ -23,7 +23,7 @@
    historical mirror and called it the live template. Paul caught it.)
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from "node:fs";
-import { FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP } from "../src/lib/findableOffer.ts";
+import { FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, REMEASURE_CLAIM_SENTENCE } from "../src/lib/findableOffer.ts";
 import { READABLE_TEMPLATE_BODIES } from "../src/lib/templateBodies.ts";
 import { WA_TEMPLATE_REQS } from "../src/lib/whatsappTemplates.ts";
 
@@ -52,6 +52,8 @@ const RENDERERS: Array<[string, string]> = [
   ["client request form (client)", "src/lib/clientRequestDoc.ts"],
   ["client request asks (client)", "src/lib/clientRequestAsks.ts"],
   ["audit report (prospect + client)", "src/lib/aiAuditReportHtml.ts"],
+  ["four-week results document (client)", "src/lib/remeasureResultsHtml.ts"],
+  ["four-week results words (client)", "src/lib/remeasureResults.ts"],
   ["playbook document (operator, printed for delivery)", "src/lib/playbookDoc.ts"],
   ["free-check result email (prospect)", "supabase/functions/_shared/free-check-result.ts"],
   ["onboarding follow-up (prospect)", "supabase/functions/_shared/onboarding-followup.ts"],
@@ -127,6 +129,10 @@ ok(/esc\(FINDABLE_GUARANTEE\)/.test(welcome), "the welcome pack renders FINDABLE
 ok(!/you get your money back/i.test(renderedText(welcome)), "…and no hand-written refund sentence beside it");
 ok(FINDABLE_GUARANTEE.includes(`£${FINDABLE_SETUP_PRICE_GBP}`), `the constant itself names £${FINDABLE_SETUP_PRICE_GBP}`);
 ok(/four weeks|week four/.test(FINDABLE_GUARANTEE), "…and four weeks");
+/* The claim sentence the four-week results email says when the number has not gone up IS the
+   guarantee's second sentence — one promise, one wording (2026-09-13). Cross-repo, the sync script
+   locks it to findable-site's REFUND_CLAIM_SENTENCE, which /refunds renders. */
+ok(FINDABLE_GUARANTEE.endsWith(REMEASURE_CLAIM_SENTENCE), "the guarantee ends with REMEASURE_CLAIM_SENTENCE (the four-week results email's refund sentence)");
 const playbook = read("src/lib/playbookDoc.ts");
 ok(/\$\{FINDABLE_GUARANTEE\}/.test(playbook), "the playbook document renders FINDABLE_GUARANTEE");
 ok(!/No client has completed/.test(renderedText(playbook)), "…and no longer asserts how many clients have completed a cycle (a sentence that goes stale by itself)");

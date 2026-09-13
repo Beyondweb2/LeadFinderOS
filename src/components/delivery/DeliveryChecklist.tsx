@@ -5,6 +5,7 @@ import {
   type DeliveryChecklist as ChecklistMap,
 } from '@/lib/deliveryCockpit';
 import type { ClientPageLine } from '@/hooks/useClientPages';
+import { claimWindowCloseIso } from '@/lib/remeasureResults';
 
 /* ══ THE DELIVERY CHECKLIST — ONE COMPONENT, TWO HOMES (2026-09-13) ═══════════════════════════
    Rendered by the lead card's cockpit (Outreach / Inbox) AND the Dashboard's client delivery card,
@@ -24,6 +25,10 @@ export interface DeliveryChecklistProps {
   pagesLoading?: boolean;
   onTogglePage: (pageId: string, built: boolean) => void;
   remeasure: { dueISO: string | null; fired: boolean };
+  /** THE STAMP (outreach_leads.remeasure_results_sent_at) — written once by the results sender.
+   *  null = not sent. `held` = the replay has finished but nothing was sent (the sender routed it
+   *  to a task: copy not approved, replay gave up, or the number cannot be proven). */
+  results: { sentAt: string | null; held: boolean };
   /** Whether the client's baseline audit has finished — shown as a fact beside "Baseline checked". */
   baselineDone: boolean;
   baselineDoneLabel?: string | null;
@@ -40,8 +45,10 @@ function TickBox({ on }: { on: boolean }) {
 }
 
 export function DeliveryChecklistList({
-  checklist, onToggle, pages, pagesLoading, onTogglePage, remeasure, baselineDone, baselineDoneLabel, compact,
+  checklist, onToggle, pages, pagesLoading, onTogglePage, remeasure, results, baselineDone, baselineDoneLabel, compact,
 }: DeliveryChecklistProps) {
+  const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : null);
+  const windowClose = claimWindowCloseIso(results.sentAt);
   const rm = remeasureStatus(remeasure.dueISO, Date.now());
   const rmTone =
     rm.state === 'red' ? 'border-red-500/50 bg-red-500/10 text-red-500'
@@ -90,6 +97,32 @@ export function DeliveryChecklistList({
                   })}
                 </div>
               )}
+            </div>
+          );
+        }
+        if (item.kind === 'stamp') {
+          /* THE SYSTEM'S STAMP, NEVER A TICK. Sent → date + when the 14-day window closes (derived).
+             Held → the replay finished but nothing went out; the sender flagged why. Otherwise → not
+             yet. No onClick: a person cannot start or undo a client's claim clock from here. */
+          const sent = !!results.sentAt;
+          return (
+            <div key={item.key} className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5" title={item.hint}>
+              <TickBox on={sent} />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className={`text-xs font-medium ${sent ? 'text-foreground' : 'text-foreground/80'}`}>{item.label}</span>
+                  {sent ? (
+                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
+                      sent {fmt(results.sentAt)}{windowClose ? ` · claim window closes ${fmt(windowClose)}` : ''}
+                    </span>
+                  ) : results.held ? (
+                    <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-500">results held — needs you</span>
+                  ) : (
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">not sent yet</span>
+                  )}
+                </span>
+                <span className={hintCls}>{item.hint}</span>
+              </span>
             </div>
           );
         }

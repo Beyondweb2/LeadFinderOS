@@ -44,12 +44,13 @@ ok(checklistDone(null) === 0, 'null checklist = 0');
 ok(checklistDone({}) === 0, 'empty = 0');
 ok(checklistDone({ directories: true, pages: true, gbp: false }) === 1, 'counts only the trues among TICKABLE items — a stored pages:true (pre-2026-09-13) is ignored, pages are derived now');
 ok(checklistDone({ directories: true, bogus: true } as Record<string, boolean>) === 1, 'an unknown key never inflates the count');
-ok(checklistDone({ baseline_checked: true, baseline_sent: true, results_sent: true }) === 3, 'the three 2026-09-13 ticks count');
+ok(checklistDone({ baseline_checked: true, baseline_sent: true, results_sent: true }) === 2, 'baseline checked + baseline sent count; results_sent is a SYSTEM STAMP, never a tick, so a stored true is ignored');
+ok(DELIVERY_CHECKLIST_ITEMS.find((i) => i.key === 'results_sent')?.kind === 'stamp', 'results_sent is kind stamp (outreach_leads.remeasure_results_sent_at, written by the sender)');
 console.log('── The shared list (cockpit AND dashboard card render THIS) ──');
 ok(DELIVERY_CHECKLIST_ITEMS.map((i) => i.key).join(',') === 'baseline_checked,baseline_sent,directories,gbp,pages,website,remeasure,results_sent',
   "Paul's delivery order: baseline checked → sent → directories → GBP → pages → website → week-four → results sent");
 ok(DELIVERY_CHECKLIST_ITEMS.filter((i) => i.kind === 'pages').length === 1 && DELIVERY_CHECKLIST_ITEMS.filter((i) => i.kind === 'remeasure').length === 1, 'exactly one derived pages line and one re-measure clock line');
-ok(TICKABLE_ITEMS.length === 7 && !TICKABLE_ITEMS.some((i) => i.key === 'pages'), 'seven tickable items; pages is not one of them');
+ok(TICKABLE_ITEMS.length === 6 && !TICKABLE_ITEMS.some((i) => i.key === 'pages' || i.key === 'results_sent'), 'six tickable items; pages (derived) and results_sent (stamp) are not among them');
 ok(DELIVERY_CHECKLIST_ITEMS.every((i) => i.label && i.hint), 'every item has a label and a hint (the hint is the tooltip)');
 console.log('── Pages derived from client_pages ──');
 ok(pagesProgress([{ status: 'planned' }, { status: 'live' }, { status: 'held' }, { status: 'merged' }, { status: 'removed' }, { status: 'archived' }]).total === 3, 'planned/live/held are lines; merged/removed/archived are not');

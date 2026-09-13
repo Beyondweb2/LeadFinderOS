@@ -258,6 +258,9 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
           pagesLoading={pagesLoading}
           onTogglePage={(id, built) => void setPageBuilt(id, built)}
           remeasure={{ dueISO: remeasureDue, fired: !!lead.remeasure_audit_id }}
+          /* The cockpit does not load the replay audit, so it cannot tell "held" from "not yet";
+             the Dashboard's client card does. Here the stamp alone is shown. */
+          results={{ sentAt: lead.remeasure_results_sent_at ?? null, held: false }}
           baselineDone={!!audit?.completedAt}
           baselineDoneLabel={audit?.completedAt ? new Date(audit.completedAt).toLocaleDateString('en-GB') : null}
         />

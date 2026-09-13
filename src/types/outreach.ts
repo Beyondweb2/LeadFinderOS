@@ -205,6 +205,10 @@ export interface OutreachLead {
      with a run target", which is how the cockpit pointed RG at his 26 Aug measurement. */
   baseline_audit_id?: string | null;
   remeasure_audit_id?: string | null;
+  /** Written ONCE by the four-week results sender (remeasure-results.ts) when the results email
+   *  goes. It is the start of the client's 14-day claim window; the close is derived on read
+   *  (claimWindowCloseIso), never stored. Null = not sent. */
+  remeasure_results_sent_at?: string | null;
   delivery_checklist?: Record<string, boolean> | null;  // the 5 manual milestone ticks
   delivery_ref?: Record<string, string> | null;         // NON-SECRET reference info (login email, host, access notes)
   // Lead-detail journey markers (manual milestones set in the detail popup).

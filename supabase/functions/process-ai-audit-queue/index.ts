@@ -11,6 +11,7 @@ import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
 import { refreshApifyUsage } from "../_shared/enrichment/apify-usage.ts";
 import { advanceBaseline, sweepStalledBaselines, ensureBaselinesForPaidOnboardings, fireDueRemeasures } from "../_shared/audit-baseline.ts";
 import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
+import { maybeSendRemeasureResults } from "../_shared/remeasure-results.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 
@@ -1045,6 +1046,21 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       }
     } catch (e) {
       console.error(`[process-ai-audit-queue] free_check result error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  /* THE FOUR-WEEK RESULTS (2026-09-13) — for every run that just finished, the sender checks
+     whether its audit is the lead's own day-28 replay with every run settled, and if so claims,
+     sends and stamps (or routes to a task when the number cannot be proven or the copy is not yet
+     approved). Runs AFTER advanceBaseline (which finalises the replay) and after the free-check
+     sends; same contract as every other send here — a failure never breaks finalisation. Reuses
+     freeCheckJobs: the same "finished complete, not capped" set, deduped by audit. */
+  for (const auditId of new Set(freeCheckJobs.map((j) => j.auditId))) {
+    try {
+      const r = await maybeSendRemeasureResults(service, auditId);
+      if (r.kind !== "skipped") console.log(`[process-ai-audit-queue] four-week results for audit ${auditId}: ${JSON.stringify(r)}`);
+    } catch (e) {
+      console.error(`[process-ai-audit-queue] four-week results error for audit ${auditId}:`, e instanceof Error ? e.message : String(e));
     }
   }
 

@@ -508,7 +508,7 @@ export async function startFullMeasure(service: Client, audit: FrozenBaseline): 
 
 /** Write one client_error_reports row per (error_id, lead) per hour, so a persistent refusal leaves
  *  a readable trail rather than 120 rows an hour at the 30-second tick. */
-async function reportOnceAnHour(service: Client, errorId: string, leadId: string, message: string, context: Record<string, unknown>): Promise<void> {
+export async function reportOnceAnHour(service: Client, errorId: string, leadId: string, message: string, context: Record<string, unknown>): Promise<void> {
   try {
     const since = new Date(Date.now() - 60 * 60_000).toISOString();
     const { data: recent } = await service
