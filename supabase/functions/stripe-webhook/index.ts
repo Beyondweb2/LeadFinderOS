@@ -834,10 +834,21 @@ Deno.serve(async (req) => {
               }
             }
             /* Read-only pre-check, purely so the email can be sent once. Stripe RETRIES webhooks,
-               and a retry would re-run the write below and email again. Mirrors the barber branch's
-               own `paid && !wasPaid` idiom: if the lead already carried money before this event, the
-               payment is not new and no second email goes out. This adds a SELECT and changes
-               nothing about the write that follows — same fields, same order, same behaviour. */
+               and a retry would re-run the write below and email again.
+
+               🔴 THE MONEY IS NOT THE RIGHT KEY, AND KEYING ON IT LOST THE EMAIL SILENTLY
+               (2026-09-14). This flag used to decide the email on its own: "the lead already
+               carried money, so this payment is not new". But the money is written BEFORE the email
+               is sent, so the two are not the same fact. Anything that kills the handler between
+               those two lines — a timeout, a cold-start kill, a slow Resend that outlives the
+               request — leaves the lead paid and the email unsent, and then the retry reads the
+               money, calls the payment old, and suppresses the one notification for ever. Nothing
+               would have said so: the skip only ever reached console.log, and the CLI cannot read
+               edge logs.
+
+               ⛔ SO THE MONEY ONLY NARROWS; THE EMAIL'S OWN TRACE DECIDES (below). `alreadyPaid`
+               stays because it is the cheap test and it is true for every duplicate — it just no
+               longer gets to answer the question by itself. */
             let alreadyPaid = false;
             let leadForEmail: Record<string, unknown> | null = null;
             if (findableLeadId) {
@@ -851,6 +862,31 @@ Deno.serve(async (req) => {
               } catch (e) {
                 // A failed pre-read must not touch the payment. Worst case: a retry emails twice.
                 console.error("[stripe-webhook] pre-payment read failed (non-blocking):", (e as Error).message);
+              }
+            }
+
+            /* ⛔ DID THE PAID EMAIL ACTUALLY GO FOR THIS ONBOARDING ROW? That is the only question
+               worth suppressing on, and `payment_email_sent` is the record of it — written on the
+               Resend 2xx with the provider id, by the same recorder the rest of this branch uses.
+               Asked ONLY when the lead already carries money, so the first payment never pays for
+               this read.
+               ⛔ IT FAILS OPEN, DELIBERATELY, AND THE DIRECTION IS THE WHOLE POINT. If the read
+               errors we cannot tell whether the email went, and the two wrong answers are not equal:
+               a duplicate "PAID £99" to Paul is an inbox annoyance, while a missed one means a
+               customer paid and nobody was told. The guard exists to stop noise, never to risk
+               silence, so an unknown answer sends. */
+            let paidEmailAlreadySent = false;
+            if (alreadyPaid) {
+              try {
+                const { data: prior } = await service
+                  .from("client_error_reports")
+                  .select("id")
+                  .eq("error_id", "payment_email_sent")
+                  .contains("context", { onboarding_id: onboardingId })
+                  .limit(1);
+                paidEmailAlreadySent = Array.isArray(prior) && prior.length > 0;
+              } catch (e) {
+                console.error("[stripe-webhook] could not check for a prior PAID email — sending rather than risking silence:", (e as Error).message);
               }
             }
             /* ══ THE WEBSITE ADD-ON ═══════════════════════════════════════════════════════════
@@ -919,9 +955,10 @@ Deno.serve(async (req) => {
             console.log(`[stripe-webhook] findable payment recorded: onboarding=${onboardingId} lead=${findableLeadId || "(none)"} amount=${amountGbp} (${event.id})`);
 
             /* Email AFTER the payment is written and logged — the money landing can never depend on
-               Resend being up. Skipped when the lead already had money against it, which is what
-               makes a Stripe retry silent. */
-            if (!alreadyPaid) {
+               Resend being up. Suppressed ONLY when this onboarding row already has a
+               `payment_email_sent` trace, which is what makes a Stripe retry quiet without letting a
+               crash between the write and the send lose the notification for ever. */
+            if (!paidEmailAlreadySent) {
               await notifyOfFindablePayment({
                 onboardingId, leadId: findableLeadId || null, record: recordPaymentFailure,
                 businessName: ((leadForEmail?.business_name as string) ?? "").trim(),
@@ -965,7 +1002,20 @@ Deno.serve(async (req) => {
                     })()),
               });
             } else {
-              console.log(`[stripe-webhook] findable payment email skipped: lead ${findableLeadId} already had a payment (retry?)`);
+              /* 🔴 THE SKIP IS RECORDED NOW. It used to reach console.log alone — and the CLI has no
+                 `functions logs`, so "no PAID email and no trace" had two readings that could not be
+                 told apart: the webhook never arrived, or it arrived and chose not to send. That
+                 ambiguity is what cost an evening on 2026-09-14. Four outcomes, four rows: sent,
+                 failed, skipped, and nothing-at-all (which now means only that nothing arrived). */
+              console.log(`[stripe-webhook] findable payment email skipped: onboarding ${onboardingId} already has a payment_email_sent trace`);
+              await recordPaymentFailure("payment_email_skipped", {
+                onboarding_id: onboardingId,
+                lead_id: findableLeadId || null,
+                reason: "a PAID email was already sent for this onboarding row",
+                amount_on_lead_gbp: Number(leadForEmail?.amount_paid ?? 0) || null,
+                amount_gbp: amountGbp,
+                at: new Date().toISOString(),
+              });
             }
 
             /* THE CUSTOMER'S CONFIRMATION — WhatsApp template, best-effort, after the paid write.
