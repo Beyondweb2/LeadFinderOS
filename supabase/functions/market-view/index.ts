@@ -1,6 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { classifyWinnability, unwrapCitationUrl, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
+
+/* ⛔ THE TWO SCORED ENGINES ONLY, for the slot read. AI Overview and Google organic are captured
+   but never scored, and §5's pages-move-Gemini evidence says nothing about them — reading slots
+   off an engine whose behaviour we have never measured would put an unevidenced number at the top
+   of the screen. Same restriction the opportunity-engine filter already applies. */
+const SCORED_SLOT_ENGINES = ["chatgpt", "gemini"] as const;
 import { majorityVerdict, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
 import { classifySource } from "../../../src/lib/sourceType.ts";
 import { nicheTradeKey, ENGINE_LABELS_NICHE } from "../../../src/lib/nicheView.ts";
@@ -143,6 +149,10 @@ Deno.serve(async (req) => {
 
       const engNamed: Record<string, [number, number]> = {};
       const srcSplit: Record<string, { directory: number; ownSite: number; authority: number; other: number; total: number }> = {};
+      /* ⛔ SLOT CHURN — one entry per engine, accumulated over questions that were asked MORE THAN
+         ONCE. A single-run question cannot show whether a name is entrenched or passing through,
+         so it contributes nothing here rather than counting as "held". */
+      const slotAgg: Record<string, { qs: number; names: number; held: number }> = {};
       const domCount: Record<string, Map<string, number>> = {};
       const winnability: Record<string, number> = {};
       const townAgg = new Map<string, { town: string; businesses: Set<string>; audits: number; cells: number }>();
@@ -198,6 +208,29 @@ Deno.serve(async (req) => {
           });
           const m = majorityVerdict(verdicts);
           winnability[m] = (winnability[m] ?? 0) + 1;
+          /* ⛔ THE FREE-SLOT READ. `runResults` is this ONE question across its runs, so the same
+             question's competitor lists can be compared run to run — which is the only way to tell
+             a firm that holds a slot from one that happened to appear once.
+             ⚠️ 2+ RUNS OR NOTHING. With a single run every name looks "held every run", which would
+             read as total entrenchment and is the exact inversion of the truth. */
+          if (runResults.length > 1) {
+            for (const e of SCORED_SLOT_ENGINES) {
+              const perRun = runResults
+                .map((res) => (res as Record<string, { competitors?: unknown } | undefined>)[e])
+                .filter((d): d is { competitors?: unknown } => !!d)
+                .map((d) => new Set((Array.isArray(d.competitors) ? d.competitors : [])
+                  .map((c) => String(c ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim())
+                  .filter((c) => c.length >= 3)));
+              if (perRun.length < 2) continue;
+              const count = new Map<string, number>();
+              for (const set of perRun) for (const n of set) count.set(n, (count.get(n) ?? 0) + 1);
+              const agg = slotAgg[e] ?? { qs: 0, names: 0, held: 0 };
+              agg.qs += 1;
+              agg.names += perRun.reduce((n, set) => n + set.size, 0) / perRun.length;
+              agg.held += [...count.values()].filter((c) => c === perRun.length).length;
+              slotAgg[e] = agg;
+            }
+          }
         }
         townAgg.set(tKey, tAgg);
       }
@@ -206,11 +239,22 @@ Deno.serve(async (req) => {
         .filter((e) => engNamed[e])
         .map((e) => ({ engine: e, label: ENGINE_LABELS_NICHE[e] ?? e, named: engNamed[e][0], answered: engNamed[e][1] }));
       const sources = Object.entries(srcSplit).map(([e, s]) => ({ engine: e, label: ENGINE_LABELS_NICHE[e] ?? e, ...s }));
+      /* Means, not totals: the consumer reads "names per answer", and a raw sum would make a niche
+         with more questions look more crowded. An engine with no readable question is OMITTED
+         rather than sent as zero — absent is not "no slots". */
+      const slots = Object.entries(slotAgg)
+        .filter(([, v]) => v.qs > 0)
+        .map(([e, v]) => ({
+          engine: e, label: ENGINE_LABELS_NICHE[e] ?? e,
+          readableQuestions: v.qs,
+          namesPerAnswer: v.names / v.qs,
+          heldEveryRun: v.held / v.qs,
+        }));
       const topDomains = Object.fromEntries(Object.entries(domCount).map(([e, m]) =>
         [e, [...m.entries()].sort((x, y) => y[1] - x[1]).slice(0, 10).map(([domain, count]) => ({ domain, count }))]));
 
       const niche = {
-        trade: tradeIn, tradeKey: key,
+        trade: tradeIn, tradeKey: key, slots,
         sample: {
           audits: auditsWithAnswers, businesses: bizNames.size, towns: townAgg.size,
           questions: questionsTotal, cells: cellsTotal, multiRunAudits, multiRunQuestions,

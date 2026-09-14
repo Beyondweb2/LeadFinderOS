@@ -286,11 +286,31 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
     unmeasured: 'border-border text-muted-foreground',
   }[v.tier];
 
+  /* One word each, and NOT MEASURED is deliberately the plainest — it is a refusal to judge, not a
+     middling grade, and it is the honest default for most niches (only 7.1% of question×engine
+     buckets on file carry the repeat runs a slot read needs). */
+  const VERDICT_WORD: Record<typeof v.kind, string> = {
+    worth_outreach: 'Worth outreach', mixed: 'Tight', avoid: 'Avoid', no_verdict: 'Not measured',
+  };
+  const VERDICT_BADGE: Record<typeof v.kind, string> = {
+    worth_outreach: 'bg-emerald-500/15 text-emerald-600',
+    mixed: 'bg-amber-500/15 text-amber-600',
+    avoid: 'bg-red-500/15 text-red-600',
+    no_verdict: 'bg-muted text-muted-foreground',
+  };
+
   return (
     <Card className="border-primary/25">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium flex flex-wrap items-center gap-2">
           <Telescope className="h-4 w-4 text-primary" /> Niche analysis — {n.trade}
+          {/* ⛔ THE VERDICT AS A WORD, NOT ONLY AS A COLOUR. "Not measured" must be distinguishable
+              from "Tight" AT A GLANCE: they are the two states an operator could confuse, and
+              confusing them means sending outreach into a niche nobody has read. Grey-with-a-word
+              beside amber-with-a-word cannot be misread the way two coloured cards can. */}
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${VERDICT_BADGE[v.kind]}`}>
+            {VERDICT_WORD[v.kind]}
+          </span>
           <span className="text-xs font-normal text-muted-foreground">
             {n.sample.businesses} businesses · {n.sample.towns} towns · {n.sample.audits} audits · {n.sample.cells} answers
             {n.marketAudits > 0 ? ` · +${n.marketAudits} market audits (not folded in)` : ''}
