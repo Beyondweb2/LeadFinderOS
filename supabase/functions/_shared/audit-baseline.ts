@@ -26,6 +26,14 @@
    questions to compare. Do not set it to 0 without new data. */
 export const RUN_STAGGER_MS = 3 * 60 * 1000;
 
+/* The skip reason names the missing answer in the words the operator uses, not the column name.
+   ⚠️ A field with no entry here falls back to its column name rather than being dropped: a skip
+   reason that silently omitted the one thing being waited for would be the absent-value shape on a
+   diagnostic. The RULE for which fields are required lives in src/lib/questionnaireComplete.ts. */
+const MISSING_LABEL = (field: string): string =>
+  ({ confirmed_location: "no confirmed town", services: "no services" } as Record<string, string>)[field]
+  ?? `no ${field}`;
+
 /** The engines whose named/answered signal counts toward the baseline. Mirrors the report. */
 const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
@@ -38,6 +46,7 @@ import { isRemeasureDue, utcDateISO } from "../../../src/lib/remeasureDue.ts";
 import { remeasureDueFill, workIncompleteFor } from "../../../src/lib/remeasureFill.ts";
 import { planReplay } from "../../../src/lib/baselineReplay.ts";
 import { REFUNDED_STATUS } from "../../../src/lib/leadPayment.ts";
+import { missingQuestionnaireFields } from "../../../src/lib/questionnaireComplete.ts";
 import { pickAuditTown } from "./place-town.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 
@@ -841,12 +850,11 @@ export async function startPaidBaseline(
        baseline starts on its own. Nothing new schedules it.
        ⚠️ AND IT IS CORRECT UNDER THE CURRENT ONE-QUESTIONNAIRE FLOW TOO — there both answers exist
        at payment, so this passes on the first attempt and nothing changes. */
-    const q2Town = String(row.confirmed_location ?? "").trim();
-    const q2Services = String(row.services ?? "").trim();
-    if (!q2Town || !q2Services) {
+    const q2Missing = missingQuestionnaireFields(row);
+    if (q2Missing.length > 0) {
       return {
         ok: true,
-        skipped: `awaiting_questionnaire_2 (${!q2Town ? "no confirmed town" : ""}${!q2Town && !q2Services ? ", " : ""}${!q2Services ? "no services" : ""})`,
+        skipped: `awaiting_questionnaire_2 (${q2Missing.map(MISSING_LABEL).join(", ")})`,
       };
     }
 

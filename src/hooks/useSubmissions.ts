@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { questionnaireComplete } from '@/lib/questionnaireComplete';
 
 /* ══ WHO FILLED IN MY FORM? ═══════════════════════════════════════════════════════════════════
    ⛔ WHAT THIS REPLACES: running SQL. onboarding_responses is read by no operator page, so the
@@ -99,20 +100,18 @@ export const isLeadPaid = (r: SubmissionRow) => (r.lead_amount_paid ?? 0) > 0;
  * freeze old rows against a stale definition and let the readers drift. The two fields are
  * exactly the ones Q2 makes required, so "we have them" and "they finished" cannot disagree.
  *
- * ⛔ TWO FIELDS, NOT THREE (2026-08-22). business_address left the questionnaire — it was trapping
- * paying customers on mobile and is collected at delivery instead — so complete_q2 no longer
- * requires it. If this still required business_address, every customer who finished the new
- * two-field Q2 would read "awaiting Q2" forever and be chased for something we no longer ask.
- * town + services is exactly what startPaidBaseline waits for, so completion still means the
- * baseline can run.
+ * ⛔ THE RULE ITSELF NOW LIVES IN `src/lib/questionnaireComplete.ts` AND IS NOT RESTATED HERE
+ * (2026-09-14). This function was the one copy of four that was right; the PAID email and the lead
+ * card had each been left requiring `business_address` when it dropped out of the questionnaire on
+ * 2026-08-22, so the same customer read complete here and outstanding there. What this function
+ * still owns is the half the leaf deliberately refuses: the PAYMENT test.
  *
  * ⚠️ Unpaid rows are NOT in this state. Someone who has not paid has nothing outstanding — they
  * are a chase about money, which the card already shows separately.
  */
 export function needsQ2(r: SubmissionRow): boolean {
   if (!isPaidSubmission(r)) return false;
-  const has = (v: string | null) => !!(v ?? '').trim();
-  return !(has(r.confirmed_location) && has(r.services));
+  return !questionnaireComplete(r);
 }
 
 /** Whole days since payment-era submission — what the day 2 / day 5 / day 7 chase counts. */
