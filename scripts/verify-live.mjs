@@ -96,6 +96,18 @@ const TARGETS = [
               'Hide empty statuses', 'per-campaign funnels'],
   },
   {
+    name: 'SPA · one questionnaire-complete rule (shared leaf chunk)',
+    /* ⛔ THE CHUNK IS RESOLVED BY NAME, NOT BY THE MARKER. Searching every chunk FOR the marker
+       would make "present" and "resolved" the same event, and an absent marker would report as
+       UNRESOLVED — collapsing the two meanings this file exists to keep apart. The entry chunk
+       names this one, so resolution is a real step that can fail on its own. */
+    resolve: spaLazy('whatsappTemplates'),
+    /* The leaf's only runtime literal, and the two names are adjacent ONLY in
+       QUESTIONNAIRE_REQUIRED_FIELDS — a string the pre-2026-09-14 bundle could not contain,
+       because the file did not exist. Minifiers rename functions; they do not rewrite strings. */
+    present: ['["confirmed_location","services"]'],
+  },
+  {
     name: 'findable.live · hero + pricing card',
     resolve: page(`${SITE}/`),
     present: ['had my report', 'Your second payment is',
