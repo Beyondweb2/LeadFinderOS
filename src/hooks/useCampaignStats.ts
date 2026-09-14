@@ -51,7 +51,11 @@ const SIGNUP_TEMPLATES = new Set(['onboarding_followup']);
 /* ⚠️ audit_reply_warm ADDED 2026-09-07 WITH THE TEMPLATE ITSELF. Its {{3}} is the report link, so
    forgetting it here does not throw — it silently moves real prospect opens into the unattributable
    bucket and understates the open rate, which is the failure this set's own comment records. */
-const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'video_template', 'free_check_result', 'audit_reply_warm']);
+/* ⚠️ FIVE NOW. Forgetting to add a report-carrying template here does not throw — it silently moves
+   that template's real prospect opens into the "not attributable" bucket and prints a low open rate
+   for the template beside it. competitor_hook's {{6}} is the same findable.live/report/<auditId>
+   link every other entry carries. */
+const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'video_template', 'free_check_result', 'audit_reply_warm', 'competitor_hook']);
 
 /* ⛔ THE DAY PAGE-HIT LOGGING WENT LIVE. Every site-visit rate is measured from here, because a
    send that predates it had no way to be counted and would drag its template's rate to a meaningless

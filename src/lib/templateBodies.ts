@@ -22,6 +22,8 @@
    ============================================================ */
 
 import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from './questionnaireFollowup';
+/* competitor_hook's body prints the SAME plural the parameter carries — see its note below. */
+import { pluraliseTrade } from './templateVars';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
 const onboardingFollowupBody = (b: string, u: string) =>
@@ -111,6 +113,39 @@ Have a read, and if you want I'll explain what's causing it and how we'd fix it.
 
 Paul, Findable.`;
 
+/* competitor_hook - the body SUBMITTED TO META 2026-09-14. Six variables: {{1}} business name,
+   {{2}} trade as a LOWERCASE PLURAL, {{3}} {{4}} {{5}} three competitor names, {{6}} audit link.
+   ⛔ MARKED AS SUBMITTED, NOT APPROVED, AND THAT DISTINCTION IS THE FILE'S OWN RULE: a body here is
+   the record of what a prospect actually read, so this string may only be corrected FROM WhatsApp
+   Manager once the registered version exists. If Meta's reviewer edits so much as a line break,
+   paste theirs over this - do not keep ours because it is what we asked for.
+   ⚠️ THE TRADE IS PLURALISED HERE TOO, and that is not decoration. Every other body in this map
+   prints the RAW stored trade while the send prints the normalised one, so a video_template
+   transcript reads "for a Plumbers" where the prospect received "for a plumber" - a small, existing
+   lie in the operator's record. This one renders exactly what the parameter carries; the fallback
+   to the raw value is display-only and can never reach a send, because the payload builder refuses
+   a value pluraliseTrade rejects.
+   ⚠️ The video header is NOT in this string - it is a payload component built from
+   VIDEO_TEMPLATE_HEADER_URL, because a header is structure and this is text. */
+const competitorHookBody = (b: string, u: string, trade?: string, competitors?: string) => {
+  const t = pluraliseTrade(trade);
+  return `Hi ${b || "your business"},
+
+I asked ChatGPT and Gemini to find ${t.ok ? t.value : (trade || "businesses")} in your area.
+
+They came back with businesses including ${competitors || "other firms"}.
+
+I checked whether your business was being mentioned too.
+
+📋 Here's your free AI visibility audit:
+${u}
+
+It shows exactly what AI sees about your business and where you stand.
+No signup or obligation.
+
+Paul, Findable`;
+};
+
 /* audit_reply_warm — the WARM audit message (Meta 1509669747584736, approved 2026-09-07). It is
    video_template MINUS the "is this the right number" opening, because it only ever goes to a
    lead who has already answered the opener, so asking again reads as though we were not listening.
@@ -188,6 +223,7 @@ export const READABLE_TEMPLATE_BODIES: Record<
   initial_contact: initialContactBody,
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
+  competitor_hook: competitorHookBody,
   /* The 135 rows sent before the 2026-09-12 rename carry the old name and the SAME words. */
   audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,

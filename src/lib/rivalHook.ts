@@ -1,0 +1,114 @@
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   THE COMPETITOR HOOK — three named rivals, or this template does not go out.
+
+   `competitor_hook` names three real competing firms in the body ({{3}}, {{4}}, {{5}}). That is the
+   whole point of it and it is also its whole risk: those three values are the only variables in the
+   book whose CONTENT is a claim about somebody else's business, printed to a stranger.
+
+   ⛔ A META PARAMETER MAY NEVER BE EMPTY, so "we only found two" cannot degrade — it is a rejected
+   send (#132000-class), which is exactly how video_template failed for its whole life. There are
+   only two honest outcomes: three real names, or a different message.
+
+   ⛔ AND IT MUST NEVER PAD. "and others", "other firms", a repeated name — each turns a checkable
+   statement ("they came back with X, Y and Z") into a vague one a prospect cannot verify, on the
+   first message they ever get from us. The audit either supports the claim or it does not.
+
+   ✅ SO THE ANSWER IS A FALLBACK, NOT A REFUSAL (Paul, 2026-09-14): a lead that cannot fill three
+   names is sent `video_template` — the current, approved, video-header hook that needs no rivals at
+   all. They get a message today rather than sitting in a queue waiting for someone to notice.
+
+   🔴 MEASURED BEFORE BUILDING IT, and the shape of the data is why this is a fallback rather than a
+   per-name top-up: across the 147 newest lead-linked audits with a completed run, the grouped rival
+   list held THREE names 141 times, ZERO names 6 times, and one or two names NEVER. It is
+   all-or-nothing, so a partial-fill path would be dead code guarding a case that does not occur.
+   ⚠️ AND THE SIX ZEROES ARE NOT "AI NAMED NOBODY". Every one is run-level SUPPRESSION firing
+   (competitorCleaning.ts) — AD Locksmithing's audit holds 106 genuine Newcastle locksmiths and is
+   blanked because its cleaning receipt reads complete:false. So the 4% is the rate at which the
+   SAFETY NET fires, not the rate at which AI declines to name anyone, and it will move if the
+   cleaner's completeness improves. Do not quote it as a property of the market.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The template whose body names three competitors. Registered at Meta with a VIDEO header. */
+export const RIVAL_HOOK_TEMPLATE = 'competitor_hook';
+
+/* ⛔ THE FALLBACK IS video_template AND IT IS NAMED HERE, ONCE. Both senders read this constant, so
+   the queue and the manual path cannot fall back to different messages — the rules-in-N-places
+   failure this codebase has recorded five times. */
+export const RIVAL_HOOK_FALLBACK = 'video_template';
+
+/** How many rival names the body needs. Not tunable at a call site: it is the number of variables
+ *  Meta has registered, so changing it means re-registering the template. */
+export const RIVALS_REQUIRED = 3;
+
+/** The variable names a template declares when its body names rivals, in body order. */
+export const RIVAL_VARS = ['rival_1', 'rival_2', 'rival_3'] as const;
+
+/** Does this template's declared variable list name rivals? Asked as a PROPERTY of the template,
+ *  never as `name === 'competitor_hook'` — a guard written as a name expires silently the day the
+ *  product moves, which is precisely how 16 cold sends walked past the phone-history seatbelt on
+ *  2026-09-02 (CLAUDE.md §8). A second rival-naming template is covered by this the day it is
+ *  registered. */
+export function templateNeedsRivals(vars: readonly string[] | undefined | null): boolean {
+  if (!vars) return false;
+  return vars.some((v) => (RIVAL_VARS as readonly string[]).includes(v));
+}
+
+/** Usable rival names: collapsed, non-blank, de-duplicated (case-insensitively), capped at three.
+ *  ⛔ DE-DUPLICATION IS A CORRECTNESS RULE, NOT TIDINESS. "Timpson" twice in the list would render
+ *  "businesses including Timpson, Timpson and X" — visibly machine-made, and it would also mean the
+ *  message claims three firms while naming two.
+ *  ⚠️ The collapse mirrors formatCompetitors and templateBodyParams' own `forMeta`: Meta rejects the
+ *  WHOLE send when any parameter carries a newline, a tab or 4+ consecutive spaces (#132018, which
+ *  killed four live audit_reply sends on 2026-08-12 on a name that arrived as
+ *  "Checkatrade\n    \n    If"). Three variables now carry extractor output instead of one, so the
+ *  collapse happens where the names are CHOSEN as well as where they are sent. */
+export function usableRivals(names: readonly (string | null | undefined)[] | null | undefined): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of names ?? []) {
+    const n = String(raw ?? '').replace(/\s+/g, ' ').trim();
+    if (!n) continue;
+    const k = n.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(n);
+    if (out.length >= RIVALS_REQUIRED) break;
+  }
+  return out;
+}
+
+export interface RivalHookDecision {
+  /** The template to actually send. */
+  template: string;
+  /** True when the requested template could not be filled and the fallback was substituted. */
+  fellBack: boolean;
+  /** Operator-facing explanation, empty when nothing changed. */
+  reason: string;
+}
+
+/**
+ * Which template should actually be sent, given what the audit could supply.
+ *
+ * ⛔ THE FALLBACK IS ONE-WAY AND NARROW: it fires ONLY for a template that needs rivals and cannot
+ * get them. It never redirects anything else, and the fallback is never itself substituted — a
+ * fallback that could fall back is a loop with a message at the end of it.
+ * ⚠️ THE FALLBACK CAN STILL REFUSE, AND THAT IS NOT THIS FUNCTION'S JOB TO HIDE. video_template's
+ * body says "for a {{2}}", so its own vowel-sound rule holds an accountant or an electrician — a
+ * lead that falls back for want of rivals AND is held by that rule is genuinely unsendable today,
+ * and the sender reports it as the hold it is rather than as a silent drop.
+ */
+export function rivalHookDecision(
+  templateName: string,
+  needsRivals: boolean,
+  rivalCount: number,
+): RivalHookDecision {
+  if (!needsRivals || rivalCount >= RIVALS_REQUIRED) return { template: templateName, fellBack: false, reason: '' };
+  return {
+    template: RIVAL_HOOK_FALLBACK,
+    fellBack: true,
+    reason:
+      `${templateName} names ${RIVALS_REQUIRED} competitors and this lead's audit could supply ` +
+      `${rivalCount} — sent ${RIVAL_HOOK_FALLBACK} instead. ` +
+      `An empty competitor is rejected by Meta and a padded one is a claim we cannot show.`,
+  };
+}

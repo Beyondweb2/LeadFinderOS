@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
+import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHook.ts";
 /* ⚠️ templateBodyParams IS DELIBERATELY NOT IMPORTED ANY MORE. This file used to assemble one
    send payload by hand from it, which is how video_template went out without its video header for
    its entire life. Payloads come from claimTemplatePayload, which reads the registry. */
@@ -198,6 +199,13 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
   // video_template - the outreach hook. MIRRORS whatsapp-send.ts; change both together.
   video_template: { lang: "en", vars: ["name", "trade", "town", "audit_url"] },
+  /* competitor_hook - the COMPETITOR-NAMING hook, submitted to Meta 2026-09-14. MIRRORS
+     whatsapp-send.ts; change both together (scripts/re-engage-vars.test.ts asserts both directions).
+     SIX vars: {{1}} name, {{2}} trade as a LOWERCASE PLURAL, {{3}} {{4}} {{5}} competitor names,
+     {{6}} audit link. A lead whose audit cannot supply three names is sent video_template instead -
+     see rivalHookDecision at the send site below, not here: this map says what a template IS, never
+     what to do when it cannot be filled. */
+  competitor_hook: { lang: "en", vars: ["name", "trade_plural", "rival_1", "rival_2", "rival_3", "audit_url"] },
   // audit_reply_warm - the WARM audit message. MIRRORS whatsapp-send.ts; change both together.
   // THREE vars and NO name: {{1}} trade, {{2}} town, {{3}} audit link.
   audit_reply_warm: { lang: "en", vars: ["trade", "town", "audit_url"] },
@@ -904,8 +912,20 @@ Deno.serve(async (req) => {
                an empty audit_url, so the row would have failed flagged_error for every lead, however
                good its data. Safe, but permanently broken. Keying on the declared vars fills the
                next audit-class template correctly by construction. */
-            const auditExtra: Record<string, string> = { trade: vars.trade };
+            /* ⛔ NO RIVAL FALLBACK ON THIS LANE, AND THAT IS NOT AN OVERSIGHT — DO NOT "MAKE IT
+               CONSISTENT" WITH THE DRIP. This is the FIRST-REPLY lane: the lead has already
+               answered us. The fallback target, video_template, is a COLD opener ("is this the
+               right number"), and the phone-history seatbelt that would normally stop a cold
+               template reaching a number already in conversation runs in the drip, NOT here. So
+               falling back here would post a cold opener into a live conversation, with the one
+               guard that exists for that specific mistake not in the path.
+               A rival-naming template set as the reply template therefore HOLDS instead: the
+               payload builder throws `unsafe_template_var:rivals_unavailable:…`, the catch below
+               turns it into flagged_unsafe_var with its reason, and the operator sees a lead to
+               look at rather than a prospect reading the wrong message. */
+            const auditExtra: Record<string, string | string[]> = { trade: vars.trade };
             if (tmpl.vars.includes("competitors")) auditExtra.competitors = vars.competitors;
+            if (templateNeedsRivals(tmpl.vars)) auditExtra.rivals = vars.rivals;
             if (tmpl.vars.includes("town")) auditExtra.town = vars.town;
             if (tmpl.vars.includes("audit_url")) auditExtra.auditUrl = vars.link;
             /* ⛔ AN UNSAFE TRADE OR TOWN HOLDS THE LEAD, IT DOES NOT SEND IT WRONG (2026-09-12).
@@ -1381,9 +1401,12 @@ Deno.serve(async (req) => {
         ...statusPayload,
       }, 200);
     }
-    const templateName = requestedTemplate;
-    const lang = TEMPLATES[templateName].lang;
-    const tvars = TEMPLATES[templateName].vars;
+    /* ⚠️ `let`, FOR ONE REASON ONLY: a template that names three competitors and cannot get three
+       falls back to video_template (rivalHookDecision, applied after the audit resolves below).
+       Nothing else reassigns these, and the fallback is one-way. */
+    let templateName = requestedTemplate;
+    let lang = TEMPLATES[templateName].lang;
+    let tvars = TEMPLATES[templateName].vars;
     /* Only templates whose url IS the claim link need a share_token. audit_reply also declares a
        "url" var, but its link is the lead's AUDIT REPORT, resolved below — gating it on a generated
        site would refuse a report pitch to any lead that never had a site built, which is most of
@@ -1433,7 +1456,10 @@ Deno.serve(async (req) => {
        EVERY builder of its payload and count them before believing you have them all.
        ⚠️ The guard did its job: it refused rather than sending a message with a missing link, and
        failed_temporary means the lead retries rather than being burned. */
-    const templateExtra: { trade?: string; competitors?: string; onboardingUrl?: string; town?: string; auditUrl?: string } = {};
+    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string } = {};
+    /* Set only when a rival-naming template was swapped for the fallback, so the tick's answer can
+       say so. Silence would make a substitution indistinguishable from a normal send. */
+    let rivalFallbackReason = "";
     // The url actually sent: the claim link by default, overridden by a resolver that owns it.
     let resolvedUrl = claimUrl;
     if (tvars.includes("onboarding_url")) {
@@ -1482,10 +1508,30 @@ Deno.serve(async (req) => {
           lead_id: lead.id, business: lead.business_name, ...statusPayload, auditAhead,
         }, 200);
       }
+      /* ⛔ THREE NAMES OR A DIFFERENT MESSAGE — decided HERE, before anything is built, because it
+         changes which template is sent (src/lib/rivalHook.ts). An empty Meta parameter is a rejected
+         send and a padded one is a claim we cannot show, so competitor_hook simply does not go to a
+         lead whose audit cannot name three rivals; video_template does, and they hear from us today
+         instead of waiting for someone to notice.
+         ⚠️ EVERY DERIVED VALUE IS RE-READ FROM THE NEW TEMPLATE. Reassigning the name alone would
+         leave `tvars` describing competitor_hook while the payload is built for video_template —
+         six parameters for a four-variable template, which Meta answers with #132000 and which
+         reads, from the outside, exactly like the fallback not working.
+         ⚠️ THE ROW KEEPS ITS OPERATOR-CHOSEN TEMPLATE; only this SEND changes. The message log
+         records what actually went out (templateName below), so the transcript stays true. */
+      const rivalCall = rivalHookDecision(templateName, templateNeedsRivals(tvars), ar.rivals.length);
+      if (rivalCall.fellBack) {
+        console.warn(`[whatsapp] ${lead.id}: ${rivalCall.reason}`);
+        templateName = rivalCall.template;
+        lang = TEMPLATES[templateName].lang;
+        tvars = TEMPLATES[templateName].vars;
+        rivalFallbackReason = rivalCall.reason;
+      }
       /* FROM THE TEMPLATE'S DECLARED VARS, matching the other two builders exactly - so a template
          that declares town/audit_url is filled, and one that does not is byte-identical to before. */
       templateExtra.trade = ar.trade;
       if (tvars.includes("competitors")) templateExtra.competitors = ar.competitors;
+      if (templateNeedsRivals(tvars)) templateExtra.rivals = ar.rivals;
       if (tvars.includes("town")) templateExtra.town = ar.town;
       if (tvars.includes("audit_url")) templateExtra.auditUrl = ar.link;
       // Its "url" var is the AUDIT REPORT link, so it replaces the claim link for this send.
@@ -1732,6 +1778,10 @@ Deno.serve(async (req) => {
       lead_id: lead.id,
       business: lead.business_name,
       template: templateName,
+      /* Present ONLY when a rival-naming template was swapped for the fallback. A substitution that
+         reported itself identically to a normal send would be invisible in exactly the place
+         somebody would look for it. */
+      ...(rivalFallbackReason ? { requested_template: requestedTemplate, fell_back: rivalFallbackReason } : {}),
       to: toNumber,
       claim_url: claimUrl,
       message_id: messageId,

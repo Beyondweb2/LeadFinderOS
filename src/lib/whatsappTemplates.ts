@@ -67,6 +67,15 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   // video_template - the outreach hook. Same shape as audit_reply: its link IS the report link,
   // so it needs the lead's completed audit and never a share_token.
   video_template:      { needsUrl: false, needsAudit: true,  group: 'audit' },
+  /* competitor_hook — needsAudit for the same reason as its sibling: its {{6}} IS the report link
+     and {{3}}–{{5}} are the rivals that audit named, so the queue must not send it before the audit
+     completes (queueAuditStatus reads this flag).
+     ⚠️ THE PICKER DOES NOT CHECK FOR THREE RIVALS, DELIBERATELY. `hasCompetitors` already exists
+     here and is already unused for the same reason: the rival list is resolved server-side at SEND
+     time from the audit, so a client-side count would be a second copy of the rule reading staler
+     data — and it would disable the button for a lead the server would happily serve with the
+     fallback (src/lib/rivalHook.ts). Enable, then let the server decide what actually goes. */
+  competitor_hook:     { needsUrl: false, needsAudit: true,  group: 'audit' },
   /* audit_reply_warm - the warm audit message. needsAudit because its {{3}} IS the report link, so
      the queue must not send it before the audit completes (queueAuditStatus reads this flag). */
   audit_reply_warm:       { needsUrl: false, needsAudit: true,  group: 'audit' },
