@@ -3909,7 +3909,7 @@ reach the thing the button promised.
   LIVE TEMPLATE — AND I MISREAD IT AS ONE (2026-09-12, evening).** `re_engage_49` at Meta is a
   one-variable body with no price ("Where did we get to with this?…"), mirrored exactly. The OLD
   `re_engage` body is kept ONLY so the Inbox renders what 21 August rows actually contained; it is
-  not in `WA_TEMPLATE_REQS` (not sendable) and `re-engage-vars.test.ts` asserts the old name is not
+  not in `WA_TEMPLATES` (not sendable) and `re-engage-vars.test.ts` asserts the old name is not
   in `WA_TEMPLATES` either. ⛔ Do not "update" or delete the historical body — that falsifies 21
   transcripts (done once by mistake that day and restored). `client-copy-claims.test.ts` pins the
   property that matters: **no SENDABLE template body quotes a retired price or a hedge**, and
