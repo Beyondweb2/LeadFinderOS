@@ -19,6 +19,7 @@ import {
   buildBaselineView, BANDS, BAND_LABEL, BAND_MEANING,
   type BaselineView, type Band, type QueueRowLite,
 } from '@/lib/baselineView';
+import { assessTradeFit, TRADE_FIT_LABEL, TRADE_FIT_REASON } from '@/lib/questionTradeFit';
 import { SEOHead } from '@/components/SEOHead';
 import { isInternalMeasurement, INTERNAL_MEASUREMENT_LABEL } from '@/lib/auditKind';
 
@@ -237,6 +238,17 @@ export default function Baseline() {
   }
 
   const engineNames = [...new Set(view.questions.flatMap((q) => Object.keys(q.engines)))].sort();
+
+  /* ⛔ COMPUTED HERE, NOT INSIDE buildBaselineView, AND THAT IS THE GATE. The fold feeds
+     measurementCompare, which feeds the four-week results document a CLIENT reads; a flag hung on
+     BaselineQuestion would travel there by default and have to be stripped by somebody remembering
+     to. Keeping it in its own module, read only by this operator page, means it structurally
+     cannot. ⚠️ `readable` false = this trade cannot be read off company names (a cocktail bar is
+     not called "hospitality"), and nothing is flagged — see questionTradeFit's header. */
+  const tradeFit = (() => {
+    const report = assessTradeFit(view, audit.business_type);
+    return { report, byQuestion: new Map(report.questions.map((q) => [q.question, q.state])) };
+  })();
   /* A full measure / day-28 replay: operator document, no client report offered, labelled as
      what it is rather than "Baseline" (this route serves both — the cockpit and Compare link here
      for measurements too). */
@@ -315,6 +327,16 @@ export default function Baseline() {
               {BAND_LABEL[b]} {view.bandCounts[b]}
             </span>
           ))}
+          {/* Counted separately from the bands ON PURPOSE: it is not a sixth band, it is a
+              statement that some of the bands beside it cannot be trusted. */}
+          {tradeFit.report.offTrade.length > 0 && (
+            <span
+              className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-500"
+              title={TRADE_FIT_REASON.off_trade ?? undefined}
+            >
+              {TRADE_FIT_LABEL.off_trade} {tradeFit.report.offTrade.length}
+            </span>
+          )}
         </div>
 
         {BANDS.filter((b) => view.bandCounts[b] > 0).map((band) => (
@@ -333,6 +355,19 @@ export default function Baseline() {
                 <div key={q.question} className={`rounded-r-md bg-muted/20 py-2 pl-3 pr-2 ${BAND_STYLE[band].row}`}>
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <span className="text-sm font-medium">{q.question}</span>
+                    {/* ⛔ THE BAND IS NOT A FACT ABOUT THIS CLIENT WHEN THE ENGINES ANSWERED ABOUT
+                        SOMEBODY ELSE'S TRADE. "fault diagnosis services in thetford UK" sat here
+                        under ABSENT — "the race exists and you are invisible" — naming six car
+                        garages. Rendered BEFORE the counts, because the counts are the thing it
+                        disqualifies. Operator screen only: see questionTradeFit's header. */}
+                    {tradeFit.byQuestion.get(q.question) === 'off_trade' && (
+                      <span
+                        className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-500"
+                        title={TRADE_FIT_REASON.off_trade ?? undefined}
+                      >
+                        {TRADE_FIT_LABEL.off_trade}
+                      </span>
+                    )}
                     <span className="flex shrink-0 gap-3 text-[11px] tabular-nums text-muted-foreground">
                       {engineNames.map((e) => {
                         const c = q.engines[e];

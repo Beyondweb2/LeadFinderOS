@@ -5,7 +5,7 @@ import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
-import { dropResearchIntent, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective } from "../../../src/lib/seedGuard.ts";
+import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective, stripRepeatedWords } from "../../../src/lib/seedGuard.ts";
 import { excludeAsked, overAskFor } from "../../../src/lib/fullMeasure.ts";
 import { fillToTarget, dedupeByIntent } from "../../../src/lib/questionFill.ts";
 import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
@@ -1474,7 +1474,23 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
     const parsed = JSON.parse(rawArgs);
     const arr = Array.isArray(parsed?.questions) ? parsed.questions : null;
     if (!arr) return fallback;
-    const cleaned = stripNearMe(arr.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim()));
+    /* ⛔ REPEATED WORDS ARE REPAIRED FIRST, BEFORE ANY SLICE OR DEDUPE. White Sparks' frozen
+       baseline carries "electrician electrician in thetford UK" — one string, so dedupeQuestions
+       cannot see it (it compares whole questions, and this is not a duplicate question but a
+       damaged one). It bought a slot in a twelve-question baseline that now decides a refund, and
+       day 28 will replay it verbatim.
+       ⚠️ It runs here rather than after the guards so the repaired form can collapse into an
+       identical real question instead of buying a second slot with the same words. */
+    const deduped = stripRepeatedWords(
+      arr.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim()),
+    );
+    if (deduped.repaired.length) {
+      console.warn(
+        `[create-ai-audit] repeated words collapsed (${deduped.repaired.length}): `
+        + deduped.repaired.map((r) => `"${r.before}" -> "${r.after}"`).join(" | "),
+      );
+    }
+    const cleaned = stripNearMe(deduped.questions);
     const usable = cleaned.length >= n ? cleaned.slice(0, n) : fallback;
     /* BUYING INTENT, NOT RESEARCH INTENT. The model produced "tattoo design for beginners cambridge
        uk" for a tattoo studio, and the engines answered it accurately with ucas.com and two colleges
@@ -1489,6 +1505,22 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
         + guarded.rejected.map((r) => `"${r.question}" (${r.reason})`).join(" | "),
       );
     }
+    /* ⛔ AND THE TRADE, WHICH WAS THE ONE THING NOTHING CHECKED. The guard above asks whether the
+       question is about BUYING, the one below whether it names the TOWN, and qualifyPlace whether
+       it names the COUNTRY — three guards for intent, place and country, and until 2026-09-14 none
+       for what the question is actually ABOUT. "fault diagnosis services in thetford UK" passed all
+       three into White Sparks' live electrician measurement and came back naming six car garages,
+       filed under ABSENT: a race that was never his.
+       ⚠️ Trade word OR a known intent for the trade — see offTradeReason. Measured over all 3,198
+       questions on file it rejects 118 and throws away ONE good question; the rule was tuned
+       against that corpus, not guessed. */
+    const onTrade = dropOffTrade(guarded.questions, fallback, n, businessType);
+    if (onTrade.rejected.length) {
+      console.warn(
+        `[create-ai-audit] off-trade questions dropped (${onTrade.rejected.length}) for "${businessType}": `
+        + onTrade.rejected.map((r) => `"${r.question}" (${r.reason})`).join(" | "),
+      );
+    }
     /* THE TOWN IS CHECKED, NOT TRUSTED. The prompt says to always write the place exactly, but
        with business_scope null the model classifies the business itself and may pick NATIONAL —
        which is how "emergency locksmith for homes uk" reached a Hastings locksmith audit. Enforced
@@ -1499,7 +1531,7 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
          time it reaches here (create-ai-audit resolves it via pickAuditTown), so the check is on
          that value — not on locQ, which appends " UK" for engine disambiguation. */
       const town = locationText.trim();
-      const localised = dropMissingTown(guarded.questions, fallback, n, town);
+      const localised = dropMissingTown(onTrade.questions, fallback, n, town);
       if (localised.rejected.length) {
         console.warn(
           `[create-ai-audit] town-less questions dropped (${localised.rejected.length}) for "${town}": `
@@ -1525,7 +1557,7 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
       }
       return pinned.questions;
     }
-    return guarded.questions;
+    return onTrade.questions;
   } catch (_e) {
     return fallback;
   }
