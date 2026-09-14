@@ -5,7 +5,7 @@ import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
-import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective, stripRepeatedWords } from "../../../src/lib/seedGuard.ts";
+import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
 import { excludeAsked, overAskFor } from "../../../src/lib/fullMeasure.ts";
 import { fillToTarget, dedupeByIntent } from "../../../src/lib/questionFill.ts";
 import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
@@ -861,7 +861,7 @@ Deno.serve(async (req) => {
         for (const area of areaAllocation) {
           if (area.isMain) continue;
           try {
-            const mixed = await generateWithMoney(businessName, businessType, area.town, hasWebsite, specialisms, ask(area.questions), "local", country, area.questions, coverage);
+            const mixed = await generateWithMoney(businessName, businessType, area.town, hasWebsite, specialisms, ask(area.questions), "local", country, area.questions, coverage, true);
             const kept = fillGenerated(`area "${area.town}"`, mixed.questions, area.questions, baselineAsked,
               { type: businessType, loc: area.town, hasWebsite, specialisms, scope: "local", country });
             perArea.push(...kept);
@@ -878,7 +878,7 @@ Deno.serve(async (req) => {
         if (providedQuestions?.length) {
           mainQs = disjoint(providedQuestions).slice(0, mainShare);
         } else {
-          const mixed = await generateWithMoney(businessName, businessType, locationText, hasWebsite, specialisms, ask(mainShare), businessScope, country, mainShare, coverage);
+          const mixed = await generateWithMoney(businessName, businessType, locationText, hasWebsite, specialisms, ask(mainShare), businessScope, country, mainShare, coverage, true);
           mainQs = fillGenerated(`main town "${locationText}"`, mixed.questions, mainShare, baselineAsked,
             { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country });
           const keptMain = new Set(mainQs);
@@ -907,7 +907,7 @@ Deno.serve(async (req) => {
              the two-call generator, so the before/after can include or exclude them by choice. */
           const mixed = await generateWithMoney(
             businessName, businessType, locationText, hasWebsite, specialisms, ask(questionCount),
-            businessScope, country, questionCount, coverage,
+            businessScope, country, questionCount, coverage, true,
           );
           /* ⛔ FILL, DON'T SLICE (2026-09-13): exclude → dedupe by intent → slice → top up from the
              templates. This is the site that queued AD Locksmithing's 11-of-12 baseline and
@@ -1218,6 +1218,10 @@ async function generateWithMoney(
   moneySlots: number = count,
   /** The coverage directive, threaded to BOTH calls — the full measure's baseline exclusion. */
   coverage = "",
+  /* ⛔ JUDGED SETS ONLY. Passed true by the paid baseline and the full measure and by nothing else:
+     the outreach hook is 3 throwaway questions and capping it would change cold outreach, which is
+     a decision nobody has asked for. */
+  capHeads = false,
 ): Promise<{ questions: string[]; money: string[] }> {
   const total = Math.max(0, Math.floor(Number(count) || 0));
   const moneyN = Math.min(total, baselineMoneyQuestionShare(moneySlots));
@@ -1254,6 +1258,23 @@ async function generateWithMoney(
      with fillToTarget (top-up from templates); this pass just makes sure the pool they slice has
      no twins in it. Money stays first. */
   const pooled = dedupeByIntent([...money, ...standard]);
+  /* ⛔ THE SPREAD, ON THE POOLED SET RATHER THAN ON EITHER CALL. The cap is about what the FINAL
+     set looks like, and the two calls are independent — capping the standard half alone would let
+     the money half push the total back over. Money questions are buying-moment phrasings and are
+     almost never head terms, so in practice they simply do not consume the allowance.
+     ⚠️ Applied BEFORE the caller slices to target: the caller cuts from the end, so capping after
+     the slice would let a dropped head term be replaced by nothing. */
+  if (capHeads) {
+    const spread = capHeadTerms(pooled.questions, total, businessType, locationText.trim());
+    if (spread.dropped.length) {
+      console.warn(
+        `[create-ai-audit] ${spread.dropped.length} head term(s) over the cap of ${headTermCap(total)} dropped: `
+        + spread.dropped.map((q) => `"${q}"`).join(" | ")
+        + (spread.added.length ? ` — replaced with ${spread.added.map((q) => `"${q}"`).join(" | ")}` : " — NOT replaced, the set is short"),
+      );
+    }
+    pooled.questions = spread.questions;
+  }
   if (pooled.duplicates.length) {
     console.warn(`[create-ai-audit] ${pooled.duplicates.length} intent-duplicate(s) between the money and standard calls dropped before slicing: ${pooled.duplicates.join(" | ")}`);
   }
@@ -1316,6 +1337,12 @@ async function generateQuestions(
    *  ⚠️ Only generateWithMoney() sets this. Passing it does NOT make money questions a majority of
    *  an audit — the CALLER splits the count and keeps the money half a minority. */
   moneyExact: number | null = null,
+  /* ⛔ JUDGED SETS ONLY, AND OPT-IN. A paid baseline is what a refund is measured against and a full
+     measure is what pages are built from; both are ruined by twelve ways of asking one question.
+     The outreach hook is 3 questions, throwaway and never compared — capping it to one head term
+     would change cold outreach, which is a different decision nobody has asked for. Default false,
+     so every caller that has not opted in generates exactly what it generated before. */
+  capHeads = false,
 ): Promise<string[]> {
   // The CALLER has already applied the right POLICY ceiling: MAX_QUESTION_COUNT for the outreach
   // hook, BASELINE_MAX_QUESTION_COUNT for a paid baseline, FULL_MEASURE_QUESTIONS for a measure.
@@ -1521,6 +1548,23 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
         + onTrade.rejected.map((r) => `"${r.question}" (${r.reason})`).join(" | "),
       );
     }
+    /* ⛔ AND THE SPREAD, ON JUDGED SETS ONLY. White Sparks' frozen baseline is 11 of 12 head terms —
+       one question wearing twelve adjectives, and it is the set his refund is measured against.
+       AD Locksmithing's, the same day, is 5 of 11, so this is chance rather than a broken generator
+       and nothing about the numbers looks wrong either way.
+       ⚠️ IT RUNS BEFORE THE TOWN GUARD DELIBERATELY: its top-ups are built with the town in them,
+       so they still have to satisfy dropMissingTown and qualifyPlace like everything else rather
+       than being smuggled past the checks that follow. */
+    const spread = capHeads
+      ? capHeadTerms(onTrade.questions, n, businessType, hasUsableTown(locationText) ? locationText.trim() : "")
+      : { questions: onTrade.questions, dropped: [] as string[], added: [] as string[] };
+    if (spread.dropped.length) {
+      console.warn(
+        `[create-ai-audit] head terms over the cap of ${headTermCap(n)} dropped (${spread.dropped.length}) for "${businessType}": `
+        + spread.dropped.map((q) => `"${q}"`).join(" | ")
+        + (spread.added.length ? ` — replaced with: ${spread.added.map((q) => `"${q}"`).join(" | ")}` : " — NOT replaced, the set is short"),
+      );
+    }
     /* THE TOWN IS CHECKED, NOT TRUSTED. The prompt says to always write the place exactly, but
        with business_scope null the model classifies the business itself and may pick NATIONAL —
        which is how "emergency locksmith for homes uk" reached a Hastings locksmith audit. Enforced
@@ -1531,7 +1575,7 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
          time it reaches here (create-ai-audit resolves it via pickAuditTown), so the check is on
          that value — not on locQ, which appends " UK" for engine disambiguation. */
       const town = locationText.trim();
-      const localised = dropMissingTown(onTrade.questions, fallback, n, town);
+      const localised = dropMissingTown(spread.questions, fallback, n, town);
       if (localised.rejected.length) {
         console.warn(
           `[create-ai-audit] town-less questions dropped (${localised.rejected.length}) for "${town}": `
@@ -1557,7 +1601,7 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
       }
       return pinned.questions;
     }
-    return onTrade.questions;
+    return spread.questions;
   } catch (_e) {
     return fallback;
   }
