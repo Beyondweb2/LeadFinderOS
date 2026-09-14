@@ -742,6 +742,16 @@ Facts with numbers. These are measured, and several contradict the older docs.
   Observed 2026-08-06 from a Thai IP: the Checkout Session presented **THB 4,582.95** with a stated
   4% conversion fee; the founder Payment Link showed **£19.99 only**, minutes apart in the same
   browser. One observation does not disprove the docs — treat the link as capable of converting.
+- 🔴 **ONE RULE WRITTEN OUT IN N PLACES IS THE OTHER RECURRING SHAPE, AND EVERY COPY LOOKS CORRECT
+  FROM INSIDE ITS OWN FILE.** Measured: **five** copies of "is the questionnaire complete" (two still
+  demanded a column dropped on 2026-08-22, so a paying client read "awaiting details" for ever and
+  every real first payment was emailed as unpaid); **four** copies of the literal `"audit_reply"`;
+  **two** constants in two repos, which drifted the guarantee a customer had agreed to at checkout.
+  ⚠️ **A CHECK CANNOT SAVE YOU HERE — EXTRACT THE RULE INTO A LEAF AND IMPORT IT.** A static sweep
+  for "a column nothing writes" misses it (the column is still written when a value arrives), and
+  the copies do not diverge until the product moves. The test to write is not "is the predicate
+  right" but **"is there only one of it"** — grep the importers and fail the build on a local copy:
+  `questionnaire-complete.test.ts` and `audit-kind.test.ts` are the pattern.
 - 🔴 **AN ABSENT VALUE FALLING THROUGH AS THOUGH IT WERE A REAL ONE. THIS HAS NOW HAPPENED SIX
   TIMES, in six unrelated files, and it will happen again.** The shape is always the same: code
   branches on the *known* values and lets everything else drop into the `else`, where the default

@@ -386,16 +386,17 @@ export default function Baseline() {
                     </span>
                   </div>
                   {q.competitors.length > 0 && (
-                    /* Recurrence, not a ranking. A firm at 6/6 was named in every cell — that is the
-                       incumbent to study, and it is a count you can verify. */
+                    /* ⛔ NAMES ONLY ON THIS SCREEN (Paul, 2026-09-14). It used to print "(6/6)" after
+                       each firm. The COUNTS ARE NOT DELETED and nothing downstream changed: they
+                       still order this list, and `topCompetitorTimes` is still the within-band sort
+                       key in buildBaselineView — so the firm named in every cell is still the one
+                       printed first. What went is the formatting of a number the operator reading
+                       his own screen does not need spelled out; the order already says it.
+                       ⚠️ THE CLIENT REPORT IS A DIFFERENT DECISION and still carries its counts —
+                       there the number is the proof that the ranking is real to somebody who cannot
+                       check it. Do not "make these consistent". */
                     <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/80">
-                      named instead:{' '}
-                      {q.competitors.slice(0, 5).map((c, i) => (
-                        <span key={c.name}>
-                          {i > 0 && ', '}
-                          {c.name} <span className="tabular-nums text-muted-foreground/60">({c.times}/{c.of})</span>
-                        </span>
-                      ))}
+                      named instead: {q.competitors.slice(0, 5).map((c) => c.name).join(', ')}
                     </p>
                   )}
                 </div>
