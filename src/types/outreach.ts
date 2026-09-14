@@ -473,7 +473,14 @@ export function canonicalFilterValue(value: StatusFilterValue): StatusFilterValu
 export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   { value: 'initial_contact', label: 'Initial contact (opener)' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
-  { value: 'video_template', label: 'Audit result hook (outreach)' },
+  /* 🔴 THE LABEL SAID "Audit result hook (outreach)" AND THAT IS THE NAME OF THE TEMPLATE THIS ONE
+     REPLACED. `audit_result_hook` was retired on 2026-09-12; `video_template` is its successor,
+     with different approved words and a VIDEO header. So the picker was offering the video template
+     under the dead template's name, and the operator — looking for the video one — read the list and
+     concluded it was missing. It was there all along, wearing the wrong label.
+     ⚠️ A label is not decoration on this list: it is the ONLY thing distinguishing two templates
+     that do the same job, and the one an operator picks from. Name what it IS. */
+  { value: 'video_template', label: 'Audit result hook — with video (outreach)' },
   { value: 'audit_reply_warm', label: 'Audit reply — warm (after the opener)' },
   { value: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
   /* The OPENER follow-up: a business that got the initial_contact opener and never replied. Bulk-
@@ -510,6 +517,12 @@ const SERVER_ONLY_TEMPLATE_LABELS: Record<string, string> = {
   hook_followup: 'Hook follow-up (chase the hook)',
   payment_recieved: 'Payment received',
   free_check_result: 'Free check result',
+  /* ⚠️ ADDED 2026-09-14. It was in the server registry and in NO list here, so templateLabel()
+     returned the raw key — which is the exact fault the other three entries exist to prevent, on a
+     template that really does send. It is operator-triggered (the lead card's nudge button) rather
+     than automatic, but it is still not a CAMPAIGN default: one send per lead, no override, and the
+     server refuses it without a contact name. Labelled, deliberately not sendable from here. */
+  questionnaire_followup: 'Questionnaire chase (one per lead)',
 };
 
 /** Every template that can appear anywhere, for pickers that legitimately span both products. */
