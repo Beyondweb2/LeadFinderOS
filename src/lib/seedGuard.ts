@@ -122,10 +122,11 @@ export function seedRejectionReason(
   const qTokens = normalise(question).split(" ").filter(Boolean);
   if (qTokens.length === 0) return "empty question";
 
-  const trade = contentTokens(businessType);
-  if (trade.length && !trade.some((t) => looseHas(qTokens, t))) {
-    return `does not name the trade (${trade.join("/")}) — likely misspelled or about something else`;
-  }
+  /* ⛔ ONE RULE, TWO CALLERS. This clause used to be written out here and nowhere else, and since
+     nothing called this function it never ran. It is `offTradeReason` now, shared with the live
+     generator guard, so the two cannot answer differently about the same question. */
+  const offTrade = offTradeReason(question, businessType);
+  if (offTrade) return offTrade;
 
   /* Only checked when the question actually claims a place. A national question has no town to
      disagree with, and rejecting it here would quietly force every baseline local. */
@@ -186,8 +187,216 @@ export function dropResearchIntent(
 
 /* ⛔ `applySeed` / `SeedOutcome` WERE DELETED 2026-09-12 with baseline seeding. The outreach hook
    is throwaway and never compared, so a paid baseline no longer carries the hook's questions
-   forward; it is generated fresh for the home town. `seedRejectionReason` survives as the shared
-   rule behind dropResearchIntent and the town guard. */
+   forward; it is generated fresh for the home town.
+
+   🔴 AND THIS NOTE USED TO END "`seedRejectionReason` survives as the shared rule behind
+   dropResearchIntent and the town guard", WHICH WAS FALSE FOR TWO DAYS AND COST A MEASUREMENT.
+   dropResearchIntent calls `researchIntentReason`; the town guard calls `mentionsTown`. Nothing
+   called seedRejectionReason at all — so its TRADE clause, the only check in the codebase that a
+   question is about the audited trade, was dead code, and "fault diagnosis services in thetford UK"
+   went into a live electrician measurement and came back naming six car garages.
+   A comment asserting a guard still runs is how a guard stops running unnoticed (§4).
+   ⛔ THE TRADE CLAUSE IS LIVE AGAIN AS `dropOffTrade` BELOW, and it is the shared rule now in fact
+   rather than in prose: seedRejectionReason and dropOffTrade both call `offTradeReason`. */
+
+/* ── IS THIS QUESTION EVEN ABOUT THE TRADE? ───────────────────────────────────────────────────
+   🔴 THE INCIDENT, 2026-09-13. White Sparks Electrical's full measure asked "fault diagnosis
+   services in thetford UK". The engines answered it accurately — with Gorse Motors Garage, Vickers
+   Motors, Cunningham Motors and M & S Breckland Motors. Car garages. One of twelve named firms was
+   an electrician. It filed under ABSENT, which reads "the race exists and you are invisible", and
+   would have sent the operator to build a page for a race that was never theirs.
+
+   Every existing guard passed it: buying intent (yes), names the town (yes), carries the country
+   marker (yes). Three guards for intent, place and country, and none for WHAT THE QUESTION IS ABOUT.
+
+   ⛔ THE TEST IS TRADE WORD **OR** A KNOWN INTENT FOR THAT TRADE, AND THE `OR` IS THE WHOLE DESIGN.
+   The trade word alone rejects "emergency lockout service in Burnley UK" and "key cutting in
+   Halifax" — a locksmith's two best questions, neither containing "locksmith". Measured over every
+   question ever asked, 30.4% name no trade word, and the great majority of those are good. So
+   `intentsForTrade` — already hand-maintained, already the market-audit coverage vocabulary — is
+   the second door.
+
+   ⚠️ AN INTENT MATCHES ON ITS TOKENS, NOT AS A PHRASE, AND NOT ON ANY SINGLE TOKEN EITHER. Phrase
+   matching rejects "lock installation" because the list happens to say "lock repair". Matching any
+   single token ACCEPTS "fault diagnosis" off the back of "fault finding" — which is the exact
+   question this guard exists to catch, let through by its own guard. So every token of one
+   alternative must be present.
+
+   ⚠️ AND AN ENTRY LIKE "outdoor and garden power" IS AN OR-LIST WRITTEN AS ONE STRING. Split on
+   "and" first or "outdoor power installation" is rejected for not mentioning a garden.
+
+   ⛔ WHAT THIS DELIBERATELY DOES NOT CATCH: a question that IS anchored to the trade and still gets
+   answered about another one. "landlord certificates in thetford UK" is a real electrician service
+   (an EICR is a landlord certificate) and came back naming gas engineers and EPC assessors. No
+   generation-time rule can know that; it is only visible once the engines have answered. That is
+   what the measurement-time check in src/lib/questionTradeFit.ts is for. Two different faults, two
+   different places. */
+
+/** Tokens worth matching an intent on. Shorter than contentTokens' 4 because "key", "ev" and "pat"
+ *  are the load-bearing words of real intents; "and"/"work" carry nothing. */
+/* ⛔ THE TRADE WORD HAS TO BE STEMMED, AND MEASURING IT IS WHAT PROVED THAT. `looseHas` allows a
+   trailing plural only — it was written for seed matching, where strictness was the point because a
+   seed that fails costs nothing. Reused here it rejects "plumbing services in Melton Mowbray",
+   "accounting services for small businesses" and "residential electrical repairs in Wrexham",
+   because plumbing ≠ plumber, accounting ≠ accountant, electrical ≠ electrician. Run over every
+   question on file it threw away 259 good ones.
+
+   The stem keeps at least five characters, so it stays specific enough to mean something, and the
+   test runs BOTH ways: "electrician" → "electric" catches "electrical", and "locksmith" → "locksm"
+   catches the bare "lock" of "lock installation" by the reverse test. A four-character floor on the
+   reverse direction stops a stem being matched by a fragment. */
+/* ⚠️ SINGULARISE BEFORE STEMMING. business_type is stored plural on most leads ("Locksmiths",
+   "Plumbers", "accountants" — 402 audits say "locksmiths" and 6 say "locksmith"), and stemming the
+   plural gives "accounta", which does not match "accounting". That alone was 28 of the 63 false
+   rejections left after the first fix. */
+const tradeStem = (w: string) => {
+  const singular = w.length > 4 && w.endsWith('s') ? w.slice(0, -1) : w;
+  return singular.slice(0, Math.max(5, singular.length - 3));
+};
+const tradeStemHit = (qTokens: string[], tradeWord: string) => {
+  const stem = tradeStem(tradeWord);
+  return qTokens.some((w) => w.startsWith(stem) || (w.length >= 4 && stem.startsWith(w)));
+};
+
+/**
+ * Does this text carry the trade's own vocabulary? Door one of offTradeReason, exported so the
+ * measurement-time check (src/lib/questionTradeFit.ts) classifies a COMPETITOR'S NAME by exactly
+ * the rule the generator classifies a question by. Two rules would drift, and the drift would be
+ * invisible: one says the question is fine, the other says its answers are not.
+ *
+ * ⚠️ Deliberately the trade word ONLY, not the intent list. An intent describes a service somebody
+ * asks for; a firm's NAME is not a sentence, and "emergency lockout" matching a company called
+ * "Emergency Services Ltd" would call a general builder a locksmith.
+ */
+export function tradeWordHit(text: string, businessType: string): boolean {
+  const trade = contentTokens(businessType);
+  if (!trade.length) return false;
+  const tokens = normalise(text).split(' ').filter(Boolean);
+  return trade.some((t) => tradeStemHit(tokens, t));
+}
+
+const INTENT_STOP = new Set(['and', 'the', 'for', 'with', 'work', 'works', 'your', 'their']);
+const intentTokens = (v: string) => normalise(v).split(' ').filter((w) => w.length >= 3 && !INTENT_STOP.has(w));
+
+/** One intent, split into the alternatives an "and" was hiding. "burglary repair and boarding up"
+ *  is two services, and a question only has to be one of them. */
+const intentAlternatives = (intent: string): string[][] =>
+  intent.split(/\band\b|\/|,/).map((part) => intentTokens(part)).filter((t) => t.length > 0);
+
+/**
+ * Reject a question that is not about the audited trade. Returns null when the question is fine.
+ *
+ * ⚠️ A BLANK TRADE PASSES EVERYTHING, deliberately. With no business type there is nothing to be
+ * off, and refusing on absence would empty the question set for every lead whose trade we never
+ * captured — absence is not an answer (CLAUDE.md §6).
+ */
+export function offTradeReason(question: string, businessType: string): string | null {
+  const trade = contentTokens(businessType);
+  if (!trade.length) return null;
+  const qTokens = normalise(question).split(' ').filter(Boolean);
+  if (!qTokens.length) return 'empty question';
+
+  // Door one: the trade's own word, by STEM.
+  if (trade.some((t) => tradeStemHit(qTokens, t))) return null;
+
+  // Door two: a known intent for this trade, every token of one alternative present.
+  /* ⚠️ INTENT TOKENS MATCH ON A SHARED PREFIX, NOT ON EQUALITY. "installing gas appliances" and
+     "gas appliance installation" are the same intent, and neither word is a prefix of the other
+     ("installa" vs "installi") — so an exact or prefix-of test misses it. Five shared characters is
+     the floor: it joins install/installing/installation and drain/drainage, and is short enough to
+     be safe because both sides are already constrained (one is a hand-written intent for this
+     trade, the other a token from the question). */
+  const alike = (a: string, b: string) => {
+    if (a === b || a === `${b}s` || `${a}s` === b) return true;
+    let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;
+    return i >= 5;
+  };
+  const has = (w: string) => qTokens.some((q) => alike(q, w));
+  for (const intent of intentsForTrade(businessType)) {
+    for (const alt of intentAlternatives(intent)) {
+      if (alt.every(has)) return null;
+    }
+  }
+  return `does not name the trade (${trade.join('/')}) or any known ${businessType} service — the engines are free to answer it about a different trade`;
+}
+
+/**
+ * Drop off-trade questions from a GENERATED set and top the count back up from the deterministic
+ * templates. Mirrors dropResearchIntent and dropMissingTown exactly, including the case-insensitive
+ * dedupe and the deliberate willingness to come up short rather than fabricate filler.
+ *
+ * ⚠️ THE TOP-UP CAN NEVER BE REJECTED BY THIS FILTER, and that is a property of the templates
+ * rather than luck: every one is built as `${trade}${where}` or `${niche} ${trade}${where}`, so the
+ * trade word is in all of them by construction. Same reason dropMissingTown's top-up always
+ * carries the town. If that template builder ever stops embedding the trade, this guard starts
+ * returning short sets and the reason will not be obvious — hence this note.
+ */
+export function dropOffTrade(
+  generated: string[],
+  fallback: string[],
+  target: number,
+  businessType: string,
+): { questions: string[]; rejected: Array<{ question: string; reason: string }> } {
+  const rejected: Array<{ question: string; reason: string }> = [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const take = (list: string[]) => {
+    for (const q of list) {
+      if (out.length >= target) return;
+      const t = (q ?? '').trim();
+      if (!t) continue;
+      const key = questionKey(t);
+      if (seen.has(key)) continue;
+      const reason = offTradeReason(t, businessType);
+      if (reason) { rejected.push({ question: t, reason }); seen.add(key); continue; }
+      seen.add(key);
+      out.push(t);
+    }
+  };
+  take(generated);
+  take(fallback);
+  return { questions: out, rejected };
+}
+
+/* ── A WORD REPEATED BACK TO BACK ─────────────────────────────────────────────────────────────
+   🔴 White Sparks' FROZEN baseline contains "electrician electrician in thetford UK". It is one
+   string, so dedupeQuestions — which compares whole questions — cannot see it; it is not a
+   duplicate question, it is a damaged one. It bought a measurement slot in a twelve-question
+   baseline that is now the yardstick for a refund, and it will be replayed verbatim at day 28.
+
+   ⛔ REPAIRED, NOT REJECTED, for the same reason qualifyPlace repairs a missing country marker:
+   the question is right and only its wording is damaged, and rejecting it would spend the slot on
+   a template instead of on the question the model actually meant.
+
+   ⚠️ ADJACENT REPEATS ONLY. "lock repair and lock replacement" repeats "lock" legitimately and is
+   left alone; English search phrases essentially never contain a word twice in a row. Collapsing
+   any repeated word anywhere would rewrite real questions.
+
+   ⚠️ IT RUNS BEFORE dedupeQuestions, so a repaired question that now equals a real one collapses
+   into it rather than buying a second slot with the same words. */
+export function stripRepeatedWords(questions: string[]): {
+  questions: string[];
+  repaired: Array<{ before: string; after: string }>;
+} {
+  const repaired: Array<{ before: string; after: string }> = [];
+  const out = questions.map((q) => {
+    const before = (q ?? '').trim();
+    if (!before) return before;
+    /* Split on whitespace and keep the ORIGINAL casing: the stored question is what the engines
+       are asked and what day 28 replays, so this may only ever delete, never re-case. */
+    const parts = before.split(/\s+/);
+    const kept: string[] = [];
+    for (const p of parts) {
+      const prev = kept[kept.length - 1];
+      if (prev && normalise(prev) === normalise(p) && normalise(p) !== '') continue;
+      kept.push(p);
+    }
+    const after = kept.join(' ');
+    if (after !== before) repaired.push({ before, after });
+    return after;
+  });
+  return { questions: out, repaired };
+}
 
 /* ── CASE-INSENSITIVE QUESTION IDENTITY ───────────────────────────────────────────────────────
    MEASURED 2026-08-04, locksmiths/Hastings: of 18 questions paid for, "locksmith services in
@@ -297,25 +506,54 @@ export function dropMissingTown(
  *  decides anything on its own. A trade with no entry falls back to the generic list, which reads
  *  sensibly for any local service business. */
 const TRADE_INTENTS: Record<string, string[]> = {
+  /* ⚠️ THIS LIST IS LOAD-BEARING TWICE NOW. It still steers market-audit coverage, and since
+     2026-09-14 it is also the SECOND DOOR of the trade guard: a question carrying no trade word is
+     kept only if it matches one of these. So a service missing from a trade's list is a good
+     question thrown away. The entries added below were not invented — each one is a real question
+     from the book that the guard rejected and the engines had answered correctly. Paul tunes it;
+     adding an entry can only ever let MORE questions through, never fewer. */
   locksmith: [
     "emergency lockout", "car keys and auto locksmith", "lock repair", "lock replacement",
     "uPVC and multipoint door locks", "safes", "burglary repair and boarding up", "key cutting",
     "commercial and landlord work", "window locks",
+    // added 2026-09-14 from measured false rejections
+    "lock installation", "lockout", "key duplication", "rekeying", "security locks",
   ],
   plumber: [
     "emergency plumbing", "boiler repair", "boiler installation", "leak detection",
     "blocked drains", "bathroom installation", "radiators and heating", "power flushing",
     "landlord gas safety", "commercial plumbing",
+    // added 2026-09-14 from measured false rejections
+    "leak repair", "pipe installation", "pipe repair", "toilet installation", "tap installation",
+    "gas appliance installation", "shower installation", "drain cleaning", "drainage",
   ],
   electrician: [
     "emergency electrician", "fuse board replacement", "rewiring", "EV charger installation",
     "EICR and landlord certificates", "lighting installation", "fault finding",
     "outdoor and garden power", "commercial electrical", "PAT testing",
+    // added 2026-09-14 from measured false rejections
+    "electrical installation", "electrical repairs", "electrical testing", "wiring",
+    /* ⛔ "fault diagnosis" IS DELIBERATELY ABSENT, and it is the reason this whole guard exists.
+       It is a real electrician service AND a real motor-trade one, and a question that cannot tell
+       an engine which trade it means is not a measurement — "fault diagnosis services in thetford
+       UK" came back naming six car garages. "fault finding" stays because it is the phrasing an
+       electrician's customer actually uses; it measured 5 of 8 firms in trade on the same audit.
+       If this line is ever "tidied" for symmetry, White Sparks' fault returns. */
+  ],
+  'driving instructor': [
+    /* ⚠️ NO ENTRY EXISTED, so every driving school fell through to the generic list and "learn to
+       drive in Wisbech" — the single best question a driving school has (§ the teaching-trade rule
+       above exists precisely to protect it) — was rejected by the guard. */
+    "learn to drive", "driving lessons", "intensive course", "automatic lessons",
+    "manual lessons", "theory test", "pass plus", "refresher lessons", "test preparation",
   ],
   accountant: [
     "annual accounts", "self assessment", "VAT returns", "payroll", "bookkeeping",
     "corporation tax", "company formation", "CIS and subcontractors",
     "landlord and property tax", "tax investigation",
+    // added 2026-09-14 from measured false rejections
+    "tax preparation", "tax return", "tax advice", "tax planning", "management accounts",
+    "financial statements", "VAT filing",
   ],
   generic: [
     "emergency or urgent work", "repairs", "installation", "servicing and maintenance",
