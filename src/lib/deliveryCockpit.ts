@@ -1,4 +1,11 @@
-import { GBP_MANAGER_EMAIL } from './findableOffer';
+/* ⛔ THE .ts EXTENSION IS LOAD-BEARING AND THIS FILE WAS BROKEN WITHOUT IT (2026-09-14). This
+   module is reachable from stripe-webhook, process-ai-audit-queue and render-remeasure-results, and
+   the Supabase bundler refuses an extensionless relative import outright — "Module not found …
+   Maybe add a '.ts' extension". tsc, npm run build and every tsx suite resolve it happily, so the
+   whole local gate reads green and only the DEPLOY says no; those three functions sat on their
+   previous version while main looked correct. Vite resolves the explicit form too, so it costs the
+   SPA nothing. CLAUDE.md §4 records this trap twice already. */
+import { GBP_MANAGER_EMAIL } from './findableOffer.ts';
 /* ============================================================
    DELIVERY COCKPIT — pure logic for the client cockpit in LeadDetailDialog (2026-08-18).
 
