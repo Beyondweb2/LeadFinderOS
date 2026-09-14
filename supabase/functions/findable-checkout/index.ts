@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
-import { CARD_SAVED_NOTICE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
+import { CARD_SAVED_NOTICE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
    "where does the public site live" was settled after the pages.dev incident, and it applies the
@@ -378,8 +378,14 @@ Deno.serve(async (req) => {
       form.set("line_items[0][price_data][unit_amount]", String(Math.round(offer.gbp * 100)));
       // The name is what the payer sees on their Stripe receipt; the description carries
       // the guarantee VERBATIM from findableOffer.ts — the wording the sale is made on.
-      /* ⚠️ THE CUSTOMER READS THIS ON THEIR STRIPE RECEIPT, so it moved with the cycle (2026-09-03). */
-      form.set("line_items[0][price_data][product_data][name]", "Findable — 4-week AI visibility cycle");
+      /* ⚠️ THE CUSTOMER READS THIS ON THEIR STRIPE RECEIPT, so it moved with the cycle (2026-09-03).
+         🔴 AND IT NAMES BOTH FIGURES SINCE 2026-09-14. "4-week AI visibility cycle" described a
+         finite piece of work on the receipt for a product that continues at FINDABLE_MONTHLY_GBP a
+         month — the receipt is the document somebody digs out when they query the second charge,
+         so it is the last place that should describe only the first one.
+         ⚠️ Both figures are interpolated from the constants, never typed: this string is read by
+         a customer and a price move must not be able to leave a stale number on a receipt. */
+      form.set("line_items[0][price_data][product_data][name]", `Findable — AI visibility: £${FINDABLE_SETUP_PRICE_GBP} setup, then £${FINDABLE_MONTHLY_GBP}/month`);
       form.set("line_items[0][price_data][product_data][description]", FINDABLE_GUARANTEE);
       form.set("line_items[0][quantity]", "1");
     }

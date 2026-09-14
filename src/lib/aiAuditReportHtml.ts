@@ -426,6 +426,12 @@ function siteCheckPendingSection(): string {
     </section>`;
 }
 
+/* 🔴 "nothing extra to pay" CAME OUT 2026-09-14, AND IT WAS THE ONLY SENTENCE IN THIS DOCUMENT
+   THAT DESCRIBED THE PRICE. The report names no figure anywhere else by design, so this line was
+   carrying the whole offer on its own — and it said the £99 was the end of it, on a product that
+   is £99 to start and £29.99 a month, with hosting on top for exactly the customer who sees this
+   panel (no website, so we build and host one). "Building it is included in your £99" says the
+   true thing the panel exists to say and claims nothing about what else is owed. */
 function noWebsiteSection(): string {
   return `
     <!-- NO WEBSITE &mdash; what we will build, where the SEO grade would be -->
@@ -435,8 +441,8 @@ function noWebsiteSection(): string {
       <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.55;color:var(--muted)">
         AI can&rsquo;t recommend a business it can&rsquo;t read, and right now there&rsquo;s nothing for it to read.
         We&rsquo;ll build you a simple site that&rsquo;s set up properly for AI from the start: your services,
-        your area, your credentials, all written the way AI quotes them. It&rsquo;s included in your setup,
-        nothing extra to pay.
+        your area, your credentials, all written the way AI quotes them. Building it is included in
+        your &pound;99.
       </p>
     </section>`;
 }
