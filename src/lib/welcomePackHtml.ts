@@ -1,5 +1,6 @@
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml';
-import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, findableContactPhoneDisplay } from './findableOffer';
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, findableContactPhoneDisplay,
+  GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WELCOME PACK — ONE printable document for a client who has just paid:
@@ -62,6 +63,17 @@ const PACK_CSS = `
     color:var(--on-gold); font-weight:900; font-size:15px; display:flex; align-items:center; justify-content:center; }
   .wp-rowbody{ min-width:0; }
   .wp-rowtitle{ font-size:14px; font-weight:800; color:var(--ink); }
+  /* The one block in the pack that asks the reader to do something, so it is the one block that
+     does not look like body copy. Gold rule on the left, matching the report's own band accent. */
+  /* ⚠️ --gold-line / --gold-tint / --on-gold-tint, NOT invented names. The pack renders inside the
+     report's stylesheet (see this file's header) and a --tint token does not exist there. A token
+     that
+     does not resolve leaves the block transparent and the text on the page ground, which is exactly
+     the "it rendered, therefore it is right" trap. Checked against the token block before use. */
+  .wp-ask{ margin:18px 0 6px; padding:14px 16px; border-left:3px solid var(--gold-line); background:var(--gold-tint); border-radius:0 8px 8px 0; }
+  .wp-asklabel{ font-size:11px; font-weight:800; letter-spacing:.10em; text-transform:uppercase; color:var(--on-gold-tint); }
+  .wp-askline{ margin:6px 0 0; font-size:14px; font-weight:800; color:var(--ink); }
+  .wp-asksteps{ margin:6px 0 0; font-size:13px; line-height:1.5; color:var(--on-gold-tint-2); }
   .wp-rowline{ font-size:13px; color:var(--muted); margin:2px 0 0; line-height:1.5; }
 
   /* info boxes */
@@ -134,6 +146,20 @@ function coverPage(name: string): string {
       <p>Thanks for coming on board. This pack is everything in one place: where your business stands
       with AI today, what we&rsquo;re going to do about it, and the one small part that&rsquo;s yours.
       Nothing here is technical, and you can come back to it any time.</p>
+      <!-- ⛔ THE ASK COMES FIRST, ABOVE THE CONTENTS. The pack already promised "the one small part
+           that's yours" in its opening line and then never said what it was — the address appeared
+           nowhere in this document. Placed before the timeline so it cannot read as a later step:
+           the profile work waits on it, and a customer who reads to the end and stops has still
+           read this.
+           ⚠️ Every sentence is a shared constant (findableOffer.ts), byte-identical to the
+           confirmation screens in findable-site. An instruction somebody is expected to FOLLOW must
+           not exist in three slightly different versions, and the address least of all. -->
+      <div class="wp-ask">
+        <div class="wp-asklabel">${esc('One thing we need from you')}</div>
+        <p class="wp-askline">${esc(GBP_ACCESS_ASK)}</p>
+        <p class="wp-asksteps">${esc(GBP_ADD_STEPS)}</p>
+        <p class="wp-asksteps">${esc(GBP_ACCESS_REASSURANCE)} ${esc(GBP_ACCESS_CONSEQUENCE)}</p>
+      </div>
       <h2 class="wp-h2">What&rsquo;s inside</h2>
       <div class="wp-rows">
         <div class="wp-row">

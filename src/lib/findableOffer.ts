@@ -112,11 +112,32 @@ export const reportPublicUrl = (auditId: string) => `${REPORT_PUBLIC_ORIGIN}/rep
    addresses would be worse than the inconsistency it replaced. */
 export const GBP_MANAGER_EMAIL = "paul@move37.fun";
 
-/** The three clicks, written once. Both documents render this rather than describing it twice. */
-export const GBP_ADD_STEPS =
-  `Open your Google Business Profile, go to Users, click Add, enter ${GBP_MANAGER_EMAIL}, and choose `
-  + 'Manager. That is the whole job — you stay the owner, you never share a password, and you can '
-  + 'remove us in two clicks at any time.';
+/* 🔴 THIS CONSTANT HAD ZERO CONSUMERS UNTIL 2026-09-14, and its own comment said "Both documents
+   render this rather than describing it twice". Neither document rendered it: the welcome pack
+   described the profile work without ever naming the address, and the questionnaire asked for
+   PERMISSION and never told anybody what to do. A customer agreed to something nobody then
+   explained — Ronnie paid in August and it has still not happened.
+   ⛔ THE WORDING IS THE ONE PAUL APPROVED ON 2026-09-14, and the path is Google's current one:
+   "Users" has been "People and access" under Business Profile settings for some time, so the old
+   text would have sent somebody hunting for a menu that no longer exists. */
+/* ⚠️ ONE LITERAL, ON ONE LINE, NOT A CONCATENATION. check-cross-repo-sync parses a string
+   constant and REFUSES anything it cannot read as a literal — which it did twice for these, first
+   for being a concatenation and then for being SINGLE-quoted. Both refusals were correct: a guard
+   that cannot parse its input must fail rather than quietly cover nothing. Double quotes, one
+   line, matching FINDABLE_CONTACT_EMAIL beside it. */
+export const GBP_ADD_STEPS = "Go to your profile → Business Profile settings → People and access → Add → paste that address → choose Manager → Invite.";
+
+/** What they are asked to do, naming the address. */
+export const GBP_ACCESS_ASK = `Add ${GBP_MANAGER_EMAIL} as a manager on your Google Business Profile.`;
+
+/** Why it matters, and it stays low-key on purpose. */
+export const GBP_ACCESS_REASSURANCE = "It takes about two minutes and you stay the owner.";
+
+/* ⛔ IT SAYS WHAT THEY LOSE, NOT WHAT WE REFUSE (Paul's wording, 2026-09-14). Drafted as "we cannot
+   complete your profile until it is done", which reads as a condition on the service — a threat to
+   withhold work they have paid for. This states a fact about the work instead: the MEASUREMENT is
+   unaffected, the fixing is what stalls. Same consequence, no ultimatum, and it is true. */
+export const GBP_ACCESS_CONSEQUENCE = "Until that lands we can measure you, but we cannot fix what Google shows about you.";
 
 /* ⛔ THE CLAIM SENTENCE, ON ITS OWN (2026-09-13). It is the second sentence of FINDABLE_GUARANTEE and
    the sentence /refunds states; the four-week results email and document say it verbatim when the

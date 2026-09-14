@@ -1,3 +1,4 @@
+import { GBP_MANAGER_EMAIL } from './findableOffer';
 /* ============================================================
    DELIVERY COCKPIT — pure logic for the client cockpit in LeadDetailDialog (2026-08-18).
 
@@ -52,7 +53,11 @@ export const DELIVERY_CHECKLIST_ITEMS: DeliveryChecklistItem[] = [
   { key: 'baseline_checked', label: 'Baseline done — checked', hint: 'The baseline has finished and you have read it. It is the document the refund is measured against, so it is checked by a person before anything is sent', kind: 'tick' },
   { key: 'baseline_sent', label: 'Baseline sent', hint: 'The client has been sent their baseline. Nothing sends it automatically', kind: 'tick' },
   { key: 'directories', label: 'Directories added', hint: 'Listed on the directories the evidence says matter for this trade', kind: 'tick' },
-  { key: 'gbp', label: 'Google Business Profile sorted', hint: 'Claimed, verified and consistent with the pages', kind: 'tick' },
+  /* ⚠️ THE HINT NAMES WHAT IS WAITING ON THE CLIENT (2026-09-14). This tick covers work that
+     cannot start until they add us as a manager — the ask now shown on the confirmation screens and
+     in the welcome pack. Before that existed the tick meant two things at once: "I have done the
+     profile work" and "they have let me in", and an untouched box could not tell you which. */
+  { key: 'gbp', label: 'Google Business Profile sorted', hint: `Claimed, verified and consistent with the pages. Needs the client to add ${GBP_MANAGER_EMAIL} as a manager first — they are asked at sign-up and in the welcome pack`, kind: 'tick' },
   { key: 'pages', label: 'Pages built', hint: 'One line per planned page (the page-plan queue). Tick a page when it is live on their site', kind: 'pages' },
   { key: 'website', label: 'Website', hint: 'Site built or fixed where there was none / it was blocking', kind: 'tick' },
   { key: 'remeasure', label: 'Week-four re-measure', hint: 'Fires itself on the stored due date (RG Locksmiths: eight weeks, by his contract). Tick once you have checked the replay', kind: 'remeasure' },

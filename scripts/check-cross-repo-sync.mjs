@@ -42,6 +42,37 @@ const SITE = path.join(HERE, '..', '..', 'findable-site', 'src', 'lib');
    a string built from concatenated literals, or a bare number. */
 const PAIRS = [
   {
+    /* ⛔ THE GOOGLE MANAGER ADDRESS AND THE WORDS AROUND IT (2026-09-14). The customer is asked on
+       findable.live's confirmation screens and again in the welcome pack this repo renders. Two
+       documents naming DIFFERENT addresses would be worse than the inconsistency the shared
+       constant replaced — they would send a real person to add the wrong account and then wait. */
+    what: 'the Google Business Profile manager address',
+    kind: 'string',
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'GBP_MANAGER_EMAIL' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'GBP_MANAGER_EMAIL' },
+    why: 'A client adds ONE address as a manager. Both documents must name the same one.',
+  },
+  {
+    /* The menu path. Google renamed "Users" to "People and access"; a stale copy sends somebody
+       hunting for a menu that no longer exists, which is indistinguishable from the product being
+       broken. */
+    what: 'the Google access steps',
+    kind: 'string',
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'GBP_ADD_STEPS' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'GBP_ADD_STEPS' },
+    why: 'One set of clicks, described identically wherever it is asked for.',
+  },
+  {
+    /* ⛔ A CLAIM ABOUT WHAT THE SERVICE DOES AND DOES NOT DO WITHOUT ACCESS. It says the
+       measurement is unaffected and the fixing stalls; a drifted copy would either over-promise
+       or read as withholding paid work. */
+    what: 'the Google access consequence',
+    kind: 'string',
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'GBP_ACCESS_CONSEQUENCE' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'GBP_ACCESS_CONSEQUENCE' },
+    why: 'It states what a client loses by not acting. Both documents must say the same thing.',
+  },
+  {
     /* ⛔ THE CONTACT EMAIL (2026-09-13). Locked for the same reason as the number beside it: two
        copies with the same value and nothing enforcing it is a drift waiting for the day the
        address changes. The report renders it as "Email me"; the site as its contact link. */
