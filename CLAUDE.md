@@ -1987,6 +1987,30 @@ by the single account below.** §6's paginate rule, caught in this file's own no
     fragments. The `names_uncleaned` refusal still fires for historic folds, which keep their names.
   - **Deployed for it:** `create-ai-audit`, `process-ai-audit-queue`, `market-view`, `derive-audit`,
     `check-directory-listings`, `backfill-lead-towns`, `render-audit-report`, `findable-onboarding`.
+- ⛔ **A BARE `complete:false` RECEIPT NO LONGER BLANKS A CLIENT'S COMPETITORS (2026-09-14).**
+  `assessCompetitorCleanliness` suppressed on an incomplete stamp at ANY junk count. **The junk rule
+  is unchanged and still blanks** (≥ `JUNK_NAMES_PROVING_UNCLEANED`, and ANY junk beside an
+  incomplete receipt); a receipt with **zero** junk now WARNS — verdict stays `dirty`, so the amber
+  banner stands, and it reads `suppressNames` for its wording instead of hardcoding "do not send".
+  - 🔴 **WHY THE RECEIPT IS WEAK EVIDENCE, and this existed only in code comments:
+    `extract-competitors` asks gpt-4o for one entry per answer id INCLUDING an empty list when an
+    answer named nobody — so a model that OMITS the id is indistinguishable, at that layer, from one
+    that failed to read it.** A clean run whose last answer named nobody is stamped incomplete.
+  - **Measured 2026-09-14** over the 147 newest lead-linked audits with a completed run: 6 had their
+    whole rival list withheld, **all 6 from this branch with ZERO junk** — AD Locksmithing 25/25
+    items cleaned, 106 real names, withheld on "model omitted 1 of 25 ids". Five now print; the
+    genuine "cannot name three competitors" rate is **1 in 147**, not 6.
+  - ⚠️ **RG's report is NOT affected and must not be "fixed": his pointer audit `f64920ce` is
+    suppressed by the JUNK rule (109 provable junk names) and is his FROZEN baseline.** Paul's call
+    2026-09-14 — re-extracting it would rewrite the evidence the four-week comparison is judged
+    against. AD was a code fix; RG would have been editing evidence.
+- 🟡 **`competitor_hook` — the rival-naming outreach hook, REGISTERED BOTH SIDES, AWAITING META
+  (2026-09-14).** {{1}} name, {{2}} trade as a LOWERCASE PLURAL (`pluraliseTrade`, no article check —
+  it unblocks the 113 audits, 12%, that video_template's "for a" holds), {{3}}{{4}}{{5}} rivals,
+  {{6}} report link, same video header. Fewer than three usable names → **falls back to
+  `video_template` on the drip and the manual send** (`src/lib/rivalHook.ts`, one constant) and
+  **HOLDS on the first-reply lane**, deliberately: the fallback is a cold opener and the
+  phone-history seatbelt does not run there. Never pads, never sends a blank.
 - ✅ **THE COMPETITOR-NAME CLEANER SILENTLY CLEANED PART OF A RUN AND RETURNED `ok:true` — FIXED
   2026-08-28.** `extract-competitors` packed every answer into ONE OpenAI call capped at
   `MAX_ITEMS = 60` (question × engine) and `break`ed out. Solene's 47-question run is **137 items**,
