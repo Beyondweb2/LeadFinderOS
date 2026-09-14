@@ -166,6 +166,8 @@ async function notifyOfFindablePayment(opts: {
     const line = (k: string, v: string | null) => (v && v.trim() ? `  ${k.padEnd(8)}${v.trim()}\n` : "");
     const text =
       `${name} has paid.\n\n` +
+      /* The job first: it is what decides whether there is anything you can do today. */
+      (opts.job ? `  ${opts.job}\n\n` : "") +
       `  Amount: ${amount}\n` +
       `  For:    ${opts.paidFor}\n` +
       line("Trade:", opts.trade) + line("Town:", opts.town) +
@@ -178,6 +180,7 @@ async function notifyOfFindablePayment(opts: {
     const html =
       `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1e293b">` +
       `<h2 style="margin:0 0 12px">${esc(name)} has paid</h2>` +
+      (opts.job ? `<p style="margin:0 0 12px;padding:8px 10px;background:#f1f5f9;border-left:3px solid #0f172a;font-weight:700">${esc(opts.job)}</p>` : "") +
       row("Amount:", amount) + row("For:", opts.paidFor) +
       row("Trade:", opts.trade) + row("Town:", opts.town) +
       row("Phone:", opts.phone) + row("Email:", opts.email ?? "(not given)") +
@@ -918,10 +921,49 @@ Deno.serve(async (req) => {
                them apart, so the refund would land on whichever lead the lookup happened to find.
                The intent is the only identifier that is one-to-one with the money that moved. */
             const stripePaymentIntentId = idOf(s.payment_intent);
-            const boughtWebsite = !!stripeSubscriptionId;
+            /* 🔴 THIS READ `!!stripeSubscriptionId` AND WAS WRONG ON EVERY PAYMENT (fixed
+               2026-09-14). The comment above is the reasoning as it stood on 2026-09-03, when a
+               ticked checkout really was `mode: "subscription"`. On 2026-09-13 the hosting line
+               MOVED OFF the checkout session so nothing sits inside the refund window —
+               findable-checkout now has exactly one `mode:` in the file and it is hardcoded
+               "payment". No session has created a subscription since, so `stripeSubscriptionId` is
+               always null, `boughtWebsite` was always false, and every customer was recorded as
+               "AI visibility, first cycle" whatever they chose — in the operator email AND in
+               `outreach_leads.paid_for`, which is the record of what they bought.
+               ⛔ THE LESSON IS THE ONE THIS FILE KEEPS RE-LEARNING: that was an INFERENCE from a
+               billing side-effect, not a reading of the customer's answer. When the billing shape
+               changed the inference silently inverted and nothing threw. `website_addon` is the
+               column findable-checkout itself trusts to decide what to charge — the standing rule
+               on that endpoint being that the browser never decides money and the ROW is the
+               record — so it is the same fact, read from the place that owns it.
+               ⚠️ ABSENT IS NOT A PURCHASE. A missing row, a failed read or a null column all mean
+               "no add-on": charging-direction safety, exactly as findable-checkout reads it. */
+            let boughtWebsite = false;
+            let siteManager: string | null = null;
+            try {
+              const { data: obJob } = await service.from("onboarding_responses")
+                .select("website_addon, website_manager").eq("id", onboardingId).maybeSingle();
+              const j = obJob as { website_addon?: unknown; website_manager?: unknown } | null;
+              boughtWebsite = j?.website_addon === true;
+              siteManager = typeof j?.website_manager === "string" ? j.website_manager : null;
+            } catch (e) {
+              console.error("[stripe-webhook] could not read the website answer — recording the audit-only label:", (e as Error).message);
+            }
+            /* ⛔ THREE JOBS, NOT TWO, AND THE MIDDLE ONE IS THE POINT. "Add pages to their site"
+               splits on who holds the keys: when an agency manages it the first move is not ours,
+               and that is the only one of the three where the work cannot start on our say-so.
+               ⚠️ NO COLUMN RECORDS *WHY* A BUILD IS NEEDED (refused access / wanted a new one / no
+               site at all), deliberately — they are the same job and the reason is not actionable. */
             const paidForLabel = boughtWebsite
               ? "Findable - AI visibility (first cycle) + website build + hosting"
               : "Findable - AI visibility, first cycle";
+            const jobLine = boughtWebsite
+              ? "BUILD AND HOST A NEW SITE — they have no site we can publish to."
+              : siteManager === "web_company"
+                ? "ADD PAGES — but AN AGENCY HOLDS THE KEYS. You cannot start until they let you in."
+                : siteManager === "direct_access"
+                  ? "ADD PAGES to their existing site — they can let you in themselves."
+                  : "ADD PAGES to their existing site — who controls it was not recorded.";
 
             if (findableLeadId) {
               await mustWrite(
@@ -977,6 +1019,7 @@ Deno.serve(async (req) => {
                 businessName: ((leadForEmail?.business_name as string) ?? "").trim(),
                 amountGbp,
                 paidFor: paidForLabel,
+                job: jobLine,
                 trade: (((leadForEmail?.category as string) || (leadForEmail?.search_keyword as string) || "").trim()) || null,
                 town: ((leadForEmail?.search_location as string) ?? "").trim() || null,
                 phone: ((leadForEmail?.phone as string) ?? "").trim() || null,
