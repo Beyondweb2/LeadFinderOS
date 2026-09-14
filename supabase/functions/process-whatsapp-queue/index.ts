@@ -2,7 +2,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
-import { renderTemplateBody, templateBodyParams, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, type TemplateVar } from "../_shared/whatsapp-send.ts";
+/* ⚠️ templateBodyParams IS DELIBERATELY NOT IMPORTED ANY MORE. This file used to assemble one
+   send payload by hand from it, which is how video_template went out without its video header for
+   its entire life. Payloads come from claimTemplatePayload, which reads the registry. */
+import { renderTemplateBody, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { hookFollowupEligible } from "../_shared/hook-followup-eligibility.ts";
 import { contactFollowupEligible } from "../_shared/contact-followup-eligibility.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
@@ -1613,8 +1616,21 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             messaging_product: "whatsapp",
             to: toNumber,
-            type: "template",
-            template: { name: templateName, language: { code: lang }, components: templateBodyParams(tvars, lead.business_name as string, resolvedUrl, templateExtra) },
+            /* 🔴 THIS BUILT THE PAYLOAD INLINE, AND video_template NEVER ONCE REACHED A PHONE.
+               templateBodyParams returns the BODY only. video_template is registered at Meta with a
+               VIDEO header, so every attempt was rejected:
+                 (#132012) "header component parameter should not be empty"
+               Attempted 4 times, accepted 0 — over the entire life of the template. The operator's
+               best-performing asset had never successfully sent, and `whatsapp_sends` rows are
+               written whatever Meta answers, so the row count looked like traffic.
+               ⛔ A HEADER IS A PROPERTY OF THE TEMPLATE, SO ONLY THE REGISTRY CAN KNOW IT.
+               claimTemplatePayload reads WA_TEMPLATES and adds the header component when the entry
+               declares one — its own comment already said "a template registered with a VIDEO
+               header and sent with only a body is rejected". Every other send path in the product
+               calls it; this one kept a private copy of the assembly, and a copy cannot learn about
+               a field added after it was written.
+               ⚠️ It supplies `type` AND `template`, so neither is spelled out here any more. */
+            ...claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, templateExtra),
           }),
         });
         const data = await res.json().catch(() => ({}));

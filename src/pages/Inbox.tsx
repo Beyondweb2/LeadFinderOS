@@ -41,6 +41,7 @@ import {
   FIRST_REPLY_MODES,
   FIRST_REPLY_MODE_HINTS,
   FIRST_REPLY_MODE_LABELS,
+  FIRST_REPLY_MODE_QUESTION,
   parseFirstReplyMode,
   type FirstReplyMode,
 } from '@/lib/firstReplyMode';
@@ -199,7 +200,7 @@ function AutoReplyToggle() {
     /* The confirmation states what WILL happen, and for send mode it leads with the risk. A toast
        that only says "saved" is how an operator ends up unsure which mode is live. */
     toast({
-      title: next === 'off' ? 'Reply rule off' : next === 'audit_only' ? 'Reply rule: run audit only' : 'Reply rule: audit + auto-send',
+      title: next === 'off' ? 'On reply: do nothing' : next === 'audit_only' ? 'On reply: audit only' : 'On reply: audit and reply',
       description: next === 'send' && !envOn
         ? 'Saved — but the AUTO_AUDIT_REPLY_ENABLED secret is off, so nothing will actually send yet.'
         : FIRST_REPLY_MODE_HINTS[next],
@@ -210,8 +211,13 @@ function AutoReplyToggle() {
   const sending = mode === 'send';
   return (
     <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 h-9">
-      <span className="text-xs font-medium whitespace-nowrap" title="What happens automatically when a business replies to your initial_contact opener">
-        On reply{sending && !envOn ? ' ⚠' : ''}
+      {/* 🔴 "On reply" WAS TOO SHORT TO CARRY THE SCOPE. With options reading "Run audit only" and
+          "Audit + auto-send", the control looked like a global audit switch: Paul set it expecting
+          it to govern the outreach QUEUE and then reasonably believed it was why outreach had
+          stopped. It governs neither — the drip never reads this. The full question is rendered
+          now, and the options are answers to it. */}
+      <span className="text-xs font-medium whitespace-nowrap" title="What happens automatically when a business replies to your opener. This does NOT affect the outreach queue — queued leads are always audited and sent.">
+        {FIRST_REPLY_MODE_QUESTION}{sending && !envOn ? ' ⚠' : ''}
       </span>
       {/* Exactly one lit segment, so the state cannot be half-read. */}
       <div className="flex items-center rounded-md border border-border/60 overflow-hidden">

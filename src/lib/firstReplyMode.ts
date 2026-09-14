@@ -118,12 +118,27 @@ export function isStaleAutoReply(fireAfterIso: string | null | undefined, nowMs:
   return nowMs - t > AUTO_REPLY_STALE_MS;
 }
 
-/** Human labels for the control. Kept beside the modes so a new mode cannot render as a raw slug. */
+/* 🔴 THE SCOPE IS IN THE LABEL NOW, AND IT COST AN AFTERNOON TO LEARN WHY (2026-09-14).
+   They read "Off / Run audit only / Audit + auto-send" — three names that describe an AUDIT
+   SWITCH and say nothing about when it applies. Paul set "Run audit only" in good faith,
+   expecting it to govern the outreach queue, and then spent an hour reasonably believing it was
+   why outreach had stopped. It governs neither: these modes decide what happens when a PROSPECT
+   REPLIES, and the drip never reads them.
+   ⛔ THE OLD FLOW THEY WERE NAMED FOR IS GONE. They date from opener-first outreach — send a
+   message, and if they replied, audit. The audit now runs BEFORE the message, because
+   video_template carries the report link. The modes are still needed (the warm reply path is
+   real), but a name that implies global scope is a switch an operator can set wrong, and did.
+   ⚠️ LABELS ONLY — the stored values ('off' | 'audit_only' | 'send') are untouched, so nothing
+   anyone has already set changes meaning. */
 export const FIRST_REPLY_MODE_LABELS: Record<FirstReplyMode, string> = {
-  off: 'Off',
-  audit_only: 'Run audit only',
-  send: 'Audit + auto-send',
+  off: 'Do nothing',
+  audit_only: 'Audit only',
+  send: 'Audit and reply',
 };
+
+/** The question the three answers belong to. Rendered above the control so the scope is read
+ *  BEFORE the options, which is the half that was missing. */
+export const FIRST_REPLY_MODE_QUESTION = 'When a prospect replies:';
 
 export const FIRST_REPLY_MODE_HINTS: Record<FirstReplyMode, string> = {
   off: 'A reply does nothing automatic. The lead still shows as replied.',
