@@ -4,6 +4,7 @@ import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { createFreeCheckLead } from "../_shared/free-check-lead.ts";
 import { shouldAutoAudit, fireFreeCheckAudit } from "../_shared/free-check-audit.ts";
 import { missingQuestionnaireFields } from "../../../src/lib/questionnaireComplete.ts";
+import { readWebsite, sameWebsite } from "../../../src/lib/websiteUrl.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Actions:
@@ -207,7 +208,11 @@ Deno.serve(async (req) => {
            copied onto the hit row because lead_page_hits is owner-scoped by RLS — without it the
            dashboard read would return an empty array rather than an error, which is this project's
            most expensive recurring failure. */
-        .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid")
+        /* ⚠️ phone AND website ADDED 2026-09-14 WITH THE PRE-FILL THAT RETURNS THEM. Selecting a
+           column is not bookkeeping here: an unselected column reads as `undefined`, so the
+           response would have carried "" and the change would have looked applied while doing
+           nothing — the same trap the derived_town note below records. */
+        .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid, phone, website")
         .eq("id", leadId).maybeSingle();
       if (!lead) return json({ ok: false, error: "unknown_lead" }, 404);
 
@@ -248,7 +253,25 @@ Deno.serve(async (req) => {
          advisory: the flow renders it, but the charge is re-derived server-side at checkout, so a
          tampered response buys nothing. */
       const offer = offerPrice();
-      // SAFE subset only — never expose phone/email/notes/owner to the public page.
+      /* ── WHAT THIS IS ALLOWED TO HAND BACK ───────────────────────────────────────────────────
+         This line used to read "SAFE subset only — never expose phone/email/notes/owner to the
+         public page", and phone was on the wrong side of it.
+
+         ⛔ THE RULE IS NOT "NOTHING PERSONAL", IT IS "NOTHING WE HOLD PRIVATELY". A `?lead=` is an
+         unguessable capability, but a forwarded link is a real thing, so the test is what a
+         stranger holding one could learn that they could not already look up. `phone` and `website`
+         are Google Places fields — `internationalPhoneNumber` and `websiteUri`, fetched by
+         google-place-details and already on the business's own Maps listing. Returning them
+         discloses nothing.
+         ⛔ `email`, `contact_name` AND `notes` STAY OUT, and they are the ones that matter. The
+         email comes from enrichment rather than from Google, contact_name is usually the operator's
+         own note about who to ask for, and notes is internal by definition. Measured before
+         deciding: email is present on 10.1% of live leads and contact_name on 0.2%, so they are
+         worth nothing as a prefill AND carry all of the risk — the trade is one-sided in both
+         directions.
+         ⚠️ WHY IT IS WORTH THE CHANGE AT ALL: phone is on 99.7% of unarchived leads and website on
+         88.6%. Every WhatsApp prospect arrives with both, and making them retype what we already
+         know is friction on the one screen that takes the payment. */
       return json({
         ok: true,
         price_gbp: offer.gbp,
@@ -270,6 +293,11 @@ Deno.serve(async (req) => {
            Matches the audit chain's own precedence: confirmed_location || derived_town ||
            search_location. */
         location_guess: ((lead.derived_town as string) || (lead.search_location as string) || (lead.address as string) || "").trim(),
+        /* Google's own values, offered back so the customer confirms rather than retypes. Empty
+           string when we hold nothing — the page must not be able to tell "we have no number" from
+           "the column is missing", and "" renders as an empty box either way. */
+        phone_guess: String(lead.phone ?? "").trim(),
+        website_guess: String(lead.website ?? "").trim(),
       });
     }
 
@@ -634,6 +662,14 @@ Deno.serve(async (req) => {
            it is missing here — proven 2026-08-05 by willing_to_migrate, which saved as HTTP 200
            with a null and let a Squarespace customer reach Stripe. The free check sends this. */
         confirmed_phone: clip(a.confirmed_phone, 40),
+        /* ⛔ THE WEBSITE, AND BLANK IS NOT AN ANSWER. readWebsite returns `blank` for an empty box
+           AND for "n/a"/"none"/"not yet" — the things people type when they mean "I have not got
+           one" — and blank stores NULL, which NEWER_COLS then deletes. Nothing anywhere may read
+           that as "this business has no website": has_website is a tri-state and the absence of a
+           typed URL is not evidence either way (src/lib/websiteUrl.ts). An INVALID entry is also
+           stored as null rather than as junk; the page refuses it at entry, and a server that
+           accepted rubbish here would point the SEO scan at nothing. */
+        business_website: (() => { const w = readWebsite(a.business_website as string); return w.kind === "ok" ? w.url : null; })(),
         source: submissionSource,
         /* ⛔ THE WEBSITE ADD-ON TICK, AND THIS ROW IS THE ONLY PLACE IT IS TRUSTED FROM. Added
            2026-09-03 with the £49.99 build + £9.99/mo hosting option. findable-checkout reads the
@@ -658,7 +694,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "source", "website_addon"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -674,7 +710,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon"];
+        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
@@ -957,6 +993,38 @@ ${note}` : note })
               .eq("id", leadId);
           }
         } catch { /* non-fatal — onboarding_responses.confirmed_phone is the source of truth */ }
+      }
+
+      /* ⛔ THE WEBSITE FOLLOWS THE PHONE'S RULE EXACTLY, for the same reason (2026-09-14). It is the
+         site we will SCAN and the site the page generator links from, so a lead pointing at Google's
+         scraped URL while the customer has told us a different one is the worst of both. A typed
+         URL that disagrees WINS, and the old one is appended to notes first — an overwrite that
+         erases the only other address we had is not a safe default.
+         ⛔ AND A BLANK BOX WRITES NOTHING AT ALL. `readWebsite` returns `blank` for empty and for
+         "none"/"n/a"/"not yet", and this block returns before touching the lead. Clearing the
+         lead's website because somebody skipped an OPTIONAL field would manufacture the exact
+         false negative the tri-state exists to prevent: no website on the lead plus a place_id
+         reads as "Google looked and they have none", and the report then offers to build a site to
+         a business that already has one.
+         ⚠️ SAME SITE IN DIFFERENT CLOTHES IS NOT A DISAGREEMENT — sameWebsite compares host and
+         path, so "whitesparks.co.uk" against "https://www.whitesparks.co.uk/" writes nothing. */
+      const submittedSite = readWebsite(a.business_website as string);
+      if (submittedSite.kind === "ok") {
+        try {
+          const { data: cur } = await service.from("outreach_leads")
+            .select("website, notes").eq("id", leadId).maybeSingle();
+          const row = (cur ?? {}) as { website?: string | null; notes?: string | null };
+          const existing = (row.website ?? "").trim();
+          if (!existing) {
+            await service.from("outreach_leads").update({ website: submittedSite.url })
+              .eq("id", leadId).is("website", null);
+          } else if (!sameWebsite(existing, submittedSite.url)) {
+            const note = `[${new Date().toISOString().slice(0, 10)}] website replaced by the customer at signup; previous: ${existing}`;
+            await service.from("outreach_leads")
+              .update({ website: submittedSite.url, notes: row.notes ? `${row.notes}\n${note}` : note })
+              .eq("id", leadId);
+          }
+        } catch { /* non-fatal — onboarding_responses.business_website is the source of truth */ }
       }
 
       // An incomplete submission stops here: there is no confirmed area to audit against, and
