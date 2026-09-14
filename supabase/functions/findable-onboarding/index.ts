@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
     // ── prefill ─────────────────────────────────────────────────────────────────
     if (action === "prefill") {
       if (!leadId) return json({ ok: false, error: "unknown_lead" }, 404);
-      const { data: lead } = await service
+      const { data: lead, error: leadErr } = await service
         .from("outreach_leads")
         /* ⚠️ derived_town ADDED WITH THE PRE-FILL THAT READS IT. Selecting it is not optional
            bookkeeping: `lead.derived_town` on a row that never fetched the column is undefined, so
@@ -214,6 +214,21 @@ Deno.serve(async (req) => {
            nothing — the same trap the derived_town note below records. */
         .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid, phone, website")
         .eq("id", leadId).maybeSingle();
+      /* 🔴 A FAILED READ IS NOT A MISSING ROW, AND FOR MONTHS THEY WERE THE SAME ANSWER.
+         This destructured the query's `error` away and tested only `data`, so a database that
+         timed out produced `data = null` — identical to a lead that does not exist — and the
+         customer was told "We couldn't find your details. Reply to our message and we'll send you
+         a fresh link." A dead end, on a valid outreach link, caused by our own infrastructure.
+         ⛔ PROVEN LIVE 2026-09-14, not theorised: during a Supabase degradation every PostgREST
+         read returned HTTP 522 after ~20 seconds, and prefill answered `unknown_lead` for leads
+         that plainly exist. Paul walked his own onboarding link and hit it.
+         ⛔ SO THE TWO ANSWERS ARE NOW DIFFERENT ANSWERS. `lookup_failed` is a 503 — transient, ours,
+         retryable, and the page keeps the visitor moving. `unknown_lead` stays a 404 and is the only
+         one allowed to say anything about their link. Absence is never inferred from silence. */
+      if (leadErr) {
+        console.error("[findable-onboarding] prefill lead lookup failed:", leadErr.message);
+        return json({ ok: false, error: "lookup_failed" }, 503);
+      }
       if (!lead) return json({ ok: false, error: "unknown_lead" }, 404);
 
       /* ── THE PAGE HIT ───────────────────────────────────────────────────────────
@@ -373,6 +388,10 @@ Deno.serve(async (req) => {
       }
       let phone: string | null = null;
       if (row.lead_id) {
+        /* ⚠️ THIS ONE IS DELIBERATELY LEFT ALONE. A failed read here means the phone box arrives
+           empty instead of filled, which is a missing convenience rather than a refusal — the
+           caller already gets `ok: true` and the customer can simply type it. There is no dead end
+           to remove, so adding a 503 would turn a working degradation into a blocked screen. */
         const { data: lead } = await service
           .from("outreach_leads").select("phone").eq("id", row.lead_id as string).maybeSingle();
         phone = (lead as { phone: string | null } | null)?.phone ?? null;
@@ -880,10 +899,25 @@ Deno.serve(async (req) => {
       }
 
       // LEAD MODE — lockdown #2: the lead must exist and must NOT already be a paying client.
-      const { data: lead } = await service
+      const { data: lead, error: leadErr } = await service
         .from("outreach_leads")
         .select("id, user_id, business_name, category, search_keyword, status, amount_paid, country, website")
         .eq("id", leadId).maybeSingle();
+      /* 🔴 A FAILED READ IS NOT A MISSING ROW, AND FOR MONTHS THEY WERE THE SAME ANSWER.
+         This destructured the query's `error` away and tested only `data`, so a database that
+         timed out produced `data = null` — identical to a lead that does not exist — and the
+         customer was told "We couldn't find your details. Reply to our message and we'll send you
+         a fresh link." A dead end, on a valid outreach link, caused by our own infrastructure.
+         ⛔ PROVEN LIVE 2026-09-14, not theorised: during a Supabase degradation every PostgREST
+         read returned HTTP 522 after ~20 seconds, and prefill answered `unknown_lead` for leads
+         that plainly exist. Paul walked his own onboarding link and hit it.
+         ⛔ SO THE TWO ANSWERS ARE NOW DIFFERENT ANSWERS. `lookup_failed` is a 503 — transient, ours,
+         retryable, and the page keeps the visitor moving. `unknown_lead` stays a 404 and is the only
+         one allowed to say anything about their link. Absence is never inferred from silence. */
+      if (leadErr) {
+        console.error("[findable-onboarding] submit lead lookup failed:", leadErr.message);
+        return json({ ok: false, error: "lookup_failed" }, 503);
+      }
       if (!lead) return json({ ok: false, error: "unknown_lead" }, 404);
       if (PAID_OR_BEYOND.has(lead.status as string) || ((lead.amount_paid as number) ?? 0) > 0) {
         return json({ ok: false, error: "already_client" }, 403);
