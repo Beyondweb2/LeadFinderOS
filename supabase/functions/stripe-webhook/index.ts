@@ -1,6 +1,7 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
+import { questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
 import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
    to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
@@ -1001,19 +1002,18 @@ Deno.serve(async (req) => {
                           .from("onboarding_responses")
                           .select("confirmed_location, services")
                           .eq("id", onboardingId).maybeSingle();
-                        const has = (v: unknown) => !!String(v ?? "").trim();
-                        /* 🔴 TOWN + SERVICES, NOT THREE FIELDS (2026-09-14). This tested
-                           `business_address` too — a field REMOVED from the questionnaire on
-                           2026-08-22, because a paying customer was trapped on mobile hand-typing a
-                           full address. It is collected at delivery now, so it is null at the moment
-                           of every payment BY DESIGN, and this test therefore fired on every real
-                           first payment: "details not yet collected" for a customer who had given
-                           everything that matters, plus the subject tag that rode on it.
-                           ⛔ THESE ARE THE TWO startPaidBaseline WAITS FOR, and the two needsQ2()
-                           reads. A rule about whether a client is complete must agree with the rule
-                           that decides whether the baseline can run, or the email contradicts the
-                           dashboard and the measurement about the same customer. */
-                        const outstanding = !(has(ob?.confirmed_location) && has(ob?.services));
+                        /* 🔴 THIS TESTED `business_address` TOO UNTIL 2026-09-14 — a field REMOVED
+                           from the questionnaire on 2026-08-22, because a paying customer was
+                           trapped on mobile hand-typing a full address. It is collected at delivery
+                           now, so it is null at the moment of every payment BY DESIGN, and this test
+                           therefore fired on every real first payment: "details not yet collected"
+                           for a customer who had given everything that matters, plus the subject tag
+                           that rode on it.
+                           ⛔ THE RULE IS AN IMPORT NOW, not a fourth restatement of it. A claim
+                           about whether a client is complete must agree with the rule that decides
+                           whether the baseline can run, or this email contradicts the dashboard and
+                           the measurement about the same customer. */
+                        const outstanding = !questionnaireComplete(ob);
                         return outstanding
                           ? "Details not yet collected — they still have the post-payment form to fill in (town and services). No baseline starts until it lands."
                           : null;

@@ -106,8 +106,14 @@ const outstandingLine = src.match(/const outstanding = [^;]+;/)?.[0] ?? '';
 ok(outstandingLine.length > 0, `the outstanding test was found (${JSON.stringify(outstandingLine)})`);
 ok(!/business_address/.test(outstandingLine),
    'it no longer requires business_address — a field the product stopped collecting');
-ok(/confirmed_location/.test(outstandingLine) && /services/.test(outstandingLine),
-   'it requires town and services, the two startPaidBaseline waits for');
+/* ⛔ AND SINCE 2026-09-14 IT DOES NOT STATE THE RULE AT ALL — it imports it. Four copies of
+   "is this questionnaire complete" existed and two had gone stale; the fix was to delete the
+   copies, so what this pins now is that this file reads the shared one.
+   `scripts/questionnaire-complete.test.ts` pins the rule itself and all four importers. */
+ok(/questionnaireComplete\(ob\)/.test(outstandingLine),
+   'it calls the one shared predicate rather than restating town + services');
+ok(/from "\.\.\/\.\.\/\.\.\/src\/lib\/questionnaireComplete\.ts"/.test(src),
+   'imported with the explicit .ts extension, or the bundler refuses at deploy');
 /* And the SELECT must not fetch what the test no longer reads — a column named in a query is the
    next person's evidence that it still matters. */
 ok(!/\.select\("confirmed_location, services, business_address"\)/.test(src),

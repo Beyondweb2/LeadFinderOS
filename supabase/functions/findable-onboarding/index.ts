@@ -3,6 +3,7 @@ import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from ".
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { createFreeCheckLead } from "../_shared/free-check-lead.ts";
 import { shouldAutoAudit, fireFreeCheckAudit } from "../_shared/free-check-audit.ts";
+import { missingQuestionnaireFields } from "../../../src/lib/questionnaireComplete.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Actions:
@@ -360,14 +361,16 @@ Deno.serve(async (req) => {
        that has not paid, or an unpaid submission could be filled in by anyone holding the link.
        `revise` guards the mirror case (it refuses PAID rows); this refuses everything else.
 
-       ⛔ THE THREE CRITICAL FIELDS ARE ENFORCED, NOT REQUESTED. confirmed_location, services and
-       business_address are what needsQ2() reads to decide "they finished" — and the first two are
-       exactly what startPaidBaseline waits for before it will measure anything. Accepting a Q2
+       ⛔ THE CRITICAL FIELDS ARE ENFORCED, NOT REQUESTED, AND THEY ARE NAMED IN ONE PLACE:
+       src/lib/questionnaireComplete.ts. They are what the dashboard reads to decide "they finished"
+       and exactly what startPaidBaseline waits for before it will measure anything. Accepting a Q2
        without them would mark a customer complete while leaving the guarantee's day-0 unmeasurable
        and delivery unable to start. Everything else is genuinely optional.
+       ⚠️ THIS COMMENT SAID "THREE" AND NAMED business_address UNTIL 2026-09-14, eight weeks after
+       the gate below stopped requiring it. A stale comment is a load-bearing bug (§4).
 
-       ⚠️ NO STATUS CHANGE. `status` stays "paid": completion is DERIVED by needsQ2() from the three
-       fields, never stored. A stored verdict freezes old rows against a stale rule and lets the
+       ⚠️ NO STATUS CHANGE. `status` stays "paid": completion is DERIVED from the answers themselves,
+       never stored. A stored verdict freezes old rows against a stale rule and lets the
        readers drift — the same reason serveGate's verdict is derived (CLAUDE.md §1).
 
        ⚠️ IDEMPOTENT BY CONSTRUCTION. It is an UPDATE of the same columns, so a resubmit — a double
@@ -395,19 +398,21 @@ Deno.serve(async (req) => {
       const q2Town = clip(a.confirmed_location, 120);
       const q2Services = clip(a.services, 2000);
       const q2Address = clip(a.business_address, 300);
-      /* ⛔ TWO REQUIRED NOW, NOT THREE (2026-08-22, URGENT). business_address left the questionnaire:
+      /* ⛔ TWO REQUIRED, NOT THREE (2026-08-22, URGENT). business_address left the questionnaire:
          a paying customer was trapped on mobile hand-typing a full address (see OnboardingFlow's
          STEPS note). The address is collected at delivery instead (the lead usually already has one
-         from Google enrichment). The baseline only ever needed town + services, so this is exactly
-         what startPaidBaseline waits for — and needsQ2() was relaxed to match, or a completed
-         customer would read "awaiting Q2" forever. business_address is still ACCEPTED below and
-         written when present; it is simply no longer a gate. */
-      if (!q2Town || !q2Services) {
-        return json({
-          ok: false,
-          error: "missing_required",
-          missing: [!q2Town && "confirmed_location", !q2Services && "services"].filter(Boolean),
-        }, 400);
+         from Google enrichment). business_address is still ACCEPTED below and written when present;
+         it is simply no longer a gate.
+         ⛔ AND THE RULE IS THE SHARED ONE NOW (2026-09-14), not a fifth restatement of it. This gate
+         was written out independently and happened to be correct; two of its siblings were not, and
+         a customer read complete on one screen and outstanding on another for three weeks. It is
+         asked of the INCOMING answers rather than the stored row — the same question, one tick
+         earlier — so accepting a Q2 the dashboard would still call outstanding is now impossible by
+         construction rather than by everyone remembering. `missing` is the leaf's own list, which
+         is why it returns names instead of a boolean. */
+      const q2Missing = missingQuestionnaireFields({ confirmed_location: q2Town, services: q2Services });
+      if (q2Missing.length > 0) {
+        return json({ ok: false, error: "missing_required", missing: q2Missing }, 400);
       }
 
       /* ⛔ THREE PLACES OR THE FIELD VANISHES — the same rule the submit path below carries, and for

@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { firstNameFrom, questionnaireFollowupBody } from '@/lib/questionnaireFollowup';
 import { isPaidLead } from '@/lib/leadPayment';
+import { questionnaireComplete } from '@/lib/questionnaireComplete';
 import type { OutreachLead } from '@/types/outreach';
 
 /* ============================================================
@@ -97,7 +98,13 @@ export function LeadQuestionnaireSection({ lead, onUpdateLead }: {
 
   const rowPaid = row?.status === 'paid';
   const leadPaid = isPaidLead(lead);
-  const q2Done = !!(held(row?.confirmed_location) && held(row?.services) && held(row?.business_address));
+  /* 🔴 THIS LINE ASKED FOR `business_address` UNTIL 2026-09-14, AND IT WAS LIVE. That column left
+     the questionnaire on 2026-08-22 (it was trapping paying customers hand-typing an address on a
+     phone; it is collected at delivery instead), so it is null at the moment of every payment BY
+     DESIGN — and this card therefore read "Paid — awaiting details (the post-payment questions)"
+     for a finished client FOR EVER, on the screen the operator works from. The rule is one import
+     now, so there is no copy left here to go stale the next time the form changes. */
+  const q2Done = questionnaireComplete(row);
 
   /* One wording for every empty Q2 answer, decided by whose turn it is: before payment the
      question literally has not been asked; after payment it is theirs to answer. */
