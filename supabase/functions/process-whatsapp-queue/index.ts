@@ -199,7 +199,7 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
   // video_template - the outreach hook. MIRRORS whatsapp-send.ts; change both together.
   video_template: { lang: "en", vars: ["name", "trade", "town", "audit_url"] },
-  /* competitor_hook - the COMPETITOR-NAMING hook, submitted to Meta 2026-09-14. MIRRORS
+  /* competitor_hook - the COMPETITOR-NAMING hook, APPROVED at Meta 2026-09-14. MIRRORS
      whatsapp-send.ts; change both together (scripts/re-engage-vars.test.ts asserts both directions).
      SIX vars: {{1}} name, {{2}} trade as a LOWERCASE PLURAL, {{3}} {{4}} {{5}} competitor names,
      {{6}} audit link. A lead whose audit cannot supply three names is sent video_template instead -

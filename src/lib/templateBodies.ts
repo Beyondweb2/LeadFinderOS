@@ -113,12 +113,19 @@ Have a read, and if you want I'll explain what's causing it and how we'd fix it.
 
 Paul, Findable.`;
 
-/* competitor_hook - the body SUBMITTED TO META 2026-09-14. Six variables: {{1}} business name,
-   {{2}} trade as a LOWERCASE PLURAL, {{3}} {{4}} {{5}} three competitor names, {{6}} audit link.
-   ⛔ MARKED AS SUBMITTED, NOT APPROVED, AND THAT DISTINCTION IS THE FILE'S OWN RULE: a body here is
-   the record of what a prospect actually read, so this string may only be corrected FROM WhatsApp
-   Manager once the registered version exists. If Meta's reviewer edits so much as a line break,
-   paste theirs over this - do not keep ours because it is what we asked for.
+/* competitor_hook - APPROVED AT META 2026-09-14, and this is the REGISTERED body, pasted by Paul
+   from WhatsApp Manager. Six variables: {{1}} business name, {{2}} trade as a LOWERCASE PLURAL,
+   {{3}} {{4}} {{5}} three competitor names, {{6}} audit link - unchanged from submission, nothing
+   renumbered.
+   🔴 THE BODY CHANGED DURING SUBMISSION AND THIS FILE'S OWN RULE IS WHY IT WAS REPLACED RATHER THAN
+   KEPT: a body here is the record of what a prospect actually READ, so ours was never the authority.
+   Three differences from what we submitted, all pasted from Manager:
+     · "No signup or obligation." is GONE
+     · the "🌐 https://findable.live/" line and the closing question are NEW
+     · the sign-off is "Paul." not "Paul, Findable"
+   ⛔ Do not restore any of ours. If Meta's reviewer edits so much as a line break in a future
+   version, paste theirs over this - keeping ours because it is what we asked for is exactly the
+   failure this rule exists to stop, and it is the same one that falsified 21 re_engage transcripts.
    ⚠️ THE TRADE IS PLURALISED HERE TOO, and that is not decoration. Every other body in this map
    prints the RAW stored trade while the send prints the normalised one, so a video_template
    transcript reads "for a Plumbers" where the prospect received "for a plumber" - a small, existing
@@ -141,9 +148,12 @@ I checked whether your business was being mentioned too.
 ${u}
 
 It shows exactly what AI sees about your business and where you stand.
-No signup or obligation.
 
-Paul, Findable`;
+🌐 https://findable.live/
+
+Find out how we get you into those searches on our website, or I can explain more here if you'd like?
+
+Paul.`;
 };
 
 /* audit_reply_warm — the WARM audit message (Meta 1509669747584736, approved 2026-09-07). It is
