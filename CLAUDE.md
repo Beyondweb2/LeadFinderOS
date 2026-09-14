@@ -103,10 +103,32 @@ as *possibly describing something deleted*. Grep before you believe it.
 - **£9.99/month hosting** is the product's only recurring charge, live since 2026-09-03. A ticked
   checkout is still `mode: subscription` (one line now, not three): **£99 today, £9.99/month after**.
   Unticked is `mode: payment`.
-- **£49.99/month continuing work is OPTIONAL and COPY-ONLY IN THIS CODEBASE.** A real Stripe price
-  exists (Paul holds it) but it is sent **BY HAND as a Payment Link at week four**, after the
-  customer has seen their results — which is what the site's own copy promises. ⛔ Do not wire it
-  into the checkout: doing so would make that promise false.
+- 🔴 **THE OFFER IS £99 TO START **AND** £29.99 A MONTH. ONE SHAPE, TWO HALVES (2026-09-14).** The
+  £99 covers the measurement, the pages and the work to get them named; the £29.99 keeps them there
+  — more pages every month, replying to their Google reviews, and watching the technical side of
+  their site. It is **automatic and delayed**: a real Stripe subscription
+  (`_shared/delayed-subscription.ts`) starting on the day the claim window closes, which is the
+  four-week results **plus 14 days**.
+  - ⛔ **THIS BULLET SAID "£49.99/month, OPTIONAL and COPY-ONLY, sent BY HAND as a Payment Link"
+    UNTIL 2026-09-14** — wrong price, wrong shape, and wrong about whether code charges it. §0's
+    exact failure: confident prose describing the opposite of what the code does, on the first page
+    anyone reads. The constants were right the whole time (`FINDABLE_MONTHLY_GBP`).
+  - ⛔ **NO SURFACE MAY NAME ONE FIGURE WITHOUT THE OTHER.** The whole product read as a one-off
+    with something bolted on because every screen led with the setup fee: "Pay once" headlined the
+    pricing section, the card showed £99 alone, /terms opened "for the one-off fee", the Stripe
+    receipt said "4-week cycle", and the report told the one customer who also pays hosting that
+    there was "nothing extra to pay". Swept 2026-09-14, both repos, §26.
+  - ⛔ **BINDING COPY COUNTS FROM THE RESULTS, NEVER "week six".** Week six is results + 14 days
+    only when the results land on day 28 — later whenever the replay holds, and **day 56 for RG by
+    contract, whose second payment is week ten.** /terms, /refunds, the pay screen, Stripe and the
+    emails all say "14 days after you get your results". The pricing TIMELINE may say "From week 6"
+    because it states day 28 in the row directly above it.
+  - ⛔ **NEVER CLAIM AN SEO SCORE.** "watch the technical side of your site so nothing slips" is the
+    ceiling and is written into the comments as one: nothing measures a score, and site quality is
+    tested NEGATIVE for being named by AI (§5).
+  - ⚠️ **"Reply to your reviews" is a REAL promise since 2026-09-14** (Paul is doing it) and it
+    needs the client's GBP access. Every surface used to say *help* replying. If that access ever
+    leaves the flow, the word goes back to "help". Asking for a review is still the client's.
 - Audit whether **ChatGPT and Gemini name them** when a customer asks for their trade in their town.
 - Fix what AI reads: pages on **their own site**, a page per service per town, plus consistency in
   the sources the evidence says matter for that trade.
@@ -3075,7 +3097,7 @@ section as the reasoning rather than the current figures.
 | `FINDABLE_SETUP_PRICE_GBP` | **99** — charged and displayed, one-off, everyone |
 | The website build | **included in the £99.** `FINDABLE_WEBSITE_PRICE_ID` is no longer read by `findable-checkout` at all |
 | Hosting | **£9.99/month**, `FINDABLE_HOSTING_PRICE_ID`, the only line the tick now adds |
-| Continuing work | **£49.99/month, OPTIONAL, copy-only here** — a real Stripe price exists but is sent by hand as a Payment Link at week four. No code path bills it |
+| Continuing work | 🔴 **£29.99/month, AUTOMATIC, `FINDABLE_MONTHLY_GBP`** — a delayed Stripe subscription starting on the results + 14 days. ⛔ This row said "£49.99, OPTIONAL, copy-only, no code path bills it" until 2026-09-14; every clause was wrong. §1 |
 | The guarantee | **outcome-conditional**: if the measured number has not gone up at four weeks, they email **within 14 days of their four-week results** and the £99 is refunded (wording of 2026-09-13, §21) |
 
 - ⚠️ **THE SECRET IS NOT DELETED, ONLY UNREAD.** `FINDABLE_WEBSITE_PRICE_ID` still exists in the
@@ -4451,3 +4473,53 @@ elapsed, one run exists" and both post run 2. Measured: **0 duplicate (audit_id,
   the ceiling, not by the number of runs.
 - ✅ **Apify cost is per question** ($0.0125 budgeted, $0.01155 measured), so firing together costs
   exactly what firing apart costs. There is no spend argument in either direction.
+
+---
+
+## 26. ✅ THE PRICE IS ONE SHAPE WITH TWO HALVES — swept both repos (2026-09-14)
+
+**£99 to start, then £29.99 a month.** The machinery had been right since 09-13; the WORDS had not,
+and every one of them was defensible alone. Together the site and the documents sold a one-off.
+§1's first section carries the rule; this is what moved and what it cost.
+
+- **findable-site:** the pricing heading ("Pay once." → the price, with the refund condition moved
+  down into the guarantee band that already carries it word for word); the card (both figures, and
+  `OFFER_COPY[1]` inside it saying what each half buys); a fourth timeline row; hosting back on the
+  page; the FAB on every page ("Sign up · £99" → both figures); two FAQ answers; HowItWorks' "One
+  project, start to finish."; /terms' "For the one-off fee we:"; /refunds' opening sentence; the pay
+  screen's "What you pay" block.
+- **LeadFinderOS:** `CARD_SAVED_NOTICE` (one string, shown by BOTH Stripe as its submit message and
+  findable.live on its own pre-pay screen); the Stripe **product name** on the receipt; the report's
+  only price sentence; the welcome pack, which had said nothing about the monthly at all.
+- ⛔ **THE PAY SCREEN'S TICK LIST IS TWO LISTS NOW**, under "In your £99" and "In your £29.99 a
+  month". Eight ticks under one figure meant three of them — the monthly's work — read as things
+  the setup fee had already bought. "Help getting more Google reviews" LEFT the setup list rather
+  than being copied down: keeping a weaker version above the real promise would sell the reviews
+  work twice, once in each column.
+- 🔴 **`FINDABLE_MONTHLY_GBP` MOVED TO THE TOP OF `findableOffer.ts`, AND THAT IS STRUCTURAL.**
+  `CARD_SAVED_NOTICE` interpolates it, and a `const` referenced before its declaration throws
+  **ReferenceError at module load** — in this file that is the checkout, not a screen. Third TDZ
+  bite recorded in this repo.
+- 🔴 **THREE FUNCTIONS FAILED TO DEPLOY ON A PRE-EXISTING FAULT, AND NOTHING LOCAL COULD SEE IT.**
+  `src/lib/deliveryCockpit.ts` imported `'./findableOffer'` with no extension; tsc, `npm run build`
+  and all 103 suites resolve that happily, so the gate read green and only the bundler said
+  *Module not found … Maybe add a '.ts' extension*. **stripe-webhook, process-ai-audit-queue and
+  render-remeasure-results sat on their previous version while `main` looked correct.** Fixed, and
+  the closure re-swept: it was the ONLY extensionless relative import reachable from any edge
+  entrypoint. The others in `src/lib` are SPA-only.
+  ⚠️ **The sweep is worth re-running after any change that adds a file to an edge closure** — walk
+  `from "./…"` from each `index.ts` and flag anything without `.ts`.
+- ⚠️ **A NEGATIVE STRING CHECK WAS MY OWN CHECK'S FAULT, AGAIN.** The report's new line asserted
+  false on five live documents because the source wraps mid-sentence and the served HTML carries a
+  newline where my needle had a space. §4's rule, still earning its place: **normalise whitespace
+  before believing a missing marker.** Proven live afterwards on all five.
+- **Deployed:** the 13 functions in the changed closure — findable-checkout v54, render-audit-report
+  v101, stripe-webhook v103, process-ai-audit-queue v172, render-remeasure-results v13,
+  findable-onboarding v97, submissions v42, process-whatsapp-queue v132, send-whatsapp-message v91,
+  instantly-push v55, market-view v68, page-generator v54, run-seo-scan v52. findable-site deployed
+  with `npm run deploy` (no CI) and verified live by string on /, /terms, /refunds and the
+  onboarding island.
+- ⚠️ **NOT VERIFIED, AND IT NEEDS A REAL PAYMENT:** `CARD_SAVED_NOTICE` and the new Stripe product
+  name are proven by source and deploy only. Both render on Stripe's own hosted page, which is a
+  JS shell that tells a fetch nothing (§6, §11) — the first real Checkout Session is the proof.
+  The guarantee description is 236 chars against a 222-char proof, so that is the same session.
