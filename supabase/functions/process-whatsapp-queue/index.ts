@@ -120,7 +120,37 @@ const GRAPH_VERSION = "v21.0";
    want MORE than ~200 you must also speed the cron again, and if you drop the cap low the floor-4
    pacing simply spreads fewer sends wider. Lowering the cap alone is always safe.
    ⚠️ The reply-path-eats-the-budget point below still stands, with more room now (200 not 120). */
-const DAILY_CAP = 200;
+/* ✅ 200 → 400 ON 2026-09-14, AND AGAIN ALL THREE NUMBERS MOVE TOGETHER OR NOTHING CHANGES.
+   The note above is the second time this was learned; this is the third. Re-simulated 5,000 days
+   against the real formula before changing anything, and the model reproduces every figure already
+   recorded here (cap 200 / floor 3 / cron 10 → 87.0; floor 10 on a 4-min cron → 73), which is what
+   makes the new rows trustworthy:
+       cap 400, floor 3, cron 4   → 218/day   the GRID binds (217 ticks), floor irrelevant
+       cap 400, floor 1, cron 4   → 218/day   identical — proving the floor was NOT what bound
+       cap 400, floor 1, cron 3   → 290/day   grid again
+       cap 400, floor 1, cron 2   → 364/day   rounding loss: a jittered 3-min gap waits for +4
+       cap 400, floor 1, cron 1   → 399/day   cap reached on 4.7% of days
+   ⛔ SO ONLY A ONE-MINUTE CRON REACHES 400. The target gap is 870/399 ≈ 2.18 min, so any grid
+   coarser than that is the ceiling no matter what this constant says — raising the cap alone moves
+   the number from 175 to 218 and stops. That is the same mistake as raising a cap on something
+   stuck at 3, which is why it was simulated rather than argued.
+   ⛔ AND THE FLOOR HAD TO GO TO 1. At a 1-minute grid a floor of 2 clamps the 2.18 target upward and
+   gives ~334/day; at 1 every integer gap lands exactly on a tick and nothing is lost to rounding.
+   The floor must never exceed the target gap, and the grid must never exceed it either.
+   ⚠️ THE PACING IS UNTOUCHED AND MUST STAY SO. baseGap = minutesUntilWindowEnd()/(cap - sentToday)
+   is what stops the queue dumping a day's sends in an hour; 400 simply makes it aim at 2.18 min
+   instead of 4.37. The queue still spreads whatever the cap is across the window.
+   🔴 THE CAP IS NOT THE BINDING CONSTRAINT TODAY AND THIS NUMBER WILL NOT CHANGE THAT BY ITSELF.
+   Measured over the 14 days to 2026-09-14: 42.4 sends/day on the 7-day mean, best day 109, against
+   a cap of 200 the queue never approached. The queue is SUPPLY-limited — eligible leads with a
+   completed audit — not cap-limited. 400 raises the ceiling; it does not fill the queue.
+   🔴 AND THE APIFY BUDGET IS A HARDER LIMIT THAN META'S. A hook audit costs $0.0329 (measured over
+   120 billed runs, purpose='audit', 1 run each), so 400 sends/day ≈ $13.16/day of Apify. On
+   2026-09-14 the cycle had $141.42 left with 20 days to run: that is 10.7 days at 400/day, i.e. dry
+   nine days before the cycle resets. Budget-neutral for the whole cycle is ~215/day. Paul's call —
+   recorded so the number is not rediscovered when audits start failing 402 (the 2026-07-30
+   incident). */
+const DAILY_CAP = 400;
 /* ══ THE SEND GAP ═══════════════════════════════════════════════════════════════════════
    ⚠️ THESE WERE BARE LITERALS INSIDE THE PACING EXPRESSION. The floor in particular — the single
    number that decided real throughput for months — had no name, so nothing could reference it, no
@@ -164,7 +194,15 @@ const DAILY_CAP = 200;
    there is always a ready lead within reach whenever one exists. */
 const QUEUE_LOOKAHEAD = 10;
 
-const SEND_GAP_FLOOR_MIN = 3;
+/* ⛔ 3 → 1 ON 2026-09-14, WITH DAILY_CAP → 400 AND THE CRON → EVERY MINUTE. See the DAILY_CAP note
+   for the simulation. The rule that decides this constant has not changed since it was written:
+   THE FLOOR MUST SIT BELOW THE GRID, or a target gap rounds up to the tick after next and the lane
+   paces at two grid steps. At a 1-minute cron a floor of 1 IS the grid, and because gaps are whole
+   minutes every one of them lands exactly on a tick — so nothing is lost to rounding, which is why
+   1 gets 399/day where 2 gets ~334. ⚠️ 1 is the floor of the floor: pg_cron cannot go below a
+   minute, so there is no faster grid to sit under. If more throughput is ever wanted, this is not
+   the lever — the WINDOW is (870 minutes today). */
+const SEND_GAP_FLOOR_MIN = 1;
 const SEND_GAP_CEILING_MIN = 180;
 const SEND_GAP_JITTER_LOW = 0.55;
 const SEND_GAP_JITTER_HIGH = 1.65;
