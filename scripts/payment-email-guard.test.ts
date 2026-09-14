@@ -79,5 +79,40 @@ ok(/from: FROM_OPERATOR,/.test(src), 'the PAID email reads FROM_OPERATOR');
 ok(/const FROM_OPERATOR = "Findable alerts <alerts@findable\.live>";/.test(src),
    'which is the verified domain, not the retired lead-finder-app.com');
 
+console.log('\n-- a LINKED payment can never produce a no-lead subject --');
+/* 🔴 THE FAULT THIS PINS (2026-09-14). The subject read `opts.note ? " (NOT LINKED)" : ""` — one tag
+   inferred from whether ANY note existed, while `note` carries two unrelated things: a payment with
+   no CRM lead, and a linked payment whose post-payment details are outstanding. The second is the
+   NORMAL state of every first payment, so every real customer's PAID email was subject-tagged as
+   unlinked when it was linked perfectly well. A tag describing a different condition from the one
+   that produced it is worse than no tag. */
+ok(/subject: `PAID \$\{amount\} — \$\{name\}\$\{opts\.noLead \? " \(NO LEAD\)" : ""\}`/.test(src),
+   'the tag reads opts.noLead, its own fact');
+ok(!/opts\.note \? " \(NOT LINKED\)"/.test(src),
+   'it is NOT inferred from whether a note exists');
+ok(/noLead: !findableLeadId,/.test(src),
+   'and the caller sets it from the lead id alone — linked means no tag, always');
+ok(/noLead\?: boolean;/.test(src), 'it is a declared field, not a stringly-typed guess');
+
+console.log('\n-- the outstanding test matches the rules that actually gate delivery --');
+/* 🔴 business_address WAS REMOVED FROM THE QUESTIONNAIRE ON 2026-08-22 (a paying customer was
+   trapped hand-typing an address on mobile); it is collected at delivery instead, so it is null at
+   the moment of EVERY payment by design. Testing for it fired "details not yet collected" on every
+   real first payment — and dragged the subject tag along with it.
+   ⛔ needsQ2() is `has(confirmed_location) && has(services)` and startPaidBaseline waits on exactly
+   those two. All three must agree, or this email contradicts the dashboard and the measurement
+   about the same customer. */
+const outstandingLine = src.match(/const outstanding = [^;]+;/)?.[0] ?? '';
+ok(outstandingLine.length > 0, `the outstanding test was found (${JSON.stringify(outstandingLine)})`);
+ok(!/business_address/.test(outstandingLine),
+   'it no longer requires business_address — a field the product stopped collecting');
+ok(/confirmed_location/.test(outstandingLine) && /services/.test(outstandingLine),
+   'it requires town and services, the two startPaidBaseline waits for');
+/* And the SELECT must not fetch what the test no longer reads — a column named in a query is the
+   next person's evidence that it still matters. */
+ok(!/\.select\("confirmed_location, services, business_address"\)/.test(src),
+   'and the select stops asking for it too');
+
+
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);
 if (f > 0) process.exit(1);
