@@ -148,6 +148,18 @@ const DAILY_CAP = 200;
    always near 10-minute marks whatever this band is; what the band varies is HOW MANY ticks are
    skipped between sends, which is what stops a visible fixed cadence. Widening it further would not
    change the first fact. */
+/* ⛔ HOW FAR PAST A NOT-READY LEAD THE DRIP MAY LOOK (2026-09-14). The queue is strict FIFO and
+   sends ONE lead per tick; before this, a lead whose audit was still running returned the WHOLE
+   tick, so every lead behind it waited too — including ones whose audits had finished an hour
+   earlier. Measured that day: 40 leads queued, 11 audits run, 6+ complete, and TWO messages sent in
+   68 minutes. Throughput was one send per audit-completion, serialised, not one per tick.
+   ⚠️ A LOOK-AHEAD, NOT A REORDERING. The queue order never changes: the oldest lead is still
+   examined first on every single tick, and the moment its audit is ready it sends. Skipping is what
+   this tick does when the head is not ready, not a position the head loses.
+   ⚠️ Bounded because each candidate costs a read. Ten is far more than the concurrency cap of 3, so
+   there is always a ready lead within reach whenever one exists. */
+const QUEUE_LOOKAHEAD = 10;
+
 const SEND_GAP_FLOOR_MIN = 3;
 const SEND_GAP_CEILING_MIN = 180;
 const SEND_GAP_JITTER_LOW = 0.55;
@@ -1051,7 +1063,7 @@ Deno.serve(async (req) => {
        has never been checked (null note), OR its note is transient. Only settled-unverifiable is
        held. It stays status='queued' (like archived), visible via the count above and the row
        badge, and re-enters the drip the moment its town verifies. */
-    const { data: lead } = await service
+    const { data: leadRows } = await service
       .from("outreach_leads")
       .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id")
       .eq("status", "queued")
@@ -1059,8 +1071,51 @@ Deno.serve(async (req) => {
       .not("phone", "is", null)
       .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
       .order("queued_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      .limit(QUEUE_LOOKAHEAD);
+
+    /* ══ WHICH OF THEM SENDS THIS TICK ═══════════════════════════════════════════════════════════
+       🔴 THE BLOCK THIS REPLACES. A lead whose audit was not ready returned the entire tick, so a
+       40-deep queue drained at one send per audit-completion instead of one per tick — six leads
+       with finished audits sat behind one that was still running.
+
+       ⛔ SKIPPING IS NOT DROPPING, and that distinction is the September fix this must not undo.
+       A skipped lead is simply NOT CHOSEN this tick: nothing is written, its status stays 'queued',
+       its queued_at is untouched, and it is examined again — first, because it is oldest — on the
+       very next tick. The only path that changes a lead's status is the existing stale branch
+       below, which is reached exactly as often as it was before.
+
+       ⛔ AND SKIPPING CANNOT STARVE THE HEAD, because this is a per-tick fallback rather than a
+       reordering. The oldest lead is re-examined at the top of EVERY tick and wins the moment its
+       audit completes; it is never marked, deprioritised or remembered as skipped. Its worst case
+       is unchanged: `decideOutreachAudit` stops returning wait/start once the audit passes
+       OUTREACH_AUDIT_STALE_MS, and it is then dequeued with its reason — the same bound as before.
+       ⚠️ WHICH IS WHY THE FALLBACK IS THE HEAD, NOT "nothing". If no candidate is sendable we
+       deliberately proceed with the OLDEST lead so the existing branch can decide between waiting
+       and dropping it. Returning early here instead would mean a permanently wedged head is never
+       re-evaluated and never dequeued — starvation introduced by the fix for starvation. */
+    const candidates = (leadRows ?? []) as Array<Record<string, unknown>>;
+    let lead: Record<string, unknown> | null = candidates[0] ?? null;
+    let skippedForAudit = 0;
+    if (candidates.length > 1) {
+      /* ONE batched read for the whole look-ahead, not one per candidate. */
+      const states = await readAuditStates(service, candidates.map((c) => String(c.id)));
+      for (const c of candidates) {
+        const vars = TEMPLATES[String(c.whatsapp_template ?? "")]?.vars;
+        if (!templateNeedsAudit(vars)) { lead = c; break; }   // nothing to wait for
+        /* ⚠️ THE TEST IS `completedAt` ALONE, NOT decideOutreachAudit. Its completed-audit branch
+           returns start:false/wait:false unconditionally, so the answer would be identical — but it
+           also reads search_keyword, category, search_location, address and website, none of which
+           this query selects. Calling it here would judge a lead on fields that are `undefined`
+           because of the SELECT rather than because of the data: the exact trap the prefill note in
+           findable-onboarding records. The send path re-derives everything properly for whichever
+           lead is chosen. */
+        if (states.get(String(c.id))?.completedAt) { lead = c; break; }
+        skippedForAudit++;
+      }
+      if (skippedForAudit > 0) {
+        console.log(`[queue] looked past ${skippedForAudit} lead(s) waiting on an audit; they stay queued and are re-examined next tick`);
+      }
+    }
     /* "empty_queue", "nothing left but archived leads" and "nothing left but unverifiable towns"
        are different facts, so they get different skip codes. Without this, pulling 17 leads out of
        the queue by archiving them would look identical to having genuinely finished the list. */
