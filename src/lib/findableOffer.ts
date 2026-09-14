@@ -35,6 +35,24 @@
  *  change the other. */
 export const FINDABLE_SETUP_PRICE_GBP = 99;
 
+/** 🔴 THE MONTHLY. The offer is £99 to start AND £29.99 a month — one shape, not a one-off with
+ *  something bolted on afterwards (Paul, 2026-09-14). Every surface that names the price names
+ *  both figures now; a line that quotes only the setup fee understates what the customer pays.
+ *
+ *  It starts on the day the claim window closes: the four-week results plus 14 days, which is
+ *  monthlyStartIso === claimWindowCloseIso in remeasureResults.ts — ONE function, so the charge
+ *  cannot drift from the entitlement.
+ *  ⛔ WHICH IS WHY BINDING COPY SAYS "14 days after you get your results" AND NEVER "week six".
+ *  Week six is results + 14 days ONLY when the results land on day 28. They land later whenever
+ *  the replay holds, and day 56 for RG by contract, whose second payment is therefore week ten.
+ *  "From week 6" is allowed in the marketing TIMELINE, where day 28 is the stated case directly
+ *  above it; terms, refunds, the pay screen, Stripe and the emails count from the results.
+ *
+ *  ⚠️ DECLARED HERE, ABOVE CARD_SAVED_NOTICE, AND THAT IS STRUCTURAL. That constant interpolates
+ *  this one, and a const referenced before its declaration throws ReferenceError at module load —
+ *  which in this file would take down the checkout, not a screen. It used to live at the bottom. */
+export const FINDABLE_MONTHLY_GBP = 29.99;
+
 /* The guarantee, WORK-based: we promise the audit, the work and the re-measurement, never the
    outcome. Anywhere this sentence is shown to a client must render it from this constant, not a
    local copy — three hardcoded copies drifted apart once already.
@@ -252,11 +270,11 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
    ⚠️ IT NAMES WHAT IS TAKEN TODAY AND WHAT IS NOT. "Nothing else is taken until after you have seen
    your four-week results" is the whole promise; a vaguer line ("we may charge you later") would be
    true and useless. ⛔ Do not add the word "maintain" to this or anything downstream of it. */
+/* 🔴 IT NAMES BOTH FIGURES NOW (2026-09-14). It said "You pay £99 today" and then described the
+   monthly without ever pricing it, on the one screen where somebody enters a card — so the only
+   number in front of them at the moment they pay was the smaller half of what they owe. */
 export const CARD_SAVED_NOTICE =
-  "You pay £99 today. We keep your card on file so your monthly can start later — nothing else is taken until after you have seen your four-week results, and you can cancel before it does.";
-
-/** The delayed monthly. Starts on the day the claim window closes, never before. */
-export const FINDABLE_MONTHLY_GBP = 29.99;
+  `You pay £${FINDABLE_SETUP_PRICE_GBP} today and £${FINDABLE_MONTHLY_GBP} a month after that. We keep your card on file so the monthly can start later — nothing else is taken until after you have seen your four-week results, and you can cancel before it does.`;
 
 export const FINDABLE_CONTACT_EMAIL = "paul@move37.fun";
 

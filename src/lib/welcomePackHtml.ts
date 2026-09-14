@@ -1,5 +1,6 @@
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml';
-import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, findableContactPhoneDisplay,
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
+  FINDABLE_SETUP_PRICE_GBP, findableContactPhoneDisplay,
   GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
@@ -221,6 +222,9 @@ function planPage1(name: string): string {
         <p class="wp-boxtitle">Timeline &amp; guarantee</p>
         ${lead('Timeline.', 'The work goes live in the first few weeks. AI tools take a little time to re-read the web, so we re-measure at four weeks from your starting point, on the same questions and the same engines, and send you a clear before-and-after.')}
         ${lead('Guarantee.', esc(FINDABLE_GUARANTEE))}
+        ${/* ⚠️ lead() ESCAPES ITS SECOND ARGUMENT, so this string uses real characters and never
+              HTML entities — "&pound;" here would print those six letters to a paying client. */''}
+        ${lead('What happens next.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the pages and the work to get you named. Fourteen days after we send your four week results, £${FINDABLE_MONTHLY_GBP} a month begins — that is the work that keeps you there: more pages every month, your reviews replied to, and an eye on the technical side of your site. We will email you before it starts, and you can stop it any time.`)}
       </div>`;
 }
 
