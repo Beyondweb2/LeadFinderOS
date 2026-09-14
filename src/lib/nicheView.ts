@@ -53,6 +53,43 @@ export interface NicheSourceSplit {
   total: number;
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   SLOTS — THE THING THIS SCREEN IS ACTUALLY FOR.
+
+   🔴 THE OLD VERDICT ANSWERED THE WRONG QUESTION. It graded a niche on NAMED RATES and an
+   open/locked split, and its "harder" branch fired whenever no engine was naming these businesses
+   almost never (NICHE_ABSENT_MAX_RATE). Electricians came back "harder — ChatGPT already names
+   them 64.4%" — quoting the engine pages cannot move, purely because it was the biggest number
+   on the row.
+
+   ⛔ YOU DO NOT HAVE TO WIN. AI returns a HANDFUL of businesses per answer and a client only has
+   to be one of them. Measured across every churn-readable question on file: 3.6–5.0 names come
+   back per answer and only 1.3–2.2 of them are the SAME FIRM EVERY RUN. One firm named every
+   time still leaves three slots, and if those three rotate between runs they are winnable.
+   "Is somebody winning" was never the test.
+
+   ⛔ FREE SLOTS = names per answer − names held every run. Measured on GEMINI, and that is not a
+   preference borrowed from one client: across the book Gemini returns 3.7 names and holds 1.3,
+   against ChatGPT's 5.2 and 2.4 — HALF the entrenchment. So the engine the work can move (§5:
+   Gemini reads businesses' own sites) is also the engine with the loosest slots. Two independent
+   reasons pointing the same way.
+
+   ⚠️ IT NEEDS REPEAT RUNS AND MOST QUESTIONS DO NOT HAVE THEM. A question asked once cannot show
+   churn at all: only 439 of 6,179 question×engine buckets on file (7.1%) are readable. That is
+   why `readableQuestions` rides with the numbers and why the verdict has a FOURTH state — see
+   NicheSlotVerdict.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+export interface NicheSlotStats {
+  engine: string;
+  label: string;
+  /** Questions with 2+ runs on this engine — the only ones churn can be read from. */
+  readableQuestions: number;
+  /** Mean distinct firms returned per answer. */
+  namesPerAnswer: number;
+  /** Mean firms appearing in EVERY run of their question — the entrenched holders. */
+  heldEveryRun: number;
+}
+
 export interface NicheTopDomain { domain: string; count: number }
 
 export interface NicheTownRow {
@@ -77,6 +114,8 @@ export interface NicheAnalysis {
   engines: NicheEngineStats[];
   winnability: Record<string, number>;   // open/named/contested/locked/no_local_race/unmeasured → question counts
   sources: NicheSourceSplit[];
+  /** Per engine, present only where 2+ runs exist. Absent engine → unmeasurable, never zero. */
+  slots?: NicheSlotStats[];
   topDomains: Record<string, NicheTopDomain[]>;   // per engine, most-cited first
   towns: NicheTownRow[];
   marketAudits: number;         // market audits of this trade (NOT folded into the numbers — Phase 2 intel)
@@ -158,6 +197,26 @@ export const NICHE_LOCKED_HEAVY = 0.15;
 export type NicheTier = 'measured' | 'indicative' | 'unmeasured';
 export type NicheVerdictKind = 'worth_outreach' | 'mixed' | 'avoid' | 'no_verdict';
 
+/* ⛔ FREE SLOTS ON GEMINI, and the thresholds are read off the book rather than chosen.
+   Measured per trade (names per answer / held every run): electrician 4.0/1.3, locksmith 4.2/1.8,
+   plumber 4.6/2.2, accountant 5.0/2.2. So free slots run ~2.4–2.8 in a live niche and the
+   difference between the loosest and tightest trade is about one slot. Two is "there is room for a
+   client and somebody else"; one is "there is room for exactly one more"; under one means the same
+   handful hold every slot every run. */
+export const SLOTS_WORTH_OUTREACH = 2;
+export const SLOTS_TIGHT = 1;
+
+/* ⛔ THE CONFIDENCE FLOOR, AND IT IS NOT OPTIONAL. Only 7.1% of question×engine buckets on file are
+   churn-readable — a question asked once says nothing about churn. Below this many readable
+   questions the verdict is NOT "tight", it is UNKNOWN, and the two must never be confusable: a
+   soft-looking "tight" on unmeasured data is how outreach goes into a niche nobody has read.
+   ⚠️ 8 is two 4-question audits' worth of repeat data, deliberately low enough to be reachable and
+   high enough that one odd audit cannot carry a niche. */
+export const SLOTS_MIN_READABLE_QUESTIONS = 8;
+
+/** The engine the work can actually move (§5), and the one with half ChatGPT's entrenchment. */
+export const SLOT_ENGINE = 'gemini';
+
 export interface NicheVerdict {
   tier: NicheTier;
   kind: NicheVerdictKind;
@@ -227,30 +286,62 @@ export function nicheVerdict(n: NicheAnalysis): NicheVerdict {
   }
   const engineStory = storyBits.length ? storyBits.join('; ') + '.' : 'No engine shows a clear gap or a clear presence in this data.';
 
-  // ── the decision ──
+  /* ── THE DECISION: FREE SLOTS ─────────────────────────────────────────────────────────────
+     🔴 THIS REPLACED A NAMED-RATE LADDER on 2026-09-14. The old one graded a niche on how often
+     these businesses are named and fired "harder — ChatGPT already names them 64.4%" whenever no
+     engine sat below a 15% absence bar. It quoted the engine pages cannot move, and it asked
+     whether somebody was winning — which is not the question. A client does not need to win; AI
+     returns a handful of names and they need to be one of them.
+     ⛔ openShare / lockedShare SURVIVE AS SUPPORTING DETAIL ONLY (they are still in `reasons`).
+     They measure whether questions have a clear answer, not whether the slots rotate, so they
+     cannot carry this verdict. */
+  const slotStats = (n.slots ?? []).find((x) => x.engine === SLOT_ENGINE) ?? null;
+  const freeSlots = slotStats ? slotStats.namesPerAnswer - slotStats.heldEveryRun : null;
+  const slotsReadable = !!slotStats && slotStats.readableQuestions >= SLOTS_MIN_READABLE_QUESTIONS;
+
   let kind: NicheVerdictKind; let headline: string;
+  /* ⛔ SPREAD BEFORE SLOTS. A "niche" of one business in one town can still carry repeat-run
+     questions, and the slot read would then hand back a confident verdict about a single company —
+     which is a market read wearing a niche's clothes. The tier gate is about whether this is a
+     NICHE at all, so it has to answer first. Caught by the existing tier tests when the slot
+     branch was put in front of them. */
   if (tier === 'unmeasured') {
     kind = 'no_verdict';
-    headline = `Not enough spread to judge ${n.trade} as a niche — ${s.businesses} business${s.businesses === 1 ? '' : 'es'} across ${s.towns} town${s.towns === 1 ? '' : 's'}.`;
-  } else if (lockedShare >= NICHE_LOCKED_HEAVY) {
-    kind = 'avoid';
-    headline = `${n.trade}: not worth mass outreach — ${Math.round(100 * lockedShare)}% of questions are locked up by incumbents.`;
-  } else if (openShare < NICHE_OPEN_WEAK) {
-    kind = 'avoid';
-    headline = `${n.trade}: not worth mass outreach — only ${Math.round(100 * openShare)}% of ${questions} questions are open.`;
-  } else if (opportunity && openShare >= NICHE_OPEN_STRONG) {
-    kind = 'worth_outreach';
-    headline = `${n.trade}: worth outreach — open on ${opportunity.label}, and pages are the lever.`;
-  } else if (opportunity) {
-    kind = 'mixed';
-    headline = `${n.trade}: mixed — there's room on ${opportunity.label}, but only ${Math.round(100 * openShare)}% of questions are open.`;
+    headline = `${n.trade}: not enough spread to read as a niche — ${s.businesses} business${s.businesses === 1 ? '' : 'es'} across ${s.towns} town${s.towns === 1 ? '' : 's'}.`;
+  } else if (slotsReadable && slotStats && freeSlots !== null) {
+    const names = Math.round(slotStats.namesPerAnswer);
+    const held = Math.round(slotStats.heldEveryRun);
+    /* ⛔ THE DISPLAYED NUMBER MUST NOT CONTRADICT THE VERDICT, and rounding made it do exactly
+       that: mobile mechanics have 0.6 free slots, which rounded to "about 1 slot" and then sat
+       beside "Avoid — the same firms hold every slot". A reader cannot be expected to trust a
+       screen whose sentence argues with its own conclusion. Below the outreach bar the number is
+       shown to one decimal, where it reads as the small fraction it is. */
+    const free = freeSlots >= SLOTS_WORTH_OUTREACH ? String(Math.round(freeSlots)) : freeSlots.toFixed(1);
+    const freeIsOne = free === '1' || free === '1.0';
+    /* The sentence names the count, the holders and the room, in that order, because that is the
+       order the decision is made in: how many seats, how many are taken for good, what is left. */
+    const lead = `${n.trade}: AI names ${names} business${names === 1 ? '' : 'es'} per answer and `
+      + `${held === 0 ? 'none are' : held === 1 ? 'only 1 is' : `${held} are`} the same firm every time — `
+      + `about ${free} slot${freeIsOne ? ' rotates' : 's rotate'} on ${slotStats.label}, the engine pages move.`;
+    if (freeSlots >= SLOTS_WORTH_OUTREACH) { kind = 'worth_outreach'; headline = `${lead} Worth outreach.`; }
+    else if (freeSlots >= SLOTS_TIGHT) { kind = 'mixed'; headline = `${lead} Tight.`; }
+    else { kind = 'avoid'; headline = `${lead} Avoid — the same firms hold every slot.`; }
   } else {
-    /* No engine clears the absence bar — the niche is not locked, but there is no clear page lever
-       either. Say THAT, rather than claiming they are "named everywhere" (which would overstate a
-       middling rate like Gemini's 16% on locksmiths). */
-    kind = 'mixed';
-    const best = strongest ? `${strongest.label} already names them ${rateLabel(strongest.named, strongest.answered)}` : 'no engine shows a gap';
-    headline = `${n.trade}: harder — no engine shows a clear gap (${best}), with ${Math.round(100 * openShare)}% of questions open.`;
+    /* ⛔ NOT READABLE IS ITS OWN VERDICT, AND IT MUST NOT READ AS A SOFT "TIGHT". Only 7.1% of
+       question×engine buckets on file carry repeat runs, so this is the HONEST DEFAULT for most
+       niches — and the one state where sending outreach would be acting on nothing. It is
+       `no_verdict`, which NichePanel renders in its own neutral style, never in the amber of a
+       measured-but-tight niche.
+       🔴 THE NAMED-RATE LADDER THAT USED TO LIVE HERE IS GONE. It produced "harder — no engine
+       shows a clear gap (ChatGPT already names them 64.4%)" for Electricians — a confident-sounding
+       verdict, built on the engine the work cannot move, about a question nobody asked. A screen
+       that says nothing is better than one that says the wrong thing with a number attached. */
+    kind = 'no_verdict';
+    const why = slotStats
+        ? `only ${slotStats.readableQuestions} question${slotStats.readableQuestions === 1 ? '' : 's'} have been asked more than once (need ${SLOTS_MIN_READABLE_QUESTIONS})`
+        : 'no question here has been asked more than once';
+    headline = `${n.trade}: not enough repeat data to say whether there are free slots — ${why}. `
+      + `Run 3-run baselines on 2-3 businesses in this niche (~30p each) and this answers itself.`;
   }
 
   const tierNote = tier === 'measured'

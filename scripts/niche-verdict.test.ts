@@ -25,6 +25,9 @@ const plumbers = (over: Partial<NicheAnalysis['sample']> = {}, winOver: Record<s
     { engine: 'ai_overview', label: 'Google AI Overview', directory: 136, ownSite: 5, authority: 8, other: 176, total: 325 },
   ],
   topDomains: {}, towns: [], marketAudits: 6,
+  /* Measured off every clean fold on file (the churn sweep): Gemini returns 4.6 names per answer
+     for plumbers and 2.2 of them are the same firm every run — 2.4 free slots. */
+  slots: [{ engine: 'gemini', label: 'Gemini', readableQuestions: 110, namesPerAnswer: 4.6, heldEveryRun: 2.2 }],
 });
 
 console.log('── THE PLUMBER VERDICT (the niche analysed by hand) ──');
@@ -34,9 +37,14 @@ console.log('── THE PLUMBER VERDICT (the niche analysed by hand) ──');
   console.log(`   story   : ${v.engineStory}`);
   console.log(`   tier    : ${v.tier} — ${v.tierNote.slice(0, 80)}…`);
   ok(v.tier === 'indicative', `plumbers -> INDICATIVE (35 of 337 questions repeat-run, under the ${Math.round(100 * NICHE_CONFIRM_MIN_MULTIRUN_SHARE)}% bar)`);
-  ok(v.kind === 'worth_outreach', 'plumbers -> WORTH OUTREACH (77% open + a Gemini gap)');
+  ok(v.kind === 'worth_outreach', 'plumbers -> WORTH OUTREACH (2.4 free slots on Gemini)');
   ok(v.opportunityEngine === 'Gemini', 'the opportunity engine is Gemini, not ChatGPT');
   ok(/worth outreach/i.test(v.headline) && /Gemini/.test(v.headline), '  headline names the call AND the engine');
+  /* 🔴 THE HEADLINE IS ABOUT FREE SLOTS NOW. It used to be a named-rate sentence that quoted
+     ChatGPT — the engine pages cannot move — because it was the biggest number on the row. */
+  ok(/2 slots rotate/.test(v.headline), '  and says how many slots are actually free');
+  ok(!/ChatGPT/.test(v.headline), '  the headline never quotes ChatGPT');
+  ok(!/harder/.test(v.headline), '  and the "harder" wording is gone entirely');
   ok(/ChatGPT/.test(v.engineStory) && /director/i.test(v.engineStory), '  story explains the ChatGPT presence is directory-fed');
   ok(/own websites/.test(v.engineStory), '  and that Gemini reads businesses own sites');
   ok(/flip ~18%/.test(v.tierNote) && /30p/.test(v.tierNote), '  tier note carries the honesty label AND the priced upgrade path');
@@ -50,7 +58,9 @@ console.log('── TIER GATING (numbers always shown; only the confident wordin
   ok(nicheVerdict(plumbers({ towns: NICHE_MIN_TOWNS - 1 })).tier === 'unmeasured', 'single town -> UNMEASURED (that is a market read, not a niche)');
   ok(nicheVerdict(plumbers({ cells: 10 })).tier === 'unmeasured', 'too few answers -> UNMEASURED');
   const un = nicheVerdict(plumbers({ businesses: 1, towns: 1 }));
-  ok(un.kind === 'no_verdict' && /Not enough spread/.test(un.headline), '  UNMEASURED refuses a verdict outright');
+  /* ⛔ SPREAD IS CHECKED BEFORE SLOTS: one business in one town can still carry repeat runs, and a
+   confident slot verdict about a single company is a market read wearing a niche's clothes. */
+  ok(un.kind === 'no_verdict' && /not enough spread/i.test(un.headline), '  UNMEASURED refuses a verdict outright, even with readable slots');
   ok(un.reasons.length > 0, '  but STILL shows the numbers');
   ok(un.gaps.length >= 2, '  and itemises what is missing');
   const meas = nicheVerdict(plumbers({ multiRunQuestions: 300 }));
@@ -58,38 +68,38 @@ console.log('── TIER GATING (numbers always shown; only the confident wordin
   ok(!/flip ~18%/.test(meas.tierNote), '  and MEASURED drops the indicative caveat');
 }
 
-console.log('── AVOID / MIXED shapes ──');
+console.log('── THE DECISION: FREE SLOTS, NOT NAMED RATES ──');
 {
-  const locked = nicheVerdict(plumbers({}, { open: 20, locked: 40, named: 100 }));
-  ok(locked.kind === 'avoid' && /not worth mass outreach/i.test(locked.headline), 'locked questions -> AVOID');
-  // Very few open questions -> AVOID even with a Gemini gap (18% open is concentrated).
-  const veryClosed = nicheVerdict(plumbers({}, { open: 60, named: 200, contested: 77 }));
-  ok(veryClosed.kind === 'avoid' && /only 18% of 337 questions are open/.test(veryClosed.headline),
-    'a Gemini gap but only 18% open -> AVOID (open share leads)');
-  // Middling open share (44%) with a Gemini gap -> MIXED, not a confident yes.
-  const midOpen = nicheVerdict(plumbers({}, { open: 150, named: 150, contested: 37 }));
-  ok(midOpen.kind === 'mixed' && /mixed/i.test(midOpen.headline), '44% open + a Gemini gap -> MIXED, not a confident yes');
-  // ⛔ A genuinely locked-up niche needs a locked SHARE, not one locked question (the locksmith fault).
-  const oneLocked = nicheVerdict(plumbers({}, { open: 258, locked: 2, named: 77 }));
-  ok(oneLocked.kind !== 'avoid', '2 locked questions of 337 does NOT condemn a niche (the locksmith fault)');
-  const trulyLocked = nicheVerdict(plumbers({}, { open: 100, locked: 150, named: 87 }));
-  ok(trulyLocked.kind === 'avoid' && /locked up by incumbents/.test(trulyLocked.headline), '45% locked -> AVOID');
-  // No engine clears the absence bar: honest "harder / no clear gap", never "named everywhere".
-  const present = { ...plumbers(), engines: [
-    { engine: 'chatgpt', label: 'ChatGPT', named: 400, answered: 476 },
-    { engine: 'gemini', label: 'Gemini', named: 380, answered: 476 },
-  ] } as NicheAnalysis;
-  const p = nicheVerdict(present);
-  ok(p.kind === 'mixed' && p.opportunityEngine === null && /no engine shows a clear gap/.test(p.headline),
-    'no engine gap -> "harder, no clear gap" with the real rate, never an overstated "named everywhere"');
-  // ⛔ The opportunity engine is only ever ChatGPT/Gemini — never the unscored engines.
-  const organicGap = { ...plumbers(), engines: [
-    { engine: 'chatgpt', label: 'ChatGPT', named: 200, answered: 476 },
-    { engine: 'gemini', label: 'Gemini', named: 300, answered: 476 },
-    { engine: 'google_organic', label: 'Google organic', named: 1, answered: 476 },
-  ] } as NicheAnalysis;
-  ok(nicheVerdict(organicGap).opportunityEngine === null,
-    'an unscored engine (Google organic) is NEVER offered as the opportunity — no evidence pages move it');
+  /* 🔴 EVERY ASSERTION IN THIS BLOCK USED TO PIN THE NAMED-RATE LADDER — "a Gemini gap but only 18%
+     open -> AVOID", "no engine gap -> harder". That rule graded whether somebody was WINNING, which
+     is not the question: AI returns a handful of names and a client only has to be one of them.
+     openShare and lockedShare survive as supporting detail in `reasons`, and nowhere else. */
+  const withSlots = (names: number, held: number, readable = 60) =>
+    nicheVerdict({ ...plumbers(), slots: [{ engine: 'gemini', label: 'Gemini', readableQuestions: readable, namesPerAnswer: names, heldEveryRun: held }] } as NicheAnalysis);
+
+  ok(withSlots(4.0, 1.3).kind === 'worth_outreach', '2.7 free slots -> WORTH OUTREACH (the electrician shape)');
+  ok(withSlots(4.0, 2.6).kind === 'mixed', '1.4 free slots -> TIGHT');
+  ok(withSlots(4.0, 3.4).kind === 'avoid', '0.6 free slots -> AVOID, the same firms hold every slot');
+  ok(/0\.6 slots rotate/.test(withSlots(4.0, 3.4).headline), '  and the number shown agrees with the verdict, not a rounded 1');
+
+  /* ⛔ THE OPEN/LOCKED SPLIT NO LONGER DECIDES ANYTHING. A niche the old rule called AVOID on a
+     locked share is worth outreach if its slots rotate. */
+  const locked = nicheVerdict({ ...plumbers({}, { open: 5, locked: 300 }),
+    slots: [{ engine: 'gemini', label: 'Gemini', readableQuestions: 60, namesPerAnswer: 4.0, heldEveryRun: 1.3 }] } as NicheAnalysis);
+  ok(locked.kind === 'worth_outreach', 'a heavily locked niche with free slots is still worth outreach');
+  ok(locked.reasons.some((r) => /open/.test(r)), '  and the open/locked numbers survive in the reasons');
+
+  /* ⛔ NOT MEASURED IS ITS OWN STATE AND MUST NOT READ AS A SOFT "TIGHT". Only 7.1% of
+     question×engine buckets on file carry the repeat runs a slot read needs, so this is the common
+     case — and the one where acting would mean acting on nothing. */
+  const none = nicheVerdict({ ...plumbers(), slots: [] } as NicheAnalysis);
+  ok(none.kind === 'no_verdict', 'no repeat data -> NO VERDICT, never mixed');
+  ok(/not enough repeat data/.test(none.headline), '  and it says so plainly');
+  ok(/3-run baselines/.test(none.headline), '  with the priced way to fix it');
+  const thin = nicheVerdict({ ...plumbers(),
+    slots: [{ engine: 'gemini', label: 'Gemini', readableQuestions: 3, namesPerAnswer: 4.0, heldEveryRun: 1.2 }] } as NicheAnalysis);
+  ok(thin.kind === 'no_verdict', 'below the readable-question floor -> NO VERDICT');
+  ok(/need 8/.test(thin.headline), '  naming the floor it missed');
 }
 
 console.log('── ABSENT-VALUE GUARDS ──');

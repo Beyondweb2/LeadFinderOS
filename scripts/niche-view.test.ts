@@ -1,6 +1,7 @@
 /* Tests for src/lib/nicheView.ts pure helpers. Run: npx tsx scripts/niche-view.test.ts */
 import { nicheTradeKey, rateLabel, sharePct, resultsBelongToTown } from '../src/lib/nicheView.ts';
 import { townSearchKey, sortLeadsForDisplay } from '../src/lib/nicheView.ts';
+import { nicheVerdict, type NicheAnalysis } from '../src/lib/nicheView.ts';
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -75,4 +76,70 @@ if (f > 0) process.exit(1);
   ok(sorted[2] === 'maybe' && sorted[3] === 'has', `then uncertain, then has-own-site (${sorted.join(',')})`);
   const unknown = sortLeadsForDisplay([L('WEIRD_NEW_STATUS', 'x'), L('NO_WEBSITE', 'n')]).map((l: { name: string }) => l.name);
   ok(unknown[0] === 'n', 'an UNKNOWN status sorts last rather than jumping to the top');
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   FREE SLOTS — the verdict this screen exists for (2026-09-14).
+
+   🔴 IT USED TO GRADE ON NAMED RATES and fired "harder — ChatGPT already names them 64.4%" for
+   Electricians: the engine pages cannot move, quoted because it was the biggest number on the row,
+   answering a question nobody asked. A client does not need to WIN — AI returns a handful of names
+   and they need to be one of them.
+
+   ⛔ MEASURED, NOT CHOSEN. Across every churn-readable question on file, Gemini returns 3.7 names
+   per answer and holds 1.3 every run; ChatGPT returns 5.2 and holds 2.4. So the engine the work
+   moves is also the one with half the entrenchment — the reason to read slots on Gemini comes from
+   the book, not from one client.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+{
+  const base = (trade: string, readable: number, names: number, held: number): NicheAnalysis => ({
+    trade, tradeKey: trade.toLowerCase(),
+    sample: { audits: 40, businesses: 30, towns: 12, questions: 200, cells: 900, multiRunAudits: 4, multiRunQuestions: readable },
+    engines: [{ engine: 'chatgpt', label: 'ChatGPT', named: 400, answered: 600 },
+              { engine: 'gemini', label: 'Gemini', named: 100, answered: 600 }],
+    winnability: { open: 120, locked: 10 },
+    sources: [{ engine: 'gemini', label: 'Gemini', directory: 5, ownSite: 0, authority: 3, other: 60, total: 68 }],
+    topDomains: {}, marketAudits: 0,
+    slots: readable > 0 ? [{ engine: 'gemini', label: 'Gemini', readableQuestions: readable, namesPerAnswer: names, heldEveryRun: held }] : [],
+  } as unknown as NicheAnalysis);
+
+  console.log('\n-- the real trades, from the measured churn --');
+  /* 🔴 THE CASE THAT PROMPTED THIS. Electricians is the LOOSEST trade in the book (1.3 held of 4.0)
+     and the old rule called it "harder". */
+  const elec = nicheVerdict(base('Electricians', 63, 4.0, 1.3));
+  ok(elec.kind === 'worth_outreach', `Electricians reads worth_outreach, not "harder" (${elec.kind})`);
+  ok(/about 3 slots rotate on Gemini/.test(elec.headline), 'and says how many slots rotate');
+  ok(!/ChatGPT/.test(elec.headline), 'the headline never quotes ChatGPT');
+  ok(!/harder/.test(elec.headline), 'and the word "harder" is gone');
+  const plumb = nicheVerdict(base('Plumbers', 110, 4.6, 2.2));
+  ok(plumb.kind === 'worth_outreach', `Plumbers reads worth_outreach (${plumb.kind})`);
+  ok(/about 2 slots rotate/.test(plumb.headline), 'with 2 free slots, not 3');
+
+  console.log('\n-- the tight and closed ends --');
+  ok(nicheVerdict(base('Tilers', 40, 4.0, 2.6)).kind === 'mixed', '1.4 free slots is tight');
+  const shut = nicheVerdict(base('Mobile mechanics', 40, 4.0, 3.4));
+  ok(shut.kind === 'avoid', '0.6 free slots is avoid');
+  /* ⛔ THE NUMBER MUST NOT ARGUE WITH THE VERDICT. Rounding 0.6 to "about 1 slot" put "1 slot
+     rotates" directly beside "the same firms hold every slot". */
+  ok(/0\.6 slots rotate/.test(shut.headline), 'and it shows 0.6, not a rounded 1');
+
+  console.log('\n-- ⛔ NOT MEASURED IS ITS OWN STATE, never a soft "tight" --');
+  /* Only 7.1% of question×engine buckets on file carry repeat runs, so this is the common case. */
+  const none = nicheVerdict(base('Roofers', 0, 0, 0));
+  ok(none.kind === 'no_verdict', 'no repeat data at all → no_verdict, not mixed');
+  ok(/not enough repeat data/.test(none.headline), 'and says so in those words');
+  const thin = nicheVerdict(base('Tilers', 3, 4.1, 1.2));
+  ok(thin.kind === 'no_verdict', `3 readable questions is below the floor → no_verdict (${thin.kind})`);
+  ok(/need 8/.test(thin.headline), 'the headline names the floor it missed');
+  ok(/3-run baselines/.test(thin.headline), 'and what to do about it');
+  /* Plenty of spread but no repeats must STILL refuse: spread is not repetition. */
+  ok(nicheVerdict(base('Roofers', 0, 0, 0)).kind === 'no_verdict', 'a wide but single-run niche is still unmeasured');
+
+  console.log('\n-- openShare / lockedShare are supporting detail, not the verdict --');
+  const locked = base('Locksmiths', 60, 4.2, 1.8);
+  (locked as { winnability: Record<string, number> }).winnability = { open: 5, locked: 200 };
+  ok(nicheVerdict(locked).kind === 'worth_outreach',
+     'a heavily "locked" niche with free slots is still worth outreach — locked measured the wrong thing');
+  ok(nicheVerdict(locked).reasons.some((r) => /open/.test(r)), 'and the open/locked split survives in the reasons');
 }
