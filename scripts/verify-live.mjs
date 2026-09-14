@@ -108,6 +108,13 @@ const TARGETS = [
     present: ['["confirmed_location","services"]'],
   },
   {
+    name: 'SPA · off-trade question flag (Baseline route chunk)',
+    /* The operator Baseline screen is a lazy route, so this string is in ITS chunk and nowhere in
+       the HTML — the case that produced two false "not deployed" reports (§4). */
+    resolve: spaLazy('Baseline'),
+    present: ['Measuring the wrong trade', 'answered this about a different trade'],
+  },
+  {
     name: 'findable.live · hero + pricing card',
     resolve: page(`${SITE}/`),
     present: ['had my report', 'Your second payment is',
