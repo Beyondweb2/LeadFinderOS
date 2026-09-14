@@ -17,6 +17,7 @@ import {
   FIRST_REPLY_MODES,
   FIRST_REPLY_MODE_HINTS,
   FIRST_REPLY_MODE_LABELS,
+  FIRST_REPLY_MODE_QUESTION,
   armStatusFor,
   isStaleAutoReply,
   modeRunsAudit,
@@ -107,7 +108,19 @@ for (const m of FIRST_REPLY_MODES) {
   ok(typeof FIRST_REPLY_MODE_LABELS[m] === 'string' && FIRST_REPLY_MODE_LABELS[m].length > 0, `${m} has a label`);
   ok(typeof FIRST_REPLY_MODE_HINTS[m] === 'string' && FIRST_REPLY_MODE_HINTS[m].length > 0, `${m} has a hint`);
 }
-ok(/send/i.test(FIRST_REPLY_MODE_LABELS.send), 'the sending mode says the word "send" on its face');
+/* ⛔ THE POINT IS THAT THE SENDING MODE LOOKS LIKE SENDING, not that it uses one particular word.
+   Relabelled 2026-09-14 from "Audit + auto-send" to "Audit and reply": the three options read as a
+   global audit switch and were set in good faith to control the outreach QUEUE, which they do not
+   touch. The scope now lives in the question above them (FIRST_REPLY_MODE_QUESTION) and the answers
+   are answers to it — so "reply" carries the sending meaning that "send" used to. */
+ok(/send|repl/i.test(FIRST_REPLY_MODE_LABELS.send),
+   'the sending mode still says on its face that a message goes out');
+/* ⛔ AND THE SCOPE MUST BE ON THE CONTROL. Without it the labels describe an action with no subject,
+   which is exactly how the wrong switch got set. */
+ok(/prospect replies/i.test(FIRST_REPLY_MODE_QUESTION),
+   'the control states WHEN these apply — a reply, not the outreach queue');
+ok(!/send/i.test(FIRST_REPLY_MODE_LABELS.audit_only) && !/send/i.test(FIRST_REPLY_MODE_LABELS.off),
+   'and neither non-sending mode hints at sending');
 ok(!/send/i.test(FIRST_REPLY_MODE_LABELS.audit_only), 'and the audit-only one does not');
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILED`);
