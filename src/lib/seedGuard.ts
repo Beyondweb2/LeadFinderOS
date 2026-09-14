@@ -358,6 +358,93 @@ export function dropOffTrade(
   return { questions: out, rejected };
 }
 
+/* ── TOO MANY WAYS OF ASKING THE SAME THING ───────────────────────────────────────────────────
+   🔴 WHITE SPARKS' FROZEN BASELINE IS 11 OF 12 HEAD TERMS. best / top rated / recommended / local
+   / reliable / affordable / certified / emergency / easy to contact / which-do-people-recommend /
+   the bare term / and one that says "electrician electrician". Twelve adjectives on one question,
+   and that question is the one the refund is judged against and day 28 replays verbatim.
+   AD Locksmithing's, generated the same day, is 5 of 11 — so this is CHANCE, not a broken
+   generator, and the numbers look entirely normal either way. Both are over the cap.
+
+   ⛔ HEAD TERMS ARE MEASURABLY HARDER TO WIN, and the product already says so for market audits:
+   "dominated by directories and comparison sites, unwinnable for a single firm, and prove nothing".
+   Measured across every clean fold on file: head terms are named in 313 of 2,032 answer cells
+   (15.4%), service terms in 1,256 of 5,413 (23.2%).
+
+   ⛔ AND THE SURPLUS IS FAR WORSE THAN THE AVERAGE HEAD TERM. Of the 315 questions a one-third cap
+   would have dropped, ELEVEN were ever named (3.5%), pooled rate 4.7% against 23.2% for the service
+   terms replacing them. This is not a taste rule.
+
+   ⚠️ THE FLOOR OF ONE IS AS IMPORTANT AS THE THIRD. isHeadIntent's own note calls the head term
+   "the single most valuable question in a market — worth asking ONCE and then deliberately not
+   repeating". Capping to zero would delete the query a client most wants to win.
+
+   ⛔ THE TOP-UP CANNOT COME FROM THE FALLBACK TEMPLATES, AND THAT IS THE TRAP IN THIS ONE. Every
+   local template is "best {trade} in {town}", "top rated {trade} in {town}", "most popular…" — they
+   are ALL head terms, so the source the other two guards top up from would reintroduce exactly what
+   this is removing. Intents come from `intentsForTrade`, the hand-maintained trade vocabulary.
+   ⚠️ Which means a trade with no entry falls back to the GENERIC intent list. That is thinner than
+   a real trade's, so the set can come up short rather than be padded with head terms — the same
+   choice dropResearchIntent makes, and the right one: filler is how the LLM playbook happened. */
+
+/** Head terms allowed in a set of `target` questions: a third, never fewer than one. */
+export const headTermCap = (target: number): number => Math.max(1, Math.floor(target / 3));
+
+/**
+ * Hold a generated set to `headTermCap` head terms, topping up from the trade's own intents.
+ *
+ * ⚠️ ORDER IS PRESERVED for everything kept: the model's own ordering is its confidence ranking,
+ * and the questions it put first are the ones it thought most likely. Only the SURPLUS head terms
+ * are removed, from the end.
+ */
+export function capHeadTerms(
+  generated: string[],
+  target: number,
+  businessType: string,
+  town: string,
+): { questions: string[]; dropped: string[]; added: string[] } {
+  const cap = headTermCap(target);
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  const dropped: string[] = [];
+  let heads = 0;
+  for (const raw of generated) {
+    const q = (raw ?? '').trim();
+    if (!q) continue;
+    const key = questionKey(q);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (isHeadIntent(q, businessType)) {
+      if (heads >= cap) { dropped.push(q); continue; }
+      heads++;
+    }
+    kept.push(q);
+  }
+  /* Top up from the trade's real services. Built with the town already in them so they satisfy the
+     town guard that runs after this, and skipped when there is no town to name. */
+  /* ⛔ NOTHING IN, NOTHING OUT. If the generator produced no usable question the caller's job is to
+     fall back to the deterministic templates and, on a total failure, to say so. Inventing a full
+     set out of the trade's intent list here would MASK that — a silent 12-question audit assembled
+     from a hand-written vocabulary, presented as the model's work. Top up a real set; never
+     manufacture one. */
+  const added: string[] = [];
+  if (kept.length > 0 && kept.length < target && town.trim()) {
+    for (const intent of intentsForTrade(businessType)) {
+      if (kept.length >= target) break;
+      const q = `${intent.toLowerCase()} in ${town.trim()}`;
+      const key = questionKey(q);
+      if (seen.has(key)) continue;
+      /* An intent that is itself a head term for this trade would defeat the cap. */
+      if (isHeadIntent(q, businessType) && heads >= cap) continue;
+      if (isHeadIntent(q, businessType)) heads++;
+      seen.add(key);
+      kept.push(q);
+      added.push(q);
+    }
+  }
+  return { questions: kept.slice(0, target), dropped, added };
+}
+
 /* ── A WORD REPEATED BACK TO BACK ─────────────────────────────────────────────────────────────
    🔴 White Sparks' FROZEN baseline contains "electrician electrician in thetford UK". It is one
    string, so dedupeQuestions — which compares whole questions — cannot see it; it is not a
