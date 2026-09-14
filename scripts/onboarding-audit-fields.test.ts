@@ -83,5 +83,28 @@ ok(/\}, \[step, preSubIdx, phase\]\);/.test(flow), 'on the step, the panel AND t
 ok(!/behavior: "smooth"/.test(flow), 'instantly, never smoothly');
 ok(/typeof window === "undefined"/.test(flow), 'and it is SSR-guarded — this is an Astro island');
 
+console.log('\n-- the confirmation line, and it has to actually DO something --');
+/* ⛔ A CONTROL THAT VISIBLY DOES NOTHING IS WORSE THAN NO CONTROL. On the tagged path the trade
+   the audit uses comes from the LEAD, not from this form, so the inline edit only means anything
+   because it is sent AND written back. The town needs no plumbing: confirmed_location is already
+   sent on both paths and outranks everything in pickAuditTown. */
+ok(/We&rsquo;ll check how AI answers for/.test(flow), 'the line states what will be measured');
+ok(/Not right\?/.test(flow), 'with a way out');
+ok(/!askTradeTown && businessType\.trim\(\) && location\.trim\(\)/.test(flow),
+   'shown ONLY when we hold both — otherwise the trade_town panel has already asked');
+/* Flipping askTradeTown would insert a panel EARLIER than the one being read, shifting preSubIdx
+   under the visitor and jumping them backwards mid-sentence. */
+ok(/const \[correctTradeTown, setCorrectTradeTown\] = useState\(false\);/.test(flow),
+   'the reveal is inline state, not a panel insert');
+ok(/business_type_correction: correctTradeTown && businessType\.trim\(\)/.test(flow),
+   'and a typed correction is actually sent');
+const fn2 = read('supabase/functions/findable-onboarding/index.ts');
+ok(/const tradeFix = clip\(a\.business_type_correction, 120\);/.test(fn2), 'the server reads it');
+ok(/\.update\(\{ category: tradeFix/.test(fn2), 'and writes it to category, where the audit reads it');
+/* search_keyword is the record of HOW the lead was found; overwriting it destroys the provenance
+   and makes a mis-filing unauditable afterwards. */
+ok(!/search_keyword: tradeFix/.test(fn2), 'never over search_keyword — that is the provenance');
+ok(/trade corrected by the customer at signup/.test(fn2), 'and the old value goes to notes');
+
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);
 if (f > 0) process.exit(1);
