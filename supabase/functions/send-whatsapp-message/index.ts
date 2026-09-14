@@ -74,7 +74,13 @@ Deno.serve(async (req) => {
     const rawPhone: string = typeof body.phone === "string" ? body.phone : "";
     const leadId: string | null = typeof body.lead_id === "string" && body.lead_id ? body.lead_id : null;
     const text: string = typeof body.body === "string" ? body.body.trim() : "";
-    const templateName: string | null = typeof body.template_name === "string" && body.template_name ? body.template_name : null;
+    /* ⚠️ `let`, and ONLY because a rival-naming template can fall back to video_template when the
+       lead's audit cannot supply three competitor names (src/lib/rivalHook.ts). It is reassigned in
+       exactly one place; everything downstream — the payload, the stored body, the message row —
+       then describes what was ACTUALLY sent, which is the point. */
+    let templateName: string | null = typeof body.template_name === "string" && body.template_name ? body.template_name : null;
+    /* Non-empty only after a fallback, so the operator who pressed send is told what went instead. */
+    let fellBackReason = "";
     // Set by the Inbox ONLY after the operator confirmed a repeat send. Strict === true so a
     // stray truthy value ("false", 1) can't wave the duplicate guard through.
     const allowResend: boolean = body.allow_resend === true;
@@ -268,8 +274,11 @@ Deno.serve(async (req) => {
           return json({ ok: false, error: "phone_already_contacted", template: templateName }, 200);
         }
       }
-      const tvars = WA_TEMPLATES[templateName].vars;
-      const lang = WA_TEMPLATES[templateName].lang;
+      /* ⚠️ `let` for ONE reason: a template that names three competitors and cannot get three falls
+         back to video_template (rivalHookDecision, in the audit branch below). One-way, nothing
+         else reassigns them. */
+      let tvars = WA_TEMPLATES[templateName].vars;
+      let lang = WA_TEMPLATES[templateName].lang;
       /* Refuse before building anything: this template greets by name, so a blank name would send
          "Hi your business, Paul here" - visibly automated in the one message meant to sound human. */
       if (TEMPLATES_NEEDING_REAL_NAME.has(templateName) && !businessName.trim()) {
@@ -336,12 +345,31 @@ Deno.serve(async (req) => {
         }
         const a = await resolveAuditReplyVars(service, resolvedLeadId);
         if (!a.ok) return json({ ok: false, error: "audit_reply_unavailable", reason: a.reason }, 200);
+        /* ⛔ THREE NAMES OR A DIFFERENT MESSAGE (src/lib/rivalHook.ts). Same decision as the drip,
+           from the same leaf, so the two paths cannot fall back to different templates.
+           ⚠️ THE OPERATOR IS TOLD, because on this path a person pressed send and is owed the truth
+           about what went out: `fell_back` comes back with the send and the UI shows it. A silent
+           substitution here would be the worse half of both options — they would believe the
+           competitor message went and never check.
+           ⚠️ `allowResend`'s pitchEverSent check above was keyed to the REQUESTED template and stays
+           that way: it asks "have we already sent THIS message to this lead", and the answer about
+           competitor_hook does not change because today's attempt fell back. The fallback's own
+           once-per-lead protection is the cold-outreach machinery it already lives under. */
+        const rivalCall = rivalHookDecision(templateName, templateNeedsRivals(tvars), a.rivals.length);
+        if (rivalCall.fellBack) {
+          console.warn(`[send-whatsapp-message] ${resolvedLeadId}: ${rivalCall.reason}`);
+          templateName = rivalCall.template;
+          tvars = WA_TEMPLATES[templateName].vars;
+          lang = WA_TEMPLATES[templateName].lang;
+          fellBackReason = rivalCall.reason;
+        }
         /* ⛔ BUILT FROM THE TEMPLATE'S DECLARED VARS - see the identical note in
            process-whatsapp-queue. `needsAudit` is `trade || competitors`, so audit_result_hook
            enters here as well, and a fixed `{ trade, competitors }` would leave its `town` and
            `audit_url` empty (templateBodyParams throws on the latter). */
-        const auditExtra: Record<string, string> = { trade: a.trade };
+        const auditExtra: Record<string, string | string[]> = { trade: a.trade };
         if (tvars.includes("competitors")) auditExtra.competitors = a.competitors;
+        if (templateNeedsRivals(tvars)) auditExtra.rivals = a.rivals;
         if (tvars.includes("town")) auditExtra.town = a.town;
         if (tvars.includes("audit_url")) auditExtra.auditUrl = a.link;
         /* ⛔ THE SAME TRADE/TOWN HOLD AS THE QUEUE (2026-09-12), and it matters MORE here because
@@ -464,12 +492,18 @@ Deno.serve(async (req) => {
       console.error("[send-whatsapp-message] send-audit insert threw (non-blocking):", (e as Error).message);
     }
 
-    // A successful LIVE send of a PITCH-CLASS template (trade/competitors vars — audit_reply today)
+    // A successful LIVE send of a PITCH-CLASS template (a template built from the lead's own audit)
     // moves the lead to report_sent. Forward-only (mirrors the webhook's pattern): never overwrites
     // the interested/paid-class statuses. Free-form texts and openers don't move the pipeline here.
+    /* ⚠️ `trade_plural` HAD TO JOIN THIS TEST, and missing it would have been invisible.
+       competitor_hook declares `trade_plural` rather than `trade`, so a lead sent their report by
+       the new hook would have stayed at its old status while the same lead sent video_template moved
+       to report_sent — two templates delivering the same report, disagreeing about whether it had
+       been delivered. The class is "was this built from the lead's audit", and the variable names
+       are how a template says so. */
     if (env.live && status === "sent" && resolvedLeadId && usedTemplate) {
       const tvars = WA_TEMPLATES[usedTemplate]?.vars ?? [];
-      if (tvars.includes("trade") || tvars.includes("competitors")) {
+      if (tvars.includes("trade") || tvars.includes("trade_plural") || tvars.includes("competitors")) {
         try {
           await service.from("outreach_leads")
             .update({ status: "report_sent" })
@@ -489,6 +523,9 @@ Deno.serve(async (req) => {
       messageId,
       message: inserted ?? null,
       error: sendError,
+      /* Present ONLY after a substitution. The operator pressed send on one template and a different
+         one went out; saying nothing would leave them believing the competitor message had gone. */
+      ...(fellBackReason ? { template: usedTemplate, fell_back: fellBackReason } : {}),
     });
   } catch (e) {
     console.error("[send-whatsapp-message] error:", (e as Error).message);

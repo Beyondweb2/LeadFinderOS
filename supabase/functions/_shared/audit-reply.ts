@@ -8,6 +8,7 @@
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
 import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competitorCleaning.ts";
+import { usableRivals } from "../../../src/lib/rivalHook.ts";
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
 /* ⛔ THE PROSPECT-FACING ORIGIN. findable.live/report/<auditId> — a Pages Function proxy that forces
@@ -23,22 +24,35 @@ const REPORT_SITE_ORIGIN = "https://findable.live";
    "Param text cannot have new-line/tab characters or more than 4 consecutive spaces". The whole
    send fails; nothing is delivered and the lead who just replied hears nothing back.
    It happened four times on 2026-08-12, every one of them the SAME extraction fragment reaching
-   {{2}}: "Checkatrade\n    \n    If" — a competitor name carrying two newlines and eight spaces.
+   {{2}}: "Checkatrade
+    
+    If" — a competitor name carrying two newlines and eight spaces.
    `.trim()` alone could never catch it, because the whitespace is INTERNAL.
 
    ⚠️ COLLAPSE, NOT REJECT. Dropping the name would lose a real competitor ("Checkatrade" IS who AI
    named); collapsing keeps the fact and makes it sendable. A name is a name whether the extractor
    wrapped it across lines or not.
    ⚠️ AND IT IS A GUARD, NOT THE FIX. The extractor should not be emitting multi-line fragments as
-   business names in the first place — that is a separate, larger repair upstream. This sits at the
-   last point before the value becomes a template parameter, so it holds whatever the extractor
-   does. Same collapse is applied in templateBodyParams for every OTHER variable. */
-const collapseWhitespace = (s: string): string => (s ?? "").replace(/\s+/g, " ").trim();
+   business names in the first place — that is a separate, larger repair upstream.
+
+   🔴 THE LOCAL `collapseWhitespace` HELPER IS GONE (2026-09-14) AND THE RULE IS NOT. It lived here
+   and was applied to ONE variable of ONE template; `usableRivals` (src/lib/rivalHook.ts) now does
+   the same collapse where the names are CHOSEN, so the joined {{2}} and competitor_hook's three
+   separate parameters cannot be cleaned differently. templateBodyParams' own `forMeta` still
+   collapses EVERY variable of EVERY template immediately before the send, which is the backstop.
+   Two layers, one rule, no third copy. */
 
 /** Top competitor names → a readable list ("Whitings, TC Group and Charlotte Watson"). Caps at 3
  *  so the WhatsApp line stays tight. Empty string when there are none. (Mirrors the auto-flow.) */
 export function formatCompetitors(list: string[]): string {
-  const top = (list ?? []).map((s) => collapseWhitespace(s)).filter(Boolean).slice(0, 3);
+  /* ⛔ THE JOINED STRING AND THE THREE SEPARATE PARAMETERS ARE THE SAME NAMES, BY CONSTRUCTION.
+     `competitor_hook` sends the rivals as three variables ({{3}} {{4}} {{5}}) while `audit_reply`
+     sends one joined string ({{2}}), and the Inbox renders the joined form as the transcript for
+     BOTH. Selecting them twice — once here, once for the parameters — is the rules-in-two-places
+     shape: the two would agree today and drift the first time either capped, collapsed or
+     de-duplicated differently, and the operator's record of what was sent would stop matching what
+     the prospect read. So both start from usableRivals. */
+  const top = usableRivals(list);
   if (top.length === 0) return "";
   if (top.length === 1) return top[0];
   return `${top.slice(0, -1).join(", ")} and ${top[top.length - 1]}`;
@@ -48,7 +62,11 @@ export type AuditReplyVars =
   /* `town` is carried because audit_result_hook names it ({{3}}) while audit_reply does not.
      The resolver has always SELECTED location_text; it simply never returned it. Deriving it here
      rather than at each call site keeps one answer to "which town is this lead's audit about". */
-  | { ok: true; trade: string; competitors: string; business: string; link: string; town: string; auditId: string }
+  /* `rivals` is the SAME top names `competitors` is joined from, kept as a list for a template that
+     sends them as separate variables (competitor_hook's {{3}} {{4}} {{5}}). It can hold FEWER than
+     three — that is the caller's decision to make (src/lib/rivalHook.ts), not a reason to refuse
+     here: audit_reply and video_template are unaffected by how many there are. */
+  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string }
   | { ok: false; reason: string };
 
 /**
@@ -189,5 +207,5 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
      document; it does not need to be in the address bar. */
   const link = `${REPORT_SITE_ORIGIN}/report/${audit.id}`;
 
-  return { ok: true, trade, competitors, business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id };
+  return { ok: true, trade, competitors, rivals: usableRivals(pool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id };
 }

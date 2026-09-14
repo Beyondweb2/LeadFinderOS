@@ -4,7 +4,8 @@
 // shape. process-whatsapp-queue itself is intentionally NOT modified in this build;
 // it can adopt this helper in a later cleanup.
 
-import { normaliseTrade, normaliseTown } from "../../../src/lib/templateVars.ts";
+import { normaliseTrade, normaliseTown, pluraliseTrade } from "../../../src/lib/templateVars.ts";
+import { RIVAL_VARS, RIVALS_REQUIRED } from "../../../src/lib/rivalHook.ts";
 
 export const GRAPH_VERSION = "v21.0";
 
@@ -41,7 +42,13 @@ export function resolveWhatsAppEnv() {
 // campaign path gates those templates on the lead having a share_token; the onboarding link is built
 // from the lead id alone and must NOT be blocked by a missing site. Reusing 'url' would have made
 // onboarding_followup unsendable to exactly the leads it is for.
-export type TemplateVar = "name" | "url" | "trade" | "competitors" | "onboarding_url" | "contact_first_name" | "town" | "audit_url";
+/* ⚠️ `trade` AND `trade_plural` ARE DIFFERENT VARIABLES BECAUSE THEY ARE DIFFERENT SENTENCES.
+   `trade` is singular and article-safe ("for a {{2}}", video_template); `trade_plural` is the bare
+   plural ("find {{2}} in your area", competitor_hook). One variable with a flag would let a caller
+   ask for the wrong grammar, and the failure would be a prospect reading "for a accountants".
+   `rival_1|2|3` are the three competitor names competitor_hook sends as SEPARATE parameters — see
+   src/lib/rivalHook.ts for why they are never padded and never degrade. */
+export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "competitors" | "rival_1" | "rival_2" | "rival_3" | "onboarding_url" | "contact_first_name" | "town" | "audit_url";
 
 /* ⛔ THE VIDEO HEADER'S URL, IN ONE PLACE (Paul, 2026-09-12).
    `video_template` is registered at Meta with a VIDEO header, which means the send MUST carry a
@@ -90,6 +97,24 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      ⚠️ It shares `trade` with audit_reply, which is what both send paths used to KEY ON to decide
      the payload shape - see the var-driven build in each. */
   video_template: { lang: "en", vars: ["name", "trade", "town", "audit_url"], headerVideoUrl: VIDEO_TEMPLATE_HEADER_URL },
+  /* competitor_hook — the COMPETITOR-NAMING outreach hook. SUBMITTED TO META 2026-09-14 BY PAUL;
+     until it is approved every send of it fails with Meta's own "template not found / not approved"
+     error, exactly as free_check_result did, and nothing else is affected.
+     ⛔ SIX VARIABLES, IN THIS ORDER: {{1}} business name, {{2}} trade (LOWERCASE PLURAL — the body
+     says "find {{2}} in your area" with no article), {{3}} {{4}} {{5}} three competitor names,
+     {{6}} audit link. Registered from the body Paul submits, never inferred from video_template:
+     that one leads {{1}} name, {{2}} singular trade, {{3}} town, {{4}} link, so borrowing its var
+     list would shift every parameter and send a message that returns 200 and reads as gibberish
+     (the mistake audit_reply_warm's comment records).
+     ⛔ IT CARRIES THE SAME VIDEO HEADER, DELIBERATELY. Registering it without one would change the
+     copy AND remove the video in the same step, so whatever happened next would say nothing about
+     either — and a header can only be set AT REGISTRATION, so leaving it off is the expensive half
+     to reverse. Against video_template (same header, different words) this isolates the copy.
+     ⚠️ NO TOWN VARIABLE. The body says "in your area", so normaliseTown never runs for it — the
+     five audits whose location_text is unusable ("Bourne uk", "GF3a") are sendable here.
+     ⚠️ A lead whose audit cannot supply three rivals is sent video_template instead, decided in
+     src/lib/rivalHook.ts and applied by the senders. */
+  competitor_hook: { lang: "en", vars: ["name", "trade_plural", "rival_1", "rival_2", "rival_3", "audit_url"], headerVideoUrl: VIDEO_TEMPLATE_HEADER_URL },
   /* audit_reply_warm — the WARM audit message, approved at Meta 2026-09-07 (id 1509669747584736).
      Same job as video_template but for a lead who has ALREADY answered the opener, so it drops
      the "is this the right number" line.
@@ -363,6 +388,39 @@ We'll get started and be back to you within a few days to get your Google profil
 
 Anything in the meantime, just reply here.`;
 
+/* competitor_hook - the body SUBMITTED TO META 2026-09-14. Six variables: {{1}} business name,
+   {{2}} trade as a LOWERCASE PLURAL, {{3}} {{4}} {{5}} three competitor names, {{6}} audit link.
+   ⛔ MARKED AS SUBMITTED, NOT APPROVED, AND THAT DISTINCTION IS THE FILE'S OWN RULE: a body here is
+   the record of what a prospect actually read, so this string may only be corrected FROM WhatsApp
+   Manager once the registered version exists. If Meta's reviewer edits so much as a line break,
+   paste theirs over this - do not keep ours because it is what we asked for.
+   ⚠️ THE TRADE IS PLURALISED HERE TOO, and that is not decoration. Every other body in this map
+   prints the RAW stored trade while the send prints the normalised one, so a video_template
+   transcript reads "for a Plumbers" where the prospect received "for a plumber" - a small, existing
+   lie in the operator's record. This one renders exactly what the parameter carries; the fallback
+   to the raw value is display-only and can never reach a send, because the payload builder refuses
+   a value pluraliseTrade rejects.
+   ⚠️ The video header is NOT in this string - it is a payload component built from
+   VIDEO_TEMPLATE_HEADER_URL, because a header is structure and this is text. */
+const competitorHookBody = (b: string, u: string, trade?: string, competitors?: string) => {
+  const t = pluraliseTrade(trade);
+  return `Hi ${b || "your business"},
+
+I asked ChatGPT and Gemini to find ${t.ok ? t.value : (trade || "businesses")} in your area.
+
+They came back with businesses including ${competitors || "other firms"}.
+
+I checked whether your business was being mentioned too.
+
+📋 Here's your free AI visibility audit:
+${u}
+
+It shows exactly what AI sees about your business and where you stand.
+No signup or obligation.
+
+Paul, Findable`;
+};
+
 /* audit_reply_warm — the WARM audit message (Meta 1509669747584736, approved 2026-09-07). It is
    video_template MINUS the "is this the right number" opening, because it only ever goes to a
    lead who has already answered the opener, so asking again reads as though we were not listening.
@@ -402,6 +460,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   initial_contact: initialContactBody,
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
+  competitor_hook: competitorHookBody,
   /* The 135 rows sent before the 2026-09-12 rename carry the old name and its OWN, different words. */
   audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,
@@ -427,7 +486,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -451,6 +510,36 @@ export function templateBodyParams(
         return t.value;
       }
       case "competitors": return extra?.competitors ?? "";
+      /* ⛔ THE PLURAL SLOT. competitor_hook's body is "find {{2}} in your area" — no article — so it
+         wants "plumbers", not "plumber". pluraliseTrade blocks the same unusable values
+         normaliseTrade blocks (digits, multi-clause lists, uncountable activity nouns) and does NOT
+         apply the vowel rule, which exists only because video_template's registered text hardcodes
+         "a". That single difference is what makes this template sendable to the 113 audits (12%)
+         held on that rule today. See src/lib/templateVars.ts. */
+      case "trade_plural": {
+        const t = pluraliseTrade(extra?.trade);
+        if (!t.ok) throw new Error(`unsafe_template_var:${t.reason}:${t.detail}`);
+        return t.value;
+      }
+      /* ⛔ A MISSING RIVAL THROWS; IT NEVER DEGRADES AND IT NEVER PADS. Meta rejects an empty
+         parameter outright, and a filler ("other firms", a repeated name) turns a checkable claim
+         about three named businesses into one a prospect cannot verify — in the first message they
+         ever get from us. The senders decide what to do about it BEFORE building the payload
+         (rivalHookDecision → send video_template instead); this is the last line of defence for a
+         caller that forgets, and it uses the `unsafe_template_var:` prefix so the existing catch at
+         every send site turns it into a visible hold rather than a 500. */
+      case "rival_1":
+      case "rival_2":
+      case "rival_3": {
+        const i = RIVAL_VARS.indexOf(v as typeof RIVAL_VARS[number]);
+        const name = (extra?.rivals?.[i] ?? "").trim();
+        if (!name) {
+          throw new Error(
+            `unsafe_template_var:rivals_unavailable:only ${(extra?.rivals ?? []).length} of ${RIVALS_REQUIRED} competitor names`,
+          );
+        }
+        return name;
+      }
       /* The one variable that names a PERSON. For most templates a blank first name throws (same
          contract as onboarding_url below — callers refuse readably first, this stops a forgetful new
          caller). For a template in TEMPLATES_ALLOWING_NO_FIRST_NAME (hook_followup) a blank degrades
@@ -535,7 +624,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got

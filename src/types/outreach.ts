@@ -481,6 +481,14 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      ⚠️ A label is not decoration on this list: it is the ONLY thing distinguishing two templates
      that do the same job, and the one an operator picks from. Name what it IS. */
   { value: 'video_template', label: 'Audit result hook — with video (outreach)' },
+  /* competitor_hook — the same job as video_template, naming three real competitors from the lead's
+     own audit. SUBMITTED TO META 2026-09-14; selectable before approval on purpose, exactly as
+     free_check_result was, so it starts working the moment Meta approves it with no code change —
+     until then Meta itself refuses the send and the lead is left visibly unsent.
+     ⚠️ THE LABEL SAYS WHAT DISTINGUISHES IT FROM ITS SIBLING, because both carry the video header
+     and both send the report. "Audit result hook" alone would be the video_template label mistake
+     again: two entries doing the same job, and nothing in the list to pick between them. */
+  { value: 'competitor_hook', label: 'Competitor hook — names 3 rivals (outreach)' },
   { value: 'audit_reply_warm', label: 'Audit reply — warm (after the opener)' },
   { value: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
   /* The OPENER follow-up: a business that got the initial_contact opener and never replied. Bulk-
