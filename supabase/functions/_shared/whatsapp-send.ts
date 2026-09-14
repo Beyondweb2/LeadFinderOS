@@ -97,9 +97,10 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      ⚠️ It shares `trade` with audit_reply, which is what both send paths used to KEY ON to decide
      the payload shape - see the var-driven build in each. */
   video_template: { lang: "en", vars: ["name", "trade", "town", "audit_url"], headerVideoUrl: VIDEO_TEMPLATE_HEADER_URL },
-  /* competitor_hook — the COMPETITOR-NAMING outreach hook. SUBMITTED TO META 2026-09-14 BY PAUL;
-     until it is approved every send of it fails with Meta's own "template not found / not approved"
-     error, exactly as free_check_result did, and nothing else is affected.
+  /* competitor_hook — the COMPETITOR-NAMING outreach hook. APPROVED AT META 2026-09-14.
+     ⚠️ The BODY changed during submission (see templateBodies.ts for the three differences); the
+     VARIABLES did not — six, same order, same meanings, nothing renumbered. A body edit at Meta
+     cannot be assumed to leave the parameters alone, so both were re-checked against Manager.
      ⛔ SIX VARIABLES, IN THIS ORDER: {{1}} business name, {{2}} trade (LOWERCASE PLURAL — the body
      says "find {{2}} in your area" with no article), {{3}} {{4}} {{5}} three competitor names,
      {{6}} audit link. Registered from the body Paul submits, never inferred from video_template:
@@ -388,12 +389,18 @@ We'll get started and be back to you within a few days to get your Google profil
 
 Anything in the meantime, just reply here.`;
 
-/* competitor_hook - the body SUBMITTED TO META 2026-09-14. Six variables: {{1}} business name,
-   {{2}} trade as a LOWERCASE PLURAL, {{3}} {{4}} {{5}} three competitor names, {{6}} audit link.
-   ⛔ MARKED AS SUBMITTED, NOT APPROVED, AND THAT DISTINCTION IS THE FILE'S OWN RULE: a body here is
-   the record of what a prospect actually read, so this string may only be corrected FROM WhatsApp
-   Manager once the registered version exists. If Meta's reviewer edits so much as a line break,
-   paste theirs over this - do not keep ours because it is what we asked for.
+/* competitor_hook - APPROVED AT META 2026-09-14, and this is the REGISTERED body, pasted by Paul
+   from WhatsApp Manager. Six variables: {{1}} business name, {{2}} trade as a LOWERCASE PLURAL,
+   {{3}} {{4}} {{5}} three competitor names, {{6}} audit link - unchanged from submission, nothing
+   renumbered.
+   🔴 THE BODY CHANGED DURING SUBMISSION AND WAS REPLACED RATHER THAN KEPT, which is this file's own
+   rule: a body here is the record of what a prospect actually READ, so ours was never the authority.
+   "No signup or obligation." is gone; the findable.live line and the closing question are new; the
+   sign-off is "Paul." not "Paul, Findable". ⛔ Do not restore any of ours, and paste Meta's over
+   this again if a future version is edited - keeping ours because it is what we asked for is the
+   failure that falsified 21 re_engage transcripts.
+   ⚠️ MIRRORED CHARACTER FOR CHARACTER IN src/lib/templateBodies.ts; scripts/template-bodies-parity
+   asserts the two produce identical output, so they move together or the build fails.
    ⚠️ THE TRADE IS PLURALISED HERE TOO, and that is not decoration. Every other body in this map
    prints the RAW stored trade while the send prints the normalised one, so a video_template
    transcript reads "for a Plumbers" where the prospect received "for a plumber" - a small, existing
@@ -416,9 +423,12 @@ I checked whether your business was being mentioned too.
 ${u}
 
 It shows exactly what AI sees about your business and where you stand.
-No signup or obligation.
 
-Paul, Findable`;
+🌐 https://findable.live/
+
+Find out how we get you into those searches on our website, or I can explain more here if you'd like?
+
+Paul.`;
 };
 
 /* audit_reply_warm — the WARM audit message (Meta 1509669747584736, approved 2026-09-07). It is
