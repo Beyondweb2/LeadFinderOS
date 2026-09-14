@@ -361,7 +361,42 @@ export async function runOutreachAuditAhead(
     .eq("is_archived", false)
     .not("phone", "is", null)
     .order("queued_at", { ascending: true })
-    .limit(60);
+    /* 🔴 60 → 400 ON 2026-09-14, BECAUSE 60 WAS SILENTLY TRUNCATING A REAL QUEUE. Measured that
+       day: 111 leads queued, of which 44 already had a completed audit and 3 were in flight — so
+       the oldest 60 were mostly leads with nothing left to do, and 51 leads with NO audit were not
+       considered at all. The horizon is FIFO, so nothing was lost permanently; it just could not
+       start work it could see no reason to start.
+       ⚠️ THE DYNAMIC THAT CAUSES IT, because it will recur: an audited lead STAYS `queued` until it
+       is SENT, and sending is paced (~2.18 min at cap 400) while three audits finish in ~5 min
+       each. Audited-but-unsent leads therefore pile up at the FRONT of the FIFO and eat the
+       horizon. The horizon must exceed a day's queue, not a day's audits.
+
+       ⛔ 400 IS A CEILING SET BY A TRUNCATION TRAP, NOT A ROUND NUMBER, AND IT MUST NOT BE RAISED
+       ALONE. readAuditStates() below does ONE `.in()` over these ids and gets back ONE ROW PER
+       AUDIT — and PostgREST silently caps a result at db-max-rows, measured at exactly 1000 on this
+       project (a paginated count of lead-linked audits returned a first page of exactly 1000 of
+       1014). If that read truncates, the leads whose audits fall off the end read as
+       `{completedAt: null, attempts: 0}` — which is INDISTINGUISHABLE FROM "never audited" and
+       starts a duplicate paid audit. That is the contact_check failure of 2026-09-03 exactly: a
+       guard that answers "clean" for something it simply could not see, while looking like it works.
+       MEASURED FAN-OUT (whole book, paginated): 1,014 lead-linked audits across 994 leads — median
+       1 per lead, p99 2, max 5. Today's queue returned 47 audit rows for 111 leads. At 400 ids the
+       read returns ~128 rows measured, and ~800 even if every lead carried the p99 of 2. Past ~500
+       the worst case touches 1000 and the trap opens.
+       ⛔ SO: TO GO ABOVE ~450, PAGINATE readAuditStates FIRST (fetchAllRows' pattern, ordered by a
+       unique tiebreaker). Raising this number on its own is the expensive half of the mistake.
+
+       ⚠️ IT DOES NOT SLOW THE TICK, AND THAT WAS MEASURED RATHER THAN ASSUMED. Both reads are
+       bounded and there are still exactly two of them per tick whatever N is — the per-lead loop
+       breaks at OUTREACH_AUDIT_CONCURRENCY (3), so nothing downstream scales with N. Timed against
+       the live database: 60 ids → 22 rows, 200 → 66, 300 → 99, 400 → 128 rows in 0.60s, 600 → 182
+       in 1.10s, all from a laptop on the other side of the world; the function runs beside the
+       database. The URL at 400 ids is ~14,900 chars and PostgREST serves it fine (a 909-item `.in()`
+       was measured working in 2026-09-03's contact_check work).
+       ⚠️ ONE FALSE ALARM WORTH RECORDING: Node's undici threw HeadersOverflowError at 400 ids while
+       curl returned 200 at 600. That was the HARNESS, not the server. Check with a second client
+       before believing a big-URL failure. */
+    .limit(400);
 
   const rows = ((leads ?? []) as Array<OutreachAuditLead & { whatsapp_template: string | null }>)
     .filter((l) => templateNeedsAudit(templateVars(l.whatsapp_template)));
