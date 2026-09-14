@@ -22,6 +22,8 @@
    passes `target_runs` while this one deliberately does not.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
+import { interleaveByCampaign } from "./campaign-interleave.ts";
+
 /** Questions per outreach audit. Three is what the outreach lane has always asked and what the
  *  measured cost below is based on. */
 export const OUTREACH_AUDIT_QUESTIONS = 3;
@@ -356,7 +358,7 @@ export async function runOutreachAuditAhead(
 
   const { data: leads } = await service
     .from("outreach_leads")
-    .select("id, user_id, business_name, search_keyword, category, search_location, derived_town, address, country, website, line_type, status, previous_status, whatsapp_delivery_status, whatsapp_template")
+    .select("id, user_id, business_name, search_keyword, category, search_location, derived_town, address, country, website, line_type, status, previous_status, whatsapp_delivery_status, whatsapp_template, campaign_id, queued_at")
     .eq("status", "queued")
     .eq("is_archived", false)
     .not("phone", "is", null)
@@ -398,8 +400,16 @@ export async function runOutreachAuditAhead(
        before believing a big-URL failure. */
     .limit(400);
 
-  const rows = ((leads ?? []) as Array<OutreachAuditLead & { whatsapp_template: string | null }>)
-    .filter((l) => templateNeedsAudit(templateVars(l.whatsapp_template)));
+  /* ⛔ ROUND-ROBIN ACROSS CAMPAIGNS, NOT FIFO (2026-09-14). The read above is ordered by queued_at,
+     which is global FIFO — so this lane would start every audit for the campaign queued first and
+     only reach the second one hours later. The SEND lane was fixed the same day for the same reason,
+     and fixing only that one would have achieved nothing: an audit-class template cannot send
+     without its audit, so a fairly-ordered sender would simply have been held by the needsAudit
+     guard instead. Same starvation, one layer down. Both lanes call the SAME function. */
+  const rows = interleaveByCampaign(
+    ((leads ?? []) as Array<OutreachAuditLead & { whatsapp_template: string | null; campaign_id: string | null; queued_at: string | null }>)
+      .filter((l) => templateNeedsAudit(templateVars(l.whatsapp_template))),
+  );
   sum.considered = rows.length;
   if (!rows.length) return sum;
 

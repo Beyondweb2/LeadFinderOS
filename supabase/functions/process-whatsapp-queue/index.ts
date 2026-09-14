@@ -14,6 +14,7 @@ import { classifyLineType } from "../_shared/line-type.ts";
 import {
   runOutreachAuditAhead, decideOutreachAudit, readAuditStates, templateNeedsAudit,
 } from "../_shared/outreach-audit.ts";
+import { interleaveByCampaign, campaignsRepresented } from "../_shared/campaign-interleave.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
@@ -192,7 +193,20 @@ const DAILY_CAP = 400;
    this tick does when the head is not ready, not a position the head loses.
    ⚠️ Bounded because each candidate costs a read. Ten is far more than the concurrency cap of 3, so
    there is always a ready lead within reach whenever one exists. */
-const QUEUE_LOOKAHEAD = 10;
+const QUEUE_LOOKAHEAD = 60;
+/* ⛔ HOW MANY QUEUED LEADS ARE READ AND RE-ORDERED BEFORE THE LOOK-AHEAD PICKS FROM THEM
+   (2026-09-14). The read is ordered by queued_at — global FIFO — so reading only QUEUE_LOOKAHEAD
+   rows meant the window was frequently ONE campaign: measured that day, 95 leads in two campaigns
+   and all ten candidates belonged to the older one. The scan is now wide enough to SEE every
+   campaign, interleaveByCampaign re-orders it, and the look-ahead picks from the fair order.
+   ⛔ 400 IS THE SAME TRUNCATION CEILING AS THE AUDIT HORIZON, FOR THE SAME REASON. readAuditStates
+   does one `.in()` over the chosen candidates and gets back one row PER AUDIT, and PostgREST caps a
+   result at db-max-rows — measured at exactly 1000 on this project. Leads whose audits fall off the
+   end read as "never audited". Fan-out is ~1 audit per lead (1,014 audits over 994 leads; p99 2), so
+   the look-ahead's own `.in()` at 60 is trivial and the SCAN at 400 stays well inside the cap.
+   ⚠️ IT IS STILL A HORIZON. Past 400 queued, campaigns queued after the 400th lead are invisible
+   until the front clears — the same FIFO truncation this fixes, one order of magnitude out. */
+const QUEUE_SCAN = 400;
 
 /* ⛔ 3 → 1 ON 2026-09-14, WITH DAILY_CAP → 400 AND THE CRON → EVERY MINUTE. See the DAILY_CAP note
    for the simulation. The rule that decides this constant has not changed since it was written:
@@ -1126,13 +1140,13 @@ Deno.serve(async (req) => {
        badge, and re-enters the drip the moment its town verifies. */
     const { data: leadRows } = await service
       .from("outreach_leads")
-      .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id")
+      .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at")
       .eq("status", "queued")
       .eq("is_archived", false)
       .not("phone", "is", null)
       .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
       .order("queued_at", { ascending: true })
-      .limit(QUEUE_LOOKAHEAD);
+      .limit(QUEUE_SCAN);
 
     /* ══ WHICH OF THEM SENDS THIS TICK ═══════════════════════════════════════════════════════════
        🔴 THE BLOCK THIS REPLACES. A lead whose audit was not ready returned the entire tick, so a
@@ -1154,7 +1168,19 @@ Deno.serve(async (req) => {
        deliberately proceed with the OLDEST lead so the existing branch can decide between waiting
        and dropping it. Returning early here instead would mean a permanently wedged head is never
        re-evaluated and never dequeued — starvation introduced by the fix for starvation. */
-    const candidates = (leadRows ?? []) as Array<Record<string, unknown>>;
+    /* ⛔ ROUND-ROBIN ACROSS CAMPAIGNS, THEN TAKE THE LOOK-AHEAD WINDOW FROM THE FAIR ORDER.
+       The query above is FIFO, which meant the campaign queued first drained completely before the
+       next one sent anything — measured 2026-09-14: the next twelve ticks all belonged to one of two
+       queued campaigns, and the other (75 leads) would have waited ~44 minutes. At a 300-lead
+       campaign that is ~11 hours, i.e. the whole window. Equal share: every campaign gets one slot
+       per round whatever its size, so a small test campaign clears the same day.
+       ⚠️ THE PACING, THE CAP, THE WINDOW AND EVERY GUARD ARE UNTOUCHED. This changes WHICH lead is
+       chosen, never how many or how fast. Still one send per tick. */
+    const scanned = (leadRows ?? []) as Array<Record<string, unknown> & { id: string; campaign_id?: string | null; queued_at?: string | null }>;
+    const candidates = interleaveByCampaign(scanned).slice(0, QUEUE_LOOKAHEAD) as Array<Record<string, unknown>>;
+    if (scanned.length > candidates.length || campaignsRepresented(scanned) > 1) {
+      console.log(`[queue] scanned ${scanned.length} queued lead(s) across ${campaignsRepresented(scanned)} campaign(s); examining the fairest ${candidates.length}`);
+    }
     let lead: Record<string, unknown> | null = candidates[0] ?? null;
     let skippedForAudit = 0;
     if (candidates.length > 1) {
