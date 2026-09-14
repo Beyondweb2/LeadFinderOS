@@ -101,12 +101,37 @@ for (const n of ['You', 'The', 'Yes', 'However', 'Ask', 'Once', 'Keep']) {
   ok('a "complete" stamp over provable junk is still dirty', a.verdict === 'dirty', a.verdict);
 }
 {
-  // An incomplete stamp is dirty even with no PROVABLE junk — unprovable content junk may lurk.
+  /* ⛔ AN INCOMPLETE STAMP WARNS ALWAYS AND SUPPRESSES ONLY WITH JUNK BESIDE IT (2026-09-14).
+     It suppressed unconditionally until then, which blanked the rivals on real clients' reports:
+     measured over the 147 newest lead-linked audits, all 6 withheld lists came from this branch and
+     every one had ZERO junk — AD Locksmithing 25/25 items cleaned, 106 real names, withheld on a
+     receipt reading "model omitted 1 of 25 ids". The receipt cannot tell "the model returned no
+     entry for that id" from "an answer that named nobody", so on its own it is not evidence. */
   const a = assessCompetitorCleanliness(['Newson Health'],
     { competitor_cleaning: { complete: false, items_total: 137, items_cleaned: 60 } });
-  ok('incomplete stamp → dirty at ZERO junk (the threshold never applies to the stamp)',
+  ok('incomplete stamp → still DIRTY at zero junk, so the operator is told',
     a.verdict === 'dirty', a.verdict);
+  ok('  but the client report is NOT blanked on the receipt alone',
+    a.suppressNames === false, String(a.suppressNames));
   ok('incomplete warning shows coverage', a.warning.includes('60 of 137'), a.warning);
+  ok('  and says the names are still shown', /still shown/.test(a.warning), a.warning);
+  ok('  and does not tell the operator not to send', !/do not send/.test(a.warning), a.warning);
+
+  /* ⛔ THE CASE THE ORIGINAL RULE WAS WRITTEN FOR IS UNCHANGED: part of the run was never read AND
+     what we can see is already raw, so unprovable junk in the unread part is a real risk. One
+     marker is enough here — below the standalone threshold of 3, on purpose. */
+  const b = assessCompetitorCleanliness(['Newson Health', 'However'],
+    { competitor_cleaning: { complete: false, items_total: 137, items_cleaned: 60 } });
+  ok('incomplete stamp + ANY provable junk → suppressed',
+    b.verdict === 'dirty' && b.suppressNames === true, `${b.verdict}/${b.suppressNames}`);
+  ok('  and that warning DOES say not to send', /do not send/.test(b.warning), b.warning);
+
+  /* The junk rule itself is untouched: at or over the threshold it suppresses whatever any receipt
+     says, including a complete one. */
+  const c = assessCompetitorCleanliness(['You', 'However', 'Once', 'Newson Health'],
+    { competitor_cleaning: { complete: false, items_total: 10, items_cleaned: 4 } });
+  ok('provable junk at the threshold still suppresses under an incomplete stamp',
+    c.suppressNames === true, String(c.suppressNames));
 }
 {
   // ABSENT STAMP MUST NOT READ AS CLEAN OR AS DIRTY on its own (absent-value rule).
@@ -178,9 +203,18 @@ for (const n of ['You', 'The', 'Yes', 'However', 'Ask', 'Once', 'Keep']) {
   const junky = assessCompetitorCleanliness(['You', 'However', 'Once', 'Newson Health']);
   ok('provable junk → suppress', junky.verdict === 'dirty' && junky.suppressNames === true);
 
+  /* ⚠️ CHANGED 2026-09-14, AND THIS IS THE ASSERTION THAT MOVED: partly cleaned WITH NOTHING RAW
+     IN IT warns but no longer suppresses. See the measured note on the incomplete-stamp block
+     above — all six withheld lists in the live book came from here with zero junk, including two
+     paying clients' own reports. Junk beside the incomplete receipt still suppresses (next case). */
   const partial = assessCompetitorCleanliness(['Newson Health'],
     { competitor_cleaning: { complete: false, items_total: 137, items_cleaned: 60 } });
-  ok('partly cleaned → suppress', partial.verdict === 'dirty' && partial.suppressNames === true);
+  ok('partly cleaned, nothing raw → warn but do NOT suppress',
+    partial.verdict === 'dirty' && partial.suppressNames === false);
+  const partialJunky = assessCompetitorCleanliness(['Newson Health', 'However'],
+    { competitor_cleaning: { complete: false, items_total: 137, items_cleaned: 60 } });
+  ok('partly cleaned WITH raw text → suppress',
+    partialJunky.verdict === 'dirty' && partialJunky.suppressNames === true);
 
   const emptyNoReceipt = assessCompetitorCleanliness([], undefined, { answeredCells: 6 });
   ok('empty + no receipt → warn but DO NOT suppress',

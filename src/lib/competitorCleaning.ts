@@ -201,15 +201,40 @@ export function assessCompetitorCleanliness(
         `${considered} stored names are raw text, not businesses (e.g. ${junkExamples.slice(0, 4).join(', ')}).`,
     };
   }
-  /* Not enough to prove a raw fold. An explicitly incomplete stamp still means part of the run was
-     never read, so content-word junk ("Testosterone") could be sitting there unprovable — say so. */
+  /* ⛔ AN INCOMPLETE RECEIPT WARNS ALWAYS, AND SUPPRESSES ONLY WITH JUNK BESIDE IT (Paul, 2026-09-14).
+     It used to suppress on its own at any junk count, and that blanked the rivals on real clients'
+     reports — the section that makes the document land.
+
+     🔴 MEASURED BEFORE CHANGING IT, over the 147 newest lead-linked audits with a completed run:
+     6 had their whole rival list withheld, ALL SIX by this branch, and the junk count was ZERO in
+     every one. Four of the six had cleaned every item they held and were blanked anyway —
+     AD Locksmithing 25/25 with 106 real Newcastle locksmiths, RG Locksmiths 25/25 with 119,
+     Forest Hall 9/9, Watford 8/7 — each on a receipt reading "model omitted 1 of 25 ids".
+
+     THE MECHANISM, and it is why the receipt is weak evidence: the cleaner asks gpt-4o for one
+     entry per answer id INCLUDING an empty list when an answer named nobody. A model that omits
+     that id instead is indistinguishable, at this layer, from a model that failed to read it — so
+     a perfectly clean run whose last answer named nobody is stamped incomplete.
+
+     ⛔ WHAT HAS NOT CHANGED: the junk rule above, which is the one that actually proves raw output,
+     and suppression whenever ANY provable junk sits beside an incomplete receipt. That is the case
+     the original reasoning was written for — an unread portion could hide unprovable content-word
+     junk ("Testosterone"), and one visible marker is enough to believe it.
+     ⚠️ AND IT STILL SAYS SO. The verdict stays `dirty`, so the operator screen keeps its amber
+     banner; what changes is only whether the client's report is blanked. Warn on `verdict`,
+     suppress on `suppressNames` — this branch is now the clearest example of why they are separate
+     fields, and the banner reads `suppressNames` to decide what it claims. */
   if (stamp && stamp.complete === false) {
     const done = stamp.items_cleaned ?? 0;
     const tot = stamp.items_total ?? 0;
+    const coverage = `Competitor names only partly cleaned (${done} of ${tot} answers read)`;
     return {
-      verdict: 'dirty', suppressNames: true, junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp,
-      warning: `Competitor names only partly cleaned (${done} of ${tot} answers read) — ` +
-        `do not send to client until re-extracted.`,
+      verdict: 'dirty', suppressNames: junkExamples.length > 0, junkExamples, junkCount: junkExamples.length, namesConsidered: considered, stamp,
+      warning: junkExamples.length > 0
+        ? `${coverage}, and ${junkExamples.length} stored name${junkExamples.length === 1 ? ' is' : 's are'} ` +
+          `raw text (e.g. ${junkExamples.slice(0, 4).join(', ')}) — do not send to client until re-extracted.`
+        : `${coverage}, but none of the ${considered} stored name${considered === 1 ? '' : 's'} is raw text. ` +
+          `The names are still shown — re-extract if you want the receipt to read complete.`,
     };
   }
   /* ⛔ EMPTY, WITH ANSWERS THAT SHOULD HAVE BEEN READ AND NO COMPLETED RECEIPT. Since the regex

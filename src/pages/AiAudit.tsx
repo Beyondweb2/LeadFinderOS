@@ -2927,13 +2927,25 @@ const AiAudit = () => {
                   warning that gets scrolled past. */}
               {competitorCleanliness.verdict === 'dirty' && !isDraining && (
                 <div className="rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-sm">
+                  {/* ⛔ THE HEADING AND THE CONSEQUENCE BOTH READ `suppressNames`, NOT the verdict.
+                      They used to be hardcoded, and from 2026-09-14 that would have been a lie in
+                      the one place an operator goes to find out what happened: an incomplete
+                      cleaning receipt with ZERO junk names now WARNS without withholding anything,
+                      so "do not send to client" and "rival names are withheld" would both be false
+                      while the report printed its competitors perfectly. A banner that overstates
+                      is how a real warning stops being read. */}
                   <div className="font-medium text-amber-700 dark:text-amber-400">
-                    Competitor names not cleaned — do not send to client
+                    {competitorCleanliness.suppressNames
+                      ? 'Competitor names not cleaned — do not send to client'
+                      : 'Competitor names only partly cleaned — the names themselves look fine'}
                   </div>
                   <div className="mt-1 text-muted-foreground">
                     {competitorCleanliness.warning}
-                    {' '}Rival names are withheld from the report until this is re-extracted, so it
-                    cannot print raw text as a competitor.
+                    {competitorCleanliness.suppressNames
+                      ? ' Rival names are withheld from the report until this is re-extracted, so it'
+                        + ' cannot print raw text as a competitor.'
+                      : ' The report still prints them: nothing stored for this run is provable junk,'
+                        + ' and a receipt saying an answer id came back empty is not evidence of dirty data.'}
                   </div>
                   {competitorCleanliness.junkExamples.length > 0 && (
                     <div className="mt-1 font-mono text-xs text-muted-foreground">
