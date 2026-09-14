@@ -1061,6 +1061,38 @@ ${note}` : note })
         } catch { /* non-fatal — onboarding_responses.business_website is the source of truth */ }
       }
 
+      /* ⛔ THE TRADE THE CUSTOMER CORRECTED, WRITTEN WHERE THE AUDIT READS IT (2026-09-14).
+         startPaidBaseline takes the trade from the LEAD — `category || search_keyword` — so a
+         correction typed on the form reaches the measurement only if it lands on the lead. Sent
+         only when the visitor opened "Not right?" on the confirmation line and typed something.
+         ⛔ IT WRITES `category`, NEVER `search_keyword`. search_keyword is the record of what was
+         SEARCHED and is how the lead was found; overwriting it would destroy the provenance and
+         make the mis-filing unauditable afterwards. category outranks it in the audit's own
+         precedence, so writing there corrects the measurement and keeps the history — which is the
+         same reason primary_type was stored beside the trade rather than over it.
+         ⚠️ A correction that AGREES with what we hold writes nothing, so pressing "Not right?" and
+         then changing your mind costs an empty update rather than a spurious note. */
+      const tradeFix = clip(a.business_type_correction, 120);
+      if (tradeFix) {
+        try {
+          const { data: cur, error: curErr } = await service.from("outreach_leads")
+            .select("category, search_keyword, notes").eq("id", leadId).maybeSingle();
+          const row = (cur ?? {}) as { category?: string | null; search_keyword?: string | null; notes?: string | null };
+          const same = (v: string | null | undefined) =>
+            String(v ?? "").trim().toLowerCase() === tradeFix.trim().toLowerCase();
+          if (!curErr && !same(row.category) && !same(row.search_keyword)) {
+            const was = (row.category ?? row.search_keyword ?? "(none)").trim();
+            const note = `[${new Date().toISOString().slice(0, 10)}] trade corrected by the customer at signup: "${was}" -> "${tradeFix}"`;
+            await service.from("outreach_leads")
+              .update({ category: tradeFix, notes: row.notes ? `${row.notes}
+${note}` : note })
+              .eq("id", leadId);
+          }
+        } catch (e) {
+          console.error("[findable-onboarding] trade correction not applied:", (e as Error).message);
+        }
+      }
+
       // An incomplete submission stops here: there is no confirmed area to audit against, and
       // firing a 3-run paid baseline on a half-answered form would spend real money guessing.
       // The plan screen still works, so they can pay and we chase the answers.
