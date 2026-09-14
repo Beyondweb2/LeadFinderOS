@@ -482,9 +482,12 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      that do the same job, and the one an operator picks from. Name what it IS. */
   { value: 'video_template', label: 'Audit result hook — with video (outreach)' },
   /* competitor_hook — the same job as video_template, naming three real competitors from the lead's
-     own audit. SUBMITTED TO META 2026-09-14; selectable before approval on purpose, exactly as
-     free_check_result was, so it starts working the moment Meta approves it with no code change —
-     until then Meta itself refuses the send and the lead is left visibly unsent.
+     own audit. APPROVED AT META 2026-09-14, and the bet that it was listed before approval paid off:
+     it started working on approval with no code change here, exactly as free_check_result did.
+     ⚠️ SELECTABLE IS NOT THE SAME AS SENDABLE FOR A GIVEN LEAD. It is `needsAudit` (its {{6}} IS the
+     report link), so the queue holds it until that lead's audit completes; and a lead whose audit
+     cannot supply THREE rival names is sent video_template instead — rivalHookDecision, never a pad
+     and never an empty parameter. Measured 2026-09-14: 141 of 147 recent audits supply three.
      ⚠️ THE LABEL SAYS WHAT DISTINGUISHES IT FROM ITS SIBLING, because both carry the video header
      and both send the report. "Audit result hook" alone would be the video_template label mistake
      again: two entries doing the same job, and nothing in the list to pick between them. */
