@@ -698,12 +698,23 @@ export function renderReportHtml(d: AiAuditReportData): string {
       : `AI never named <b>${esc(d.businessName)}</b>${d.total > 0 ? ` &mdash; not once across ${d.total} answers` : ""}`;
     let body = `${namedLine}.`;
     if (leaders.length > 0) {
-      const chips = leaders.map((c) => `<span class="rv">${esc(c.name)}</span> <span class="rvn">${c.count}×</span>`);
+      /* ⛔ THE ORDER, NOT THE ARITHMETIC (Paul, 2026-09-14). This printed "53×, 42×, 41×" after each
+         firm. Second and third differed by ONE mention — a gap well inside the noise this product
+         already refuses per-question claims over (MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP), so
+         the numbers asserted a margin between the second and third firm that the data does not
+         support. "then" carries the one thing that IS real — that this is a ranking rather than a
+         list — without claiming a distance.
+         ⚠️ THE DENOMINATOR STAYS. Without it "named most often" could be three mentions, and the
+         reader has no way to size the claim. It is the count that survives, because it is the one
+         doing honest work.
+         ⚠️ The counts themselves are untouched upstream: they still decide WHICH three firms are
+         named here and in what order (auditReport's `ranked`). Only the rendering changed. */
+      const chips = leaders.map((c) => `<span class="rv">${esc(c.name)}</span>`);
       const list = chips.length === 1
         ? chips[0]
-        : `${chips.slice(0, -1).join(", ")} and ${chips[chips.length - 1]}`;
+        : chips.join(", then ");
       const denom = d.competitorMentions && d.competitorMentions > 0
-        ? ` (from ${d.competitorMentions} competitor mentions across ${qCount} question${qCount === 1 ? "" : "s"})`
+        ? ` &mdash; from ${d.competitorMentions} competitor mentions across ${qCount} question${qCount === 1 ? "" : "s"}`
         : "";
       body += ` The firms AI named most often instead were ${list}${denom}.`;
     }
