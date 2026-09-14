@@ -139,6 +139,14 @@ async function notifyOfFindablePayment(opts: {
   businessName: string; amountGbp: number; paidFor: string;
   trade: string | null; town: string | null; phone: string | null; email: string | null;
   note?: string | null;
+  /* 🔴 THE SUBJECT TAG HAS ITS OWN FACT NOW (2026-09-14). It used to read `opts.note ? " (NOT
+     LINKED)" : ""` — one tag inferred from whether ANY note existed, while `note` carries two
+     unrelated things: a payment with no CRM lead, and a linked payment whose post-payment details
+     are still outstanding. The second is the normal state of every first payment, so every real
+     customer's PAID email was subject-tagged as unlinked when it was linked perfectly well — the
+     first thing Paul reads, at the worst moment, sending him after a fault that does not exist.
+     A tag that describes a DIFFERENT condition from the one that produced it is worse than no tag. */
+  noLead?: boolean;
   /* THE TRACE (2026-09-13). The outcome is written to client_error_reports as `payment_email_sent`
      or `payment_email_failed`, so "did the PAID email go?" is answerable from a row rather than
      from the operator's inbox. `record` is the webhook's own recorder (event id attached). */
@@ -178,7 +186,9 @@ async function notifyOfFindablePayment(opts: {
     const out = await postResend({
       from: FROM_OPERATOR,
       to: [ADMIN_EMAIL],
-      subject: `PAID ${amount} — ${name}${opts.note ? " (NOT LINKED)" : ""}`,
+      /* Only the genuinely unattributed payment earns a tag: it is the one that needs a hand.
+         Outstanding details are normal and are explained in the BODY, where the sentence already is. */
+      subject: `PAID ${amount} — ${name}${opts.noLead ? " (NO LEAD)" : ""}`,
       text, html,
     });
     if (out.ok) {
@@ -961,6 +971,8 @@ Deno.serve(async (req) => {
             if (!paidEmailAlreadySent) {
               await notifyOfFindablePayment({
                 onboardingId, leadId: findableLeadId || null, record: recordPaymentFailure,
+                /* The subject's own fact — never inferred from whether a note exists. */
+                noLead: !findableLeadId,
                 businessName: ((leadForEmail?.business_name as string) ?? "").trim(),
                 amountGbp,
                 paidFor: paidForLabel,
@@ -987,12 +999,23 @@ Deno.serve(async (req) => {
                       try {
                         const { data: ob } = await service
                           .from("onboarding_responses")
-                          .select("confirmed_location, services, business_address")
+                          .select("confirmed_location, services")
                           .eq("id", onboardingId).maybeSingle();
                         const has = (v: unknown) => !!String(v ?? "").trim();
-                        const outstanding = !(has(ob?.confirmed_location) && has(ob?.services) && has(ob?.business_address));
+                        /* 🔴 TOWN + SERVICES, NOT THREE FIELDS (2026-09-14). This tested
+                           `business_address` too — a field REMOVED from the questionnaire on
+                           2026-08-22, because a paying customer was trapped on mobile hand-typing a
+                           full address. It is collected at delivery now, so it is null at the moment
+                           of every payment BY DESIGN, and this test therefore fired on every real
+                           first payment: "details not yet collected" for a customer who had given
+                           everything that matters, plus the subject tag that rode on it.
+                           ⛔ THESE ARE THE TWO startPaidBaseline WAITS FOR, and the two needsQ2()
+                           reads. A rule about whether a client is complete must agree with the rule
+                           that decides whether the baseline can run, or the email contradicts the
+                           dashboard and the measurement about the same customer. */
+                        const outstanding = !(has(ob?.confirmed_location) && has(ob?.services));
                         return outstanding
-                          ? "Details not yet collected — they still have the post-payment form to fill in (services, town, address). No baseline starts until it lands."
+                          ? "Details not yet collected — they still have the post-payment form to fill in (town and services). No baseline starts until it lands."
                           : null;
                       } catch {
                         /* Never block the email over this: a failed read means we simply do not add
