@@ -2026,6 +2026,36 @@ by the single account below.** §6's paginate rule, caught in this file's own no
     suppressed by the JUNK rule (109 provable junk names) and is his FROZEN baseline.** Paul's call
     2026-09-14 — re-extracting it would rewrite the evidence the four-week comparison is judged
     against. AD was a code fix; RG would have been editing evidence.
+- 🟡 **`audit_followup` — THE SECOND STEP OF THE TWO-STEP FLOW. Registered both sides, AWAITING
+  META (2026-09-15).** Sent to a lead who REPLIED to `initial_contact` but has had no report yet.
+  {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}}{{4}}{{5}} rivals, {{6}} report link. No
+  header, no buttons. Same three-names-or-fall-back-to-`video_template` rule as competitor_hook,
+  inherited from `templateNeedsRivals` rather than written again.
+  - ⛔ **THE TRADE IS PLURAL BECAUSE THE SINGULAR MADE IT UNUSABLE FOR THE TWO BEST TRADES.** The
+    first registration said "for a {{1}}", which puts it under normaliseTrade's article check:
+    **179 of 1,066 lead-linked audits held (16.8%), almost all ACCOUNTANTS and ELECTRICIANS.**
+    Deleting one word — "I asked chatgpt for {{1}} in {{2}} this morning" — and moving to
+    `pluraliseTrade` took the block to **1 (0.1%)**, the survivor being "shoe repairs & watch
+    battery replacement", which is genuinely not a trade name. Nothing was loosened but the
+    article: pluraliseTrade still refuses uncountables and multi-clause values.
+    ⚠️ It also fixed an incoherence — "asked chatgpt for A plumber… it came back with X, Y and Z".
+  - ⛔ **IT IS A CONTINUATION, AND "COLD" DOES NOT MEAN "HAS NOT SEEN A REPORT".** It means MAY NOT
+    REACH AN EXISTING CONVERSATION. Listed cold it was refused for every lead it exists for — the
+    seatbelt's query is `.eq(phone).neq(status,'failed')` with **no direction filter**, so the
+    outbound opener AND the inbound reply both match. The audit_reply_warm trap, one template later.
+  - 🔴 **AND THE QUEUE CANNOT SEND IT AT ALL, WHATEVER THE LIST SAYS.** `process-whatsapp-queue`'s
+    already-sent guard (`whatsapp_ever_delivered`, or a lead-linked outbound `sent` row, or any
+    non-test `whatsapp_sends` row) is **template-blind** — it never reads the name. So the queue is
+    structurally incapable of a SECOND message to a lead under any template, which is the
+    never-double-send chokepoint working as designed. **The two-step flow runs from the INBOX**
+    (`send-whatsapp-message`), exactly as audit_reply_warm does. Paul's call 2026-09-15: he does
+    not want that chokepoint weakened.
+  - ⚠️ **THE STATED COST OF THE CONTINUATION CLASSIFICATION, ACCEPTED:** a continuation is exempt
+    from the phone-history seatbelt, so **if audit_followup were ever QUEUED to a number with no
+    history it would go out as a first touch.** Nothing catches that — the already-sent guard needs
+    prior contact to trip and a stranger has none. **Same exposure `re_engage_49` already carries.**
+    The containment is operational, not structural: it is sent from the Inbox, never queued. If it
+    is ever put in a campaign, close this first.
 - 🟡 **`competitor_hook` — the rival-naming outreach hook, REGISTERED BOTH SIDES, AWAITING META
   (2026-09-14).** {{1}} name, {{2}} trade as a LOWERCASE PLURAL (`pluraliseTrade`, no article check —
   it unblocks the 113 audits, 12%, that video_template's "for a" holds), {{3}}{{4}}{{5}} rivals,

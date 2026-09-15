@@ -42,6 +42,23 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
   "hook_followup",
   "contact_followup",
   "report_followup",
+  /* ⛔ audit_followup IS A CONTINUATION, AND ITS NAME IS NOT WHY. It was listed as COLD for a few
+     hours on the reasoning that it opens the pitch — the prospect has had no report yet. That reads
+     the word "cold" as "has not seen a report", and in this file it means something else:
+     MAY NOT REACH AN EXISTING CONVERSATION. That is the property the guard tests, and it is the
+     2026-09-02 lesson — test the property, never the instance.
+     By its own definition this message goes to a lead who REPLIED to initial_contact, so it only
+     ever reaches a conversation that already exists. Left cold it was refused for every lead it was
+     written for: the seatbelt's query is `.eq(phone).neq(status,'failed')` with NO direction
+     filter, so the outbound opener AND the inbound reply both match it. Exactly the trap
+     audit_reply_warm's note above describes.
+     ⚠️ THE STATED COST, PAUL'S CALL 2026-09-15 AND THE SAME EXPOSURE re_engage_49 ALREADY CARRIES:
+     a continuation is exempt from the phone-history seatbelt, so if audit_followup were ever
+     QUEUED to a number with no history it would go out as a first touch. Nothing else catches that
+     — process-whatsapp-queue's already-sent guard needs prior contact to trip, and a stranger has
+     none. The containment is operational rather than structural: **it is sent from the Inbox, never
+     the queue.** If that ever changes, this exposure is the thing to close first. */
+  "audit_followup",
   // Post-engagement: the lead has asked for something or paid for it.
   "onboarding_followup",
   "questionnaire_followup",
