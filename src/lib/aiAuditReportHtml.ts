@@ -76,6 +76,11 @@ export interface AiAuditReportData {
   /** True when competitor names are withheld because the run's list could not be trusted.
    *  Absent on older payloads -> false, which is exactly what those documents already showed. */
   namesWithheld?: boolean;
+  /** 🔴 True when the business's own name is nothing but its trade and its town, so the automated
+   *  match cannot tell a mention of THEM from a mention of the search. The hero is replaced by a
+   *  refusal — not annotated, replaced — and no named figure appears anywhere in the document.
+   *  Derived in buildReportData (§27); absent on an older payload means the old behaviour. */
+  nameNotJudgeable?: boolean;
   /* The full question-by-question detail. Each completed question, whether AI named the business
      (on any scored engine), and the real rival firms it named in that answer. Optional so a payload
      built before this existed still renders — absent means the detail pages are simply omitted,
@@ -699,7 +704,14 @@ export function renderReportHtml(d: AiAuditReportData): string {
     const leaders = (d.topCompetitors ?? []).filter((c) => c.name && c.count > 0);
     const qCount = d.questionsAsked ?? 0;
     // Same figures as the hero headline — reinforces it, never contradicts it.
-    const namedLine = d.named > 0
+    /* ⛔ THE SECOND PLACE THAT ASSERTED "AI never named you", AND IT HAD TO MOVE WITH THE HERO.
+       Withholding the headline and leaving this box saying it four inches lower fixes nothing —
+       the reader meets the same false claim, just later. When the name cannot be judged this
+       states only what IS measured: which firms AI named. Note it does not say "instead", because
+       "instead of you" is the very claim we are refusing to make. */
+    const namedLine = d.nameNotJudgeable
+      ? `We can&rsquo;t put a number on how often AI named <b>${esc(d.businessName)}</b> until a person checks it`
+      : d.named > 0
       ? `AI named <b>${esc(d.businessName)}</b> <b>${d.named}</b> time${d.named === 1 ? "" : "s"}${d.total > 0 ? ` out of ${d.total} answers` : ""}`
       : `AI never named <b>${esc(d.businessName)}</b>${d.total > 0 ? ` &mdash; not once across ${d.total} answers` : ""}`;
     let body = `${namedLine}.`;
@@ -722,7 +734,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
       const denom = d.competitorMentions && d.competitorMentions > 0
         ? ` &mdash; from ${d.competitorMentions} competitor mentions across ${qCount} question${qCount === 1 ? "" : "s"}`
         : "";
-      body += ` The firms AI named most often instead were ${list}${denom}.`;
+      body += ` The firms AI named most often${d.nameNotJudgeable ? "" : " instead"} were ${list}${denom}.`;
     }
     /* ⛔ THE POINTER IS GATED ON THE SAME CONDITION AS THE PAGES IT POINTS AT, AND THAT MATTERS
        MORE THAN IT LOOKS. It was gated on the DATA existing (`questionBreakdown?.length > 0`) while
@@ -734,10 +746,37 @@ export function renderReportHtml(d: AiAuditReportData): string {
       : "";
     gutbox = `
     <section class="gutbox">
-      <div class="gb-eyebrow">Who AI named instead</div>
+      <div class="gb-eyebrow">${d.nameNotJudgeable ? "Who AI named" : "Who AI named instead"}</div>
       <p class="gb-sum">${body}${pointer}</p>
     </section>`;
   }
+
+  /* ⛔ THE SEO SLOT IS LIFTED OUT BECAUSE TWO BRANCHES NOW RENDER IT. Three-way on d.hasWebsite:
+     true = "the full check comes with the work", false = "we'll build you one", null = NOTHING.
+     ⚠️ It is NOT withheld by the name refusal, deliberately: a website scan measures their SITE,
+     which is true whatever their business is called. Withholding it would be a second refusal for
+     a problem it does not have. (The MEASURING branch still withholds it — there the numbers are
+     genuinely mid-flight.) */
+  const seoSlot = d.seo
+    ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : seoSection(d.seo))
+    : d.hasWebsite === false ? noWebsiteSection()
+    : d.hasWebsite === true ? siteCheckPendingSection()
+    : "";
+
+  /* 🔴 THE NAME REFUSAL — IT REPLACES THE HERO. Paul's words, 2026-09-15, and the phrasing is his
+     for two stated reasons worth keeping: it LEADS WITH THE NAME rather than with what we cannot
+     do (an earlier draft read as blaming their name for our problem), and it says "an automated
+     check can't" rather than "we cannot" — because a person CAN tell, it just takes a person.
+     ⛔ DO NOT DEMOTE THIS TO A CAVEAT UNDER THE NUMBER. A true sentence below a false headline is
+     still a false headline, and the headline this replaces was "AI never named X — not once across
+     6 answers" for a business whose name we had no way to find. */
+  const nameCheckSection = `
+    <!-- NAME NOT JUDGEABLE: the hero and the named figure are withheld. See nameNotJudgeable. -->
+    <section class="namecheck">
+      <div class="sec-eyebrow">Before we show you a number</div>
+      <div class="sec-title">We&rsquo;re checking this one by hand.</div>
+      <p>Your business name is made of the same words as your trade and your town, so an automated check can&rsquo;t tell a mention of you apart from a mention of the search itself. We check this one by hand before we send it.</p>
+    </section>`;
 
   const shareFoot = d.shareUrl ? ` &middot; <a href="${esc(d.shareUrl)}">View online</a>` : "";
 
@@ -1135,10 +1174,10 @@ ${REPORT_CHROME_CSS_CORE}
      heavy brand-blue top rule so it visibly BREAKS from the section above; white card inside. */
   /* STILL MEASURING — replaces the hero, "who AI named", the website slot and the fix section
      while a run is in flight. Amber, not red: nothing is wrong, it is simply not finished. */
-  .measuring{ margin:0 28px 20px; padding:18px 22px; border:1px solid var(--amber); border-left-width:6px; border-radius:12px; background:var(--amber-tint); }
-  .measuring .sec-eyebrow{ color:var(--amber); }
-  .measuring .sec-title{ font-size:24px; font-weight:700; color:var(--ink); margin:0 0 10px; }
-  .measuring p{ margin:0 0 8px; font-size:14px; line-height:1.55; color:var(--muted); max-width:70ch; }
+  .measuring,.namecheck{ margin:0 28px 20px; padding:18px 22px; border:1px solid var(--amber); border-left-width:6px; border-radius:12px; background:var(--amber-tint); }
+  .measuring .sec-eyebrow,.namecheck .sec-eyebrow{ color:var(--amber); }
+  .measuring .sec-title,.namecheck .sec-title{ font-size:24px; font-weight:700; color:var(--ink); margin:0 0 10px; }
+  .measuring p,.namecheck p{ margin:0 0 8px; font-size:14px; line-height:1.55; color:var(--muted); max-width:70ch; }
   .measuring .measuring-progress{ color:var(--ink); }
   .measuring .measuring-progress b{ font-size:16px; }
   /* THE EXPLAINER BESIDE THE THREE STEPS. The video is 1080x1920 (vertical), so it takes its own
@@ -1270,7 +1309,7 @@ ${REPORT_CHROME_CSS_FOOT}
     .steps{ grid-template-columns:1fr; gap:14px; }
     .steps::before{ display:none; }
     .vid-row{ flex-direction:column; align-items:center; }
-    .measuring{ margin-left:18px; margin-right:18px; }
+    .measuring,.namecheck{ margin-left:18px; margin-right:18px; }
     /* 3 · Stakes stats → single column. */
     .stats{ grid-template-columns:1fr; }
     /* 4 · Contact buttons → stacked, full-width, comfortable tap target. */
@@ -1304,7 +1343,10 @@ ${d.measuring ? `
       <div class="sec-title">We&rsquo;re not finished asking yet.</div>
       <p>AI gives different answers to the same question on different days, so we ask every question ${d.measuring.runsTarget === 1 ? "and check the answer" : `${inWords(d.measuring.runsTarget)} times`} before we show you a number &mdash; otherwise the figure would change under you between one visit and the next.</p>
       <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
-    </section>` : `
+    </section>` : d.nameNotJudgeable ? `${nameCheckSection}
+${gutbox}
+${seoSlot}
+` : `
     <!-- HERO -->
     <div class="hero">
       <div class="hero-num">
@@ -1333,7 +1375,7 @@ ${gutbox}
          old two-way branch read a blank website column as "no website" and told a business
          with a site that we would build them one (AD Locksmithing, 2026-09-13).
          ============================================================================ -->
-${d.seo ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : seoSection(d.seo)) : d.hasWebsite === false ? noWebsiteSection() : d.hasWebsite === true ? siteCheckPendingSection() : ""}
+${seoSlot}
 `}
     <!-- WHY THIS MATTERS (stakes) -->
     <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
@@ -1371,9 +1413,11 @@ ${d.hidePitch || d.measuring ? "" : `
            two sections above, said the business was named once. Three places in one document
            disagreeing about whether the business exists in AI answers is the same fault three times,
            and it is the one a sceptical reader notices first. -->
-      <div class="sec-title">${d.named > 0 ? "Where you show up, and where you don&rsquo;t yet" : "Why you&rsquo;re not in the answer"}</div>
+      <div class="sec-title">${d.nameNotJudgeable ? "What gets you named" : d.named > 0 ? "Where you show up, and where you don&rsquo;t yet" : "Why you&rsquo;re not in the answer"}</div>
       <div class="dowe-panel">
-        <p class="dowe-lead">${d.named > 0
+        <p class="dowe-lead">${d.nameNotJudgeable
+        ? "Being named consistently is not luck."
+        : d.named > 0
         ? "Being named occasionally rather than consistently is not bad luck."
         : "Being absent is not bad luck."} It comes down to <span class="hl">three things</span>, and all three are fixable.</p>
         <!-- ⛔ THREE IDEAS, NO QUANTITIES. THIS SECTION IS THE ARGUMENT, NOT THE INVENTORY.
