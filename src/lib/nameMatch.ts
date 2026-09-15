@@ -86,7 +86,10 @@ export function tokensContain(hay: string[], needle: string[]): boolean {
    same lie pointing the other direction.
 
    ✅ THE RULE: try the LONGEST proper prefix of the core that is still DISTINCTIVE — the same
-   question the (since-deleted) derivable.ts asked. Strip the trade, the town and legal suffixes, then require BOTH:
+   question `supabase/functions/_shared/derivable.ts` asks. (That file was deleted with the
+   market-audit pass and RESTORED 2026-09-15 — it is live again, and `nameIsJudgeable` there is what
+   decides whether a `named` flag this function set may be counted at all.) Strip the trade, the town
+   and legal suffixes, then require BOTH:
      * ≥4 characters of substance, and
      * at least one token that could actually NAME a firm: alphabetic, ≥2 chars, not a service word.
    The second test is what makes it safe. Without it the rule matched "24 hour" against "open 24
