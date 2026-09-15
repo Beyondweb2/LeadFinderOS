@@ -504,6 +504,15 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      so the vowel rule holds "a accountant"/"a electrician" — measured 2026-09-15, that is 179 of
      the 1,066 lead-linked audits (16.8%), almost all accountants and electricians. */
   { value: 'audit_followup', label: 'Audit follow-up — "I asked chatgpt" note, no video (outreach)' },
+  /* explain_offer — SUBMITTED TO META 2026-09-15. The full pitch: what we do, both figures, the
+     guarantee and the sign-up link, over the same video header.
+     ⚠️ THE LABEL SEPARATES IT FROM THE OTHER TWO VIDEO TEMPLATES by what it ASKS FOR. video_template
+     and competitor_hook send a REPORT and ask for a reply; this one sends the OFFER and asks for a
+     sign-up — the only outreach template whose link is the checkout rather than a report.
+     ⚠️ And it is the only one that needs NO audit, so it is selectable for a lead we have never
+     measured. The refusals it does carry (already paid, no trade, no town) come from the lead row,
+     and each names itself in the Inbox rather than failing at Meta. */
+  { value: 'explain_offer', label: 'Explain the offer — full pitch + sign-up link, with video (outreach)' },
   { value: 'audit_reply_warm', label: 'Audit reply — warm (after the opener)' },
   { value: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
   /* The OPENER follow-up: a business that got the initial_contact opener and never replied. Bulk-

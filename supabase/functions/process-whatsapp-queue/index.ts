@@ -265,6 +265,17 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} {{4}} {{5}} rivals, {{6}} report link. `audit_url` is what makes it needsAudit; rival_1..3 are what make templateNeedsRivals
      true, so it inherits competitor_hook's three-names-or-fall-back rule with no new code here. */
   audit_followup: { lang: "en", vars: ["trade_plural", "town", "rival_1", "rival_2", "rival_3", "audit_url"] },
+  /* explain_offer - submitted to Meta 2026-09-15. MIRRORS whatsapp-send.ts; change both together.
+     {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} the lead's onboarding link.
+     Inbox only - it is a CONTINUATION and carries no audit_url, so this queue never selects it.
+     ⛔ NO VIDEO-HEADER FIELD HERE, AND THAT IS THE RULE THIS MIRROR KEEPS: it carries lang + vars
+     ONLY, and the payload SHAPE lives in the real registry. I added one and it broke two suites at
+     once — worse than a style slip, because the header constant is not imported in this file, so
+     the line was a ReferenceError at module load waiting for the first tick.
+     ⚠️ template-registry-parity greps this file's whole TEXT for the field name, so even naming it
+     in a comment fails the assertion — which is why this note spells it out in words instead.
+     (CLAUDE.md §4: grep the source for your own search string.) */
+  explain_offer: { lang: "en", vars: ["trade_plural", "town", "onboarding_url"] },
   // Follow-up to a warm lead after the 24h window: {{1}} business name, {{2}} onboarding URL.
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
   /* Re-engage a lead who went quiet: {{1}} = business name, {{2}} = that lead's onboarding URL.

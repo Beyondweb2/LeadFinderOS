@@ -76,6 +76,9 @@ const EXPECTED_CONTINUATIONS = [
      QUEUED to a number with NO history it would go out as a first touch. It is sent from the Inbox,
      never the queue — the containment is operational, not structural. */
   "audit_followup",
+  /* explain_offer — added 2026-09-15 with audit_followup's reasoning: Inbox-only, sent into a live
+     conversation, so cold would refuse it for its whole audience. Same accepted cost. */
+  "explain_offer",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));
