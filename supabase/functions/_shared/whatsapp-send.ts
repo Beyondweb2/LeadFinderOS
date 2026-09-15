@@ -502,7 +502,9 @@ After that £29.99 a month. More ways to be found, your reviews replied to, and 
 Here's the sign up:
 ${u}
 
-Short explainer video attached. Happy to answer any questions.`;
+Short explainer video attached. Happy to answer any questions.
+
+https://findable.live/`;
 };
 
 /* audit_followup — SUBMITTED TO META 2026-09-15, re-registered the same day with the article

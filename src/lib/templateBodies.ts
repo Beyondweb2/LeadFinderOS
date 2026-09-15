@@ -79,7 +79,12 @@ const initialContactBodyPre20260915 = (b: string, _u: string) =>
    interpolating the constants would show the Inbox a number Meta is not sending the moment one
    moves. scripts/explain-offer.test.ts asserts they still MATCH, so a price change fails the build
    and forces the re-registration rather than letting the two drift in silence. */
-const explainOfferBody = (_b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) => {
+/* ⛔ WHAT explain_offer SAID BEFORE THE WEBSITE URL WAS ADDED AT META ON 2026-09-15.
+   FLOWPOINT, Techfix, JAMES ELECTRICAL and C.K Electrical Contractors were all sent THIS
+   wording. It is not copy any more, it is the record of what four prospects read - never
+   edit it. (One of them replied "I don't click on links from people I don't know", which is
+   why the URL was added.) */
+const explainOfferBodyPreWebsiteUrl = (_b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) => {
   const t = pluraliseTrade(trade);
   return `Nobody's doing this yet, which is the point.
 
@@ -97,6 +102,28 @@ Here's the sign up:
 ${u}
 
 Short explainer video attached. Happy to answer any questions.`;
+};
+
+const explainOfferBody = (_b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) => {
+  const t = pluraliseTrade(trade);
+  return `Nobody's doing this yet, which is the point.
+
+People ask ChatGPT and Gemini for ${t.ok ? t.value : (trade || 'businesses')} in ${town || 'your area'} instead of googling. I get you named in those answers.
+
+Keep your website and I'll optimise it so AI can read you. Or if you can't give me access, or want a new one, I'll build it. No extra cost.
+
+£99 to start. I run a full baseline check and send it over, then measure again four weeks later so you can see exactly what's changed.
+
+Not showing up more, you get your money back.
+
+After that £29.99 a month. More ways to be found, your reviews replied to, and I watch how each page performs and adjust. Stop any time.
+
+Here's the sign up:
+${u}
+
+Short explainer video attached. Happy to answer any questions.
+
+https://findable.live/`;
 };
 
 /* audit_followup — submitted to Meta 2026-09-15. {{1}} trade as a LOWERCASE PLURAL, {{2}} town,
@@ -341,6 +368,12 @@ const SUPERSEDED_BODIES: Record<string, { changedAt: string; previous: TemplateB
   /* Paul re-approved the opener on 2026-09-15: "Hi, is this the right number for X? Cheers"
      became "Hi, is this X?\n\nCheers". 238+ rows carry the old words. */
   initial_contact: { changedAt: '2026-09-15T00:00:00.000Z', previous: initialContactBodyPre20260915 },
+  /* Paul added the website URL to the foot of the body at Meta on 2026-09-15, after a prospect
+     replied that he does not click links from people he does not know. FOUR rows predate it.
+     The cutoff sits just after the last old send (13:51:52Z) and before any send that could
+     carry the new wording - there were none between, so any instant in that gap is equally
+     true and 14:00Z is the readable one. */
+  explain_offer: { changedAt: '2026-09-15T14:00:00.000Z', previous: explainOfferBodyPreWebsiteUrl },
 };
 
 /** The readable text for a message. If the stored body is already real filled text, it is

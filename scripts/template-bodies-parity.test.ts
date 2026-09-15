@@ -93,7 +93,15 @@ console.log("\n── ⛔ THE GREETING NAME IS APPLIED IDENTICALLY ON BOTH SIDES
      record of what was sent contradicts the message. Compared through the PUBLIC entry points,
      which is what the product actually calls — the tables above are compared separately. */
   const LISTING = "NeiL Hughes driving tuition";
-  const RECENT = new Date(Date.parse(DISPLAY_NAME_LIVE_FROM) + 60_000).toISOString();
+  /* ⛔ SAMPLE AT NOW, NOT AT A FIXED ANCHOR. This block compares the CURRENT readable copy against
+     the CURRENT sent copy, so it has to ask for a message sent NOW. Pinned to
+     DISPLAY_NAME_LIVE_FROM + 60s it silently became a comparison against a SUPERSEDED body the
+     moment a template's words changed at Meta: explain_offer gained the website URL at 14:00Z on
+     2026-09-15, and this line was still asking for 00:01Z, so it read the pre-URL body and
+     reported drift against copy that had not drifted. Now is after every changedAt by
+     construction, and it is still after DISPLAY_NAME_LIVE_FROM, so the greeting-name rule this
+     block exists to exercise is live either way. */
+  const RECENT = new Date().toISOString();
   let drift: string[] = [];
   for (const name of Object.keys(WA_TEMPLATE_BODIES)) {
     const sent = renderTemplateBody(name, LISTING, U, TRADE, COMP, FIRST);
