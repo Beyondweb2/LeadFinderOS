@@ -4890,3 +4890,51 @@ the TOWN is not. Two steps added to `identifyName`, in this order, after the leg
   inherited — create-ai-audit, findable-onboarding, mockup, process-ai-audit-queue,
   process-sms-queue, process-whatsapp-queue, send-whatsapp-message, stripe-webhook, submissions,
   whatsapp-status. `npm run check`: **107/112**, the five known-stale suites only.
+
+### 30b. 🔴 audit_followup 500'd ON ITS FIRST REAL SEND — the branch predicate named yesterday's variables (2026-09-15)
+
+**BS4 Electrical Services Ltd. "Edge Function returned a non-2xx status code."** Nothing was wrong
+with the lead: replied, window open, audit complete, trade `Electricians`, town `Bristol`, **24
+distinct competitor names**.
+- ⛔ **THE NON-2XX IS ITSELF THE DIAGNOSIS, AND IT IS THE FASTEST TRIAGE ON THIS ENDPOINT.** EVERY
+  designed refusal in `send-whatsapp-message` returns **200 with `ok:false`** — `pitch_already_sent`,
+  `audit_reply_unavailable`, `unsafe_template_var`, `followup_unavailable`, `no_business_name`. A
+  **non-2xx is therefore never a refusal working as designed**; it is `unknown_template` (400) or
+  `internal` (500), and 500 logs to an edge log **the CLI cannot read**. Check the status before
+  hunting the rival guard or the town gate.
+- 🔴 **THE CAUSE.** Both senders decided "does this need the lead's audit?" as
+  `vars.includes("trade") || vars.includes("competitors")`. **`audit_followup` declares
+  `trade_plural`, `town`, `rival_1..3`, `audit_url` — and neither of those two.** It answered NO,
+  fell to the **PLAIN opener branch**, and `claimTemplatePayload` ran with no trade, no rivals and
+  no report link. The first resolver threw, **the plain branch has no catch**, and the outer handler
+  returned 500. `competitor_hook` has the identical shape and was **one Inbox press behind it** — it
+  only became reachable there the same morning (§30).
+- ⛔ **THE GUARD-KEYED-TO-TODAY'S-INSTANCE FAULT AGAIN (§8), and the two copies were byte-identical
+  AND both wrong** — a reviewer diffing them would have found them in perfect agreement.
+- 🔴 **THE CORRECT RULE ALREADY EXISTED AND ITS COMMENT CLAIMED THE SENDERS USED IT.**
+  `_shared/outreach-audit.ts`'s own `templateNeedsAudit` includes `audit_url`, so it would have
+  routed both correctly, and it said of itself *"the same rule the two send paths use to fill the
+  payload"*. **False — a stale comment as a load-bearing bug (§4).** Corrected, not merged.
+- ⛔ **AND MERGING THEM WOULD BE WRONG: THEY ARE TWO QUESTIONS.** `outreach-audit`'s asks *does this
+  message need a completed audit to EXIST* (used for waiting, deliberately broader); the senders'
+  asks *which branch BUILDS this payload*. **`free_check_result` proves the difference** — it
+  declares an onboarding link AND a report link, so it builds on the ONBOARDING branch while still
+  needing an audit to exist.
+- **THE FIX: `src/lib/templateRouting.ts`** — `AUDIT_DERIVED_VARS`, `branchForVars`,
+  `buildsFromAudit`, `BRANCH_SUPPLIES`, read by both senders. ⛔ **Nothing in it names a template**,
+  so one registered tomorrow with a new audit-derived variable joins the right side by construction.
+  ⚠️ **Order is part of the rule**: `contact_first_name` → `onboarding_url` → audit vars → plain.
+  `onboarding_followup` declares `trade_plural` and is matched FIRST by `onboarding_url`; reordering
+  routes it to the audit branch and refuses every lead without an audit for a message that needs none.
+- **`scripts/template-routing.test.ts` asks COVERAGE, not routing**: for the branch each SENDABLE
+  template lands on, is every variable it declares one that branch can supply? A test asserting only
+  "audit_followup routes to audit" passes the day someone adds a variable no branch resolves. **It
+  keeps the old predicate as a live assertion** — the reproduction, so a diff reinstating it fails.
+- 🔴 **IT FOUND A SECOND LATENT ONE: `free_check_result` would 500 identically if it were ever put in
+  the picker.** It works only because it has its own sender and is server-only. The test pins that it
+  stays out of `WHATSAPP_TEMPLATES` and says why.
+- ⚠️ **NOT PROVEN BY A LIVE SEND** — that costs a real message to a real prospect. Proven by the
+  routing test and the deploy; BS4's 24 rivals mean it will genuinely send rather than fall back to
+  `video_template`.
+- **Deployed:** `send-whatsapp-message`, `process-whatsapp-queue` (the whole closure of the new leaf,
+  walked). `npm run check`: **108/113**, the five known-stale suites only.
