@@ -11,6 +11,17 @@
    the whole chain (market-match -> ai-search -> apify) uses no Deno globals, so the SPA can import
    it too and both sides group names identically. */
 import { buildMatchContext, groupNames } from "../../supabase/functions/_shared/market-match.ts";
+/* 🔴 THE NAME TEST (§27). `named` is nameMatches(answer_text, businessName), so a business CALLED
+   "Blackpool Plumber" scores on an answer about plumbers in Blackpool without the engine having any
+   idea who they are — and the report then prints that count as a measurement of THEM.
+   ⛔ IT BREAKS BOTH WAYS AND THE SECOND WAY IS THE SERIOUS ONE. Measured over the 495 opened
+   reports: 64 carry an unjudgeable name. Five were told "6 of 6" — AI already names you everywhere,
+   which kills the sale on a claim we cannot support. Two ("CJ Plumbing Services", which strips to
+   `cj`, and "A Plumbing Company") were told 0 of 6, which this renderer prints as **"AI never named
+   you"** — a false accusation on the document that asks for the business.
+   ⚠️ Same import shape as market-match above, and for the same reason: the whole chain is
+   Deno-global-free, so the SPA and the edge bundler both resolve it. */
+import { nameIsJudgeable } from "../../supabase/functions/_shared/derivable.ts";
 import { classifyKnownEntity } from './knownEntities.ts';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from './competitorCleaning.ts';
 import { sourceMix } from './sourceType.ts';
@@ -1188,6 +1199,14 @@ export function buildReportData(
        confirmed_location || derived_town || search_location), so the sentence names the town the
        questions were actually asked about rather than a second guess at it. */
     locationText: ctx.locationText ?? "",
+    /* ⛔ DERIVED HERE, NEVER STORED, AND IT GATES THE HERO RATHER THAN ADDING A CAVEAT UNDER IT.
+       Paul's rule 2026-09-15: "make sure the refusal replaces the hero, not just a line further
+       down" — a true sentence below a false headline is still a false headline.
+       ⚠️ It reads the SAME three fields the audit was run against (businessName / businessType /
+       locationText), so it cannot disagree with what the questions asked about. */
+    nameNotJudgeable: !nameIsJudgeable({
+      businessName: ctx.businessName, trade: ctx.businessType, town: ctx.locationText,
+    }),
     namesWithheld: rivalsSuppressed,
     gutPunch: rivalsSuppressed ? null : pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
     // The date the AUDIT WAS MEASURED, not the date someone happened to open the link.
