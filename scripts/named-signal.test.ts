@@ -17,6 +17,7 @@
 import {
   cellNamed, namedEvidence, hasModelNamedEvidence, namedInMode, allCellsModelRead,
 } from "../src/lib/namedSignal.ts";
+import { runIsModelRead } from "../src/lib/auditReport.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -69,6 +70,35 @@ ok(decide(legacyOnly, modelRead) === 'legacy',
    "string-matched baseline + model-read replay -> BOTH stay legacy (the ruler cannot change mid-comparison)");
 ok(decide(modelRead, legacyOnly) === 'legacy', "and the same the other way round");
 ok(decide(modelRead, modelRead) === 'auto', "both read by the model -> the model is used for both");
+
+/* ── 5. THE HAND-CHECK GATE LIFTS WHERE THE MODEL HAS READ THE RUN ─────────────────────────────
+   The client report refused to print a number at all for a name made of trade + town, because
+   nothing could tell a mention of the business from a mention of the search. The model can, so
+   the refusal now fires ONLY when there is no model verdict to lean on.
+   THE TEST IS THE MAJORITY RULE, and both edges matter: ONE model verdict among eleven string
+   matches must NOT lift a headline number, and ONE missing verdict must NOT put a whole report
+   back behind the refusal (gpt-4o omits an id often enough that the extractor retries for it). */
+const row = (cells: Record<string, unknown>) => ({ id: 'r', question: 'q', status: 'done', result: cells } as never);
+const cell = (answer: boolean, self?: boolean) =>
+  ({ answer_text: 'x', named: answer, ...(self === undefined ? {} : { self_named: self }) });
+
+ok(runIsModelRead([row({ chatgpt: cell(true, true), gemini: cell(false, false) })]) === true,
+   "every cell read -> the run is model-read, the refusal lifts");
+ok(runIsModelRead([row({ chatgpt: cell(true), gemini: cell(false) })]) === false,
+   "no cell read -> still refused (absence is not an answer)");
+ok(runIsModelRead([
+     row({ chatgpt: cell(true, true), gemini: cell(false, false) }),
+     row({ chatgpt: cell(true, true), gemini: cell(false) }),
+   ]) === true,
+   "3 of 4 read -> a majority carries it; one omitted id does not re-refuse the report");
+ok(runIsModelRead([
+     row({ chatgpt: cell(true, true), gemini: cell(false) }),
+     row({ chatgpt: cell(true), gemini: cell(false) }),
+   ]) === false,
+   "1 of 4 read -> a lone verdict cannot carry a headline number");
+ok(runIsModelRead([]) === false, "no rows at all -> not model-read");
+ok(runIsModelRead([row({ chatgpt: { answer_text: '', named: true, self_named: true } })]) === false,
+   "a cell with no ANSWER is not a read cell - an empty answer was never judged");
 
 console.log(f === 0 ? "\nnamed-signal: OK" : `\n${f} FAILURES`);
 process.exit(f ? 1 : 0);
