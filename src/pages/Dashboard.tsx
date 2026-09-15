@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { SEOHead } from '@/components/SEOHead';
 import { Link } from 'react-router-dom';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
@@ -17,26 +16,14 @@ import { DashboardSection } from '@/components/dashboard/DashboardSection';
 
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Loader2, 
+import {
+  Loader2,
   ArrowRight,
   Search,
   FileText,
   Users,
-  Trash2,
 } from 'lucide-react';
 import { TipBar } from '@/components/TipBar';
 
@@ -45,7 +32,6 @@ const Dashboard = () => {
   const { metrics, isLoading, refetch } = useDashboardMetrics(isAdmin);
   const { user } = useAuth();
   const { toast } = useToast();
-  const [isFullResetting, setIsFullResetting] = useState(false);
 
   // Clear a lead's task from the Next Actions card: set next_action='none' +
   // next_action_date=null (owner-RLS update, same shape as updateNextAction's clear).
@@ -104,30 +90,11 @@ const Dashboard = () => {
     );
   }
 
-  const handleFullReset = async () => {
-    if (!user) return;
-    setIsFullResetting(true);
-    try {
-      // One atomic, user-scoped wipe (SECURITY DEFINER fn keyed to auth.uid()).
-      // FK cascades clean the site/booking/claim children; templates + login +
-      // admin survive. Reusable — safe to press between test runs.
-      const { error } = await (supabase as unknown as {
-        rpc: (fn: string) => Promise<{ error: { message: string } | null }>;
-      }).rpc('reset_my_account');
-      if (error) {
-        console.error('Full reset failed:', error);
-        toast({ title: 'Reset failed', description: error.message, variant: 'destructive' });
-        return;
-      }
-      toast({ title: 'Account reset', description: 'All your test data was cleared. Templates and login kept.' });
-      refetch();
-    } catch (err) {
-      console.error('Full reset failed:', err);
-      toast({ title: 'Error', description: 'Failed to perform full reset.', variant: 'destructive' });
-    } finally {
-      setIsFullResetting(false);
-    }
-  };
+  /* ⛔ "FULL RESET" IS GONE (2026-09-15, Paul's call). It called reset_my_account(), a SECURITY
+     DEFINER wipe of every lead, audit, message and paying customer for the signed-in account — a
+     multi-user-era "reset my test account" button sitting one confirm away on a single-user
+     production dashboard. The DB function still exists until Phase 3 removes it; nothing in the
+     app calls it any more. */
 
   return (
     <div className="space-y-5 sm:space-y-7">
@@ -260,36 +227,6 @@ const Dashboard = () => {
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
-
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive gap-1.5">
-              <Trash2 className="h-3.5 w-3.5" />
-              Full Reset
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Full account reset?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This wipes <strong>all your data</strong> — every lead (including Track Leads and paying customers), outreach history &amp; activity, contact logs, search history, and every generated site along with its bookings, staff, claim links and visit tracking. It also clears your claims &amp; business notes and resets your metrics to zero.
-                <br /><br />
-                Your <strong>login, admin access and saved message/voice templates are kept</strong>. This only affects your own account and <strong>cannot be undone</strong>.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleFullReset}
-                disabled={isFullResetting}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {isFullResetting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                Delete Everything
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </div>
   );
