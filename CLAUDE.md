@@ -1422,6 +1422,28 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
   lead) and are never cached.
 - ⚠️ The residual false match that survives all three guards is a same-name business in the same
   hinted town — whose derived_town is still the right town, the quantity being verified.
+- ✅ **DECIDED 2026-09-15, PAUL'S CALL: A FREE-CHECK LEAD GOOGLE CANNOT RESOLVE IS HANDLED BY HAND.
+  NOTHING IS BUILT, AND THAT IS THE DECISION — do not re-open it without a third case.** The
+  question was what to do when a free-check visitor's business cannot be found on Places, so the
+  lead grades settled-unverifiable and every message lane refuses it.
+  - ⛔ **THE NUMBER IS WHAT SETTLED IT, AND IT SHOULD BE RE-COUNTED BEFORE ANYONE BUILDS ANYTHING.**
+    Measured that day: **4 leads have EVER been town-unverifiable; 2 unarchived; both free checks;
+    ZERO have a phone; ZERO are in the queue.** One of the two is Paul's own test (`richard` /
+    `plummer` / rich@move37.fun). **The real population is one lead.**
+  - ⚠️ **AND THE GATE WAS THIRD IN LINE FOR IT, NOT FIRST.** Power pulse has no phone and a
+    non-resolving email, so opening the gate changes nothing for it. Paul's instruction was
+    explicit: **do NOT resolve Power pulse.** Unblocking one lane of three is not a fix.
+  - **The handling, when one matters:** set `derived_town` on the lead and clear `town_fetch_note`.
+    Every gate passes immediately, no deploy. ⚠️ **Stated cost: afterwards it is indistinguishable
+    from a town Google verified** — there is no record that a person decided it.
+  - **The three options that were REJECTED as more machinery than the problem**, kept so they are
+    not re-invented: (B) extend the audit's `town_confirmed` exemption to the message lanes on the
+    strength of the visitor's TYPED town — the delicate part is the queue's `.or()` SELECT filter;
+    (C) a recorded operator-override state so "a person vouched" stays distinguishable from "Google
+    said so"; (D) an operator screen over the three-guard place resolution's rejected candidates,
+    which is the only one that would have solved Power pulse end to end — **and is worth doing for
+    the phone, website and address it would buy, never for this gate.**
+
 - **Backlog** (measured 2026-08-14): 498 leads lack derived_town, **384 unarchived** — all with
   place_ids, ≈ $1.92 via the Outreach table's **"Fix missing town" button — ONE press** (the
   explicit lead_ids path has no per-call slice, and $1.92 sits inside PLACE_DETAILS_CAP_USD
