@@ -5062,3 +5062,100 @@ since 2026-09-14 with no import line.** Not a scope problem: a plain ReferenceEr
   that does not exist.
 - **Deployed:** `send-whatsapp-message`, BUILD_ID **`2026-09-15d`**, verified live by
   `curl -X OPTIONS` reading `x-swm-build`. `npm run check`: **110/115**, the five stale suites only.
+
+---
+
+## 31. ✅ "NAMED" IS THE MODEL'S VERDICT NOW, AND THE SEO SCAN IS DECIDED BY PURPOSE (2026-09-15)
+
+### The SEO scan: an opt-OUT meant ABSENCE MEANT SPEND
+Found on BS4 Electrical Services Ltd (audit `c8a78581`, purpose `audit`) — a cold outreach report
+carrying "Website issues we can fix". The rule was
+`skipSeo = body.skip_seo === true || isMeasurement || isRemeasure || isFreeCheck`, so any caller
+that did not mention the flag bought a ~4p Apify scan — and the caller that does not mention it is
+the BUSIEST lane in the product: `whatsapp-inbound`'s first-reply auto-audit chain.
+- **Measured: 620 outreach-lane runs scanned, 95% of every SEO pound ever spent** (~$30 lifetime,
+  re-derived from `enrichment_usage`: 717 real rows summing $16.74 plus 322 $0.12 fallback echoes
+  whose true cost is unknown).
+- ⛔ **`seoScanAllowed()` (`src/lib/auditKind.ts`) IS A POSITIVE ALLOWLIST OF ONE PURPOSE:
+  `baseline`.** Null/unknown does NOT scan — on a paid API the absent value grades "do not spend".
+- ⛔ **ENFORCED TWICE, AND THAT IS THE POINT.** create-ai-audit seeds the skip marker;
+  `process-ai-audit-queue` re-asks the same predicate before it spends. The marker alone IS "a flag
+  that can drift" — a run inserted by any path that misses it was scanned with nothing to stop it.
+- ⚠️ Stated cost: a wizard single no longer scans by itself. `LeadSiteCheckButton` is the
+  on-demand scan and it prices itself on its face.
+
+### "named" was a substring test, and it broke both ways
+`named` was `nameMatches(answer_text, businessName)` at scan time, so a business whose name is its
+own trade and town scored on answers that had never heard of it. **147 of 1,099 lead-linked audits
+(13%)**: "Burnley Locksmiths" was told AI names it 6 of 6; "CJ Plumbing Services" that AI never
+names it.
+- ⛔ **`extract-competitors` MARKS the audited business instead of excluding it** — `self_named`, a
+  required boolean per answer. `cleanNames` RETURNS the self match rather than dropping it; the
+  displayed rival list is byte-identical and self still never prints as a competitor.
+- ⛔ **`src/lib/namedSignal.ts` IS THE ONE PREDICATE**, read by all 19 raw-flag sites.
+  `cellNamed()` prefers the model verdict; **absence FALLS BACK to the string match, never to
+  zero** — reading a missing verdict as "not named" would zero the book in one deploy, two paying
+  clients' frozen baselines included.
+- ⛔ **A COMPARISON USES ONE RULER ON BOTH SIDES** (`namedMode`): the model is used only when the
+  before AND the after have both been read by it. A model-read replay against a string-matched
+  baseline is not a before-and-after, and that number decides a refund.
+- ⛔ **The hand-check refusal now needs a MAJORITY of model-read cells to lift**
+  (`runIsModelRead`). Not one (a lone verdict cannot carry a headline), not all (gpt-4o omits an
+  id on ~8% of runs).
+- **Why the model is trusted, measured not assumed: across the 5,957 distinct names gpt-4o has
+  written into that field, ZERO are bare postcodes. Across the 19,046 the old regex scraper
+  wrote, 203 are.**
+
+### 🔴 THE CAP WAS DECIDING WHAT THE MODEL WAS ALLOWED TO SEE
+The first backfill produced ~12 false negatives — businesses shown in ChatGPT Maps-style listing
+cards scored "not named". **A prompt paragraph was written for it and recovered 0 of 13, which is
+what proved the fault was one layer down.**
+- A ChatGPT answer carrying listing cards is **9,000–22,000 characters and about half of it is
+  markdown image embeds with ~800-character opaque URLs**, so the business's own listing sat past
+  `MAX_ANSWER_CHARS` (4,000). The model was asked "did this answer name them?" about text that did
+  not contain them.
+- **Measured: stripping the embeds removes 45.4% of all text; cells over the cap 232 → 27; cells
+  whose BUSINESS NAME is beyond the cut 14 → ZERO.** `stripCaptureNoise()` runs BEFORE the
+  truncation — slicing first would leave the cut where it is and merely tidy what survived it.
+- ⚠️ **THE LESSON, AND IT IS §4's: THE PROMPT WAS REWRITTEN WITHOUT CHECKING WHAT THE PROMPT
+  CONTAINED.** One query against `MAX_ANSWER_CHARS` before spending would have shown it. Cost
+  $1.47 and a round trip. **When a model "gets it wrong", check what it was SHOWN before you
+  rewrite what it was TOLD.**
+- ⚠️ **"IDENTICAL EVERYWHERE" IS A TELL, NOT A RESULT.** Both times a pass produced numbers
+  identical to the previous one the cause was mechanical (the fix never reached the data; the
+  affected cells were not in that set) — never a model that happened to agree. Prove which.
+
+### What was run, and what it cost
+- **Today's 13 unjudgeable audits re-extracted: $0.2279** (13 runs, 0 failures). Nothing changed,
+  and that was VERIFIED not accepted: zero of their 78 cells had the name beyond the old cut, and
+  all 13 runs carry fresh receipts.
+- **The other 135 were CLEARED** — `self_named` removed from 1,187 cells across 494 rows, plus the
+  stale counters on 139 receipts. Read back: 0 remaining. They keep the string match and the
+  refusal. ⛔ **Leaving them would NOT have been neutral** — `cellNamed` prefers a model verdict
+  wherever one exists, so it would have made ~12 known-wrong verdicts authoritative.
+- ⛔ **`extract-competitors` NOW RETURNS ITS REAL COST** from OpenAI's own token counts (gpt-4o
+  $2.50/$10 per 1M). It had never logged a penny; every figure for it in this file was an estimate
+  from a comment, and the estimate made this session was **3.5x too low**.
+
+### ⛔ TaskStop REPORTED SUCCESS AND THE PROCESS KEPT RUNNING
+A background re-run was stopped, reported as stopped, and **spent another ~$0.52** before a
+progress event for a job already called dead gave it away. **Verify a kill by process count, not
+by the tool's return value.**
+
+### ⚠️ The parity test sampled at a fixed anchor
+`template-bodies-parity` compared at `DISPLAY_NAME_LIVE_FROM + 60s`, so the moment a body was
+superseded it began comparing the OLD body against current copy and reporting drift that did not
+exist. It samples at **now**, which is after every `changedAt` by construction.
+
+### explain_offer gained the website URL
+Paul added `https://findable.live/` at the foot at Meta after a prospect replied "I don't click on
+links from people I don't know". Variables UNCHANGED — {{1}} trade_plural, {{2}} town, {{3}}
+onboarding link, the URL plain text. **FLOWPOINT, Techfix, JAMES ELECTRICAL and C.K Electrical
+were sent the OLD wording and render it** via `SUPERSEDED_BODIES` (changedAt 14:00Z).
+⚠️ `process-whatsapp-queue`'s mirror of explain_offer has **no `headerVideoUrl`** where
+whatsapp-send.ts has one. Harmless today (the queue cannot send it — §30b) but the registries are
+meant to match.
+
+**Deployed:** all 17 functions in the closure; SPA pushed.
+⚠️ **`cleanup/pixel-and-full-reset` (`06a4f815`) IS STILL UNMERGED** — the Meta Pixel and the
+dashboard's Full Reset button are still live.
