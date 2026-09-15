@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { cellNamed } from '@/lib/namedSignal';
 import { supabase } from '@/integrations/supabase/client';
 import {
   buildPlaybook,
@@ -331,7 +332,7 @@ export function usePlaybook(id: string | undefined): UsePlaybookResult {
             let n = 0, t = 0;
             for (const r of qRows) {
               if (r.status !== 'done' || !r.result) continue;
-              for (const e of SCORED_ENGINES) { t++; if (r.result[e]?.named) n++; }
+              for (const e of SCORED_ENGINES) { t++; if (cellNamed(r.result[e])) n++; }
             }
             naming = (t > 0 ? { named: n, total: t } : null);
           }

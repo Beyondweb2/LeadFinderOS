@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { classifyWinnability, unwrapCitationUrl, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
 
 /* ⛔ THE TWO SCORED ENGINES ONLY, for the slot read. AI Overview and Google organic are captured
@@ -200,7 +201,7 @@ Deno.serve(async (req) => {
             if (judgeable) {
               engNamed[e] = engNamed[e] ?? [0, 0];
               engNamed[e][1]++; cellsTotal++; tAgg.cells++;
-              if (er.named) engNamed[e][0]++;
+              if (cellNamed(er)) engNamed[e][0]++;
             }
             srcSplit[e] = srcSplit[e] ?? { directory: 0, ownSite: 0, authority: 0, other: 0, total: 0 };
             domCount[e] = domCount[e] ?? new Map();

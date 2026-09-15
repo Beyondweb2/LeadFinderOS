@@ -20,6 +20,13 @@ const corsHeaders = {
 };
 
 const MODEL = "gpt-4o";
+/* ⛔ THE REAL COST, FROM OpenAI's OWN TOKEN COUNTS — this function has never logged a penny.
+   CLAUDE.md §4's rule: name the PRODUCT and the TIER. These are OpenAI's published standard
+   (non-batch, non-cached) rates for gpt-4o: $2.50 per 1M input tokens, $10.00 per 1M output.
+   Every call's `usage` block is summed and returned, so a backfill reports what it actually
+   spent rather than an estimate derived from a comment. */
+const USD_PER_1M_INPUT_TOKENS = 2.50;
+const USD_PER_1M_OUTPUT_TOKENS = 10.00;
 const MAX_ANSWER_CHARS = 4_000;   // truncate each stored answer_text packed into the prompt
 const MAX_NAME_LEN = 60;          // reject absurdly long "names" (fragments)
 const MAX_PER_ENGINE = 8;         // cap competitors kept per engine
@@ -77,16 +84,22 @@ const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
  *  ⛔ SO WHAT THIS FUNCTION RETURNS IS WHAT THE CLIENT READS. Anything added here must be a fact
  *  about the NAME (it is a directory; it is not a name at all), never a heuristic about towns, word
  *  counts, capitalisation or trade vocabulary - those are what threw real competitors away. */
-function cleanNames(names: unknown, businessName: string): string[] {
+function cleanNames(names: unknown, businessName: string): { names: string[]; selfMatched: boolean } {
   const self = businessName.trim().toLowerCase();
   const seen = new Set<string>();
   const out: string[] = [];
+  /* ⛔ RETURNED, NOT DISCARDED (2026-09-15). The self entry is still never printed as a rival —
+     that rule is unchanged and the displayed list is byte-identical. What changed is that the
+     DROP is now evidence: if the model listed the audited business among the firms an answer
+     recommended, the answer named them. It used to be thrown away, which is why "named" had to
+     be decided by a substring test against the raw answer instead. */
+  let selfMatched = false;
   for (const raw of Array.isArray(names) ? names : []) {
     const name = str(raw);
     if (!name || name.length > MAX_NAME_LEN) continue;
     const k = name.toLowerCase();
     if (seen.has(k)) continue;
-    if (self && (k === self || k.includes(self) || self.includes(k))) continue; // never list self
+    if (self && (k === self || k.includes(self) || self.includes(k))) { selfMatched = true; continue; } // never list self — but record it
     /* A known DIRECTORY is a SOURCE, not a rival a customer hires instead - Checkatrade printing as
        a client's competitor is the failure this prevents. Known NATIONALS stay: Able Group really is
        a rival (knownEntities.ts). */
@@ -98,7 +111,7 @@ function cleanNames(names: unknown, businessName: string): string[] {
     out.push(name);
     if (out.length >= MAX_PER_ENGINE) break;
   }
-  return out;
+  return { names: out, selfMatched };
 }
 
 /* Record the cleaning outcome on the run (results.competitor_cleaning) WITHOUT touching the
@@ -109,7 +122,7 @@ function cleanNames(names: unknown, businessName: string): string[] {
  * verdict from the names themselves, because every audit before 2026-08-28 has no stamp at all. */
 // deno-lint-ignore no-explicit-any
 async function stampCleaning(service: any, runId: string, s: {
-  items_total: number; items_cleaned: number; complete: boolean; errors: string[];
+  items_total: number; items_cleaned: number; complete: boolean; errors: string[]; self_named_items?: number; self_named_true?: number; usd?: number; prompt_tokens?: number; completion_tokens?: number;
 }): Promise<void> {
   try {
     const { data } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
@@ -143,19 +156,32 @@ EXCLUDE everything that is not a hireable firm — never return these:
 - generic words or descriptors: Provider, Providers, Small, Online, Cost, Cheap, Best,
   Service(s), Firm, Company, Accountant(s), Software, Cloud, Local, Support
 - section headers, list labels, UI / page furniture, or sentence fragments
-Also EXCLUDE the audited business itself (given below) — never list it as its own competitor.
+The AUDITED BUSINESS (given below) is a special case, and it is the one thing this tool is
+really for. NEVER list it under competitors — it is not its own competitor. INSTEAD, set
+self_named to true for that id when the answer presents the audited business as one of the
+businesses a customer could choose, hire or contact: recommended, listed, linked or described
+as an option. Otherwise set self_named to false.
+
+JUDGE THE BUSINESS, NOT THE WORDS. Many of these names are made of nothing but a trade and a
+place — "Telford Plumbers", "Locksmiths Canterbury", "BS4 Electrical Services Ltd". An answer
+about plumbers in Telford is NOT naming "Telford Plumbers" simply because those words appear in
+it, and "BS4" appearing as a POSTCODE is not the firm "BS4 Electrical Services Ltd". Set
+self_named to true ONLY when the answer is genuinely pointing a customer at THAT BUSINESS as a
+business. When the words merely coincide with the subject of the question, it is false.
+A close variant of the real firm ("RG Locksmiths" for "RG Locksmiths Ltd") IS the business.
 
 If an answer names NO real competitor firm, return an EMPTY list for that id. NEVER pad with
 non-firms to fill space. Precision over recall: when unsure whether something is a genuine
 firm, leave it out.
 
-Return exactly one entry per id via return_competitors.`;
+Return exactly one entry per id via return_competitors, each with BOTH competitors and
+self_named.`;
 
 const COMPETITORS_TOOL = {
   type: "function",
   function: {
     name: "return_competitors",
-    description: "Return the real competitor firms each answer recommended, per item id.",
+    description: "Return the real competitor firms each answer recommended, and whether it named the audited business, per item id.",
     parameters: {
       type: "object",
       properties: {
@@ -170,8 +196,13 @@ const COMPETITORS_TOOL = {
                 items: { type: "string" },
                 description: "Real competitor firm names the answer recommended (empty if none).",
               },
+              self_named: {
+                type: "boolean",
+                description:
+                  "True if this answer presents the AUDITED BUSINESS itself as a business a customer could choose or hire. False if its name merely shares words with the question's trade or town.",
+              },
             },
-            required: ["id", "competitors"],
+            required: ["id", "competitors", "self_named"],
             additionalProperties: false,
           },
         },
@@ -242,6 +273,9 @@ Deno.serve(async (req) => {
 
     // Build the batch of (row × engine) answer items to read.
     type Item = { id: string; rowId: string; engine: string; label: string; question: string; answer: string };
+    /* What one answer yields: the rivals it recommended, and whether it named the audited
+       business. The second half used to be thrown away inside cleanNames. */
+    type Extracted = { names: string[]; selfNamed: boolean };
     const items: Item[] = [];
     for (const r of rows) {
       if (r.status !== "done" || !r.result || typeof r.result !== "object") continue;
@@ -267,11 +301,17 @@ Deno.serve(async (req) => {
     // Nothing to read (no completed answers) — nothing to change.
     if (items.length === 0) return json({ ok: true, changed: 0, note: "no_answer_text" });
 
+    // Summed across every batch AND every retry, so a run that needed three attempts reports all
+    // three. Counted even when a batch then fails to parse — the tokens were still billed.
+    let usageIn = 0, usageOut = 0;
+    const usdSpent = () =>
+      Number(((usageIn / 1e6) * USD_PER_1M_INPUT_TOKENS + (usageOut / 1e6) * USD_PER_1M_OUTPUT_TOKENS).toFixed(6));
+
     /* One OpenAI call for one batch. Returns the ids it cleaned, or throws with a typed reason.
        Kept as a local closure so it can see OPENAI_API_KEY / businessName without threading them. */
     const cleanBatch = async (batch: Item[]): Promise<Map<string, string[]>> => {
       const userPrompt =
-`Business (exclude from every list): ${businessName}
+`Audited business (never list as a competitor; set self_named for it): ${businessName}
 Location: ${location}
 
 Read each answer below and return the real competitor firms it recommended, per id.
@@ -305,22 +345,31 @@ Return one entry per id via return_competitors.`;
         throw new Error(`openai_http_${res.status}: ${txt.slice(0, 200)}`);
       }
       const data = await res.json();
+      const u = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+      usageIn += Number(u?.prompt_tokens) || 0;
+      usageOut += Number(u?.completion_tokens) || 0;
       const raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
       if (typeof raw !== "string") throw new Error("model_no_tool_output");
       let parsed: unknown;
       try { parsed = JSON.parse(raw); } catch { throw new Error("model_bad_json"); }
-      const out = new Map<string, string[]>();
+      const out = new Map<string, Extracted>();
       const results = (parsed as Row)?.results;
       for (const r of Array.isArray(results) ? results : []) {
         const id = str(r?.id);
-        if (id) out.set(id, cleanNames(r?.competitors, businessName));
+        if (!id) continue;
+        const { names, selfMatched } = cleanNames(r?.competitors, businessName);
+        /* ⛔ EITHER SIGNAL IS A NAMING, and the OR is deliberate. The model is asked to mark the
+           business rather than list it, but if it lists it anyway — against the instruction —
+           that is still the model saying this answer points a customer at them. Only an explicit
+           `false` with no self entry is a "no". */
+        out.set(id, { names, selfNamed: r?.self_named === true || selfMatched });
       }
       return out;
     };
 
     /* Run the batches SEQUENTIALLY. Deliberate: concurrent calls on a big run are the fastest way
        to a 429, and this path is never user-blocking (the queue fires it after finalisation). */
-    const byId = new Map<string, string[]>();
+    const byId = new Map<string, Extracted>();
     const batchErrors: string[] = [];
     for (let i = 0; i < items.length; i += BATCH_ITEMS) {
       const batchNo = i / BATCH_ITEMS + 1;
@@ -364,6 +413,7 @@ Return one entry per id via return_competitors.`;
          Stamped first so the flag survives even though the request fails. */
       await stampCleaning(service, runId, {
         items_total: answerItemsAvailable, items_cleaned: 0, complete: false, errors: batchErrors.slice(0, 8),
+      usd: usdSpent(), prompt_tokens: usageIn, completion_tokens: usageOut,
       });
       return json({ ok: false, error: "cleaning_failed", itemsTotal: answerItemsAvailable, itemsCleaned: 0, errors: batchErrors.slice(0, 8) }, 502);
     }
@@ -376,7 +426,12 @@ Return one entry per id via return_competitors.`;
       const base = updatedResults.get(it.rowId) ?? { ...(rows.find((r) => r.id === it.rowId)!.result as Row) };
       const er = base[it.engine];
       if (er && typeof er === "object") {
-        base[it.engine] = { ...er, competitors: byId.get(it.id) };
+        const got = byId.get(it.id)!;
+        /* ⛔ `self_named` IS THE NAMING VERDICT NOW (src/lib/namedSignal.ts reads it). The stored
+           `named` from nameMatches is left EXACTLY as it was — it is what every un-backfilled
+           audit still falls back to, and overwriting it would rewrite two paying clients' frozen
+           baselines. The new field sits beside it and wins where it exists. */
+        base[it.engine] = { ...er, competitors: got.names, self_named: got.selfNamed };
         updatedResults.set(it.rowId, base);
       }
     }
@@ -402,6 +457,13 @@ Return one entry per id via return_competitors.`;
       model: MODEL,
       items_total: answerItemsAvailable,
       items_cleaned: byId.size,
+      /* How many answers carry a MODEL naming verdict after this run, and how many of those were
+         a yes. Lets a backfill be verified without re-reading every queue row. */
+      self_named_items: byId.size,
+      self_named_true: [...byId.values()].filter((v) => v.selfNamed).length,
+      usd: usdSpent(),
+      prompt_tokens: usageIn,
+      completion_tokens: usageOut,
       complete,
       errors: batchErrors.slice(0, 8),
     };
@@ -412,6 +474,9 @@ Return one entry per id via return_competitors.`;
     return json({
       ok: true, changed, itemsRead: items.length, itemsTotal: answerItemsAvailable,
       itemsCleaned: byId.size, complete, errors: batchErrors.slice(0, 8),
+      selfNamedTrue: [...byId.values()].filter((v) => v.selfNamed).length,
+      selfNamedItems: byId.size,
+      usd: usdSpent(), promptTokens: usageIn, completionTokens: usageOut,
     });
   } catch (e) {
     console.error("[extract-competitors] error:", e);

@@ -15,6 +15,7 @@ import { maybeSendRemeasureResults } from "../_shared/remeasure-results.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
+import { cellNamed } from "../../../src/lib/namedSignal.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. ASYNC start-and-poll: each tick (a) POLLs in-flight Apify runs and
@@ -874,7 +875,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         for (const e of engines) {
           if (!result?.[e]) continue;
           total++;
-          if (result?.[e]?.named === true) named++;
+          if (cellNamed(result?.[e])) named++;
         }
       }
       return { question: r.question, status: r.status, engines: result };
