@@ -12,12 +12,18 @@
    ============================================================ */
 import { WA_TEMPLATE_BODIES, renderTemplateBody } from "../supabase/functions/_shared/whatsapp-send.ts";
 import { READABLE_TEMPLATE_BODIES, readableTemplateBody, isPlaceholderBody } from "../src/lib/templateBodies.ts";
+import { readableTemplateBody } from "../src/lib/templateBodies.ts";
+import { DISPLAY_NAME_LIVE_FROM } from "../src/lib/displayName.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
 
 // Sample inputs exercise every argument the renderers read.
-const B = "Acme Plumbing";
+/* ⛔ A NAME NEITHER SIDE SHORTENS, DELIBERATELY. This block compares the two COPY TABLES, and the
+   greeting-name policy is not part of that question — feeding it "Acme Plumbing" would make the
+   test fail on the name rather than on the copy, which is the drift it cannot see. The policy is
+   compared separately, at the bottom, through the two PUBLIC entry points. */
+const B = "Acme";
 const U = "https://x.test/onboard";
 const TRADE = "plumber";
 const COMP = "Rival Plumbing, Other Co";
@@ -67,6 +73,29 @@ ok(
   readableTemplateBody(null, "contact_followup", { businessName: B }) === "Hi, did you get my last message? Paul",
   "empty contact_followup → the exact re-approved fixed text",
 );
+
+console.log("\n── ⛔ THE GREETING NAME IS APPLIED IDENTICALLY ON BOTH SIDES ──");
+{
+  /* The stored body (edge) and the Inbox transcript (SPA) must agree on the name, or the only
+     record of what was sent contradicts the message. Compared through the PUBLIC entry points,
+     which is what the product actually calls — the tables above are compared separately. */
+  const LISTING = "NeiL Hughes driving tuition";
+  const RECENT = new Date(Date.parse(DISPLAY_NAME_LIVE_FROM) + 60_000).toISOString();
+  let drift: string[] = [];
+  for (const name of Object.keys(WA_TEMPLATE_BODIES)) {
+    const sent = renderTemplateBody(name, LISTING, U, TRADE, COMP, FIRST);
+    const shown = readableTemplateBody(`[${name}]`, name, {
+      businessName: LISTING, url: U, trade: TRADE, competitors: COMP, firstName: FIRST, sentAt: RECENT,
+    });
+    if (shown !== sent) drift.push(name);
+  }
+  ok(drift.length === 0, `all ${Object.keys(WA_TEMPLATE_BODIES).length} templates render the same name in the transcript as on the wire${drift.length ? " — drifted: " + drift.join(", ") : ""}`);
+
+  /* ⛔ AND A MESSAGE SENT BEFORE THE RULE STILL RENDERS WITH THE NAME IT WAS SENT WITH. */
+  const OLD = new Date(Date.parse(DISPLAY_NAME_LIVE_FROM) - 60_000).toISOString();
+  const before = readableTemplateBody("[re_engage_49]", "re_engage_49", { businessName: LISTING, sentAt: OLD });
+  ok(before.includes(LISTING), "a pre-rule transcript keeps the full listing — history is not rewritten");
+}
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
 if (f) throw new Error(`${f} parity failures`);
