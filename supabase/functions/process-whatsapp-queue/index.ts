@@ -261,6 +261,11 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   // audit_reply_warm - the WARM audit message. MIRRORS whatsapp-send.ts; change both together.
   // THREE vars and NO name: {{1}} trade, {{2}} town, {{3}} audit link.
   audit_reply_warm: { lang: "en", vars: ["trade", "town", "audit_url"] },
+  /* audit_followup — submitted to Meta 2026-09-15. MIRRORS whatsapp-send.ts; change both together.
+     {{1}} trade as a SINGULAR lowercase noun, {{2}} town, {{3}} {{4}} {{5}} rivals, {{6}} report
+     link. `audit_url` is what makes it needsAudit; rival_1..3 are what make templateNeedsRivals
+     true, so it inherits competitor_hook's three-names-or-fall-back rule with no new code here. */
+  audit_followup: { lang: "en", vars: ["trade", "town", "rival_1", "rival_2", "rival_3", "audit_url"] },
   // Follow-up to a warm lead after the 24h window: {{1}} business name, {{2}} onboarding URL.
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
   /* Re-engage a lead who went quiet: {{1}} = business name, {{2}} = that lead's onboarding URL.

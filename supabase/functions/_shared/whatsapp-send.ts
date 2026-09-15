@@ -127,6 +127,22 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      ⚠️ {{3}} is findable.live/report/<auditId>, from resolveAuditReplyVars' `link`, exactly as the
      hook's {{4}} is. Never /a/<id> (a deliberate 404) and never yoursites.uk. */
   audit_reply_warm: { lang: "en", vars: ["trade", "town", "audit_url"] },
+  /* audit_followup — SUBMITTED TO META 2026-09-15, registered here before approval for the same
+     reason free_check_result was: an absent name fails `unknown_template` in OUR code, so approval
+     alone would not start it and Paul's requirement is that it begins sending with no code change.
+     Registered, the send reaches Meta, which refuses an unapproved template with its own error.
+     SIX vars: {{1}} trade as a SINGULAR lowercase noun, {{2}} town, {{3}} {{4}} {{5}} rivals,
+     {{6}} report link. No header, no buttons. MIRRORS process-whatsapp-queue; change both together
+     (scripts/re-engage-vars.test.ts asserts both directions).
+     ⛔ `audit_url` in this list is what makes it needsAudit — the queue reads the PROPERTY, never a
+     name. ⛔ And rival_1..3 are what make templateNeedsRivals true, which is what gives it
+     competitor_hook's three-names-or-fall-back-to-video_template rule with no new code.
+     ⛔ NOT in CONTINUATION_TEMPLATES, so it is COLD by default and the phone-history seatbelt
+     applies. Despite the name it opens a conversation rather than continuing one ("Ran you a free
+     audit... Want me to explain?"). If it is ever meant for leads who have already replied, it must
+     be named in CONTINUATION_TEMPLATES or it will be dropped as phone_already_contacted for every
+     lead it is written for — the audit_reply_warm trap. */
+  audit_followup: { lang: "en", vars: ["trade", "town", "rival_1", "rival_2", "rival_3", "audit_url"] },
   // Follow-up once the 24h window has closed: points a warm lead at the onboarding flow.
   // {{1}} business name, {{2}} that lead's onboarding URL. Vars resolved server-side per-lead by
   // resolveOnboardingFollowupVars — never from a caller-supplied link.
@@ -260,10 +276,18 @@ const bookingSwitchBarbersBody = (b: string, u: string) =>
 const barberFreshaBooksyBody = (b: string, u: string) =>
   `made you this 👇\n${u}\n\nHey ${b || "your business"}, right now people can only book you through fresha/booksy - who take a cut of every booking and keep your customers on their app, not yours (bit cheeky). That's your shops own booking site up there - fully yours to customize too - colours, photos, prices, whatever you fancy. free if you want it, no stress if not`;
 
-// Opener — ONE variable ({{1}} = business name). The claimUrl arg is ignored (this template
-// has no url). Display-only preview; the real send uses Meta's body + the single name param.
+/* Opener — ONE variable ({{1}} = business name). The claimUrl arg is ignored (this template has no
+   url). Display-only preview; the real send uses Meta's body + the single name param.
+   🔴 THE BODY CHANGED AT META 2026-09-15 and this is the new registered wording. The previous copy
+   ("Hi, is this the right number for X? Cheers") is NOT deleted — it is what 238+ already-sent rows
+   actually contained, and it is preserved in src/lib/templateBodies.ts under the superseded-bodies
+   map so those transcripts keep saying what the prospect read. Same law as re_engage: a body is the
+   record of what went out, never what the registry says today.
+   ⚠️ {{1}} IS THE GREETING NAME, so this is the template the trimming exists for — "Hi, is this
+   N Hammond Gas Plumbing & Heating Engineer Ltd?" is precisely the sentence that reads automated.
+   The shortening happens in renderTemplateBody / templateBodyParams, not here. */
 const initialContactBody = (b: string, _u: string) =>
-  `Hi, is this the right number for ${b || "your business"}? Cheers`;
+  `Hi, is this ${b || "your business"}?\n\nCheers`;
 
 // audit_reply — reply to a lead who replied. b={{3}} business, u={{4}} report link,
 // trade={{1}}, competitors={{2}}. Keep in sync with the Meta-registered audit_reply body.
@@ -432,6 +456,32 @@ Find out how we get you into those searches on our website, or I can explain mor
 Paul.`;
 };
 
+/* audit_followup — SUBMITTED TO META 2026-09-15. Six variables: {{1}} trade as a SINGULAR
+   LOWERCASE noun, {{2}} town, {{3}} {{4}} {{5}} three rivals, {{6}} report link. No header, no
+   buttons.
+   ⛔ "chatgpt" IS LOWERCASE ON PURPOSE (Paul's wording) AND MUST NOT BE "CORRECTED". It reads as
+   something a person typed, which is the entire point of this message.
+   ⛔ THE TRADE IS SINGULAR HERE, NOT PLURAL — the opposite of competitor_hook. The body says "for a
+   {{1}}", so normaliseTrade governs it and the VOWEL BLOCK applies: "a accountant" and "a
+   electrician" must never send, and templateBodyParams throws rather than sending one. That is a
+   refusal by design, reported as a skip with its reason.
+   ⚠️ Rivals render on ONE line here where Meta's registered layout breaks {{3}}, onto its own line.
+   Whitespace only — the words are identical — and the Inbox degrades rivals to "other firms"
+   anyway, because it has no audit to read them from. */
+const auditFollowupBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
+  const t = normaliseTrade(trade);
+  return `I asked chatgpt for a ${t.ok ? t.value : (trade || "business")} in ${town || "your area"} this morning.
+
+It came back with ${competitors || "other firms"}.
+
+Ran you a free audit, you can see the results here:
+${u}
+
+45% of people now use AI to find local businesses. Same on Gemini, and I know how to get you showing up in those searches.
+
+Want me to explain?`;
+};
+
 /* audit_reply_warm — the WARM audit message (Meta 1509669747584736, approved 2026-09-07). It is
    video_template MINUS the "is this the right number" opening, because it only ever goes to a
    lead who has already answered the opener, so asking again reads as though we were not listening.
@@ -475,6 +525,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   /* The 135 rows sent before the 2026-09-12 rename carry the old name and its OWN, different words. */
   audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,
+  audit_followup: auditFollowupBody,
 };
 
 /** Render the display copy of a template body with its variables filled. `trade`/`competitors`

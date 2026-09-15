@@ -492,6 +492,18 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      and both send the report. "Audit result hook" alone would be the video_template label mistake
      again: two entries doing the same job, and nothing in the list to pick between them. */
   { value: 'competitor_hook', label: 'Competitor hook — names 3 rivals (outreach)' },
+  /* audit_followup — SUBMITTED TO META 2026-09-15, listed before approval on the same bet that paid
+     off for competitor_hook and free_check_result: it starts working on approval with no code change.
+     ⚠️ THE LABEL HAS TO SEPARATE IT FROM competitor_hook, because both name three rivals and both
+     send the report — which is the video_template mistake this list already records. What actually
+     distinguishes it is the OPENING: it is written as a personal note ("I asked chatgpt for a
+     plumber in Wisbech this morning") with NO video header, where the competitor hook leads with
+     the business name and a video.
+     ⚠️ SELECTABLE IS NOT SENDABLE FOR A GIVEN LEAD. needsAudit (its {{6}} IS the report link); a
+     lead short of three rivals is sent video_template instead; and its {{1}} is a SINGULAR trade,
+     so the vowel rule holds "a accountant"/"a electrician" — measured 2026-09-15, that is 179 of
+     the 1,066 lead-linked audits (16.8%), almost all accountants and electricians. */
+  { value: 'audit_followup', label: 'Audit follow-up — "I asked chatgpt" note, no video (outreach)' },
   { value: 'audit_reply_warm', label: 'Audit reply — warm (after the opener)' },
   { value: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
   /* The OPENER follow-up: a business that got the initial_contact opener and never replied. Bulk-

@@ -96,7 +96,7 @@ function templateLabel(name: string | null): string {
    ever been sent to a free-check prospect - it drives the "report sent" badge and the
    report-vs-reply ordering. A Set, because the next template carrying a report must join one list
    rather than three string comparisons. */
-const REPORT_TEMPLATES = new Set(['audit_reply', 'free_check_result', 'video_template', 'audit_reply_warm', 'competitor_hook']);
+const REPORT_TEMPLATES = new Set(['audit_reply', 'free_check_result', 'video_template', 'audit_reply_warm', 'competitor_hook', 'audit_followup']);
 
 // Clean display names for templates (incl. the legacy pre-rename name). Unknown → "Template".
 const TEMPLATE_DISPLAY: Record<string, string> = {

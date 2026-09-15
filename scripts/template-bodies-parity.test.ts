@@ -53,11 +53,24 @@ ok(!isPlaceholderBody("Hi, is this the right number for Acme? Cheers"), "real te
 ok(!isPlaceholderBody("Hi there"), "two plain words are NOT a placeholder");
 
 console.log("\n── readableTemplateBody BEHAVIOUR ──");
-// A bracketed opener → the real opener copy, filled with the business name.
+/* A bracketed opener → the real opener copy, filled with the business name.
+   ⛔ initial_contact's WORDS CHANGED AT META 2026-09-15 UNDER THE SAME NAME, so this asserts both
+   regimes. The old wording is not stale copy to be deleted — 238+ rows were sent with it, and a
+   body is the record of what a prospect read. */
 ok(
   readableTemplateBody("[initial_contact]", "initial_contact", { businessName: B }) ===
+    `Hi, is this ${B}?\n\nCheers`,
+  "bracketed initial_contact → the CURRENT approved opener",
+);
+ok(
+  readableTemplateBody("[initial_contact]", "initial_contact", { businessName: B, sentAt: "2026-09-01T10:00:00.000Z" }) ===
     `Hi, is this the right number for ${B}? Cheers`,
-  "bracketed initial_contact → readable opener with business name",
+  "a row sent BEFORE the re-approval still reads the words it was sent with",
+);
+ok(
+  readableTemplateBody("[initial_contact]", "initial_contact", { businessName: B, sentAt: "2026-09-16T10:00:00.000Z" }) ===
+    `Hi, is this ${B}?\n\nCheers`,
+  "a row sent after reads the new words",
 );
 // Real text is returned unchanged (trimmed).
 ok(
