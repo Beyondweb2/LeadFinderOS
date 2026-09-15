@@ -13,6 +13,13 @@ import {
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
+/* 🔴 THE SAME LEAF THE QUEUE READS, AND IT WAS USED HERE FOR A DAY WITHOUT BEING IMPORTED.
+   `rivalHookDecision` and `templateNeedsRivals` were written into the audit branch on 2026-09-14 and
+   the import line was never added — a plain ReferenceError that nothing local could see, because
+   `npm run typecheck` does not cover supabase/functions and the parse gate never resolves names.
+   It surfaced only once the branch became reachable AND the error path started reporting honestly.
+   `scripts/check-edge-undefined.mjs` is the gate. */
+import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHook.ts";
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
@@ -53,7 +60,7 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
    marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
    constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
 const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf"] as const;
-const BUILD_ID = "2026-09-15c";
+const BUILD_ID = "2026-09-15d";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
