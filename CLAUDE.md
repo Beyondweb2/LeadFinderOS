@@ -4629,10 +4629,44 @@ matcher and not the market.
   The exclusion is **itemised on the panel**, and a trade where EVERY audit is unjudgeable is a
   **refusal with the server's own reason**, never "0 named of 0" (the absent-value inversion, on the
   number that decides whether a trade is worth working).
-- ⛔ **THE CLIENT REPORT IS NOT GATED, AND THAT IS A DECISION WAITING ON PAUL, NOT AN OVERSIGHT.**
-  `buildReportData` still prints the inflated figure for an unjudgeable name, because the refusal
-  would be **customer-facing copy nobody has approved**. It is untouched deliberately — raise it,
-  do not quietly write the sentence.
+- ✅ **THE CLIENT REPORT IS GATED TOO — Paul approved the wording and it is LIVE (2026-09-15).**
+  `buildReportData` derives `nameNotJudgeable` from the same three fields the audit ran against, so
+  it cannot disagree with what the questions asked. **Derived on read; nothing stored, no migration,
+  every historical report covered by the same predicate.**
+  - ⛔ **IT REPLACES THE HERO. NOT A CAVEAT UNDER IT.** Paul's rule: *a true sentence under a false
+    headline is still a false headline.* The hero block, the number, the band and the verdict punch
+    do not render at all — the same shape as the `measuring` branch. **Paul's words, verbatim:**
+    *"Your business name is made of the same words as your trade and your town, so an automated
+    check can't tell a mention of you apart from a mention of the search itself. We check this one
+    by hand before we send it."*
+  - ⚠️ **BOTH HALVES OF THAT WORDING ARE DELIBERATE AND HE CORRECTED MY DRAFT ON BOTH.** It LEADS
+    WITH THE NAME — my version led with what we cannot do, which reads as blaming their name for our
+    problem — and it says **"an automated check can't", never "we cannot"**: a person CAN tell, it
+    just takes a person.
+  - ⛔ **THREE OTHER PLACES ASSERTED THE SAME THING AND ALL THREE MOVED WITH IT**, because leaving
+    any one of them means the reader meets the claim four inches lower: the gutbox's *"AI never
+    named X"* line, its **"Who AI named INSTEAD"** heading plus *"named most often instead"*
+    ("instead of you" IS the refused claim), and the fix section's *"Being absent is not bad luck"*.
+  - ⚠️ **WHAT STILL RENDERS, BECAUSE IT IS STILL TRUE:** which firms AI named (that does not depend
+    on what the client is called) and the website scan (it measures their SITE). Withholding those
+    would be a second refusal for a problem they do not have. **The MEASURING branch still withholds
+    the SEO slot** — there the numbers are genuinely mid-flight.
+  - **`scripts/report-name-refusal.test.ts` pins the property as ABSENCE, not presence**: the claims
+    must be gone from the whole document, and `nameNotJudgeable: false` must render BYTE-IDENTICALLY
+    to an absent field.
+  - ✅ **Verified live on the real rows:** CJ Plumbing Services (was 0/6 + "AI never named") and
+    Burnley Locksmiths (was 6/6) both serve the refusal with no number; **Power pulse** (judgeable)
+    still serves its hero and "Who AI named instead". ⚠️ RG's `876579bd` answers **403** — that is
+    §23's internal-measurement gate working, not a fault.
+  - ⛔ **THE 64 ALREADY OPENED WERE NOT REGENERATED OR RESENT — Paul's call, 2026-09-15.** Reports
+    render live, so the link they hold now serves the corrected document by itself. Nothing was
+    re-sent and no audit was re-run.
+  - ⚠️ **`src/lib/auditReport.ts` NOW IMPORTS `supabase/functions/_shared/derivable.ts`**, the same
+    shape as its existing `market-match.ts` import and Deno-global-free. **That put derivable.ts in
+    ten functions' closure** — findable-onboarding, instantly-push, market-view, page-generator,
+    process-ai-audit-queue, process-whatsapp-queue, render-audit-report, run-seo-scan,
+    send-whatsapp-message, submissions. All ten redeployed, which is also what proves the bundler
+    resolves that direction.
   - ✅ **IT CANNOT CONTRADICT THE SITE, AND THAT WAS CHECKED RATHER THAN ASSUMED (2026-09-15).** The
     report carries **no book-wide statistic at all** — grepped: no 628 / 761 / 11.8 / 43.7 / 43,035
     in `aiAuditReportHtml.ts`, `welcomePackHtml.ts`, `remeasureResultsHtml.ts`, `auditReport.ts`,
