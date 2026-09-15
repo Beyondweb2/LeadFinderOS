@@ -935,8 +935,10 @@ Generate a prospect's report from the town's market audit instead of a per-busin
 - ⚠️ **But `named` is STORED, not derived**, and a market audit's stored flags are against its own
   (non-)business name. A derived report must **recompute per prospect**. Free, no API call, and it is
   the one real code change: `buildReportData` reads `r.result[e].named`.
-- ✅ **THE GATE IS ALREADY BUILT AND TESTED: `_shared/derivable.ts` + `scripts/derivable.test.ts`.**
-  Nothing calls it yet — wire it, do not rebuild it. Two bugs in it were caught by writing the test
+- ✅ **THE GATE IS BUILT, TESTED AND — SINCE 2026-09-15 — WIRED: `_shared/derivable.ts` +
+  `scripts/derivable.test.ts`.** It was deleted with the market-audit pass (§19 slice 5) and
+  **restored from `0930ca57^`**; do not rebuild it and do not delete it again. Its caller is
+  `market-view`'s niche fold — **§27 is the record.** Two bugs in it were caught by writing the test
   first: it leaned on `candidateCores` to strip the trade and town (it does not — that truncates for
   MERGE purposes, a different job), and a trade word in another grammatical form still passed
   ("Chichester Accountancy" vs trade "accountants"), now a shared 5-character stem.
@@ -3967,7 +3969,9 @@ reach the thing the button promised.
   Under this model the newest multi-run audit at day 0 is the full measure, so "latest" would have
   dropped the 12 judged questions from every page plan. No pointer → `no_baseline_recorded`.
 - **Deleted with it (Slice 5):** market audits (`purpose:"market"`, `market_only`, the cooldown),
-  `derive-audit` + `derivable.ts` + the try-derive branches + the Outreach "Derive reports" button,
+  `derive-audit` + `derivable.ts` (⚠️ **`derivable.ts` CAME BACK 2026-09-15 — restored from
+  `0930ca57^` and wired into the niche fold, §27. `derive-audit` is still gone**) + the try-derive
+  branches + the Outreach "Derive reports" button,
   `compareToBaseline` (no consumers), **`measurement_locks` and everything that read it** (the
   pointer + server-side refusal on the ASKED set superseded it four days after it shipped), the
   re-audit dialog's 3-run "measurement" mode and the Baseline page's "Re-run this measurement".
@@ -4599,3 +4603,57 @@ and every one of them was defensible alone. Together the site and the documents 
   name are proven by source and deploy only. Both render on Stripe's own hosted page, which is a
   JS shell that tells a fetch nothing (§6, §11) — the first real Checkout Session is the proof.
   The guarantee description is 236 chars against a 222-char proof, so that is the same session.
+
+---
+
+## 27. 🔴 THE NAME THAT SCORES ITSELF — §6b's gate restored and wired (2026-09-15)
+
+**`named` is `nameMatches(answer_text, businessName)` at scan time (`ai-search.ts:278`), so a
+business CALLED "Blackpool Plumber" scores on an answer about plumbers in Blackpool without the
+engine having any idea who they are.** Every naming rate in the product was inflated by those
+audits, and the excluded set scores **roughly double** the rest — which is the proof it is the
+matcher and not the market.
+
+- ⛔ **THE PREDICATE IS `nameIsJudgeable` (`_shared/derivable.ts`), AND IT IS THE NAME CLAUSE ALONE.**
+  `canDeriveReport` asks two things — is the name findable, and did we look hard enough —
+  and a stored `named` flag has already looked. **Bypassing `MIN_ANSWERED_DATAPOINTS` is
+  deliberate**: a 3-question hook carries 6 answered cells and would otherwise delete most of the
+  book from every trade-level figure. One rule, two questions; do not write a second copy.
+- ⛔ **DERIVED ON READ, NEVER STORED — Paul's explicit instruction ("Do not rewrite stored scores.
+  Apply it going forward").** Same shape as `serveGate` and `townVerdict`: no column, no migration,
+  and historical rows are covered by the same predicate as new ones. Nothing was backfilled.
+- **The caller is `market-view`'s niche fold.** An unjudgeable audit is excluded from the per-engine
+  named rates **and from winnability** — `classifyWinnability`'s first branch is "were they named",
+  so it carried the identical inflation into the column towns are picked from. **Its citations still
+  count**: which sources an engine reads for a trade is independent of what the business is called.
+  The exclusion is **itemised on the panel**, and a trade where EVERY audit is unjudgeable is a
+  **refusal with the server's own reason**, never "0 named of 0" (the absent-value inversion, on the
+  number that decides whether a trade is worth working).
+- ⛔ **THE CLIENT REPORT IS NOT GATED, AND THAT IS A DECISION WAITING ON PAUL, NOT AN OVERSIGHT.**
+  `buildReportData` still prints the inflated figure for an unjudgeable name, because the refusal
+  would be **customer-facing copy nobody has approved**. It is untouched deliberately — raise it,
+  do not quietly write the sentence.
+
+### The corrected historical figures (measured read-only 2026-09-15, nothing written)
+| | as the site says | corrected |
+|---|---|---|
+| Businesses / audits | 628 / 761 | **941 / 1,013** (the book has grown; 628 is not reproducible) |
+| **Gemini** names them | 11.8% | **9.7%** (466 / 4,811) |
+| **ChatGPT** | 43.7% | **33.2%** (1,599 / 4,810) |
+| ChatGPT ÷ Gemini | 3.7x | **3.43x** (was 3.22x uncorrected — **the gate makes the ratio stronger**) |
+| Trades / towns | 14 / 187 | **17 / 223** |
+
+- **132 of 1,145 business audits refuse** (127 businesses). **129 of those 132 are genuinely all
+  trade and town**; only 3 were refused for an initialism remainder. Real examples: "Accountant"
+  (Portsmouth), "plumbers in southport", "Blackpool Plumber", "Locksmiths Canterbury", "The Leeds
+  Locksmith".
+- ⚠️ **11.8% AND 43.7% WERE NEVER REPRODUCIBLE FROM TODAY'S ROWS ANYWAY** — they are a July/August
+  snapshot of a smaller book. **Re-derive before quoting; do not inherit any number in this table.**
+- 🔴 **`findable-site/src/components/WhyThisWorks.astro` STILL CARRIES THE OLD CLAIM** (628
+  businesses, 11.8%, 43.7%). It is a separate repo with no CI and was **not changed here** — the
+  restated sentence is Paul's to approve. Until he does, the public page overstates Gemini by
+  2.1 points and ChatGPT by 10.5.
+
+**Deployed:** `market-view` **v71** (its only new import is `derivable.ts`; no other function reaches
+it — the two other greps are comments, §4). SPA pushed. `npm run check`: **105/110**, the five
+known-stale suites only.
