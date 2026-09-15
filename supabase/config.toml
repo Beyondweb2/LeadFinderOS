@@ -127,3 +127,11 @@ verify_jwt = true
 # SENT remeasure (the stamp is the publish switch), so the handler is the gate, not the JWT.
 [functions.render-remeasure-results]
 verify_jwt = false
+
+[functions.resend-webhook]
+# Resend has no Supabase JWT, so this MUST be public. The Svix signature is the only gate and the
+# handler fails closed on it: unset secret, missing headers, stale timestamp or a bad signature all
+# return 401 having written nothing. Adding the entry in the same commit as the function, because
+# the platform default is verify_jwt = TRUE and a function absent from this file deploys with it —
+# which would refuse every event silently (CLAUDE.md §8, the 2026-08-14 three-dead-paths incident).
+verify_jwt = false
