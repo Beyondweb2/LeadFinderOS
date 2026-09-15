@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { fetchAllRows } from '@/lib/fetchAllRows';
+import { cellNamed } from '@/lib/namedSignal';
 import { asPence, SEO_SCAN_USD } from '@/lib/marketView';
 import { supabase } from '@/integrations/supabase/client';
 import { reAuditFromSource, RE_AUDIT_EST_USD_PER_QUESTION } from '@/lib/reAudit';
@@ -1689,7 +1690,7 @@ const AiAudit = () => {
     (acc, r) => {
       if (r.status === 'done' && r.result) {
         acc.done++;
-        for (const e of SCORED_ENGINES) { acc.total++; if (r.result[e]?.named) acc.named++; }
+        for (const e of SCORED_ENGINES) { acc.total++; if (cellNamed(r.result[e])) acc.named++; }
       } else if (r.status === 'failed') {
         acc.failed++;
       }
@@ -1761,7 +1762,7 @@ const AiAudit = () => {
     let named = 0;
     let total = 0;
     for (const r of queueRows) {
-      if (r.status === 'done' && r.result?.[engine]) { total++; if (r.result[engine]!.named) named++; }
+      if (r.status === 'done' && r.result?.[engine]) { total++; if (cellNamed(r.result[engine])) named++; }
     }
     return { engine, named, total };
   });
@@ -3649,7 +3650,7 @@ function EngineRow({ engine, er, businessName, locationText }: { engine: string;
     <div className="rounded-lg border border-border/50 p-2.5">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-semibold w-24 shrink-0">{ENGINE_LABELS[engine] ?? engine}</span>
-        {er.named
+        {cellNamed(er)
           ? <Badge className="border-transparent bg-[hsl(var(--badge-interested))] text-[hsl(var(--badge-interested-fg))]">Named{er.position ? ` · #${er.position}` : ''}</Badge>
           : <Badge className="border-transparent bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))]">Not named</Badge>}
         {engine !== 'google_organic' && shownCompetitors.length > 0 && (
@@ -3659,7 +3660,7 @@ function EngineRow({ engine, er, businessName, locationText }: { engine: string;
         )}
       </div>
       {/* The gut-punch: show what the AI actually said when the business is absent. */}
-      {!er.named && er.answer_text && (
+      {!cellNamed(er) && er.answer_text && (
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground italic line-clamp-4">
           "{er.answer_text.slice(0, 320)}{er.answer_text.length > 320 ? '…' : ''}"
         </p>

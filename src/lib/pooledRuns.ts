@@ -23,6 +23,7 @@
    §6) pointed at the number the guarantee is measured on.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { EngineMap } from '@/lib/auditReport';
+import { cellNamed } from '@/lib/namedSignal';
 
 /** A queue row plus which run it came from. */
 export interface PooledInput {
@@ -108,7 +109,7 @@ export function poolRuns(
       if (!er) continue;               // this engine produced nothing for this question
       const tally = q.perEngine[engine];
       tally.answered++;
-      if (er.named) tally.named++;
+      if (cellNamed(er)) tally.named++;
     }
   }
 

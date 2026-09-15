@@ -34,6 +34,7 @@
    import this from an edge function without fixing that first.
    ============================================================ */
 import { buildBaselineView, type QueueRowLite } from './baselineView.ts';
+import { allCellsModelRead, type NamedCell, type NamedMode } from './namedSignal.ts';
 import { SCORED_ENGINES, citationIsClient, domainOfSafe } from './auditReport.ts';
 
 /** Measured sampling swing, in percentage points — see the header. Movement inside this band is
@@ -172,13 +173,27 @@ function askOrder(rows: QueueRowLite[]): Map<string, number> {
   return out;
 }
 
+/** Every answered engine cell on one side, for the namedMode decision above. */
+function cellsOf(rows: QueueRowLite[]): NamedCell[] {
+  const out: NamedCell[] = [];
+  for (const r of rows) {
+    if (r.status !== 'done' || !r.result) continue;
+    for (const engine of SCORED_ENGINES) {
+      const c = (r.result as Record<string, unknown>)[engine];
+      if (c && typeof c === 'object') out.push(c as NamedCell);
+    }
+  }
+  return out;
+}
+
 /** Fold one side into per-question counts, reusing buildBaselineView for named/answered/runs. */
 function sideCounts(
   rows: QueueRowLite[],
   businessName: string,
   ownWebsite: string,
+  namedMode: NamedMode,
 ): { byQuestion: Map<string, SideCounts>; overall: OverallSide; label: Map<string, string> } {
-  const view = buildBaselineView(rows, { businessName });
+  const view = buildBaselineView(rows, { businessName, namedMode });
   const cited = citedByQuestion(rows, businessName, ownWebsite);
   const byQuestion = new Map<string, SideCounts>();
   const label = new Map<string, string>();
@@ -282,8 +297,17 @@ export function compareMeasurements(
 ): MeasurementComparison {
   const businessName = (opts.businessName ?? '').trim();
   const ownWebsite = (opts.ownWebsite ?? '').trim();
-  const b = sideCounts(beforeRows, businessName, ownWebsite);
-  const a = sideCounts(afterRows, businessName, ownWebsite);
+  /* ⛔ ONE RULER FOR BOTH SIDES, DECIDED ONCE, HERE. The naming verdict has two sources now —
+     the model's `self_named` where extract-competitors has read the answer, the old
+     nameMatches string test everywhere else. Letting each side pick its own best signal would
+     make a day-28 replay that was model-read look WORSE than a string-matched baseline for a
+     client whose name flatters the string test, with nothing on the page saying the measure had
+     changed underneath them. That number decides a refund, so: the model is used only when BOTH
+     sides have been read by it, and otherwise both sides fall back together. */
+  const namedMode: NamedMode = (allCellsModelRead(cellsOf(beforeRows)) && allCellsModelRead(cellsOf(afterRows)))
+    ? 'auto' : 'legacy';
+  const b = sideCounts(beforeRows, businessName, ownWebsite, namedMode);
+  const a = sideCounts(afterRows, businessName, ownWebsite, namedMode);
   /* BEFORE's order is the spine — it is the measurement the after side is being compared against,
      so its questions keep their positions and anything new is appended after them. */
   const bOrder = askOrder(beforeRows);

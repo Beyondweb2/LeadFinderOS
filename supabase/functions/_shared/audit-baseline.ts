@@ -41,6 +41,7 @@ const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 import { BASELINE_QUESTIONS, BASELINE_RUNS, FULL_MEASURE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { findPaidBaseline, findAmbiguousMultiRun, FREE_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { type BaselineContract } from "../../../src/lib/baselineContract.ts";
+import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { fullMeasureAllocation } from "../../../src/lib/fullMeasure.ts";
 import { isRemeasureDue, utcDateISO } from "../../../src/lib/remeasureDue.ts";
 import { remeasureDueFill, workIncompleteFor } from "../../../src/lib/remeasureFill.ts";
@@ -100,7 +101,7 @@ export async function aggregateRuns(service: Client, runIds: string[]): Promise<
         if (!er) continue;           // engine returned nothing this run — not an answered cell
         stat.answered += 1;
         answeredCells += 1;
-        if (er.named === true) { stat.named += 1; namedCells += 1; }
+        if (cellNamed(er)) { stat.named += 1; namedCells += 1; }
       }
     }
   }

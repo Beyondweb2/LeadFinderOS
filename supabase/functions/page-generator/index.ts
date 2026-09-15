@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { buildPagePlan, stuffingCheck, enforceNaturalness, enforceCatchmentHonesty, FALSE_BASE_RE, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
 import { classifyWinnability, unwrapCitationUrl, SCORED_ENGINES, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
 import { sourceMix, classifySource } from "../../../src/lib/sourceType.ts";
@@ -448,9 +449,9 @@ Deno.serve(async (req) => {
             const er = result[eng];
             if (!er) continue;
             for (const cit of er.citations ?? []) { const h = hostOf(unwrapCitationUrl(cit?.url ?? "")); if (h) { doms.push(h); rowDoms.push(h); } }
-            named[eng][1]++; if (er.named) named[eng][0]++;
+            named[eng][1]++; if (cellNamed(er)) named[eng][0]++;
           }
-          const namedAnywhere = DISPLAY_ENGINES.some((e) => result[e]?.named);
+          const namedAnywhere = DISPLAY_ENGINES.some((e) => cellNamed(result[e]));
           const mixR = sourceMix(rowDoms);
           if (!namedAnywhere && mixR.total >= AUTHORITY_LOCK_MIN_CITES && mixR.business === 0
             && mixR.authority / mixR.total >= AUTHORITY_LOCK_SHARE) {

@@ -23,6 +23,7 @@ import { buildMatchContext, groupNames } from "../../supabase/functions/_shared/
    Deno-global-free, so the SPA and the edge bundler both resolve it. */
 import { nameIsJudgeable } from "../../supabase/functions/_shared/derivable.ts";
 import { classifyKnownEntity } from './knownEntities.ts';
+import { cellNamed, hasModelNamedEvidence } from './namedSignal.ts';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from './competitorCleaning.ts';
 import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
@@ -36,7 +37,13 @@ export const ENGINE_LABELS: Record<string, string> = {
   chatgpt: 'ChatGPT', gemini: 'Gemini', ai_overview: 'AI Overview', google_organic: 'Google',
 };
 export interface EngineResult {
+  /** ⚠️ THE LEGACY STRING MATCH — nameMatches(answer_text, businessName) at scan time. Kept, and
+   *  still the fallback for every answer the extractor has not read, but it is NO LONGER what a
+   *  counting surface should read. Ask src/lib/namedSignal.ts's cellNamed() instead. */
   named: boolean;
+  /** The MODEL's verdict: did this answer present the audited business as a business a customer
+   *  could hire? Written by extract-competitors. Absent on any answer it has not read. */
+  self_named?: boolean;
   position: number | null;
   competitors: string[];
   topCompetitors?: { name: string; count: number }[];
@@ -423,6 +430,26 @@ const NEAR_ME = /\bnear\s*me\b/i;
 // whether the answer is damning (doesn't exist / names a real competitor); then (3) clarity.
 // "near me" questions are skipped outright. Also returns the top REAL competitor named in the
 // chosen answer (for the report's "AI recommended X, Y and others" summary), if any.
+/* ⛔ HAS THE MODEL READ THIS RUN? The test is a MAJORITY of answered cells, not "at least one" and
+   not "all". Not one: a single model verdict beside eleven string matches cannot carry a headline
+   number. Not all: gpt-4o omits an id often enough that the extractor has a retry loop for it
+   (CLAUDE.md §8 — "model omitted N of M ids" on ~8% of runs), so demanding every cell would put a
+   whole report back behind the hand-check for one missing answer. A majority means the figure on
+   the page is mostly the model's reading, and the cells it missed keep their old fallback. */
+export function runIsModelRead(rows: QueueRow[]): boolean {
+  let read = 0, answered = 0;
+  for (const r of rows) {
+    if (r.status !== 'done' || !r.result) continue;
+    for (const e of SCORED_ENGINES) {
+      const c = r.result[e];
+      if (!c || !c.answer_text) continue;
+      answered++;
+      if (hasModelNamedEvidence(c)) read++;
+    }
+  }
+  return answered > 0 && read * 2 > answered;
+}
+
 function pickGutPunch(
   rows: QueueRow[],
   locationText: string,
@@ -440,7 +467,7 @@ function pickGutPunch(
     const isHead = HEAD_TERMS.test(q);
     for (const engine of DISPLAY_ENGINES) {
       const er = r.result[engine];
-      if (!er || er.named) continue;
+      if (!er || cellNamed(er)) continue;
       const text = (er.answer_text || '').trim();
       if (!text || isJunkAnswer(text)) continue;         // skip map/image/URL junk outright
       /* Stored names are final (see keepRival in buildReportData) — this only drops blanks. */
@@ -619,7 +646,7 @@ export function classifyWinnability(
   for (const engine of DISPLAY_ENGINES) {
     const er = result[engine];
     if (!er) continue;
-    if (er.named) {
+    if (cellNamed(er)) {
       clientNamed = true;
       if ((SCORED_ENGINES as readonly string[]).includes(engine)) scoredNamed++;
       if (er.position != null) bestPosition = bestPosition == null ? er.position : Math.min(bestPosition, er.position);
@@ -672,7 +699,7 @@ export function classifyWinnability(
     if (scoredNamed >= 2) score += 1;
     if (bestPosition != null && bestPosition <= 3) score += 1;
     score = Math.min(10, score);
-    const namedOn = DISPLAY_ENGINES.filter((e) => result[e]?.named).map((e) => ENGINE_LABELS[e] ?? e);
+    const namedOn = DISPLAY_ENGINES.filter((e) => cellNamed(result[e])).map((e) => ENGINE_LABELS[e] ?? e);
     return { verdict: 'named', score, U, C, overlap, agg, cites, clientNamed: true, namedFirms,
       reason: `You're already named on ${namedOn.join(', ')} — defend this.` };
   }
@@ -947,7 +974,7 @@ export function buildReportData(
       for (const e of SCORED_ENGINES) {
         if (!r.result[e]) continue;
         liveTotal++;
-        if (r.result[e]?.named) liveNamed++;
+        if (cellNamed(r.result[e])) liveNamed++;
       }
     }
   }
@@ -980,7 +1007,7 @@ export function buildReportData(
     let n = 0;
     let t = 0;
     for (const r of queueRows) {
-      if (r.status === 'done' && r.result?.[engine]) { t++; if (r.result[engine]!.named) n++; }
+      if (r.status === 'done' && r.result?.[engine]) { t++; if (cellNamed(r.result[engine])) n++; }
     }
     return { engine, named: n, total: t };
   }).filter((pe) => pe.total > 0).map((pe) => ({ label: ENGINE_LABELS[pe.engine] ?? pe.engine, named: pe.named, total: pe.total }));
@@ -1071,7 +1098,7 @@ export function buildReportData(
     // Client named-frequency across runs × SCORED engines — sums to the "named X of Y" headline.
     let namedCount = 0; let answers = 0;
     for (const r of rows) for (const e of SCORED_ENGINES) {
-      const er = r.result![e]; if (!er) continue; answers++; if (er.named) namedCount++;
+      const er = r.result![e]; if (!er) continue; answers++; if (cellNamed(er)) namedCount++;
     }
     const namedYou = namedCount > 0;
 
@@ -1082,7 +1109,7 @@ export function buildReportData(
       const cm = new Map<string, string>();
       for (const r of rows) {
         const er = r.result![engine]; if (!er) continue;
-        ranCount++; if (er.named) named++;
+        ranCount++; if (cellNamed(er)) named++;
         /* ⛔ RECOMMENDED vs CITED — DERIVED HERE, NOT STORED, AND `named` IS UNTOUCHED.
            The stored `named` is `prose OR a matching source title` (ai-search.ts), so a reader
            could not tell a real recommendation from a citation of the client's own site. Both
@@ -1204,9 +1231,16 @@ export function buildReportData(
        down" — a true sentence below a false headline is still a false headline.
        ⚠️ It reads the SAME three fields the audit was run against (businessName / businessType /
        locationText), so it cannot disagree with what the questions asked about. */
+    /* ⛔ AND SINCE 2026-09-15 THE MODEL CAN ANSWER IT, so the refusal is no longer the end of the
+       road. `self_named` is gpt-4o's own reading of each answer — it knows "BS4" in an answer
+       about Bristol electricians is a postcode, which is the whole reason the string match could
+       not be trusted on these names. Where the extractor has read this run, the count IS
+       judgeable and the hero renders. The refusal survives ONLY for a name that is all trade and
+       town AND has no model verdict to lean on: extraction never ran, or it failed. Absence is
+       still not an answer — it is just no longer the ONLY answer. */
     nameNotJudgeable: !nameIsJudgeable({
       businessName: ctx.businessName, trade: ctx.businessType, town: ctx.locationText,
-    }),
+    }) && !runIsModelRead(queueRows),
     namesWithheld: rivalsSuppressed,
     gutPunch: rivalsSuppressed ? null : pickGutPunch(queueRows, ctx.locationText, ctx.specialisms, ctx.businessType),
     // The date the AUDIT WAS MEASURED, not the date someone happened to open the link.
