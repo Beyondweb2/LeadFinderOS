@@ -24,7 +24,7 @@ import { useTownLeadSearch, type TownSearchState } from '@/hooks/useTownLeadSear
 type State =
   | { kind: 'idle' }
   | { kind: 'busy' }
-  | { kind: 'none'; marketAudits: number }
+  | { kind: 'none'; marketAudits: number; reason?: string }
   | { kind: 'error'; message: string }
   | { kind: 'done'; niche: NicheAnalysis };
 
@@ -188,7 +188,7 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
       const { data: res, error } = await supabase.functions.invoke('market-view', { body: { action: 'niche', trade } });
       if (error) throw new Error(error.message);
       if (!res?.ok) throw new Error(res?.error ?? 'niche fold failed');
-      if (!res.niche) { setState({ kind: 'none', marketAudits: res.marketAudits ?? 0 }); return; }
+      if (!res.niche) { setState({ kind: 'none', marketAudits: res.marketAudits ?? 0, reason: typeof res.reason === 'string' ? res.reason : undefined }); return; }
       setState({ kind: 'done', niche: res.niche as NicheAnalysis });
     } catch (e) {
       setState({ kind: 'error', message: e instanceof Error ? e.message : 'niche fold failed' });
@@ -262,7 +262,11 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
   if (state.kind === 'none') {
     return (
       <Card><CardContent className="p-4 text-sm text-muted-foreground">
-        No business audits exist for this trade yet{state.marketAudits > 0 ? ` (${state.marketAudits} market audit${state.marketAudits === 1 ? '' : 's'} only — they carry no named-rate data)` : ''}. Audit some businesses in the trade first, then this analysis has something to read.
+        {/* ⛔ THE SERVER'S OWN REASON WINS. There is more than one way to have nothing to
+            read now — no audits at all, or audits whose business names cannot say anything about
+            naming — and telling an operator "no audits exist" when eleven do sends him to run
+            more of exactly the audits that already cannot answer the question. */}
+        {state.reason ?? 'No business audits exist for this trade yet'}{state.marketAudits > 0 ? ` (${state.marketAudits} market audit${state.marketAudits === 1 ? '' : 's'} only — they carry no named-rate data)` : ''}. Audit some businesses in the trade first, then this analysis has something to read.
       </CardContent></Card>
     );
   }
@@ -314,6 +318,11 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
           <span className="text-xs font-normal text-muted-foreground">
             {n.sample.businesses} businesses · {n.sample.towns} towns · {n.sample.audits} audits · {n.sample.cells} answers
             {n.marketAudits > 0 ? ` · +${n.marketAudits} market audits (not folded in)` : ''}
+            {/* ⛔ THE REFUSAL IS ON THE FACE OF THE NUMBER IT CHANGED. Excluding audits silently
+                would leave two figures for one trade with no way to tell why they differ. */}
+            {(n.sample.nameNotJudgeable ?? 0) > 0
+              ? ` · ${n.sample.nameNotJudgeable} excluded — the name is only the trade and the town, so a match proves nothing`
+              : ''}
           </span>
         </CardTitle>
       </CardHeader>

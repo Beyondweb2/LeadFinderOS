@@ -10,6 +10,13 @@ const SCORED_SLOT_ENGINES = ["chatgpt", "gemini"] as const;
 import { majorityVerdict, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
 import { classifySource } from "../../../src/lib/sourceType.ts";
 import { nicheTradeKey, ENGINE_LABELS_NICHE } from "../../../src/lib/nicheView.ts";
+/* 🔴 §6b's NAME TEST, RESTORED AND WIRED HERE (2026-09-15, Paul's brief). `named` is
+   nameMatches(answer_text, businessName) at scan time, so a business CALLED "Blackpool Plumber"
+   scores on an answer about plumbers in Blackpool without the engine having any idea who they are.
+   Those audits inflated every naming rate this fold produces — measured across the whole book they
+   score roughly DOUBLE the judgeable ones. They are excluded from the rates now and counted where
+   the operator can see them. ⛔ Derived on read; no stored score is touched. */
+import { nameIsJudgeable } from "../_shared/derivable.ts";
 /* ⛔ src/lib/marketView.ts IS NO LONGER IMPORTED HERE, AND THAT IS THE POINT OF THE 2026-09-09
    PRUNE. This file used to pull seventeen symbols out of it — every one of them for the deleted
    `view` action. The `niche` fold referenced none of them, so the market panel's whole evidence
@@ -158,18 +165,30 @@ Deno.serve(async (req) => {
       const townAgg = new Map<string, { town: string; businesses: Set<string>; audits: number; cells: number }>();
       const bizNames = new Set<string>();
       let cellsTotal = 0, questionsTotal = 0, multiRunAudits = 0, multiRunQuestions = 0, auditsWithAnswers = 0;
+      /* The excluded set, kept separately so the refusal is a number on the screen and never a
+         silent shrink — the same rule the market view's off-trade and already-winning lists follow. */
+      const unjudgeableNames = new Set<string>();
+      let unjudgeableAudits = 0;
 
       for (const a of mine) {
         const rows = byAudit.get(a.id) ?? [];
         if (rows.length === 0) continue;
-        auditsWithAnswers++;
+        /* ⛔ THE NAME DECIDES WHETHER THIS AUDIT MAY VOTE ON NAMING, NOT WHETHER IT IS READ. Its
+           citations say which sources the engines read for this trade, and that fact is entirely
+           independent of what the business is called — so sources, top domains and the slot read
+           still take it. Only `named` (and winnability, which counts it) are refused. */
+        const judgeable = nameIsJudgeable({
+          businessName: a.business_name, trade: a.business_type, town: a.location_text,
+        });
+        if (!judgeable) { unjudgeableAudits++; unjudgeableNames.add((a.business_name ?? "").trim().toLowerCase()); }
+        if (judgeable) auditsWithAnswers++;
         const isMulti = (a.baseline_target_runs ?? 0) > 1;
-        if (isMulti) multiRunAudits++;
-        bizNames.add((a.business_name ?? "").toLowerCase());
+        if (isMulti && judgeable) multiRunAudits++;
+        if (judgeable) bizNames.add((a.business_name ?? "").toLowerCase());
         const townRaw = (a.location_text ?? "").trim() || "(unknown town)";
         const tKey = townRaw.toLowerCase();
         const tAgg = townAgg.get(tKey) ?? { town: townRaw, businesses: new Set<string>(), audits: 0, cells: 0 };
-        tAgg.audits++; tAgg.businesses.add((a.business_name ?? "").toLowerCase());
+        if (judgeable) { tAgg.audits++; tAgg.businesses.add((a.business_name ?? "").toLowerCase()); }
         const own = hostOf(String(a.website ?? ""));
         const byQ = new Map<string, EngineMap[]>();
         for (const r of rows) {
@@ -178,9 +197,11 @@ Deno.serve(async (req) => {
           for (const e of DISPLAY_ENGINES) {
             const er = (res as Record<string, { named?: boolean; citations?: { url?: string }[] } | undefined>)[e];
             if (!er) continue;
-            engNamed[e] = engNamed[e] ?? [0, 0];
-            engNamed[e][1]++; cellsTotal++; tAgg.cells++;
-            if (er.named) engNamed[e][0]++;
+            if (judgeable) {
+              engNamed[e] = engNamed[e] ?? [0, 0];
+              engNamed[e][1]++; cellsTotal++; tAgg.cells++;
+              if (er.named) engNamed[e][0]++;
+            }
             srcSplit[e] = srcSplit[e] ?? { directory: 0, ownSite: 0, authority: 0, other: 0, total: 0 };
             domCount[e] = domCount[e] ?? new Map();
             for (const c of (er.citations ?? [])) {
@@ -196,9 +217,9 @@ Deno.serve(async (req) => {
             }
           }
         }
-        questionsTotal += byQ.size;
+        if (judgeable) questionsTotal += byQ.size;
         for (const [, runResults] of byQ) {
-          if (isMulti && runResults.length > 1) multiRunQuestions++;
+          if (isMulti && judgeable && runResults.length > 1) multiRunQuestions++;
           const verdicts = runResults.map((res) => {
             const v = classifyWinnability(res, {
               businessName: a.business_name ?? "", locationText: a.location_text ?? "",
@@ -207,7 +228,11 @@ Deno.serve(async (req) => {
             return (v === "no-local-race" ? "no_local_race" : v) as WinnVerdict;
           });
           const m = majorityVerdict(verdicts);
-          winnability[m] = (winnability[m] ?? 0) + 1;
+          /* ⛔ WINNABILITY READS `named` TOO — classifyWinnability's first branch is "were they
+             named". An unjudgeable name would file its own questions under `named` and make the
+             trade look more taken than it is, which is the same inflation in the column Paul picks
+             towns from. Excluded on the same predicate, never on a second one. */
+          if (judgeable) winnability[m] = (winnability[m] ?? 0) + 1;
           /* ⛔ THE FREE-SLOT READ. `runResults` is this ONE question across its runs, so the same
              question's competitor lists can be compared run to run — which is the only way to tell
              a firm that holds a slot from one that happened to appear once.
@@ -235,6 +260,18 @@ Deno.serve(async (req) => {
         townAgg.set(tKey, tAgg);
       }
 
+      /* ⛔ EVERY AUDIT UNJUDGEABLE IS A REFUSAL, NOT A ZERO. Without this the panel would render
+         0 named of 0 answered and read as "AI names nobody in this trade" — the absent-value
+         inversion, on the number that decides whether a trade is worth working. */
+      if (auditsWithAnswers === 0) {
+        return json({
+          ok: true, niche: null, marketAudits,
+          reason: unjudgeableAudits > 0
+            ? `${unjudgeableAudits} audit${unjudgeableAudits === 1 ? "" : "s"} for this trade, but every business name is only its trade and town — nothing here can say whether AI named them`
+            : "no answered business audits for this trade yet",
+        });
+      }
+
       const engines = DISPLAY_ENGINES
         .filter((e) => engNamed[e])
         .map((e) => ({ engine: e, label: ENGINE_LABELS_NICHE[e] ?? e, named: engNamed[e][0], answered: engNamed[e][1] }));
@@ -256,11 +293,19 @@ Deno.serve(async (req) => {
       const niche = {
         trade: tradeIn, tradeKey: key, slots,
         sample: {
-          audits: auditsWithAnswers, businesses: bizNames.size, towns: townAgg.size,
+          audits: auditsWithAnswers, businesses: bizNames.size,
+          towns: [...townAgg.values()].filter((t) => t.audits > 0).length,
           questions: questionsTotal, cells: cellsTotal, multiRunAudits, multiRunQuestions,
+          /* ⛔ ITEMISED, NOT SILENT. These audits exist and were read; what they cannot do is vote
+             on whether AI names a business, because their name IS the trade and the town. */
+          nameNotJudgeable: unjudgeableAudits,
+          nameNotJudgeableBusinesses: [...unjudgeableNames].filter(Boolean).length,
         },
         engines, winnability, sources, topDomains,
         towns: [...townAgg.values()]
+          /* A town whose only audits were unjudgeable has nothing to say about naming; listing it
+             at "0 audits" would read as a measured zero. */
+          .filter((t) => t.audits > 0)
           .map((t) => ({ town: t.town, businesses: t.businesses.size, audits: t.audits, cells: t.cells }))
           .sort((x, y) => y.cells - x.cells),
         marketAudits,
