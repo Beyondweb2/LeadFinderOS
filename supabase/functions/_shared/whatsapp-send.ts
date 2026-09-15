@@ -6,7 +6,7 @@
 
 import { normaliseTrade, normaliseTown, pluraliseTrade } from "../../../src/lib/templateVars.ts";
 import { RIVAL_VARS, RIVALS_REQUIRED } from "../../../src/lib/rivalHook.ts";
-import { displayBusinessName } from "../../../src/lib/displayName.ts";
+import { displayBusinessName, IDENTIFY_NAME_TEMPLATES } from "../../../src/lib/displayName.ts";
 
 export const GRAPH_VERSION = "v21.0";
 
@@ -593,7 +593,10 @@ export function renderTemplateBody(templateName: string, businessName: string, c
      be "one rule written out in N places" — the failure this codebase has recorded five times, and
      the one that put a wrong body in the Inbox mirror for competitor_hook. src/lib/displayName.ts
      is the rule; nothing is written back to outreach_leads.business_name. */
-  businessName = displayBusinessName(businessName, { town });
+  businessName = displayBusinessName(businessName, {
+    town,
+    style: IDENTIFY_NAME_TEMPLATES.has(templateName) ? "identify" : "greet",
+  });
   /* `town` is a 6th positional rather than a new object: every existing body function ignores extra
      arguments, so adding it cannot change a single stored transcript. video_template is the only
      body that reads it - without it the transcript would say "in your area" while the message the
@@ -714,7 +717,13 @@ export function templateBodyParams(
          shortens it where it can prove a clean boundary and returns the FULL listing otherwise, so
          the worst case here is exactly what we send today. The town lets it refuse "Spalding
          Plumbers" -> "Spalding". DISPLAY ONLY — the column is never written. */
-      default: return displayBusinessName(businessName, { town: extra?.town }) || "your business"; // "name"
+      default: return displayBusinessName(businessName, {
+        town: extra?.town,
+        /* ⛔ THE FRAME DECIDES, AND THE TEMPLATE NAME IS ONLY HOW WE LOOK IT UP. "Hi, is this X?"
+           needs enough to identify; "Hi X," wants the short form. Absent templateName falls to
+           "greet", which is what every caller got before this existed. */
+        style: extra?.templateName && IDENTIFY_NAME_TEMPLATES.has(extra.templateName) ? "identify" : "greet",
+      }) || "your business"; // "name"
     }
   };
   /* ⛔ THE LAST GATE BEFORE META SEES A PARAMETER, AND IT COVERS EVERY TEMPLATE.
