@@ -219,3 +219,37 @@ export function isInternalMeasurement(row: AuditKindRow | null | undefined): boo
  *  `measurement` (the pointer triggers and the partial unique index read the column); only what a
  *  person reads changes. "Winnable questions" is what the full measure answers — Paul, 2026-09-13. */
 export const INTERNAL_MEASUREMENT_LABEL = 'Winnable questions audit (internal)';
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   WHICH AUDITS MAY BUY A WEBSITE SEO SCAN — AN ALLOWLIST BY PURPOSE, NOT A SKIP FLAG.
+
+   🔴 THE FAULT (found 2026-09-15 on BS4 Electrical Services Ltd, audit c8a78581, purpose `audit`).
+   The scan was decided by `skipSeo = body.skip_seo === true || isMeasurement || isRemeasure ||
+   isFreeCheck` — an OPT-OUT, so ABSENCE MEANT SPEND. Every caller that forgot the flag bought the
+   scan, and the lane that forgot it is the busiest one in the product: whatsapp-inbound's
+   first-reply auto-audit chain (`_shared/whatsapp-inbound.ts`, the AUTO_AUDIT_REPLY_ENABLED
+   branch) sends no `skip_seo`, so every prospect who replies to the opener has been buying a
+   ~4p Apify scan and getting a "Website issues we can fix" section on a cold outreach report.
+   Measured: 620 outreach-lane runs scanned, ~95% of every SEO pound ever spent.
+
+   ⛔ SO THE PURPOSE DECIDES, AND IT IS A POSITIVE LIST. Only a PAID BASELINE — the day-0 side of
+   the guarantee, where the website grade is part of what the client bought — may scan. Absence
+   (a null/unknown purpose: every legacy row, and any future caller that forgets) is NOT
+   permission: it grades "do not spend", which is the direction this file's absent-value law
+   points on a paid API. Adding a purpose here is a deliberate act; forgetting one costs nothing.
+
+   ⚠️ STATED COST, ACCEPTED: an operator wizard single on a paying client no longer scans by
+   itself. That is not a lost capability — `LeadSiteCheckButton` is the on-demand scan and it
+   prices itself on its face, which is the shape §8 already chose for scan-on-engagement.
+
+   ⚠️ AND IT IS ENFORCED TWICE ON PURPOSE. create-ai-audit seeds `results.seo` with the skip
+   marker at run-insert time, and process-ai-audit-queue re-asks this same question before it
+   spends. The marker alone IS "a flag that can drift" — a run inserted by any path that misses
+   it is scanned by the queue with nothing to stop it. The second gate is what makes the purpose,
+   rather than the marker, the thing that decides. */
+export const SEO_SCAN_PURPOSES: ReadonlySet<string> = new Set([BASELINE_AUDIT_PURPOSE]);
+
+/** May an audit of this purpose buy the website scan? Null / unknown / absent → NO. */
+export function seoScanAllowed(auditPurpose: string | null | undefined): boolean {
+  return typeof auditPurpose === 'string' && SEO_SCAN_PURPOSES.has(auditPurpose);
+}

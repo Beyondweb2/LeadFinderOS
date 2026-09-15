@@ -14,6 +14,7 @@ import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
 import { maybeSendRemeasureResults } from "../_shared/remeasure-results.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
+import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. ASYNC start-and-poll: each tick (a) POLLs in-flight Apify runs and
@@ -615,8 +616,17 @@ async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolea
     if (results.seo) continue; // already graded (success or failure marker)
 
     const { data: audit } = await service
-      .from("ai_audits").select("user_id, has_website, website, location_text").eq("id", run.audit_id).maybeSingle();
+      .from("ai_audits").select("user_id, has_website, website, location_text, audit_purpose").eq("id", run.audit_id).maybeSingle();
     if (!audit?.has_website || !audit?.website) continue; // no-website audits get no SEO section
+
+    /* ⛔ THE PURPOSE DECIDES, AND IT IS ASKED HERE TOO (2026-09-15). create-ai-audit seeds
+       results.seo with the skip marker, and until today that MARKER was the only thing standing
+       between an outreach audit and a paid Apify scan — i.e. a flag, set by one caller, that any
+       other insert path silently omits. `seoScanAllowed` is the same predicate create-ai-audit
+       reads; a null or unknown purpose (every pre-2026-09-12 row, and any future caller that
+       forgets) does NOT scan. Nothing is written here: a refused run simply has no SEO section,
+       which is exactly what an outreach report should have. */
+    if (!seoScanAllowed(audit.audit_purpose as string | null)) continue;
 
     // INHERIT before scanning. Any OTHER run of this same audit, recent enough, that holds a
     // GRADED scan (failure markers excluded by isReusableSeo, so a failed scan still retries)

@@ -12,7 +12,7 @@ import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
 import {
   measurementFlagFor,
   BASELINE_AUDIT_PURPOSE, MEASUREMENT_AUDIT_PURPOSE, REMEASURE_AUDIT_PURPOSE,
-  FREE_CHECK_AUDIT_PURPOSE, ORDINARY_AUDIT_PURPOSE,
+  FREE_CHECK_AUDIT_PURPOSE, ORDINARY_AUDIT_PURPOSE, seoScanAllowed,
 } from "../../../src/lib/auditKind.ts";
 import { moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
@@ -390,7 +390,20 @@ Deno.serve(async (req) => {
        business with a website they bought the ~4p scan run 1 declined and the report grew a website
        section the free check was designed not to have. Keying the skip on the PURPOSE makes it
        structural for every run of the audit, the way it already is for a measurement. */
-    const skipSeo: boolean = body.skip_seo === true || isMeasurement || isRemeasure || isFreeCheck;
+    /* 🔴 REBUILT 2026-09-15 AS AN ALLOWLIST BY PURPOSE. It used to read
+         `body.skip_seo === true || isMeasurement || isRemeasure || isFreeCheck`
+       — an opt-OUT, so a caller that simply did not mention skip_seo bought the scan. The busiest
+       lane in the product is exactly such a caller (whatsapp-inbound's first-reply auto-audit),
+       which is how 620 cold outreach runs bought a website scan and printed "Website issues we can
+       fix" on a prospect's report. `seoScanAllowed` is the one rule, in src/lib/auditKind.ts, and
+       the queue re-asks it before it spends. An explicit skip_seo is still honoured: it can only
+       ever reduce spend, so it needs no gate. */
+    const auditPurpose: string = isBaseline ? BASELINE_AUDIT_PURPOSE
+      : isRemeasure ? REMEASURE_AUDIT_PURPOSE
+      : isMeasurement ? MEASUREMENT_AUDIT_PURPOSE
+      : isFreeCheck ? FREE_CHECK_AUDIT_PURPOSE
+      : ORDINARY_AUDIT_PURPOSE;
+    const skipSeo: boolean = body.skip_seo === true || !seoScanAllowed(auditPurpose);
     /* ⛔ ONE PREDICATE GOVERNS BOTH ENDS — the preview the operator reviews and the run that
        actually happens. Money questions are for the ordinary per-business audit only: a paid
        baseline is the guarantee's day-0 and must not change character under a client
@@ -992,11 +1005,9 @@ Deno.serve(async (req) => {
          ⚠️ Migration-tolerant like its neighbours: the shed-and-retry below drops it if the column
          is not there yet, and without the column the trigger does not exist either, so the whole
          feature is simply absent rather than half-present. */
-      auditRow.audit_purpose = isBaseline ? BASELINE_AUDIT_PURPOSE
-        : isRemeasure ? REMEASURE_AUDIT_PURPOSE
-        : isMeasurement ? MEASUREMENT_AUDIT_PURPOSE
-        : isFreeCheck ? FREE_CHECK_AUDIT_PURPOSE
-        : ORDINARY_AUDIT_PURPOSE;
+      /* ⛔ ONE DERIVATION, read here and by skipSeo above. Two expressions that agree today is
+         how the scan and the stored purpose would drift apart tomorrow. */
+      auditRow.audit_purpose = auditPurpose;
       let { data: audit, error: insErr } = await service
         .from("ai_audits").insert(auditRow).select("id, business_name").single();
       // Shed a missing new column (either one) and retry, longest-name-first so one miss can't mask another.
