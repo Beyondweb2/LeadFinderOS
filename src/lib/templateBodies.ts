@@ -23,7 +23,7 @@
 
 import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from './questionnaireFollowup';
 /* competitor_hook's body prints the SAME plural the parameter carries — see its note below. */
-import { pluraliseTrade } from './templateVars';
+import { pluraliseTrade, normaliseTrade } from './templateVars';
 import { transcriptBusinessName } from './displayName';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
@@ -61,8 +61,36 @@ const reEngage49Body = (b: string, _u: string) =>
 Where did we get to with this? Happy to pick it back up, or leave it if now's not the time.`;
 
 // ── Findable, no link ─────────────────────────────────────────────────────
+/* 🔴 initial_contact's BODY CHANGED AT META 2026-09-15. This is the new registered wording; the
+   previous words are NOT gone, they are in SUPERSEDED_BODIES below, because 238+ rows were sent
+   with them and a body is the record of what a prospect READ. Mirrors whatsapp-send.ts. */
 const initialContactBody = (b: string, _u: string) =>
+  `Hi, is this ${b || 'your business'}?
+
+Cheers`;
+
+/** What initial_contact said before 2026-09-15 — kept so those transcripts stay true. */
+const initialContactBodyPre20260915 = (b: string, _u: string) =>
   `Hi, is this the right number for ${b || 'your business'}? Cheers`;
+
+/* audit_followup — submitted to Meta 2026-09-15. {{1}} trade SINGULAR lowercase, {{2}} town,
+   {{3}} {{4}} {{5}} rivals, {{6}} report link.
+   ⛔ "chatgpt" is lowercase deliberately (Paul's wording). Do not capitalise it.
+   ⚠️ The Inbox has no audit to read rivals from, so {{3}}-{{5}} degrade to "other firms" here
+   exactly as audit_reply's competitors do. The words the prospect received are on Meta's side. */
+const auditFollowupBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
+  const t = normaliseTrade(trade);
+  return `I asked chatgpt for a ${t.ok ? t.value : (trade || 'business')} in ${town || 'your area'} this morning.
+
+It came back with ${competitors || 'other firms'}.
+
+Ran you a free audit, you can see the results here:
+${u}
+
+45% of people now use AI to find local businesses. Same on Gemini, and I know how to get you showing up in those searches.
+
+Want me to explain?`;
+};
 
 const auditReplyBody = (b: string, u: string, trade?: string, competitors?: string) =>
   `Hi, thanks for getting back.
@@ -212,12 +240,14 @@ const bookingSwitchBarbersBody = (b: string, u: string) =>
 const barberFreshaBooksyBody = (b: string, u: string) =>
   `made you this 👇\n${u}\n\nHey ${b || 'your business'}, right now people can only book you through fresha/booksy - who take a cut of every booking and keep your customers on their app, not yours (bit cheeky). That's your shops own booking site up there - fully yours to customize too - colours, photos, prices, whatever you fancy. free if you want it, no stress if not`;
 
+/** One template's display renderer. Named so the superseded-bodies map can reuse it rather than
+ *  restate the signature — two copies of it would drift the day a seventh argument appears. */
+export type TemplateBodyFn =
+  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string) => string;
+
 /** DISPLAY-ONLY body renderers keyed by template name. Same signature as whatsapp-send.ts's
  *  WA_TEMPLATE_BODIES so the parity test can compare them one-to-one. */
-export const READABLE_TEMPLATE_BODIES: Record<
-  string,
-  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string) => string
-> = {
+export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
   re_engage_49: reEngage49Body,
@@ -238,6 +268,7 @@ export const READABLE_TEMPLATE_BODIES: Record<
   /* The 135 rows sent before the 2026-09-12 rename carry the old name and the SAME words. */
   audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,
+  audit_followup: auditFollowupBody,
 };
 
 export interface ReadableBodyOpts {
@@ -268,6 +299,23 @@ export function isPlaceholderBody(body: string | null | undefined): boolean {
   return false;
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   BODIES THAT CHANGED AT META UNDER THE SAME TEMPLATE NAME.
+
+   ⛔ THIS IS THE re_engage PROBLEM WITH NO NAME TO HANG IT ON. When a template is RENAMED the old
+   key stays in READABLE_TEMPLATE_BODIES and old rows render correctly by key. When the body is
+   re-approved under the SAME name, there is no key to keep — so the only honest discriminator is
+   when the message was sent.
+
+   ⚠️ ADD AN ENTRY WHENEVER A LIVE TEMPLATE'S WORDS CHANGE AT META, and never edit the `previous`
+   function afterwards: it is not copy, it is the record of what a prospect read.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+const SUPERSEDED_BODIES: Record<string, { changedAt: string; previous: TemplateBodyFn }> = {
+  /* Paul re-approved the opener on 2026-09-15: "Hi, is this the right number for X? Cheers"
+     became "Hi, is this X?\n\nCheers". 238+ rows carry the old words. */
+  initial_contact: { changedAt: '2026-09-15T00:00:00.000Z', previous: initialContactBodyPre20260915 },
+};
+
 /** The readable text for a message. If the stored body is already real filled text, it is
  *  returned unchanged. Otherwise the approved template copy is rendered from the template name +
  *  what the caller knows (business name, and — where the template uses them — link / trade /
@@ -286,7 +334,20 @@ export function readableTemplateBody(
      ⚠️ video_template is the exception that needs no exception: its body is unchanged by the
      rename (only a video header was added), so one entry serves both names — which is why
      `audit_result_hook` maps to the same function below. */
-  const fn = templateName ? READABLE_TEMPLATE_BODIES[templateName] : undefined;
+  /* ⛔ A TEMPLATE WHOSE BODY WAS RE-APPROVED UNDER THE SAME NAME NEEDS THE SAME PROTECTION, and
+     keeping the old KEY (the re_engage trick) cannot provide it — the name did not change, so every
+     row past and future looks identical. The date is the only discriminator there is.
+     initial_contact's wording changed at Meta on 2026-09-15 with 238+ rows already sent; rendering
+     those with today's copy would put words in a prospect's mouth they never read.
+     ⚠️ An absent or unreadable timestamp renders with the CURRENT body, deliberately: almost every
+     row has one, and a template's current copy is the better guess for the handful that do not. The
+     asymmetry with the greeting name is intended — there, absence keeps the FULL name, because the
+     risk runs the other way. */
+  const superseded = templateName ? SUPERSEDED_BODIES[templateName] : undefined;
+  const sentMs = opts.sentAt ? Date.parse(opts.sentAt) : NaN;
+  const fn = superseded && Number.isFinite(sentMs) && sentMs < Date.parse(superseded.changedAt)
+    ? superseded.previous
+    : (templateName ? READABLE_TEMPLATE_BODIES[templateName] : undefined);
   if (!fn) return '';
   return fn(
     transcriptBusinessName(opts.businessName, opts.sentAt, { town: opts.town }),

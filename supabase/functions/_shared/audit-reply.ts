@@ -8,7 +8,8 @@
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
 import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competitorCleaning.ts";
-import { usableRivals } from "../../../src/lib/rivalHook.ts";
+import { usableRivals, excludeSelfRivals } from "../../../src/lib/rivalHook.ts";
+import { nameMatches } from "../../../src/lib/nameMatch.ts";
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
 /* ⛔ THE PROSPECT-FACING ORIGIN. findable.live/report/<auditId> — a Pages Function proxy that forces
@@ -153,7 +154,21 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     const cc = (audit.country ?? "").trim().toUpperCase();
     if (cc === "UK" || cc === "GB") pool = pool.filter((c: string) => !US_MARKERS.test(c));
   }
-  const competitors = formatCompetitors(pool);
+  /* ⛔ DECLARED HERE, ABOVE ITS FIRST USE, AND THAT IS NOT A TIDY-UP. It used to sit ~25 lines
+     below, beside the trade guard; reading it from the self-exclusion would have been a temporal
+     dead zone — a ReferenceError at runtime that `deno check` and the parse gate both pass,
+     because a `const` is hoisted but not initialised. This repo has recorded three TDZ bites
+     already (CLAUDE.md §26), and this one would have thrown inside the function that resolves
+     every outreach pitch. The guard that needs it still runs in its original place. */
+  const business = (audit.business_name ?? "").trim();
+
+  /* ⛔ THE SELF-EXCLUSION IS APPLIED ONCE, HERE, SO THE JOINED {{2}} AND THE THREE SEPARATE
+     {{3}}-{{5}} CANNOT DISAGREE. audit_reply names competitors in one string and competitor_hook /
+     audit_followup name them as three parameters; filtering only the second would leave a business
+     listed as its own competitor in exactly one template, which is the two-copies drift this file
+     already warns about for the whitespace collapse. */
+  const rivalPool = excludeSelfRivals(pool, business, nameMatches);
+  const competitors = formatCompetitors(rivalPool);
   /* {{2}} is a REQUIRED Meta var — refuse rather than send an empty/broken template. But SAY WHICH
      REFUSAL IT IS: one message used to cover three different situations, which is why a block felt
      random.
@@ -176,7 +191,6 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
   }
 
   const trade = (audit.business_type ?? "").trim();
-  const business = (audit.business_name ?? "").trim();
   if (!trade || !business) return { ok: false, reason: "Audit is missing the business name or type." };
 
   /* THE LEAD'S TRADE, NOT JUST THE AUDIT'S. This guard used to check only audit.business_type, which
@@ -207,5 +221,10 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
      document; it does not need to be in the address bar. */
   const link = `${REPORT_SITE_ORIGIN}/report/${audit.id}`;
 
-  return { ok: true, trade, competitors, rivals: usableRivals(pool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id };
+  /* ⛔ A BUSINESS IS NEVER ITS OWN RIVAL — the rule, the measurement and the reasoning live in
+     src/lib/rivalHook.ts, which is where the test can reach them. This function needs a supabase
+     client, so a rule written inline here would be a rule nothing asserts.
+     ⛔ Dropping a self-match can leave fewer than three names; that is correct and already handled
+     — rivalHookDecision falls back to video_template rather than padding. */
+  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id };
 }

@@ -112,3 +112,62 @@ export function rivalHookDecision(
       `An empty competitor is rejected by Meta and a padded one is a claim we cannot show.`,
   };
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   A BUSINESS IS NEVER ITS OWN RIVAL.
+
+   🔴 MEASURED 2026-09-15, AND IT WAS LIVE ON competitor_hook — not a risk introduced by the new
+   audit_followup. Driving the real selection (count -> groupNames -> rank -> top 3) over every
+   audit on file: **26 of 1,145 audits with stored competitors named their own business in the
+   three that get sent, and all 26 were attached to a lead**, so every one was sendable. The
+   plainest are exact — "Appleyard Locksmiths", "Moore Secure Locksmiths", "Strongs Locksmiths
+   Services", "All Access Locksmith Middlesbrough Door & Window Repair" each sat in their own top
+   three. The message reads "I asked chatgpt for a locksmith in Middlesbrough, it came back with
+   X, YOU and Z", sent to them.
+
+   ⛔ THE OLD PROTECTION WAS cleanNames AT AUDIT TIME AND IT DOES NOT HOLD: 241 stored competitor
+   names across the book match their own audited business under nameMatches. Paul's instruction was
+   to prove that rather than trust it, and this is what the proof found.
+
+   ⛔ IT IS A LEAF SO IT CAN BE TESTED WITHOUT A DATABASE. resolveAuditReplyVars needs a supabase
+   client to reach, so a rule written inline there is a rule nothing asserts.
+
+   ⛔ IT NEVER TOPS UP. Removing a self-match can leave fewer than three names, and that is already
+   handled: rivalHookDecision sends video_template instead. Reaching further down the ranked list
+   to refill would substitute weaker evidence for the name we removed and turn a checkable claim
+   into a vague one. (Measured: on the real book this costs NOTHING — 0 audits drop below three.)
+   ⚠️ nameMatches BOTH WAYS. A Google listing and an extracted mention are not written alike:
+   "Norwich Plumber" and "Norwich Plumbing Services" are the same operator written two ways, and
+   only one direction catches each.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Does this candidate name the audited business itself? */
+export function isSelfRival(
+  candidate: string | null | undefined,
+  business: string | null | undefined,
+  matches: (haystack: string, name: string) => boolean,
+): boolean {
+  const c = String(candidate ?? '').trim();
+  const b = String(business ?? '').trim();
+  if (!c || !b) return false;   // nothing to compare is not evidence of a match
+  return matches(c, b) || matches(b, c);
+}
+
+/**
+ * Drop any candidate that names the audited business.
+ *
+ * ⛔ `matches` IS INJECTED RATHER THAN IMPORTED, and that is deliberate: nameMatches lives in a
+ * module this leaf must not depend on (it is imported by SPA and edge alike), and injecting it
+ * means the test drives the REAL predicate rather than a reimplementation of it.
+ * ⚠️ AN EMPTY BUSINESS NAME FILTERS NOTHING. Absence is not a licence to strip the list — with no
+ * name to compare against there is no evidence anything is a self-match.
+ */
+export function excludeSelfRivals(
+  pool: readonly (string | null | undefined)[] | null | undefined,
+  business: string | null | undefined,
+  matches: (haystack: string, name: string) => boolean,
+): string[] {
+  const list = (pool ?? []).map((c) => String(c ?? '').trim()).filter(Boolean);
+  if (!String(business ?? '').trim()) return list;
+  return list.filter((c) => !isSelfRival(c, business, matches));
+}

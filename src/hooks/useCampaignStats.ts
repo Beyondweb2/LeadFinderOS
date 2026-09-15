@@ -55,7 +55,7 @@ const SIGNUP_TEMPLATES = new Set(['onboarding_followup']);
    that template's real prospect opens into the "not attributable" bucket and prints a low open rate
    for the template beside it. competitor_hook's {{6}} is the same findable.live/report/<auditId>
    link every other entry carries. */
-const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'video_template', 'free_check_result', 'audit_reply_warm', 'competitor_hook']);
+const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'video_template', 'free_check_result', 'audit_reply_warm', 'competitor_hook', 'audit_followup']);
 
 /* ⛔ THE DAY PAGE-HIT LOGGING WENT LIVE. Every site-visit rate is measured from here, because a
    send that predates it had no way to be counted and would drag its template's rate to a meaningless
