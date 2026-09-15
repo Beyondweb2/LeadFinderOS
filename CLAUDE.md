@@ -4633,6 +4633,23 @@ matcher and not the market.
   `buildReportData` still prints the inflated figure for an unjudgeable name, because the refusal
   would be **customer-facing copy nobody has approved**. It is untouched deliberately — raise it,
   do not quietly write the sentence.
+  - ✅ **IT CANNOT CONTRADICT THE SITE, AND THAT WAS CHECKED RATHER THAN ASSUMED (2026-09-15).** The
+    report carries **no book-wide statistic at all** — grepped: no 628 / 761 / 11.8 / 43.7 / 43,035
+    in `aiAuditReportHtml.ts`, `welcomePackHtml.ts`, `remeasureResultsHtml.ts`, `auditReport.ts`,
+    `clientRequestDoc.ts` or `playbookDoc.ts`. Every figure in a report is that ONE business's own
+    count: *"AI named <b>X</b> N times out of M answers"*.
+  - 🔴 **BUT IT HAS THE SAME FAULT IN ITS OWN NUMBERS, MEASURED: 64 of the 495 opened reports (13%)
+    carry an unjudgeable name, AND IT BREAKS BOTH WAYS.** Flattering: Burnley Locksmiths, Norwich
+    Plumber, Locksmiths Canterbury, MJS Locksmiths and DS Locksmiths were each told **6 of 6** —
+    "AI already names you everywhere", which kills the sale on a claim we cannot support.
+    Damning: "CJ Plumbing Services" (strips to `cj`) and "A Plumbing Company" were told **0 of 6**,
+    and the hero renders that as **"AI never named you"** — §6b's Wilson failure, live, on a
+    document we send.
+  - ✅ **NO PAYING CLIENT IS AFFECTED.** RG Locksmiths, Ronnie's Shoe Repairs and SC Plumbing & Gas
+    all pass the gate, so no refund evidence and no frozen baseline is touched.
+  - **The draft awaiting one word from Paul**, for the hero when the name is not judgeable:
+    *"Your name is the same words as your trade and your town, so we cannot tell a mention of you
+    from a mention of the search itself. We measure this one by hand before we send it."*
 
 ### The corrected historical figures (measured read-only 2026-09-15, nothing written)
 | | as the site says | corrected |
@@ -4649,10 +4666,28 @@ matcher and not the market.
   Locksmith".
 - ⚠️ **11.8% AND 43.7% WERE NEVER REPRODUCIBLE FROM TODAY'S ROWS ANYWAY** — they are a July/August
   snapshot of a smaller book. **Re-derive before quoting; do not inherit any number in this table.**
-- 🔴 **`findable-site/src/components/WhyThisWorks.astro` STILL CARRIES THE OLD CLAIM** (628
-  businesses, 11.8%, 43.7%). It is a separate repo with no CI and was **not changed here** — the
-  restated sentence is Paul's to approve. Until he does, the public page overstates Gemini by
-  2.1 points and ChatGPT by 10.5.
+- ✅ **findable-site IS UPDATED AND LIVE (2026-09-15, master `14558b4`, `npm run deploy` — no CI).**
+  Three files: `WhyThisWorks.astro` (the headline sentence, the expander's engine split, the sources
+  line), `Faq.astro`, `research.astro` (title, meta, JSON-LD headline, h1, lead, method, Finding 1).
+  Verified live on **/** and **/research/** by RENDERED TEXT, not markup: every new figure present,
+  every retired one absent.
+  - **Paul's wording, and the em dash is banned in it:** *"We audited 941 local businesses. Gemini
+    named them in just 9.7% of answers. ChatGPT named them three and a half times more often."*
+  - ⛔ **CHATGPT IS A RATIO ON THE HOME PAGE, NEVER A SECOND PERCENTAGE.** That file's standing rule
+    is that a skimmer meeting two percentages takes the bigger one and concludes directories win —
+    the opposite of what the section argues. "Three and a half times more often" carries the
+    comparison with nothing to anchor on. **33.2% stays in the expander**, where it has a paragraph.
+  - **Two figures moved that are NOT naming rates**, both re-derived over the same judgeable set:
+    **61,848 citations** (was 43,035) and **9,621 scored answers** (was 7,283). The old pair was the
+    smaller book, not the gate.
+  - ⛔ **Finding 1 said Checkatrade appeared in NO accountant audit. It is 1 of 80 now, so "none"
+    was false and is corrected.** Plumbers went 167/174 → **394 of 411**. Neither is a naming rate;
+    both are breadth over a book that grew.
+  - ⚠️ **The retired figures survive VERBATIM inside the design-history comments**, flagged as
+    retired at the top of the block. They are the record of what the page actually said — the same
+    rule as the historical `re_engage` body (§19). Do not "correct" them.
+  - ✅ `/research`'s standing note that per-engine rates were too stale to publish is **answered**:
+    they exist now (9.7% / 33.2% over 9,621 answers). Finding 4 is writable whenever Paul wants it.
 
 **Deployed:** `market-view` **v71** (its only new import is `derivable.ts`; no other function reaches
 it — the two other greps are comments, §4). SPA pushed. `npm run check`: **105/110**, the five
