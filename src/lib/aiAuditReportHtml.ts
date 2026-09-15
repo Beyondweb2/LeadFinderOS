@@ -892,6 +892,11 @@ export function renderReportHtml(d: AiAuditReportData): string {
        ⛔ THE COUNT IS UNCHANGED — this is the label only. `e.recommended` still comes from the same
        derivation and the header total still comes from the stored `named`. Renaming was the whole
        fix: the measurement was always honest, the word on top of it was not.
+       ⚠️ UPDATE 2026-09-15: the sentence above about nameMatches now describes the FALLBACK only.
+       The count comes from cellNamed() (namedSignal.ts), which prefers the model's own reading of
+       the answer where extract-competitors has recorded one. That does NOT make the label
+       "Recommended" honest again — self_named answers "is this business presented as an option",
+       which is still presence-as-a-candidate and not endorsement. Do not rename it back.
        ⚠️ A REAL endorsement measure needs an LLM judgement per answer and is deliberately NOT built
        here. If it is ever added it must be a NEW field with its own name — never by quietly
        re-pointing this label at a different number, which is how the overclaim happened.

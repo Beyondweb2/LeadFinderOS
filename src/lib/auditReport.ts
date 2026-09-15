@@ -20,7 +20,15 @@ import { buildMatchContext, groupNames } from "../../supabase/functions/_shared/
    `cj`, and "A Plumbing Company") were told 0 of 6, which this renderer prints as **"AI never named
    you"** — a false accusation on the document that asks for the business.
    ⚠️ Same import shape as market-match above, and for the same reason: the whole chain is
-   Deno-global-free, so the SPA and the edge bundler both resolve it. */
+   Deno-global-free, so the SPA and the edge bundler both resolve it.
+
+   ✅ SUPERSEDED IN PART, 2026-09-15: THE MODEL ANSWERS THIS NOW. extract-competitors reads every
+   answer and records self_named — whether that answer presents the AUDITED BUSINESS as a business
+   a customer could hire. src/lib/namedSignal.ts is the one predicate; cellNamed() prefers the
+   model verdict and falls back to the string match only where the extractor has not read the
+   answer. The refusal above survives ONLY for a trade-and-town name with no model verdict at all,
+   which is extraction never having run or having failed. Everything the paragraph says about WHY
+   the string test cannot be trusted is still true — it is just no longer the only thing we have. */
 import { nameIsJudgeable } from "../../supabase/functions/_shared/derivable.ts";
 import { classifyKnownEntity } from './knownEntities.ts';
 import { cellNamed, hasModelNamedEvidence } from './namedSignal.ts';

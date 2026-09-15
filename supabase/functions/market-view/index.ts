@@ -16,7 +16,11 @@ import { nicheTradeKey, ENGINE_LABELS_NICHE } from "../../../src/lib/nicheView.t
    scores on an answer about plumbers in Blackpool without the engine having any idea who they are.
    Those audits inflated every naming rate this fold produces — measured across the whole book they
    score roughly DOUBLE the judgeable ones. They are excluded from the rates now and counted where
-   the operator can see them. ⛔ Derived on read; no stored score is touched. */
+   the operator can see them. ⛔ Derived on read; no stored score is touched.
+   ✅ AND SINCE LATER THE SAME DAY THE FOLD NO LONGER HAS TO GUESS: cellNamed() (namedSignal.ts)
+   reads the MODEL's self_named where extract-competitors has recorded one. The exclusion above
+   still applies — a name that is all trade and town with no model verdict is still unjudgeable —
+   but a backfilled audit now contributes a real number instead of being dropped. */
 import { nameIsJudgeable } from "../_shared/derivable.ts";
 /* ⛔ src/lib/marketView.ts IS NO LONGER IMPORTED HERE, AND THAT IS THE POINT OF THE 2026-09-09
    PRUNE. This file used to pull seventeen symbols out of it — every one of them for the deleted
