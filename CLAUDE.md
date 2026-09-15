@@ -4781,3 +4781,43 @@ were the same shape: a correlation stated as a cause.** Deployed (master `e8b1a1
   every research figure still rendered, and an absolute-claims regex sweep over all seven built
   pages comes back **empty**. Home grew **2.9% desktop / 4.9% mobile** (measured against a stashed
   pre-change build, not estimated).
+
+---
+
+## 29. ✅ THE GREETING NAME — two styles, because there are two grammars (2026-09-15)
+
+**`src/lib/displayName.ts` shortens the Google Maps listing before it reaches Meta.** It was one
+rule; it is two, and the split is the SENTENCE the name lands in, never the template's tone.
+
+| style | frame | rule |
+|---|---|---|
+| **`greet`** (default) | `"Hi ${b},"` / `"Hi ${b} 👋"` | the full peel — trade tail + legal suffix |
+| **`identify`** | `"Hi, is this ${b}?"` | **the LEGAL suffix only** |
+
+- 🔴 **WHY, IN PAUL'S WORDS:** *"Hi, is this Zest?" and "Hi, is this Park?" read like a wrong
+  number.* He asked for one rule, saw the comparison and changed his mind on the spot: **"Hi, is
+  this Beeson?" and "Hi Beeson Plumbing & Heating Ltd," are opposite failures.** One is a stranger
+  with no context; the other is a mail merge. `initial_contact` is the ONLY live body that asks an
+  identification question — every other one addresses them.
+- ⛔ **`IDENTIFY_NAME_TEMPLATES` IS THE ONE PLACE THE SPLIT IS DECIDED**, read by THREE renderers:
+  the Meta parameter (`whatsapp-send.ts`'s variable resolver), the stored body
+  (`renderTemplateBody`) and the Inbox mirror (`templateBodies.ts`). Written out at any of them it
+  is the one-rule-in-N-places failure recorded five times in this file, and the **transcript would
+  drift from the message** on the next template added. Membership is decided by reading the body's
+  opening line, not by how formal it feels.
+- ⛔ **TRAILING LEGAL WORDS ONLY, AND THAT IS MEASURED, NOT CAUTIOUS.** Of 3,641 distinct business
+  names, **980 carry a legal token: 897 end in one, 8 sit immediately before a parenthetical, 75
+  are MID-NAME.** Stripping those in place gives *"Asmat & Accountants"* and *"JM Price &
+  Accountants"* — a fragment, the one output this module exists to refuse. Paul's call: *"trailing
+  only is the correct call."* The parenthetical carve-out exists because he specified its output:
+  `RJW Electrical Ltd (Sutton Coldfield)` → `RJW Electrical (Sutton Coldfield)`.
+- **What it moves:** greet shortens 1,817 of 3,641 names (49.9%); identify shortens 904 (24.8%).
+  **1,166 names keep their trade words on the opener** that used to lose them.
+- ⚠️ **greet IS BYTE-IDENTICAL TO BEFORE and the suite pins it** — an absent `style` renders the
+  same as an explicit `greet`, so `video_template`, `competitor_hook`, `free_check_result`,
+  `re_engage_49` and `payment_recieved` are untouched. **`audit_followup` and `explain_offer` carry
+  no name variable at all** and could not have been affected either way.
+- **Deployed:** the ten functions in the closure, walked from each `index.ts` rather than inherited
+  — create-ai-audit, findable-onboarding, mockup, process-ai-audit-queue, process-sms-queue,
+  process-whatsapp-queue, send-whatsapp-message, stripe-webhook, submissions, whatsapp-status.
+  `npm run check`: 107/112, the five known-stale suites only.
