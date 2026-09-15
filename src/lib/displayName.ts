@@ -135,15 +135,94 @@ const legalTailOk = (w: string) => {
   return !n || LEGAL.has(n) || /^[-&+,./|~]+$/.test(n);
 };
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   🔴 THE TRAILING TOWN, AND WHY IT IS THE ONLY TOWN RULE THAT CAN BE PROVEN (Paul, 2026-09-15).
+
+   "Hi, is this RJ Burns Electrical Services Harlow?" is too much. The trade words are right to keep
+   — "RJ Burns Electrical" reads fine — so the thing to remove is the TOWN.
+
+   ⛔ NEVER GUESS A TOWN. The evidence is `opts.town`, which is the town the LEAD ROW already
+   carries, and nothing else. There is no gazetteer here on purpose: `uk_towns` is a 733-row
+   database table, and copying it into a leaf is the second-copy failure this codebase has recorded
+   six times. No town on the caller means the strip simply does not run, which is today's output.
+   ⛔ AND TRAILING ONLY. "Bristol Electricians" is the whole name and must survive untouched — a
+   leading town IS the name. Measured over the book: 364 of 3,624 unarchived names end in their own
+   town; not one of the leading-town names is affected, because position is the whole test.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Words that must never be left dangling at the end of a name once something after them is cut. */
+const DANGLING = new Set(["in", "of", "near", "for", "at", "the", "and", "&", "-"]);
+const trimTail = (words: string[]): string[] => {
+  let t = [...words];
+  while (t.length && (DANGLING.has(norm(t[t.length - 1])) || /^[-&+,./|~]+$/.test(norm(t[t.length - 1])))) t = t.slice(0, -1);
+  return t;
+};
+
+/* Generic words the identify name may shed AFTER the town, and only then. Deliberately a short
+   list — "Services", "Solutions" and the like describe nothing and name nobody. */
+const IDENTIFY_GENERIC = new Set([
+  "services", "service", "solutions", "solution", "group", "uk", "company", "co",
+]);
+
 /**
- * IDENTIFY style: strip the legal suffix and nothing else.
+ * Remove a trailing run of words equal to a town the lead PROVABLY has.
+ *
+ * ⛔ THE CONNECTOR REFUSAL — Paul's call, from the one case in 364 that this rule got wrong.
+ * "Ollie's Lock & Safe Locksmiths Cheltenham & Gloucester" is a TWO-TOWN name, and stripping the
+ * matched town left "…Locksmiths Cheltenham": half a list, presented as the whole thing. A
+ * connector immediately before the town proves the town is one item of several, not a suffix — so
+ * the strip refuses rather than editing what the business says it covers. Same family as the
+ * fragment refusal in the greet rule: when the boundary is not clean, keep the full name.
+ */
+function stripTrailingTown(words: string[], town: string): string[] | null {
+  const tw = town.split(/\s+/).filter(Boolean).map(norm);
+  if (!tw.length || tw.length >= words.length) return null;                 // never the whole name
+  const tail = words.slice(words.length - tw.length).map(norm);
+  if (tail.join(" ") !== tw.join(" ")) return null;                         // trailing only
+  /* ⛔ ONLY "&", "and" AND "+" REFUSE, AND THE DISTINCTION IS MEASURED RATHER THAN TIDY. A
+     CONJUNCTION before the town means the town is one item of a list ("…Cheltenham & Gloucester");
+     a DASH or COMMA means an appended qualifier ("PME Heating & Plumbing - Bolton", "AquaPlumb -
+     Emergency Plumber - Harlow"), which is precisely the suffix this strip exists to remove.
+     Treating all of CONNECTORS as a list marker refused both of those real rows. */
+  const before = norm(words[words.length - tw.length - 1] ?? "");
+  if (before === "&" || before === "and" || before === "+") return null;
+  const head = trimTail(words.slice(0, words.length - tw.length));
+  if (!head.length) return null;
+  /* ⛔ AND WHAT REMAINS MUST NAME SOMEBODY. "Plumbing Harlow" minus the town is "Plumbing" — a bare
+     trade word, which is the wrong-number failure this whole style exists to prevent. Two words is
+     enough context ("City Plumbing" is a name), one word is only enough if it is not vocabulary
+     ("Toolstation March" -> "Toolstation"). */
+  if (head.length === 1 && (STOP.has(norm(head[0])) || MODIFIERS.has(norm(head[0])))) return null;
+  return head;
+}
+
+/**
+ * Remove a trailing "Services"-class word, but only where the name still says what they do.
+ *
+ * ⛔ TWO CONDITIONS, BOTH REQUIRED, AND THEY ARE WHAT MAKE A BARE "Shaw" IMPOSSIBLE: a TRADE word
+ * must survive the cut, and at least two words must remain. So "Shaw Plumbing Services" → "Shaw
+ * Plumbing", while "Pyramid Services" is left exactly as it is — nothing in it says what they do,
+ * so "Pyramid" would be the wrong-number failure this style exists to prevent.
+ */
+function stripIdentifyGeneric(words: string[]): string[] | null {
+  let cut = words.length;
+  while (cut > 0 && (IDENTIFY_GENERIC.has(norm(words[cut - 1])) || /^[-&+,./|~]+$/.test(norm(words[cut - 1])))) cut--;
+  if (cut === words.length) return null;
+  const head = trimTail(words.slice(0, cut));
+  if (head.length < 2) return null;                                          // never one bare word
+  if (!head.some((w) => TRADE.has(norm(w)))) return null;                    // a trade word must survive
+  return head;
+}
+
+/**
+ * IDENTIFY style: strip the legal suffix, then a trailing town, then a "Services" tail.
  *
  * ⛔ TRAILING ONLY, AND THAT IS MEASURED RATHER THAN CAUTIOUS. Of the 980 names carrying a legal
  * token, 897 end in one and **75 carry it mid-name** — "Asmat & Co. Accountants", "JM Price & Co
  * Accountants", "Whitings LLP, Chartered Accountants". Removing those in place produces "Asmat &
  * Accountants": a fragment, which is the one output this whole module exists to refuse.
  */
-function identifyName(original: string, keep: (why: string) => DisplayNameResult): DisplayNameResult {
+function identifyName(original: string, town: string, keep: (why: string) => DisplayNameResult): DisplayNameResult {
   const m = original.match(PAREN_TAIL);
   const paren = m ? m[1] : "";
   const main = (m ? original.slice(0, m.index) : original).trim();
@@ -151,14 +230,23 @@ function identifyName(original: string, keep: (why: string) => DisplayNameResult
   const t = tok(main);
   let cut = t.length;
   while (cut > 0 && legalTailOk(t[cut - 1])) cut--;
-  if (cut === t.length) return keep("no legal suffix to remove");
-  if (!t.slice(cut).some((w) => LEGAL.has(norm(w)))) return keep("nothing but punctuation to remove");
+  /* ⚠️ A NAME WITH NO LEGAL SUFFIX IS NO LONGER A REFUSAL — it just has nothing to cut at this
+     step. "RJ Burns Electrical Services Harlow" carries no Ltd, and it is the case that started
+     this. The refusal moved to the bottom, where it belongs: nothing changed by ANY step. */
+  if (cut < t.length && !t.slice(cut).some((w) => LEGAL.has(norm(w)))) cut = t.length;
 
   let head = t.slice(0, cut);
   while (head.length && CONNECTORS.has(norm(head[head.length - 1]))) head = head.slice(0, -1);
+
+  /* ⛔ ORDER IS LOAD-BEARING: legal, then town, then the generic tail. "…Electrical Services
+     Harlow" only reveals its "Services" tail once the town is gone, and running the generic step
+     first would cut nothing and leave the town stranded on the end. */
+  if (town) head = stripTrailingTown(head, town) ?? head;
+  head = stripIdentifyGeneric(head) ?? head;
+
   let out = head.join(" ").replace(/[\s,\-&+|/~]+$/, "").trim();
 
-  if (!out) return keep("the whole name is a legal suffix");
+  if (!out) return keep("the whole name is a legal suffix, a town or a generic word");
   if (out.replace(/[^A-Za-z0-9]/g, "").length < 3) return keep("what remains is too short to be a name");
   if (paren) out = `${out} ${paren}`;
   if (out.toLowerCase() === original.toLowerCase()) return keep("nothing to trim");
@@ -187,7 +275,7 @@ export function displayNameFor(name: string | null | undefined, opts: DisplayNam
   const keep = (why: string): DisplayNameResult => ({ display: original, original, shortened: false, why });
   if (!original) return { display: "", original: "", shortened: false, why: "no name" };
 
-  if (opts.style === "identify") return identifyName(original, keep);
+  if (opts.style === "identify") return identifyName(original, (opts.town ?? "").trim().toLowerCase(), keep);
 
   const t = tok(original);
 

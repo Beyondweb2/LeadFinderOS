@@ -12,26 +12,20 @@ const sb = supabase as unknown as { from: (t: string) => any; functions: typeof 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** Out-of-window reply templates (mirror the edge allowlist). */
-/* ⛔ SENDABLE TEMPLATES. The five barber ones (booking_page_intro, no_website_barbers,
-   barber_poor_website, booking_switch_barbers, barber_fresha_booksy) were REMOVED from this list on
-   2026-09-09 with the barber product. Every one of them carries {{link}} = a /s/<share_token> claim
-   URL, and no lead has a share_token any more — so siteLinkGuard refused all five on every lead.
-   They were five permanently-disabled rows in a picker of twelve, and they would have been five
-   dead options in the new bulk-send picker too.
-   ⚠️ HISTORY STILL RENDERS THEM. 71 of those messages were really sent, and a thread showing a raw
-   slug where it used to show a sentence is a regression in the transcript — but the answer is
-   Inbox.tsx's existing TEMPLATE_DISPLAY map, which already names every template this product has
-   ever had. Do not add a second list here: naming a PAST message and choosing the NEXT one are
-   different questions with different lists, and that is the whole reason this one shrank. */
-export const WA_REPLY_TEMPLATES = [
-  { name: 'initial_contact', label: 'Initial contact (opener)' },
-  { name: 'audit_reply', label: 'Audit reply (report + competitors)' },
-  { name: 'video_template', label: 'Audit result hook (outreach)' },
-  { name: 'audit_reply_warm', label: 'Audit reply — warm (after the opener)' },
-  { name: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
-  { name: 'book_call', label: 'Arrange a call' },
-  { name: 're_engage_49', label: 'Re-engage (gone quiet)' },
-];
+/* 🔴 THE SENDABLE LIST LIVES IN ONE PLACE: `WHATSAPP_TEMPLATES` (src/types/outreach.ts).
+   A second copy stood here as `WA_REPLY_TEMPLATES` until 2026-09-15 and it went stale exactly the
+   way this codebase has now recorded six times: templates were registered at Meta, wired in the
+   server registry, added to the real list — and the Inbox, reading this copy, never saw them.
+   ⛔ MEASURED COST, and it is not hypothetical: `competitor_hook` was approved on 2026-09-14 and
+   was UNSENDABLE FROM THE INBOX from that day; `audit_followup`, `explain_offer` and
+   `contact_followup` were invisible too. Four templates the server would have sent happily.
+   ⛔ DO NOT REINTRODUCE A LIST HERE — not a filtered one, not a re-ordered one, not "just the
+   warm ones". If the Inbox should hide a template, the rule belongs beside the list it filters,
+   and `scripts/sendable-templates.test.ts` fails the build on a second copy appearing.
+   ⚠️ NAMING A PAST MESSAGE IS STILL A DIFFERENT QUESTION and still has its own list: Inbox.tsx's
+   TEMPLATE_DISPLAY covers every template this product has ever had, including the five retired
+   barber ones whose 71 sent messages must keep rendering as sentences rather than raw slugs. */
+
 
 
 export interface WaMessage {
