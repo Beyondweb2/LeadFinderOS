@@ -4981,3 +4981,48 @@ on a real lead to provoke, so the first evidence of a fault was always a burned 
 - **Deployed:** `send-whatsapp-message` (and `process-whatsapp-queue` re-deployed off current main,
   so the routing fix is certainly live on both). `npm run check`: **109/114**, the five known-stale
   suites only.
+
+### 30d. 🔴 A `catch` CANNOT SEE WHAT ITS `try` DECLARED — and that is how "Failed to send a request" happened (2026-09-15)
+
+**The third distinct symptom on the same button, and it was mine: the dry-run commit put
+`let phase` INSIDE the handler's `try` and read it in the `catch`.** A catch clause is a SIBLING
+scope, not a child of the try block, so the name is simply not there. **Every throw became a
+ReferenceError inside the error handler**, which escaped `Deno.serve`; the runtime answered with its
+own 500 carrying **none of our CORS headers**, the browser refused to read it, and supabase-js
+reported `Failed to send a request to the Edge Function`.
+
+- ⛔ **THE SYMPTOM IS THE TELL, AND IT IS WORTH MEMORISING.** On this project:
+  | What the operator sees | What it means |
+  |---|---|
+  | a 200 with `ok:false` | a DESIGNED refusal, with its reason |
+  | `Edge Function returned a non-2xx status code` | the handler answered — 400/401/403/409, or a 500 whose reason is in an unreadable log |
+  | **`Failed to send a request to the Edge Function`** | **the response had no CORS headers at all** — the handler crashed outside its own error path, or never booted |
+  The third one is not a worse version of the second; it is a different layer, and reading it as
+  "another 500" sends you looking in the wrong place.
+- ⛔ **NOTHING LOCAL COULD SEE IT.** `npm run typecheck` does not cover `supabase/functions` (§3),
+  `check-edge-syntax.mjs` parses without resolving names, and Deno is not on this machine — so the
+  deploy succeeded and the bug shipped. **`scripts/edge-catch-scope.test.ts`** is the gate: for every
+  edge entrypoint it takes the outermost `catch` body and fails on any name whose declarations ALL
+  lie inside that `try`. **Proven both directions** — it fails on the real bug and passes hoisted.
+  ⚠️ It deliberately ignores a name declared nowhere visible (an import, a parameter): the rule is
+  narrow on purpose, because a check that fails for its own reasons is the §4 trap.
+- ⛔ **THE LIVE VERSION IS READABLE NOW, WITH NO CREDENTIAL: `BUILD_ID` AND `CAPABILITIES` RIDE ON
+  `corsHeaders`, SO THEY COME BACK ON THE OPTIONS PREFLIGHT.**
+  `curl -s -D - -o /dev/null -X OPTIONS https://<ref>.supabase.co/functions/v1/send-whatsapp-message`
+  → `x-swm-build: 2026-09-15c`, `x-swm-caps: dry_run,build_phase_hold,routing_leaf`. Three faults in
+  a row on one button were each diagnosed against `main` because the deployed bytes were
+  unobservable; a deploy timestamp eleven seconds from a file's mtime was the entire evidence base.
+  ⚠️ **A CONSTANT THAT CAN LIE IS WORSE THAN NO CONSTANT**, so `dry-run-preview.test.ts` asserts the
+  capability list against the code: `dry_run` is advertised **if and only if** the dry-run return is
+  really in the file. **Bump `BUILD_ID` in the same commit as anything worth proving live.**
+- ⚠️ **THE CATCH ALSO RECORDS NOW** (`client_error_reports`), because the CLI has no `functions
+  logs` — which is why three separate faults on one button each cost a live prospect to find.
+- 🔴 **AND THAT EXPOSED A BIGGER ONE: `client_error_reports` HAS NO `message` COLUMN.** Ten edge
+  call sites insert one (`audit-baseline.ts`'s `reportOnceAnHour` among them), so **every one of
+  those rows has been silently rejected** — the diagnostic layer §4 and §15 describe as "recorded, not
+  logged" has, for those writers, been recording nothing. The rows that DO exist all use
+  `error_id` + `context`. **`SQL_FOR_PAUL_client_error_message.sql` is the one idempotent ALTER**;
+  until it runs, write `error_id` + `context` only. ⚠️ §2's Management-API route is unusable on this
+  machine (`~/.supabase/access-token` does not exist — §20 already recorded it), so this needs Paul.
+- **Deployed:** `send-whatsapp-message` (BUILD_ID `2026-09-15c`, verified live by the preflight
+  header above). `npm run check`: **110/115**, the five known-stale suites only.
