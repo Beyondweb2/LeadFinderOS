@@ -59,6 +59,13 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
      none. The containment is operational rather than structural: **it is sent from the Inbox, never
      the queue.** If that ever changes, this exposure is the thing to close first. */
   "audit_followup",
+  /* explain_offer — the full pitch, Inbox only, 2026-09-15. Same reasoning as audit_followup above:
+     it is sent into a conversation that already exists, so COLD would refuse it for every lead it
+     is written for. ⚠️ It carries the same accepted exposure — exempt from the phone-history
+     seatbelt, so queueing it to a number with no history would send a first touch. It is never
+     queued: process-whatsapp-queue cannot select it anyway (no audit_url, and the already-sent
+     guard is template-blind), and the Inbox is the only door. */
+  "explain_offer",
   // Post-engagement: the lead has asked for something or paid for it.
   "onboarding_followup",
   "questionnaire_followup",

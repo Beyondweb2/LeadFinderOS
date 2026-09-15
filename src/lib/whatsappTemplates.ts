@@ -85,6 +85,12 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
      ⚠️ Like competitor_hook, the picker does NOT check for three rivals — that decision belongs at
      send time, where a lead short of three falls back to video_template rather than being refused. */
   audit_followup:         { needsUrl: false, needsAudit: true,  group: 'audit' },
+  /* explain_offer - the full pitch. ⛔ needsAudit is FALSE and that is the point: its {{3}} is the
+     SIGN-UP link, built from the lead id alone, so nothing here waits on a completed audit. It is
+     the only outreach template that can go to a lead we have never audited.
+     ⚠️ needsUrl stays false too - 'url' means the CLAIM/site link and gates on a share_token no
+     Findable lead has; onboarding_url is a different variable for exactly that reason. */
+  explain_offer:          { needsUrl: false, needsAudit: false, group: 'audit' },
   // Follow-up after the 24h window. needsUrl is FALSE: its link is the onboarding URL, built
   // from the lead id server-side, so it must not be gated on a generated site's share_token.
   // needsAudit is FALSE too — it pitches the flow, not a report. The only real requirement is a

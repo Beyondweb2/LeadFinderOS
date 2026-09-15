@@ -73,6 +73,32 @@ Cheers`;
 const initialContactBodyPre20260915 = (b: string, _u: string) =>
   `Hi, is this the right number for ${b || 'your business'}? Cheers`;
 
+/* explain_offer — submitted to Meta 2026-09-15. {{1}} trade as a LOWERCASE PLURAL, {{2}} town,
+   {{3}} the lead's onboarding link. Video header (structure, not text — not in this string).
+   ⛔ THE PRICES ARE LITERAL BECAUSE META'S ARE. This is a mirror of the registered body, so
+   interpolating the constants would show the Inbox a number Meta is not sending the moment one
+   moves. scripts/explain-offer.test.ts asserts they still MATCH, so a price change fails the build
+   and forces the re-registration rather than letting the two drift in silence. */
+const explainOfferBody = (_b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) => {
+  const t = pluraliseTrade(trade);
+  return `Nobody's doing this yet, which is the point.
+
+People ask ChatGPT and Gemini for ${t.ok ? t.value : (trade || 'businesses')} in ${town || 'your area'} instead of googling. I get you named in those answers.
+
+Keep your website and I'll optimise it so AI can read you. Or if you can't give me access, or want a new one, I'll build it. No extra cost.
+
+£99 to start. I run a full baseline check and send it over, then measure again four weeks later so you can see exactly what's changed.
+
+Not showing up more, you get your money back.
+
+After that £29.99 a month. More ways to be found, your reviews replied to, and I watch how each page performs and adjust. Stop any time.
+
+Here's the sign up:
+${u}
+
+Short explainer video attached. Happy to answer any questions.`;
+};
+
 /* audit_followup — submitted to Meta 2026-09-15. {{1}} trade as a LOWERCASE PLURAL, {{2}} town,
    {{3}} {{4}} {{5}} rivals, {{6}} report link.
    ⛔ "chatgpt" is lowercase deliberately (Paul's wording). Do not capitalise it.
@@ -269,6 +295,7 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,
   audit_followup: auditFollowupBody,
+  explain_offer: explainOfferBody,
 };
 
 export interface ReadableBodyOpts {

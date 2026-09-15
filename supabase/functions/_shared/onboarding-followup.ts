@@ -96,7 +96,13 @@ export function onboardingUrl(origin: string, leadId: string, businessName?: str
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type OnboardingFollowupVars =
-  | { ok: true; business: string; url: string }
+  /* ⚠️ `trade` AND `town` ARE CARRIED FOR explain_offer, WHICH SHARES THIS RESOLVER (2026-09-15).
+     onboarding_followup ignores both — its vars are name + link. They are returned rather than
+     refused on HERE because a refusal belongs where the template's needs are known: adding a
+     blank-town refusal in this function would newly refuse onboarding_followup for the 58 leads
+     that have no town, silently tightening a LIVE template to serve a new one. The send branch
+     refuses instead, gated on what the template actually declares. */
+  | { ok: true; business: string; url: string; trade: string; town: string }
   | { ok: false; reason: string };
 
 /**
@@ -121,7 +127,7 @@ export async function resolveOnboardingFollowupVars(service: any, leadId: string
 
   const { data: lead, error } = await service
     .from("outreach_leads")
-    .select("id, business_name, status, amount_paid, category, search_keyword")
+    .select("id, business_name, status, amount_paid, category, search_keyword, derived_town, search_location")
     .eq("id", id)
     .maybeSingle();
   if (error) return { ok: false, reason: `Could not read that lead: ${error.message}` };
@@ -163,5 +169,11 @@ export async function resolveOnboardingFollowupVars(service: any, leadId: string
     };
   }
 
-  return { ok: true, business, url: onboardingUrl(origin, id, business) };
+  /* THE TOWN, for a template that names one. Precedence is the file-wide rule minus
+     confirmed_location, which only a PAID customer has and this template is a pitch to someone who
+     has not paid — the resolver refuses those above. Never inferred from the business name (§4's
+     wrong-town lesson): a blank is returned blank and the caller decides. */
+  const town = ((lead.derived_town as string) || (lead.search_location as string) || "").trim();
+
+  return { ok: true, business, url: onboardingUrl(origin, id, business), trade: bizType, town };
 }

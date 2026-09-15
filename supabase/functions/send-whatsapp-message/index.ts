@@ -319,8 +319,25 @@ Deno.serve(async (req) => {
         if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
         const f = await resolveOnboardingFollowupVars(service, resolvedLeadId);
         if (!f.ok) return json({ ok: false, error: "followup_unavailable", reason: f.reason }, 200);
-        payload = claimTemplatePayload(templateName, lang, f.business, "", { onboardingUrl: f.url });
-        storedBody = renderTemplateBody(templateName, f.business, f.url);
+        /* ⛔ A TEMPLATE THAT NAMES A TOWN MUST NOT SEND A BLANK ONE, AND THIS IS THE SAME CLASS OF
+           FAULT AS AN EMPTY LINK. `templateBodyParams`' town case returns "" for a blank rather than
+           throwing — a deliberate carve-out for free_check_result, whose sentence still reads
+           without it — but an EMPTY Meta parameter is rejected outright (#132000-class) and takes
+           the whole send with it. That is how video_template failed for its entire life.
+           ⚠️ REFUSED HERE, NOT IN THE RESOLVER, so onboarding_followup is untouched: it declares no
+           town, and 58 leads have none — refusing in the shared resolver would have quietly made a
+           LIVE template stricter to serve a new one. Measured 2026-09-15: the town-less leads are a
+           SUBSET of the trade-less ones the resolver already refuses, so this costs nothing.
+           ⚠️ AND IT IS A PROPERTY TEST, never a template name — a future town-bearing template on
+           this branch is covered the day it is registered. */
+        if (tvars.includes("town") && !f.town) {
+          return json({ ok: false, error: "followup_unavailable", reason: "That lead has no town stored, and this template names one — add the town on the lead and try again." }, 200);
+        }
+        if (tvars.includes("trade_plural") && !f.trade) {
+          return json({ ok: false, error: "followup_unavailable", reason: "That lead has no trade stored, and this template names one." }, 200);
+        }
+        payload = claimTemplatePayload(templateName, lang, f.business, "", { onboardingUrl: f.url, trade: f.trade, town: f.town });
+        storedBody = renderTemplateBody(templateName, f.business, f.url, f.trade, undefined, undefined, f.town);
         auditBusinessName = f.business;
         auditClaimUrl = f.url; // the outbound URL for this send, recorded like any other
       } else if (needsAudit) {

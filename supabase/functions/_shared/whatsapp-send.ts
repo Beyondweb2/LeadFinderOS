@@ -127,7 +127,7 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      ⚠️ {{3}} is findable.live/report/<auditId>, from resolveAuditReplyVars' `link`, exactly as the
      hook's {{4}} is. Never /a/<id> (a deliberate 404) and never yoursites.uk. */
   audit_reply_warm: { lang: "en", vars: ["trade", "town", "audit_url"] },
-  /* audit_followup — SUBMITTED TO META 2026-09-15, registered here before approval for the same
+/* audit_followup — SUBMITTED TO META 2026-09-15, registered here before approval for the same
      reason free_check_result was: an absent name fails `unknown_template` in OUR code, so approval
      alone would not start it and Paul's requirement is that it begins sending with no code change.
      Registered, the send reaches Meta, which refuses an unapproved template with its own error.
@@ -143,6 +143,17 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      be named in CONTINUATION_TEMPLATES or it will be dropped as phone_already_contacted for every
      lead it is written for — the audit_reply_warm trap. */
   audit_followup: { lang: "en", vars: ["trade_plural", "town", "rival_1", "rival_2", "rival_3", "audit_url"] },
+  /* explain_offer — SUBMITTED TO META 2026-09-15. The full pitch: what we do, both figures, the
+     guarantee, and the sign-up link, over the SAME video header video_template carries.
+     THREE vars: {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} onboarding link.
+     ⛔ `onboarding_url` in this list is what routes it to send-whatsapp-message's onboarding
+     branch — a PROPERTY, never a name — so it inherits resolveOnboardingFollowupVars' refusals,
+     including "already paid" (this message asks someone to pay; a customer must never see it).
+     ⛔ NOT needsAudit: {{3}} is the SIGN-UP link, not a report link, so nothing here waits on an
+     audit. It is the only rival-free, audit-free template in the outreach set.
+     ⛔ NOT in CONTINUATION_TEMPLATES by accident — it IS one, deliberately: Inbox only, sent into
+     a live conversation. MIRRORS process-whatsapp-queue; change both together. */
+  explain_offer: { lang: "en", vars: ["trade_plural", "town", "onboarding_url"], headerVideoUrl: VIDEO_TEMPLATE_HEADER_URL },
   // Follow-up once the 24h window has closed: points a warm lead at the onboarding flow.
   // {{1}} business name, {{2}} that lead's onboarding URL. Vars resolved server-side per-lead by
   // resolveOnboardingFollowupVars — never from a caller-supplied link.
@@ -456,6 +467,44 @@ Find out how we get you into those searches on our website, or I can explain mor
 Paul.`;
 };
 
+/* explain_offer — SUBMITTED TO META 2026-09-15. THE FULL PITCH, with the video header.
+   {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} that lead's onboarding link. No buttons.
+
+   ⛔ {{3}} IS THE FIRST TIME A SIGN-UP LINK CARRIES THE WHOLE MESSAGE, AND IT CANNOT GO BLANK.
+   Two layers, both pre-existing: resolveOnboardingFollowupVars refuses with a NAMED reason (no
+   lead, unconfigured origin, lead unreadable, lead gone, no business name, already paid, no
+   trade), and templateBodyParams THROWS on an empty onboarding_url rather than sending it. An
+   empty Meta parameter is rejected outright and takes the whole send with it.
+   ⚠️ {{2}} NEEDED THE SAME TREATMENT AND DID NOT HAVE IT — the town case returns "" for a blank
+   instead of throwing (free_check_result's deliberate carve-out). send-whatsapp-message refuses a
+   blank town for any template that DECLARES one; see the note there for why it is not in the
+   resolver.
+
+   ⛔ THE PRICES ARE LITERAL BECAUSE META'S COPY IS LITERAL. This string is a MIRROR of the
+   registered body, not a source of truth, so interpolating FINDABLE_SETUP_PRICE_GBP would make the
+   Inbox show a number Meta is not sending the moment the constant moves. `scripts/explain-offer.test.ts`
+   asserts the two figures still MATCH the constants, so a price change fails the build and forces
+   the re-registration instead of letting the two drift silently. */
+const explainOfferBody = (_b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) => {
+  const t = pluraliseTrade(trade);
+  return `Nobody's doing this yet, which is the point.
+
+People ask ChatGPT and Gemini for ${t.ok ? t.value : (trade || "businesses")} in ${town || "your area"} instead of googling. I get you named in those answers.
+
+Keep your website and I'll optimise it so AI can read you. Or if you can't give me access, or want a new one, I'll build it. No extra cost.
+
+£99 to start. I run a full baseline check and send it over, then measure again four weeks later so you can see exactly what's changed.
+
+Not showing up more, you get your money back.
+
+After that £29.99 a month. More ways to be found, your reviews replied to, and I watch how each page performs and adjust. Stop any time.
+
+Here's the sign up:
+${u}
+
+Short explainer video attached. Happy to answer any questions.`;
+};
+
 /* audit_followup — SUBMITTED TO META 2026-09-15, re-registered the same day with the article
    removed. Six variables: {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} {{4}} {{5}} three
    rivals, {{6}} report link. No header, no buttons.
@@ -532,6 +581,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,
   audit_followup: auditFollowupBody,
+  explain_offer: explainOfferBody,
 };
 
 /** Render the display copy of a template body with its variables filled. `trade`/`competitors`
