@@ -27,7 +27,16 @@ const MODEL = "gpt-4o";
    spent rather than an estimate derived from a comment. */
 const USD_PER_1M_INPUT_TOKENS = 2.50;
 const USD_PER_1M_OUTPUT_TOKENS = 10.00;
-const MAX_ANSWER_CHARS = 4_000;   // truncate each stored answer_text packed into the prompt
+/* 🔴 RAISED 4,000 -> 6,000 AND, MUCH MORE IMPORTANTLY, THE ANSWER IS DE-NOISED FIRST
+   (2026-09-15). The cap was silently deciding what the model was allowed to see. A ChatGPT answer
+   carrying Maps-style listing cards is 9,000-22,000 characters, and about HALF of it is markdown
+   image embeds whose targets are ~800-character opaque URLs. So the business's own listing sat
+   past the cut on 14 cells and the model was asked "did this answer name them?" about text that
+   did not contain them. Measured over the 1,066 backfilled cells: stripping the embeds removes
+   45.4% of all text, takes cells over the cap from 232 to 27, and takes cells whose BUSINESS NAME
+   is beyond the cut from 14 to ZERO.
+   ⚠️ The extra 2,000 is headroom, not the fix — it is what the noise had been eating. */
+const MAX_ANSWER_CHARS = 6_000;   // truncate each DE-NOISED answer_text packed into the prompt
 const MAX_NAME_LEN = 60;          // reject absurdly long "names" (fragments)
 const MAX_PER_ENGINE = 8;         // cap competitors kept per engine
 
@@ -68,6 +77,24 @@ const ANSWER_ENGINES: Record<string, string> = {
 };
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+/* ⛔ CAPTURE NOISE IS NOT CONTENT, AND IT WAS PUSHING THE ANSWER OUT OF THE PROMPT.
+   The scraped answers are full of markdown image embeds whose targets are enormous opaque URLs
+   (images.openai.com/static-rsc-1/<~800 chars>, maps.gstatic.com, gemini star icons). None of it
+   can contain a business name, and all of it counts against MAX_ANSWER_CHARS.
+   ⚠️ THE ALT TEXT IS KEPT, deliberately: "![Bob's Locks](url)" is an image OF a named business, so
+   throwing the whole embed away could throw away the only mention. Only the URL goes.
+   ⚠️ Short links are LEFT ALONE — a competitor's own domain is legible evidence of their name. The
+   120-character floor only catches the tracking monsters. */
+export function stripCaptureNoise(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, (_m, alt: string) => (alt ? ` ${alt} ` : " "))
+    .replace(/\((https?:\/\/[^)\s]{120,})\)/g, "()")
+    .replace(/https?:\/\/\S{120,}/g, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 /** THE FINAL WORD ON WHAT GETS STORED. Trim, drop empties/over-long, drop the audited business
  *  (self), drop known DIRECTORIES and provable junk, dedupe case-insensitively, cap.
@@ -162,12 +189,29 @@ self_named to true for that id when the answer presents the audited business as 
 businesses a customer could choose, hire or contact: recommended, listed, linked or described
 as an option. Otherwise set self_named to false.
 
-JUDGE THE BUSINESS, NOT THE WORDS. Many of these names are made of nothing but a trade and a
-place — "Telford Plumbers", "Locksmiths Canterbury", "BS4 Electrical Services Ltd". An answer
-about plumbers in Telford is NOT naming "Telford Plumbers" simply because those words appear in
-it, and "BS4" appearing as a POSTCODE is not the firm "BS4 Electrical Services Ltd". Set
-self_named to true ONLY when the answer is genuinely pointing a customer at THAT BUSINESS as a
-business. When the words merely coincide with the subject of the question, it is false.
+A LISTING ENTRY IS ALWAYS A YES, WHATEVER SURROUNDS IT. THIS RULE COMES FIRST AND OVERRIDES
+EVERYTHING BELOW IT. If the audited business appears as an ENTRY — its name in bold, or in a
+list, next to a star rating, a review count, a category, an address, opening hours or a "closed
+/ open now" label — then the answer IS presenting that business and self_named is TRUE. These
+entries often sit in a wall of long image links and gibberish URLs. IGNORE THE SURROUNDING
+NOISE COMPLETELY: the noise is how the page was captured, not a sign the business is unrelated.
+Examples that are ALL self_named true for their own business:
+  **JB Locks Ltd**★ 5.0-Cerrajero
+  **Norwich Plumber** 5.0 Plumber Closed
+  * **SOS Locksmiths Bolton** - 5.0 (128 reviews), 24/7
+This is true even when the name is made of the trade and the town. A rated listing is evidence
+about THAT BUSINESS; it cannot be a coincidence of vocabulary.
+
+OTHERWISE, JUDGE THE BUSINESS, NOT THE WORDS. Many of these names are made of nothing but a
+trade and a place — "Telford Plumbers", "Locksmiths Canterbury", "BS4 Electrical Services Ltd",
+"plumbers in southport". Outside a listing entry, an answer about plumbers in Telford is NOT
+naming "Telford Plumbers" simply because those words appear in it; a HEADING or a phrase
+describing what the question asked for ("Plumbers in Southport", "emergency plumbers in
+Southport open today") is the subject of the answer, not an entry for a business. "BS4"
+appearing as a POSTCODE is not the firm "BS4 Electrical Services Ltd", and a DIFFERENT firm
+whose name contains the same words ("LockFit Canterbury Locksmiths" when the audited business
+is "Locksmiths Canterbury") is not the audited business either. Set self_named to true ONLY
+when the answer is genuinely pointing a customer at THAT BUSINESS as a business.
 A close variant of the real firm ("RG Locksmiths" for "RG Locksmiths Ltd") IS the business.
 
 If an answer names NO real competitor firm, return an EMPTY list for that id. NEVER pad with
@@ -283,7 +327,9 @@ Deno.serve(async (req) => {
         const er = (r.result as Row)[engine];
         const answer = str(er?.answer_text);
         if (!answer) continue;
-        items.push({ id: `${r.id}::${engine}`, rowId: r.id, engine, label, question: str(r.question), answer: answer.slice(0, MAX_ANSWER_CHARS) });
+        /* ⛔ DE-NOISE BEFORE TRUNCATING, NEVER AFTER. Slicing first would keep the cut exactly
+           where it is and simply tidy what survived it — the listing cards would stay invisible. */
+        items.push({ id: `${r.id}::${engine}`, rowId: r.id, engine, label, question: str(r.question), answer: stripCaptureNoise(answer).slice(0, MAX_ANSWER_CHARS) });
         if (items.length >= MAX_TOTAL_ITEMS) break;
       }
       if (items.length >= MAX_TOTAL_ITEMS) break;
