@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/run-tests.mjs",
     "typecheck:baseline": "node scripts/check-typecheck-baseline.mjs",
-    "check": "npm run typecheck:baseline && node scripts/check-edge-syntax.mjs && npm run build && npm test",
+    "check": "npm run typecheck:baseline && node scripts/check-edge-syntax.mjs && node scripts/check-edge-undefined.mjs && npm run build && npm test",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint .",
     "preview": "vite preview"
