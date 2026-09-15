@@ -199,6 +199,78 @@ function isSelfName(candidate: string, businessName: string): boolean {
   return cand.length > 0 && tokensContain(full, cand);
 }
 
+/* ══ GOOGLE ORGANIC CAPTURE — STORED DATA, NOT AN ENGINE (2026-09-15) ═══════════════════════════
+ * Restores the organic results the actor has been returning and we have been discarding since
+ * 2026-07-21 (commit f2214648, which deleted normalizeOrganic).
+ *
+ * ⛔ ZERO ADDITIONAL THIRD-PARTY COST, AND THAT IS WHY IT IS SAFE TO TURN BACK ON.
+ * `buildAiSearchInput` is untouched, so the actor input is byte-identical: same single query, same
+ * maxPagesPerQuery: 1, same two AI toggles. Google organic is this actor's BASE output — the file
+ * header above records that there is no input flag to disable it, because organic IS the search and
+ * the AI engines ride on top of it. So the SERP is scraped on every question today whether we keep
+ * it or not. Runs, Apify API requests and compute units are all unchanged; the dataset is already
+ * fetched in full by fetchAiSearchItems and this reads it from memory. The only cost is jsonb bytes
+ * in ai_audit_queue.result (~1KB a row).
+ *
+ * ⛔ IT IS NOT RE-EMITTED AS `google_organic`, AND THAT IS THE WHOLE DESIGN. `google_organic` is a
+ * member of DISPLAY_ENGINES, so restoring the old key would silently change four things nobody
+ * asked for: a "Google" row would appear on the CLIENT REPORT's per-engine table
+ * (auditReport.ts perEngine), `namedOn` would start saying a business is "named on Google",
+ * page-generator's `namedAnywhere` would count a SERP appearance as being named and change which
+ * pages are held, and market-view's niche fold would gain a fifth engine. An organic listing is not
+ * an AI engine naming a firm — that is exactly why it was dropped — so it is stored as DATA under a
+ * LEADING-UNDERSCORE META KEY, the convention `_apify` and `_cost_usd` already use at the write
+ * site precisely "so nothing that walks the engine keys trips on it".
+ *
+ * ⛔ NOTHING IS MATCHED AT CAPTURE TIME, DELIBERATELY. The deleted normalizeOrganic decided `named`
+ * with a strict `contains()` substring while the AI engines are scored with `nameMatches`, so the
+ * two sides were never measured on equal terms. Storing the ordered results and matching at
+ * ANALYSIS time means the matcher can improve without re-collecting anything, and no weak
+ * comparison gets baked into the record.
+ *
+ * ⚠️ ABSENT AND EMPTY ARE DIFFERENT, and both are true answers: no organic block at all returns
+ * null (we did not get the data), while a block holding zero results stores count 0 (Google
+ * returned nothing for that query). Do not collapse them. */
+
+/** Top-N organic results kept per question. 10 = Google's first page, which is what a top-3 /
+ *  top-10 / outside-top-10 analysis needs; more would be bytes nothing reads. */
+const MAX_SERP_RESULTS = 10;
+
+export interface GoogleSerpResult {
+  /** The actor's own `position` when it gives one (a real Google rank), else the 1-based index. */
+  position: number;
+  url: string;
+  title: string;
+}
+export interface GoogleSerpCapture {
+  /** First page, in the actor's order, capped at MAX_SERP_RESULTS. */
+  results: GoogleSerpResult[];
+  /** How many organic results the actor returned BEFORE the cap — so "we kept 10 of 87" is legible
+   *  and a truncated capture can never be read as a short SERP. */
+  count: number;
+}
+
+/**
+ * Pull the organic results out of one actor dataset item. Pure; never throws.
+ * Returns null when the item carries no organic block at all.
+ */
+export function captureGoogleSerp(items: unknown[]): GoogleSerpCapture | null {
+  const item = asRecord(Array.isArray(items) ? items[0] : items) ?? {};
+  /* The same two source keys the deleted normalizeOrganic read — kept verbatim rather than guessed,
+     because they are the proven accessor for this actor's output shape. */
+  const raw = item["organicResults"] ?? item["results"];
+  if (!Array.isArray(raw)) return null;
+  const results: GoogleSerpResult[] = [];
+  for (let i = 0; i < raw.length && results.length < MAX_SERP_RESULTS; i++) {
+    const r = asRecord(raw[i]) ?? {};
+    const { title, url } = citationOf(r);
+    if (!title && !url) continue;
+    const p = r["position"];
+    results.push({ position: typeof p === "number" ? p : i + 1, url, title });
+  }
+  return { results, count: raw.length };
+}
+
 function citationOf(src: unknown): AiCitation {
   const r = asRecord(src) ?? {};
   return { title: asStr(firstKey(r, ["title", "name"])), url: asStr(firstKey(r, ["url", "link"])) };

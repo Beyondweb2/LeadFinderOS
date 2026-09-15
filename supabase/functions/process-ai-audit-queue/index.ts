@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/runner.ts";
-import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, toCountryCode } from "../_shared/enrichment/ai-search.ts";
+import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import {
   mayFinishWithoutStragglers,
@@ -299,6 +299,15 @@ Deno.serve(async (req) => {
           const result = normalizeAiSearch(items, audit.businessName, {
             trade: audit.businessType, town: audit.locationText,
           }) as Record<string, unknown>;
+          /* The Google organic results the actor returned for this same question. Stored beside the
+             other meta keys, NOT as an engine — see the long note at captureGoogleSerp.
+             ⛔ COSTS NOTHING EXTRA: the actor scrapes the SERP as its base output on every question
+             whether we keep it or not, and these items are already in memory. No extra run, no extra
+             Apify request, no change to the actor input.
+             ⚠️ Attached only when the actor actually returned an organic block, so "no capture" and
+             "Google returned nothing" stay distinguishable in the stored row. */
+          const serp = captureGoogleSerp(items);
+          if (serp) result._google_serp = serp;
           // What Apify says this question actually cost. Stored under a leading-underscore meta
           // key (same convention as _apify) so nothing that walks the engine keys trips on it.
           if (usageTotalUsd != null || computeUnits != null) {
