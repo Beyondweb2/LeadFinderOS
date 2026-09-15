@@ -917,7 +917,7 @@ Deno.serve(async (req) => {
           }
           // 2) Send-time status + suppression (checked HERE, not just at queue time).
           const { data: lead } = await service.from("outreach_leads")
-            .select("id, user_id, status, business_name, is_archived, amount_paid").eq("id", row.lead_id).maybeSingle();
+            .select("id, user_id, status, business_name, is_archived, amount_paid, derived_town, search_location").eq("id", row.lead_id).maybeSingle();
           if (!lead) { await finish("flagged_error", "lead_missing"); results[row.lead_id] = "flagged_error"; continue; }
           /* ⛔ NEVER AUTO-PITCH A PAYING CUSTOMER. amount_paid > 0 is the money-not-status rule
              (CLAUDE.md §6): a customer who paid (possibly during the ~3-min delay, or armed before
@@ -1049,8 +1049,16 @@ Deno.serve(async (req) => {
               if (!shareToken) { await finish("flagged_no_link", "no claim link for a url template"); results[row.lead_id] = "flagged_no_link"; continue; }
               claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
             }
-            payload = claimTemplatePayload(templateName, tmpl.lang, businessName, claimUrl);
-            renderedBody = renderTemplateBody(templateName, businessName, claimUrl);
+            /* THE TOWN IS PASSED EVEN THOUGH NO TEMPLATE ON THIS BRANCH DECLARES A town VAR, and
+               that is the point: displayNameFor's IDENTIFY style uses it to drop a trailing town
+               from the greeting name ("RJ Burns Electrical Services Harlow" -> "RJ Burns
+               Electrical"). initial_contact is the ONLY identify template and it lands HERE, so
+               without this the town rule would be dead code on the one path that needs it.
+               claimTemplatePayload reads extra.town for a town PARAMETER only when the registry
+               declares one, so this can neither add nor move a Meta variable. */
+            const leadTown = ((lead.derived_town as string | null) ?? (lead.search_location as string | null) ?? "").trim();
+            payload = claimTemplatePayload(templateName, tmpl.lang, businessName, claimUrl, { town: leadTown });
+            renderedBody = renderTemplateBody(templateName, businessName, claimUrl, undefined, undefined, undefined, leadTown);
           }
           let sendStatus = "simulated";
           let messageId: string | null = null;

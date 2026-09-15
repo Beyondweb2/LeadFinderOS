@@ -176,6 +176,11 @@ Deno.serve(async (req) => {
     let ownsConversation = false;
     let resolvedLeadId = leadId;
     let businessName = "";
+    /* The lead's own town, for displayNameFor's IDENTIFY style — it drops a trailing town from
+       the greeting name. `initial_contact` is the only identify template and it is sent from the
+       plain branch below, which declares no town VARIABLE; this is the name rule's evidence, not
+       a Meta parameter. Empty when the caller has no lead, and the strip then does not run. */
+    let leadTown = "";
 
     const { data: existing } = await service
       .from("whatsapp_messages")
@@ -196,13 +201,14 @@ Deno.serve(async (req) => {
     if (resolvedLeadId) {
       const { data: lead } = await service
         .from("outreach_leads")
-        .select("id, user_id, business_name, phone, country, is_archived")
+        .select("id, user_id, business_name, phone, country, is_archived, derived_town, search_location")
         .eq("id", resolvedLeadId)
         .maybeSingle();
-      const l = lead as { user_id: string; business_name: string; phone: string; country: string | null; is_archived: boolean | null } | null;
+      const l = lead as { user_id: string; business_name: string; phone: string; country: string | null; is_archived: boolean | null; derived_town: string | null; search_location: string | null } | null;
       if (l && l.user_id === operatorId && toWhatsAppNumber(l.phone, l.country) === to) {
         ownsConversation = true;
         businessName = l.business_name ?? "";
+        leadTown = (l.derived_town ?? l.search_location ?? "").trim();
         leadArchived = l.is_archived === true;
       }
     }
@@ -437,8 +443,8 @@ Deno.serve(async (req) => {
           if (!shareToken) return json({ ok: false, error: "no_claim_link" }, 400);
           claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
         }
-        payload = claimTemplatePayload(templateName, lang, businessName, claimUrl);
-        storedBody = renderTemplateBody(templateName, businessName, claimUrl);
+        payload = claimTemplatePayload(templateName, lang, businessName, claimUrl, { town: leadTown });
+        storedBody = renderTemplateBody(templateName, businessName, claimUrl, undefined, undefined, undefined, leadTown);
         auditClaimUrl = claimUrl;
       }
       messageType = "template";

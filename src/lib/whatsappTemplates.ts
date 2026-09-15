@@ -98,6 +98,16 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   onboarding_followup:    { needsUrl: false, needsAudit: false, group: 'audit' },
   // No link and no audit — the only real requirement is a linked lead with a business name,
   // which the edge refuses without (no_business_name).
+  /* contact_followup - the NO-REPLY chase: a lead that got the opener and never answered. It had
+     no entry here until 2026-09-15 and did not need one, because the Inbox read a second hardcoded
+     list that omitted it entirely. Now that every picker reads the one list it renders here, and an
+     absent record falls through getTemplateSendability's `if (!req) return { ok: true }` - enabled
+     with nothing checked. Stating it is the point: no link, no audit, the same shape as book_call.
+     ⚠️ AND THE PERMISSIVE DEFAULT IS WORTH KNOWING ABOUT rather than relying on: a template missing
+     from this table is offered UNGATED, which is the absent-value shape pointing the wrong way on a
+     picker. Left as it is - flipping it would silently disable anything else not listed - but every
+     entry in WHATSAPP_TEMPLATES should have a record here. */
+  contact_followup:       { needsUrl: false, needsAudit: false, group: 'opener' },
   book_call:              { needsUrl: false, needsAudit: false, group: 'opener' },
   /* Re-engage a lead who went quiet. No link and no audit: it asks a question rather than
      delivering anything, so gating it on a report or a generated site would make it unsendable to

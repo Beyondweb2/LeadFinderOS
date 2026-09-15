@@ -97,5 +97,61 @@ ok(PICKER.includes('re_engage_49'), 're_engage_49 (the live one) is in the picke
 ok(!PICKER.includes('re_engage'), 'the retired re_engage is NOT');
 ok(!SERVER.includes('re_engage'), 'and it is not sendable server-side');
 
+console.log('\n-- ONE SENDABLE LIST, AND EVERY PICKER READS IT --');
+/* 🔴 WHY THIS SECTION EXISTS (2026-09-15). Everything above passed while the INBOX could not send
+   four approved templates. The parity checks compare the server registry against
+   WHATSAPP_TEMPLATES and both were correct — what nobody asserted was that the screens actually
+   RENDER that list. `useInbox.ts` exported a second hardcoded array, `WA_REPLY_TEMPLATES`, seven
+   entries, and Inbox.tsx's thread picker and bulk-send dialog read THAT. So `competitor_hook` was
+   approved at Meta on 09-14 and unsendable from the Inbox from that day; `audit_followup`,
+   `explain_offer` and `contact_followup` were invisible too. Sendable by the server, absent from
+   the one screen an operator sends from.
+   ⛔ SO THE PROPERTY IS NOT "is the list right" — it is "is there only one of it". A copy is
+   correct on the day it is written and wrong on the day a template is added, which is why a
+   reviewer cannot catch this and the diff that breaks it looks innocent. Same shape as
+   questionnaire-complete (five copies) and audit-kind (a writer and a reader that disagreed):
+   grep the importers, fail the build on a local copy.
+   ⚠️ IT MATCHES ON SHAPE, NOT NAME. A renamed second list is still a second list, so this looks
+   for an OPTION-LIST LITERAL — `{ name|value: '<a real template>' }` — rather than for the
+   identifier that happened to cause it. Bare-string sets (Inbox's REPORT_TEMPLATES) and label
+   MAPS (`video_template: 'Audit result hook'`) answer different questions, legitimately have their
+   own lists, and are deliberately not matched. */
+const SRC = path.join(ROOT, 'src');
+const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
+  const full = path.join(d, e.name);
+  return e.isDirectory() ? walk(full) : /\.tsx?$/.test(e.name) ? [full] : [];
+});
+const files = walk(SRC);
+ok(files.length > 50, `scanned the SPA source (${files.length} files)`);
+
+const KEYS = new Set([...SERVER, ...LEGACY]);
+const OPTION_ENTRY = /(?:\bname|\bvalue)\s*:\s*['"`]([a-z_0-9]+)['"`]/g;
+const CANONICAL = path.join(SRC, 'types', 'outreach.ts');
+let copies = 0;
+for (const file of files) {
+  if (file === CANONICAL) continue;                       // the one list, by definition
+  const body = fs.readFileSync(file, 'utf8');
+  const found = new Set([...body.matchAll(OPTION_ENTRY)].map((m) => m[1]).filter((k) => KEYS.has(k)));
+  /* Two would be a coincidence worth allowing (a pair of special cases); three or more entries of
+     option shape in one file is a list. The deleted WA_REPLY_TEMPLATES had seven. */
+  if (found.size >= 3) { copies++; ok(false, `${path.relative(ROOT, file)} holds a SECOND sendable list — ${[...found].join(', ')}`); }
+}
+ok(copies === 0, `no second sendable list anywhere in src/ (${files.length} files scanned)`);
+
+/* ⛔ AND THE INBOX SPECIFICALLY, because it is the screen the fault hid on and the only one that
+   sends a template by hand. Not redundant with the sweep: the sweep proves no SECOND list exists,
+   this proves the FIRST one arrived. */
+const inbox = read('src/pages/Inbox.tsx');
+ok(/import\s*\{[^}]*\bWHATSAPP_TEMPLATES\b[^}]*\}\s*from\s*'@\/types\/outreach'/.test(inbox),
+   'Inbox.tsx imports the canonical WHATSAPP_TEMPLATES');
+ok(/WHATSAPP_TEMPLATES\.map\(/.test(inbox), 'and renders it in its picker(s)');
+ok(!/WA_REPLY_TEMPLATES\s*=/.test(read('src/hooks/useInbox.ts')),
+   'useInbox.ts declares no sendable list of its own');
+
+/* The four that were invisible. Named individually so a regression says WHICH, not "a count moved". */
+for (const t of ['competitor_hook', 'audit_followup', 'explain_offer', 'contact_followup']) {
+  ok(PICKER.includes(t), `${t.padEnd(18)} is offered by the one list the Inbox now reads`);
+}
+
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);
 if (f > 0) process.exit(1);

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
 import { planBulkSend, groupSkips, type BulkCandidate } from '@/lib/inboxBulkSend';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConversation, type LeadLite } from '@/hooks/useInbox';
+import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -80,7 +80,8 @@ function relTime(iso: string): string {
 
 // Fallback label for legacy template rows sent before the body was stored (body null).
 /* ⚠️ READS TEMPLATE_DISPLAY (defined below), NOT the sendable list. It used to look the name up in
-   WA_REPLY_TEMPLATES, which is the list of what you may SEND — so when the five retired barber
+   the SENDABLE list (WHATSAPP_TEMPLATES; then a second copy of it, since deleted) — so when the
+   five retired barber
    templates left that list on 2026-09-09, every historic barber message in a thread would have
    rendered its raw slug. Naming what a PAST message was and choosing what to send NEXT are
    different questions, and TEMPLATE_DISPLAY is already the answer to the first one for every
@@ -374,7 +375,7 @@ const Inbox = () => {
   const persistDraft = useCallback((key: string, v: string) => {
     setDrafts((prev) => setDraft(prev, key, v));
   }, [setDrafts]);
-  /* Starts UNSELECTED, deliberately. This used to default to WA_REPLY_TEMPLATES[0], which is
+  /* Starts UNSELECTED, deliberately. This used to default to the sendable list's [0], which was
      booking_page_intro — the barber booking pitch — so every thread opened with a barber template
      armed regardless of trade. On an accountant thread only the "no site link yet" guard stood
      between that default and a real send. Same defaulting was removed from WhatsAppLeadControls and
@@ -876,12 +877,12 @@ const Inbox = () => {
         <Select value={template} onValueChange={setTemplate}>
           <SelectTrigger className="flex-1"><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
           <SelectContent>
-            {WA_REPLY_TEMPLATES.map((t) => {
-              const s = templateSendability(t.name);
-              const group = WA_TEMPLATE_REQS[t.name]?.group;
+            {WHATSAPP_TEMPLATES.map((t) => {
+              const s = templateSendability(t.value);
+              const group = WA_TEMPLATE_REQS[t.value]?.group;
               const groupLabel = group === 'site' ? 'Site / claim' : group === 'audit' ? 'Audit' : 'Opener';
               return (
-                <SelectItem key={t.name} value={t.name} disabled={!s.ok}>
+                <SelectItem key={t.value} value={t.value} disabled={!s.ok}>
                   <span className="flex flex-col">
                     <span>{t.label} <span className="text-[10px] text-muted-foreground">· {groupLabel}</span></span>
                     {!s.ok && <span className="text-[10px] text-amber-600">{s.reason}</span>}
@@ -1104,7 +1105,7 @@ const Inbox = () => {
        and a prompt on every message would be noise people learn to dismiss. */
     let allowResend = false;
     if (useTemplate) {
-      const label = WA_REPLY_TEMPLATES.find((t) => t.name === template)?.label ?? template;
+      const label = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
       const who = activeLead?.business_name || active.label;
       // Already had THIS template? The thread is already loaded, so this needs no extra query.
       // A repeat is legitimate (they asked again, the first went to a dead handset) but it must be
@@ -1267,8 +1268,8 @@ const Inbox = () => {
                       <SelectValue placeholder="Choose a template…" />
                     </SelectTrigger>
                     <SelectContent>
-                      {WA_REPLY_TEMPLATES.map((t) => (
-                        <SelectItem key={t.name} value={t.name} className="text-xs">{t.label}</SelectItem>
+                      {WHATSAPP_TEMPLATES.map((t) => (
+                        <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1781,7 +1782,7 @@ const Inbox = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base">
-              Send “{WA_REPLY_TEMPLATES.find((t) => t.name === bulkTemplate)?.label ?? bulkTemplate}” to {bulkPlan.send.length} business{bulkPlan.send.length === 1 ? '' : 'es'}?
+              Send “{WHATSAPP_TEMPLATES.find((t) => t.value === bulkTemplate)?.label ?? bulkTemplate}” to {bulkPlan.send.length} business{bulkPlan.send.length === 1 ? '' : 'es'}?
             </DialogTitle>
             <DialogDescription className="text-xs">
               They go out <strong>now</strong>, one after another — not through the daily queue.

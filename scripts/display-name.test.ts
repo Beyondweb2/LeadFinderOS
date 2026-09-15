@@ -146,7 +146,11 @@ console.log("\n── 🔴 IDENTIFY STYLE — \"Hi, is this X?\" NEEDS CONTEXT, 
 {
   const id = (n: string, town?: string) => displayNameFor(n, { town, style: "identify" }).display;
   for (const [input, want] of [
-    ["Zest Electrical Services", "Zest Electrical Services"],
+    /* WAS "Zest Electrical Services" UNTIL 2026-09-15. Paul's call after seeing 20 real
+       before/afters: "Services" goes too, when a trade word survives it. "Hi, is this Zest
+       Electrical?" is the target; "Hi, is this Zest?" was the wrong number this style exists
+       to prevent, and the two-word floor is what keeps them apart. */
+    ["Zest Electrical Services", "Zest Electrical"],
     ["London Electrics Ltd", "London Electrics"],
     ["N Hammond Gas Plumbing & Heating Engineer", "N Hammond Gas Plumbing & Heating Engineer"],
     ["Beeson Plumbing & Heating Ltd", "Beeson Plumbing & Heating"],
@@ -155,6 +159,81 @@ console.log("\n── 🔴 IDENTIFY STYLE — \"Hi, is this X?\" NEEDS CONTEXT, 
   }
   ok(id("RJW Electrical Ltd (Sutton Coldfield)", "Sutton Coldfield") === "RJW Electrical (Sutton Coldfield)",
      "identify keeps a trailing parenthetical and still drops the Ltd before it");
+}
+
+console.log("\n🔴 IDENTIFY: A TRAILING TOWN GOES, A LEADING ONE IS THE NAME");
+/* Paul, 2026-09-15: "Hi, is this RJ Burns Electrical Services Harlow?" is too much, and the town is
+   the part to lose. ⛔ THE TOWN IS NEVER GUESSED — it is the one the LEAD ROW carries, passed in.
+   Measured: 364 of 3,624 unarchived names end in their own town. */
+{
+  const id = (n: string, town?: string) => displayNameFor(n, { town, style: "identify" }).display;
+
+  // Paul's own case, both halves of it.
+  ok(id("RJ Burns Electrical Services Harlow", "Harlow") === "RJ Burns Electrical",
+     'identify: "RJ Burns Electrical Services Harlow" + Harlow -> "RJ Burns Electrical"');
+  ok(id("RJ Burns Electrical Services", "Harlow") === "RJ Burns Electrical",
+     'identify: the same name without the town still sheds "Services"');
+
+  /* ⛔ A LEADING TOWN IS THE WHOLE NAME. Paul named this one: "Bristol Electricians" must survive
+     even with Bristol supplied, because POSITION is the test, not membership. */
+  ok(id("Bristol Electricians", "Bristol") === "Bristol Electricians",
+     "a LEADING town is the name and is never touched");
+  ok(id("Bristol Electricians", "bristol") === "Bristol Electricians",
+     "and case does not smuggle it through");
+
+  // Real rows from the book, with the town the lead carries.
+  for (const [input, town, want] of [
+    ["Bracey's Accountants Hitchin", "Hitchin", "Bracey's Accountants"],
+    ["SOS Locksmiths Bolton", "Bolton", "SOS Locksmiths"],
+    ["PME Heating & Plumbing - Bolton", "Bolton", "PME Heating & Plumbing"],
+    ["AquaPlumb - Emergency Plumber - Harlow", "Harlow", "AquaPlumb - Emergency Plumber"],
+    ["Sherwin Currid Chichester", "Chichester", "Sherwin Currid"],
+    ["City Plumbing Burton upon Trent", "Burton upon Trent", "City Plumbing"],
+  ] as Array<[string, string, string]>) {
+    ok(id(input, town) === want, `identify: ${JSON.stringify(input)} + ${town} -> ${JSON.stringify(want)}`);
+  }
+
+  /* 🔴 THE CONNECTOR REFUSAL — Paul's call, from the ONE case in 364 this got wrong. A two-town
+     name is a LIST, and stripping the matched half presents half a list as the whole thing. */
+  ok(id("Ollie's Lock & Safe Locksmiths Cheltenham & Gloucester", "Gloucester")
+       === "Ollie's Lock & Safe Locksmiths Cheltenham & Gloucester",
+     "a town after a connector is one item of a list, not a suffix — kept whole");
+  ok(id("Veteran Locksmiths and Chichester", "Chichester") === "Veteran Locksmiths and Chichester",
+     "and 'and' counts as a connector too");
+
+  /* ⛔ NO TOWN SUPPLIED = NO TOWN STEP. The gazetteer is a 733-row database table and is
+     deliberately not copied into this leaf, so a caller with no town gets exactly today's output. */
+  ok(id("Sherwin Currid Chichester") === "Sherwin Currid Chichester",
+     "no town on the caller: the strip does not run and the name is kept whole");
+
+  // The town may never BE the name.
+  ok(id("Harlow", "Harlow") === "Harlow", "a name that is only the town is kept whole");
+  ok(id("Plumbing Harlow", "Harlow") === "Plumbing Harlow",
+     "and what remains must still be more than a bare trade word");
+}
+
+console.log("\n⛔ IDENTIFY: \"SERVICES\" GOES ONLY WHERE A TRADE WORD SURVIVES AND TWO WORDS REMAIN");
+/* Paul's guard, and it is what makes a bare "Shaw" impossible. */
+{
+  const id = (n: string, town?: string) => displayNameFor(n, { town, style: "identify" }).display;
+  for (const [input, want] of [
+    ["Shaw Plumbing Services", "Shaw Plumbing"],
+    ["Needhams Plumbing Services", "Needhams Plumbing"],
+    ["Read Bookkeeping Services Ltd", "Read Bookkeeping"],
+    ["MIRO-WIRO Electrical Services", "MIRO-WIRO Electrical"],
+    ["James Drains Solutions", "James Drains"],
+    ["Seaburn Gas Services Ltd", "Seaburn Gas"],
+  ] as Array<[string, string]>) {
+    ok(id(input) === want, `identify: ${JSON.stringify(input)} -> ${JSON.stringify(want)}`);
+  }
+  /* ⛔ THE REFUSALS. Nothing in these says what they do, so the remainder would be a wrong number. */
+  for (const n of ["Pyramid Services", "Anderson Solutions", "Hartley Group"]) {
+    ok(id(n) === n, `no trade word survives, so it is kept whole: ${JSON.stringify(n)}`);
+  }
+  ok(id("Plumbing Services") === "Plumbing Services", "two words down to one is refused");
+  /* BSCB: already the answer, and nothing more may be cut — the trade word is the only context. */
+  ok(id("BSCB ELECTRICAL LIMITED") === "BSCB ELECTRICAL",
+     "BSCB ELECTRICAL LIMITED -> BSCB ELECTRICAL, and no further");
 }
 
 console.log("\n⛔ IDENTIFY MUST NOT CUT A LEGAL WORD OUT OF THE MIDDLE OF A NAME");
