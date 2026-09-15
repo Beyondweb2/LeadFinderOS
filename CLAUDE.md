@@ -4938,3 +4938,46 @@ distinct competitor names**.
   `video_template`.
 - **Deployed:** `send-whatsapp-message`, `process-whatsapp-queue` (the whole closure of the new leaf,
   walked). `npm run check`: **108/113**, the five known-stale suites only.
+
+### 30c. ✅ A SEND CAN BE PREVIEWED NOW — `mode: "dry_run"` and the Inbox Preview button (2026-09-15)
+
+**`audit_followup` failed a SECOND time, on JP Electrical & Compliance, after the §30b fix was
+deployed — and the reason nobody could say which of the two causes it was is that there is no
+way to ask this function what it WOULD do.** Every refusal and every throw needed a real attempt
+on a real lead to provoke, so the first evidence of a fault was always a burned prospect. Two were.
+
+- ⛔ **`mode: "dry_run"` IS THE SAME CODE PATH, NOT A SECOND ONE.** Every guard, every resolver and
+  the real `claimTemplatePayload` run exactly as they do for a send; it returns the built Meta
+  payload and the stored transcript body **immediately before the Graph POST**, writing nothing.
+  A separate "preview" that rebuilt the payload its own way would be the one-rule-in-two-places
+  failure this file has recorded seven times — and it would agree with the sender right up to the
+  day it mattered.
+- ⛔ **A REFUSAL IS REPORTED, NEVER WAVED THROUGH.** `pitch_already_sent`, `phone_already_contacted`,
+  `audit_reply_unavailable`, `unsafe_template_var` all answer exactly as they would — that IS the
+  answer to "would this send". A dry run that skipped the guards to show a payload would be lying
+  about the send it is previewing.
+- ⛔ **IT IS ALSO THE DEPLOY MARKER, WHICH IS WHY IT EXISTS IN THIS SHAPE.** §4 says assert on
+  something ONLY the target can produce, and this endpoint offered nothing: the §30b fix changed
+  behaviour only, its deploy timestamp (10:59:29Z) and the source's own mtime (10:59:40Z) were
+  eleven seconds apart, and no reading of either could prove which bytes were live. A response
+  carrying `mode:"dry_run"` proves it. **`useInbox.preview` treats a response WITHOUT that field as
+  `preview_unsupported`** — an older deploy handed the same call would have SENT.
+- ⛔ **AND A PAYLOAD THAT CANNOT BE BUILT IS NOW A 200 HOLD WITH ITS REASON, NEVER A 500.** Every
+  designed refusal here already answered 200 with ok:false; a resolver THROWING was the single path
+  that reached the operator as an opaque non-2xx with the reason in an edge log the CLI cannot read.
+  A `phase` flag makes the outer catch answer `template_not_buildable` before the send and
+  `internal` after it, so a half-completed send can never read as a refusal.
+- **`scripts/dry-run-preview.test.ts` pins the one property no unit test could see**: the preview
+  returns BEFORE the Graph POST, before both inserts and before the status move. **Proven to fail by
+  relocating that block below them** (5 failures, all ordering). If it ever drifts down, a preview
+  becomes a send.
+- ✅ **THE JP ELECTRICAL PAYLOAD WAS REBUILT OFFLINE WITH THE REAL RESOLVERS AND IS CLEAN** — trade
+  `electricians`, town `Bath`, three rivals, report link. **So the second failure was the OLD bytes,
+  not a second cause**: replaying the pre-fix plain branch for that lead throws
+  `unsafe_template_var:trade_missing:` uncaught → 500, which is the §30b fault exactly and matches
+  the 19 `trade_missing` rows on the queue lane.
+- ⚠️ **IT PROVES OUR HALF, NOT META'S.** `test_send` still costs a real message on purpose, because
+  only Meta can prove Meta accepts a template. The dry run covers the half that has failed twice.
+- **Deployed:** `send-whatsapp-message` (and `process-whatsapp-queue` re-deployed off current main,
+  so the routing fix is certainly live on both). `npm run check`: **109/114**, the five known-stale
+  suites only.
