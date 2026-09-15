@@ -124,8 +124,12 @@ function friendlyTemplate(name: string | null | undefined): string {
  *  a bracketed slug ("[initial_contact]") or bare snake_case — the campaign/opener rows written by
  *  the whatsapp_sends DB trigger — is rendered as its approved readable copy, filled with the
  *  conversation's business name. Only if there is no readable copy do we fall back to a label. */
-function listPreview(m: { body: string | null; template_name: string | null }, businessName?: string | null): string {
-  const readable = readableTemplateBody(m.body, m.template_name, { businessName });
+function listPreview(m: { body: string | null; template_name: string | null; created_at?: string | null }, businessName?: string | null): string {
+  /* ⛔ created_at IS NOT OPTIONAL DECORATION. The greeting name is shortened at send time, so a row
+     sent BEFORE that rule existed must still render with the full name the prospect actually read.
+     Omitting it here would keep every preview long; passing the wrong one would falsify a
+     transcript. See src/lib/displayName.ts. */
+  const readable = readableTemplateBody(m.body, m.template_name, { businessName, sentAt: m.created_at });
   if (readable) return readable;
   return `📄 ${friendlyTemplate(m.template_name ?? ((m.body ?? '').trim() || null))}`;
 }
@@ -626,14 +630,15 @@ const Inbox = () => {
    * template name + what THIS thread knows (business name, and — where the template uses them — the
    * report/onboarding link, trade and owner first name). A row already holding real text is returned
    * unchanged. Competitors aren't available in the inbox, so audit_reply degrades to "other firms". */
-  const bubbleReadable = (m: { body: string | null; template_name: string | null }): string => {
+  const bubbleReadable = (m: { body: string | null; template_name: string | null; created_at?: string | null }): string => {
     const businessName = activeBusinessName ?? active?.label ?? '';
     const url = m.template_name && REPORT_TEMPLATES.has(m.template_name)
       ? (reportUrl ?? '')
       : (activeLead ? onboardingUrl(activeLead.id, activeLead.business_name) : '');
     const trade = activeLead?.search_keyword ?? activeLead?.category ?? undefined;
     const firstName = firstNameFrom(activeLead?.contact_name);
-    return readableTemplateBody(m.body, m.template_name, { businessName, url, trade, firstName });
+    /* ⛔ sentAt: the transcript must show the name that WENT OUT, not the rule as it stands today. */
+    return readableTemplateBody(m.body, m.template_name, { businessName, url, trade, firstName, sentAt: m.created_at });
   };
 
   const [reportCopied, setReportCopied] = useState(false);

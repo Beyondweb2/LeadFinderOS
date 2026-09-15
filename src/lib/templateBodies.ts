@@ -24,6 +24,7 @@
 import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from './questionnaireFollowup';
 /* competitor_hook's body prints the SAME plural the parameter carries — see its note below. */
 import { pluraliseTrade } from './templateVars';
+import { transcriptBusinessName } from './displayName';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
 const onboardingFollowupBody = (b: string, u: string) =>
@@ -247,6 +248,13 @@ export interface ReadableBodyOpts {
   firstName?: string | null;
   /** video_template's {{3}}. Only this body reads it; the rest ignore the extra argument. */
   town?: string | null;
+  /* ⛔ WHEN THE MESSAGE WAS SENT — required for the greeting name to be honest.
+     The greeting is shortened at send time (src/lib/displayName.ts), but this function re-renders a
+     placeholder-bodied row from the lead's name as it is TODAY. Applying the rule blindly would
+     rewrite every message sent before it existed to say something the prospect never read — the
+     same fault as editing re_engage's historical body to match the registry (CLAUDE.md 19), in the
+     other direction. An absent or unreadable timestamp is treated as OLD and keeps the full name. */
+  sentAt?: string | null;
 }
 
 /** True when a stored body is NOT real filled text: empty, a bracketed slug like
@@ -281,7 +289,7 @@ export function readableTemplateBody(
   const fn = templateName ? READABLE_TEMPLATE_BODIES[templateName] : undefined;
   if (!fn) return '';
   return fn(
-    opts.businessName ?? '',
+    transcriptBusinessName(opts.businessName, opts.sentAt, { town: opts.town }),
     opts.url ?? '',
     opts.trade ?? undefined,
     opts.competitors ?? undefined,

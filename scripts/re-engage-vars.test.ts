@@ -43,7 +43,12 @@ console.log("\n── THE PARAMS ACTUALLY SENT, IN ORDER ──");
   const comps = templateBodyParams(t.vars, "NeiL Hughes driving tuition", "", { templateName: "re_engage_49" });
   const params = (comps[0] as { parameters: Array<{ text: string }> }).parameters;
   ok(params.length === 1, `ONE parameter goes on the wire (${params.length})`);
-  ok(params[0].text === "NeiL Hughes driving tuition", "{{1}} is the business name");
+  /* ⛔ {{1}} IS THE GREETING NAME, NOT THE RAW LISTING, SINCE 2026-09-15. "NeiL Hughes driving
+     tuition" is the Google Maps listing; the man is NeiL Hughes, and the message now says so
+     (src/lib/displayName.ts). The casing is untouched on purpose — no re-casing, ever.
+     ⚠️ This suite went red the moment that shipped, which is the suite doing its job: it is the
+     only thing asserting what actually goes on the wire for this template. */
+  ok(params[0].text === "NeiL Hughes", `{{1}} is the greeting name, not the listing (got "${params[0].text}")`);
 }
 
 console.log("\n── AND IT REFUSES ON A BLANK BUSINESS NAME (the body opens \"Hi {{1}},\") ──");

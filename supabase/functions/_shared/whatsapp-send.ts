@@ -6,6 +6,7 @@
 
 import { normaliseTrade, normaliseTown, pluraliseTrade } from "../../../src/lib/templateVars.ts";
 import { RIVAL_VARS, RIVALS_REQUIRED } from "../../../src/lib/rivalHook.ts";
+import { displayBusinessName } from "../../../src/lib/displayName.ts";
 
 export const GRAPH_VERSION = "v21.0";
 
@@ -480,6 +481,12 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
  *  are used only by audit_reply; the other (2-var) bodies ignore them. */
 export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string): string {
   const fn = WA_TEMPLATE_BODIES[templateName];
+  /* ⛔ THE STORED BODY IS SHORTENED HERE, IN THE SAME FUNCTION THE META PARAMETER IS BUILT BESIDE,
+     so the transcript and the message cannot diverge. Doing it at the ~15 call sites instead would
+     be "one rule written out in N places" — the failure this codebase has recorded five times, and
+     the one that put a wrong body in the Inbox mirror for competitor_hook. src/lib/displayName.ts
+     is the rule; nothing is written back to outreach_leads.business_name. */
+  businessName = displayBusinessName(businessName, { town });
   /* `town` is a 6th positional rather than a new object: every existing body function ignores extra
      arguments, so adding it cannot change a single stored transcript. video_template is the only
      body that reads it - without it the transcript would say "in your area" while the message the
@@ -594,7 +601,13 @@ export function templateBodyParams(
         if (!u) throw new Error("audit_url variable is empty — refusing to send a result with no link");
         return u;
       }
-      default: return businessName || "your business"; // "name"
+      /* ⛔ THE GREETING NAME. `business_name` is the Google Maps listing, so untouched it opens
+         "Hi N Hammond Gas Plumbing & Heating Engineer" at a man who calls himself N Hammond —
+         81.2% of the book carries a trade word and 26.4% carries Ltd/Limited/LLP. displayName.ts
+         shortens it where it can prove a clean boundary and returns the FULL listing otherwise, so
+         the worst case here is exactly what we send today. The town lets it refuse "Spalding
+         Plumbers" -> "Spalding". DISPLAY ONLY — the column is never written. */
+      default: return displayBusinessName(businessName, { town: extra?.town }) || "your business"; // "name"
     }
   };
   /* ⛔ THE LAST GATE BEFORE META SEES A PARAMETER, AND IT COVERS EVERY TEMPLATE.
