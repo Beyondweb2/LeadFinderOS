@@ -110,6 +110,13 @@ export interface NicheAnalysis {
     cells: number;              // answered engine cells (all engines)
     multiRunAudits: number;     // baselines (baseline_target_runs > 1)
     multiRunQuestions: number;  // questions whose winnability comes from a majority fold
+    /* 🔴 §6b's NAME TEST, APPLIED ON READ (2026-09-15). An audit whose business name is only its
+       trade and its town ("Blackpool Plumber") scores `named` on the question itself, so it is
+       excluded from every figure above and counted here instead. Optional because an older
+       market-view deploy does not send it — and an ABSENT count must read as "not reported", never
+       as "none were excluded". */
+    nameNotJudgeable?: number;
+    nameNotJudgeableBusinesses?: number;
   };
   engines: NicheEngineStats[];
   winnability: Record<string, number>;   // open/named/contested/locked/no_local_race/unmeasured → question counts
