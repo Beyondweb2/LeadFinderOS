@@ -33,7 +33,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from '@/lib/utils';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
-import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2 } from 'lucide-react';
+import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2 } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import {
   DEFAULT_FIRST_REPLY_MODE,
@@ -266,7 +266,7 @@ function AutoReplyToggle() {
 }
 
 const Inbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, isLoading, send, refetch, patchLeadStatus } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, isLoading, send, preview, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
@@ -861,6 +861,15 @@ const Inbox = () => {
   // strictly from THIS lead's own record: claim templates need its share_token; audit_reply needs
   // the lead's own completed audit (reportSlug = its auditId → /a/<auditId>). Nothing is auto-hidden
   // — invalid templates render disabled with a clear reason.
+  /* ⛔ THE PREVIEW PANEL'S STATE. Held here rather than in the picker because it must be CLEARED
+     when the chosen template or the open thread changes — a preview of a different message left on
+     screen is worse than no preview, and it is the shape a person acts on. */
+  const [previewing, setPreviewing] = useState(false);
+  const [previewOf, setPreviewOf] = useState<{ template: string; key: string } | null>(null);
+  const [previewResult, setPreviewResult] = useState<
+    { ok: boolean; body?: string; template?: string; fellBack?: string; error?: string; reason?: string } | null
+  >(null);
+
   const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null });
   /* getTemplateSendability('') returns ok:true, because an unknown name is not its business to
      block — so "nothing selected" has to be refused here or the button would be live with no
@@ -892,11 +901,56 @@ const Inbox = () => {
             })}
           </SelectContent>
         </Select>
+        {/* ⛔ PREVIEW BEFORE SEND — the dry run (useInbox.preview → send-whatsapp-message
+            mode:"dry_run"). It runs every server-side guard and builds the real Meta payload, then
+            stops. Two live prospects were spent finding out that `audit_followup` would 500, because
+            the only way to ask was to send. Deliberately NOT disabled by `selectedSendability` — a
+            template the client-side guard already blocks is exactly the one worth asking the SERVER
+            about, and its answer names the real reason. */}
+        <Button
+          variant="outline"
+          className="shrink-0"
+          disabled={previewing || sending || !active?.leadId || !template}
+          onClick={async () => {
+            if (!active || !template) return;
+            setPreviewing(true);
+            setPreviewOf({ template, key: active.key });
+            const r = await preview({ phone: active.phone, leadId: active.leadId, country: activeLead?.country ?? null, templateName: template, allowResend: thread.some((m) => m.direction === 'outbound' && m.template_name === template) });
+            setPreviewResult(r.ok
+              ? { ok: true, body: r.body ?? '', template: r.template ?? template, fellBack: r.fellBack }
+              : { ok: false, error: r.error ?? 'preview_failed', reason: r.reason });
+            setPreviewing(false);
+          }}
+        >
+          {previewing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}
+          Preview
+        </Button>
         <Button onClick={() => doSend(true)} disabled={sending || !active?.leadId || !template || !selectedSendability.ok} className="shrink-0">
           {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
           Send template
         </Button>
       </div>
+      {/* ⛔ SHOWN ONLY FOR THE TEMPLATE AND THREAD IT WAS RUN FOR. A stale preview under a different
+          template reads as a guarantee about a message nobody previewed. */}
+      {previewResult && previewOf && previewOf.template === template && previewOf.key === active?.key && (
+        previewResult.ok ? (
+          <div className="mt-2 rounded-md border border-emerald-600/30 bg-emerald-50/60 p-2 dark:bg-emerald-950/20">
+            <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+              This would send — nothing has been sent.
+              {previewResult.template !== template && ` It would fall back to "${previewResult.template}".`}
+            </p>
+            {previewResult.fellBack && <p className="text-[10px] text-muted-foreground">{previewResult.fellBack}</p>}
+            <pre className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-snug">{previewResult.body}</pre>
+          </div>
+        ) : (
+          <div className="mt-2 rounded-md border border-amber-600/30 bg-amber-50/60 p-2 dark:bg-amber-950/20">
+            <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+              This would NOT send — {previewResult.error}
+            </p>
+            {previewResult.reason && <p className="text-[10px] text-muted-foreground">{previewResult.reason}</p>}
+          </div>
+        )
+      )}
       {active?.leadId && !!template && !selectedSendability.ok && (
         <p className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-600">
           <AlertTriangle className="h-3 w-3 shrink-0" />

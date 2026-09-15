@@ -306,6 +306,38 @@ export function useInbox() {
     return { ok: true, simulated: data.simulated };
   }, [fetchAll]);
 
+  /* ⛔ PREVIEW WHAT WOULD BE SENT — the SAME endpoint, the same guards, nothing sent.
+     `mode: "dry_run"` returns the built Meta payload and the transcript body immediately before the
+     Graph POST, or the refusal it would have given. It exists because `audit_followup` failed twice
+     in front of live prospects with nothing but "Edge Function returned a non-2xx status code"
+     (CLAUDE.md §30b), and there was no way to ask the question without spending a message.
+     ⚠️ Deliberately does NOT refetch: it changes nothing, so a refetch would only make a read look
+     like a write. */
+  const preview = useCallback(async (args: {
+    phone: string; leadId: string | null; country?: string | null; templateName: string; allowResend?: boolean;
+  }): Promise<{ ok: boolean; body?: string; template?: string; fellBack?: string; error?: string; reason?: string }> => {
+    const { data, error } = await sb.functions.invoke('send-whatsapp-message', {
+      body: {
+        mode: 'dry_run',
+        phone: args.phone,
+        lead_id: args.leadId,
+        country: args.country ?? null,
+        template_name: args.templateName,
+        allow_resend: args.allowResend === true,
+      },
+    });
+    /* ⚠️ A NON-2XX IS THE ANSWER TOO, and saying so is the whole point of this control: before
+       today that was all the operator ever saw, with no way to tell a refusal from a crash. */
+    if (error) return { ok: false, error: error.message };
+    if (!data?.ok) return { ok: false, error: data?.error ?? 'preview_failed', reason: data?.reason };
+    /* An old deploy has no dry_run mode and would SEND. It cannot echo this field, so its absence is
+       the tell — §4's rule that you assert on something only the target version can produce. */
+    if (data?.mode !== 'dry_run') {
+      return { ok: false, error: 'preview_unsupported', reason: 'The live function does not have the preview yet — deploy send-whatsapp-message.' };
+    }
+    return { ok: true, body: data.body ?? '', template: data.template ?? args.templateName, fellBack: data.fell_back };
+  }, []);
+
   // Optimistic single-lead status patch — updates local `leads` state so the derived
   // `conversations`/`list` recompute (leadStatus + hide filters) WITHOUT a full
   // re-query. Mirrors Outreach's single-row setLeads; avoids the isLoading spinner.
@@ -317,5 +349,5 @@ export function useInbox() {
       prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, status } : l)) } : prev),
     [queryClient, queryKey]);
 
-  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, isLoading, refetch: fetchAll, send, patchLeadStatus };
+  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, isLoading, refetch: fetchAll, send, preview, patchLeadStatus };
 }
