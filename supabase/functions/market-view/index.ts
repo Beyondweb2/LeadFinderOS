@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
-import { classifyWinnability, unwrapCitationUrl, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
+import { classifyWinnability, unwrapCitationUrl, runIsModelRead, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
 
 /* ⛔ THE TWO SCORED ENGINES ONLY, for the slot read. AI Overview and Google organic are captured
    but never scored, and §5's pages-move-Gemini evidence says nothing about them — reading slots
@@ -19,8 +19,9 @@ import { nicheTradeKey, ENGINE_LABELS_NICHE } from "../../../src/lib/nicheView.t
    the operator can see them. ⛔ Derived on read; no stored score is touched.
    ✅ AND SINCE LATER THE SAME DAY THE FOLD NO LONGER HAS TO GUESS: cellNamed() (namedSignal.ts)
    reads the MODEL's self_named where extract-competitors has recorded one. The exclusion above
-   still applies — a name that is all trade and town with no model verdict is still unjudgeable —
-   but a backfilled audit now contributes a real number instead of being dropped. */
+   still applies to a name with NO model verdict; an audit the extractor has read votes on naming
+   whatever it is called, because a verdict from something that read the answer beats a guess from
+   the name. That is what the 148-audit backfill bought. */
 import { nameIsJudgeable } from "../_shared/derivable.ts";
 /* ⛔ src/lib/marketView.ts IS NO LONGER IMPORTED HERE, AND THAT IS THE POINT OF THE 2026-09-09
    PRUNE. This file used to pull seventeen symbols out of it — every one of them for the deleted
@@ -182,7 +183,16 @@ Deno.serve(async (req) => {
            citations say which sources the engines read for this trade, and that fact is entirely
            independent of what the business is called — so sources, top domains and the slot read
            still take it. Only `named` (and winnability, which counts it) are refused. */
-        const judgeable = nameIsJudgeable({
+        /* ⛔ AND THE NAME IS NO LONGER THE ONLY WAY TO BE JUDGEABLE (2026-09-15, later the same
+           day). extract-competitors records the MODEL's own verdict per answer (`self_named`), and
+           a model verdict beats a name every time — it read the answer. So an audit whose name is
+           all trade and town VOTES ANYWAY once the extractor has read a majority of its cells,
+           which is what the backfill produced for all 148 of them. The exclusion now means what it
+           should have meant all along: we have no way to tell, rather than the name looks awkward.
+           ⚠️ The majority rule, not "any cell", for the same reason the report uses it: one model
+           verdict beside eleven string matches cannot carry a rate. */
+        const modelRead = runIsModelRead(rows as never);
+        const judgeable = modelRead || nameIsJudgeable({
           businessName: a.business_name, trade: a.business_type, town: a.location_text,
         });
         if (!judgeable) { unjudgeableAudits++; unjudgeableNames.add((a.business_name ?? "").trim().toLowerCase()); }
