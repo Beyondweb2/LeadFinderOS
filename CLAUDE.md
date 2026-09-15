@@ -5026,3 +5026,39 @@ reported `Failed to send a request to the Edge Function`.
   machine (`~/.supabase/access-token` does not exist — §20 already recorded it), so this needs Paul.
 - **Deployed:** `send-whatsapp-message` (BUILD_ID `2026-09-15c`, verified live by the preflight
   header above). `npm run check`: **110/115**, the five known-stale suites only.
+
+### 30e. 🔴 `rivalHookDecision` WAS CALLED AND NEVER IMPORTED — for a day, in the send path (2026-09-15)
+
+**`send-whatsapp-message`'s audit branch has called `rivalHookDecision` and `templateNeedsRivals`
+since 2026-09-14 with no import line.** Not a scope problem: a plain ReferenceError.
+`process-whatsapp-queue` imports both from the same leaf; this file never did.
+
+- ⛔ **NOTHING IN THIS REPO RESOLVED NAMES IN EDGE CODE, AND THAT IS THE ACTUAL GAP.**
+  `npm run typecheck` does not cover `supabase/functions` (§3); `check-edge-syntax.mjs` PARSES with
+  esbuild and never resolves a name; the Supabase bundler is content because an unresolved
+  identifier is legal JavaScript until the line runs; Deno is not on this machine. So it deployed,
+  it was "live", and the first evidence was a prospect thread.
+  **`scripts/check-edge-undefined.mjs`** is the gate — tsc over every edge entrypoint collecting
+  **TS2304 only**, with `Deno`/`EdgeRuntime` allowed. It is NOT a typecheck: module-resolution and
+  type errors are discarded, one error code, one question. In `npm run check`, beside the parse gate.
+  ⚠️ **IT GUARDS ITSELF**: tsc always has something to say about edge code (every file uses `Deno`),
+  so EMPTY output means the compiler never ran and now FAILS. Naming `npx.cmd` directly instead of
+  `shell: true` did exactly that on this machine — execFileSync threw, the catch handed back "", and
+  the check reported a cheerful OK. The §0 harness failure, one script later.
+- ⛔ **IT TOOK THREE FIXES TO BECOME VISIBLE, AND THE ORDER IS THE LESSON.** While the branch
+  predicate sent `audit_followup` down the plain path (§30b) the line was unreachable; while the
+  catch was broken (§30d) every throw was destroyed inside the error handler and reported as
+  "Failed to send a request". **Each fix did not cause the next fault — it EXPOSED one that was
+  already there.** A layer that cannot report is a layer that hides everything beneath it.
+- 🔴 **"IT WORKS FOR NEW LEADS" WAS A DIFFERENT SENDER, NOT A DIFFERENT LEAD.** The four
+  `audit_followup` messages that went out at 12:06 (Taunton Electricians, Edge Electrical Solutions,
+  RW Electrical, Amped Electrics) all carry **`whatsapp_sends.user_id = null`**, which is the QUEUE's
+  signature — `send-whatsapp-message` writes the operator's id. They were the **reply lane firing
+  automatically** (`first_reply_mode` is `send` again, `first_reply_template` `audit_followup`), not
+  button presses. **The Inbox button had never once succeeded.**
+  ⚠️ **THE DIAGNOSTIC: `whatsapp_sends.user_id` TELLS YOU WHICH SENDER RAN.** null = queue, an id =
+  the Inbox. Two senders with two code paths look identical in `whatsapp_messages`, and reasoning
+  about "which leads work" instead of "which sender ran" sends you looking for a data difference
+  that does not exist.
+- **Deployed:** `send-whatsapp-message`, BUILD_ID **`2026-09-15d`**, verified live by
+  `curl -X OPTIONS` reading `x-swm-build`. `npm run check`: **110/115**, the five stale suites only.
