@@ -16,6 +16,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
   displayNameFor, displayBusinessName, transcriptBusinessName, DISPLAY_NAME_LIVE_FROM,
+  IDENTIFY_NAME_TEMPLATES,
 } from "../src/lib/displayName.ts";
 
 let f = 0;
@@ -137,6 +138,55 @@ console.log("\n── ⛔ IDEMPOTENT: shortening a shortened name changes nothin
     return displayBusinessName(once) !== once;
   });
   ok(bad.length === 0, `re-applying the rule is a no-op${bad.length ? " — " + bad.join(", ") : ""}`);
+}
+
+console.log("\n── 🔴 IDENTIFY STYLE — \"Hi, is this X?\" NEEDS CONTEXT, NOT A FIRST WORD ──");
+/* Paul, 2026-09-15: "Hi, is this Zest?" and "Hi, is this Park?" read like a wrong number. The greet
+   rule is right for "Hi X," and wrong for an identification question, so the FRAME picks the rule. */
+{
+  const id = (n: string, town?: string) => displayNameFor(n, { town, style: "identify" }).display;
+  for (const [input, want] of [
+    ["Zest Electrical Services", "Zest Electrical Services"],
+    ["London Electrics Ltd", "London Electrics"],
+    ["N Hammond Gas Plumbing & Heating Engineer", "N Hammond Gas Plumbing & Heating Engineer"],
+    ["Beeson Plumbing & Heating Ltd", "Beeson Plumbing & Heating"],
+  ] as Array<[string, string]>) {
+    ok(id(input) === want, `identify: ${JSON.stringify(input)} -> ${JSON.stringify(want)}`);
+  }
+  ok(id("RJW Electrical Ltd (Sutton Coldfield)", "Sutton Coldfield") === "RJW Electrical (Sutton Coldfield)",
+     "identify keeps a trailing parenthetical and still drops the Ltd before it");
+}
+
+console.log("\n⛔ IDENTIFY MUST NOT CUT A LEGAL WORD OUT OF THE MIDDLE OF A NAME");
+/* Measured over the book: 75 of the 980 names carrying a legal token carry it mid-name. Stripping
+   in place gives "Asmat & Accountants" — a fragment, the one output this module exists to refuse. */
+{
+  for (const n of ["Asmat & Co. Accountants", "JM Price & Co Accountants",
+                   "Whitings LLP, Chartered Accountants", "Fisher & Co Chartered Accountants"]) {
+    const r = displayNameFor(n, { style: "identify" });
+    ok(!r.shortened && r.display === n, `mid-name legal word is kept whole: ${JSON.stringify(n)}`);
+  }
+}
+
+console.log("\n⚠️ THE TWO STYLES ARE GENUINELY DIFFERENT, AND greet IS UNCHANGED");
+{
+  ok(displayNameFor("Beeson Plumbing & Heating Ltd").display === "Beeson",
+     "greet still peels the trade tail — the default is untouched");
+  ok(displayNameFor("Beeson Plumbing & Heating Ltd", { style: "greet" }).display
+     === displayNameFor("Beeson Plumbing & Heating Ltd").display,
+     "an absent style renders byte-identically to an explicit greet");
+  ok(IDENTIFY_NAME_TEMPLATES.has("initial_contact"), "initial_contact is the identify frame");
+  for (const t of ["video_template", "competitor_hook", "free_check_result", "re_engage_49", "payment_recieved"]) {
+    ok(!IDENTIFY_NAME_TEMPLATES.has(t), `${t} stays on greet — its body opens "Hi X,"`);
+  }
+}
+
+console.log("\n⛔ IDENTIFY KEEPS EVERY GUARANTEE THE GREET RULE MAKES");
+{
+  ok(displayNameFor("Ltd", { style: "identify" }).display === "Ltd", "a name that is only a legal word is kept whole");
+  ok(displayNameFor("", { style: "identify" }).display === "", "empty in, empty out");
+  const once = displayNameFor("London Electrics Ltd", { style: "identify" }).display;
+  ok(displayNameFor(once, { style: "identify" }).display === once, "re-applying identify is a no-op");
 }
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");

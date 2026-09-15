@@ -24,7 +24,7 @@
 import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from './questionnaireFollowup';
 /* competitor_hook's body prints the SAME plural the parameter carries — see its note below. */
 import { pluraliseTrade } from './templateVars';
-import { transcriptBusinessName } from './displayName';
+import { transcriptBusinessName, IDENTIFY_NAME_TEMPLATES } from './displayName';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
 const onboardingFollowupBody = (b: string, u: string) =>
@@ -377,7 +377,13 @@ export function readableTemplateBody(
     : (templateName ? READABLE_TEMPLATE_BODIES[templateName] : undefined);
   if (!fn) return '';
   return fn(
-    transcriptBusinessName(opts.businessName, opts.sentAt, { town: opts.town }),
+    /* ⛔ THE MIRROR TAKES THE SAME STYLE AS THE SEND, from the same set. If it did not, the Inbox
+       would show "Hi, is this Beeson?" for a message that actually said "Beeson Plumbing &
+       Heating" — the transcript drift this file exists to prevent. */
+    transcriptBusinessName(opts.businessName, opts.sentAt, {
+      town: opts.town,
+      style: templateName && IDENTIFY_NAME_TEMPLATES.has(templateName) ? 'identify' : 'greet',
+    }),
     opts.url ?? '',
     opts.trade ?? undefined,
     opts.competitors ?? undefined,

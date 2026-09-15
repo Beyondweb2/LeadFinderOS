@@ -93,10 +93,76 @@ const tailOk = (w: string) => {
   return !n || STOP.has(n) || MODIFIERS.has(n) || /^[-&+,./|]+$/.test(n);
 };
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   🔴 TWO STYLES, BECAUSE THERE ARE TWO GRAMMARS AND ONE RULE CANNOT SERVE BOTH (Paul, 2026-09-15).
+
+     "Hi ${b}," / "Hi ${b} 👋"   — a GREETING. Addressing someone. Short is natural: "Hi Zest,"
+                                    reads like a person; "Hi Zest Electrical Services," reads like
+                                    a mail merge. Every template but one is this shape.
+     "Hi, is this ${b}?"         — an IDENTIFICATION. Asking whether they are who we think. Short
+                                    is a WRONG NUMBER: "is this Zest?" and "is this Park?" carry no
+                                    context at all, which is exactly what Paul reported.
+
+   ⛔ THE SPLIT IS THE FRAME, NOT THE TEMPLATE. If a future body asks "is this X?" it wants
+   `identify`; if it opens "Hi X," it wants `greet`. Do not add a template to the identify set
+   because it feels formal — read the sentence the name lands in.
+   ⚠️ `greet` IS THE DEFAULT so every existing caller is byte-identical to before this existed. */
+export type NameStyle = "greet" | "identify";
+
+/* ⛔ THE ONE PLACE THE SPLIT IS DECIDED. Three renderers read it — the Meta parameter, the stored
+   body, and the Inbox mirror — so a template added here changes all three together. Written out at
+   any of them instead, it would be the one-rule-in-N-places failure this codebase has recorded five
+   times, and the transcript would drift from the message on the very next template.
+   ⚠️ MEMBERSHIP IS DECIDED BY THE SENTENCE, NOT THE TONE: `initial_contact` is here because its
+   body is "Hi, is this ${b}?". Every other live body opens "Hi ${b}," and wants the short form. */
+export const IDENTIFY_NAME_TEMPLATES: ReadonlySet<string> = new Set(["initial_contact"]);
+
 export interface DisplayNameOpts {
   /** The lead's town, when the caller knows it. Stops "Spalding Plumbers" greeting someone as
    *  "Spalding". Optional by design — see the stated limit on the bare-town guard below. */
   town?: string | null;
+  /** How the name is being used. Default "greet" — the full peel, unchanged. */
+  style?: NameStyle;
+}
+
+/* A trailing "(…)" or "[…]" is a Google Maps qualifier, not part of the legal suffix — and Paul's
+   own worked example keeps it: "RJW Electrical Ltd (Sutton Coldfield)" -> "RJW Electrical (Sutton
+   Coldfield)". Measured over the book: 8 names put the legal word immediately before one. */
+const PAREN_TAIL = /\s*([([][^()[\]]*[)\]])\s*$/;
+/** A word the LEGAL-only tail may run through: a legal suffix, or bare punctuation. */
+const legalTailOk = (w: string) => {
+  const n = norm(w);
+  return !n || LEGAL.has(n) || /^[-&+,./|~]+$/.test(n);
+};
+
+/**
+ * IDENTIFY style: strip the legal suffix and nothing else.
+ *
+ * ⛔ TRAILING ONLY, AND THAT IS MEASURED RATHER THAN CAUTIOUS. Of the 980 names carrying a legal
+ * token, 897 end in one and **75 carry it mid-name** — "Asmat & Co. Accountants", "JM Price & Co
+ * Accountants", "Whitings LLP, Chartered Accountants". Removing those in place produces "Asmat &
+ * Accountants": a fragment, which is the one output this whole module exists to refuse.
+ */
+function identifyName(original: string, keep: (why: string) => DisplayNameResult): DisplayNameResult {
+  const m = original.match(PAREN_TAIL);
+  const paren = m ? m[1] : "";
+  const main = (m ? original.slice(0, m.index) : original).trim();
+
+  const t = tok(main);
+  let cut = t.length;
+  while (cut > 0 && legalTailOk(t[cut - 1])) cut--;
+  if (cut === t.length) return keep("no legal suffix to remove");
+  if (!t.slice(cut).some((w) => LEGAL.has(norm(w)))) return keep("nothing but punctuation to remove");
+
+  let head = t.slice(0, cut);
+  while (head.length && CONNECTORS.has(norm(head[head.length - 1]))) head = head.slice(0, -1);
+  let out = head.join(" ").replace(/[\s,\-&+|/~]+$/, "").trim();
+
+  if (!out) return keep("the whole name is a legal suffix");
+  if (out.replace(/[^A-Za-z0-9]/g, "").length < 3) return keep("what remains is too short to be a name");
+  if (paren) out = `${out} ${paren}`;
+  if (out.toLowerCase() === original.toLowerCase()) return keep("nothing to trim");
+  return { display: out, original, shortened: true, why: "" };
 }
 
 export interface DisplayNameResult {
@@ -120,6 +186,8 @@ export function displayNameFor(name: string | null | undefined, opts: DisplayNam
   const original = (name ?? "").trim().replace(/\s+/g, " ");
   const keep = (why: string): DisplayNameResult => ({ display: original, original, shortened: false, why });
   if (!original) return { display: "", original: "", shortened: false, why: "no name" };
+
+  if (opts.style === "identify") return identifyName(original, keep);
 
   const t = tok(original);
 
