@@ -41,10 +41,28 @@ import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts
 const CLAIM_ORIGIN = "https://yoursites.uk";
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/* ⛔ THE BUILD MARKER — THE ONLY THING ON THIS ENDPOINT THAT CAN PROVE WHICH BYTES ARE LIVE.
+   Three faults in a row on one button were each diagnosed against `main` because there was no way
+   to read the DEPLOYED version: the routing fix changed behaviour only, so a deploy timestamp
+   eleven seconds from a file's mtime was the entire evidence base (CLAUDE.md §30c).
+   ⛔ IT RIDES ON `corsHeaders`, SO IT IS ON THE **OPTIONS PREFLIGHT** — which needs no credential.
+   That is the whole design: anyone can `curl -X OPTIONS` this function and read exactly which build
+   is answering, with no operator session, no key, and nothing sent. It carries no secret.
+   ⛔ `CAPABILITIES` IS NOT DECORATION AND MUST NOT BE HAND-WAVED. `scripts/dry-run-preview.test.ts`
+   asserts "dry_run" is listed IF AND ONLY IF this file actually contains the dry-run return, so the
+   marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
+   constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
+const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf"] as const;
+const BUILD_ID = "2026-09-15c";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  /* Exposed so a browser can read it too, not only curl. */
+  "Access-Control-Expose-Headers": "x-swm-build, x-swm-caps",
+  "x-swm-build": BUILD_ID,
+  "x-swm-caps": CAPABILITIES.join(","),
 };
 
 function json(body: unknown, status = 200): Response {
@@ -53,6 +71,19 @@ function json(body: unknown, status = 200): Response {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  /* 🔴 DECLARED OUT HERE, ABOVE THE `try`, AND THAT IS THE WHOLE POINT — IT WAS INSIDE IT FOR ONE
+     DEPLOY AND BROKE THE CATCH ITSELF (2026-09-15). A `catch` clause is a SIBLING scope, not a child
+     of the `try` block, so a `let` declared inside the try is not visible to the catch: every throw
+     produced a ReferenceError *inside the error handler*, which escaped Deno.serve, and the runtime
+     answered with its own 500 carrying NONE of our CORS headers. The browser could not read it, so
+     supabase-js reported "Failed to send a request to the Edge Function" — a THIRD distinct symptom
+     for what was still just "something threw".
+     ⛔ NOTHING LOCAL COULD SEE IT: `npm run typecheck` does not cover supabase/functions (§3), the
+     esbuild parse gate only parses and never resolves names, and Deno is not on this machine. The
+     gate is `scripts/edge-catch-scope.test.ts`, which now asserts the outer catch of every edge
+     entrypoint references only names declared above its `try`. */
+  let phase: "build" | "send" = "build";
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -270,7 +301,6 @@ Deno.serve(async (req) => {
        specific, already-tested shape — this is the net UNDER them, so a branch that forgets (or a
        throw that carries no prefix, like the empty audit_url / onboarding_url guards) degrades to a
        readable hold instead of a 500. Two layers, one rule. */
-    let phase: "build" | "send" = "build";
     let payload: Record<string, unknown>;
     let messageType: "text" | "template";
     let usedTemplate: string | null = null;
@@ -619,7 +649,28 @@ Deno.serve(async (req) => {
       ...(fellBackReason ? { template: usedTemplate, fell_back: fellBackReason } : {}),
     });
   } catch (e) {
-    const msg = (e as Error).message ?? "";
+    const msg = (e as Error)?.message ?? String(e);
+    /* ⛔ THE REASON IS WRITTEN DOWN, NOT ONLY LOGGED. The CLI has no `functions logs` subcommand
+       (§4), so until now every crash on this endpoint was undiagnosable after the fact — which is
+       why three separate faults on one button each cost a live prospect to find. Best-effort and
+       wrapped: a failure to record must never change what the caller is told. */
+    try {
+      const url = Deno.env.get("SUPABASE_URL") ?? "";
+      const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      if (url && key) {
+        await createClient(url, key, { auth: { persistSession: false } })
+          .from("client_error_reports")
+          /* ⛔ `error_id` + `context` ONLY, AND THAT IS NOT A STYLE CHOICE: `client_error_reports`
+             HAS NO `message` COLUMN. Ten call sites across the edge functions insert one, so every
+             one of those rows has been silently rejected — the diagnostic layer this codebase built
+             precisely because the CLI cannot read logs (§4) is, for those writers, writing nothing.
+             Checked against the live table, not inherited from a neighbouring file. */
+          .insert({
+            error_id: `send_whatsapp_threw_during_${phase}`,
+            context: { message: msg.slice(0, 2000), phase, at: new Date().toISOString(), build: BUILD_ID },
+          });
+      }
+    } catch { /* recording is never allowed to matter */ }
     /* ⛔ A BUILD FAILURE IS A HOLD WITH ITS REASON, NOT AN OPAQUE 500. See the note at `phase`.
        `phase` is still "build" only if nothing has been sent and nothing has been written, so this
        cannot turn a half-completed send into a cheerful refusal. */
@@ -635,3 +686,9 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "internal" }, 500);
   }
 });
+
+/* ⛔ WHY THERE IS NO SECOND WRAPPER AROUND THIS. The catch above now references only `e`, `phase`
+   (hoisted above the try) and module-level names, so it has nothing left that can throw a
+   ReferenceError — and the test asserts that property rather than trusting this comment. A
+   belt-and-braces outer try would hide the next instance of the same mistake instead of failing the
+   build on it, which is the trade this codebase has repeatedly got wrong in the other direction. */
