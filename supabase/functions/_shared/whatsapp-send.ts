@@ -142,7 +142,7 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      audit... Want me to explain?"). If it is ever meant for leads who have already replied, it must
      be named in CONTINUATION_TEMPLATES or it will be dropped as phone_already_contacted for every
      lead it is written for — the audit_reply_warm trap. */
-  audit_followup: { lang: "en", vars: ["trade", "town", "rival_1", "rival_2", "rival_3", "audit_url"] },
+  audit_followup: { lang: "en", vars: ["trade_plural", "town", "rival_1", "rival_2", "rival_3", "audit_url"] },
   // Follow-up once the 24h window has closed: points a warm lead at the onboarding flow.
   // {{1}} business name, {{2}} that lead's onboarding URL. Vars resolved server-side per-lead by
   // resolveOnboardingFollowupVars — never from a caller-supplied link.
@@ -456,21 +456,27 @@ Find out how we get you into those searches on our website, or I can explain mor
 Paul.`;
 };
 
-/* audit_followup — SUBMITTED TO META 2026-09-15. Six variables: {{1}} trade as a SINGULAR
-   LOWERCASE noun, {{2}} town, {{3}} {{4}} {{5}} three rivals, {{6}} report link. No header, no
-   buttons.
+/* audit_followup — SUBMITTED TO META 2026-09-15, re-registered the same day with the article
+   removed. Six variables: {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} {{4}} {{5}} three
+   rivals, {{6}} report link. No header, no buttons.
    ⛔ "chatgpt" IS LOWERCASE ON PURPOSE (Paul's wording) AND MUST NOT BE "CORRECTED". It reads as
    something a person typed, which is the entire point of this message.
-   ⛔ THE TRADE IS SINGULAR HERE, NOT PLURAL — the opposite of competitor_hook. The body says "for a
-   {{1}}", so normaliseTrade governs it and the VOWEL BLOCK applies: "a accountant" and "a
-   electrician" must never send, and templateBodyParams throws rather than sending one. That is a
-   refusal by design, reported as a skip with its reason.
+   ⛔ THE TRADE IS PLURAL, AND THAT IS WHAT MAKES THIS TEMPLATE USABLE AT ALL. It was singular
+   ("for a {{1}}") until Meta re-registration on 2026-09-15, which put it under normaliseTrade's
+   article check — and that held 179 of the 1,066 lead-linked audits (16.8%), almost all of them
+   ACCOUNTANTS and ELECTRICIANS, because "a accountant" must never send. Deleting one word took the
+   block to 1 (0.1%), the survivor being "shoe repairs & watch battery replacement", which is
+   genuinely not a trade name. pluraliseTrade has no article check and still refuses uncountables
+   ("find plumbing in your area" is as wrong as "a plumbing"), so nothing was loosened except the
+   article.
+   ⚠️ IT ALSO REPAIRED AN INCOHERENCE: "I asked chatgpt for A plumber… It came back with X, Y and Z"
+   asked for one and listed three. The plural makes the second line follow from the first.
    ⚠️ Rivals render on ONE line here where Meta's registered layout breaks {{3}}, onto its own line.
    Whitespace only — the words are identical — and the Inbox degrades rivals to "other firms"
    anyway, because it has no audit to read them from. */
 const auditFollowupBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
-  const t = normaliseTrade(trade);
-  return `I asked chatgpt for a ${t.ok ? t.value : (trade || "business")} in ${town || "your area"} this morning.
+  const t = pluraliseTrade(trade);
+  return `I asked chatgpt for ${t.ok ? t.value : (trade || "businesses")} in ${town || "your area"} this morning.
 
 It came back with ${competitors || "other firms"}.
 

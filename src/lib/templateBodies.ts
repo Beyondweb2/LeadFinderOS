@@ -23,7 +23,7 @@
 
 import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from './questionnaireFollowup';
 /* competitor_hook's body prints the SAME plural the parameter carries — see its note below. */
-import { pluraliseTrade, normaliseTrade } from './templateVars';
+import { pluraliseTrade } from './templateVars';
 import { transcriptBusinessName } from './displayName';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
@@ -73,14 +73,14 @@ Cheers`;
 const initialContactBodyPre20260915 = (b: string, _u: string) =>
   `Hi, is this the right number for ${b || 'your business'}? Cheers`;
 
-/* audit_followup — submitted to Meta 2026-09-15. {{1}} trade SINGULAR lowercase, {{2}} town,
+/* audit_followup — submitted to Meta 2026-09-15. {{1}} trade as a LOWERCASE PLURAL, {{2}} town,
    {{3}} {{4}} {{5}} rivals, {{6}} report link.
    ⛔ "chatgpt" is lowercase deliberately (Paul's wording). Do not capitalise it.
    ⚠️ The Inbox has no audit to read rivals from, so {{3}}-{{5}} degrade to "other firms" here
    exactly as audit_reply's competitors do. The words the prospect received are on Meta's side. */
 const auditFollowupBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
-  const t = normaliseTrade(trade);
-  return `I asked chatgpt for a ${t.ok ? t.value : (trade || 'business')} in ${town || 'your area'} this morning.
+  const t = pluraliseTrade(trade);
+  return `I asked chatgpt for ${t.ok ? t.value : (trade || 'businesses')} in ${town || 'your area'} this morning.
 
 It came back with ${competitors || 'other firms'}.
 

@@ -66,6 +66,16 @@ const EXPECTED_CONTINUATIONS = [
   "questionnaire_followup",
   "payment_recieved", // Meta's registered spelling — do not "correct" it
   "re_engage_49",
+  /* audit_followup — added 2026-09-15, Paul's call, and the tripwire did its job: it went red on
+     the classification change and named the template rather than a number.
+     THE DECISION IT IS RECORDING: this is the second step of the two-step flow, sent to a lead who
+     REPLIED to initial_contact. It only ever reaches a conversation that already exists, so cold
+     would refuse it for every lead it is written for (the seatbelt matches the inbound reply as
+     well as the outbound opener — no direction filter).
+     ⚠️ THE COST, ACCEPTED AND THE SAME ONE re_engage_49 CARRIES: exempt means that if it were ever
+     QUEUED to a number with NO history it would go out as a first touch. It is sent from the Inbox,
+     never the queue — the containment is operational, not structural. */
+  "audit_followup",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));
