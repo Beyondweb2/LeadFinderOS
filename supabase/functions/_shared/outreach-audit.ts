@@ -125,9 +125,18 @@ export function waCapableForOutreach(lead: OutreachAuditLead): WaCapability {
   return { audit: true };
 }
 
-/** Does this template's message need the lead's own completed audit before it can be built?
- *  Derived from the template's DECLARED vars, never from its name — the same rule the two send
- *  paths use to fill the payload, so a new audit-class template joins automatically. */
+/** Does this template's message need the lead's own completed audit to EXIST before it is queued?
+ *  Derived from the template's DECLARED vars, never from its name.
+ *
+ *  ⛔ THIS IS NOT THE SEND PATHS' RULE, AND THE COMMENT HERE SAID IT WAS UNTIL 2026-09-15 — a stale
+ *  comment as a load-bearing bug (CLAUDE.md §4). The senders had their own narrower expression
+ *  (`trade || competitors`), which sent audit_followup and competitor_hook down the plain branch
+ *  and 500'd. Their question is "which branch BUILDS this payload" and lives in
+ *  src/lib/templateRouting.ts as `buildsFromAudit`.
+ *  ⚠️ THE TWO GENUINELY DIFFER, ON ONE TEMPLATE, AND MERGING THEM WOULD BE WRONG:
+ *  `free_check_result` declares an onboarding link AND a report link, so it BUILDS on the
+ *  onboarding branch while still needing a completed audit to exist. Waiting is the broader
+ *  question; keep it broader. */
 export function templateNeedsAudit(vars: readonly string[] | undefined): boolean {
   if (!vars) return false;
   return vars.includes("trade") || vars.includes("competitors") || vars.includes("audit_url");

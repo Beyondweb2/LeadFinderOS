@@ -16,6 +16,7 @@ import {
 } from "../_shared/outreach-audit.ts";
 import { interleaveByCampaign, campaignsRepresented } from "../_shared/campaign-interleave.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
+import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 
@@ -967,7 +968,11 @@ Deno.serve(async (req) => {
           // For audit_reply-class the link IS the report link — the same "outbound URL" column.
           let businessName = ((lead.business_name as string) ?? "").trim();
           let claimUrl = "";
-          if (tmpl.vars.includes("trade") || tmpl.vars.includes("competitors")) {
+          /* ⛔ THE SAME ONE RULE AS send-whatsapp-message — src/lib/templateRouting.ts. The two
+             copies of this expression were byte-identical AND both wrong: a template declaring
+             `trade_plural` / `rival_*` / `audit_url` (audit_followup, competitor_hook) answered NO
+             and fell to the plain branch, which resolves none of them. */
+          if (buildsFromAudit(tmpl.vars)) {
             // audit_reply-class: needs the lead's own completed audit.
             const vars = await resolveAuditReplyVars(service, row.lead_id);
             if (!vars.ok) { await finish("flagged_no_audit", vars.reason); results[row.lead_id] = "flagged_no_audit"; continue; }
@@ -1562,7 +1567,7 @@ Deno.serve(async (req) => {
       }
       templateExtra.onboardingUrl = ob.url;
     }
-    if (templateNeedsAudit(tvars)) {
+    if (buildsFromAudit(tvars)) {
       const ar = await resolveAuditReplyVars(service, lead.id as string);
       if (!ar.ok) {
         /* 🔴 NO COMPLETED AUDIT. THIS USED TO DEQUEUE UNCONDITIONALLY, AND THAT WAS THE BUG.

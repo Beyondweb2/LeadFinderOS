@@ -12,6 +12,7 @@ import {
   firstNameFrom,
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
+import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
@@ -290,7 +291,14 @@ Deno.serve(async (req) => {
       if (TEMPLATES_NEEDING_REAL_NAME.has(templateName) && !businessName.trim()) {
         return json({ ok: false, error: "no_business_name" }, 200);
       }
-      const needsAudit = tvars.includes("trade") || tvars.includes("competitors");
+      /* ⛔ ONE RULE, SHARED WITH THE QUEUE — src/lib/templateRouting.ts. This was
+         `tvars.includes("trade") || tvars.includes("competitors")` here AND, identically, in
+         process-whatsapp-queue, and both were wrong the same way: audit_followup and
+         competitor_hook declare `trade_plural`, `rival_*` and `audit_url` and NOT `trade`, so they
+         answered NO, fell to the plain opener branch with no audit resolved, and threw where no
+         catch exists — a 500 in front of the operator with the reason in an unreadable edge log.
+         The predicate named the variables of the day instead of the property that decides. */
+      const needsAudit = buildsFromAudit(tvars);
       const needsOnboardingUrl = tvars.includes("onboarding_url");
       const needsContactName = tvars.includes("contact_first_name");
       if (needsContactName) {
