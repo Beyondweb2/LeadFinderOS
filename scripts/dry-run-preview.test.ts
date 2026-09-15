@@ -72,6 +72,23 @@ ok(/if \(phase === "build"\)[\s\S]{0,700}unsafe_template_var/.test(SENDER),
 ok(/console\.error\("\[send-whatsapp-message\] error:"[\s\S]{0,200}"internal" \}, 500\)/.test(SENDER),
    'a failure AFTER the send is still a 500 — a half-completed send must not read as a refusal');
 
+console.log('\n-- the build marker is readable WITHOUT a credential, and cannot lie --');
+/* ⛔ THE MARKER RIDES ON corsHeaders, SO IT IS ON THE OPTIONS PREFLIGHT — which needs no auth.
+   That is the only way anyone here can read WHICH BYTES ARE LIVE: three faults in a row on this
+   button were each diagnosed against `main`, because the deployed version was unobservable.
+   ⛔ AND A CONSTANT THAT CAN LIE IS WORSE THAN NO CONSTANT. The capability list is asserted against
+   the code itself: "dry_run" is advertised if and only if the dry-run return is really in this file. */
+ok(/const BUILD_ID = "[\w.-]+";/.test(SENDER), 'BUILD_ID is declared');
+ok(/"x-swm-build": BUILD_ID/.test(SENDER), 'it is sent as a response header on every reply');
+ok(/const corsHeaders = \{[\s\S]*?"x-swm-build"/.test(SENDER),
+   'and it lives on corsHeaders, so the UNAUTHENTICATED OPTIONS preflight carries it');
+ok(/"Access-Control-Expose-Headers": "x-swm-build/.test(SENDER), 'a browser is allowed to read it too');
+const caps = /const CAPABILITIES = \[([^\]]*)\]/.exec(SENDER)?.[1] ?? '';
+ok(caps.includes('"dry_run"') === SENDER.includes('if (dryRun) {'),
+   'the marker advertises "dry_run" if and only if the dry-run return is actually in this file');
+ok(caps.includes('"build_phase_hold"') === /if \(phase === "build"\)/.test(SENDER),
+   'and "build_phase_hold" if and only if the build-phase hold is');
+
 console.log('\n-- the Inbox asks the server, and refuses to trust an older deploy --');
 const HOOK = fs.readFileSync(path.join(ROOT, 'src/hooks/useInbox.ts'), 'utf8');
 ok(/mode: 'dry_run'/.test(HOOK), 'useInbox.preview sends the mode');
