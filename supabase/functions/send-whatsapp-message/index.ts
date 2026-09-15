@@ -86,6 +86,32 @@ Deno.serve(async (req) => {
     // stray truthy value ("false", 1) can't wave the duplicate guard through.
     const allowResend: boolean = body.allow_resend === true;
     const country: string | null = typeof body.country === "string" ? body.country : null;
+    /* ══ mode 'dry_run' — PROVE A SEND WILL WORK WITHOUT SENDING ═════════════════════════════════
+       Built 2026-09-15, after two live prospects were burned on `audit_followup` 500s (CLAUDE.md
+       §30b). The reason a failure was only ever discovered in front of a prospect is that there was
+       no way to ask this function what it WOULD do: every refusal and every throw needed a real
+       attempt on a real lead to provoke.
+
+       ⛔ IT IS THE SAME CODE PATH, NOT A SECOND ONE. Every guard, every resolver and the real
+       `claimTemplatePayload` run exactly as they do for a send; the ONLY difference is that it
+       returns the built payload immediately before the Graph POST instead of making it. A separate
+       "preview" that rebuilt the payload its own way would be the one-rule-in-two-places failure
+       this codebase has recorded seven times — and it would agree with the sender right up to the
+       day it mattered.
+
+       ⛔ SO A REFUSAL IS REPORTED, NEVER SKIPPED. pitch_already_sent, phone_already_contacted,
+       audit_reply_unavailable, unsafe_template_var and the rest all return their normal 200 with
+       ok:false — that IS the answer to "would this send". A dry run that waved the guards through
+       to show a payload would be lying about the send it is previewing.
+
+       ⚠️ IT WRITES NOTHING AND SENDS NOTHING: it returns before the Graph POST, before the
+       whatsapp_messages insert, before the whatsapp_sends row and before the status move. Unlike
+       `test_send` (which costs a real message on purpose, because only Meta can prove Meta accepts
+       a template) this proves only OUR half — which is the half that has failed twice.
+       ⚠️ AND IT IS THE DEPLOY MARKER. `mode:"dry_run"` exists only in this version, so a response
+       carrying `mode:"dry_run"` is proof the live function is running these bytes — §4's rule that
+       you assert on something only the target can produce. */
+    const dryRun: boolean = body.mode === "dry_run";
 
     const to = toWhatsAppNumber(rawPhone, country);
     /* ⚠️ test_send is the one mode that does NOT need a phone in the request — it takes its
@@ -234,6 +260,17 @@ Deno.serve(async (req) => {
     const env = resolveWhatsAppEnv();
 
     // --- Decide payload: template (out-of-window) vs text (in-window) ---
+    /* ⛔ A PAYLOAD THAT CANNOT BE BUILT IS A REFUSAL, NEVER A 500 — and that distinction is the
+       whole reason `audit_followup` cost two live prospects. Every DESIGNED refusal on this endpoint
+       answers 200 with ok:false; the branch predicate sent it down a path whose resolver threw, and
+       a throw here reached the outer catch as `internal` 500 with the reason in an edge log the CLI
+       cannot read. The operator was shown "Edge Function returned a non-2xx status code" and had
+       nothing to act on.
+       ⚠️ The individual branches still catch their own `unsafe_template_var:` throws and return the
+       specific, already-tested shape — this is the net UNDER them, so a branch that forgets (or a
+       throw that carries no prefix, like the empty audit_url / onboarding_url guards) degrades to a
+       readable hold instead of a 500. Two layers, one rule. */
+    let phase: "build" | "send" = "build";
     let payload: Record<string, unknown>;
     let messageType: "text" | "template";
     let usedTemplate: string | null = null;
@@ -466,6 +503,29 @@ Deno.serve(async (req) => {
       storedBody = text;
     }
 
+    /* ⛔ THE DRY RUN STOPS HERE — after every guard and the real payload build, before anything
+       leaves the building. Nothing below this line has run. */
+    if (dryRun) {
+      return json({
+        ok: true,
+        mode: "dry_run",
+        sent: false,
+        template: usedTemplate,
+        message_type: messageType,
+        live: env.live,
+        window_open: windowOpen,
+        to,
+        lead_id: resolvedLeadId,
+        /* The exact object that would be POSTed to Meta, so a wrong parameter ORDER or a missing
+           header component is visible without a send (the fault `test_send` was built to expose). */
+        payload,
+        /* What the Inbox would store as the transcript — what the prospect reads. */
+        body: storedBody,
+        ...(fellBackReason ? { fell_back: fellBackReason } : {}),
+      });
+    }
+
+    phase = "send";
     // --- Send (or simulate in test mode) ---
     let status = "simulated";
     let messageId: string | null = null;
@@ -559,7 +619,19 @@ Deno.serve(async (req) => {
       ...(fellBackReason ? { template: usedTemplate, fell_back: fellBackReason } : {}),
     });
   } catch (e) {
-    console.error("[send-whatsapp-message] error:", (e as Error).message);
+    const msg = (e as Error).message ?? "";
+    /* ⛔ A BUILD FAILURE IS A HOLD WITH ITS REASON, NOT AN OPAQUE 500. See the note at `phase`.
+       `phase` is still "build" only if nothing has been sent and nothing has been written, so this
+       cannot turn a half-completed send into a cheerful refusal. */
+    if (phase === "build") {
+      console.warn(`[send-whatsapp-message] HELD before send: ${msg}`);
+      if (msg.startsWith("unsafe_template_var:")) {
+        const [, reason, detail] = msg.split(":");
+        return json({ ok: false, error: "unsafe_template_var", reason, detail: detail ?? "" }, 200);
+      }
+      return json({ ok: false, error: "template_not_buildable", reason: msg }, 200);
+    }
+    console.error("[send-whatsapp-message] error:", msg);
     return json({ ok: false, error: "internal" }, 500);
   }
 });
