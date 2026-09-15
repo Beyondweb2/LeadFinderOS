@@ -4821,3 +4821,72 @@ rule; it is two, and the split is the SENTENCE the name lands in, never the temp
   — create-ai-audit, findable-onboarding, mockup, process-ai-audit-queue, process-sms-queue,
   process-whatsapp-queue, send-whatsapp-message, stripe-webhook, submissions, whatsapp-status.
   `npm run check`: 107/112, the five known-stale suites only.
+
+---
+
+## 30. 🔴 THE INBOX READ A SECOND TEMPLATE LIST, AND THE IDENTIFY NAME KEPT ITS TOWN (2026-09-15)
+
+### The sixth copy — four approved templates were sendable and invisible
+`src/hooks/useInbox.ts` exported **`WA_REPLY_TEMPLATES`**, seven entries, and BOTH Inbox pickers
+(the thread composer and the bulk-send dialog) read it instead of `WHATSAPP_TEMPLATES`. So a
+template could be registered at Meta, wired into the server registry, added to the real list — and
+never appear on the one screen an operator sends from.
+- ⛔ **MEASURED COST: `competitor_hook` was approved 2026-09-14 and UNSENDABLE FROM THE INBOX from
+  that day.** `audit_followup`, `explain_offer` and `contact_followup` were invisible too. Paul
+  reported two missing; it was four.
+- ⚠️ **AND THE FIRST DIAGNOSIS ALMOST WENT THE OTHER WAY.** The deployed chunk was checked first
+  (§4) and my grep said the two templates were ABSENT from the live bundle — **my own check's
+  fault**: `audit_followup`'s label contains `"` so Vite emits it in SINGLE quotes, and the pattern
+  matched `label:"…"` only. They were live the whole time. Match the shape, not the quoting.
+- ⛔ **THE LIST IS DELETED, NOT TOPPED UP** — Paul's instruction, and the right one: a copy is
+  correct the day it is written and wrong the day a template is added.
+- 🔴 **`template-picker-parity.test.ts` ALREADY EXISTED AND PASSED THROUGHOUT.** It compares the
+  server registry against `WHATSAPP_TEMPLATES` and both were correct. **Nobody had asserted that
+  the SCREENS read that list.** The property is not "is the list right", it is **"is there only one
+  of it"** — the same answer `questionnaire-complete` and `audit-kind` reached. Its new section
+  sweeps all 279 SPA files for an option-list literal (`{ name|value: '<a real template>' }`)
+  outside `src/types/outreach.ts`, matching on **SHAPE so a renamed copy is caught too**, and names
+  the four templates individually. **Proven to FAIL on a reintroduced three-entry list** before it
+  was accepted.
+  ⚠️ Bare-string sets (Inbox's `REPORT_TEMPLATES`) and label MAPS (`TEMPLATE_DISPLAY`) are
+  deliberately NOT matched — naming a PAST message is a different question with its own list.
+- ⚠️ **`contact_followup` HAD NO `WA_TEMPLATE_REQS` RECORD**, and it did not matter while the Inbox
+  could not see it. `getTemplateSendability` answers `if (!req) return { ok: true }` — **an absent
+  record is offered UNGATED**, the absent-value shape pointing the wrong way on a picker. It has a
+  record now. The permissive default is left alone (flipping it would silently disable anything
+  else unlisted) but **every `WHATSAPP_TEMPLATES` entry should have one**.
+
+### The identify name loses a trailing town, then "Services"
+"Hi, is this **RJ Burns Electrical Services Harlow**?" — the trade words are right to keep (§29),
+the TOWN is not. Two steps added to `identifyName`, in this order, after the legal strip:
+- **A TRAILING TOWN, proven only by the town the LEAD ROW carries** (`opts.town`). ⛔ **No
+  gazetteer in this leaf**: `uk_towns` is a 733-row table and copying it is the same failure as
+  above, so **no town on the caller means the strip does not run** and the output is exactly
+  today's. ⛔ **TRAILING ONLY** — "Bristol Electricians" survives untouched even with Bristol
+  supplied, because **position is the test, not membership**.
+- **Then "Services"/"Solutions", ONLY where a TRADE word survives AND two words remain.** So
+  "Shaw Plumbing Services" → "Shaw Plumbing", while "Pyramid Services" is kept whole and a bare
+  "Shaw" is impossible by construction. Paul's guard, his wording.
+- ⛔ **ORDER IS LOAD-BEARING.** "…Electrical Services Harlow" only reveals its "Services" tail once
+  the town is gone; generic-first cuts nothing and strands the town.
+- 🔴 **THE CONNECTOR REFUSAL — Paul's call on the ONE case in 364 this got wrong.** *"Ollie's Lock
+  & Safe Locksmiths Cheltenham & Gloucester"* is a two-town **LIST**, and stripping the matched half
+  presented half a list as the whole thing. ⛔ **Only `&` / `and` / `+` refuse.** A DASH or COMMA is
+  an appended qualifier — "PME Heating & Plumbing - Bolton", "AquaPlumb - Emergency Plumber -
+  Harlow" — and is precisely what this removes. Treating all of `CONNECTORS` as a list marker
+  refused both of those real rows; the test caught it, not review.
+- ⚠️ **AND WHAT REMAINS MUST NAME SOMEBODY.** "Plumbing Harlow" minus the town is "Plumbing", a
+  bare trade word — the wrong-number failure the identify style exists to prevent. One word is
+  enough only when it is not vocabulary ("Toolstation March" → "Toolstation").
+- 🔴 **IT WOULD HAVE BEEN DEAD CODE WITHOUT THE LAST LAYER, AND THAT IS §4's RULE AGAIN.**
+  `initial_contact` is the ONLY identify template and it is sent from the **plain branch** of both
+  senders — which passed **no town at all**. Both lead selects now carry `derived_town` /
+  `search_location` and both branches pass it. ⚠️ It is the name rule's EVIDENCE, never a Meta
+  parameter: `claimTemplatePayload` reads `extra.town` for a town VARIABLE only when the registry
+  declares one, so no parameter can be added or shifted.
+- **Measured live through the shipped function: 1,441 of 3,624 unarchived names shorten (39.8%).**
+  `greet` is byte-identical and the suite pins it.
+- **Deployed:** the ten functions in the closure, re-walked from each `index.ts` rather than
+  inherited — create-ai-audit, findable-onboarding, mockup, process-ai-audit-queue,
+  process-sms-queue, process-whatsapp-queue, send-whatsapp-message, stripe-webhook, submissions,
+  whatsapp-status. `npm run check`: **107/112**, the five known-stale suites only.
