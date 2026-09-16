@@ -4,6 +4,7 @@ import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar 
 import { Link } from 'react-router-dom';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
+import { CrawlCheckButton } from '@/components/CrawlCheckButton';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
 import { Badge } from '@/components/ui/badge';
@@ -590,6 +591,9 @@ function LeadDetailBody({
           {/* Site check on engagement — renders only for a replied-or-beyond lead with a real
               website whose completed audit skipped the SEO scan (the email lane's up-front skip). */}
           {!isDemoLead(lead.id) && <LeadSiteCheckButton lead={lead} />}
+          {/* Free crawlability check — run on the prospect BEFORE messaging so the outreach can name
+              their actual problem. Fetches only (£0), never the Apify SEO scanner. */}
+          {!isDemoLead(lead.id) && <CrawlCheckButton lead={lead} />}
           {/* REMOVED 2026-08-18: the Revenue field (top-right) — confirmed waste for the cockpit. */}
         </div>
 

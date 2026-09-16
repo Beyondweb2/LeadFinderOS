@@ -48,6 +48,11 @@ verify_jwt = false
 [functions.create-ai-audit]
 verify_jwt = false
 
+# Free crawlability check (fetches only, no Apify/OpenAI). In-handler admin auth, the search-leads
+# pattern — so verify_jwt is false and the operator's Bearer is validated inside.
+[functions.crawl-check]
+verify_jwt = false
+
 [functions.process-ai-audit-queue]
 verify_jwt = false
 
