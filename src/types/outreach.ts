@@ -504,6 +504,19 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      so the vowel rule holds "a accountant"/"a electrician" — measured 2026-09-15, that is 179 of
      the 1,066 lead-linked audits (16.8%), almost all accountants and electricians. */
   { value: 'audit_followup', label: 'Audit follow-up — "I asked chatgpt" note, no video (outreach)' },
+  /* audit_followup_call — SUBMITTED TO META 2026-09-16, listed before approval on the same bet as
+     its siblings: it starts working on approval with no code change.
+     ⚠️ THE LABEL SEPARATES IT FROM audit_followup BY WHAT IT ASKS FOR, because everything else about
+     the two is alike — both are personal notes, both name three rivals, neither carries a video.
+     The sibling sends the REPORT and asks "want me to explain?"; this one sends NO LINK and offers
+     a CALL. That is the only thing an operator is choosing between, so it is what the label says.
+     ⚠️ SELECTABLE IS NOT SENDABLE FOR A GIVEN LEAD. needsAudit (the rivals come from it, not a
+     link), and a lead whose audit cannot name three rivals is HELD rather than sent something else
+     — it continues a live conversation, so there is no cold template to substitute.
+     ✅ IT IS THE FIRST OUTREACH TEMPLATE AN ACCOUNTANT OR AN ELECTRICIAN CAN RECEIVE AS ITSELF: its
+     {{1}} carries its own article, so "an electrician" is written rather than refused. Measured
+     2026-09-15, the vowel rule holds 179 of 1,066 lead-linked audits (16.8%) on its siblings. */
+  { value: 'audit_followup_call', label: 'Audit follow-up + call — "I asked AI" note, no link (outreach)' },
   /* explain_offer — SUBMITTED TO META 2026-09-15. The full pitch: what we do, both figures, the
      guarantee and the sign-up link, over the same video header.
      ⚠️ THE LABEL SEPARATES IT FROM THE OTHER TWO VIDEO TEMPLATES by what it ASKS FOR. video_template

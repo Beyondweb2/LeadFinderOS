@@ -60,10 +60,21 @@ console.log("\n── ⛔ IT NEVER TOPS UP, AND THE FALLBACK TAKES OVER ──")
   const pool = ["Gavin The Locksmith", "Appleyard Locksmiths", "Keytek Locksmiths"];
   const rivals = usableRivals(excludeSelfRivals(pool, biz, nameMatches));
   ok(rivals.length === 2, `two real names remain, not padded back to three (${rivals.length})`);
-  const d = rivalHookDecision("audit_followup", true, rivals.length);
-  ok(d.fellBack && d.template === "video_template", `and the send falls back to ${d.template} rather than naming two`);
+  /* ⚠️ THIS BLOCK WENT RED ON 2026-09-16 AND THAT WAS THE TRIPWIRE WORKING. It asserted that
+     audit_followup FALLS BACK to video_template on two names. It no longer does: audit_followup is
+     a CONTINUATION, video_template is a cold opener, and the phone-history seatbelt runs before the
+     substitution — so the old behaviour posted a cold "is this the right number" into a thread the
+     prospect had already answered. The rule is now the template's PROPERTY (src/lib/rivalHook.ts),
+     so the two cases are asserted separately here rather than one standing in for the other. */
+  const held = rivalHookDecision("audit_followup", true, rivals.length);
+  ok(held.held && !held.fellBack && held.template === "audit_followup",
+     "a CONTINUATION holds on two names — nothing is sent and the template is unchanged");
+  ok(/no cold template to send instead/.test(held.reason), "  and the reason says why there is no substitute");
+  const cold = rivalHookDecision("competitor_hook", true, rivals.length);
+  ok(cold.fellBack && !cold.held && cold.template === "video_template",
+     `a COLD hook still falls back to ${cold.template} rather than naming two`);
   const full = rivalHookDecision("audit_followup", true, RIVALS_REQUIRED);
-  ok(!full.fellBack && full.template === "audit_followup", "with three, audit_followup sends as itself");
+  ok(!full.fellBack && !full.held && full.template === "audit_followup", "with three, audit_followup sends as itself");
 }
 
 console.log("\n── ⛔ ABSENCE IS NEVER A LICENCE TO STRIP THE LIST ──");

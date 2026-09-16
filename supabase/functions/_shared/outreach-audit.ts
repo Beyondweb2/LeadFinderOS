@@ -23,6 +23,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { interleaveByCampaign } from "./campaign-interleave.ts";
+import { AUDIT_DERIVED_VARS } from "../../../src/lib/templateRouting.ts";
 
 /** Questions per outreach audit. Three is what the outreach lane has always asked and what the
  *  measured cost below is based on. */
@@ -136,10 +137,22 @@ export function waCapableForOutreach(lead: OutreachAuditLead): WaCapability {
  *  ⚠️ THE TWO GENUINELY DIFFER, ON ONE TEMPLATE, AND MERGING THEM WOULD BE WRONG:
  *  `free_check_result` declares an onboarding link AND a report link, so it BUILDS on the
  *  onboarding branch while still needing a completed audit to exist. Waiting is the broader
- *  question; keep it broader. */
+ *  question; keep it broader.
+ *
+ *  🔴 IT NOW READS AUDIT_DERIVED_VARS RATHER THAN NAMING THREE VARIABLES, AND IT WAS WRONG THE OLD
+ *  WAY (found 2026-09-16 while wiring audit_followup_call). The hand-written list named `trade`,
+ *  `competitors` and `audit_url` — so a template whose ONLY audit-derived values are the three
+ *  RIVAL NAMES answered NO and would have been queued to a lead with no completed audit, then held
+ *  at the payload builder with `rivals_unavailable` instead of waiting for the audit it was always
+ *  going to need. That is the guard-keyed-to-today's-instance fault (CLAUDE.md §4) in the WAITING
+ *  rule, one file away from where the same fault was fixed in the BUILDING rule a day earlier.
+ *  ⛔ THE TWO RULES SHARE THE SET AND STILL ASK DIFFERENT QUESTIONS: this one is "does it declare
+ *  ANY audit-derived variable" (so free_check_result's audit_url counts even though its branch is
+ *  onboarding); `buildsFromAudit` is "which branch wins", first match. Sharing the set is what
+ *  makes a variable added tomorrow join BOTH sides at once. */
 export function templateNeedsAudit(vars: readonly string[] | undefined): boolean {
   if (!vars) return false;
-  return vars.includes("trade") || vars.includes("competitors") || vars.includes("audit_url");
+  return vars.some((v) => AUDIT_DERIVED_VARS.has(v));
 }
 
 export interface AuditState {

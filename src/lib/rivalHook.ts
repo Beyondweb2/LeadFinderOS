@@ -28,6 +28,10 @@
    cleaner's completeness improves. Do not quote it as a property of the market.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
+/* ⛔ THE FALLBACK IS ONLY LEGAL FOR A COLD TEMPLATE, AND THE RULE LIVES HERE SO BOTH SENDERS GET IT
+   (2026-09-16). See the long note above rivalHookDecision. */
+import { isColdOutreachTemplate } from "./coldOutreach.ts";
+
 /** The template whose body names three competitors. Registered at Meta with a VIDEO header. */
 export const RIVAL_HOOK_TEMPLATE = 'competitor_hook';
 
@@ -78,10 +82,12 @@ export function usableRivals(names: readonly (string | null | undefined)[] | nul
 }
 
 export interface RivalHookDecision {
-  /** The template to actually send. */
+  /** The template to actually send. Unchanged when `held` — nothing is sent. */
   template: string;
   /** True when the requested template could not be filled and the fallback was substituted. */
   fellBack: boolean;
+  /** True when it could not be filled AND no legal fallback exists, so NOTHING may go out. */
+  held: boolean;
   /** Operator-facing explanation, empty when nothing changed. */
   reason: string;
 }
@@ -96,20 +102,56 @@ export interface RivalHookDecision {
  * body says "for a {{2}}", so its own vowel-sound rule holds an accountant or an electrician — a
  * lead that falls back for want of rivals AND is held by that rule is genuinely unsendable today,
  * and the sender reports it as the hold it is rather than as a silent drop.
+ *
+ * 🔴 AND A CONTINUATION HAS NO LEGAL FALLBACK, SO IT HOLDS (2026-09-16). `video_template` is a COLD
+ * opener — "is this the right number", a video header, written for a stranger. Substituting it for
+ * a template written to CONTINUE a conversation is wrong twice over:
+ *   1. THE COPY. It is sent to somebody who has already answered us, so it reads as a machine that
+ *      has forgotten the conversation it is in.
+ *   2. THE SEATBELT, AND THIS IS THE HALF THAT MAKES IT A BUG RATHER THAN A STYLE OPINION.
+ *      send-whatsapp-message runs `isColdOutreachTemplate` ONCE, above every branch, on the
+ *      REQUESTED name — and the substitution happens later, inside the audit branch. So a
+ *      continuation passes the check and then a COLD template goes out to a number already in
+ *      conversation, with the one guard written for exactly that mistake already behind it. That
+ *      is the 2026-09-02 incident's shape (CLAUDE.md §4: a guard keyed to today's instance), and
+ *      re-running the check after the swap would only convert it into a confusing refusal —
+ *      "phone_already_contacted" for a template the operator never chose.
+ * ⛔ SO THE TEST IS THE PROPERTY, NOT THE NAME. Any continuation that names rivals holds; any cold
+ * one falls back. A rival-naming template registered tomorrow is covered the day it is classified
+ * in CONTINUATION_TEMPLATES, which it must be anyway before it can reach a live thread.
+ * ⚠️ HOLDING IS THE RIGHT ANSWER HERE AND WOULD BE THE WRONG ONE FOR THE DRIP. A continuation is
+ * sent BY HAND from the Inbox: a person is looking at the thread, so a refusal naming the reason is
+ * an answer at the moment of the decision, not a lead stuck in a queue nobody is watching. That is
+ * the same reasoning process-whatsapp-queue's FIRST-REPLY lane already wrote down for itself; this
+ * makes it a property of the template instead of a property of the lane.
  */
 export function rivalHookDecision(
   templateName: string,
   needsRivals: boolean,
   rivalCount: number,
 ): RivalHookDecision {
-  if (!needsRivals || rivalCount >= RIVALS_REQUIRED) return { template: templateName, fellBack: false, reason: '' };
+  if (!needsRivals || rivalCount >= RIVALS_REQUIRED) {
+    return { template: templateName, fellBack: false, held: false, reason: '' };
+  }
+  const short =
+    `${templateName} names ${RIVALS_REQUIRED} competitors and this lead's audit could supply ` +
+    `${rivalCount}. An empty competitor is rejected by Meta and a padded one is a claim we cannot show.`;
+  if (!isColdOutreachTemplate(templateName)) {
+    return {
+      template: templateName,
+      fellBack: false,
+      held: true,
+      reason:
+        `${short} It continues an existing conversation, so there is no cold template to send ` +
+        `instead — ${RIVAL_HOOK_FALLBACK} would open as though we had never spoken. Nothing was sent; ` +
+        `pick another template or re-run the audit.`,
+    };
+  }
   return {
     template: RIVAL_HOOK_FALLBACK,
     fellBack: true,
-    reason:
-      `${templateName} names ${RIVALS_REQUIRED} competitors and this lead's audit could supply ` +
-      `${rivalCount} — sent ${RIVAL_HOOK_FALLBACK} instead. ` +
-      `An empty competitor is rejected by Meta and a padded one is a claim we cannot show.`,
+    held: false,
+    reason: `${short} Sent ${RIVAL_HOOK_FALLBACK} instead.`,
   };
 }
 

@@ -85,6 +85,14 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
      ⚠️ Like competitor_hook, the picker does NOT check for three rivals — that decision belongs at
      send time, where a lead short of three falls back to video_template rather than being refused. */
   audit_followup:         { needsUrl: false, needsAudit: true,  group: 'audit' },
+  /* audit_followup_call — submitted to Meta 2026-09-16. ⛔ needsAudit is TRUE even though it carries
+     NO LINK, and that is the whole subtlety of this entry: {{3}}-{{5}} are the rivals the audit
+     named, so the message cannot be built before the audit completes. An entry copied from
+     explain_offer (also linkless, also needsAudit false) would have been wrong for exactly that
+     reason. ⚠️ Like its siblings the picker does NOT check for three rivals — that is resolved
+     server-side at send time, where a lead short of three is HELD (this template is a continuation,
+     so there is no cold fallback to substitute). */
+  audit_followup_call:    { needsUrl: false, needsAudit: true,  group: 'audit' },
   /* explain_offer - the full pitch. ⛔ needsAudit is FALSE and that is the point: its {{3}} is the
      SIGN-UP link, built from the lead id alone, so nothing here waits on a completed audit. It is
      the only outreach template that can go to a lead we have never audited.
