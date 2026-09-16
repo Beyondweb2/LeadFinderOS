@@ -6,7 +6,7 @@
 import {
   visibleText, detectClientRendered, hasH1, hasJsonLd, wordCount,
   parseRobotsAIBlocks, extractSitemapLocs, patternKey, clusterUrls, pageSimilarity, buildVerdict,
-  type CrawlSignals,
+  buildFaultLines, type CrawlSignals,
 } from '../src/lib/crawlCheck.ts';
 
 let f = 0;
@@ -87,6 +87,24 @@ console.log('\n── verdict priority + wording ──');
   // Priority: client-render outranks a robots block outranks duplicates.
   const both = buildVerdict({ ...base, blockedByBot: true, clientRendered: { flagged: true, visibleChars: 50, htmlBytes: 9000, appShell: true } });
   ok(both.headline.includes('block'), 'a hard block leads over client-render');
+}
+
+console.log('\n── report fault lines (each carries its number; amber only for structured data) ──');
+{
+  const base: CrawlSignals = {
+    homeUrl: 'https://x.co', fetchFailed: false, blockedByBot: false,
+    clientRendered: null, missingH1: false, noJsonLd: false, aiBlocked: [], duplicates: null, thinPages: 0,
+  };
+  ok(buildFaultLines({ ...base, fetchFailed: true }).length === 0, 'couldn’t fetch → no fault lines (section hidden)');
+  ok(buildFaultLines({ ...base, blockedByBot: true }).length === 0, 'blocked as a bot → no fault lines');
+  ok(buildFaultLines(base).length === 0, 'a clean site → no fault lines');
+  const dup = buildFaultLines({ ...base, duplicates: { clusterSize: 20, sampleSize: 5, similarityPct: 98 } })[0];
+  ok(dup.detail.includes('20') && dup.detail.includes('98%') && !dup.minor, 'duplicate line carries the numbers, red dot');
+  const jsonld = buildFaultLines({ ...base, noJsonLd: true })[0];
+  ok(jsonld.minor === true, 'structured-data line is the ONLY amber (minor) one');
+  const cr = buildFaultLines({ ...base, clientRendered: { flagged: true, visibleChars: 64, htmlBytes: 9000, appShell: true } })[0];
+  ok(cr.detail.includes('64') && !cr.minor, 'client-render line carries the char count, red');
+  ok(buildFaultLines({ ...base, duplicates: { clusterSize: 9, sampleSize: 3, similarityPct: 95 }, thinPages: 6, missingH1: true, noJsonLd: true }).length === 4, 'capped at 4 lines');
 }
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILED`);

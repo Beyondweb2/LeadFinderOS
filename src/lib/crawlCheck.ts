@@ -238,6 +238,38 @@ export interface CrawlVerdict {
   problems: string[];                // every problem found, each a paste-ready sentence
 }
 
+/** A fault line for the report's "What's stopping AI reading your site" section: a short title, a
+ *  detail that CARRIES ITS SPECIFIC NUMBER, and `minor` (amber dot) for the structured-data gap —
+ *  everything else is a real fault (red dot). Paul, 2026-09-16. */
+export interface CrawlFault { title: string; detail: string; minor: boolean }
+
+/** Turn the signals into report fault lines, worst first, capped so the section stays short. Returns
+ *  [] when the site couldn't be read — the caller then renders NO section (Paul's rule). Each detail
+ *  is that lead's real number, never a generic phrase. */
+export function buildFaultLines(s: CrawlSignals): CrawlFault[] {
+  if (s.fetchFailed || s.blockedByBot) return [];   // couldn't read the site → the section does not render
+  const out: CrawlFault[] = [];
+  if (s.clientRendered?.flagged) out.push({
+    title: "AI can’t read your homepage",
+    detail: `Only about ${s.clientRendered.visibleChars} characters reach a crawler — the rest loads with JavaScript, which AI doesn’t run.`, minor: false });
+  if (s.aiBlocked.length) out.push({
+    title: "Your site blocks AI crawlers",
+    detail: `Your robots.txt blocks ${s.aiBlocked.join(", ")}.`, minor: false });
+  if (s.duplicates) out.push({
+    title: "Your pages are too similar",
+    detail: `${s.duplicates.clusterSize} near-identical pages, ${s.duplicates.similarityPct}% the same. AI reads them as one.`, minor: false });
+  if (s.thinPages > 0) out.push({
+    title: "There isn’t enough on your pages",
+    detail: `${s.thinPages} page${s.thinPages === 1 ? "" : "s"} under ${THIN_WORDS} words. Not enough for AI to quote you from.`, minor: false });
+  if (s.missingH1) out.push({
+    title: "Your pages have no clear heading",
+    detail: `No H1 heading, so AI has no plain statement of what the page is about.`, minor: false });
+  if (s.noJsonLd) out.push({
+    title: "Your site doesn’t label the basics",
+    detail: `No structured data — nothing tells AI what you do, where you are, or how to reach you.`, minor: true });
+  return out.slice(0, 4);
+}
+
 /** Build the paste-ready verdict from the signals — the single worst problem as the headline, in a
  *  fixed priority (a site AI can't read at all beats a cosmetic gap), plus the full list. Names the
  *  specific problem, never a grade. */

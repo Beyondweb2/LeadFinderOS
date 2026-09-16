@@ -15,7 +15,8 @@
 /* RELATIVE paths with explicit .ts extensions, NOT the "@/" alias: this file is bundled into
    render-audit-report and apply-seo-paste, and Deno cannot resolve the Vite alias. Both are
    dependency-free constant files, so nothing heavy joins those bundles. */
-import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE } from './findableOffer.ts';
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
+import type { CrawlFault } from './crawlCheck.ts';
 
 export interface ReportEngineRow {
   label: string;   // "ChatGPT", "Gemini", "AI Overview", "Google"
@@ -175,6 +176,16 @@ export interface AiAuditReportData {
    * Email us / WhatsApp us buttons above are still a route.
    */
   offerUrl?: string | null;
+  /** "What's stopping AI reading your site" — one line per real crawl-check fault, each carrying its
+   *  own number. Built from the lead's STORED crawl-check by render-audit-report (buildFaultLines).
+   *  Absent/empty, or a site that couldn't be fetched → the section does not render (Paul, 2026-09-16). */
+  crawlFaults?: CrawlFault[];
+  /** The audit id, so the "Request a call" form can POST it (recipient + phone are derived
+   *  server-side from it — the prospect sends nothing but this id). Absent → no call button. */
+  auditId?: string;
+  /** The origin the "Request a call" form POSTs to (…/functions/v1/request-call). Absent → no call
+   *  button. Passed in like offerUrl: this module is pure, the caller knows the site origin. */
+  requestCallUrl?: string;
   /* NO PER-TERM WINNABILITY HERE, DELIBERATELY.
      This is the CUSTOMER report's data contract, and a "winnable" verdict is not something we can
      evidence. Measured over all 402 stored answered questions: 77.6% came back "open" (winnable)
@@ -760,43 +771,67 @@ export function renderReportHtml(d: AiAuditReportData): string {
     </section>`;
   }
 
-  /* ⛔ THE SEO SLOT IS LIFTED OUT BECAUSE TWO BRANCHES NOW RENDER IT. Three-way on d.hasWebsite:
-     true = "the full check comes with the work", false = "we'll build you one", null = NOTHING.
-     ⚠️ It is NOT withheld by the name refusal, deliberately: a website scan measures their SITE,
-     which is true whatever their business is called. Withholding it would be a second refusal for
-     a problem it does not have. (The MEASURING branch still withholds it — there the numbers are
-     genuinely mid-flight.) */
+  /* Official engine marks — compact inline SVG (not the 40KB base64 blob). OpenAI is monochrome
+     (white path on a black chip via .cc-*--oai); Gemini is its gradient spark. A gradient needs a
+     unique id per instance, so the header mark and the avatar pass different ids. */
+  const OAI_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.1419.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.6813zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>`;
+  const geminiSvg = (id: string) => `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4285f4"/><stop offset=".5" stop-color="#9b72cb"/><stop offset="1" stop-color="#d96570"/></linearGradient></defs><path fill="url(#${id})" d="M12 2c.45 5.1 3.4 8.05 8.5 8.5-5.1.45-8.05 3.4-8.5 8.5-.45-5.1-3.4-8.05-8.5-8.5 5.1-.45 8.05-3.4 8.5-8.5Z"/></svg>`;
+  const isOai = (label: string) => /chatgpt|openai|gpt/i.test(label);
+  const engineMark = (label: string) => isOai(label) ? `<span class="cc-mark cc-mark--oai">${OAI_SVG}</span>` : `<span class="cc-mark cc-mark--gem">${geminiSvg("gemMark")}</span>`;
+  const engineAvatar = (label: string) => isOai(label) ? `<div class="cc-avatar cc-avatar--oai">${OAI_SVG}</div>` : `<div class="cc-avatar cc-avatar--gem">${geminiSvg("gemAvatar")}</div>`;
+
+  /* "WHAT'S STOPPING AI READING YOUR SITE" — one line per real crawl-check fault (buildFaultLines),
+     each carrying its own number; red dot for a real fault, amber for the structured-data gap.
+     Rendered only when there ARE faults — a site that couldn't be fetched yields none (Paul's rule),
+     so the section is simply absent. */
+  const faultsSection = (d.crawlFaults && d.crawlFaults.length)
+    ? `
+    <section class="why" style="border-top:1px solid var(--line)">
+      <div class="sec-eyebrow">Your website</div>
+      <div class="sec-title">What&rsquo;s stopping AI reading your site</div>
+      <p style="margin:0 0 18px;max-width:70ch;font-size:14px;line-height:1.55;color:var(--muted)">We read your site the way ChatGPT and Gemini do.</p>
+      ${d.crawlFaults.map((f) => `
+      <div class="fault">
+        <div class="fault-dot${f.minor ? " fault-dot--minor" : ""}"></div>
+        <div>
+          <div class="fault-t">${esc(f.title)}</div>
+          <p class="fault-p">${esc(f.detail)}</p>
+        </div>
+      </div>`).join("")}
+    </section>`
+    : "";
+
+  /* THE WEBSITE SLOT. A PAID BASELINE keeps its graded Apify SEO — the deliverable it bought (Paul,
+     2026-09-16: do not strip it). Every other report shows the free crawl-check faults instead; a
+     no-website lead gets the "we'll build you one" slot; otherwise nothing. */
   const seoSlot = d.seo
     ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : seoSection(d.seo))
+    : (d.crawlFaults && d.crawlFaults.length) ? faultsSection
     : d.hasWebsite === false ? noWebsiteSection()
-    : d.hasWebsite === true ? siteCheckPendingSection()
     : "";
 
   /* ── ONE REAL AI ANSWER, RECREATED (2026-09-16, Paul) ─────────────────────────────────────────
-     A chat-style card showing a SINGLE actual answer where the business was NOT named, to make the
-     outreach report immediately understandable. It is a visual RECREATION of stored audit data, not
-     a screenshot — every part is real: gutPunch.engineLabel (which engine), gutPunch.question (the
-     exact question asked), gutPunch.answer (the clean damning extract of that answer), and
-     gutPunch.businesses (the real firms AI named in it).
-     ⛔ IT ONLY RENDERS FROM gutPunch, AND THAT IS WHAT KEEPS THE CALLOUT TRUE. gutPunch is chosen
-     from answers where cellNamed() is FALSE, so the "wasn't mentioned in this search" line is true
-     by construction; when the business is named in every answer gutPunch is null and the card is
-     omitted (Paul's point 8 — the simplest truthful fallback). It sits on the main render path only
-     — never on the still-measuring or name-not-judgeable paths, which withhold figures. */
+     ONE engine — the one that did NOT name them (pickGutPunch, scored engines only) — with its
+     OFFICIAL mark in the header and as the avatar, the exact real question, and a NUMBERED LIST of
+     the real firms it named instead (names only; we don't store descriptions and a clipped clause
+     reads worse). Renders only when a not-named answer carries firms; the callout is true by
+     construction. Withheld on the still-measuring and name-not-judgeable paths. */
   const gp = d.gutPunch;
-  const chatCard = (gp && gp.answer && gp.answer.trim())
+  const chatCard = (gp && gp.businesses && gp.businesses.length)
     ? `
     <section class="chatcard">
       <div class="cc-head">
-        <span class="cc-engine">${esc(gp.engineLabel)}</span>
+        <span class="cc-brand">${engineMark(gp.engineLabel)}${esc(gp.engineLabel)}</span>
         <span class="cc-date">${esc(d.generatedAtLabel)}</span>
       </div>
-      <div class="cc-q">${esc(gp.question)}</div>
-      <div class="cc-a">
-        <p class="cc-atext">${esc(gp.answer)}</p>
-        ${(gp.businesses && gp.businesses.length)
-          ? `<div class="cc-firms">${gp.businesses.map((b) => `<span class="rv">${esc(b)}</span>`).join("")}</div>`
-          : ""}
+      <div class="cc-body">
+        <div class="cc-q">${esc(gp.question)}</div>
+        <div class="cc-arow">
+          ${engineAvatar(gp.engineLabel)}
+          <div class="cc-a">
+            <ol class="cc-list">${gp.businesses.map((b) => `<li><b>${esc(b)}</b></li>`).join("")}</ol>
+          </div>
+        </div>
       </div>
       <div class="cc-callout"><span class="cc-bang">!</span>${esc(d.businessName)} wasn&rsquo;t mentioned in this search.</div>
     </section>`
@@ -875,11 +910,20 @@ export function renderReportHtml(d: AiAuditReportData): string {
      2026-09-02; the price belongs on the onboarding page, which states it. */
   const startUrl = (d.offerUrl ?? "").trim();
   const startBtn = d.showOffer === true && startUrl
-    ? `<a class="cta-btn start" href="${esc(startUrl)}" target="_blank" rel="noopener noreferrer">Get started</a>`
+    ? `<a class="cta-btn start" href="${esc(startUrl)}" target="_blank" rel="noopener noreferrer">Get started &mdash; &pound;99</a>`
     : "";
   if (d.showOffer === true && !startUrl) {
     console.warn("[report] get-started button omitted: no per-lead onboarding url (no lead_id, or the site origin is not configured)");
   }
+
+  /* ⛔ REQUEST A CALL — a FORM POST, never a link. POST so link-prefetchers and messaging-app
+     crawlers cannot fire it (an email side-effect on a GET would spam Paul). The only field is the
+     audit id already in the report URL; the endpoint derives the business name + phone server-side
+     and always emails Paul — the prospect cannot inject content or a recipient. request-call dedupes
+     to one email per lead per 24h. No auditId/endpoint (e.g. the in-app preview) → no button. */
+  const requestCallBtn = (d.auditId && d.requestCallUrl)
+    ? `<form method="POST" action="${esc(d.requestCallUrl)}" style="margin:0;display:inline"><input type="hidden" name="audit" value="${esc(d.auditId)}"><button type="submit" class="cta-btn call">Request a call</button></form>`
+    : "";
 
   const waHref = esc(`https://wa.me/${FINDABLE_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
 
@@ -1397,6 +1441,62 @@ ${REPORT_CHROME_CSS_PRINT}
     .steps,.stats,.seo-grades,.seo-body,.dowe-panel{ break-inside:avoid; }
     .qb-item{ break-inside:avoid; page-break-inside:avoid; }
   }
+
+  /* ══ 2026-09-16 REDESIGN — faults section, numbered-list chat card, new CTA + footer, darker
+     surfaces. Appended so it overrides the base rules above (later wins), the way the mockup did. ══ */
+  .fault{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--line)}
+  .fault:first-of-type{border-top:0;padding-top:0}
+  .fault-dot{width:9px;height:9px;border-radius:50%;background:var(--red);margin-top:6px;flex:0 0 9px}
+  .fault-dot--minor{background:var(--amber)}
+  .fault-t{font-weight:700;font-size:15px;color:var(--ink);letter-spacing:-.01em}
+  .fault-p{margin:4px 0 0;font-size:13.5px;line-height:1.5;color:var(--muted);max-width:66ch}
+
+  /* Chat card — official mark in the header + as the avatar, a numbered list of the real firms. */
+  .cc-body{padding:2px 0 16px}
+  .cc-brand{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--ink)}
+  .cc-mark{width:18px;height:18px;border-radius:50%;flex:0 0 18px}
+  .cc-arow{display:flex;gap:10px;margin:12px 18px 0;align-items:flex-start}
+  .cc-avatar{width:26px;height:26px;border-radius:50%;flex:0 0 26px;margin-top:2px}
+  .cc-mark svg,.cc-avatar svg{width:100%;height:100%;display:block}
+  .cc-avatar--oai{background:#0d0d0d;border-radius:50%;padding:5px;box-sizing:border-box}
+  .cc-mark--oai{background:#0d0d0d;border-radius:6px;padding:3px;box-sizing:border-box}
+  .cc-list{margin:8px 0 0;padding-left:20px;font-size:14px;line-height:1.55;color:var(--ink-2)}
+  .cc-list li{margin:7px 0}
+  .cc-head{background:var(--paper)}
+  .cc-a{margin:0;max-width:none;background:var(--paper);border-radius:4px 14px 14px 14px;padding:12px 14px}
+
+  /* New footer — brand row, key/value grid, note. */
+  .site-foot{background:var(--foot);color:var(--foot-text);padding:26px 28px 22px}
+  .foot-top{display:flex;align-items:baseline;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.10)}
+  .foot-brand{font-size:19px;font-weight:800;letter-spacing:-.02em;color:#fff}
+  .foot-dot{color:var(--gold)}
+  .foot-cta{font-size:13.5px;font-weight:600;color:var(--gold);text-decoration:none}
+  .foot-grid{display:flex;flex-wrap:wrap;gap:26px 44px;padding:16px 0 14px}
+  .foot-grid > div{display:flex;flex-direction:column;gap:3px}
+  .foot-k{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--foot-muted)}
+  .foot-v{font-size:13.5px;font-weight:600;color:#fff}
+  .foot-note{font-size:12px;line-height:1.5;color:var(--foot-muted);max-width:62ch;padding-top:13px;border-top:1px solid rgba(255,255,255,.10)}
+  @media(max-width:560px){.foot-grid{gap:16px 28px}}
+
+  /* New CTA buttons + site link + one-line fix copy. */
+  .fx-p{font-size:13.5px;line-height:1.5;margin:3px 0 0}
+  .cta h3{font-size:26px;letter-spacing:-.02em;margin:0 0 18px}
+  .cta-actions{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 16px}
+  .cta-btn.start{background:var(--gold);color:#0d0d0d}
+  .cta-btn.call{background:#fff;color:#0d0d0d;border:1px solid transparent;font-family:inherit;cursor:pointer}
+  .cta-btn.wa{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35)}
+  .cta-site{display:inline-block;font-size:13.5px;font-weight:600;color:var(--gold);text-decoration:none;margin:0 0 18px}
+  .cta-promise{font-size:12.5px;line-height:1.5;color:var(--foot-muted);margin:0;padding-top:14px;border-top:1px solid rgba(255,255,255,.10);max-width:56ch}
+
+  /* Darker surfaces — the old tints were washed out (Paul, 2026-09-16). Overrides, later-wins. */
+  :root{ --blue-tint:#dfe3ea; --blue-tint-2:#cfd5df; --page:#eef0f4; --line:#c8cede; }
+  body{background:#c3c9d6}
+  .chatcard{background:#dfe3ea;border-color:#c0c7d6}
+  .cc-head{background:#fff;border-bottom-color:#d3d9e4}
+  .cc-a{background:#fff;border-color:#d3d9e4}
+  .cc-q{background:#cdd4e2}
+  .fault{border-top-color:#d3d9e4}
+  .sec-title{margin-bottom:6px}
 </style>
 </head>
 <body>
@@ -1412,7 +1512,6 @@ ${d.measuring ? `
       <p>AI gives different answers to the same question on different days, so we ask every question ${d.measuring.runsTarget === 1 ? "and check the answer" : `${inWords(d.measuring.runsTarget)} times`} before we show you a number &mdash; otherwise the figure would change under you between one visit and the next.</p>
       <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
     </section>` : d.nameNotJudgeable ? `${nameCheckSection}
-${gutbox}
 ${seoSlot}
 ` : `
     <!-- HERO -->
@@ -1434,7 +1533,6 @@ ${seoSlot}
         <div class="punch-sub">${v.sub}</div>
       </div>
     </div>
-${gutbox}
 ${chatCard}
     <!-- ============================================================================
          SEO SECTION SLOT &mdash; renders results.seo when present (overall grade + three
@@ -1446,27 +1544,7 @@ ${chatCard}
          ============================================================================ -->
 ${seoSlot}
 `}
-    <!-- WHY THIS MATTERS (stakes) -->
-    <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
-${d.hidePitch ? "" : `
-    <section class="why">
-      <div class="sec-eyebrow">The stakes</div>
-      <div class="sec-title">Why this matters</div>
-      <div class="stats">
-        <div class="stat">
-          <span class="big">45%</span>
-          <p>of people used AI like ChatGPT and Gemini to find a local business last year &mdash; up from just <span class="was">6%</span> the year before. That is a sevenfold rise in twelve months.</p>
-        </div>
-      </div>
-      <p class="why-frame">This is where your customers are <span class="hl">already going</span> &mdash; and it&rsquo;s growing fast.</p>
-      <!-- THE SAME SOURCE LINE AS findable.live, and for the same reason: this is a US survey and
-           we sell to UK businesses. "US data, UK behaviour follows the same pattern" is more credible
-           than implying the figure was British, and a prospect who works that out for themselves
-           trusts us less than one we told. The report is what a prospect actually READS, so the
-           caveat matters more here than on the marketing page.
-           ⚠️ CROSS-SURFACE: the site's WhyThisMatters section carries this wording too. Change both. -->
-      <div class="src">Source: BrightLocal Local Consumer Review Survey 2026 &mdash; 1,002 US adults; UK behaviour follows the same pattern, and the year-on-year comparison is self-reported within the same survey series.</div>
-    </section>`}
+    <!-- WHY THIS MATTERS / 45% STAKES SECTION: REMOVED from all audits (Paul, 2026-09-16). -->
 
     <!-- WHAT WE DO (solution) &mdash; the confident turn from problem to fix -->
     <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
@@ -1526,19 +1604,19 @@ ${d.hidePitch || d.measuring ? "" : `
               <div class="step-ic"><span class="ic">${icNamed}</span><span class="badge">1</span></div>
               <div class="step-n">What we measure</div>
               <div class="st">How often AI names you</div>
-              <p>We ask ChatGPT and Gemini the questions your customers ask for ${article(type)} ${esc(type)}${d.locationText ? ` in ${esc(d.locationText)}` : ""}, and record who is named. The questions are written down before any work starts.</p>
+              <p class="fx-p">We ask the questions your customers ask, and record who gets named.</p>
             </div>
             <div class="step">
               <div class="step-ic"><span class="ic">${icListed}</span><span class="badge">2</span></div>
               <div class="step-n">What we build</div>
               <div class="st">Pages AI can quote</div>
-              <p>Pages on your own site that say plainly what you do and where, your details made to agree everywhere AI reads, and the listings that matter for your trade put right.</p>
+              <p class="fx-p">Pages on your own site, built for the questions you can win.</p>
             </div>
             <div class="step">
               <div class="step-ic"><span class="ic">${icStruct}</span><span class="badge">3</span></div>
               <div class="step-n">What we re-measure</div>
               <div class="st">The same questions, four weeks on</div>
-              <p>Same questions, same engines, so the before and after mean something. You see both sets of numbers, and the refund turns on whether yours went up.</p>
+              <p class="fx-p">Same questions, same engines. You see both numbers.</p>
             </div>
           </div>
         </div>
@@ -1588,27 +1666,31 @@ ${d.hidePitch ? "" : `
          an email route), and WhatsApp now points at the personal number, not the Business API line,
          prefilled with the business name, so the one route that was actually used is unchanged. -->
     <section class="cta">
-      <h3>Ready to <span class="y">get found</span>?</h3>
-      <p>Three steps. We measure where you stand, build the pages AI reads, then re-measure after four weeks so you can see the difference.</p>
-      <p>Watch the explainer, or just ask me anything.</p>
+      <h3>Want to be one of the names?</h3>
       <div class="cta-actions">
         ${startBtn}
-        <a class="cta-btn site" href="${esc(REPORT_EXPLAINER_URL)}" target="_blank" rel="noopener noreferrer">See how it works</a>
-        <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp me</a>
-        <a class="cta-btn email" href="${emailHref}">Email me</a>
+        ${requestCallBtn}
+        <a class="cta-btn wa" href="${waHref}" target="_blank" rel="noopener noreferrer">Ask me anything</a>
       </div>
-      <!-- 🔴 THE GUARANTEE IS BACK ON THE REPORT (2026-09-12). When the founder-offer block was
-           deleted on 2026-09-02 the guarantee went with it, and nobody noticed: this file kept
-           IMPORTING FINDABLE_GUARANTEE and rendering it nowhere, so for ten days the document a
-           prospect reads first carried no promise at all while the marketing site and the Stripe
-           page both did. A dead import is not a compile error, which is exactly why it survived.
-           ⛔ VERBATIM FROM THE CONSTANT, never paraphrased and never shortened. It is the same
-           sentence findable-checkout puts in the Stripe line-item description, so what a prospect
-           reads here is what they agree to at payment. If it does not fit, change the layout. -->
-      <p class="cta-promise">${esc(FINDABLE_GUARANTEE)}</p>
+      <a class="cta-site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">See how it works at findable.live &rarr;</a>
+      <!-- ⛔ THE REFUND SENTENCE IS REMEASURE_CLAIM_SENTENCE, VERBATIM/BYTE-LOCKED (Paul, 2026-09-16).
+           The layout changed; the sentence does not. Not the shortened mockup version, not paraphrased
+           — it is the promise the checkout and the refunds page carry, and it must read identically. -->
+      <p class="cta-promise">${esc(REMEASURE_CLAIM_SENTENCE)}</p>
     </section>`}
 
-    ${siteFooter}
+    <footer class="site-foot">
+      <div class="foot-top">
+        <div class="foot-brand">Findable<span class="foot-dot">.</span></div>
+        <a class="foot-cta" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">findable.live</a>
+      </div>
+      <div class="foot-grid">
+        <div><span class="foot-k">Prepared for</span><span class="foot-v">${esc(d.businessName)}</span></div>
+        <div><span class="foot-k">Report date</span><span class="foot-v">${esc(d.generatedAtLabel)}</span></div>
+        <div><span class="foot-k">Measured on</span><span class="foot-v">ChatGPT &amp; Gemini</span></div>
+      </div>
+      <div class="foot-note">A snapshot of where you stand today. After we make changes we ask the same questions again to show your before and after.</div>
+    </footer>
   </div>
 ${questionDetail}
 </body>
