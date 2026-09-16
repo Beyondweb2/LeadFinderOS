@@ -68,25 +68,17 @@ console.log("\n── ⛔ THE HERO IS REPLACED, NOT ANNOTATED ──");
   const html = renderReportHtml(base({ nameNotJudgeable: true }));
   ok(!html.includes('<div class="hero">'), "no hero block at all");
   ok(!html.includes('class="hero-verdict"'), "no verdict punch");
-  /* ⚠️ ASSERT ON THE SECTION MARKUP, NOT THE CLASS NAME. Both names appear in the STYLESHEET
-     first, so comparing bare `indexOf("namecheck")` against `indexOf("gutbox")` measures the CSS
-     rule order and fails against a document that is correct — my own check's fault, §4. */
-  ok(html.indexOf('<section class="namecheck">') < html.indexOf('<section class="gutbox">'),
-     "the refusal comes FIRST, where the number used to be");
+  /* The gutbox is GONE from the whole document (2026-09-16 redesign), so the refusal simply renders
+     in the hero's place — assert it is present, not its order against a section that no longer exists. */
+  ok(html.includes('<section class="namecheck">'), "the refusal section renders where the number used to be");
 }
 
-console.log("\n── ⚠️ WHAT IS STILL TRUE IS STILL SHOWN ──");
+console.log("\n── ⚠️ THE WEBSITE SLOT IS INDEPENDENT OF THE NAME ──");
 {
-  const html = renderReportHtml(base({
-    nameNotJudgeable: true, hasWebsite: false,
-    topCompetitors: [{ name: "Fen Property Services", count: 5 }],
-  }));
-  ok(html.includes("Fen Property Services"),
-     "the firms AI named are still named — that measurement does not depend on their own name");
-  ok(!html.includes("named most often instead"),
-     "but never “instead”, which is the exact claim being refused");
-  ok(html.includes("Who AI named<"), "and the heading drops “instead” too");
-  ok(/build you (a|one)|no website/i.test(html) || html.includes("website"),
+  const html = renderReportHtml(base({ nameNotJudgeable: true, hasWebsite: false }));
+  ok(!/named most often instead/.test(html),
+     "no “instead” claim anywhere — the exact thing being refused");
+  ok(/build you (a|one)|website/i.test(html),
      "the website slot still renders — a site scan measures their SITE, not their name");
 }
 
@@ -96,7 +88,7 @@ console.log("\n── ✅ A JUDGEABLE NAME IS COMPLETELY UNCHANGED ──");
   const after = renderReportHtml(base({ businessName: "Lockwood & Sons", businessType: "locksmiths", locationText: "Norwich", named: 2, total: 6, nameNotJudgeable: false }));
   ok(before === after, "nameNotJudgeable:false renders byte-identically to an absent field");
   ok(before.includes('<div class="hero">'), "and the hero is there, as it always was");
-  ok(before.includes("Who AI named instead"), "with “instead” intact");
+  ok(!before.includes('<section class="namecheck">'), "no name-refusal section for a judgeable name");
 }
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");

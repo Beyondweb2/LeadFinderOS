@@ -20,6 +20,7 @@ import { showOffer } from "../../../src/lib/buyOffer.ts";
 import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
 
 import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
+import { buildFaultLines, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 
 /* ⛔ THE "VIEW ONLINE" FOOTER LINK WAS DEAD IN EVERY REPORT EVER SENT.
    It was built from a hardcoded SITE_ORIGIN of https://yoursites.uk plus /a/<slug> — a route that
@@ -312,6 +313,44 @@ Deno.serve(async (req) => {
     }
 
     data.shareUrl = shareUrlFor(supabaseUrl, audit.id); // "View online" footer link — see shareUrlFor
+
+    /* ── WHAT'S STOPPING AI READING YOUR SITE + the Request-a-call button (2026-09-16) ────────────
+       The faults come from the lead's STORED crawl-check (crawl-check writes lead_crawl_checks); we
+       render buildFaultLines from its signals. A site that couldn't be fetched yields no faults, so
+       the section is absent (Paul's rule). auditId + requestCallUrl arm the POST form — recipient and
+       phone are derived server-side by request-call from this id alone. */
+    data.auditId = audit.id;
+    data.requestCallUrl = `${supabaseUrl}/functions/v1/request-call`;
+    if (leadId) {
+      const { data: cc } = await service
+        .from("lead_crawl_checks").select("result, created_at")
+        .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const fresh = !!cc && (Date.now() - new Date((cc as { created_at: string }).created_at).getTime()) < 30 * 86_400_000;
+      const sig = (cc as { result?: { signals?: CrawlSignals } } | null)?.result?.signals;
+      if (fresh && sig) {
+        const faults = buildFaultLines(sig);
+        if (faults.length) data.crawlFaults = faults;
+      }
+      /* Background-populate when there's no fresh check and they have a real site, so the section is
+         there on the next open. Fire-and-forget via waitUntil — never blocks this render (it would
+         add the crawl's ~5-12s to the page). crawl-check's internal branch accepts CRON_SECRET. */
+      if (!fresh && ownWebsite) {
+        // deno-lint-ignore no-explicit-any
+        const rt = (globalThis as any).EdgeRuntime;
+        const fire = () => fetch(`${supabaseUrl}/functions/v1/crawl-check`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": serviceKey,
+            "Authorization": `Bearer ${serviceKey}`,
+            "x-internal-job": "1",
+            "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+          },
+          body: JSON.stringify({ lead_id: leadId }),
+        }).then(() => {}).catch(() => {});
+        if (rt && typeof rt.waitUntil === "function") rt.waitUntil(fire());
+      }
+    }
     // Genuine render succeeded → record the open (non-bot only). Awaited but fully guarded, so a
     // tracking failure can never break the report the visitor came for.
     await recordAuditOpen(service, audit.id, req.headers.get("user-agent") ?? "");

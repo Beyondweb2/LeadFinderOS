@@ -53,6 +53,12 @@ verify_jwt = false
 [functions.crawl-check]
 verify_jwt = false
 
+# Report "Request a call" button. PUBLIC by design (a prospect with a report link) — verify_jwt
+# false. Abuse-guarded in-handler: POST-only, audit_id is the only input, recipient/content derived
+# server-side, one email per lead per 24h. See the function header.
+[functions.request-call]
+verify_jwt = false
+
 [functions.process-ai-audit-queue]
 verify_jwt = false
 
