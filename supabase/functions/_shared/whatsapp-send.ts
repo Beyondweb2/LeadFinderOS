@@ -154,6 +154,16 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      ⛔ NOT in CONTINUATION_TEMPLATES by accident — it IS one, deliberately: Inbox only, sent into
      a live conversation. MIRRORS process-whatsapp-queue; change both together. */
   explain_offer: { lang: "en", vars: ["trade_plural", "town", "onboarding_url"], headerVideoUrl: VIDEO_TEMPLATE_HEADER_URL },
+  /* explain_offer_v2 — SUBMITTED TO META 2026-09-16. THE SAME SHAPE AS explain_offer: three vars in
+     the same order ({{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} onboarding link), the same
+     video header, no buttons. Two paragraphs were added to the BODY — what a searcher does with the
+     answer ("they call whoever gets named"), and the proof (941 audits; a locksmith named once in
+     twelve questions, then three times). Registered as a NEW name rather than a re-approval because
+     Paul chooses between the two per lead; both stay sendable and explain_offer is untouched.
+     Everything said of explain_offer above holds here: the onboarding branch by the onboarding_url
+     PROPERTY, not needsAudit, a CONTINUATION (Inbox only). MIRRORS process-whatsapp-queue; change
+     both together. */
+  explain_offer_v2: { lang: "en", vars: ["trade_plural", "town", "onboarding_url"], headerVideoUrl: VIDEO_TEMPLATE_HEADER_URL },
   // Follow-up once the 24h window has closed: points a warm lead at the onboarding flow.
   // {{1}} business name, {{2}} that lead's onboarding URL. Vars resolved server-side per-lead by
   // resolveOnboardingFollowupVars — never from a caller-supplied link.
@@ -507,6 +517,40 @@ Short explainer video attached. Happy to answer any questions.
 https://findable.live/`;
 };
 
+/* explain_offer_v2 — SUBMITTED TO META 2026-09-16. explain_offer with two paragraphs added: what a
+   searcher does with the answer, and the proof. Same three variables in the same order, same header.
+   ⛔ "chatgpt" AND "gemini" ARE LOWERCASE ON PURPOSE (Paul's wording, as in audit_followup) AND MUST
+   NOT BE "CORRECTED". explain_offer's body capitalises them and that is ALSO what ITS registration
+   says — each mirror follows its own registration, never its sibling's.
+   ⛔ THE PROOF LINE IS LITERAL, LIKE THE PRICES. "941" and "once in twelve … three times" are what
+   Meta registered, not values this code computes. If the figures move (CLAUDE.md §27: re-derive,
+   never inherit), the template is re-registered at Meta and this mirror follows — never the reverse.
+   ⚠️ Everything explainOfferBody's note says about {{3}} never going blank and a blank {{2}} being
+   refused at the send branch applies unchanged: same resolver, same branch, same guards. */
+const explainOfferV2Body = (_b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) => {
+  const t = pluraliseTrade(trade);
+  return `Nobody's doing this yet, which is the point.
+
+People ask chatgpt and gemini for ${t.ok ? t.value : (trade || "businesses")} in ${town || "your area"} instead of googling, and they call whoever gets named. Right now that's not you.
+
+I've audited 941 UK businesses to work out what actually gets a firm named. A locksmith I did this for went from named once in twelve questions to named three times, in four weeks, on the pages I built.
+
+Keep your website and I'll optimise it so AI can read you. Or if you can't give me access, or want a new one, I'll build it. No extra cost.
+
+£99 to start. I run a full baseline check and send it over, then measure again four weeks later so you can see exactly what's changed.
+
+Not showing up more, you get your money back.
+
+After that £29.99 a month. More ways to be found, your reviews replied to, and I watch how each page performs and adjust. Stop any time.
+
+Here's the sign up:
+${u}
+
+Short explainer video attached. Happy to answer any questions.
+
+https://findable.live/`;
+};
+
 /* audit_followup — SUBMITTED TO META 2026-09-15, re-registered the same day with the article
    removed. Six variables: {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} {{4}} {{5}} three
    rivals, {{6}} report link. No header, no buttons.
@@ -584,6 +628,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   audit_reply_warm: auditReplyWarmBody,
   audit_followup: auditFollowupBody,
   explain_offer: explainOfferBody,
+  explain_offer_v2: explainOfferV2Body,
 };
 
 /** Render the display copy of a template body with its variables filled. `trade`/`competitors`

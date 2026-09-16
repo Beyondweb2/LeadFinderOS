@@ -57,6 +57,8 @@ ok(branchForVars(WA_TEMPLATES.onboarding_followup.vars as readonly string[]) ===
    'onboarding_followup routes to its own branch despite declaring trade_plural');
 ok(branchForVars(WA_TEMPLATES.explain_offer.vars as readonly string[]) === 'onboarding',
    'explain_offer routes to onboarding — its link is the sign-up, not a report');
+ok(branchForVars(WA_TEMPLATES.explain_offer_v2.vars as readonly string[]) === 'onboarding',
+   'explain_offer_v2 routes to onboarding too — same three variables, same branch');
 ok(branchForVars(WA_TEMPLATES.initial_contact.vars as readonly string[]) === 'plain',
    'initial_contact stays on the plain branch');
 ok(branchForVars(WA_TEMPLATES.questionnaire_followup.vars as readonly string[]) === 'contact_name',

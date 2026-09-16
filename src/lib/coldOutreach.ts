@@ -66,6 +66,9 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
      queued: process-whatsapp-queue cannot select it anyway (no audit_url, and the already-sent
      guard is template-blind), and the Inbox is the only door. */
   "explain_offer",
+  /* explain_offer_v2 — the same pitch with the proof paragraph, 2026-09-16. Same classification, same
+     reasoning, same accepted exposure: Inbox only, never queued. */
+  "explain_offer_v2",
   // Post-engagement: the lead has asked for something or paid for it.
   "onboarding_followup",
   "questionnaire_followup",
