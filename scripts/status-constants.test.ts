@@ -162,16 +162,17 @@ console.log("\n── ⛔ THE COMBINED FILTER COVERS EVERY STATUS, EXACTLY ONCE 
   ok(missing === 0, "every status is reachable through some filter option — none is invisible");
   ok(doubled === 0, "and none appears in two options, so a count cannot be double-reported");
   /* ⚠️ COUNT UPDATED 2026-08-23 with 'already_visible' (+1), and again 2026-08-29 with 'refunded'
-     (+1). It was ALSO stale before the first of those (it read 17 while the list had grown to 18
-     with in_delivery/completed) — this Deno suite is not in the npm pipeline, so nobody had re-run
-     it. Now: 20 statuses; no_whatsapp + no_whatsapp_needs_sms share a label → 19 groups; 19 groups
-     + the Paid sentinel = 20 filter options.
+     (+1), and again 2026-09-16 with 'awaiting_reply' ("You replied") (+1). It was ALSO stale before
+     the first of those (it read 17 while the list had grown to 18 with in_delivery/completed) —
+     this Deno suite is not in the npm pipeline, so nobody had re-run it. Now: 21 statuses;
+     no_whatsapp + no_whatsapp_needs_sms share a label → 20 groups; 20 groups + the Paid sentinel =
+     21 filter options.
      ⚠️ This assertion FAILS BY DESIGN whenever a status is added — that is the point. It is the
      prompt to check the new value really got a unique label and its own filter group (the two
      assertions directly above), rather than silently joining an existing one. Update the numbers
      only after reading those pass. */
-  ok(OUTREACH_STATUS_FILTER_OPTIONS.length === 20 && OUTREACH_STATUS_OPTIONS.length === 20,
-    `19 status groups + the Paid sentinel = 20 filter options for 20 statuses (got ${OUTREACH_STATUS_FILTER_OPTIONS.length} for ${OUTREACH_STATUS_OPTIONS.length})`);
+  ok(OUTREACH_STATUS_FILTER_OPTIONS.length === 21 && OUTREACH_STATUS_OPTIONS.length === 21,
+    `20 status groups + the Paid sentinel = 21 filter options for 21 statuses (got ${OUTREACH_STATUS_FILTER_OPTIONS.length} for ${OUTREACH_STATUS_OPTIONS.length})`);
 
   const noWa = OUTREACH_STATUS_FILTER_OPTIONS.filter((o) => o.label === "No WhatsApp");
   ok(noWa.length === 1, `"No WhatsApp" appears ONCE in the filter (got ${noWa.length})`);

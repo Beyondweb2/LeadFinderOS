@@ -39,6 +39,13 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Report',
     className: 'bg-sky-500/20 text-sky-400 border-transparent font-semibold',
   },
+  /* "You replied" — the operator has responded, waiting on the prospect. Violet, distinct from
+     replied and from report_sent's sky, so the two never read as the same thing. */
+  awaiting_reply: {
+    label: 'You replied',
+    shortLabel: 'You rep.',
+    className: 'bg-violet-500/20 text-violet-400 border-transparent font-semibold',
+  },
   price_given: {
     label: 'Price Given',
     shortLabel: 'Price',

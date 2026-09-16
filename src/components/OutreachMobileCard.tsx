@@ -25,7 +25,7 @@ import { NextActionBadge } from './NextActionBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import type { OutreachLead, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
-import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS, awaitingReplyTooltip } from '@/types/outreach';
 
 interface OutreachMobileCardProps {
   lead: OutreachLead;
@@ -205,6 +205,9 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                   >
                     <SelectTrigger 
                       className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0"
+                      title={lead.status === 'awaiting_reply'
+                        ? awaitingReplyTooltip(lead.whatsapp_template, lead.whatsapp_sent_at)
+                        : undefined}
                       {...(isLastContacted ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : {})}
                     >
                       <PipelineStatusBadge status={lead.status as PipelineStatus} compact />

@@ -13,6 +13,14 @@ export type LeadStatus =
   | 'in_delivery'       // paid & being delivered (operator-set only)
   | 'opted_out'         // system-written by the suppression paths (drainer/triage) — NOT operator-pickable
   | 'replied'
+  /* ⛔ 'awaiting_reply' — "You replied", i.e. the operator has responded and the ball is in the
+     prospect's court. Set by send-whatsapp-message when a message goes to a lead currently on the
+     Replied list AND it is not a report-deliverer (those keep 'report_sent'). It exists so the
+     Replied list only holds leads that still need the operator. A prospect's next inbound flips it
+     straight back to 'replied' (it is NOT in whatsapp-inbound's NO_DOWNGRADE), and that reply cannot
+     start a second audit — the once-per-lead whatsapp_auto_replies slot still gates it and this
+     status never touches that slot. Distinct from 'report_sent' by design (Paul, 2026-09-16). */
+  | 'awaiting_reply'
   | 'payment_received'  // "Paid" — Outreach pipeline terminal (also Track Leads marker)
   /* ⛔ REFUNDED — MONEY IN, THEN MONEY BACK OUT. The ONLY status that removes a lead from the
      paying-customer count and every revenue total, via isPaidLead (src/lib/leadPayment.ts).
@@ -234,6 +242,10 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'second_attempt', label: '2nd attempt' },
   { value: 'email_sent', label: 'Email Sent' },
   { value: 'replied', label: 'Replied' },
+  /* Unique label → its own filter group, so the operator can list "You replied" (dealt-with,
+     waiting on them) separately from "Replied" (needs me). status-constants.test.ts asserts the
+     count and that the label is unique. */
+  { value: 'awaiting_reply', label: 'You replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'report_sent', label: 'Report Sent' },
   /* Permanent, always-selectable filter option. This list is STATIC — the dropdown does NOT depend on
@@ -654,6 +666,23 @@ export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[]
   { value: 'refunded', label: 'Refunded' },
 ];
 
+/** Hover text for the "You replied" (awaiting_reply) status pill: what the operator last sent and
+ *  when, read from the lead's whatsapp_template / whatsapp_sent_at (written by send-whatsapp-message
+ *  when it sets the status). A free-form reply has no template, so the text is just "You replied ·
+ *  <when>". One definition, imported by the table and the mobile card. */
+export function awaitingReplyTooltip(template?: string | null, sentAtIso?: string | null): string {
+  const parts = ['You replied'];
+  const t = (template ?? '').trim();
+  if (t) parts.push(t);
+  if (sentAtIso) {
+    const d = new Date(sentAtIso);
+    if (!Number.isNaN(d.getTime())) {
+      parts.push(d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }));
+    }
+  }
+  return parts.join(' · ');
+}
+
 // ── Status semantics shared by the dashboard (Outreach status = source of truth) ──
 // A lead counts as "contacted / sent" once it has left "New" (any status except
 // not_contacted). This deliberately includes Not Interested and Closed — i.e.
@@ -670,7 +699,7 @@ export function isSentStatus(status?: string | null): boolean {
 
 // Replied-or-beyond: replied through every later stage. Includes not_interested
 // (they replied to say no — and were sent a site) and the Paid terminals.
-const REPLIED_OR_BEYOND = ['replied', 'site_sent', 'report_sent', 'price_given', 'interested', 'not_interested', 'payment_received', 'in_delivery', 'completed'];
+const REPLIED_OR_BEYOND = ['replied', 'awaiting_reply', 'site_sent', 'report_sent', 'price_given', 'interested', 'not_interested', 'payment_received', 'in_delivery', 'completed'];
 export function isRepliedStatus(status?: string | null): boolean {
   return !!status && REPLIED_OR_BEYOND.includes(status);
 }
