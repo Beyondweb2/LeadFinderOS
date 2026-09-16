@@ -113,7 +113,7 @@ import { LeadDetailDialog } from './LeadDetailDialog';
 import { isDemoLead } from '@/lib/demoLeads';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
-import { leadStatusLabel } from '@/types/outreach';
+import { leadStatusLabel, awaitingReplyTooltip } from '@/types/outreach';
 import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
 import { useApifyUsage } from '@/hooks/useApifyUsage';
@@ -2556,8 +2556,15 @@ export function OutreachTable({
                               <ContactMethodBadge method={lead.contact_method as ContactMethod} />
                             )}
                           </TableCell>
-                          {/* Pipeline Status column */}
-                          <TableCell onClick={(e) => e.stopPropagation()}>
+                          {/* Pipeline Status column. The title shows what the operator last sent
+                              and when for a 'You replied' lead — the one status whose meaning is
+                              "I've responded, waiting on them" (awaitingReplyTooltip). */}
+                          <TableCell
+                            onClick={(e) => e.stopPropagation()}
+                            title={lead.status === 'awaiting_reply'
+                              ? awaitingReplyTooltip(lead.whatsapp_template, lead.whatsapp_sent_at)
+                              : undefined}
+                          >
                             {onPipelineStatusChange ? (
                               <PipelineStatusSelect
                                 value={lead.status}

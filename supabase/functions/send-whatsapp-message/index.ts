@@ -60,7 +60,7 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
    marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
    constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
 const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf"] as const;
-const BUILD_ID = "2026-09-16b";
+const BUILD_ID = "2026-09-16c";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -643,9 +643,10 @@ Deno.serve(async (req) => {
        to report_sent — two templates delivering the same report, disagreeing about whether it had
        been delivered. The class is "was this built from the lead's audit", and the variable names
        are how a template says so. */
-    if (env.live && status === "sent" && resolvedLeadId && usedTemplate) {
-      const tvars = WA_TEMPLATES[usedTemplate]?.vars ?? [];
-      if (tvars.includes("trade") || tvars.includes("trade_plural") || tvars.includes("competitors")) {
+    if (env.live && status === "sent" && resolvedLeadId) {
+      const tvars = usedTemplate ? (WA_TEMPLATES[usedTemplate]?.vars ?? []) : [];
+      const isReportSend = tvars.includes("trade") || tvars.includes("trade_plural") || tvars.includes("competitors");
+      if (isReportSend) {
         try {
           await service.from("outreach_leads")
             .update({ status: "report_sent" })
@@ -653,6 +654,33 @@ Deno.serve(async (req) => {
             .not("status", "in", "(interested,price_given,payment_received,in_delivery,completed)");
         } catch (e) {
           console.error(`[send-whatsapp-message] report_sent status write failed for lead ${resolvedLeadId}:`, (e as Error).message);
+        }
+      } else {
+        /* ⛔ ANY OTHER SEND TO A REPLIED LEAD → 'awaiting_reply' ("You replied"), so the operator's
+           Replied list holds only leads that still need them (Paul, 2026-09-16). This covers the
+           templates that are NOT report deliverers (book_call, audit_followup_call, onboarding_followup,
+           re_engage_49, …) and a FREE-FORM typed reply (usedTemplate null) — the case that used to
+           leave a lead stuck on Replied after the operator had already answered.
+           ⛔ SCOPED .eq(status=replied) ON PURPOSE: it moves ONLY a lead currently on the Replied
+           list, so it can never overwrite a later pipeline status (report_sent, interested, price_given,
+           paid, in_delivery, completed) or a lead the operator has not actually just answered. Report
+           sends keep 'report_sent' above; both leave the Replied list, and the two stay distinct.
+           ⚠️ whatsapp_template + whatsapp_sent_at record WHAT was sent and WHEN, for the status hover
+           (awaitingReplyTooltip). A free-form reply stores a null template → the hover reads
+           "You replied · <when>". These columns are the lead's "last sent" markers (the queue writes
+           them too; WhatsAppLeadControls already displays them), and an awaiting_reply lead is never in
+           the queue, so overwriting them here starts no automated send.
+           ⛔ THE AUDIT IS UNAFFECTED. A prospect's reply flips this back to 'replied' in
+           whatsapp-inbound and runs the reply trigger, which is gated by the once-per-lead
+           whatsapp_auto_replies slot (claimed on their FIRST reply) and the completed-audit check —
+           neither of which this status touches. So no reply-to-an-inbox-message can start a 2nd audit. */
+        try {
+          await service.from("outreach_leads")
+            .update({ status: "awaiting_reply", whatsapp_template: usedTemplate ?? null, whatsapp_sent_at: new Date().toISOString() })
+            .eq("id", resolvedLeadId)
+            .eq("status", "replied");
+        } catch (e) {
+          console.error(`[send-whatsapp-message] awaiting_reply status write failed for lead ${resolvedLeadId}:`, (e as Error).message);
         }
       }
     }

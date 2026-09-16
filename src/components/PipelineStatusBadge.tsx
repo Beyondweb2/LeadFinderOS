@@ -86,6 +86,15 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Replied',
     className: 'bg-[hsl(var(--badge-replied))] text-[hsl(var(--badge-replied-fg))] border-transparent font-semibold',
   },
+  /* "You replied" — the operator has responded; ball is in the prospect's court. VIOLET, chosen to
+     read differently at a glance from both 'replied' and report_sent's sky (Paul's constraint,
+     2026-09-16: the two must not look the same). The hover on the pill shows which template + when
+     (awaitingReplyTooltip). */
+  awaiting_reply: {
+    label: 'You replied',
+    shortLabel: 'You rep.',
+    className: 'bg-violet-500/20 text-violet-400 border-transparent font-semibold',
+  },
   site_sent: {
     label: 'Site Sent',
     shortLabel: 'Site Sent',
