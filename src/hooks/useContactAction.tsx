@@ -5,14 +5,14 @@ import type { OutreachLead } from '@/types/outreach';
 
 interface UseContactActionOptions {
   onUpdate: (leadId: string, updates: Record<string, any>) => void;
-  onPersisted: (leadId: string, channel: 'whatsapp' | 'sms' | 'call') => void;
+  onPersisted: (leadId: string, channel: 'whatsapp' | 'call') => void;
 }
 
 export function useContactAction({ onUpdate, onPersisted }: UseContactActionOptions) {
   const contactedRef = useRef<Set<string>>(new Set());
   const { logAttempt } = useOutreachAttempt();
 
-  const executeContact = useCallback((lead: OutreachLead, channel: 'whatsapp' | 'sms' | 'call') => {
+  const executeContact = useCallback((lead: OutreachLead, channel: 'whatsapp' | 'call') => {
     // Prevent double-counting on rapid clicks
     if (contactedRef.current.has(lead.id)) return;
     contactedRef.current.add(lead.id);
@@ -24,7 +24,7 @@ export function useContactAction({ onUpdate, onPersisted }: UseContactActionOpti
     // Update contact_method and status locally
     const protectedStatuses = ['replied', 'interested', 'not_interested', 'completed'];
     const updates: Record<string, any> = {
-      contact_method: channel === 'whatsapp' ? 'whatsapp' : channel === 'sms' ? 'sms' : 'call',
+      contact_method: channel === 'whatsapp' ? 'whatsapp' : 'call',
       outreach_attempts: (lead.outreach_attempts || 0) + 1,
       last_outreach_attempt_at: new Date().toISOString(),
     };

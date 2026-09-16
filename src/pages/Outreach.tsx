@@ -70,7 +70,7 @@ const Outreach = () => {
   // Launch-pad intent carried from the Manage page via router state. Consumed once
   // (cleared from history so a refresh/back won't reopen the composer).
   const location = useLocation();
-  type LaunchIntent = { leadId: string; channel: 'sms' | 'whatsapp' | 'call' | 'open'; templateContent?: string | null; shareLink?: string | null };
+  type LaunchIntent = { leadId: string; channel: 'whatsapp' | 'call' | 'open'; templateContent?: string | null; shareLink?: string | null };
   const [launchIntent, setLaunchIntent] = useState<LaunchIntent | null>(
     ((location.state as { launch?: LaunchIntent } | null)?.launch) ?? null,
   );
@@ -192,7 +192,7 @@ const Outreach = () => {
         <div className="text-center sm:text-left">
           <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
           <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
-            Contact businesses via WhatsApp, SMS or call. Update their status, star the promising ones to track them, and open any row for the full detail.
+            Contact businesses via WhatsApp or call. Update their status, star the promising ones to track them, and open any row for the full detail.
           </p>
         </div>
         <div className="flex items-center justify-center sm:justify-end gap-2 shrink-0">

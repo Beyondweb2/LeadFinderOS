@@ -20,7 +20,7 @@ import { looksAutomated } from '@/lib/inboundClassify';
 export type TaskKind = 'deliver' | 'chase' | 'quoted' | 'reply' | 'manual' | 'fix_trades';
 
 /** 'open' = show the lead on Outreach; the rest open that channel's composer. */
-export type JumpTarget = 'sms' | 'whatsapp' | 'call' | 'open';
+export type JumpTarget = 'whatsapp' | 'call' | 'open';
 
 /* Manual next_action values that mean "send them a message", so the row opens the composer at the
    template step rather than just showing the lead. Carried over verbatim from the old card so a
@@ -33,7 +33,8 @@ function jumpFor(l: OutreachLead, useAction: boolean): JumpTarget {
   if (useAction) {
     if (l.next_action === 'call') return 'call';
     if (l.next_action && MESSAGING_ACTIONS.has(l.next_action)) {
-      return cm === 'sms' || cm === 'whatsapp' || cm === 'call' ? cm : 'open';
+      /* 'sms' is a historic pill on 15 leads; there is no SMS composer any more, so it opens the lead. */
+      return cm === 'whatsapp' || cm === 'call' ? cm : 'open';
     }
     return 'open';
   }
@@ -124,8 +125,8 @@ export interface TaskInputs {
    question and is refund-aware there. */
 const DEAD = new Set(['not_interested', 'opted_out', 'closed', 'refunded']);
 /* Statuses the card must never surface (see the "what should NOT be on it" list):
-   - no_whatsapp / no_whatsapp_needs_sms: unreachable on WhatsApp, and the SMS pipeline is off, so
-     there is no action available at all;
+   - no_whatsapp / no_whatsapp_needs_sms: unreachable on WhatsApp (the second is the landline
+     marker), and there is no other automated channel, so there is no action available at all;
    - queued: the drip sends these on a timer, so there is nothing for a human to do. */
 const NOT_ACTIONABLE = new Set(['no_whatsapp', 'no_whatsapp_needs_sms', 'queued']);
 

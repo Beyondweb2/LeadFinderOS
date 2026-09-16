@@ -79,12 +79,11 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
      nothing about what he does next: both mean email instead. A label that draws a distinction the
      operator never acts on is noise.
      ⛔ WHAT MUST NOT BE "TIDIED" ON THE BACK OF THIS: the two statuses stay SEPARATE IN THE DATA and
-     keep different colours. process-sms-queue targets no_whatsapp and explicitly excludes
-     no_whatsapp_needs_sms, so merging the values would lose which leads can still take an SMS — a
-     channel that is unused today, not one that has been ruled out. The colour is what keeps them
-     tellable apart on screen if that ever changes.
-       no_whatsapp            a real mobile with no WhatsApp account — SMS would still work (53)
-       no_whatsapp_needs_sms  not a mobile at all — neither WhatsApp nor SMS can arrive (509) */
+     keep different colours. They describe two different phones, and merging the values would lose
+     that fact for ever. (SMS left the product 2026-09-16; the second status is the landline marker,
+     Paul's decision to keep it.) The colour is what keeps them tellable apart on screen.
+       no_whatsapp            a real mobile with no WhatsApp account
+       no_whatsapp_needs_sms  not a mobile at all — a landline/VoIP number (1,861 leads, 2026-09-15) */
   no_whatsapp: {
     label: 'No WhatsApp',
     shortLabel: 'No WA',

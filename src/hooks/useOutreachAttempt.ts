@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
-type Channel = 'whatsapp' | 'sms' | 'call';
+type Channel = 'whatsapp' | 'call';
 
 export function useOutreachAttempt() {
   const { user } = useAuth();
