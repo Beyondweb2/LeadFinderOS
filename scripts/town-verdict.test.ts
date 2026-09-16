@@ -1,7 +1,7 @@
 /* ============================================================
    THE TOWN GATE'S REGRESSION SUITE — Paul's verify-and-gate build, 2026-08-14.
 
-   The one predicate every gate reads (process-whatsapp-queue, instantly-push, bulk-jobs,
+   The one predicate every gate reads (process-whatsapp-queue, bulk-jobs,
    create-ai-audit, the Outreach badge). Two properties are load-bearing and history
    says both will be broken by a well-meaning "fix" if they are not pinned:
 

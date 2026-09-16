@@ -1,5 +1,5 @@
 /* RELATIVE imports with explicit .ts extensions, NOT the "@/" alias — this file is imported by
-   edge functions (process-whatsapp-queue, instantly-push, bulk-jobs, create-ai-audit)
+   edge functions (process-whatsapp-queue, bulk-jobs, create-ai-audit)
    and Deno cannot resolve the Vite alias. Same convention as marketView.ts and auditReport.ts. */
 import { SETTLED_TOWN_NOTES } from "../../supabase/functions/_shared/place-details.ts";
 

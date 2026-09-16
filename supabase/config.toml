@@ -3,12 +3,6 @@ project_id = "ruusxpkkmwtljxxulhbq"
 [functions.bulk-jobs]
 verify_jwt = false
 
-[functions.instantly-push]
-verify_jwt = false
-
-[functions.poll-instantly-replies]
-verify_jwt = false
-
 [functions.search-leads]
 verify_jwt = false
 

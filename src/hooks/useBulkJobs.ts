@@ -16,7 +16,7 @@ import { readFunctionError } from '@/lib/functionError';
 // bulk_jobs isn't in the generated types yet — RLS still enforces access.
 const sb = supabase as unknown as { from: (t: string) => any; functions: typeof supabase.functions };
 
-export type BulkJobType = 'enrich' | 'audit' | 'audit_and_push';
+export type BulkJobType = 'enrich' | 'audit';
 
 export interface BulkJob {
   id: string;
@@ -29,11 +29,8 @@ export interface BulkJob {
   error: string | null;
   created_at: string;
   updated_at: string;
-  /** Per-item state (drives per-row spinners). 'running' = currently generating.
-   *  `phase` is audit_and_push only: 'audit' while the lead still needs measuring, 'push' once it
-   *  is ready to send. It is what lets the progress line say WHICH half is running rather than a
-   *  bare fraction that stalls for nine minutes with no explanation. */
-  items?: { lead_id: string; status: string; phase?: 'audit' | 'push' }[];
+  /** Per-item state (drives per-row spinners). 'running' = currently generating. */
+  items?: { lead_id: string; status: string }[];
 }
 
 const RECENT_WINDOW_MS = 10 * 60 * 1000;
@@ -132,7 +129,7 @@ export function useBulkJobs(onJobComplete?: (job: BulkJob) => void) {
          "edge function error" on 2026-09-09 with nobody able to say what had gone wrong.
          supabase-js sets `error` on ANY non-2xx and its `.message` is always the same useless
          "Edge Function returned a non-2xx status code"; every refusal bulk-jobs states carefully
-         ("already in Instantly", "nothing to do", "how many to send must be a whole number") was
+         ("nothing to do", "Too many leads") was
          being thrown away here and replaced with that sentence. Fourth hand-rolled instance of the
          same gap — see src/lib/functionError.ts. */
       if (error) return { ok: false, error: await readFunctionError(error) };
