@@ -705,6 +705,13 @@ export function renderReportHtml(d: AiAuditReportData): string {
   {
     const leaders = (d.topCompetitors ?? []).filter((c) => c.name && c.count > 0);
     const qCount = d.questionsAsked ?? 0;
+    /* ⛔ "INSTEAD" ONLY WHEN THEY WERE GENUINELY NOT NAMED (Paul, 2026-09-16). The heading and the
+       firms line both used to say "instead" for every judgeable audit — so a business named 5 of 6
+       read "Who AI named INSTEAD" directly above "AI named <them> 5 times", which contradicts itself
+       and reads as the tool ignoring its own measurement. "Instead of you" is only true when the
+       count is zero; when they were named at all, the firms were named ALONGSIDE them, not instead.
+       nameNotJudgeable already suppresses it (we make no "instead of you" claim we can't support). */
+    const saysInstead = !d.nameNotJudgeable && d.named === 0;
     // Same figures as the hero headline — reinforces it, never contradicts it.
     /* ⛔ THE SECOND PLACE THAT ASSERTED "AI never named you", AND IT HAD TO MOVE WITH THE HERO.
        Withholding the headline and leaving this box saying it four inches lower fixes nothing —
@@ -736,7 +743,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
       const denom = d.competitorMentions && d.competitorMentions > 0
         ? ` &mdash; from ${d.competitorMentions} competitor mentions across ${qCount} question${qCount === 1 ? "" : "s"}`
         : "";
-      body += ` The firms AI named most often${d.nameNotJudgeable ? "" : " instead"} were ${list}${denom}.`;
+      body += ` The firms AI named most often${saysInstead ? " instead" : ""} were ${list}${denom}.`;
     }
     /* ⛔ THE POINTER IS GATED ON THE SAME CONDITION AS THE PAGES IT POINTS AT, AND THAT MATTERS
        MORE THAN IT LOOKS. It was gated on the DATA existing (`questionBreakdown?.length > 0`) while
@@ -748,7 +755,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
       : "";
     gutbox = `
     <section class="gutbox">
-      <div class="gb-eyebrow">${d.nameNotJudgeable ? "Who AI named" : "Who AI named instead"}</div>
+      <div class="gb-eyebrow">${saysInstead ? "Who AI named instead" : "Who AI named"}</div>
       <p class="gb-sum">${body}${pointer}</p>
     </section>`;
   }
