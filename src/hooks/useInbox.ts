@@ -4,6 +4,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { isPaidLead } from '@/lib/leadPayment';
+import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/lib/templateAttribution';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
 // (operators read their own; admin reads all incl. Unassigned).
@@ -62,6 +63,11 @@ export interface WaConversation {
   lastMessage: WaMessage;
   lastMessageAt: string;
   lastInboundAt: string | null;
+  /** Engagement, from the same source the campaign card attributes by (templateAttribution.ts):
+   *  reportOpenedAt = they opened their report link (after we sent it); siteVisitedAt = they clicked
+   *  through to findable.live. Null until it happens; both drive an at-a-glance Inbox pill. */
+  reportOpenedAt: string | null;
+  siteVisitedAt: string | null;
 }
 
 export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null; contact_name: string | null; hook_followup_queued_at: string | null }
@@ -94,7 +100,9 @@ export function windowFor(lastInboundAt: string | null): { open: boolean; hoursL
 interface InboxData {
   messages: WaMessage[];
   leads: LeadLite[];
-  audits: Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>;
+  audits: Array<{ id: string; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>;
+  /** Sign-up page landings (findable-onboarding's prefill hook) → the SITE pill. */
+  pageHits: Array<{ lead_id: string | null; created_at: string }>;
 }
 
 /* Key includes the user id (the useCoverage pattern): firing before it resolves would cache the
@@ -105,9 +113,10 @@ export const inboxQueryKey = (userId: string | null | undefined) => ['inbox', us
 const NO_MESSAGES: WaMessage[] = [];
 const NO_LEADS: LeadLite[] = [];
 const NO_AUDITS: InboxData['audits'] = [];
+const NO_PAGE_HITS: InboxData['pageHits'] = [];
 
 async function fetchInboxData(): Promise<InboxData> {
-  const [msgRes, leadRes, reportRes] = await Promise.all([
+  const [msgRes, leadRes, reportRes, hitRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
        This is the fastest-growing table in the system — every send and every reply. */
@@ -138,13 +147,20 @@ async function fetchInboxData(): Promise<InboxData> {
     /* ⛔ PAGINATED — truncation here would silently drop the report-ready pill and the audit_reply
        guard for whichever leads fell outside the window. Same id tiebreaker. */
     fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', (from, to) =>
-      sb.from('ai_audits').select('id, lead_id, created_at, ai_audit_runs(status)')
+      sb.from('ai_audits').select('id, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status)')
         .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
+    /* Sign-up page hits → the SITE pill. The SAME table and the SAME paginated read the campaign
+       card uses (id tiebreaker); the SITE_TRACKING_START cutoff is applied in leadSiteVisitedAt. A
+       failed read degrades to no pill, never to a wrong one. */
+    fetchAllRows<InboxData['pageHits'][number]>('Inbox (page hits)', (from, to) =>
+      sb.from('lead_page_hits').select('lead_id, created_at')
+        .order('id', { ascending: true }).range(from, to)),
   ]);
   return {
     messages: msgRes.rows,
     leads: leadRes.rows.filter((l) => (l.phone ?? '').trim()),
     audits: reportRes.rows,
+    pageHits: hitRes.rows,
   };
 }
 
@@ -171,6 +187,7 @@ export function useInbox() {
   const messages = query.data?.messages ?? NO_MESSAGES;
   const leads = query.data?.leads ?? NO_LEADS;
   const audits = query.data?.audits ?? NO_AUDITS;
+  const pageHits = query.data?.pageHits ?? NO_PAGE_HITS;
   const isLoading = query.isLoading;
 
   /* Force-refresh: query.refetch always hits the network (staleTime does not apply to an explicit
@@ -245,6 +262,53 @@ export function useInbox() {
     [leads],
   );
 
+  /* ⛔ ENGAGEMENT, FROM THE SAME SOURCE THE CAMPAIGN CARD USES (templateAttribution.ts) — not a
+     second tracking mechanism. AUDIT: the earliest report-link send per lead gates ai_audits'
+     first_opened_at, so an operator preview (same URL, same counter) does not light the pill. SITE:
+     the earliest lead_page_hit since tracking began. Both keyed by lead, both null until they
+     happen; the rules live in the shared leaf so the Inbox and the campaign card cannot diverge. */
+  const earliestReportLinkSentByLead = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const msg of messages) {
+      if (msg.direction !== 'outbound' || !msg.lead_id || !msg.template_name || msg.status === 'failed') continue;
+      if (!REPORT_LINK_TEMPLATES.has(msg.template_name)) continue;
+      const t = new Date(msg.created_at).getTime();
+      if (Number.isNaN(t)) continue;
+      const cur = m.get(msg.lead_id);
+      if (cur == null || t < cur) m.set(msg.lead_id, t);
+    }
+    return m;
+  }, [messages]);
+
+  const reportOpenedAtByLead = useMemo(() => {
+    const byLead = new Map<string, Array<{ open_count: number | null; first_opened_at: string | null }>>();
+    for (const a of audits) {
+      if (!a.lead_id) continue;
+      (byLead.get(a.lead_id) ?? byLead.set(a.lead_id, []).get(a.lead_id)!)
+        .push({ open_count: a.open_count, first_opened_at: a.first_opened_at });
+    }
+    const m = new Map<string, string>();
+    for (const [leadId, la] of byLead) {
+      const opened = leadReportOpenedAt(la, earliestReportLinkSentByLead.get(leadId) ?? null);
+      if (opened) m.set(leadId, opened);
+    }
+    return m;
+  }, [audits, earliestReportLinkSentByLead]);
+
+  const siteVisitedAtByLead = useMemo(() => {
+    const byLead = new Map<string, string[]>();
+    for (const h of pageHits) {
+      if (!h.lead_id) continue;
+      (byLead.get(h.lead_id) ?? byLead.set(h.lead_id, []).get(h.lead_id)!).push(h.created_at);
+    }
+    const m = new Map<string, string>();
+    for (const [leadId, isos] of byLead) {
+      const visited = leadSiteVisitedAt(isos);
+      if (visited) m.set(leadId, visited);
+    }
+    return m;
+  }, [pageHits]);
+
   // Derive conversations from the message log, grouped by (user_id, phone).
   const conversations = useMemo<WaConversation[]>(() => {
     const groups = new Map<string, WaMessage[]>();
@@ -274,10 +338,12 @@ export function useInbox() {
         lastMessage: last,
         lastMessageAt: last.created_at,
         lastInboundAt: lastInbound?.created_at ?? null,
+        reportOpenedAt: reportOpenedAtByLead.get(leadId) ?? null,
+        siteVisitedAt: siteVisitedAtByLead.get(leadId) ?? null,
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [messages, leadNameById, campaignByLeadId, statusByLeadId, paidLeadIds, ownLeadIds]);
+  }, [messages, leadNameById, campaignByLeadId, statusByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead]);
 
   const messagesForKey = useCallback(
     (key: string) => messages.filter((m) => convKey(m.user_id, m.phone) === key),
