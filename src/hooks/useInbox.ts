@@ -68,6 +68,12 @@ export interface WaConversation {
    *  through to findable.live. Null until it happens; both drive an at-a-glance Inbox pill. */
   reportOpenedAt: string | null;
   siteVisitedAt: string | null;
+  /** ⛔ JUDGED ON GEMINI ALONE — the engine pages move (Paul, 2026-09-16). named/answers on the
+   *  lead's newest audit that returned Gemini answers. Null when Gemini never ran. A lead strong on
+   *  ChatGPT but absent on Gemini reads 0 here and does NOT flag — it is still worth contacting.
+   *  The pill fires at >= 2/3 (Inbox), a look-before-you-send signal, never an automatic skip. */
+  geminiNamed: number | null;
+  geminiAnswers: number | null;
 }
 
 export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null; contact_name: string | null; hook_followup_queued_at: string | null }
@@ -103,6 +109,10 @@ interface InboxData {
   audits: Array<{ id: string; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>;
   /** Sign-up page landings (findable-onboarding's prefill hook) → the SITE pill. */
   pageHits: Array<{ lead_id: string | null; created_at: string }>;
+  /** Per-audit Gemini named/answers, from the audit_gemini_signal view (aggregated server-side so the
+   *  Inbox never ships 6k+ result blobs). Drives the "Gemini X/Y" flag — judged on Gemini alone,
+   *  the engine pages move, per Paul 2026-09-16. */
+  geminiSignals: Array<{ audit_id: string; lead_id: string | null; gemini_answers: number; gemini_named: number }>;
 }
 
 /* Key includes the user id (the useCoverage pattern): firing before it resolves would cache the
@@ -114,9 +124,10 @@ const NO_MESSAGES: WaMessage[] = [];
 const NO_LEADS: LeadLite[] = [];
 const NO_AUDITS: InboxData['audits'] = [];
 const NO_PAGE_HITS: InboxData['pageHits'] = [];
+const NO_GEMINI: InboxData['geminiSignals'] = [];
 
 async function fetchInboxData(): Promise<InboxData> {
-  const [msgRes, leadRes, reportRes, hitRes] = await Promise.all([
+  const [msgRes, leadRes, reportRes, hitRes, gemRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
        This is the fastest-growing table in the system — every send and every reply. */
@@ -155,12 +166,20 @@ async function fetchInboxData(): Promise<InboxData> {
     fetchAllRows<InboxData['pageHits'][number]>('Inbox (page hits)', (from, to) =>
       sb.from('lead_page_hits').select('lead_id, created_at')
         .order('id', { ascending: true }).range(from, to)),
+    /* Per-audit Gemini named/answers → the "Gemini X/Y" flag. Reads the audit_gemini_signal VIEW
+       (security_invoker, so the operator's own-row RLS on ai_audit_queue still applies) rather than
+       the 6.7k result blobs behind it: the DB does the count, the Inbox gets two ints per audit.
+       audit_id is unique → the pagination tiebreaker. A failed read degrades to no pill. */
+    fetchAllRows<InboxData['geminiSignals'][number]>('Inbox (gemini signal)', (from, to) =>
+      sb.from('audit_gemini_signal').select('audit_id, lead_id, gemini_answers, gemini_named')
+        .order('audit_id', { ascending: true }).range(from, to)),
   ]);
   return {
     messages: msgRes.rows,
     leads: leadRes.rows.filter((l) => (l.phone ?? '').trim()),
     audits: reportRes.rows,
     pageHits: hitRes.rows,
+    geminiSignals: gemRes.rows,
   };
 }
 
@@ -188,6 +207,7 @@ export function useInbox() {
   const leads = query.data?.leads ?? NO_LEADS;
   const audits = query.data?.audits ?? NO_AUDITS;
   const pageHits = query.data?.pageHits ?? NO_PAGE_HITS;
+  const geminiSignals = query.data?.geminiSignals ?? NO_GEMINI;
   const isLoading = query.isLoading;
 
   /* Force-refresh: query.refetch always hits the network (staleTime does not apply to an explicit
@@ -309,6 +329,23 @@ export function useInbox() {
     return m;
   }, [pageHits]);
 
+  /* Per-lead Gemini named/answers, from the lead's NEWEST audit that returned Gemini answers.
+     `audits` is already sorted newest-first, so the first audit per lead with a Gemini signal wins —
+     the same "newest audit" the report and the pitch resolve to. Keyed by lead_id, own audits only. */
+  const geminiByLead = useMemo(() => {
+    const byAudit = new Map<string, { named: number; answers: number }>();
+    for (const s of geminiSignals) {
+      byAudit.set(s.audit_id, { named: Number(s.gemini_named ?? 0), answers: Number(s.gemini_answers ?? 0) });
+    }
+    const m = new Map<string, { named: number; answers: number }>();
+    for (const a of audits) {
+      if (!a.lead_id || m.has(a.lead_id)) continue;
+      const sig = byAudit.get(a.id);
+      if (sig && sig.answers > 0) m.set(a.lead_id, sig);
+    }
+    return m;
+  }, [audits, geminiSignals]);
+
   // Derive conversations from the message log, grouped by (user_id, phone).
   const conversations = useMemo<WaConversation[]>(() => {
     const groups = new Map<string, WaMessage[]>();
@@ -340,10 +377,12 @@ export function useInbox() {
         lastInboundAt: lastInbound?.created_at ?? null,
         reportOpenedAt: reportOpenedAtByLead.get(leadId) ?? null,
         siteVisitedAt: siteVisitedAtByLead.get(leadId) ?? null,
+        geminiNamed: geminiByLead.get(leadId)?.named ?? null,
+        geminiAnswers: geminiByLead.get(leadId)?.answers ?? null,
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [messages, leadNameById, campaignByLeadId, statusByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead]);
+  }, [messages, leadNameById, campaignByLeadId, statusByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, geminiByLead]);
 
   const messagesForKey = useCallback(
     (key: string) => messages.filter((m) => convKey(m.user_id, m.phone) === key),

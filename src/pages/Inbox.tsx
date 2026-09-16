@@ -102,17 +102,31 @@ function templateLabel(name: string | null): string {
    templateAttribution.ts (imported as REPORT_TEMPLATES to keep this file's call sites unchanged). */
 const REPORT_TEMPLATES = REPORT_LINK_TEMPLATES;
 
-/* Two at-a-glance engagement pills beside the status pill: AUDIT (they opened their report link)
-   and SITE (they clicked through to findable.live). Each shows ONLY when it happened; the hover
-   gives the date. Both values come from useInbox, which reads the SAME source the campaign card
-   attributes by (ai_audits.first_opened_at gated to after the send; lead_page_hits). */
-function EngagementPills({ reportOpenedAt, siteVisitedAt }: { reportOpenedAt: string | null; siteVisitedAt: string | null }) {
-  if (!reportOpenedAt && !siteVisitedAt) return null;
+/* At-a-glance pills beside the status pill:
+   · AUDIT (they opened their report link) and SITE (they clicked through to findable.live) — each
+     shows ONLY when it happened; the hover gives the date. Same source the campaign card attributes
+     by (ai_audits.first_opened_at gated to after the send; lead_page_hits).
+   · GEMINI X/Y — the lead is already named on >= 2/3 of their GEMINI answers (the engine pages move,
+     Paul 2026-09-16). A look-before-you-send flag, never an automatic skip: it puts "he may not need
+     you" in front of the operator at the moment they would press send. Judged on Gemini ALONE, so a
+     lead strong on ChatGPT but absent on Gemini does NOT flag — still worth contacting. Raw fraction,
+     no verdict word (the number carries it); the operator decides. */
+function geminiFlags(named: number | null, answers: number | null): boolean {
+  return (answers ?? 0) > 0 && (named ?? 0) * 3 >= (answers as number) * 2;   // named/answers >= 2/3, integer-safe
+}
+function EngagementPills(
+  { reportOpenedAt, siteVisitedAt, geminiNamed, geminiAnswers }:
+  { reportOpenedAt: string | null; siteVisitedAt: string | null; geminiNamed?: number | null; geminiAnswers?: number | null },
+) {
+  const showGemini = geminiFlags(geminiNamed ?? null, geminiAnswers ?? null);
+  if (!reportOpenedAt && !siteVisitedAt && !showGemini) return null;
   const when = (iso: string) => {
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
   const pill = 'inline-flex items-center rounded px-1 py-0 text-[9px] font-semibold uppercase tracking-wide leading-tight';
+  // red once named on EVERY Gemini answer (little room), amber while there is still a gap.
+  const gemTone = (geminiNamed ?? 0) === (geminiAnswers ?? 0) ? ' bg-red-500/20 text-red-400' : ' bg-amber-500/20 text-amber-500';
   return (
     <>
       {reportOpenedAt && (
@@ -120,6 +134,11 @@ function EngagementPills({ reportOpenedAt, siteVisitedAt }: { reportOpenedAt: st
       )}
       {siteVisitedAt && (
         <span className={pill + ' bg-emerald-500/20 text-emerald-400'} title={'Visited findable.live · ' + when(siteVisitedAt)}>Site</span>
+      )}
+      {showGemini && (
+        <span className={pill + gemTone} title={`Already named on Gemini in ${geminiNamed} of ${geminiAnswers} answers — the engine pages move`}>
+          Gemini {geminiNamed}/{geminiAnswers}
+        </span>
       )}
     </>
   );
@@ -1136,6 +1155,7 @@ const Inbox = () => {
         /* A freshly-opened thread has no messages, so no report link was sent and no engagement is
            attributable yet; a lead with real engagement has real messages and a real conversation. */
         reportOpenedAt: null, siteVisitedAt: null,
+        geminiNamed: null, geminiAnswers: null,
       };
       setSynthetic(synth);
       setActiveKey(key);
@@ -1500,7 +1520,7 @@ const Inbox = () => {
                   {savingStatusKey === c.key
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                     : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} />}
-                  <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} />
+                  <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} geminiNamed={c.geminiNamed} geminiAnswers={c.geminiAnswers} />
                 </div>
               )}
             </div>
@@ -1532,7 +1552,7 @@ const Inbox = () => {
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                         : <PipelineStatusSelect value={active.leadStatus} onValueChange={(status) => handleSetStatus(active, status)} />
                     )}
-                    <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} />
+                    <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
                     <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
                   </div>
                 </div>
