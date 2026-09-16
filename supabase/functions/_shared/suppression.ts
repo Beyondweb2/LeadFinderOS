@@ -4,7 +4,7 @@
    ⛔ THIS IS THE ONLY IMPLEMENTATION, AND THAT IS THE ENTIRE POINT. Before it existed the rule
    was written out inline in three places and absent from two others:
      process-whatsapp-queue  inline .eq("phone_e164", …)      protected
-     process-sms-queue       inline .eq("phone_e164", …)      protected
+     process-sms-queue       inline .eq("phone_e164", …)      protected (function deleted 2026-09-16)
      auto-reply-rules        inline .eq("phone_e164", …)      protected
      instantly-push          NOTHING                          could email someone who said no
      bulk-jobs (audits)      NOTHING                          could spend on someone who said no
@@ -118,7 +118,7 @@ export async function suppress(
 
   try {
     /* onConflict names ONE column, so pick the strongest identifier present — phone is the one
-       twilio-inbound already upserts on and the one most rows carry. The other identifiers ride
+       the old SMS STOP handler upserted on and the one most rows carry. The other identifiers ride
        along on the same row. A conflict on a DIFFERENT unique column (same lead, new phone) surfaces
        as 23505 and is treated as "already suppressed", which it is. */
     const conflictCol = phone ? "phone_e164" : email ? "email" : "lead_id";

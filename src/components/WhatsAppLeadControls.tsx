@@ -43,8 +43,8 @@ export function WhatsAppLeadControls({
         });
       } else {
         // Tier-1 offline line-type gate: only mobiles may be queued. A non-mobile
-        // (landline/VoIP/etc.) is flagged 'no_whatsapp_needs_sms' instead of queued,
-        // so it's easy to find for SMS later and no send is ever attempted at it.
+        // (landline/VoIP/etc.) is flagged 'no_whatsapp_needs_sms' instead of queued — the
+        // status name is historical; it is the landline marker, and no send is ever attempted.
         const { lineType, whatsappEligible } = classifyLineType(lead.phone, lead.country);
         if (!whatsappEligible) {
           await onUpdate(lead.id, {
@@ -85,11 +85,11 @@ export function WhatsAppLeadControls({
 
       {lead.status === 'no_whatsapp' ? (
         <p className="text-xs leading-relaxed text-amber-500">
-          Not on WhatsApp — this number can't receive WhatsApp. Reach them by SMS, call or email instead.
+          Not on WhatsApp — this number can't receive WhatsApp. Reach them by call or email instead.
         </p>
       ) : lead.status === 'no_whatsapp_needs_sms' ? (
         <p className="text-xs leading-relaxed text-cyan-500">
-          Not a mobile number{lead.line_type ? ` (${lead.line_type})` : ''} — can't receive WhatsApp, so it wasn't queued. Flagged for SMS instead.
+          Landline{lead.line_type && lead.line_type !== 'landline' ? ` (${lead.line_type})` : ''} — flagged, not queued. It can't receive WhatsApp.
         </p>
       ) : lead.whatsapp_sent_at ? (
         <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">

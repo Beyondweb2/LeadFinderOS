@@ -24,7 +24,7 @@ export interface LineTypeResult {
 }
 
 /** Lead `country` enum → ISO-3166 alpha-2 for libphonenumber. Mirrors the map in
- *  _shared/enrichment/whatsapp.ts. */
+ *  src/lib/lineType.ts. */
 const COUNTRY_TO_ISO: Record<string, string> = {
   UK: "GB", Australia: "AU", USA: "US", Canada: "CA", Germany: "DE", France: "FR",
   Spain: "ES", Italy: "IT", Netherlands: "NL", Belgium: "BE", Ireland: "IE",

@@ -106,7 +106,6 @@ const GRAPH_VERSION = "v21.0";
    07:00 where 100 gave 8.7 and 120 gives 7.3 (floored to 10). The gap is derived from the cap by
    construction: the queue spreads whatever the cap is across the window rather than racing to it and
    stopping.
-   process-sms-queue has its OWN separate DAILY_CAP; this constant does not affect it.
 
    ✅ 120 → 200 ON 2026-08-22, AND THE CEILING ABOVE WAS LIFTED THE ONLY WAY IT COULD BE — THE CRON.
    The "~87/day ceiling" and "raising past ~140 does nothing" notes above were TRUE at a 10-minute
@@ -815,7 +814,7 @@ Deno.serve(async (req) => {
       if (!l) return json({ ok: false, error: "lead_not_found" }, 404);
       const lead = l as { id: string; phone: string | null; email: string | null; country: string | null; business_name: string | null };
       /* toWhatsAppNumber gives bare digits; suppress() canonicalises to '+' itself via toE164, so the
-         row lands on the same key twilio-inbound and checkSuppressed use. */
+         row lands on the same key checkSuppressed uses (and the deleted SMS lane used). */
       const digits = lead.phone ? toWhatsAppNumber(lead.phone, lead.country) : "";
       const wrote = await suppress(service, {
         phone: digits || null, email: lead.email ?? null, leadId: lead.id,

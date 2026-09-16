@@ -109,7 +109,6 @@ const ACCEPTED = new Set<string>([
   /* Barber-era claim links in the message queues. Inert (no lead carries a share_token any more)
      and left in place rather than given surgery in the same pass as the product deletion. */
   'supabase/functions/process-whatsapp-queue/index.ts → yoursites.uk',
-  'supabase/functions/process-sms-queue/index.ts → yoursites.uk',
   'supabase/functions/send-whatsapp-message/index.ts → yoursites.uk',
   /* Synthetic phone-signup addresses (@claimed.yoursites.uk) the webhook still has to RECOGNISE
      to avoid emailing a dead inbox — a string it reads, never a URL it builds. */

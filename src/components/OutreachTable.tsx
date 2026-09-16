@@ -60,7 +60,6 @@ import {
   DatabaseZap,
   Loader2,
   MessageSquare,
-  MessageCircle,
   Upload,
   Eye,
   PhoneOff,
@@ -134,7 +133,6 @@ const AUDIT_JOB_CAP = 100;
 const AUDIT_DAILY_CAP_USD = 12.0;
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { CampaignPicker } from '@/components/CampaignPicker';
-import { SingleSMSDialog } from '@/components/SingleSMSDialog';
 import { PushToInstantlyDialog } from '@/components/PushToInstantlyDialog';
 import { TRADES } from '@/lib/trades';
 import { AiOpenerModal } from '@/components/AiOpenerModal';
@@ -174,7 +172,7 @@ interface OutreachTableProps {
   phoneFetchStatus?: Record<string, PhoneFetchStatus>;
   onRetryPhoneFetch?: (leadId: string) => void;
   /** Called before a contact action. Return true to allow, false to block (show paywall). */
-  onContactGated?: (channel: 'call' | 'sms' | 'whatsapp', leadId?: string) => boolean;
+  onContactGated?: (channel: 'call' | 'whatsapp', leadId?: string) => boolean;
   /** Persist enrichment results found via the per-row enrich buttons. */
   onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
   /** Lead-detail modal callbacks (opened on row click) — fold-in of Track Leads. */
@@ -194,7 +192,7 @@ interface OutreachTableProps {
     leadId: string;
     /** 'open' just opens the lead's detail modal (for non-messaging next actions, or
      *  email/messenger leads that have no per-lead composer). */
-    channel: 'sms' | 'whatsapp' | 'call' | 'open';
+    channel: 'whatsapp' | 'call' | 'open';
     templateContent?: string | null;
     shareLink?: string | null;
   } | null;
@@ -413,13 +411,12 @@ export function OutreachTable({
      Same class of bug as the Inbox picker; '' means not set and the Queue button stays disabled. */
   const [queueTemplate, setQueueTemplate] = useState<string>('');
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
-  // Dialog state for WhatsApp/SMS template pages
+  // Dialog state for the WhatsApp template page
   const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
   // Launch-pad: template + /s/ link injected into the composer for THIS launch only
   // (cleared on dialog close so a later manual open behaves normally).
   const [launchTemplate, setLaunchTemplate] = useState<string | null>(null);
   const [launchLink, setLaunchLink] = useState<string | null>(null);
-  const [smsDialogLead, setSmsDialogLead] = useState<OutreachLead | null>(null);
   // Optimistic UI state: leadId -> partial overrides
   const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Record<string, any>>>(new Map());
   // Track leads contacted during walkthrough (so highlight moves to next business)
@@ -441,7 +438,7 @@ export function OutreachTable({
         return next;
       });
     }, []),
-    onPersisted: useCallback((leadId: string, _channel: 'whatsapp' | 'sms' | 'call') => {
+    onPersisted: useCallback((leadId: string, _channel: 'whatsapp' | 'call') => {
       // Keep optimistic updates (including status) until the leads prop syncs.
       // The useEffect below will clear them when leads catch up.
       // We no longer strip `status` here because leads aren't re-fetched after
@@ -634,7 +631,7 @@ export function OutreachTable({
   const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
     if (lead.whatsapp_status === 'no') {
       toast({
-        description: `${lead.business_name} not on WhatsApp. Try SMS or Call.`,
+        description: `${lead.business_name} not on WhatsApp. Try a call.`,
         duration: 3000,
       });
       return;
@@ -656,24 +653,6 @@ export function OutreachTable({
     // The wa.me "Open in WhatsApp app" fallback lives in the Inbox thread header.
     navigate('/inbox', { state: { launch: { leadId: lead.id } } });
   }, [toast, onContactGated, onContactMethodChange, navigate]);
-
-  // Handle SMS button click - open template dialog + count walkthrough contact
-  const handleSMSClick = useCallback((lead: OutreachLead) => {
-    if (onContactGated && !onContactGated('sms', lead.id)) return;
-    // Auto-fill contact method
-    if (onContactMethodChange) onContactMethodChange(lead.id, 'sms' as ContactMethod);
-    // Treat opening contact panel as selecting this lead for next walkthrough step
-    highlightLead(lead.id);
-    // Always emit walkthrough contact event on click (replay-safe)
-    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
-    setWalkthroughContactedIds(prev => {
-      if (prev.has(lead.id)) return prev;
-      const next = new Set(prev);
-      next.add(lead.id);
-      return next;
-    });
-    setSmsDialogLead(lead);
-  }, [onContactGated, onContactMethodChange]);
 
   // Single-row "Generate site": enqueue a DURABLE, server-side site-gen job — the same
 
@@ -704,16 +683,15 @@ export function OutreachTable({
     if (!lead) return; // not loaded/filtered yet — rerun when leads change
     setLaunchTemplate(launchIntent.templateContent ?? null);
     setLaunchLink(launchIntent.shareLink ?? null);
-    if (launchIntent.channel === 'sms') setSmsDialogLead(lead);
-    else if (launchIntent.channel === 'whatsapp') setWhatsappDialogLead(lead);
+    if (launchIntent.channel === 'whatsapp') setWhatsappDialogLead(lead);
     else if (launchIntent.channel === 'call') handleCallClick(lead);
     else if (launchIntent.channel === 'open') setDetailLead(lead);
     onLaunchConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launchIntent, leads]);
 
-  // Called when user clicks "Open App" in WhatsApp/SMS dialog
-  const handleDialogSent = useCallback((leadId: string, channel: 'whatsapp' | 'sms') => {
+  // Called when user clicks "Open App" in the WhatsApp dialog
+  const handleDialogSent = useCallback((leadId: string, channel: 'whatsapp') => {
     const lead = leadsRef.current.find(l => l.id === leadId);
     if (!lead) return;
     highlightLead(lead.id);
@@ -1239,7 +1217,7 @@ export function OutreachTable({
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
     const leadOf = (id: string) => leads.find((l) => l.id === id);
-    // Canonical E.164 ("+…") for a lead, matching the drainer + twilio-inbound suppression key.
+    // Canonical E.164 ("+…") for a lead, matching the drainer's suppression key (and the SMS lane's, before it went).
     const e164 = (l?: OutreachLead) => (l?.phone ? `+${formatPhoneForWhatsApp(l.phone)}` : '');
 
     /* ⛔ PRIOR CONTACT AND SUPPRESSION BOTH COME FROM THE SERVER NOW, AND THAT IS A BUG FIX, NOT
@@ -1304,8 +1282,8 @@ export function OutreachTable({
     });
     const skipped = ids.length - queueable.length;
     // Tier-1 offline line-type gate: only mobiles may be queued. Landline/VoIP/etc.
-    // never enter the queue — they're flagged 'no_whatsapp_needs_sms' so they're easy
-    // to find for SMS later (no send is ever attempted at a non-mobile number).
+    // never enter the queue — they're flagged 'no_whatsapp_needs_sms' (the status name is
+    // historical; it is the landline marker, and no send is ever attempted at one).
     let blockedNonMobile = 0;
     queueable.forEach((id) => {
       const lead = leads.find((l) => l.id === id);
@@ -1340,7 +1318,7 @@ export function OutreachTable({
     const notes = [
       blockedContacted ? `${blockedContacted} skipped — that number is already in a conversation (probably a duplicate lead row).` : '',
       skipped - blockedContacted > 0 ? `${skipped - blockedContacted} skipped (already contacted, queued or suppressed).` : '',
-      blockedNonMobile ? `${blockedNonMobile} not a mobile → flagged for SMS.` : '',
+      blockedNonMobile ? `${blockedNonMobile} landline — flagged, not queued.` : '',
     ].filter(Boolean).join(' ');
     toast({
       title: `Queued ${queuedCount} for WhatsApp`,
@@ -2420,7 +2398,6 @@ export function OutreachTable({
                     onPipelineStatusChange(lead.id, status);
                   } : undefined}
                   onWhatsAppClick={() => handleWhatsAppClick(lead)}
-                  onSMSClick={() => handleSMSClick(lead)}
                   onCallClick={() => handleCallClick(lead)}
                   onTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
                   onAutoTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
@@ -2693,14 +2670,6 @@ export function OutreachTable({
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                              <button
-                                onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'sms' } })); handleSMSClick(lead); }}
-                                className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-colors"
-                                title="Send SMS"
-                                data-walkthrough={lead.outreach_attempts === 0 && !walkthroughContactedIds.has(lead.id) ? 'contact' : undefined}
-                              >
-                                <MessageCircle className="h-4 w-4" />
-                              </button>
                               <button
                                 onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'whatsapp' } })); handleWhatsAppClick(lead); }}
                                 className="p-1.5 rounded-md hover:bg-green-500/10 text-green-500 hover:text-green-400 transition-colors"
@@ -3109,26 +3078,6 @@ export function OutreachTable({
         onSent={handleDialogSent}
         onAiOpener={isAdmin && whatsappDialogLead ? () => {
           setAiOpenerLead(whatsappDialogLead);
-        } : undefined}
-      />
-
-      {/* SMS Template Dialog */}
-      <SingleSMSDialog
-        open={!!smsDialogLead}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSmsDialogLead(null);
-            setLaunchTemplate(null);
-            setLaunchLink(null);
-            window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
-          }
-        }}
-        lead={smsDialogLead}
-        initialTemplate={launchTemplate}
-        shareLink={launchLink}
-        onSent={handleDialogSent}
-        onAiOpener={isAdmin && smsDialogLead ? () => {
-          setAiOpenerLead(smsDialogLead);
         } : undefined}
       />
 

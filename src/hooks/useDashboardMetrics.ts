@@ -16,8 +16,8 @@ import { isPaidLead } from '@/lib/leadPayment';
  * `tracking` says how much of this channel is actually recorded, because that differs per channel
  * and pretending otherwise is what made this card wrong:
  *   'full'       sends AND replies are logged (WhatsApp: whatsapp_messages, both directions)
- *   'sends-only' sends are logged but nothing records an inbound (SMS: sms_sends exists, and
- *                twilio-inbound only updates delivery status — there is no inbound SMS table)
+ *   'sends-only' sends are logged but nothing records an inbound (no channel uses this today;
+ *                SMS did until it left the product on 2026-09-16 — the tier is kept for the next one)
  *   'none'       nothing anywhere records a send on this channel, so no honest number exists
  * `replied` is null when it cannot be known, rather than 0 — "nobody replied" and "we do not record
  * replies" are different facts and the card must not merge them.
@@ -30,7 +30,6 @@ export interface ChannelStat {
 }
 export interface ChannelPerformance {
   whatsapp: ChannelStat;
-  sms: ChannelStat;
   call: ChannelStat;
   facebook_msg: ChannelStat;
   email: ChannelStat;
@@ -175,7 +174,6 @@ interface DashboardData {
   onboardingByLead: Map<string, LeadOnboarding>;
   baselineLeadIds: Set<string>;
   msgsByLeadId: Map<string, FunnelMsg[]>;
-  smsSentLeadIds: Set<string>;
 }
 
 export function useDashboardMetrics(isAdmin = false) {
@@ -214,7 +212,6 @@ export function useDashboardMetrics(isAdmin = false) {
     let onboardingByLead: Map<string, LeadOnboarding> = EMPTY_ONBOARDING;
     let baselineLeadIds: Set<string> = EMPTY_IDS;
     let msgsByLeadId: Map<string, FunnelMsg[]> = EMPTY_MSGS;
-    let smsSentLeadIds: Set<string> = EMPTY_IDS;
     const dates = getDateRanges();
 
     const sevenDaysAgo = new Date();
@@ -272,10 +269,6 @@ export function useDashboardMetrics(isAdmin = false) {
       fetchAllRows<{ lead_id: string; baseline_target_runs: number | null }>('Dashboard (audits)', (f, t) =>
         sbAny.from('ai_audits').select('lead_id, baseline_target_runs').not('lead_id', 'is', null)
           .order('id', { ascending: true }).range(f, t)),
-      // The only record that an SMS was really sent. Currently empty — no SMS has ever gone out —
-      // which is precisely why the card must read this rather than the contact_method pill.
-      fetchAllRows<{ lead_id: string | null }>('Dashboard (sms sends)', (f, t) =>
-        sbAny.from('sms_sends').select('lead_id').order('id', { ascending: true }).range(f, t)),
     ]).catch((e: unknown) => {
       /* fetchAllRows throws rather than returning an error, so the failure surfaces HERE. The old
          code only guarded the leads query and returned; this covers all nine the same way, and
@@ -286,7 +279,7 @@ export function useDashboardMetrics(isAdmin = false) {
     if (!all) {
       return;
     }
-    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult, msgResult, obResult, baselineResult, smsResult] = all;
+    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult, msgResult, obResult, baselineResult] = all;
 
     allLeads = (leadsResult.rows);
     outreachEvents7d = (eventsResult.rows);
@@ -303,7 +296,6 @@ export function useDashboardMetrics(isAdmin = false) {
         if (arr) arr.push(row); else idx.set(m.lead_id, [row]);
       }
       msgsByLeadId = (idx);
-      smsSentLeadIds = (new Set(smsResult.rows.map((r) => r.lead_id).filter((v): v is string => !!v)));
     } catch (e) {
       console.warn('Message-time fold skipped (reply tasks hidden):', e instanceof Error ? e.message : e);
     }
@@ -357,7 +349,7 @@ export function useDashboardMetrics(isAdmin = false) {
       totalLeadsContacted: contacts.length,
     });
 
-    return { allLeads, totalNoWebsiteFound, activityData, outreachEvents7d, msgTimes, onboardingByLead, baselineLeadIds, msgsByLeadId, smsSentLeadIds };
+    return { allLeads, totalNoWebsiteFound, activityData, outreachEvents7d, msgTimes, onboardingByLead, baselineLeadIds, msgsByLeadId };
   }, [isAdmin, user?.id]);
 
   /* The two mount effects are gone. One re-ran the whole fetch whenever the user id changed and
@@ -382,7 +374,6 @@ export function useDashboardMetrics(isAdmin = false) {
   const onboardingByLead = data?.onboardingByLead ?? EMPTY_ONBOARDING;
   const baselineLeadIds = data?.baselineLeadIds ?? EMPTY_IDS;
   const msgsByLeadId = data?.msgsByLeadId ?? EMPTY_MSGS;
-  const smsSentLeadIds = data?.smsSentLeadIds ?? EMPTY_IDS;
   /* Signed out is not "loading" — it is an answer. */
   const isLoading = !!user?.id && query.isPending;
 
@@ -527,7 +518,7 @@ export function useDashboardMetrics(isAdmin = false) {
        not_interested), and archived leads were included deliberately — on a comment claiming it
        matched the per-campaign card, which stopped being true when that card started excluding them.
        SMS was worse than wrong: 15 leads carry the SMS pill and sms_sends is EMPTY, so the card
-       claimed 15 sends that never happened.
+       claimed 15 sends that never happened. (SMS left the product on 2026-09-16; its row is gone.)
 
        The channel now comes from the evidence, not from the pill. A lead with an outbound WhatsApp
        message was contacted on WhatsApp whatever its contact_method says, which is also why the
@@ -535,12 +526,11 @@ export function useDashboardMetrics(isAdmin = false) {
        than a number invented from status. */
     const channelPerf: ChannelPerformance = {
       whatsapp: emptyChannelStat('full'),
-      sms: emptyChannelStat('sends-only'),
       call: emptyChannelStat('none'),
       facebook_msg: emptyChannelStat('none'),
       email: emptyChannelStat('none'),
     };
-    let waSent = 0, waReplied = 0, smsSent = 0;
+    let waSent = 0, waReplied = 0;
     for (const l of funnelLeads) {
       const ms = msgsByLeadId.get(l.id);
       if (ms) {
@@ -552,12 +542,10 @@ export function useDashboardMetrics(isAdmin = false) {
         // English-only, so non-English promotional spam still reads as a human reply.
         if (ms.some(m => m.direction === 'inbound' && !looksAutomated(m.body ?? ''))) waReplied += 1;
       }
-      if (smsSentLeadIds.has(l.id)) smsSent += 1;
     }
     channelPerf.whatsapp.sent = waSent;
     channelPerf.whatsapp.replied = waReplied;
     channelPerf.whatsapp.replyRate = waSent > 0 ? Math.round((waReplied / waSent) * 100) : null;
-    channelPerf.sms.sent = smsSent;   // replied stays null: nothing records an inbound SMS.
 
     /* Only what the dashboard actually renders. 22 other fields used to be returned and read by
        nobody: the whole revenue/outreach half, plus the two components that would have shown them
@@ -566,7 +554,7 @@ export function useDashboardMetrics(isAdmin = false) {
     return {
       dashTasks, allLeads, auditFunnel, channelPerf,
     };
-  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, msgTimes, msgsByLeadId, smsSentLeadIds, onboardingByLead, baselineLeadIds]);
+  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, msgTimes, msgsByLeadId, onboardingByLead, baselineLeadIds]);
 
   /* `refetch` keeps its name and contract — the Dashboard's refresh button calls it. It
      invalidates rather than re-running the fetch by hand, so a refresh triggered from more than

@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench, ClipboardList, ClipboardCheck } from 'lucide-react';
+import { ExternalLink, MessageSquare, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench, ClipboardList, ClipboardCheck } from 'lucide-react';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
@@ -40,7 +40,6 @@ interface OutreachMobileCardProps {
   onContactMethodChange?: (method: ContactMethod) => void;
   onPipelineStatusChange?: (status: PipelineStatus) => void;
   onWhatsAppClick: () => void;
-  onSMSClick?: () => void;
   onCallClick?: () => void;
   onTrack?: () => void;
   readOnly?: boolean;
@@ -75,7 +74,6 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   onContactMethodChange,
   onPipelineStatusChange,
   onWhatsAppClick,
-  onSMSClick,
   onCallClick,
   onTrack,
   readOnly = false,
@@ -293,18 +291,10 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                   </Button>
                 ) : null}
               </div>
-              {/* Row 2: SMS, WhatsApp, Track */}
+              {/* Row 2: WhatsApp, Track */}
               <div className="flex items-center gap-0.5">
                 {hasPhone ? (
                   <div className="flex items-center gap-0.5" data-walkthrough={lead.outreach_attempts === 0 && !isWalkthroughContacted ? 'contact' : undefined}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                      onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'sms' } })); onSMSClick?.(); }}
-                    >
-                      <MessageCircle className="h-3.5 w-3.5" />
-                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

@@ -96,8 +96,8 @@ export type WaCapability =
  * pre-send certainty about WhatsApp: capability is discovered only by attempting a send and reading
  * Meta's failure code. `whatsapp_status` looks like the answer and is NOT — measured 2026-09-02 it
  * reads 'unknown' on all 2,756 leads, it has never been populated by anything. The only real
- * pre-send signal is `line_type` from the Twilio HLR lookup in enrich-business (landline 1241,
- * mobile 1236, null 173, unknown 106), and process-sms-queue already gates on it the same way.
+ * pre-send signal is `line_type` (landline 1241, mobile 1236, null 173, unknown 106 on 2026-09-02),
+ * written by the offline classifier in _shared/line-type.ts.
  *
  * So this refuses only what is KNOWN bad: a proven-permanent WhatsApp failure, or a known landline.
  * A null or 'unknown' line_type PROCEEDS. Skipping those would withhold the audit — and therefore

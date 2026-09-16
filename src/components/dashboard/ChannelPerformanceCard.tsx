@@ -4,7 +4,6 @@ import type { ChannelPerformance, ChannelStat } from '@/hooks/useDashboardMetric
 
 const CHANNELS: { key: keyof ChannelPerformance; label: string; dot: string; alwaysShow?: boolean }[] = [
   { key: 'whatsapp', label: 'WhatsApp', dot: 'bg-[hsl(var(--badge-whatsapp))]', alwaysShow: true },
-  { key: 'sms', label: 'SMS', dot: 'bg-[hsl(var(--badge-sms))]', alwaysShow: true },
   { key: 'call', label: 'Call', dot: 'bg-[hsl(var(--badge-call))]', alwaysShow: true },
   { key: 'email', label: 'Email', dot: 'bg-sky-600', alwaysShow: true },
   { key: 'facebook_msg', label: 'Messenger', dot: 'bg-[hsl(var(--badge-facebook))]' },
@@ -22,8 +21,8 @@ function rateColor(rate: number | null): string {
  *
  * Every figure comes from the record of the SEND, not from the lead's status or its contact_method
  * pill — see the note in useDashboardMetrics for what each number used to claim. A channel whose
- * sends are not recorded anywhere says so instead of showing a number, and SMS shows a dash under
- * Replied because sms_sends logs what we send while nothing logs an inbound SMS.
+ * sends are not recorded anywhere says so instead of showing a number. (SMS left the product
+ * 2026-09-16; its row is gone.)
  */
 export function ChannelPerformanceCard({ data }: { data: ChannelPerformance }) {
   // An untracked channel has no meaningful `sent`, so keep it listed rather than hiding it — the

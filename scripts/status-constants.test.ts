@@ -57,9 +57,9 @@ for (const s of ["no_whatsapp_needs_sms", "no_whatsapp", "initial_contact", "rep
   ok((CRAWLABLE_STATUSES_DEFAULT as string[]).includes(s), `default includes ${JSON.stringify(s)}`);
 }
 /* ⚠️ These two are DIFFERENT populations and both belong. no_whatsapp is a real mobile with no
-   WhatsApp account (SMS still works); no_whatsapp_needs_sms is a landline (SMS does not). Merging
-   them would lose which leads can still take an SMS — process-sms-queue targets one and excludes
-   the other. */
+   WhatsApp account; no_whatsapp_needs_sms is a landline (the status name is historical — SMS left the
+   product 2026-09-16 and the value stays as the landline marker). Merging them would lose which
+   phones are mobiles. */
 ok((CRAWLABLE_STATUSES_DEFAULT as string[]).includes("no_whatsapp")
   && (CRAWLABLE_STATUSES_DEFAULT as string[]).includes("no_whatsapp_needs_sms"),
   "both no_whatsapp statuses are targeted — they are different populations, not duplicates");
@@ -131,9 +131,9 @@ console.log("\n── ⛔ STATUSES ARE DISTINGUISHABLE BY THEIR WORDS, BAR ONE D
   const labelOf = (v: string) => OUTREACH_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? "";
   ok(labelOf("no_whatsapp") === "No WhatsApp", `no_whatsapp reads ${JSON.stringify(labelOf("no_whatsapp"))}`);
   ok(labelOf("no_whatsapp_needs_sms") === "No WhatsApp", `no_whatsapp_needs_sms reads the same, as intended`);
-  /* ⚠️ The label merged; the VALUES must not. process-sms-queue targets one and excludes the
-     other, so a "tidy-up" that collapsed them into a single status would lose which leads can still
-     take an SMS. Both remain in the crawl defaults for the same reason. */
+  /* ⚠️ The label merged; the VALUES must not. One is a mobile without WhatsApp, the other a
+     landline, so a "tidy-up" that collapsed them into a single status would lose which phones are
+     mobiles. Both remain in the crawl defaults for the same reason. */
   ok(labelOf("no_whatsapp") !== "" && OUTREACH_STATUS_OPTIONS.filter((o) => o.label === "No WhatsApp").length === 2,
     "  and they are still TWO separate statuses wearing one label, not one merged status");
 }
