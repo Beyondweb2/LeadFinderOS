@@ -50,7 +50,7 @@ const CALLERS: Array<{ where: string; body: Body; internal: boolean; scan: boole
   { where: "AiAudit.tsx wizard single", body: { }, internal: false, scan: false },
   { where: "reAudit quick (1 run)", body: { }, internal: false, scan: false },
   { where: "bulk-jobs plain `audit` job", body: { }, internal: true, scan: false },
-  { where: "bulk-jobs audit_and_push", body: { skip_seo: true }, internal: true, scan: false },
+  { where: "bulk-jobs audit job with skip_seo param", body: { skip_seo: true }, internal: true, scan: false },
   { where: "outreach-audit.ts hook", body: { skip_seo: true }, internal: true, scan: false },
   { where: "free-check-audit.ts run 1", body: { purpose: FREE_CHECK_AUDIT_PURPOSE, skip_seo: true }, internal: true, scan: false },
   { where: "audit-baseline advanceBaseline free-check repeat", body: { purpose: FREE_CHECK_AUDIT_PURPOSE }, internal: true, scan: false },

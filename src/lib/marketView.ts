@@ -64,8 +64,8 @@ export const MARKET_SEARCH_USD = 0.110;
    extract-competitors re-reads every answer of a run and rewrites the competitor names.
    MEASURED on the real Norwich run, not estimated: 8 queue rows, ~79,600 characters of answers,
    ~19,900 input tokens at $2.50/M plus ~2k output at $10.00/M = $0.070 per run.
-   ⚠️ Quoted in the Push-to-Instantly dialog as part of what an audit-first push costs. The
-   cleaner itself is automatic at finalisation and is never a button (CLAUDE.md §6e). */
+   ⚠️ Was quoted in the Push-to-Instantly dialog (deleted 2026-09-16). The cleaner itself is
+   automatic at finalisation and is never a button (docs/state-coverage-market.md §6e). */
 export const CLEANER_USD_PER_RUN = 0.070;
 
 /* ── THE MARKET-AUDIT COOLDOWN ───────────────────────────────────────────────────────────────

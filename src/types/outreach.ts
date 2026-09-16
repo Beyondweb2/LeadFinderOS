@@ -689,7 +689,7 @@ export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
      no_whatsapp_needs_sms  WhatsApp could not reach them, so email is the only channel left
      contacted              an opener went out and they never replied — a fair second attempt
    ⚠️ THE SUPPRESSION LIST IS THE REAL GUARD, NOT THIS. _shared/suppression.ts is checked at SEND
-   time by instantly-push, so a suppressed lead cannot be emailed even if it is crawled. This filter
+   time by every sender, so a suppressed lead cannot be messaged even if it is crawled. This filter
    is a convenience — it stops you paying attention to rows you were never going to mail — and it
    must never be mistaken for the safety net, or someone will widen it and assume they are still
    protected. */

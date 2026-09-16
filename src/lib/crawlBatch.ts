@@ -22,6 +22,10 @@
 /** Leads crawled per press. Bounds how long one run can take, not how much work exists.
  *  ⚠️ The crawl is 10-way concurrent plain HTTP, so 200 is roughly a minute. Raising it makes a
  *  single press longer, never cheaper — `extract-email` is free either way. */
+/** Don't re-crawl a lead checked within this many days. Matches extract-email's own 30-day domain
+ *  cache. Lived in pushCrawlTargets.ts until that file went with Instantly (2026-09-16). */
+export const RECHECK_AFTER_DAYS = 30;
+
 export const CRAWL_MAX_PER_RUN = 200;
 
 export interface CrawlBatchPlan {

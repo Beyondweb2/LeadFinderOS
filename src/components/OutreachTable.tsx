@@ -46,7 +46,6 @@ import {
   Download,
   Trash2,
   RotateCcw,
-  Send,
   Copy,
   CheckCheck,
   Star,
@@ -133,7 +132,6 @@ const AUDIT_JOB_CAP = 100;
 const AUDIT_DAILY_CAP_USD = 12.0;
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { CampaignPicker } from '@/components/CampaignPicker';
-import { PushToInstantlyDialog } from '@/components/PushToInstantlyDialog';
 import { TRADES } from '@/lib/trades';
 import { AiOpenerModal } from '@/components/AiOpenerModal';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -200,7 +198,7 @@ interface OutreachTableProps {
   onLaunchConsumed?: () => void;
   /** Create a server-side bulk job (enrich / site_gen / audit) for the given lead ids.
    *  Runs in the bulk-jobs edge function — survives leaving the page. */
-  onBulkJob?: (type: 'enrich' | 'audit' | 'audit_and_push', leadIds: string[], params?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
+  onBulkJob?: (type: 'enrich' | 'audit', leadIds: string[], params?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
   /** True while a bulk job is queued/running (or being created) — disables new ones. */
   bulkJobActive?: boolean;
   /** Bulk-move the selected leads to a campaign (null = "No campaign"). Single
@@ -373,8 +371,6 @@ export function OutreachTable({
   const [sigNoWebsite, setSigNoWebsite] = useState(false);
   const [sigFacebook, setSigFacebook] = useState(false);
   const [sigInstagram, setSigInstagram] = useState(false);
-  // Push-to-Instantly dialog (campaign picker), opened from the bulk bar.
-  const [pushInstantlyOpen, setPushInstantlyOpen] = useState(false);
   // Lead-detail modal (Track Leads fold-in) — opened on row click.
   const [detailLead, setDetailLead] = useState<OutreachLead | null>(null);
   /* ⛔ KEEP THE OPEN DETAIL DIALOG POINTED AT THE LIVE LEAD ROW, NOT A FROZEN SNAPSHOT (fixed
@@ -1662,9 +1658,6 @@ export function OutreachTable({
        silently drop the ticked leads that are no longer on screen, crawl fewer than the button said,
        and look like the crawl having failed on exactly the leads the operator cared about. The hook
        intersects with selectedIds itself, so passing the full list cannot widen the set. */
-    /* Handed to PushToInstantlyDialog so the push can crawl the leads it is about to send. Same
-       loop, same write, same cancel as the Find emails button — see the hook's header. */
-    crawlForPush,
   } = useOutreachFindEmails(
     selectedIds.size > 0 ? leads : filteredAndSortedLeads,
     onUpdateLead ?? (async () => null),
@@ -1975,18 +1968,6 @@ export function OutreachTable({
                       </AlertDialogContent>
                     </AlertDialog>
                   )}
-                  {!readOnly && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPushInstantlyOpen(true)}
-                      className="bg-background text-xs h-8 text-sky-600 hover:text-sky-600"
-                      title="Push the selected leads (those with an email) into an Instantly.ai email campaign."
-                    >
-                      <Send className="h-3.5 w-3.5 mr-1.5" />
-                      Push to Instantly
-                    </Button>
-                  )}
                 </>
               )}
               {/* ⛔ OUTSIDE the selectedIds.size > 0 gate, deliberately: its whole job is to CREATE a
@@ -2000,7 +1981,7 @@ export function OutreachTable({
                   disabled={!leadsWithEmail.length}
                   className="bg-background text-xs h-8"
                   title={leadsWithEmail.length
-                    ? `Tick the ${leadsWithEmail.length} lead${leadsWithEmail.length === 1 ? '' : 's'} in this view that have an email address — the same test Push to Instantly uses. Replaces the current selection.`
+                    ? `Tick the ${leadsWithEmail.length} lead${leadsWithEmail.length === 1 ? '' : 's'} in this view that have an email address. Replaces the current selection.`
                     : 'No leads in this view have an email address yet — run the email crawl first.'}
                 >
                   <Mail className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
@@ -2062,9 +2043,9 @@ export function OutreachTable({
                     this selection, so "crawling 187 leads" is always the set that will be crawled —
                     the two cannot disagree, which is the point of holding the selection here rather
                     than inside the hook.
-                    ⚠️ It is a CONVENIENCE, not the safety net. Suppressed leads cannot be emailed
-                    whatever is ticked here, because instantly-push checks _shared/suppression.ts at
-                    send time. Widening this can waste a crawl; it cannot cause an email. */}
+                    ⚠️ It is a CONVENIENCE, not the safety net. Every sender checks
+                    _shared/suppression.ts at send time. Widening this can waste a crawl; it cannot
+                    cause a message. */}
               {!readOnly && onUpdateLead && !findingEmails && (
                 <details className="relative inline-block align-middle">
                     <summary className="cursor-pointer select-none text-[11px] text-muted-foreground hover:text-foreground">
@@ -3079,19 +3060,6 @@ export function OutreachTable({
         onAiOpener={isAdmin && whatsappDialogLead ? () => {
           setAiOpenerLead(whatsappDialogLead);
         } : undefined}
-      />
-
-      {/* Push selected leads into an Instantly.ai email campaign */}
-      <PushToInstantlyDialog
-        open={pushInstantlyOpen}
-        onOpenChange={setPushInstantlyOpen}
-        leadIds={Array.from(selectedIds)}
-        onPushed={() => { onRefreshLeads?.(); setSelectedIds(new Set()); }}
-        onBulkJob={onBulkJob}
-        bulkJobActive={bulkJobActive}
-        onCrawlEmails={crawlForPush}
-        crawlProgress={emailProgress}
-        onCancelCrawl={cancelFindEmails}
       />
 
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}

@@ -34,20 +34,7 @@ const CONCURRENCY = 10;   // website crawl is plain HTTP — safe to parallelise
    200-per-run cap and pushing genuinely-unchecked leads out of the batch.
    30 days matches extract-email's own domain cache, so a shorter window would mostly re-read that
    cache and change nothing anyway. Selecting a lead overrides this — see targetsFor. */
-import { pushCrawlTargets, RECHECK_AFTER_DAYS } from '@/lib/pushCrawlTargets';
-import { CRAWL_MAX_PER_RUN, crawlBatchPlan, crawlDoneMessage } from '@/lib/crawlBatch';
-
-/** What the Push-to-Instantly pre-crawl reports back, so the dialog can state it rather than guess. */
-export interface PushCrawlResult {
-  /** Emails actually found and written. */
-  found: number;
-  /** Leads crawled this run (<= candidates, because of CRAWL_MAX_PER_RUN). */
-  scanned: number;
-  /** Leads that needed a crawl at all. Zero means nothing to do, not a failure. */
-  candidates: number;
-  /** Candidates left over after the per-run cap — stated, never silently dropped. */
-  remaining: number;
-}
+import { CRAWL_MAX_PER_RUN, RECHECK_AFTER_DAYS, crawlBatchPlan, crawlDoneMessage } from '@/lib/crawlBatch';
 
 export function useOutreachFindEmails(
   leads: OutreachLead[],
@@ -153,26 +140,6 @@ export function useOutreachFindEmails(
     toast({ title: `Found emails for ${found} of ${scanned}`, description: crawlDoneMessage(found, scanned, remaining) });
   };
 
-  /* ⛔ THE PUSH-TO-INSTANTLY PRE-CRAWL (Paul, 2026-09-09: "when I try push to instantly it should run
-     an email crawl on ones it hasn't crawled already"). It takes an EXPLICIT id list — the leads
-     being pushed — and is deliberately NOT the `selectedIds` path above.
-     ⚠️ THE DIFFERENCE IS THE 30-DAY SKIP, AND IT IS THE WHOLE POINT OF THE REQUEST. Ticking rows and
-     pressing Find emails is an instruction to crawl THOSE rows, so it overrides the skip on purpose.
-     Pushing is not that instruction: "ones it hasn't crawled already" means a lead proven last week
-     to have no findable email must not be crawled again every time he opens the dialog. Same
-     unconditional guards either way — a website, no email already, not archived.
-     ⚠️ Resolved against the `leads` array this hook was given, so a lead the current filter hides is
-     still crawled if it is in the push. */
-  const crawlForPush = async (leadIds: readonly string[]): Promise<PushCrawlResult> => {
-    const candidates = pushCrawlTargets(leads, leadIds);
-    if (!candidates.length) return { found: 0, scanned: 0, candidates: 0, remaining: 0 };
-    const batch = candidates.slice(0, crawlBatchPlan(candidates.length, CRAWL_MAX_PER_RUN).batch);
-    const { found, scanned } = await runCrawl(batch);
-    /* ⚠️ `remaining` is NAMED rather than silently dropped. A cap that quietly crawls 200 of 743 and
-       then pushes reads as "these leads have no email", which is the opposite of true. */
-    return { found, scanned, candidates: candidates.length, remaining: Math.max(0, candidates.length - scanned) };
-  };
-
   const cancel = () => { cancelRef.current = true; };
 
   /* `usingSelection` lets the button say WHICH set it is about to crawl — the ambiguity that made
@@ -182,7 +149,7 @@ export function useOutreachFindEmails(
      exists", which is a real question. What changed is that the LABEL no longer uses it alone:
      `crawlPlan` carries the batch, the remainder and whether the cap bites. */
   return {
-    findEmails, crawlForPush, cancel, finding, progress, result,
+    findEmails, cancel, finding, progress, result,
     withWebsiteCount: targets.length,
     crawlPlan: crawlBatchPlan(targets.length, CRAWL_MAX_PER_RUN),
     usingSelection: hasSelection,

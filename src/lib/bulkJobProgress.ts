@@ -21,7 +21,6 @@
 
 export interface BulkJobProgressItem {
   status: string;
-  phase?: string;
 }
 
 export interface BulkJobProgressInput {
@@ -34,9 +33,11 @@ export interface BulkJobProgressInput {
 }
 
 export interface BulkJobProgress {
-  /** "Bulk enrich" / "Audit and push" / the raw job_type when unknown. */
+  /** "Bulk enrich" / "Bulk audit" / the raw job_type when unknown. */
   label: string;
-  /** Which half of a two-phase job is running. Empty when there is nothing honest to say. */
+  /** Which half of a two-phase job is running. Always empty since the two-phase audit_and_push job
+   *  went with Instantly (2026-09-16); kept so the Outreach render needs no change and a future
+   *  two-phase job has a home. */
   phase: string;
   /** Items that have reached a terminal state. */
   settled: number;
@@ -50,36 +51,16 @@ export interface BulkJobProgress {
 const LABELS: Record<string, string> = {
   enrich: 'Bulk enrich',
   audit: 'Bulk audit',
-  audit_and_push: 'Audit and push',
 };
-
-/** Statuses that mean an item is still moving. Everything else is terminal. */
-const IN_FLIGHT = new Set(['pending', 'running', 'awaiting_audit']);
 
 export function bulkJobProgress(job: BulkJobProgressInput): BulkJobProgress {
   const label = LABELS[job.job_type] ?? job.job_type;
-  const doneWord = job.job_type === 'audit_and_push' ? 'pushed' : 'done';
+  const doneWord = 'done';
   const settled = job.done_count + job.failed_count + job.skipped_count;
   const total = job.total;
   const pct = total > 0 ? Math.max(0, Math.min(100, Math.round((settled / total) * 100))) : 0;
 
-  const items = Array.isArray(job.items) ? job.items : null;
-  let phase = '';
-  if (job.job_type === 'audit_and_push' && items) {
-    const auditItems = items.filter((it) => it.phase === 'audit');
-    const stillAuditing = auditItems.filter((it) => IN_FLIGHT.has(it.status)).length;
-    const readyToPush = items.filter((it) => it.phase === 'push' && it.status === 'pending').length;
-
-    if (stillAuditing > 0) {
-      /* An audit takes minutes, so the operator watches this number for a long time. It says how
-         many are ANSWERED, because that is the thing that moves; a bare "auditing 8" looks frozen. */
-      phase = `auditing — ${auditItems.length - stillAuditing} of ${auditItems.length} answered`;
-    } else if (readyToPush > 0) {
-      phase = `pushing ${readyToPush} to Instantly`;
-    }
-    /* No else. Nothing in flight and nothing ready means the phase is genuinely nothing, and an
-       invented "finishing up" would be a claim about a state we have not observed. */
-  }
+  const phase = '';
 
   return { label, phase, settled, total, pct, doneWord };
 }
