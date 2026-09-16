@@ -817,7 +817,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
      reads worse). Renders only when a not-named answer carries firms; the callout is true by
      construction. Withheld on the still-measuring and name-not-judgeable paths. */
   const gp = d.gutPunch;
-  const chatCard = (gp && gp.businesses && gp.businesses.length)
+  const chatCard = (gp && gp.answer && gp.answer.trim() && gp.businesses && gp.businesses.length)
     ? `
     <section class="chatcard">
       <div class="cc-head">
@@ -829,6 +829,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
         <div class="cc-arow">
           ${engineAvatar(gp.engineLabel)}
           <div class="cc-a">
+            <p class="cc-atext">${esc(gp.answer)}</p>
             <ol class="cc-list">${gp.businesses.map((b) => `<li><b>${esc(b)}</b></li>`).join("")}</ol>
           </div>
         </div>
@@ -836,6 +837,29 @@ export function renderReportHtml(d: AiAuditReportData): string {
       <div class="cc-callout"><span class="cc-bang">!</span>${esc(d.businessName)} wasn&rsquo;t mentioned in this search.</div>
     </section>`
     : "";
+
+  /* ── THE OTHER QUESTIONS (2026-09-16, Paul) ───────────────────────────────────────────────────
+     Under the card, the rest of the questions we asked — one row each, a marker per scored engine.
+     GREEN = named, RED = not named (Paul's correction), grey dash = that engine didn't answer. Same
+     questionBreakdown the internal pages use, shown here as a compact two-marker client view; the
+     question the card already shows is excluded so nothing reads twice. */
+  const qOther = (d.questionBreakdown ?? []).filter((q) => !gp || q.question !== gp.question);
+  const engNamed = (q: NonNullable<typeof d.questionBreakdown>[number], label: string): boolean | null => {
+    const e = q.perEngine?.find((pe) => pe.label === label);
+    if (!e || !e.ran) return null;
+    const n = typeof e.named === "number" ? e.named : (e.named ? 1 : 0);
+    return n > 0;
+  };
+  const qMark = (v: boolean | null) => v === null
+    ? `<span class="qm qm-na" title="didn&rsquo;t appear">&ndash;</span>`
+    : v ? `<span class="qm qm-yes" title="named">&check;</span>`
+        : `<span class="qm qm-no" title="not named">&times;</span>`;
+  const questionsList = qOther.length ? `
+    <section class="qlist">
+      <div class="sec-eyebrow">The other questions we asked</div>
+      <div class="qrow qrow-head"><span class="qrow-q"></span><span class="qrow-e">ChatGPT</span><span class="qrow-e">Gemini</span></div>
+      ${qOther.map((q) => `<div class="qrow"><span class="qrow-q">${esc(q.question)}</span><span class="qrow-e">${qMark(engNamed(q, "ChatGPT"))}</span><span class="qrow-e">${qMark(engNamed(q, "Gemini"))}</span></div>`).join("")}
+    </section>` : "";
 
   /* 🔴 THE NAME REFUSAL — IT REPLACES THE HERO. Paul's words, 2026-09-15, and the phrasing is his
      for two stated reasons worth keeping: it LEADS WITH THE NAME rather than with what we cannot
@@ -1451,6 +1475,19 @@ ${REPORT_CHROME_CSS_PRINT}
   .fault-t{font-weight:700;font-size:15px;color:var(--ink);letter-spacing:-.01em}
   .fault-p{margin:4px 0 0;font-size:13.5px;line-height:1.5;color:var(--muted);max-width:66ch}
 
+  /* The other questions — a row each, ChatGPT + Gemini markers (green named, red not named). */
+  .qlist{padding:4px 28px 18px}
+  .qrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+  .qrow-head{border-top:0;padding:0 0 4px}
+  .qrow-head .qrow-e{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .qrow-q{flex:1;font-size:13.5px;color:var(--ink);line-height:1.35}
+  .qrow-e{width:64px;text-align:center;flex:0 0 64px}
+  .qm{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:12px;font-weight:800}
+  .qm-yes{background:var(--green-tint);color:var(--green)}
+  .qm-no{background:var(--red-tint-2);color:var(--red)}
+  .qm-na{background:var(--blue-tint);color:var(--faint)}
+  @media(max-width:560px){.qlist{padding-left:18px;padding-right:18px}.qrow-e{width:52px;flex-basis:52px}}
+
   /* Chat card — official mark in the header + as the avatar, a numbered list of the real firms. */
   .cc-body{padding:2px 0 16px}
   .cc-brand{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--ink)}
@@ -1534,6 +1571,7 @@ ${seoSlot}
       </div>
     </div>
 ${chatCard}
+${questionsList}
     <!-- ============================================================================
          SEO SECTION SLOT &mdash; renders results.seo when present (overall grade + three
          category grades + a radar of the three scores + the lead findings). With no scan
@@ -1610,7 +1648,7 @@ ${d.hidePitch || d.measuring ? "" : `
               <div class="step-ic"><span class="ic">${icListed}</span><span class="badge">2</span></div>
               <div class="step-n">What we build</div>
               <div class="st">Pages AI can quote</div>
-              <p class="fx-p">Pages on your own site, built for the questions you can win.</p>
+              <p class="fx-p">We find the questions you can win, then build new pages or fix your existing ones so AI can read and name you.</p>
             </div>
             <div class="step">
               <div class="step-ic"><span class="ic">${icStruct}</span><span class="badge">3</span></div>

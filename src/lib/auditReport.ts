@@ -490,6 +490,11 @@ function pickGutPunch(
       // clean SUMMARY of this answer — it never uses the extracted snippet verbatim.
       const snippet = extractGutPunch(text, rival);
       if (!snippet) continue;
+      /* The card reads like a REAL AI answer (Paul, 2026-09-16): the actual stored answer_text as
+         prose, cleaned of markup/UI chrome and trimmed to a sentence boundary — not the short
+         damning snippet (that only gates selection above), and never invented. The numbered firms
+         render underneath it in the report. */
+      const prose = trimToSentence(cleanAnswerText(text), 520);
       let score = 0;
       // (1) Relevance / winnability — dominant.
       if (hasNiche) score += 2_000_000;                  // specialism-relevant, winnable
@@ -505,9 +510,8 @@ function pickGutPunch(
           question: r.question,
           engineLabel: ENGINE_LABELS[engine] ?? engine,
           rivals,
-          /* The clean, damning extract of THIS answer (1–3 real sentences, competitor/absence-focused;
-             never the raw AI paragraph). Shown verbatim in the report's search-result card. */
-          answer: snippet,
+          /* The real answer as prose (see `prose` above). Read as an AI answer; firms shown under it. */
+          answer: prose,
           /* The real businesses AI named in this one answer, junk-filtered for display. */
           businesses: rivals.filter((c) => isRealCompetitor(c, locationText)).slice(0, 5),
         };
