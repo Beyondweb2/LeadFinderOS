@@ -463,9 +463,9 @@ function pickGutPunch(
   locationText: string,
   specialisms: string,
   businessType: string,
-): { question: string; engineLabel: string; rivals: string[] } | null {
+): { question: string; engineLabel: string; rivals: string[]; answer: string; businesses: string[] } | null {
   const niche = nicheKeywordsFrom(specialisms, businessType);
-  let best: { question: string; engineLabel: string; rivals: string[] } | null = null;
+  let best: { question: string; engineLabel: string; rivals: string[]; answer: string; businesses: string[] } | null = null;
   let bestScore = -Infinity;
   for (const r of rows) {
     if (r.status !== 'done' || !r.result) continue;
@@ -473,7 +473,11 @@ function pickGutPunch(
     if (NEAR_ME.test(q)) continue;                       // never lead with a wrong-city "near me" answer
     const hasNiche = niche.some((k) => q.includes(k));
     const isHead = HEAD_TERMS.test(q);
-    for (const engine of DISPLAY_ENGINES) {
+    /* SCORED_ENGINES only (ChatGPT + Gemini). The report's search-result card names the engine, and
+       it must be one of the two that make up the "named X of Y" count on the hero — an AI Overview
+       card would cite an engine that is not in that denominator. (This also matches the outreach
+       card's brief: "which engine — ChatGPT or Gemini".) */
+    for (const engine of SCORED_ENGINES) {
       const er = r.result[engine];
       if (!er || cellNamed(er)) continue;
       const text = (er.answer_text || '').trim();
@@ -497,7 +501,16 @@ function pickGutPunch(
       score += Math.min(snippet.length, 400) / 100;
       if (score > bestScore) {
         bestScore = score;
-        best = { question: r.question, engineLabel: ENGINE_LABELS[engine] ?? engine, rivals };
+        best = {
+          question: r.question,
+          engineLabel: ENGINE_LABELS[engine] ?? engine,
+          rivals,
+          /* The clean, damning extract of THIS answer (1–3 real sentences, competitor/absence-focused;
+             never the raw AI paragraph). Shown verbatim in the report's search-result card. */
+          answer: snippet,
+          /* The real businesses AI named in this one answer, junk-filtered for display. */
+          businesses: rivals.filter((c) => isRealCompetitor(c, locationText)).slice(0, 5),
+        };
       }
     }
   }
