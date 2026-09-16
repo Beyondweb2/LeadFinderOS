@@ -5159,3 +5159,49 @@ meant to match.
 **Deployed:** all 17 functions in the closure; SPA pushed.
 ⚠️ **`cleanup/pixel-and-full-reset` (`06a4f815`) IS STILL UNMERGED** — the Meta Pixel and the
 dashboard's Full Reset button are still live.
+
+---
+
+## 32. ✅ explain_offer_v2 — the pitch with the proof paragraph, wired beside explain_offer (2026-09-16)
+
+**Submitted to Meta 2026-09-16: explain_offer's body with two paragraphs added** — what a searcher
+does with the answer ("they call whoever gets named. Right now that's not you.") and the proof
+("I've audited 941 UK businesses… A locksmith I did this for went from named once in twelve
+questions to named three times, in four weeks, on the pages I built."). Same three variables in the
+same order ({{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} onboarding link), same video
+header, no buttons, Marketing, English. **explain_offer stays in place — Paul chooses per lead.**
+
+- ⛔ **"chatgpt" AND "gemini" ARE LOWERCASE IN v2 AND CAPITALISED IN v1, AND BOTH ARE RIGHT.** Each
+  mirror follows ITS OWN registration; `explain-offer.test.ts` pins both spellings so a "correction"
+  to either fails the build. Same rule as audit_followup's lowercase "chatgpt".
+- ⛔ **THE PROOF FIGURES ARE LITERAL, LIKE THE PRICES.** "941" and "once in twelve … three times"
+  are what Meta registered, not values the code computes. When the book grows (§27: re-derive,
+  never inherit) the template is re-registered at Meta FIRST and the two mirrors follow. The
+  shared tail from "Keep your website" onwards is asserted byte-identical between v1 and v2, so a
+  price edit that reaches one body and not the other fails.
+- **The eleven places a template lives, and v2 is in every one:** `WA_TEMPLATES` + `WA_TEMPLATE_BODIES`
+  (whatsapp-send.ts), the queue's mirror (lang + vars only — no header field, the registry-parity
+  test forbids it), `WHATSAPP_TEMPLATES` (the one sendable list), `WA_TEMPLATE_REQS`,
+  `CONTINUATION_TEMPLATES`, `READABLE_TEMPLATE_BODIES`, Inbox's `TEMPLATE_DISPLAY`, campaign-card
+  `SIGNUP_TEMPLATES`, and the two named-template tests (cold-outreach's expected set,
+  template-routing's onboarding assertion). Routing, bodies-parity, registry-parity, picker-parity
+  and client-copy-claims all read the registries and covered it with no edit.
+- ⚠️ **TWO GAPS IN explain_offer's OWN WIRING WERE FOUND AND CLOSED ON THE WAY, both silent:**
+  Inbox `TEMPLATE_DISPLAY` had no row for `audit_followup` or `explain_offer`, so both rendered as
+  the bare word "Template" in a thread's history (labels added for both); and `SIGNUP_TEMPLATES` in
+  `useCampaignStats` still held only `onboarding_followup`, so a lead sent the full pitch did not
+  count as sent a sign-up link (explain_offer and v2 added). Neither throws when missed — the same
+  shape as `REPORT_LINK_TEMPLATES`'s own warning.
+- ⚠️ **THE WORKING TREE WAS MIXED-ENDING IN TWO FILES.** `whatsapp-send.ts` and `templateBodies.ts`
+  carried bare-LF line breaks inside explainOfferBody's template literal (the 2026-09-15 URL edit
+  wrote LF into CRLF files). Harmless — JS normalises line terminators inside template literals and
+  git stores LF under autocrlf — but an exact-string edit anchored across those lines misses. Both
+  files are uniformly CRLF in the working tree now. Match on an LF-normalised copy when scripting
+  an edit here.
+- **Not proven by a live send** — that costs a real message to a real prospect. Proven by the
+  suites (`explain-offer.test.ts` runs every block for both templates) and, once deployed, by
+  `mode: "dry_run"` on `send-whatsapp-message` (§30c), which builds the real payload and stops
+  before the Graph POST. **Deploy list is the whatsapp-send.ts closure** (ten functions, §29/§30)
+  plus `process-whatsapp-queue` for the mirror — walked, not inherited, at deploy time.
+  `npm run check`: **112/117**, the five known-stale suites only (§0's list, re-read by name from
+  the runner's FAILED lines, not inferred from the count).

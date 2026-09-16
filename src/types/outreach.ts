@@ -513,6 +513,14 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      measured. The refusals it does carry (already paid, no trade, no town) come from the lead row,
      and each names itself in the Inbox rather than failing at Meta. */
   { value: 'explain_offer', label: 'Explain the offer — full pitch + sign-up link, with video (outreach)' },
+  /* explain_offer_v2 — SUBMITTED TO META 2026-09-16. explain_offer with two paragraphs added: what a
+     searcher does with the answer ("they call whoever gets named"), and the proof (941 audits; a
+     locksmith named once in twelve questions, then three times). Same variables, same video header,
+     same refusals — only the words differ.
+     ⚠️ BOTH STAY IN THE PICKER, Paul's call: he chooses per lead. So this LABEL has to say what v2
+     ADDS rather than repeat "full pitch" — two entries reading the same words is the video_template
+     mistake recorded above, with nothing in the list to pick between them. */
+  { value: 'explain_offer_v2', label: 'Explain the offer v2 — adds the 941-audit proof, with video (outreach)' },
   { value: 'audit_reply_warm', label: 'Audit reply — warm (after the opener)' },
   { value: 'onboarding_followup', label: 'Onboarding follow-up (sign-up link)' },
   /* The OPENER follow-up: a business that got the initial_contact opener and never replied. Bulk-

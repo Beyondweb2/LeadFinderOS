@@ -91,6 +91,9 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
      ⚠️ needsUrl stays false too - 'url' means the CLAIM/site link and gates on a share_token no
      Findable lead has; onboarding_url is a different variable for exactly that reason. */
   explain_offer:          { needsUrl: false, needsAudit: false, group: 'audit' },
+  /* explain_offer_v2 - the same message with the proof paragraph (2026-09-16). Same shape for the
+     same reasons: its link is the sign-up, so no audit and no share_token. */
+  explain_offer_v2:       { needsUrl: false, needsAudit: false, group: 'audit' },
   // Follow-up after the 24h window. needsUrl is FALSE: its link is the onboarding URL, built
   // from the lead id server-side, so it must not be gated on a generated site's share_token.
   // needsAudit is FALSE too — it pitches the flow, not a report. The only real requirement is a

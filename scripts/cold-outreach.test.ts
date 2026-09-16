@@ -79,6 +79,8 @@ const EXPECTED_CONTINUATIONS = [
   /* explain_offer — added 2026-09-15 with audit_followup's reasoning: Inbox-only, sent into a live
      conversation, so cold would refuse it for its whole audience. Same accepted cost. */
   "explain_offer",
+  /* explain_offer_v2 — 2026-09-16, the same pitch with the proof paragraph. Same decision. */
+  "explain_offer_v2",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));

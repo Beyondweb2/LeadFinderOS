@@ -277,6 +277,11 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      in a comment fails the assertion — which is why this note spells it out in words instead.
      (CLAUDE.md §4: grep the source for your own search string.) */
   explain_offer: { lang: "en", vars: ["trade_plural", "town", "onboarding_url"] },
+  /* explain_offer_v2 - submitted to Meta 2026-09-16. MIRRORS whatsapp-send.ts; change both together.
+     The same three vars in the same order as explain_offer; only the body differs. Inbox only, like
+     its sibling - a continuation with no audit_url, so this queue never selects it. Lang + vars ONLY
+     here; the video header lives in the real registry (the note on explain_offer above says why). */
+  explain_offer_v2: { lang: "en", vars: ["trade_plural", "town", "onboarding_url"] },
   // Follow-up to a warm lead after the 24h window: {{1}} business name, {{2}} onboarding URL.
   onboarding_followup: { lang: "en", vars: ["name", "onboarding_url"] },
   /* Re-engage a lead who went quiet: {{1}} = business name, {{2}} = that lead's onboarding URL.

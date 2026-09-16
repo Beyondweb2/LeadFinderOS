@@ -33,8 +33,13 @@ import { canonicalTemplate } from '@/lib/whatsappTemplates';
 
 /** The pitch: the report follow-up whose effect we are trying to measure. */
 const PITCH_TEMPLATES = new Set(['audit_reply']);
-/** The sign-up link. */
-const SIGNUP_TEMPLATES = new Set(['onboarding_followup']);
+/* The sign-up link — EVERY operator-sent template whose link is the onboarding URL, the same rule
+   REPORT_LINK_TEMPLATES states for the report link below. Taken from the variable registry in
+   _shared/whatsapp-send.ts: each of these declares onboarding_url and is offered in the picker.
+   ⚠️ explain_offer (2026-09-15) WAS NEVER ADDED HERE, so a lead sent the full pitch did not count as
+   sent a sign-up link — found 2026-09-16 while adding explain_offer_v2. Forgetting does not throw;
+   it silently undercounts. */
+const SIGNUP_TEMPLATES = new Set(['onboarding_followup', 'explain_offer', 'explain_offer_v2']);
 
 /* ⛔ EVERY TEMPLATE THAT CARRIES THE REPORT LINK — NOT JUST THE PITCH, AND THE DIFFERENCE IS
    MEASURABLE. Report opens can only be attributed against the moment the link went out, so this

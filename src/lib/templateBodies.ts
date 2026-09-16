@@ -126,6 +126,38 @@ Short explainer video attached. Happy to answer any questions.
 https://findable.live/`;
 };
 
+/* explain_offer_v2 — submitted to Meta 2026-09-16. explain_offer with two paragraphs added: what a
+   searcher does with the answer, and the proof. Same three variables, same video header (structure,
+   not text — not in this string). Mirrors whatsapp-send.ts; template-bodies-parity pins the match.
+   ⛔ "chatgpt" and "gemini" are LOWERCASE on purpose (Paul's wording, as in audit_followup). Do not
+   capitalise them — explain_offer's body does, because ITS registration does. Each mirror follows
+   its own registration.
+   ⛔ THE PROOF FIGURES ARE LITERAL, LIKE THE PRICES: they are what Meta registered, not values this
+   code computes. A change to them is a re-registration at Meta first, then this mirror. */
+const explainOfferV2Body = (_b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) => {
+  const t = pluraliseTrade(trade);
+  return `Nobody's doing this yet, which is the point.
+
+People ask chatgpt and gemini for ${t.ok ? t.value : (trade || 'businesses')} in ${town || 'your area'} instead of googling, and they call whoever gets named. Right now that's not you.
+
+I've audited 941 UK businesses to work out what actually gets a firm named. A locksmith I did this for went from named once in twelve questions to named three times, in four weeks, on the pages I built.
+
+Keep your website and I'll optimise it so AI can read you. Or if you can't give me access, or want a new one, I'll build it. No extra cost.
+
+£99 to start. I run a full baseline check and send it over, then measure again four weeks later so you can see exactly what's changed.
+
+Not showing up more, you get your money back.
+
+After that £29.99 a month. More ways to be found, your reviews replied to, and I watch how each page performs and adjust. Stop any time.
+
+Here's the sign up:
+${u}
+
+Short explainer video attached. Happy to answer any questions.
+
+https://findable.live/`;
+};
+
 /* audit_followup — submitted to Meta 2026-09-15. {{1}} trade as a LOWERCASE PLURAL, {{2}} town,
    {{3}} {{4}} {{5}} rivals, {{6}} report link.
    ⛔ "chatgpt" is lowercase deliberately (Paul's wording). Do not capitalise it.
@@ -323,6 +355,7 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   audit_reply_warm: auditReplyWarmBody,
   audit_followup: auditFollowupBody,
   explain_offer: explainOfferBody,
+  explain_offer_v2: explainOfferV2Body,
 };
 
 export interface ReadableBodyOpts {

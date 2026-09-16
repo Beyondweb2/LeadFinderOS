@@ -112,6 +112,13 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   video_template: 'Audit result hook (outreach)',
   competitor_hook: 'Competitor hook (names 3 rivals)',
   audit_reply_warm: 'Audit reply — warm (after the opener)',
+  /* ⚠️ TWO SENDABLE TEMPLATES HAD NO ROW HERE AND RENDERED AS THE BARE WORD "Template" IN A THREAD
+     — audit_followup and explain_offer, both sendable since 2026-09-15. Found 2026-09-16 while adding
+     explain_offer_v2. Naming a PAST message is this map's job, so every sendable template needs a
+     row; the picker's label (WHATSAPP_TEMPLATES) answers the other question and is not read here. */
+  audit_followup: 'Audit follow-up ("I asked chatgpt" note)',
+  explain_offer: 'Explain the offer (full pitch + sign-up link)',
+  explain_offer_v2: 'Explain the offer v2 (adds the 941-audit proof)',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage_49: 'Re-engage (gone quiet)',
