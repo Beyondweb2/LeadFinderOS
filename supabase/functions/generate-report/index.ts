@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 
 // generate-report — admin-triggered. Reads a business's audit + linked-lead data, has OpenAI
 // (DIRECT api.openai.com, gpt-4o, tool-calling) write an AI-search-optimised, HONEST business
@@ -219,6 +220,7 @@ Deno.serve(async (req) => {
     if (!OPENAI_API_KEY) return json({ ok: false, error: "openai_not_configured" }, 500);
 
     let raw: string | undefined;
+    let usageIn = 0, usageOut = 0;
     try {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -240,10 +242,20 @@ Deno.serve(async (req) => {
       }
       const data = await res.json();
       raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+      const u = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+      usageIn = Number(u?.prompt_tokens) || 0;
+      usageOut = Number(u?.completion_tokens) || 0;
     } catch (e) {
       return json({ ok: false, error: "openai_request_failed", detail: e instanceof Error ? e.message : String(e) }, 502);
     }
 
+    /* Record the gpt-4o spend (change 3, 2026-09-16): auto-report is the biggest automatic OpenAI
+       caller after the cleaner and logged nothing. Non-blocking. */
+    await logOpenAiUsage(service, {
+      functionName: "generate-report", apiType: "openai_generate_report", model: MODEL,
+      promptTokens: usageIn, completionTokens: usageOut, calls: 1,
+      triggerSource: isInternal ? "auto" : "admin",
+    });
     if (typeof raw !== "string") return json({ ok: false, error: "model_no_tool_output" }, 422);
     let report: Row;
     try { report = JSON.parse(raw); } catch { return json({ ok: false, error: "model_bad_json" }, 422); }

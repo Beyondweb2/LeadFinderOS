@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 /* ⛔ THE SAME TWO PREDICATES THE REPORT USED TO APPLY AT RENDER - now applied HERE, once, before
    storing. Relative imports with the .ts extension because `@/` does not resolve for Deno
    (CLAUDE.md 4); both files are pure and pull in nothing Deno-hostile. */
@@ -292,6 +293,14 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const runId: string = typeof body.runId === "string" ? body.runId.trim() : "";
     if (!runId) return json({ ok: false, error: "runId required" }, 400);
+    /* ⛔ MODEL IS OVERRIDABLE, DRY-RUN IS READ-ONLY — the two together are how the gpt-4o -> mini
+       switch gets VERIFIED before it is made. `dry_run` extracts with `model` and returns the names
+       WITHOUT writing anything (no queue rewrite, no stamp), so mini's output can be diffed against
+       the stored gpt-4o result on the same answers. The live cleaner passes neither, so it is
+       unchanged: model defaults to MODEL and every write still happens. Verification spend is still
+       logged (trigger_source 'verify'). */
+    const model: string = typeof body.model === "string" && body.model.trim() ? body.model.trim() : MODEL;
+    const dryRun: boolean = body.dry_run === true;
 
     // Load the run + ownership-check (the ownership check is skipped for trusted internal calls).
     const { data: run } = await service
@@ -349,9 +358,17 @@ Deno.serve(async (req) => {
 
     // Summed across every batch AND every retry, so a run that needed three attempts reports all
     // three. Counted even when a batch then fails to parse — the tokens were still billed.
-    let usageIn = 0, usageOut = 0;
+    let usageIn = 0, usageOut = 0, openaiCalls = 0;
     const usdSpent = () =>
       Number(((usageIn / 1e6) * USD_PER_1M_INPUT_TOKENS + (usageOut / 1e6) * USD_PER_1M_OUTPUT_TOKENS).toFixed(6));
+    /* Records this invocation's OpenAI spend to api_usage_log (change 3, 2026-09-16), so OpenAI
+       cost is queryable beside Apify/Google instead of only stamped per-run. Non-blocking. */
+    const logSpend = () => logOpenAiUsage(service, {
+      functionName: "extract-competitors",
+      apiType: dryRun ? "openai_competitor_clean_verify" : "openai_competitor_clean",
+      model, promptTokens: usageIn, completionTokens: usageOut, calls: openaiCalls,
+      userId: run.user_id ?? null, triggerSource: dryRun ? "verify" : (isInternal ? "internal" : "user"),
+    });
 
     /* One OpenAI call for one batch. Returns the ids it cleaned, or throws with a typed reason.
        Kept as a local closure so it can see OPENAI_API_KEY / businessName without threading them. */
@@ -369,11 +386,12 @@ ${it.answer}
 
 Return one entry per id via return_competitors.`;
 
+      openaiCalls++;
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: MODEL,
+          model,
           temperature: 0, // deterministic — same stored answers → same competitors
           max_tokens: MAX_OUTPUT_TOKENS,
           messages: [
@@ -453,7 +471,33 @@ Return one entry per id via return_competitors.`;
          final state, not every wobble on the way to a good one. */
       if (lastError) batchErrors.push(`batch ${batchNo}: ${lastError}`);
     }
+    /* ⛔ DRY-RUN VERIFY: nothing is written. Return mini's extracted names beside the STORED
+       (gpt-4o) names on the same answers, so the caller diffs the two — names, self_named, junk.
+       The switch is only made after this diff passes. */
+    if (dryRun) {
+      await logSpend();
+      const out = items.map((it) => {
+        const mini = byId.get(it.id);
+        const storedRow = rows.find((r) => r.id === it.rowId);
+        const er = storedRow && storedRow.result && typeof storedRow.result === "object"
+          ? (storedRow.result as Row)[it.engine] as Row | undefined : undefined;
+        return {
+          id: it.id, engine: it.engine,
+          mini_names: mini?.names ?? [], mini_self_named: mini?.selfNamed ?? null,
+          stored_names: Array.isArray(er?.competitors) ? er!.competitors : [],
+          stored_self_named: (er && typeof er === "object" && "self_named" in er) ? (er as Row).self_named : null,
+        };
+      });
+      return json({
+        ok: true, dryRun: true, model, runId,
+        itemsRead: items.length, itemsTotal: answerItemsAvailable,
+        items: out, errors: batchErrors.slice(0, 8),
+        usd: usdSpent(), promptTokens: usageIn, completionTokens: usageOut, openaiCalls,
+      });
+    }
+
     if (items.length > 0 && byId.size === 0) {
+      await logSpend();
       /* NOTHING was cleaned. This must be a hard failure, not {ok:true, changed:0} — the caller
          (and the operator) has to be able to tell "no junk to remove" from "cleaning did not run".
          Stamped first so the flag survives even though the request fails. */
@@ -500,7 +544,7 @@ Return one entry per id via return_competitors.`;
     const complete = byId.size >= items.length && items.length >= answerItemsAvailable && batchErrors.length === 0;
     const stamp = {
       at: new Date().toISOString(),
-      model: MODEL,
+      model,
       items_total: answerItemsAvailable,
       items_cleaned: byId.size,
       /* How many answers carry a MODEL naming verdict after this run, and how many of those were
@@ -517,6 +561,7 @@ Return one entry per id via return_competitors.`;
       .from("ai_audit_runs").update({ results: { ...cur, questions, competitor_cleaning: stamp } }).eq("id", runId);
     if (upErr) return json({ ok: false, error: "store_failed", detail: upErr.message }, 500);
 
+    await logSpend();
     return json({
       ok: true, changed, itemsRead: items.length, itemsTotal: answerItemsAvailable,
       itemsCleaned: byId.size, complete, errors: batchErrors.slice(0, 8),
