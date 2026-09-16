@@ -20,7 +20,7 @@ import { showOffer } from "../../../src/lib/buyOffer.ts";
 import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
 
 import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
-import { buildFaultLines, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
+import { buildFaultLines, CRAWL_CHECK_VERSION, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 
 /* ⛔ THE "VIEW ONLINE" FOOTER LINK WAS DEAD IN EVERY REPORT EVER SENT.
    It was built from a hardcoded SITE_ORIGIN of https://yoursites.uk plus /a/<slug> — a route that
@@ -326,15 +326,21 @@ Deno.serve(async (req) => {
         .from("lead_crawl_checks").select("result, created_at")
         .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
       const fresh = !!cc && (Date.now() - new Date((cc as { created_at: string }).created_at).getTime()) < 30 * 86_400_000;
-      const sig = (cc as { result?: { signals?: CrawlSignals } } | null)?.result?.signals;
-      if (fresh && sig) {
+      const stored = (cc as { result?: { version?: number; signals?: CrawlSignals } } | null)?.result;
+      /* ⛔ ONLY v2+ RESULTS RENDER. Pre-v2 rows were fetched as GPTBot (a training crawler) and can
+         carry FALSE findings (a legitimate GPTBot block read as "client-rendered"). We ignore them
+         and re-populate below rather than show a diagnosis we no longer trust (Paul, 2026-09-16). */
+      const currentVer = (stored?.version ?? 1) >= CRAWL_CHECK_VERSION;
+      const sig = stored?.signals;
+      if (fresh && currentVer && sig) {
         const faults = buildFaultLines(sig);
         if (faults.length) data.crawlFaults = faults;
       }
-      /* Background-populate when there's no fresh check and they have a real site, so the section is
-         there on the next open. Fire-and-forget via waitUntil — never blocks this render (it would
-         add the crawl's ~5-12s to the page). crawl-check's internal branch accepts CRON_SECRET. */
-      if (!fresh && ownWebsite) {
+      /* Background-populate when there's no fresh CURRENT-version check and they have a real site, so
+         the section is there on the next open. Fire-and-forget via waitUntil — never blocks this
+         render (it would add the crawl's ~5-12s to the page). crawl-check's internal branch accepts
+         CRON_SECRET. */
+      if ((!fresh || !currentVer) && ownWebsite) {
         // deno-lint-ignore no-explicit-any
         const rt = (globalThis as any).EdgeRuntime;
         const fire = () => fetch(`${supabaseUrl}/functions/v1/crawl-check`, {

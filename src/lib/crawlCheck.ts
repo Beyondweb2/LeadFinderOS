@@ -21,17 +21,28 @@ export const DUP_MIN_CLUSTER = 3;
 export const DUP_SIMILARITY = 0.90;      // 0..1; reported as a percentage
 /** A service/content page thinner than this (words of visible text) is "thin". */
 export const THIN_WORDS = 120;
-/** AI crawlers worth naming when robots.txt blocks them. Lowercased for case-insensitive match. */
-export const AI_CRAWLERS: Readonly<Record<string, string>> = {
-  gptbot: 'GPTBot (ChatGPT)',
-  'chatgpt-user': 'ChatGPT-User',
-  'oai-searchbot': 'OAI-SearchBot',
-  'google-extended': 'Google-Extended (Gemini)',
-  claudebot: 'ClaudeBot',
-  'anthropic-ai': 'anthropic-ai',
-  ccbot: 'CCBot',
-  perplexitybot: 'PerplexityBot',
-};
+
+/** Bump when the crawl-check's MEANING changes so stored results from the old logic are ignored by
+ *  the report rather than shown. v2 = the SEARCH-crawler rewrite (2026-09-16): we fetch as the
+ *  crawlers that fetch a page when someone ASKS an AI, not as GPTBot (a TRAINING crawler whose block
+ *  is legitimate and was producing false findings — one nearly reached a prospect). */
+export const CRAWL_CHECK_VERSION = 2;
+
+/* ⛔ TWO KINDS OF AI CRAWLER, AND ONLY ONE IS THE FAULT (Paul, 2026-09-16, tested on mc-locksmiths).
+   SEARCH crawlers fetch a page when a person asks ChatGPT / Claude / Perplexity a question — these
+   decide whether a business gets NAMED, and a block on them is the real problem. TRAINING crawlers
+   (GPTBot, ClaudeBot, CCBot) scrape for model training; blocking them is a common, legitimate choice
+   that does NOT stop a business being cited, so it is never a headline.
+   ⛔ THE UA STRINGS LIVE IN THE EDGE FUNCTION (it does the fetching). These labels are what the
+   report names. Testing GPTBot was the bug. */
+export const SEARCH_CRAWLER_LABELS = ['OAI-SearchBot', 'ChatGPT-User', 'Claude-User', 'PerplexityBot'] as const;
+
+/** A Cloudflare / bot-challenge interstitial — a BLOCK even when it comes back 200. The edge also
+ *  checks the status and the cf-mitigated header; this is the body-marker half. Only the actual
+ *  fetch is evidence — robots.txt is not (a site can "Allow" a crawler and still block it here). */
+export function looksChallenged(body: string): boolean {
+  return /__cf_chl_|cf_chl_opt|cf-browser-verification|just a moment|attention required|enable javascript and cookies/i.test((body || '').slice(0, 4000));
+}
 
 /* ── visible text ─────────────────────────────────────────────────────────────────────────────── */
 
@@ -91,43 +102,10 @@ export function wordCount(html: string): number {
   return t ? t.split(/\s+/).filter(Boolean).length : 0;
 }
 
-/* ── robots.txt ───────────────────────────────────────────────────────────────────────────────── */
-
-/** AI crawlers that robots.txt blocks from the whole site. Parses user-agent groups; a bot is
- *  "blocked" when its own group — or a wildcard `*` group — carries `Disallow: /` (the whole site).
- *  A partial Disallow (e.g. /admin) is NOT a block. Returns display names, deduped, in list order. */
-export function parseRobotsAIBlocks(robotsTxt: string): string[] {
-  const lines = (robotsTxt || '').split(/\r?\n/);
-  // group agents (lowercased) → set of disallow paths (trimmed)
-  const groups: Array<{ agents: string[]; disallows: string[] }> = [];
-  let cur: { agents: string[]; disallows: string[] } | null = null;
-  let lastWasAgent = false;
-  for (const raw of lines) {
-    const line = raw.replace(/#.*$/, '').trim();
-    if (!line) { lastWasAgent = false; continue; }
-    const m = line.match(/^([^:]+):\s*(.*)$/);
-    if (!m) continue;
-    const field = m[1].trim().toLowerCase();
-    const value = m[2].trim();
-    if (field === 'user-agent') {
-      if (!cur || !lastWasAgent) { cur = { agents: [], disallows: [] }; groups.push(cur); }
-      cur.agents.push(value.toLowerCase());
-      lastWasAgent = true;
-    } else {
-      lastWasAgent = false;
-      if (field === 'disallow' && cur) cur.disallows.push(value);
-    }
-  }
-  const blocksAll = (g: { disallows: string[] }) => g.disallows.some((d) => d === '/' || d === '/*');
-  const blocked = new Set<string>();
-  const out: string[] = [];
-  for (const key of Object.keys(AI_CRAWLERS)) {
-    const named = groups.some((g) => g.agents.includes(key) && blocksAll(g));
-    const wildcard = groups.some((g) => g.agents.includes('*') && blocksAll(g));
-    if ((named || wildcard) && !blocked.has(key)) { blocked.add(key); out.push(AI_CRAWLERS[key]); }
-  }
-  return out;
-}
+/* ── robots.txt is NOT evidence ───────────────────────────────────────────────────────────────────
+   Removed 2026-09-16. A site can say "ChatGPT-User: Allow" in robots.txt and still block it at the
+   edge (Cloudflare, WAF). Only the ACTUAL FETCH counts — the edge function fetches the homepage as
+   each SEARCH crawler and records which are blocked (searchBlocked). robots parsing is gone. */
 
 /* ── sitemap + URL clustering (bounds the fetch count) ─────────────────────────────────────────── */
 
@@ -222,12 +200,16 @@ export function pageSimilarity(htmlA: string, htmlB: string, town?: string | nul
 
 export interface CrawlSignals {
   homeUrl: string;
-  fetchFailed: boolean;              // couldn't fetch the homepage at all
-  blockedByBot: boolean;            // 403/challenge — a real site we can't read as a crawler
+  fetchFailed: boolean;              // no crawler could even connect (site down) → section hidden
+  /* SEARCH crawlers BLOCKED on the actual fetch (403 / challenge) — the crawlers that fetch a page
+     when someone asks an AI. A block on these is THE fault. Derived from real fetches, never robots. */
+  searchBlocked: string[];
+  /* Which search crawler we successfully read the content with (null = all blocked, so the content
+     signals below are withheld — we never diagnose "client-rendered" off a block page). */
+  readableAs: string | null;
   clientRendered: ClientRenderResult | null;
   missingH1: boolean;
   noJsonLd: boolean;
-  aiBlocked: string[];
   duplicates: { clusterSize: number; sampleSize: number; similarityPct: number } | null;
   thinPages: number;                // count of sampled service pages under THIN_WORDS
 }
@@ -247,14 +229,17 @@ export interface CrawlFault { title: string; detail: string; minor: boolean }
  *  [] when the site couldn't be read — the caller then renders NO section (Paul's rule). Each detail
  *  is that lead's real number, never a generic phrase. */
 export function buildFaultLines(s: CrawlSignals): CrawlFault[] {
-  if (s.fetchFailed || s.blockedByBot) return [];   // couldn't read the site → the section does not render
+  if (s.fetchFailed) return [];   // site down — can't read it, so the section does not render (Paul's rule)
   const out: CrawlFault[] = [];
+  /* ⛔ THE REAL FAULT, AND THE HEADLINE: a SEARCH crawler is blocked. These fetch a page when someone
+     asks ChatGPT / Claude / Perplexity, so blocking them is what stops a business being named. A
+     GPTBot-only (training) block is never here — the edge doesn't even test it. */
+  if (s.searchBlocked.length) out.push({
+    title: "AI can’t reach your site",
+    detail: `${s.searchBlocked.join(", ")} ${s.searchBlocked.length === 1 ? "is" : "are"} blocked from fetching your pages — and ${s.searchBlocked.length === 1 ? "that is a crawler" : "those are the crawlers"} AI uses to read a site when someone asks about you.`, minor: false });
   if (s.clientRendered?.flagged) out.push({
     title: "AI can’t read your homepage",
     detail: `Only about ${s.clientRendered.visibleChars} characters reach a crawler — the rest loads with JavaScript, which AI doesn’t run.`, minor: false });
-  if (s.aiBlocked.length) out.push({
-    title: "Your site blocks AI crawlers",
-    detail: `Your robots.txt blocks ${s.aiBlocked.join(", ")}.`, minor: false });
   if (s.duplicates) out.push({
     title: "Your pages are too similar",
     detail: `${s.duplicates.clusterSize} near-identical pages, ${s.duplicates.similarityPct}% the same. AI reads them as one.`, minor: false });
@@ -279,14 +264,11 @@ export function buildVerdict(s: CrawlSignals): CrawlVerdict {
   }
   const problems: string[] = [];
 
-  if (s.blockedByBot) {
-    problems.push(`Your site returns a block to automated visitors, so AI crawlers like GPTBot may not be able to read it at all.`);
+  if (s.searchBlocked.length) {
+    problems.push(`${s.searchBlocked.join(', ')} ${s.searchBlocked.length === 1 ? 'is' : 'are'} blocked from fetching your site — and ${s.searchBlocked.length === 1 ? 'that crawler is' : 'those crawlers are'} what AI uses to read a page when someone asks ChatGPT, Claude or Perplexity about you. Blocking them means AI can't see you.`);
   }
   if (s.clientRendered?.flagged) {
     problems.push(`AI crawlers see only about ${s.clientRendered.visibleChars} characters of your homepage — the rest loads with JavaScript, which ChatGPT and Gemini don't run, so they can't read what you do or where you work.`);
-  }
-  if (s.aiBlocked.length) {
-    problems.push(`Your robots.txt blocks ${s.aiBlocked.join(', ')}, so ${s.aiBlocked.length === 1 ? 'that AI crawler is' : 'those AI crawlers are'} told not to read your site.`);
   }
   if (s.duplicates) {
     problems.push(`You have about ${s.duplicates.clusterSize} near-identical pages (${s.duplicates.similarityPct}% the same text, with just the town swapped) — AI reads that as one thin page, not ${s.duplicates.clusterSize}.`);
