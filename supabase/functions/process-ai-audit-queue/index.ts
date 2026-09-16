@@ -1090,6 +1090,18 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   // x-cron-secret + x-internal-job). Wrapped so any failure only logs and NEVER blocks/fails the
   // audit — the manual "Generate listing" button remains the fallback. Sequential so two runs of the
   // same audit in one tick can't both slip past the guard.
+  /* ⛔ AUTO-REPORT ONLY FOR AN ENGAGED LEAD (Paul, 2026-09-16). The public /r/ listing is a
+     crawlable SEO artifact; it matters for clients and leads who have engaged, NOT for a cold
+     prospect who may never reply. It fires at audit finalisation, when a cold outreach lead is
+     still not_contacted/queued/initial_contact — so gating here skips exactly those. Measured: 315
+     of 750 auto-reports in the last 30d were for leads that never replied, i.e. gpt-4o spent on
+     prospects who never answered. This does NOT affect what a prospect can open — their report link
+     is served LIVE by render-audit-report and needs no business_reports row — and the manual
+     "Generate listing" button remains for every other case. Engaged = replied-or-beyond, or paid. */
+  const AUTO_REPORT_ENGAGED_STATUSES = new Set([
+    "replied", "awaiting_reply", "report_sent", "interested", "price_given",
+    "payment_received", "in_delivery", "completed",
+  ]);
   for (const job of reportJobs) {
     try {
       /* ⛔ MARKET AUDITS NEVER GET A REPORT. THE MOST IMPORTANT GUARD IN THIS FILE.
@@ -1101,9 +1113,24 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
          guard. The two other completion side effects (audit_reply, D2 completion send) are
          already safe because both require a lead_id. */
       const { data: auditRow } = await service
-        .from("ai_audits").select("is_market, business_name").eq("id", job.auditId).maybeSingle();
+        .from("ai_audits").select("is_market, business_name, lead_id").eq("id", job.auditId).maybeSingle();
       if (auditRow?.is_market === true) {
         console.log(`[process-ai-audit-queue] auto-report REFUSED for market audit ${job.auditId} ("${auditRow.business_name}"): market audits have no business and must never produce a public report.`);
+        continue;
+      }
+      /* THE ENGAGED-LEAD GATE. Read status + amount_paid off the lead; skip unless engaged or paid.
+         No lead (should not happen for a non-market audit) → skip: nothing to be engaged. */
+      const reportLeadId = (auditRow as { lead_id?: string | null } | null)?.lead_id ?? null;
+      let leadEngaged = false;
+      if (reportLeadId) {
+        const { data: lr } = await service
+          .from("outreach_leads").select("status, amount_paid").eq("id", reportLeadId).maybeSingle();
+        const lst = ((lr as { status?: string | null } | null)?.status ?? "").trim();
+        const lpaid = Number((lr as { amount_paid?: number | null } | null)?.amount_paid ?? 0) > 0;
+        leadEngaged = lpaid || AUTO_REPORT_ENGAGED_STATUSES.has(lst);
+      }
+      if (!leadEngaged) {
+        console.log(`[process-ai-audit-queue] auto-report skipped for audit ${job.auditId}: lead not engaged (cold prospect) — the manual button remains.`);
         continue;
       }
       const { data: existing } = await service

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { buildPagePlan, stuffingCheck, enforceNaturalness, enforceCatchmentHonesty, FALSE_BASE_RE, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
 import { classifyWinnability, unwrapCitationUrl, SCORED_ENGINES, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
@@ -539,6 +540,8 @@ Deno.serve(async (req) => {
           return json({ ok: false, error: `openai_http_${clusterRes.status}`, detail: txt.slice(0, 200) }, 502);
         }
         const cData = await clusterRes.json();
+        { const _u = cData.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+          await logOpenAiUsage(service, { functionName: "page-generator", apiType: "openai_page_cluster", model: MODEL, promptTokens: Number(_u?.prompt_tokens) || 0, completionTokens: Number(_u?.completion_tokens) || 0, userId, triggerSource: "user" }); }
         let proposals: ClusterProposal[] = [];
         try {
           const raw = JSON.parse(cData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ?? "{}") as { clusters?: Array<Record<string, unknown>> };
@@ -652,6 +655,8 @@ Deno.serve(async (req) => {
           return json({ ok: false, error: `openai_http_${res.status}`, detail: txt.slice(0, 200) }, 502);
         }
         const data = await res.json();
+        { const _u = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+          await logOpenAiUsage(service, { functionName: "page-generator", apiType: "openai_page_qa_advice", model: MODEL, promptTokens: Number(_u?.prompt_tokens) || 0, completionTokens: Number(_u?.completion_tokens) || 0, userId, triggerSource: "user" }); }
         const raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
         if (typeof raw !== "string") return json({ ok: false, error: "model_no_tool_output" }, 502);
         let parsed: {
@@ -746,6 +751,8 @@ Deno.serve(async (req) => {
           return { kind: "error" as const, error: `openai_http_${res.status}`, detail: txt.slice(0, 200) };
         }
         const data = await res.json();
+        { const _u = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+          await logOpenAiUsage(service, { functionName: "page-generator", apiType: "openai_page_qa_structured", model: MODEL, promptTokens: Number(_u?.prompt_tokens) || 0, completionTokens: Number(_u?.completion_tokens) || 0, userId, triggerSource: "user" }); }
         const raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
         if (typeof raw !== "string") return { kind: "error" as const, error: "model_no_tool_output" };
         try {
@@ -975,6 +982,8 @@ Return via return_page.`;
         return { kind: "error" as const, error: `openai_http_${res.status}`, detail: txt.slice(0, 200) };
       }
       const data = await res.json();
+      { const _u = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+        await logOpenAiUsage(service, { functionName: "page-generator", apiType: "openai_page_service", model: MODEL, promptTokens: Number(_u?.prompt_tokens) || 0, completionTokens: Number(_u?.completion_tokens) || 0, userId, triggerSource: "user" }); }
       const raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
       if (typeof raw !== "string") return { kind: "error" as const, error: "model_no_tool_output" };
       try {
