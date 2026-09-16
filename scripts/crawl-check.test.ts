@@ -5,12 +5,18 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
   visibleText, detectClientRendered, hasH1, hasJsonLd, wordCount,
-  parseRobotsAIBlocks, extractSitemapLocs, patternKey, clusterUrls, pageSimilarity, buildVerdict,
+  looksChallenged, extractSitemapLocs, patternKey, clusterUrls, pageSimilarity, buildVerdict,
   buildFaultLines, type CrawlSignals,
 } from '../src/lib/crawlCheck.ts';
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
+
+/** A clean signals object; override the fields under test. */
+const mkSig = (over: Partial<CrawlSignals> = {}): CrawlSignals => ({
+  homeUrl: 'https://x.co', fetchFailed: false, searchBlocked: [], readableAs: 'OAI-SearchBot',
+  clientRendered: null, missingH1: false, noJsonLd: false, duplicates: null, thinPages: 0, ...over,
+});
 
 console.log('── visible text + client-render ──');
 {
@@ -36,13 +42,17 @@ console.log('\n── H1 / JSON-LD / thin ──');
   ok(wordCount('<p>one two three</p>') === 3, 'word count');
 }
 
-console.log('\n── robots.txt AI blocking ──');
+console.log('\n── search-crawler block + Cloudflare challenge (the actual-fetch fault; robots is not evidence) ──');
 {
-  ok(parseRobotsAIBlocks('User-agent: GPTBot\nDisallow: /').includes('GPTBot (ChatGPT)'), 'GPTBot Disallow / → blocked');
-  ok(parseRobotsAIBlocks('User-agent: *\nDisallow: /').length >= 2, 'wildcard Disallow / blocks the AI crawlers too');
-  ok(parseRobotsAIBlocks('User-agent: GPTBot\nDisallow: /admin').length === 0, 'partial Disallow is not a block');
-  ok(parseRobotsAIBlocks('User-agent: Googlebot\nDisallow: /').length === 0, 'blocking Googlebot only is not an AI block');
-  ok(parseRobotsAIBlocks('').length === 0, 'empty robots → nothing blocked');
+  ok(looksChallenged('<html><body>Just a moment...<script>window.__cf_chl_opt={};</script></body></html>'), 'a Cloudflare challenge body is a block, even on a 200');
+  ok(looksChallenged('Please enable JavaScript and cookies to continue'), 'the JS/cookies interstitial is a block');
+  ok(!looksChallenged('<html><body><h1>Ace Electrical</h1><p>We rewire homes.</p></body></html>'), 'a real page is not a challenge');
+  // A blocked SEARCH crawler is the red headline fault; GPTBot (training) is never tested, and
+  // robots.txt is never consulted.
+  const blocked = buildFaultLines(mkSig({ searchBlocked: ['OAI-SearchBot', 'ChatGPT-User'], readableAs: null }));
+  ok(blocked[0].title.includes('can’t reach') && blocked[0].detail.includes('OAI-SearchBot') && !blocked[0].minor,
+    'blocked search crawlers are the red headline fault, naming which');
+  ok(buildFaultLines(mkSig()).length === 0, 'no search block + clean site → no fault');
 }
 
 console.log('\n── sitemap + clustering (bounds the fetch) ──');
@@ -73,10 +83,7 @@ console.log('\n── page similarity (town swapped) ──');
 
 console.log('\n── verdict priority + wording ──');
 {
-  const base: CrawlSignals = {
-    homeUrl: 'https://x.co', fetchFailed: false, blockedByBot: false,
-    clientRendered: null, missingH1: false, noJsonLd: false, aiBlocked: [], duplicates: null, thinPages: 0,
-  };
+  const base = mkSig();
   ok(!buildVerdict({ ...base, fetchFailed: true }).ok, 'fetch failed → not ok');
   const cr = buildVerdict({ ...base, clientRendered: { flagged: true, visibleChars: 69, htmlBytes: 9000, appShell: true }, missingH1: true });
   ok(cr.headline.includes('69 characters'), 'client-render leads the verdict and names the char count');
@@ -84,19 +91,16 @@ console.log('\n── verdict priority + wording ──');
   const dup = buildVerdict({ ...base, duplicates: { clusterSize: 20, sampleSize: 5, similarityPct: 99 } });
   ok(dup.headline.includes('20 near-identical'), 'duplicate verdict names the count');
   ok(buildVerdict(base).problems.length === 0, 'clean site → no problems');
-  // Priority: client-render outranks a robots block outranks duplicates.
-  const both = buildVerdict({ ...base, blockedByBot: true, clientRendered: { flagged: true, visibleChars: 50, htmlBytes: 9000, appShell: true } });
-  ok(both.headline.includes('block'), 'a hard block leads over client-render');
+  // Priority: a blocked SEARCH crawler leads over client-render.
+  const both = buildVerdict({ ...base, searchBlocked: ['OAI-SearchBot'], clientRendered: { flagged: true, visibleChars: 50, htmlBytes: 9000, appShell: true } });
+  ok(/blocked from fetching/.test(both.headline), 'a blocked search crawler leads over client-render');
 }
 
 console.log('\n── report fault lines (each carries its number; amber only for structured data) ──');
 {
-  const base: CrawlSignals = {
-    homeUrl: 'https://x.co', fetchFailed: false, blockedByBot: false,
-    clientRendered: null, missingH1: false, noJsonLd: false, aiBlocked: [], duplicates: null, thinPages: 0,
-  };
+  const base = mkSig();
   ok(buildFaultLines({ ...base, fetchFailed: true }).length === 0, 'couldn’t fetch → no fault lines (section hidden)');
-  ok(buildFaultLines({ ...base, blockedByBot: true }).length === 0, 'blocked as a bot → no fault lines');
+  ok(buildFaultLines({ ...base, searchBlocked: ['OAI-SearchBot'] })[0].title.includes('can’t reach'), 'a blocked search crawler IS a fault (headline)');
   ok(buildFaultLines(base).length === 0, 'a clean site → no fault lines');
   const dup = buildFaultLines({ ...base, duplicates: { clusterSize: 20, sampleSize: 5, similarityPct: 98 } })[0];
   ok(dup.detail.includes('20') && dup.detail.includes('98%') && !dup.minor, 'duplicate line carries the numbers, red dot');
