@@ -72,7 +72,9 @@ export interface AiAuditReportData {
   // The single worst example to lead with: the question, the engine, and the REAL
   // competitors AI recommended in that answer. The report writes a clean summary of
   // this — it never dumps the raw AI paragraph.
-  gutPunch: { question: string; engineLabel: string; rivals: string[] } | null;
+  /* answer/businesses are OPTIONAL so a payload built before the search-result card existed still
+     typechecks (a caller that omits them simply gets no card). buildReportData always sets them. */
+  gutPunch: { question: string; engineLabel: string; rivals: string[]; answer?: string; businesses?: string[] } | null;
   /** True when competitor names are withheld because the run's list could not be trusted.
    *  Absent on older payloads -> false, which is exactly what those documents already showed. */
   namesWithheld?: boolean;
@@ -763,6 +765,36 @@ export function renderReportHtml(d: AiAuditReportData): string {
     : d.hasWebsite === true ? siteCheckPendingSection()
     : "";
 
+  /* ── ONE REAL AI ANSWER, RECREATED (2026-09-16, Paul) ─────────────────────────────────────────
+     A chat-style card showing a SINGLE actual answer where the business was NOT named, to make the
+     outreach report immediately understandable. It is a visual RECREATION of stored audit data, not
+     a screenshot — every part is real: gutPunch.engineLabel (which engine), gutPunch.question (the
+     exact question asked), gutPunch.answer (the clean damning extract of that answer), and
+     gutPunch.businesses (the real firms AI named in it).
+     ⛔ IT ONLY RENDERS FROM gutPunch, AND THAT IS WHAT KEEPS THE CALLOUT TRUE. gutPunch is chosen
+     from answers where cellNamed() is FALSE, so the "wasn't mentioned in this search" line is true
+     by construction; when the business is named in every answer gutPunch is null and the card is
+     omitted (Paul's point 8 — the simplest truthful fallback). It sits on the main render path only
+     — never on the still-measuring or name-not-judgeable paths, which withhold figures. */
+  const gp = d.gutPunch;
+  const chatCard = (gp && gp.answer && gp.answer.trim())
+    ? `
+    <section class="chatcard">
+      <div class="cc-head">
+        <span class="cc-engine">${esc(gp.engineLabel)}</span>
+        <span class="cc-date">${esc(d.generatedAtLabel)}</span>
+      </div>
+      <div class="cc-q">${esc(gp.question)}</div>
+      <div class="cc-a">
+        <p class="cc-atext">${esc(gp.answer)}</p>
+        ${(gp.businesses && gp.businesses.length)
+          ? `<div class="cc-firms">${gp.businesses.map((b) => `<span class="rv">${esc(b)}</span>`).join("")}</div>`
+          : ""}
+      </div>
+      <div class="cc-callout"><span class="cc-bang">!</span>${esc(d.businessName)} wasn&rsquo;t mentioned in this search.</div>
+    </section>`
+    : "";
+
   /* 🔴 THE NAME REFUSAL — IT REPLACES THE HERO. Paul's words, 2026-09-15, and the phrasing is his
      for two stated reasons worth keeping: it LEADS WITH THE NAME rather than with what we cannot
      do (an earlier draft read as blaming their name for our problem), and it says "an automated
@@ -1251,6 +1283,29 @@ ${REPORT_CHROME_CSS_CORE}
   .find-title{ font-weight:700; font-size:14px; color:var(--ink); }
   .find-detail{ font-size:14px; font-weight:400; line-height:1.45; color:var(--muted); }
 
+  /* ONE REAL AI ANSWER, RECREATED &mdash; a chat-style card under "Who AI named instead". A visual
+     recreation of stored audit data (see chatCard in renderReportHtml), never a screenshot. */
+  .chatcard{ margin:0 28px 20px; border:1px solid var(--line); border-radius:14px; background:var(--paper);
+    overflow:hidden; box-shadow:0 4px 24px rgba(15,23,42,.06); }
+  .cc-head{ display:flex; align-items:center; justify-content:space-between; padding:11px 18px;
+    border-bottom:1px solid var(--line); background:var(--page); }
+  .cc-engine{ font-size:15px; font-weight:700; color:var(--ink); }
+  .cc-date{ font-size:12px; color:var(--faint); }
+  /* The question, as the customer would type it &mdash; a right-aligned user bubble. */
+  .cc-q{ margin:16px 18px 0 auto; max-width:82%; width:fit-content; background:var(--blue-tint);
+    color:var(--ink); font-size:14px; font-weight:600; padding:10px 14px; border-radius:14px 14px 4px 14px; }
+  /* The AI's answer &mdash; a left-aligned assistant bubble. */
+  .cc-a{ margin:12px 18px 0; max-width:88%; background:var(--page); border:1px solid var(--line);
+    border-radius:4px 14px 14px 14px; padding:12px 14px; }
+  .cc-atext{ margin:0; font-size:14px; line-height:1.55; color:var(--ink-2); }
+  .cc-firms{ margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
+  .cc-firms .rv{ color:var(--red); font-weight:700; font-size:13px; }
+  /* The truthful callout &mdash; only ever rendered for an answer that did NOT name the business. */
+  .cc-callout{ display:flex; align-items:center; gap:9px; margin:16px 18px 18px; padding:11px 14px;
+    border-radius:10px; background:var(--red-tint); color:var(--red); font-size:14px; font-weight:700; }
+  .cc-bang{ flex:0 0 auto; width:20px; height:20px; border-radius:50%; background:var(--red);
+    color:var(--paper); font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+
   /* CLOSING CTA &mdash; Findable blue band with a yellow highlight */
   .cta{ background:var(--blue); color:var(--on-band); padding:20px 28px 20px; }
   .cta h3{ margin:0 0 7px; font-size:22px; font-weight:700; color:var(--on-band); letter-spacing:-.01em; }
@@ -1300,6 +1355,7 @@ ${REPORT_CHROME_CSS_FOOT}
     .explainer{ padding-left:18px; padding-right:18px; }
     .hero{ padding-left:18px; padding-right:18px; }
     .gutbox{ margin-left:18px; margin-right:18px; }
+    .chatcard{ margin-left:18px; margin-right:18px; }
     .why{ padding-left:18px; padding-right:18px; }
     .dowe{ padding-left:18px; padding-right:18px; }
     .seo{ padding-left:18px; padding-right:18px; }
@@ -1372,6 +1428,7 @@ ${seoSlot}
       </div>
     </div>
 ${gutbox}
+${chatCard}
     <!-- ============================================================================
          SEO SECTION SLOT &mdash; renders results.seo when present (overall grade + three
          category grades + a radar of the three scores + the lead findings). With no scan
