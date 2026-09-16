@@ -5205,3 +5205,15 @@ header, no buttons, Marketing, English. **explain_offer stays in place — Paul 
   plus `process-whatsapp-queue` for the mirror — walked, not inherited, at deploy time.
   `npm run check`: **112/117**, the five known-stale suites only (§0's list, re-read by name from
   the runner's FAILED lines, not inferred from the count).
+- ✅ **DEPLOYED 2026-09-16, on Paul's word after Meta approval.** Merge `5390f233` pushed; the ten
+  functions in the whatsapp-send.ts closure redeployed (walked from each index.ts, not inherited):
+  send-whatsapp-message v106, process-whatsapp-queue v149, create-ai-audit v127, findable-onboarding
+  v109, mockup v39, process-ai-audit-queue v185, process-sms-queue v52, stripe-webhook v113,
+  submissions v53, whatsapp-status v87. **Proven live by markers only the new code produces**: the
+  sender's OPTIONS preflight answers `x-swm-build: 2026-09-16a` (bumped in `507e4380` for exactly
+  this — the template commit had forgotten §30d's rule), and the live SPA's Inbox, outreach,
+  whatsappTemplates and coldOutreach chunks each carry `explain_offer_v2` with its label, read with
+  the surrounding characters (§4). ⚠️ **The live ENTRY chunk does NOT contain the string** — the
+  templates live in route chunks — so grepping `index-*.js` for a template name reads "absent" on a
+  deploy that is live. Cloudflare had built within ~5 minutes of the push this time. Still not proven
+  by a real send; the Inbox Preview (`dry_run`) is the next cheapest proof.
