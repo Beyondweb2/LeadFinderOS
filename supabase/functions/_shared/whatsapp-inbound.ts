@@ -14,7 +14,7 @@ function ownWebsite(raw: string | null | undefined): string | null {
   return w && !isAggregatorUrl(w) ? w : null;
 }
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
-import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, armStatusFor, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, modeSends, phoneSuppressed, pitchEverSent } from "./auto-reply-rules.ts";
+import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, armStatusFor, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, modeSends, phoneSuppressed, pitchEverSent, type FirstReplyMode } from "./auto-reply-rules.ts";
 import { suppress } from "./suppression.ts";
 import { createMockupRow, fillMockupFromSite } from "./mockup-trigger.ts";
 
@@ -335,9 +335,23 @@ export async function handleInboundMessages(
               const { data: paidRow } = await service
                 .from("outreach_leads").select("amount_paid").eq("id", leadId).maybeSingle();
               const leadPaid = ((paidRow as { amount_paid: number | null } | null)?.amount_paid ?? 0) > 0;
-              if (lastOutboundTemplate !== "initial_contact") {
-                console.log(`[auto-reply] lead ${leadId}: reply arrived but the last outbound was '${lastOutboundTemplate ?? "none"}', not the initial_contact opener — NOT arming an audit pitch.`);
-              } else if (leadPaid) {
+              /* ⛔ THE OPENER GATE GATES THE AUTO-SEND, NOT THE AUDIT (2026-09-16). It used to sit
+                 HERE as a top-level skip: last outbound not initial_contact → the whole block armed
+                 NOTHING, so no audit ran. But a lead we CHASED before they replied (contact_followup,
+                 hook_followup, re_engage_49) has its last outbound set to the chase, so the reply that
+                 finally arrived ran no audit even in a mode that says to run it. Measured 2026-09-16:
+                 the dominant "replied but never audited" population was exactly a contact_followup
+                 last-outbound. The audit is cheap (~2.6p), always wanted on a first human reply, and
+                 already protected from duplication by the hasCompletedAudit check below — so it must
+                 not turn on which opener variant happened to be last.
+                 What the gate REALLY protected is the AUTO-SEND in send mode: a reply to audit_reply,
+                 onboarding_followup or any later message must not auto-send another report. That is
+                 now `repliedToOpener`, applied to the send alone via effectiveMode below. The send
+                 CONDITION is therefore byte-for-byte what it was — send mode AND a reply to the
+                 initial_contact opener — so this change introduces no send that was not possible
+                 before. audit_only never sends, so the audit simply runs on every first reply. */
+              const repliedToOpener = lastOutboundTemplate === "initial_contact";
+              if (leadPaid) {
                 console.log(`[auto-reply] lead ${leadId}: paying customer (amount_paid > 0) — NEVER auto-pitch, not arming.`);
               } else if (looksAutomated(body)) {
                 // Booking-bot / out-of-office auto-ack — not a human yes. No row, no send; the
@@ -374,7 +388,15 @@ export async function handleInboundMessages(
                    whether we intend to send. Only what we ARM changes here. Any unreadable or
                    unknown value resolves to 'audit_only', the mode that sends nothing. */
                 const mode = await firstReplyMode(service);
-                const willSend = modeSends(mode);
+                /* ⛔ SEND NEEDS A REPLY TO THE OPENER; THE AUDIT DOES NOT. A send-mode reply to a
+                   chase or any later outbound runs the audit but does NOT auto-send the report — the
+                   exact case the old opener gate existed for, scoped now to the send alone. In
+                   audit_only mode this is a no-op (it never sends), so the audit runs on every first
+                   reply whatever the last outbound was. The send path below reads effectiveMode, so
+                   armStatus is 'pending'/'awaiting_audit' only for send + repliedToOpener — the same
+                   pair of conditions the top-level opener gate used to require, and no other. */
+                const effectiveMode: FirstReplyMode = (modeSends(mode) && !repliedToOpener) ? "audit_only" : mode;
+                const willSend = modeSends(effectiveMode);
                 // Does the lead already have a COMPLETED audit (complete/capped — same set the
                 // audit_reply resolver accepts)? Cheap two-step existence check.
                 let hasCompletedAudit = false;
@@ -475,7 +497,7 @@ export async function handleInboundMessages(
                      lead whose audit is ready to quote by hand.
                      ⛔ armStatusFor owns the choice, so the trigger and the tests cannot disagree
                      about which status a mode writes. */
-                  const armStatus = armStatusFor(mode, true);
+                  const armStatus = armStatusFor(effectiveMode, true);
                   if (!armStatus) {
                     console.log(`[auto-reply] lead ${leadId}: mode '${mode}' takes no automatic action — nothing armed.`);
                   } else {
@@ -498,7 +520,7 @@ export async function handleInboundMessages(
                     } else if (!qErr) {
                       console.log(armStatus === "pending"
                         ? `[auto-reply] lead ${leadId}: '${replyTemplate ?? DEFAULT_FIRST_REPLY_TEMPLATE}' queued (fires in ~3 min).`
-                        : `[auto-reply] lead ${leadId}: audit already complete and mode is '${mode}' — recorded ${AUDIT_ONLY_STATUS}, NOTHING will send.`);
+                        : `[auto-reply] lead ${leadId}: audit already complete and effective mode is '${effectiveMode}' — recorded ${AUDIT_ONLY_STATUS}, NOTHING will send.`);
                       /* Mockup call site 1 of 2: they ALREADY have a measurement. The audit half is
                          done, so this is the only preparation left before Paul opens the picker. */
                       await prepareMockup();
@@ -535,7 +557,7 @@ export async function handleInboundMessages(
                        audit_only row is written as AUDIT_ONLY_STATUS instead, which that hook cannot
                        see, so no completion, no later mode flip and no stale row can turn this into
                        a message. The audit below still runs exactly the same way either way. */
-                    const armStatus = armStatusFor(mode, false) ?? AUDIT_ONLY_STATUS;
+                    const armStatus = armStatusFor(effectiveMode, false) ?? AUDIT_ONLY_STATUS;
                     const { error: awaitErr } = await service.from("whatsapp_auto_replies").insert({
                       lead_id: leadId, phone: waPhone, trigger_wa_message_id: wamid || null,
                       template_name: replyTemplate,
