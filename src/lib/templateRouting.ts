@@ -29,7 +29,7 @@
 
 /** Variables only a lead's completed audit can answer. */
 export const AUDIT_DERIVED_VARS: ReadonlySet<string> = new Set([
-  "trade", "trade_plural", "competitors", "rival_1", "rival_2", "rival_3", "audit_url",
+  "trade", "trade_plural", "trade_article", "competitors", "rival_1", "rival_2", "rival_3", "audit_url",
 ]);
 
 /** The four ways a send resolves its variables. Named for the branch each sender already has. */
@@ -67,7 +67,7 @@ export const BRANCH_SUPPLIES: Record<TemplateBranch, ReadonlySet<string>> = {
   contact_name: new Set(["name", "contact_first_name"]),
   onboarding: new Set(["name", "onboarding_url", "trade", "trade_plural", "town"]),
   audit: new Set([
-    "name", "trade", "trade_plural", "competitors", "rival_1", "rival_2", "rival_3",
+    "name", "trade", "trade_plural", "trade_article", "competitors", "rival_1", "rival_2", "rival_3",
     "town", "audit_url", "url",
   ]),
   plain: new Set(["name", "url", "town"]),

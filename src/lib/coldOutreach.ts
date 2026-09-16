@@ -59,6 +59,17 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
      none. The containment is operational rather than structural: **it is sent from the Inbox, never
      the queue.** If that ever changes, this exposure is the thing to close first. */
   "audit_followup",
+  /* audit_followup_call — the same note with a call offer instead of a report link, 2026-09-16.
+     Same classification for the same reason: it is written for a lead who has already answered, so
+     COLD would refuse it for every lead it exists for.
+     ⛔ AND ITS CLASSIFICATION IS NOW LOAD-BEARING TWICE. Since 2026-09-16 rivalHookDecision reads
+     this set: a rival-naming CONTINUATION that cannot fill three names holds, where a cold one
+     falls back to video_template. Listing it here is therefore what stops a cold opener being
+     substituted into a live thread — not only what lets it send at all.
+     ⚠️ Same accepted exposure as its sibling: exempt from the phone-history seatbelt, so queueing
+     it to a number with no history would send a first touch. It is never queued — it carries no
+     audit_url, so the drip cannot select it, and the Inbox is the only door. */
+  "audit_followup_call",
   /* explain_offer — the full pitch, Inbox only, 2026-09-15. Same reasoning as audit_followup above:
      it is sent into a conversation that already exists, so COLD would refuse it for every lead it
      is written for. ⚠️ It carries the same accepted exposure — exempt from the phone-history

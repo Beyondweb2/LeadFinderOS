@@ -60,7 +60,7 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
    marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
    constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
 const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf"] as const;
-const BUILD_ID = "2026-09-16a";
+const BUILD_ID = "2026-09-16b";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -461,6 +461,20 @@ Deno.serve(async (req) => {
            competitor_hook does not change because today's attempt fell back. The fallback's own
            once-per-lead protection is the cold-outreach machinery it already lives under. */
         const rivalCall = rivalHookDecision(templateName, templateNeedsRivals(tvars), a.rivals.length);
+        /* ⛔ A CONTINUATION HOLDS — NOTHING IS SUBSTITUTED AND NOTHING IS SENT (2026-09-16).
+           ⚠️ AND THIS IS A BUG FIX, NOT A NEW RULE. The phone-history seatbelt above runs ONCE, on
+           the REQUESTED name, before any branch. The substitution happens HERE, after it. So a
+           continuation (audit_followup, audit_followup_call) passed the seatbelt and then sent
+           video_template — a COLD opener, "is this the right number", into a conversation the
+           prospect had already replied to, with the one guard written for that exact mistake
+           already behind it. Measured shape: 6 of 147 recent audits supply fewer than three names.
+           Re-running the seatbelt after the swap would not fix it either — it would refuse with
+           "phone_already_contacted" for a template the operator never chose. The honest answer is
+           to send nothing and say why, which is what src/lib/rivalHook.ts now decides. */
+        if (rivalCall.held) {
+          console.warn(`[send-whatsapp-message] HELD ${resolvedLeadId} (${templateName}): ${rivalCall.reason}`);
+          return json({ ok: false, error: "rivals_unavailable", reason: rivalCall.reason, template: templateName }, 200);
+        }
         if (rivalCall.fellBack) {
           console.warn(`[send-whatsapp-message] ${resolvedLeadId}: ${rivalCall.reason}`);
           templateName = rivalCall.template;

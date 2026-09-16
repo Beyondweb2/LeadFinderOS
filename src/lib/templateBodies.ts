@@ -23,7 +23,7 @@
 
 import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from './questionnaireFollowup';
 /* competitor_hook's body prints the SAME plural the parameter carries — see its note below. */
-import { pluraliseTrade } from './templateVars';
+import { articleTrade, pluraliseTrade } from './templateVars';
 import { transcriptBusinessName, IDENTIFY_NAME_TEMPLATES } from './displayName';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
@@ -175,6 +175,22 @@ ${u}
 45% of people now use AI to find local businesses. Same on Gemini, and I know how to get you showing up in those searches.
 
 Want me to explain?`;
+};
+
+/* audit_followup_call — submitted to Meta 2026-09-16. {{1}} trade WITH ITS OWN ARTICLE, {{2}} town,
+   {{3}} {{4}} {{5}} rivals. No link, no header.
+   ⛔ "i" is lowercase in three places deliberately (Paul's wording). Do not capitalise it.
+   ⚠️ The Inbox has no audit to read rivals from, so {{3}}-{{5}} degrade to "other firms" here
+   exactly as its sibling's do. The words the prospect received are on Meta's side. */
+const auditFollowupCallBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
+  const t = articleTrade(trade);
+  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned ${competitors || 'other firms'}
+
+I know how to get you showing up more in those answers so people are more likely to find you
+
+Happy to explain it here or jump on a quick call if you'd rather
+
+Paul✌️`;
 };
 
 const auditReplyBody = (b: string, u: string, trade?: string, competitors?: string) =>
@@ -354,6 +370,7 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,
   audit_followup: auditFollowupBody,
+  audit_followup_call: auditFollowupCallBody,
   explain_offer: explainOfferBody,
   explain_offer_v2: explainOfferV2Body,
 };

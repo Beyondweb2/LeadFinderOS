@@ -176,10 +176,18 @@ function articleCheck(value: string, original: string): VarCheck {
 }
 
 /**
- * Turn a stored `business_type` into something that can follow "a " in a sentence.
- * Map first, then lowercase + singularise the final word. Blocks rather than guessing.
+ * The SINGULAR trade noun, with no article and no article RULE — every block normaliseTrade
+ * applies for being unreadable, and none of the ones that are about a particular sentence.
+ *
+ * ⛔ EXTRACTED 2026-09-16 SO THE THREE SLOTS CANNOT DISAGREE ABOUT WHAT A TRADE IS. There are now
+ * three sentences in the book that need this value shaped differently — "for a {{2}}"
+ * (normaliseTrade), "find {{2}} in your area" (pluraliseTrade) and "looking for {{1}}"
+ * (articleTrade) — and the only thing that differs between them is what happens AFTER the noun is
+ * resolved. Written out three times, the map lookup, the digit test, the multi-clause test, the
+ * uncountable test and the singularisation would be five rules in three places, which is this
+ * file's own recorded failure mode. normaliseTrade's behaviour is byte-identical to before.
  */
-export function normaliseTrade(raw: string | null | undefined): VarCheck {
+function singulariseTrade(raw: string | null | undefined): VarCheck {
   const trimmed = (raw ?? "").replace(/\s+/g, " ").trim();
   if (!trimmed) return { ok: false, reason: "trade_missing", detail: "" };
 
@@ -193,7 +201,7 @@ export function normaliseTrade(raw: string | null | undefined): VarCheck {
         trades the block exists for were the two that skipped it. The map says what a trade is
         CALLED; it does not say the approved sentence can carry it. */
   const mapped = TRADE_SINGULAR[lower];
-  if (mapped) return articleCheck(mapped, trimmed);
+  if (mapped) return { ok: true, value: mapped };
 
   if (/\d/.test(lower)) return { ok: false, reason: "trade_has_digits", detail: trimmed };
   if (MULTI_CLAUSE.test(lower)) return { ok: false, reason: "trade_not_a_single_noun", detail: trimmed };
@@ -228,8 +236,70 @@ export function normaliseTrade(raw: string | null | undefined): VarCheck {
     return { ok: false, reason: "trade_still_plural", detail: trimmed };
   }
 
-  /* 4. THE ARTICLE — see articleCheck. */
-  return articleCheck(value, trimmed);
+  return { ok: true, value };
+}
+
+/**
+ * Turn a stored `business_type` into something that can follow "a " in a sentence.
+ * Map first, then lowercase + singularise the final word. Blocks rather than guessing.
+ *
+ * ⛔ THE ARTICLE CHECK IS APPLIED TO EVERY PATH OUT OF singulariseTrade, INCLUDING THE MAPPED ONE.
+ * An earlier version returned the mapped value immediately, which quietly defeated the whole point
+ * of the rule: `accountants -> accountant` and `electricians -> electrician` are correct
+ * singularisations AND vowel-initial, so the two trades the block exists for were the two that
+ * skipped it. The map says what a trade is CALLED; it does not say the approved sentence can carry
+ * it.
+ */
+export function normaliseTrade(raw: string | null | undefined): VarCheck {
+  const s = singulariseTrade(raw);
+  if (!s.ok) return s;
+  return articleCheck(s.value, (raw ?? "").replace(/\s+/g, " ").trim());
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   🟢 THE ARTICLE SLOT — articleTrade, the third sibling, AND IT CANNOT BE HELD BY THE VOWEL RULE
+   BECAUSE IT OWNS THE ARTICLE.
+
+   `audit_followup_call`'s approved body reads "i was looking for {{1}} in {{2}}" — the article is
+   NOT in Meta's registered text, so the VALUE carries it: "a plumber", "an electrician", "an
+   accountant".
+
+   ⛔ THAT IS WHY IT NEEDS NEITHER articleCheck NOR AN EXEMPTION FROM IT. normaliseTrade refuses a
+   vowel-initial trade because video_template's registered sentence hardcodes "for a {{2}}" and we
+   cannot change one word of it without a Meta re-review — the refusal is a fact about ONE SENTENCE,
+   never about the trade. Here there is no hardcoded article to disagree with, so the correct answer
+   is simply to write the right one. "an electrician" is not a loosening of the rule; it is the
+   sentence the rule was protecting, spelled correctly.
+   ✅ MEASURED CONSEQUENCE, THE SAME POPULATION pluraliseTrade UNBLOCKED: 179 of 1,066 lead-linked
+   audits (16.8%) are held on video_template's article rule, almost all ACCOUNTANTS and
+   ELECTRICIANS. Every one of them can receive this template.
+
+   ⛔ AND IT IS THE SAME MAP. TRADE_SINGULAR is read by all three slots, so the trade vocabulary
+   lives in one place. A second "trades that take an" list would be a second place to keep it AND a
+   second place to be wrong — and it would be wrong immediately, because the article follows from
+   the SOUND of the resolved value, which the map itself decides ("plumbing" -> "plumber" -> "a",
+   "electrics" -> "electrician" -> "an").
+   ⚠️ A mapped WORKAROUND value still works and still reads correctly: the "local accountancy firm"
+   escape hatch documented above yields "a local accountancy firm" here, because the article is
+   chosen from the first word of whatever the map returned.
+   ⚠️ NO BACKSTOP, AND THAT IS NOT AN OMISSION. pluraliseTrade has one because pluralisation can
+   silently fail to change a word; the article is chosen from a closed set of two and is always
+   applied, so there is no "failed to apply" state for a backstop to detect.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Turn a stored `business_type` into a singular trade noun WITH its indefinite article, for a slot
+ * whose registered text carries none ("looking for {{1}} in {{2}}"). Blocks exactly what
+ * normaliseTrade blocks, minus the article refusal — which this function answers instead of raising.
+ */
+export function articleTrade(raw: string | null | undefined): VarCheck {
+  const s = singulariseTrade(raw);
+  if (!s.ok) return s;
+  /* Chosen from the FIRST word, because that is the one the article sits in front of — the same
+     word articleCheck tests, so the two functions can never disagree about which trades are
+     vowel-initial. */
+  const article = startsWithVowelSound(s.value.split(" ")[0]) ? "an" : "a";
+  return { ok: true, value: `${article} ${s.value}` };
 }
 
 /* ── THE TOWN ────────────────────────────────────────────────────────────────────────────────────

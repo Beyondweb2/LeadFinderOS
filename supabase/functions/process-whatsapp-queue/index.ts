@@ -265,6 +265,14 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} {{4}} {{5}} rivals, {{6}} report link. `audit_url` is what makes it needsAudit; rival_1..3 are what make templateNeedsRivals
      true, so it inherits competitor_hook's three-names-or-fall-back rule with no new code here. */
   audit_followup: { lang: "en", vars: ["trade_plural", "town", "rival_1", "rival_2", "rival_3", "audit_url"] },
+  /* audit_followup_call — submitted to Meta 2026-09-16. MIRRORS whatsapp-send.ts; change both together.
+     FIVE vars and NO link: {{1}} trade WITH ITS OWN ARTICLE ("a plumber"), {{2}} town,
+     {{3}} {{4}} {{5}} rivals. Inbox only — it is a CONTINUATION, and with no audit_url this queue
+     never selects it. rival_1..3 are what make templateNeedsRivals true AND what make
+     templateNeedsAudit true (it reads AUDIT_DERIVED_VARS, not a list of three names).
+     ⛔ It does NOT inherit the three-names-or-fall-back rule: a continuation HOLDS instead, because
+     the fallback is a cold opener. src/lib/rivalHook.ts owns that. */
+  audit_followup_call: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3"] },
   /* explain_offer - submitted to Meta 2026-09-15. MIRRORS whatsapp-send.ts; change both together.
      {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} the lead's onboarding link.
      Inbox only - it is a CONTINUATION and carries no audit_url, so this queue never selects it.
@@ -1616,6 +1624,29 @@ Deno.serve(async (req) => {
          ⚠️ THE ROW KEEPS ITS OPERATOR-CHOSEN TEMPLATE; only this SEND changes. The message log
          records what actually went out (templateName below), so the transcript stays true. */
       const rivalCall = rivalHookDecision(templateName, templateNeedsRivals(tvars), ar.rivals.length);
+      /* ⛔ A CONTINUATION HOLDS RATHER THAN FALLING BACK (2026-09-16) — the same rule the FIRST-REPLY
+         lane above already wrote down for itself, now a property of the TEMPLATE instead of a
+         property of the lane. video_template is a cold opener, and this lane's seatbelt has already
+         passed on the requested name, so substituting it would post a cold message into a live
+         thread.
+         ⚠️ DEQUEUED, NOT LEFT WAITING. The audit is COMPLETE at this point (resolveAuditReplyVars
+         succeeded) — the rival count cannot improve without a new audit, so keeping the lead queued
+         would stall a one-send-per-tick drip on a row that can never be served. Same shape as
+         audit_reply_unavailable above: status back to not_contacted, the reason on the row, visible
+         to the operator.
+         ⚠️ NEAR-UNREACHABLE TODAY AND CORRECT ANYWAY: both rival-naming continuations are Inbox-only
+         (neither carries an audit_url, so this queue does not select them). It is here so the rule
+         cannot be true on one path and false on the other. */
+      if (rivalCall.held) {
+        console.warn(`[whatsapp] HELD ${lead.id} (${templateName}): ${rivalCall.reason}`);
+        await service.from("outreach_leads").update({
+          status: "not_contacted", whatsapp_delivery_status: "rivals_unavailable", contact_method: null,
+        }).eq("id", lead.id);
+        return json({
+          ok: false, error: "rivals_unavailable", reason: rivalCall.reason,
+          lead_id: lead.id, business: lead.business_name, ...statusPayload, auditAhead,
+        }, 200);
+      }
       if (rivalCall.fellBack) {
         console.warn(`[whatsapp] ${lead.id}: ${rivalCall.reason}`);
         templateName = rivalCall.template;

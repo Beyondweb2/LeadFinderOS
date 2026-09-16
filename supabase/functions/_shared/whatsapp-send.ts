@@ -4,7 +4,7 @@
 // shape. process-whatsapp-queue itself is intentionally NOT modified in this build;
 // it can adopt this helper in a later cleanup.
 
-import { normaliseTrade, normaliseTown, pluraliseTrade } from "../../../src/lib/templateVars.ts";
+import { articleTrade, normaliseTrade, normaliseTown, pluraliseTrade } from "../../../src/lib/templateVars.ts";
 import { RIVAL_VARS, RIVALS_REQUIRED } from "../../../src/lib/rivalHook.ts";
 import { displayBusinessName, IDENTIFY_NAME_TEMPLATES } from "../../../src/lib/displayName.ts";
 
@@ -49,7 +49,7 @@ export function resolveWhatsAppEnv() {
    ask for the wrong grammar, and the failure would be a prospect reading "for a accountants".
    `rival_1|2|3` are the three competitor names competitor_hook sends as SEPARATE parameters — see
    src/lib/rivalHook.ts for why they are never padded and never degrade. */
-export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "competitors" | "rival_1" | "rival_2" | "rival_3" | "onboarding_url" | "contact_first_name" | "town" | "audit_url";
+export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "trade_article" | "competitors" | "rival_1" | "rival_2" | "rival_3" | "onboarding_url" | "contact_first_name" | "town" | "audit_url";
 
 /* ⛔ THE VIDEO HEADER'S URL, IN ONE PLACE (Paul, 2026-09-12).
    `video_template` is registered at Meta with a VIDEO header, which means the send MUST carry a
@@ -143,6 +143,26 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      be named in CONTINUATION_TEMPLATES or it will be dropped as phone_already_contacted for every
      lead it is written for — the audit_reply_warm trap. */
   audit_followup: { lang: "en", vars: ["trade_plural", "town", "rival_1", "rival_2", "rival_3", "audit_url"] },
+  /* audit_followup_call — SUBMITTED TO META 2026-09-16. audit_followup's sibling, and the
+     difference is what it ASKS FOR: no report link at all, just "happy to explain it here or jump
+     on a quick call".
+     ⛔ FIVE VARS, AND {{1}} CARRIES ITS OWN ARTICLE: {{1}} trade as "a plumber" / "an electrician",
+     {{2}} town, {{3}} {{4}} {{5}} three rivals. Taken from the body Paul submitted, never inferred
+     from audit_followup — that one opens with a PLURAL trade and ends with a link, so borrowing its
+     six-var list would send one parameter too many (#132000) and shift the rivals by one.
+     🟢 trade_article IS A NEW VARIABLE AND IT EXISTS TO DODGE THE VOWEL BLOCK RATHER THAN BE
+     EXEMPTED FROM IT. Meta's registered text here reads "looking for {{1}} in {{2}}" with NO
+     article, so the value supplies it and "an electrician" is simply written correctly. See the
+     long note above articleTrade in src/lib/templateVars.ts.
+     ⛔ NO audit_url, AND IT IS STILL needsAudit. The RIVALS come from the lead's completed audit,
+     so it must wait for one exactly as its sibling does — templateNeedsAudit reads
+     AUDIT_DERIVED_VARS for that reason, and named three variables (none of them a rival) until
+     2026-09-16.
+     ⛔ A CONTINUATION, SO IT HOLDS RATHER THAN FALLING BACK when the audit cannot name three
+     rivals: video_template is a cold opener and this message is sent into a live thread. The rule
+     is in src/lib/rivalHook.ts, keyed on the property, not on this name.
+     No header, no buttons. MIRRORS process-whatsapp-queue; change both together. */
+  audit_followup_call: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3"] },
   /* explain_offer — SUBMITTED TO META 2026-09-15. The full pitch: what we do, both figures, the
      guarantee, and the sign-up link, over the SAME video header video_template carries.
      THREE vars: {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} onboarding link.
@@ -551,6 +571,29 @@ Short explainer video attached. Happy to answer any questions.
 https://findable.live/`;
 };
 
+/* audit_followup_call — SUBMITTED TO META 2026-09-16. Five variables: {{1}} trade WITH ITS OWN
+   ARTICLE ("a plumber", "an electrician"), {{2}} town, {{3}} {{4}} {{5}} three rivals. No link, no
+   header, no buttons.
+   ⛔ "i" IS LOWERCASE IN THREE PLACES AND MUST NOT BE "CORRECTED" — Paul's wording, the same rule
+   as "chatgpt" in its sibling. It reads as something a person typed on a phone, which is the whole
+   point of a message that offers a call.
+   ⛔ AND THE ARTICLE IS IN THE VALUE, NOT THE SENTENCE. That is what makes this the first outreach
+   template an accountant or an electrician can receive without a map workaround — 179 of 1,066
+   lead-linked audits (16.8%) are held on video_template's hardcoded "for a {{2}}".
+   ⚠️ Rivals render as ONE joined string here where Meta sends three parameters, exactly as
+   audit_followup does: the Inbox has no audit to read them from, so they degrade to "other firms".
+   The words the prospect received are on Meta's side. */
+const auditFollowupCallBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
+  const t = articleTrade(trade);
+  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || "a local business")} in ${town || "your area"} so i asked AI and it mentioned ${competitors || "other firms"}
+
+I know how to get you showing up more in those answers so people are more likely to find you
+
+Happy to explain it here or jump on a quick call if you'd rather
+
+Paul✌️`;
+};
+
 /* audit_followup — SUBMITTED TO META 2026-09-15, re-registered the same day with the article
    removed. Six variables: {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} {{4}} {{5}} three
    rivals, {{6}} report link. No header, no buttons.
@@ -627,6 +670,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   audit_result_hook: auditResultHookBody,
   audit_reply_warm: auditReplyWarmBody,
   audit_followup: auditFollowupBody,
+  audit_followup_call: auditFollowupCallBody,
   explain_offer: explainOfferBody,
   explain_offer_v2: explainOfferV2Body,
 };
@@ -692,6 +736,16 @@ export function templateBodyParams(
          held on that rule today. See src/lib/templateVars.ts. */
       case "trade_plural": {
         const t = pluraliseTrade(extra?.trade);
+        if (!t.ok) throw new Error(`unsafe_template_var:${t.reason}:${t.detail}`);
+        return t.value;
+      }
+      /* ⛔ THE ARTICLE SLOT. audit_followup_call's body is "looking for {{1}} in {{2}}" — the
+         article is NOT in Meta's registered text, so the VALUE carries it ("a plumber", "an
+         electrician"). Same map and same refusals as the other two slots; the ONLY difference is
+         that a vowel-initial trade is written correctly here instead of being held, because there
+         is no hardcoded "a" for it to disagree with. See src/lib/templateVars.ts. */
+      case "trade_article": {
+        const t = articleTrade(extra?.trade);
         if (!t.ok) throw new Error(`unsafe_template_var:${t.reason}:${t.detail}`);
         return t.value;
       }

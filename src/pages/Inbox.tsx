@@ -117,6 +117,10 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
      explain_offer_v2. Naming a PAST message is this map's job, so every sendable template needs a
      row; the picker's label (WHATSAPP_TEMPLATES) answers the other question and is not read here. */
   audit_followup: 'Audit follow-up ("I asked chatgpt" note)',
+  /* ⚠️ DELIBERATELY ABSENT FROM REPORT_TEMPLATES ABOVE, unlike every other audit-class template:
+     audit_followup_call carries NO report link, so counting it as a report sent would put the
+     "report sent" badge on a thread that has never been sent one. */
+  audit_followup_call: 'Audit follow-up + call ("I asked AI" note, no link)',
   explain_offer: 'Explain the offer (full pitch + sign-up link)',
   explain_offer_v2: 'Explain the offer v2 (adds the 941-audit proof)',
   onboarding_followup: 'Onboarding follow-up',

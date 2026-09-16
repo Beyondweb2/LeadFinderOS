@@ -76,6 +76,14 @@ const EXPECTED_CONTINUATIONS = [
      QUEUED to a number with NO history it would go out as a first touch. It is sent from the Inbox,
      never the queue — the containment is operational, not structural. */
   "audit_followup",
+  /* audit_followup_call — added 2026-09-16, the same note with a call offer instead of a report
+     link. Same classification for the same reason: it is written for a lead who has already
+     answered, so cold would refuse it for its whole audience. Same accepted cost.
+     ⛔ AND ITS CLASSIFICATION DOES A SECOND JOB NOW. rivalHookDecision reads this set: a
+     rival-naming CONTINUATION that cannot fill three names HOLDS, where a cold one falls back to
+     video_template. So listing it here is also what stops a cold opener being substituted into a
+     live thread — see scripts/article-trade-and-hold.test.ts. */
+  "audit_followup_call",
   /* explain_offer — added 2026-09-15 with audit_followup's reasoning: Inbox-only, sent into a live
      conversation, so cold would refuse it for its whole audience. Same accepted cost. */
   "explain_offer",
