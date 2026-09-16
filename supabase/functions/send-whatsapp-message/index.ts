@@ -448,7 +448,37 @@ Deno.serve(async (req) => {
         if (!allowResend && await pitchEverSent(service, resolvedLeadId, templateName)) {
           return json({ ok: false, error: "pitch_already_sent" }, 200);
         }
-        const a = await resolveAuditReplyVars(service, resolvedLeadId);
+        let a = await resolveAuditReplyVars(service, resolvedLeadId);
+        /* ⛔ TRIGGER THE CLEANER AND SEND WHEN READY — DON'T REFUSE (Paul, 2026-09-16). The common
+           refusal here is "the cleaner hasn't run": extract-competitors ran at finalisation but gpt-4o
+           returned a malformed batch, so it stamped complete:false and left no competitors. Refusing
+           left the lead sitting until the operator remembered to come back. Instead: re-invoke the
+           cleaner for the lead's newest completed run (a fresh model call clears the flaky omission
+           nearly always), await it, and re-resolve. If it still can't, THEN refuse. */
+        if (!a.ok && /cleaner hasn.?t run|haven.?t been extracted/i.test(a.reason)) {
+          const { data: auds } = await service.from("ai_audits").select("id").eq("lead_id", resolvedLeadId);
+          const auditIds = ((auds ?? []) as Array<{ id: string }>).map((x) => x.id);
+          let runId: string | null = null;
+          if (auditIds.length) {
+            const { data: run } = await service.from("ai_audit_runs").select("id")
+              .in("audit_id", auditIds).eq("status", "complete")
+              .order("created_at", { ascending: false }).limit(1).maybeSingle();
+            runId = (run as { id?: string } | null)?.id ?? null;
+          }
+          if (runId) {
+            try {
+              const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extract-competitors`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "", "x-internal-job": "1" },
+                body: JSON.stringify({ runId }),
+              });
+              if (!res.ok) console.error(`[send-whatsapp-message] on-send cleaner invoke HTTP ${res.status} for run ${runId}`);
+            } catch (e) {
+              console.error(`[send-whatsapp-message] on-send cleaner invoke error for run ${runId}:`, (e as Error).message);
+            }
+            a = await resolveAuditReplyVars(service, resolvedLeadId);   // re-resolve after the fresh clean
+          }
+        }
         if (!a.ok) return json({ ok: false, error: "audit_reply_unavailable", reason: a.reason }, 200);
         /* ⛔ THREE NAMES OR A DIFFERENT MESSAGE (src/lib/rivalHook.ts). Same decision as the drip,
            from the same leaf, so the two paths cannot fall back to different templates.

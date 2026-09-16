@@ -543,6 +543,19 @@ Deno.serve(async (req) => {
     // (polling) row keeps its run open — so a run never finalises while a question is in flight.
     const finalised = await finaliseSettledRuns(service, [...touchedRuns], estCost, cappedRuns, apifyToken);
 
+    /* 🔴 RETRY THE STUCK CLEANINGS. extract-competitors fires ONCE at finalisation; when gpt-4o
+       returns a malformed batch ("model omitted N of M ids") it stamps complete:false and, until
+       now, nothing retried — so an audit sat uncleaned for hours and its audit_reply refused with
+       "the cleaner hasn't run" (Kia Electrical, 2026-09-16; 19 runs / 15 leads found stuck). A fresh
+       invoke clears the flaky omission nearly always. Bounded so a genuinely-unsalvageable run can't
+       burn OpenAI for ever: attempts < RETRY_CAP, spaced ≥ RETRY_SPACING_MS apart, few per tick. */
+    let cleaningRetries = 0;
+    try {
+      cleaningRetries = await retryStuckCleanings(service);
+    } catch (e) {
+      console.error("[process-ai-audit-queue] cleaning retry sweep failed:", e instanceof Error ? e.message : String(e));
+    }
+
     /* SEO STEP LAST. One scan per tick, after every question has been started, polled and
        finalised, so a website audit never delays its own questions. Skipped when this invocation
        has already spent most of its budget - the scan can wait a tick, questions cannot, and
@@ -716,11 +729,12 @@ async function stampCleaningFailure(service: any, runId: string, detail: string)
   try {
     const { data } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
     const cur = data?.results && typeof data.results === "object" ? data.results : {};
+    const attempts = Number((cur as { competitor_cleaning?: { attempts?: unknown } })?.competitor_cleaning?.attempts ?? 0) + 1;
     await service.from("ai_audit_runs").update({
       results: {
         ...cur,
         competitor_cleaning: {
-          at: new Date().toISOString(), model: null, items_total: null, items_cleaned: 0,
+          at: new Date().toISOString(), model: null, attempts, items_total: null, items_cleaned: 0,
           complete: false, errors: [detail],
         },
       },
@@ -728,6 +742,50 @@ async function stampCleaningFailure(service: any, runId: string, detail: string)
   } catch (e) {
     console.error(`[process-ai-audit-queue] could not stamp cleaning failure for ${runId}:`, e instanceof Error ? e.message : e);
   }
+}
+
+/* ── RETRY STUCK COMPETITOR CLEANINGS ─────────────────────────────────────────────────────────────
+   extract-competitors runs ONCE at finalisation; a malformed gpt-4o batch ("model omitted N of M
+   ids") stamps competitor_cleaning.complete=false and nothing retried it — so the audit_reply for
+   that lead refused ("the cleaner hasn't run") for hours. A fresh invoke clears the flaky omission
+   nearly always. This sweep re-invokes extract-competitors for complete-but-incomplete runs, BOUNDED
+   so an unsalvageable run can't burn OpenAI for ever: attempts < RETRY_CAP, spaced, few per tick. */
+const RETRY_CLEAN_CAP = 4;                 // total attempts (1 at finalise + up to 3 retries) then give up
+const RETRY_CLEAN_SPACING_MS = 4 * 60_000; // don't hammer the same run every 30s tick
+const RETRY_CLEAN_PER_TICK = 5;            // bound cost + tick time
+// deno-lint-ignore no-explicit-any
+async function retryStuckCleanings(service: any): Promise<number> {
+  const { data, error } = await service
+    .from("ai_audit_runs").select("id, results")
+    .eq("status", "complete")
+    .filter("results->competitor_cleaning->>complete", "eq", "false")
+    .gte("created_at", new Date(Date.now() - 7 * 86_400_000).toISOString())
+    .limit(30);
+  if (error || !Array.isArray(data)) return 0;
+  const now = Date.now();
+  const eligible = (data as Row[]).filter((r) => {
+    const c = r.results?.competitor_cleaning;
+    if (!c || c.complete === true) return false;
+    const attempts = Number(c.attempts ?? 1);
+    const atMs = Date.parse(c.at ?? "");
+    return attempts < RETRY_CLEAN_CAP && (!Number.isFinite(atMs) || now - atMs > RETRY_CLEAN_SPACING_MS);
+  }).slice(0, RETRY_CLEAN_PER_TICK);
+  let n = 0;
+  for (const r of eligible) {
+    try {
+      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extract-competitors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "", "x-internal-job": "1" },
+        body: JSON.stringify({ runId: r.id }),
+      });
+      if (res.ok) n++;
+      else console.error(`[process-ai-audit-queue] cleaning retry failed for run ${r.id}: HTTP ${res.status}`);
+    } catch (e) {
+      console.error(`[process-ai-audit-queue] cleaning retry error for run ${r.id}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (n) console.log(`[process-ai-audit-queue] retried ${n} stuck competitor cleanings`);
+  return n;
 }
 
 // deno-lint-ignore no-explicit-any
