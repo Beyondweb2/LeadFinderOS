@@ -763,9 +763,18 @@ async function retryStuckCleanings(service: any): Promise<number> {
     .limit(30);
   if (error || !Array.isArray(data)) return 0;
   const now = Date.now();
+  /* ⛔ A run that already has competitors is SENDABLE — resolveAuditReplyVars gates on competitors,
+     not on a perfect stamp — so retrying it is pure wasted gpt-4o spend (Kia reached 6 attempts with
+     competitors long since extracted). Only retry runs with NO usable competitors yet. */
+  const hasCompetitors = (results: unknown): boolean => {
+    const qs = (results as { questions?: Array<{ engines?: Record<string, { competitors?: unknown[] }> }> } | null)?.questions;
+    if (!Array.isArray(qs)) return false;
+    return qs.some((q) => q.engines && Object.values(q.engines).some((e) => Array.isArray(e?.competitors) && e.competitors.length > 0));
+  };
   const eligible = (data as Row[]).filter((r) => {
     const c = r.results?.competitor_cleaning;
     if (!c || c.complete === true) return false;
+    if (hasCompetitors(r.results)) return false;              // already sendable — don't re-clean
     const attempts = Number(c.attempts ?? 1);
     const atMs = Date.parse(c.at ?? "");
     return attempts < RETRY_CLEAN_CAP && (!Number.isFinite(atMs) || now - atMs > RETRY_CLEAN_SPACING_MS);
