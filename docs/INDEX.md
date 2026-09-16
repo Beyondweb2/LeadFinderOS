@@ -52,6 +52,8 @@
 
 ## By file
 
+- `docs/deep-clean-phase3-plan.md` — Deep clean Phase 3: done steps, the remaining order (contact discovery → tour/i18n → barber branches → multi-user → function deletes → SQL → purges), Paul's standing decisions (2026-09-16)
+
 - `docs/state-of-play-2026-09-09.md` — State of play as written 2026-09-09 — the original preamble and §0 (§0; 102 lines)
 - `docs/business-and-offer.md` — The business, the price, the guarantee, the site origin, the report CTA (§1, §11, §12, §13, §13b, §26; 494 lines)
 - `docs/how-paul-works.md` — How Paul works — the original §2 (§2; 50 lines)
