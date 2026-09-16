@@ -8,7 +8,7 @@ import { looksAutomated, isDecline } from '@/lib/inboundClassify';
 import { isRealSend } from '@/lib/realSend';
 import { isPaidLead } from '@/lib/leadPayment';
 import { fetchAllRows } from '@/lib/fetchAllRows';
-import { creditRepliesByTemplate, creditOpenToTemplate, creditEventToTemplate, OPEN_ATTRIBUTION_SLACK_MS } from '@/lib/templateAttribution';
+import { creditRepliesByTemplate, creditOpenToTemplate, creditEventToTemplate, OPEN_ATTRIBUTION_SLACK_MS, REPORT_LINK_TEMPLATES, SITE_TRACKING_START } from '@/lib/templateAttribution';
 import { foldArmComparison, type ArmComparison, type ArmLeadInput } from '@/lib/armComparison';
 import { canonicalTemplate } from '@/lib/whatsappTemplates';
 
@@ -53,30 +53,9 @@ const SIGNUP_TEMPLATES = new Set(['onboarding_followup', 'explain_offer', 'expla
    video_template, which became the outreach hook and never got added here.
    ⚠️ SO: IF A NEW TEMPLATE EVER CARRIES A REPORT LINK, ADD IT HERE. Forgetting does not throw; it
    silently moves real prospect opens into the unattributed bucket and understates the rate. */
-/* ⚠️ audit_reply_warm ADDED 2026-09-07 WITH THE TEMPLATE ITSELF. Its {{3}} is the report link, so
-   forgetting it here does not throw — it silently moves real prospect opens into the unattributable
-   bucket and understates the open rate, which is the failure this set's own comment records. */
-/* ⚠️ FIVE NOW. Forgetting to add a report-carrying template here does not throw — it silently moves
-   that template's real prospect opens into the "not attributable" bucket and prints a low open rate
-   for the template beside it. competitor_hook's {{6}} is the same findable.live/report/<auditId>
-   link every other entry carries. */
-const REPORT_LINK_TEMPLATES = new Set(['audit_reply', 'video_template', 'free_check_result', 'audit_reply_warm', 'competitor_hook', 'audit_followup']);
+/* REPORT_LINK_TEMPLATES + SITE_TRACKING_START now live in src/lib/templateAttribution.ts, imported
+   above — one source shared with the Inbox engagement pills (they were two drifting copies before). */
 
-/* ⛔ THE DAY PAGE-HIT LOGGING WENT LIVE. Every site-visit rate is measured from here, because a
-   send that predates it had no way to be counted and would drag its template's rate to a meaningless
-   0%. Set once, when findable-onboarding's prefill hook was deployed — do not "refresh" it, and do
-   not derive it from the earliest row in the table: an empty first week would then silently move the
-   start date forward and inflate every rate.
-   ⚠️ IT IS THE MIDNIGHT AFTER THE DEPLOY, NOT THE DEPLOY MINUTE, AND THAT IS THE CONSERVATIVE
-   DIRECTION ON PURPOSE. The hook went live mid-afternoon on 2026-09-05 with the table not yet
-   created, so part of that day's sends could not have produced a hit however fast the SQL was run.
-   Counting them would divide real sends by a period the tracking was not running and print a low
-   rate on day one — the first number anyone looks at. Excluding the partial day costs one day of
-   history and buys a figure that is right from the moment it first appears. The card shows
-   "none sent since" until a template is sent inside the tracked window, which is the honest state.
-   ⚠️ London is UTC+1 in September and the outreach window is 07:00–21:30 London, so a UTC-midnight
-   boundary lands over an hour before any send day begins. No day is ever split by it. */
-const SITE_TRACKING_START = Date.parse('2026-09-06T00:00:00Z');
 
 /* A questionnaire submission whose source is the FREE CHECK form is not a sign-up start. 12 of the
    22 onboarding rows on file are free checks (measured 2026-09-05), and counting them credited our

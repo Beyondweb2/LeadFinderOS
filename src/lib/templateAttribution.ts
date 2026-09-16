@@ -110,6 +110,64 @@ export function creditRepliesByTemplate(msgs: AttributableMsg[]): ReplyCredit[] 
  */
 export const OPEN_ATTRIBUTION_SLACK_MS = 60_000;
 
+/* ⛔ THE ONE REPORT-LINK TEMPLATE SET, AND THE ONE SITE-TRACKING START. Both moved here from
+   useCampaignStats 2026-09-16 so the campaign card and the Inbox engagement pills read the SAME
+   source rather than two drifting copies (there were already two: useCampaignStats and Inbox.tsx).
+   A report-carrying template forgotten here silently moves that template's real opens into the
+   "not attributable" bucket AND drops the Inbox AUDIT pill for those leads — the same failure the
+   campaign card's own comment records, now in one place. */
+export const REPORT_LINK_TEMPLATES: ReadonlySet<string> = new Set([
+  'audit_reply', 'video_template', 'free_check_result', 'audit_reply_warm', 'competitor_hook', 'audit_followup',
+]);
+
+/* The day page-hit logging went live (findable-onboarding's prefill hook). Every site-visit read is
+   measured from here: a send/hit that predates it could not have been counted. Midnight AFTER the
+   deploy on 2026-09-05, so no partial first day inflates a rate; London is UTC+1 in September and
+   the send window is 07:00-21:30 London, so a UTC-midnight boundary never splits a day. Do not
+   "refresh" it and do not derive it from the earliest row (an empty first week would move it
+   forward and inflate every rate). */
+export const SITE_TRACKING_START = Date.parse('2026-09-06T00:00:00Z');
+
+/**
+ * Per-lead engagement for the Inbox pills, from the SAME source the campaign card attributes by.
+ *
+ * AUDIT pill — the prospect opened their report link. Reads ai_audits.first_opened_at (set once,
+ * coalesced) with open_count > 0, and only counts it when the open happened at/after the earliest
+ * report-link send to this lead (minus the slack) — the exact rule that separates a real open from
+ * an OPERATOR PREVIEW, since both hit the same URL and bump the same counter. No report-link send
+ * on record → null: an open we cannot tie to a send we made is not shown as "they opened it".
+ * Returns the earliest qualifying open, ISO, or null.
+ */
+export function leadReportOpenedAt(
+  audits: ReadonlyArray<{ open_count: number | null; first_opened_at: string | null }>,
+  earliestReportLinkSentMs: number | null,
+): string | null {
+  if (earliestReportLinkSentMs == null) return null;
+  let best: number | null = null;
+  for (const a of audits) {
+    if ((a.open_count ?? 0) <= 0 || !a.first_opened_at) continue;
+    const t = Date.parse(a.first_opened_at);
+    if (Number.isNaN(t)) continue;
+    if (t >= earliestReportLinkSentMs - OPEN_ATTRIBUTION_SLACK_MS && (best == null || t < best)) best = t;
+  }
+  return best == null ? null : new Date(best).toISOString();
+}
+
+/**
+ * SITE pill — the prospect clicked through to findable.live's sign-up page. Reads lead_page_hits
+ * (written by findable-onboarding's prefill hook), counting only hits at/after SITE_TRACKING_START
+ * for the same reason the campaign card does. Returns the earliest qualifying hit, ISO, or null.
+ */
+export function leadSiteVisitedAt(pageHitIsos: ReadonlyArray<string>): string | null {
+  let best: number | null = null;
+  for (const iso of pageHitIsos) {
+    const t = Date.parse(iso);
+    if (Number.isNaN(t) || t < SITE_TRACKING_START) continue;
+    if (best == null || t < best) best = t;
+  }
+  return best == null ? null : new Date(best).toISOString();
+}
+
 export function creditOpenToTemplate(
   msgs: AttributableMsg[],
   reportTemplates: ReadonlySet<string>,

@@ -35,6 +35,7 @@ import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2 } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
+import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
 import {
   DEFAULT_FIRST_REPLY_MODE,
   DEFAULT_FIRST_REPLY_TEMPLATE,
@@ -97,7 +98,32 @@ function templateLabel(name: string | null): string {
    ever been sent to a free-check prospect - it drives the "report sent" badge and the
    report-vs-reply ordering. A Set, because the next template carrying a report must join one list
    rather than three string comparisons. */
-const REPORT_TEMPLATES = new Set(['audit_reply', 'free_check_result', 'video_template', 'audit_reply_warm', 'competitor_hook', 'audit_followup']);
+/* The report-link set is shared with useCampaignStats and the engagement pills — one source in
+   templateAttribution.ts (imported as REPORT_TEMPLATES to keep this file's call sites unchanged). */
+const REPORT_TEMPLATES = REPORT_LINK_TEMPLATES;
+
+/* Two at-a-glance engagement pills beside the status pill: AUDIT (they opened their report link)
+   and SITE (they clicked through to findable.live). Each shows ONLY when it happened; the hover
+   gives the date. Both values come from useInbox, which reads the SAME source the campaign card
+   attributes by (ai_audits.first_opened_at gated to after the send; lead_page_hits). */
+function EngagementPills({ reportOpenedAt, siteVisitedAt }: { reportOpenedAt: string | null; siteVisitedAt: string | null }) {
+  if (!reportOpenedAt && !siteVisitedAt) return null;
+  const when = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
+  const pill = 'inline-flex items-center rounded px-1 py-0 text-[9px] font-semibold uppercase tracking-wide leading-tight';
+  return (
+    <>
+      {reportOpenedAt && (
+        <span className={pill + ' bg-sky-500/20 text-sky-400'} title={'Opened their report · ' + when(reportOpenedAt)}>Audit</span>
+      )}
+      {siteVisitedAt && (
+        <span className={pill + ' bg-emerald-500/20 text-emerald-400'} title={'Visited findable.live · ' + when(siteVisitedAt)}>Site</span>
+      )}
+    </>
+  );
+}
 
 // Clean display names for templates (incl. the legacy pre-rename name). Unknown → "Template".
 const TEMPLATE_DISPLAY: Record<string, string> = {
@@ -1107,6 +1133,9 @@ const Inbox = () => {
         isPaid: isPaidLead(lead),
         label: lead.business_name || `+${norm}`, unassigned: false,
         lastMessage: undefined as never, lastMessageAt: new Date(0).toISOString(), lastInboundAt: null,
+        /* A freshly-opened thread has no messages, so no report link was sent and no engagement is
+           attributable yet; a lead with real engagement has real messages and a real conversation. */
+        reportOpenedAt: null, siteVisitedAt: null,
       };
       setSynthetic(synth);
       setActiveKey(key);
@@ -1471,6 +1500,7 @@ const Inbox = () => {
                   {savingStatusKey === c.key
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                     : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} />}
+                  <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} />
                 </div>
               )}
             </div>
@@ -1502,6 +1532,7 @@ const Inbox = () => {
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                         : <PipelineStatusSelect value={active.leadStatus} onValueChange={(status) => handleSetStatus(active, status)} />
                     )}
+                    <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} />
                     <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
                   </div>
                 </div>
