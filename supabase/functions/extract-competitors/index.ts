@@ -155,8 +155,10 @@ async function stampCleaning(service: any, runId: string, s: {
   try {
     const { data } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
     const cur = data?.results && typeof data.results === "object" ? data.results : {};
+    // deno-lint-ignore no-explicit-any
+    const attempts = Number((cur as any)?.competitor_cleaning?.attempts ?? 0) + 1;
     await service.from("ai_audit_runs")
-      .update({ results: { ...cur, competitor_cleaning: { at: new Date().toISOString(), model: MODEL, ...s } } })
+      .update({ results: { ...cur, competitor_cleaning: { at: new Date().toISOString(), model: MODEL, attempts, ...s } } })
       .eq("id", runId);
   } catch (e) {
     console.error("[extract-competitors] could not stamp cleaning outcome:", e instanceof Error ? e.message : e);
@@ -545,6 +547,8 @@ Return one entry per id via return_competitors.`;
     const stamp = {
       at: new Date().toISOString(),
       model,
+      // deno-lint-ignore no-explicit-any
+      attempts: Number((cur as any)?.competitor_cleaning?.attempts ?? 0) + 1,   // for the retry sweep's cap
       items_total: answerItemsAvailable,
       items_cleaned: byId.size,
       /* How many answers carry a MODEL naming verdict after this run, and how many of those were
