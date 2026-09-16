@@ -29,7 +29,6 @@ const BaselinePage = lazy(() => import("./pages/Baseline"));
 const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
 const PlaybookPage = lazy(() => import("./pages/Playbook"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
-const Feedback = lazy(() => import("./pages/Feedback"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Coverage = lazy(() => import("./pages/Coverage"));
@@ -223,7 +222,6 @@ const App = () => {
               <Route path="/templates" element={<Templates />} />
               {/* WhatsApp Inbox — operator-gated + in-app (each operator sees only their own) */}
               <Route path="/inbox" element={<Inbox />} />
-              <Route path="/feedback" element={<Feedback />} />
               <Route path="/coverage" element={<Coverage />} />
               {/* Stateless review-reply generator — paste a Google review in, copy a reply out (or a
               don't-reply verdict). No Google API, no storage; see src/pages/ReviewReply.tsx. */}

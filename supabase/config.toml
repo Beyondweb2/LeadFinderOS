@@ -18,9 +18,6 @@ verify_jwt = false
 [functions.cron-run]
 verify_jwt = false
 
-[functions.send-feedback]
-verify_jwt = false
-
 [functions.admin-users]
 verify_jwt = false
 

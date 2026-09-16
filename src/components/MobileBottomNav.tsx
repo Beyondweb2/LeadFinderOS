@@ -66,7 +66,6 @@ export function MobileBottomNav() {
     { title: 'Inbox', url: '/inbox', icon: MessageSquare },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },
     { title: t('nav.templates'), url: '/templates', icon: FileText },
-    { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare },
   ];
 
 
