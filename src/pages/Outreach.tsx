@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBulkJobs } from '@/hooks/useBulkJobs';
 import { bulkJobProgress } from '@/lib/bulkJobProgress';
 import { CampaignPicker } from '@/components/CampaignPicker';
+import { CrawlCheckUrlButton } from '@/components/CrawlCheckButton';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, X } from 'lucide-react';
 import { isDemoLead } from '@/lib/demoLeads';
@@ -196,6 +197,8 @@ const Outreach = () => {
           </p>
         </div>
         <div className="flex items-center justify-center sm:justify-end gap-2 shrink-0">
+          {/* Paste-a-URL crawlability check — for a site sent to Paul before it's a lead (b). */}
+          <CrawlCheckUrlButton />
           <span className="text-xs text-muted-foreground hidden sm:inline">Campaign</span>
           <CampaignPicker mode="filter" value={campaignFilter} onChange={changeCampaignFilter} />
         </div>
