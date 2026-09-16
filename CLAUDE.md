@@ -22,15 +22,19 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 - **Repo:** `main` auto-deploys the SPA to Cloudflare Pages on push. **Edge functions deploy by
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
-  `check-edge-syntax` + `check-edge-undefined` + `npm run build` + `npm test` (117 suites).
-  **Honest green is 112/117** — the five known-stale suites are `audit-push`, `coverage-lead-counts`,
+  `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
+  (113 suites). **Honest green is 109/113** — the four known-stale suites are `coverage-lead-counts`,
   `report-attribution`, `verdict`, `site-origin` (needs Deno). Read the FAILED names, never the count.
 - **Deno is not installed.** `deno check` cannot run here; the deploy is the only real gate for an
   edge function (§3, §4).
-- **The deep clean is in progress.** `INVENTORY_DEEP_CLEAN.md` (untracked) is the record and carries
-  Paul's decisions. Dead and not to be built on: the barber/salon product (deleted 2026-09-09; **17
-  functions still deployed with no source**), Instantly/email outreach, Twilio/SMS, contact
-  discovery, the Feedback page, the multi-user surface. Phase 3 (deletions) follows this split.
+- **The deep clean is in progress — Phase 3, steps 1–3 done (Feedback, SMS, Instantly; all in
+  `main`).** `docs/deep-clean-phase3-plan.md` is the plan for the rest — contact discovery, tour/i18n,
+  barber branches in live functions, the multi-user surface, the 20 orphan function deletes, the
+  SQL and purges that go to Paul one statement at a time — **and Paul's standing decisions, which
+  are not to be re-asked.** `INVENTORY_DEEP_CLEAN.md` (untracked) is the Phase 1 evidence. Dead and
+  not to be built on: the barber/salon product, Instantly, Twilio/SMS, contact discovery, the
+  Feedback page, the multi-user surface. 22 functions are deployed with no source (2 belong to the
+  findable-directory repo and stay).
 - **Other Claude sessions may share this checkout.** Do task work in a `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, junction `node_modules` and `../findable-site` in);
   never switch branches in the primary checkout while another session may be open.
@@ -150,9 +154,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
       literal that tsc recovers from. ⛔ **Never put a backtick inside a template literal, not even in
       a comment or an HTML comment inside one.** Bitten three times.
 - [ ] `npm run typecheck` does **not** cover `supabase/functions`. `check-edge-syntax.mjs` parses,
-      `check-edge-undefined.mjs` catches an undefined NAME (TS2304 only). ⛔ **Neither catches a
-      deleted or extensionless MODULE import** — that fails only at deploy. Before Phase 3 the import
-      graph becomes a gate; until then walk `from "./…"` from each `index.ts` yourself.
+      `check-edge-undefined.mjs` catches an undefined NAME (TS2304 only), and
+      **`check-import-graph.mjs` fails on a deleted or extensionless MODULE import in any gated file
+      and on `@/` inside an edge closure.** `node scripts/check-import-graph.mjs --reached-by <file>`
+      prints the redeploy list for a shared module; `--orphans` lists files nothing imports. Types
+      are still the deploy's job.
 - [ ] Every `src/lib` file reachable from an edge function uses **relative imports with an explicit
       `.ts`** — never `@/`, never extensionless. Grep the closure before deploying.
 - [ ] Tests for code you delete are deleted in the same commit. New client-facing renderer → add it to
@@ -347,9 +353,8 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   user".
 - **`whatsapp_sends.user_id` NULL = the queue sent it; set = the Inbox button.** That column is the
   sender diagnostic. `whatsapp_messages.user_id` NULL = system-sent or unmatched inbound.
-- **Edge auth:** handler-side, always. Internal callers use CRON_SECRET + `x-internal-job`;
-  `instantly-push` (dead product) deliberately accepts only that. Every function is listed in
-  `config.toml`.
+- **Edge auth:** handler-side, always. Internal callers use CRON_SECRET + `x-internal-job`. Every
+  function is listed in `config.toml`.
 - **The Dashboard "Full Reset" is gone**; `reset_my_account()` still exists in the DB until Phase 3.
 
 **WhatsApp**
@@ -464,7 +469,8 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - Two stranded free checks may still need the card's resend pressed.
 - `FINDABLE_ALLOWED_ORIGINS` may not contain `findable.live` — unfalsifiable and no longer depended on.
 - Website clicks other than the report link are untracked, by design for now.
-- Deep clean Phase 3 is owed: see `INVENTORY_DEEP_CLEAN.md` §7 for the decided scope and order.
+- Deep clean Phase 3, steps 4–10 are owed: `docs/deep-clean-phase3-plan.md` has the order, the file
+  lists and Paul's decisions. The `instantly-poll-run` cron is still active until Paul unschedules it.
 
 ---
 
@@ -500,7 +506,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The measured findings in detail | `docs/findings.md` (§5) |
 | How things stood on 2026-09-09, the harness repair | `docs/state-of-play-2026-09-09.md` (§0) |
 | The original §2 / §3 / §7 / §10 text | `docs/how-paul-works.md`, `docs/discipline-checklist.md`, `docs/parked-branches.md`, `docs/other-docs.md` |
-| What is dead, what only looks dead, Paul's deletion decisions | `INVENTORY_DEEP_CLEAN.md` (untracked) |
+| The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,
 added to `docs/INDEX.md`), and put here only the rule it taught or the pointer to it.
