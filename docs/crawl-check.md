@@ -3,6 +3,16 @@
 The free crawlability check (`crawl-check` edge fn, fetches only, £0 — never the Apify SEO scanner)
 run before messaging a prospect. One fetch pass, two separate outputs, one stored row.
 
+## When it runs
+- **Automatically at audit finalisation** (`process-ai-audit-queue`, 2026-09-17) — every audit that
+  finalises crawls its lead's site (complete/capped/failed), so every audited lead is covered without
+  the operator pressing anything. Deduped on the 30d/v2 freshness gate, so a 3-run baseline crawls
+  once and an already-current lead is left alone; skips market/no-lead audits and no-website leads.
+  Internal auth (CRON_SECRET + x-internal-job); fail-safe, never touches the audit.
+- **The Crawl-site button** (Inbox header / Outreach row) — on demand, and "Run again" in the popup.
+- **Lazily on report open** (`render-audit-report`) — re-populates a stale/missing crawl when a
+  report is viewed.
+
 ## The two outputs, kept strictly apart
 - **AI-visibility faults** — `CrawlSignals` → `buildFaultLines` (`src/lib/crawlCheck.ts`). THIS is what
   the report's "what's stopping AI reading your site" section renders and what gates
