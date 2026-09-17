@@ -68,6 +68,7 @@ export const FREE_CHECK_TEMPLATE = "free_check_result";
    a zero-import leaf and four edge functions already read values from it, so a local constant here
    would only have been a fourth place for the origin to drift. */
 import { reportPublicUrl } from "../../../src/lib/findableOffer.ts";
+import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 
 const ADMIN_EMAIL = "paul@move37.fun";
 /* 🔴 THE SENDER. ON findable.live SINCE 2026-09-02, AND IT TOOK TWO ATTEMPTS TO GET HERE.
@@ -160,7 +161,7 @@ export async function maybeSendFreeCheckResult(
      enrichment_source column — see the note further down for why that was wrong and what it cost.) */
   let { data: audit } = await service
     .from("ai_audits")
-    .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, free_check_result, is_measurement, audit_purpose")
+    .select("id, short_code, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, free_check_result, is_measurement, audit_purpose")
     .eq("id", auditId).maybeSingle();
   /* ⚠️ free_check_result / audit_purpose may not exist yet (SQL pending). PostgREST fails the WHOLE
      select on an unknown column, so retry without them rather than reading "no audit" and never
@@ -169,7 +170,7 @@ export async function maybeSendFreeCheckResult(
   if (!audit) {
     const { data: legacy } = await service
       .from("ai_audits")
-      .select("id, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, is_measurement")
+      .select("id, short_code, lead_id, business_name, business_type, location_text, specialism, website, baseline_target_runs, is_measurement")
       .eq("id", auditId).maybeSingle();
     audit = legacy as typeof audit;
   }
@@ -415,7 +416,11 @@ export async function maybeSendFreeCheckResult(
   /* 4 — THE LINKS. The onboarding link MUST carry ?lead= — offerPriceForLead returns the FULL £99
      for `no_lead`, so a bare /onboarding/ URL would quietly charge this prospect the standard price
      instead of the founder price. onboardingUrl builds the only correct shape. */
-  const reportLink = reportPublicUrl(auditId);
+  /* THE SHORT LINK — findable.live/r/<code>, the unguessable code the prospect gets everywhere.
+     ai_audits.short_code is on every audit (backfill + insert trigger), so it never falls back; the
+     UUID /report/ form is kept only as a belt-and-braces default. */
+  const auditShortCode = (audit as { short_code?: string | null }).short_code ?? null;
+  const reportLink = auditShortCode ? shortReportUrl(auditShortCode) : reportPublicUrl(auditId);
   const origin = resolveSiteOrigin();
   const onboardLink = origin ? onboardingUrl(origin, lead.id, audit.business_name ?? null) : null;
   if (!onboardLink) {

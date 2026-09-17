@@ -50,6 +50,7 @@ console.log('\n── EVERY REPORT-ORIGIN CONSTANT IS findable.live ──');
    shrinking test. */
 const ORIGIN_CONSTANTS: { file: string; name: string }[] = [
   { file: 'src/lib/findableOffer.ts', name: 'REPORT_PUBLIC_ORIGIN' },
+  { file: 'src/lib/reportSlug.ts', name: 'REPORT_SHORT_ORIGIN' },
   { file: 'src/lib/aiAuditReportHtml.ts', name: 'REPORT_SITE_URL' },
   { file: 'supabase/functions/render-audit-report/index.ts', name: 'REPORT_PUBLIC_ORIGIN' },
   { file: 'supabase/functions/_shared/audit-reply.ts', name: 'REPORT_SITE_ORIGIN' },

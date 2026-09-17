@@ -25,6 +25,42 @@
 /** Hex characters of the audit id used as the code. 8 → 4.29e9 values; see collision note below. */
 export const AUDIT_CODE_LEN = 8;
 
+/* ─── SHORT PUBLIC CODE — /r/<code> ──────────────────────────────────────────────────────────────
+   The SHORT report link a prospect actually receives: findable.live/r/k4m2p9. It resolves on
+   `ai_audits.short_code` (a random, unique code assigned by a DB trigger on insert, backfilled onto
+   every existing audit), NOT on the audit id or the business name, so it is unguessable — these
+   reports are public and carry a business's competitor data, so a sequential or name-derived code
+   would let one prospect read another's report.
+
+   ⛔ THE ALPHABET AND LENGTH MUST MATCH THE DATABASE GENERATOR CHARACTER FOR CHARACTER
+   (gen_audit_short_code() in the migration; scripts/report-short-code.test.ts pins both sides). It
+   excludes 0/O/1/l/i so a code read aloud, written down or squinted at cannot be mistyped. 31 chars,
+   6 long → 31^6 ≈ 8.9e8 values; the unique index is the hard backstop, the trigger retries on the
+   astronomically rare in-generator collision.
+
+   The UUID and legacy name+8-hex slug forms both keep resolving forever (render-audit-report), so
+   every link already sent stays live. A short code is exactly 6 alphabet characters with no hyphen,
+   so it can never be confused with a UUID or a `name-<8hex>` slug. */
+export const SHORT_CODE_ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz';
+export const SHORT_CODE_LEN = 6;
+const SHORT_CODE_RE = /^[23456789abcdefghjkmnpqrstuvwxyz]{6}$/i;
+
+/** True when the whole string is a short code (6 unambiguous chars, no hyphen). Case-insensitive;
+ *  codes are stored lowercase, so callers lowercase before the DB lookup. */
+export function isShortCode(s: string): boolean {
+  return SHORT_CODE_RE.test((s || '').trim());
+}
+
+/* ⛔ findable.live, the one report origin (scripts/report-origin.test.ts pins it). Hardcoded rather
+   than imported from findableOffer so this leaf stays inside its 6-function edge closure instead of
+   dragging findableOffer's 12. */
+export const REPORT_SHORT_ORIGIN = 'https://findable.live';
+
+/** The short public report URL for a code. */
+export function shortReportUrl(code: string): string {
+  return `${REPORT_SHORT_ORIGIN}/r/${code}`;
+}
+
 /** business name → clean lowercase-hyphenated slug. Mirrors generate-report's slugify. */
 export function slugifyBusinessName(name: string): string {
   return (name || '').toLowerCase().normalize('NFKD')

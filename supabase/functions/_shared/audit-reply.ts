@@ -10,6 +10,7 @@ import { isAggregatorUrl } from "./aggregators.ts";
 import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competitorCleaning.ts";
 import { usableRivals, excludeSelfRivals } from "../../../src/lib/rivalHook.ts";
 import { nameMatches } from "../../../src/lib/nameMatch.ts";
+import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
 /* ⛔ THE PROSPECT-FACING ORIGIN. findable.live/report/<auditId> — a Pages Function proxy that forces
@@ -80,7 +81,7 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
   // 1) The lead's newest audit that has a COMPLETE (or capped) run — strictly by lead_id.
   const { data: audits } = await service
     .from("ai_audits")
-    .select("id, business_name, business_type, location_text, specialism, country, created_at, baseline_target_runs, ai_audit_runs(id, run_number, status, mention_rate, results, created_at), is_measurement")
+    .select("id, short_code, business_name, business_type, location_text, specialism, country, created_at, baseline_target_runs, ai_audit_runs(id, run_number, status, mention_rate, results, created_at), is_measurement")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false });
   const list = Array.isArray(audits) ? audits : [];
@@ -211,15 +212,20 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     };
   }
 
-  /* ⛔ THE AUDIT ID, ALWAYS. NO SLUG PREFERENCE. REMOVED 2026-08-05, DO NOT REINSTATE.
-     This used to read business_reports and swap in a name-carrying slug when one existed, keeping the
-     id only as a fallback. That preference is the bug that started all of this: a slug resolves ONLY
-     if it ends in the 8-hex code, and just 69 of 123 report rows do — published ones among the 54
-     that do not. So the "prettier" branch was a coin flip on whether a prospect got a dead link,
-     while the id it was overriding resolves directly with no lookup and cannot fail.
-     A marginally nicer URL is not worth a link that 404s on a live prospect. The name is in the
-     document; it does not need to be in the address bar. */
-  const link = `${REPORT_SITE_ORIGIN}/report/${audit.id}`;
+  /* ⛔ NEVER THE NAME-CARRYING business_reports SLUG. REMOVED 2026-08-05, DO NOT REINSTATE.
+     This used to read business_reports and swap in a name+8-hex slug when one existed. That is the
+     bug that started all of this: a NAME slug resolves ONLY if it ends in the 8-hex code, and just
+     69 of 123 report rows do — so the "prettier" branch was a coin flip on whether a prospect got a
+     dead link.
+     ⚠️ THE SHORT CODE BELOW IS A DIFFERENT ANIMAL and safe to prefer: ai_audits.short_code is on
+     EVERY audit (backfilled onto all existing rows, assigned by a DB trigger on every insert, unique
+     index), so /r/<code> resolves directly with no lookup that can miss — the exact property the id
+     has and the name slug lacked. Falls back to the UUID /report/ form only if a code is somehow
+     absent. Still a BODY TEXT variable, so no Meta resubmission — see the note at the top of this
+     file. */
+  const link = (audit.short_code as string | null | undefined)
+    ? shortReportUrl(audit.short_code as string)
+    : `${REPORT_SITE_ORIGIN}/report/${audit.id}`;
 
   /* ⛔ A BUSINESS IS NEVER ITS OWN RIVAL — the rule, the measurement and the reasoning live in
      src/lib/rivalHook.ts, which is where the test can reach them. This function needs a supabase

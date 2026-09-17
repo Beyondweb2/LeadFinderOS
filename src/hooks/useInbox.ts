@@ -106,7 +106,7 @@ export function windowFor(lastInboundAt: string | null): { open: boolean; hoursL
 interface InboxData {
   messages: WaMessage[];
   leads: LeadLite[];
-  audits: Array<{ id: string; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>;
+  audits: Array<{ id: string; short_code: string | null; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>;
   /** Sign-up page landings (findable-onboarding's prefill hook) → the SITE pill. */
   pageHits: Array<{ lead_id: string | null; created_at: string }>;
   /** Per-audit Gemini named/answers, from the audit_gemini_signal view (aggregated server-side so the
@@ -158,7 +158,7 @@ async function fetchInboxData(): Promise<InboxData> {
     /* ⛔ PAGINATED — truncation here would silently drop the report-ready pill and the audit_reply
        guard for whichever leads fell outside the window. Same id tiebreaker. */
     fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', (from, to) =>
-      sb.from('ai_audits').select('id, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status)')
+      sb.from('ai_audits').select('id, short_code, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status)')
         .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
     /* Sign-up page hits → the SITE pill. The SAME table and the SAME paginated read the campaign
        card uses (id tiebreaker); the SITE_TRACKING_START cutoff is applied in leadSiteVisitedAt. A
@@ -239,11 +239,11 @@ export function useInbox() {
   // no stored report row). Keyed STRICTLY by lead_id (the lead's own audit) — never cross-leaks.
   // Newest-first, so the first audit per lead that has a complete/capped run wins.
   const auditByLeadId = useMemo(() => {
-    const m: Record<string, { auditId: string }> = {};
+    const m: Record<string, { auditId: string; shortCode: string | null }> = {};
     for (const a of audits) {
       if (!a.lead_id || m[a.lead_id]) continue;
       const runs = Array.isArray(a.ai_audit_runs) ? a.ai_audit_runs : [];
-      if (runs.some((r) => r.status === 'complete' || r.status === 'capped')) m[a.lead_id] = { auditId: a.id };
+      if (runs.some((r) => r.status === 'complete' || r.status === 'capped')) m[a.lead_id] = { auditId: a.id, shortCode: a.short_code ?? null };
     }
     return m;
   }, [audits]);
