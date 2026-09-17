@@ -395,3 +395,31 @@ known-stale suites only.
 
 ---
 
+
+## Short report URLs — `findable.live/r/<code>` (2026-09-17)
+
+Every audit carries `ai_audits.short_code`: a random 6-char code from `23456789abcdefghjkmnpqrstuvwxyz`
+(31 chars, no `0/O/1/l/i`), UNIQUE, assigned by the `trg_set_audit_short_code` BEFORE INSERT trigger
+and backfilled onto all 1,247 existing audits (migration `20260917120000_ai_audits_short_code.sql`,
+run by hand). Unguessable — these reports are public and carry a business's competitor data, so a
+sequential or name-derived code would leak one prospect's report to another.
+
+**Three resolving forms, none ever retired:** the short `/r/<code>`, the UUID `/report/<auditId>`,
+and the legacy name+8-hex slug. `render-audit-report` tries UUID → short-code (`isShortCode`, a bare
+6 alphabet chars, no hyphen, so it can never be confused with a UUID or a `name-<8hex>` slug) →
+legacy `business_reports` slug. `reportSlug.ts` is the single home of the alphabet, length,
+`isShortCode`, and `shortReportUrl`; `scripts/report-short-code.test.ts` pins the TS constants to the
+SQL generator character-for-character.
+
+**Who sends the short link:** the WhatsApp `audit_reply` template ({{3}}/{{4}} — BODY vars, so no
+Meta resubmission; `audit-reply.ts`), the free-check email/WhatsApp (`free-check-result.ts`), the
+Inbox copy-link button (`useInbox.ts` + `Inbox.tsx`), the cockpit "Client report" button, and the
+report's own "view online" footer. Each falls back to `/report/<auditId>` only if a code is ever
+absent (backfill + trigger mean it never is). findable-site fronts it with `functions/r/[code].ts`
+(+ bare-`/r` 404 guard), a sibling of `functions/report/[id].ts`, forwarding the code as `?slug=`.
+
+**Verified live 2026-09-17:** `findable.live/r/ajape3` and `findable.live/report/143e5efb-…`
+(Redline Remaps and Keys) return byte-identical 200 text/html reports; `/r/zzzzzz` and bare `/r/`
+return the noindex 404 shell. Deployed by hand: `render-audit-report`, `send-whatsapp-message`,
+`process-whatsapp-queue`, `process-ai-audit-queue`, `submissions`, `findable-checkout` (the six that
+reach `reportSlug.ts`), plus findable-site.

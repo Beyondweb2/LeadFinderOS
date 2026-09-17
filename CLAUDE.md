@@ -445,7 +445,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 - Live operator app `https://leadfinderos.pages.dev`; Supabase ref `ruusxpkkmwtljxxulhbq`; public site
   `https://findable.live` (separate repo `../findable-site`, Astro, deploys by `npm run deploy`).
-- Report URL that always resolves: `…/functions/v1/render-audit-report/<auditId>` (the UUID form).
+- **Report URL has THREE resolving forms, all forever:** the SHORT `findable.live/r/<code>` (the one
+  every template/email/Inbox now sends; `ai_audits.short_code`, unique, trigger-assigned + backfilled,
+  6 unambiguous chars), the UUID `findable.live/report/<auditId>`, and the legacy name+8-hex slug.
+  `reportSlug.ts` owns the alphabet/length/`shortReportUrl`; the resolver is in `render-audit-report`.
+  Always-resolving raw upstream: `…/functions/v1/render-audit-report?slug=<code|auditId>`.
 - `/playbook/:id` resolves an AUDIT id first, then a lead (ABLM has no lead row). Three entry points;
   the two AI-Audit ones are the only audit-keyed ones — keep at least one.
 - **Cron jobs live only in the DB** (`cron.job`): `ai-audit-queue-run` (30 s), `bulk-jobs-sweep`,
