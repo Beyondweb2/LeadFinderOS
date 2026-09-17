@@ -13,6 +13,7 @@ import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
 import { shortReportUrl } from '@/lib/reportSlug';
 import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
 import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
+import { CrawlCheckButton } from '@/components/CrawlCheckButton';
 import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
@@ -326,7 +327,7 @@ function AutoReplyToggle() {
 }
 
 const Inbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, isLoading, send, preview, refetch, patchLeadStatus } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, send, preview, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
@@ -1592,6 +1593,18 @@ const Inbox = () => {
                     >
                       {auditInFlight ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     </button>
+                  )}
+                  {/* Crawl site — free crawlability check + site info, stored on lead_crawl_checks.
+                      Not run → runs it; already run → opens the popup; the dot flags an AI-visibility
+                      fault (the same signal that gates audit_followup_fault). Same button as the
+                      Outreach row. */}
+                  {active.leadId && activeLead && (
+                    <CrawlCheckButton
+                      lead={{ id: activeLead.id, website: activeLead.website }}
+                      crawl={crawlByLeadId.get(active.leadId) ?? null}
+                      onDone={refetch}
+                      className="self-center"
+                    />
                   )}
                   {/* Google Maps — stored URL preferred, else built from place_id. */}
                   {mapsUrl && (

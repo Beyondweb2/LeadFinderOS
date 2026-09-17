@@ -5,7 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/lib/templateAttribution';
-import { buildFaultLines, CRAWL_CHECK_VERSION, type CrawlSignals } from '@/lib/crawlCheck';
+import { crawlResultFaults } from '@/lib/crawlCheck';
+import type { CrawlStoredResult } from '@/lib/crawlResult';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
 // (operators read their own; admin reads all incl. Unassigned).
@@ -114,9 +115,10 @@ interface InboxData {
    *  Inbox never ships 6k+ result blobs). Drives the "Gemini X/Y" flag — judged on Gemini alone,
    *  the engine pages move, per Paul 2026-09-16. */
   geminiSignals: Array<{ audit_id: string; lead_id: string | null; gemini_answers: number; gemini_named: number }>;
-  /** Per-lead stored crawl checks (result blob + when) → whether the site has a nameable fault, which
-   *  gates the audit_followup_fault template in the picker. Newest per lead wins in the hook. */
-  crawlChecks: Array<{ lead_id: string | null; result: { version?: number; signals?: CrawlSignals } | null; created_at: string }>;
+  /** Per-lead stored crawl checks (result blob + when) → whether the site has a nameable fault (which
+   *  gates the audit_followup_fault template) AND the stored result the Crawl-site popup shows.
+   *  Newest per lead wins in the hook. */
+  crawlChecks: Array<{ lead_id: string | null; result: CrawlStoredResult | null; created_at: string }>;
 }
 
 /* Key includes the user id (the useCoverage pattern): firing before it resolves would cache the
@@ -267,22 +269,26 @@ export function useInbox() {
      + version rule render-audit-report and the sender apply (30 days, v2+): a stale or pre-v2 check
      can carry a false finding. Absent / clean / unreachable → not in the set → the template stays
      gated off, which is the safe direction. */
-  const hasSiteFaultLeadIds = useMemo(() => {
-    const newest = new Map<string, InboxData['crawlChecks'][number]>();
+  /* Newest crawl row per lead → the Crawl-site button's whole state (run/not-run, and the popup's
+     stored result), keyed by lead. The button and the audit_followup_fault gate below read the SAME
+     rows, so what the button shows and what the template offers can never disagree. */
+  const crawlByLeadId = useMemo(() => {
+    const m = new Map<string, InboxData['crawlChecks'][number]>();
     for (const c of crawlChecks) {
       if (!c.lead_id) continue;
-      const prev = newest.get(c.lead_id);
-      if (!prev || new Date(c.created_at).getTime() > new Date(prev.created_at).getTime()) newest.set(c.lead_id, c);
+      const prev = m.get(c.lead_id);
+      if (!prev || new Date(c.created_at).getTime() > new Date(prev.created_at).getTime()) m.set(c.lead_id, c);
     }
+    return m;
+  }, [crawlChecks]);
+
+  const hasSiteFaultLeadIds = useMemo(() => {
     const s = new Set<string>();
-    for (const [leadId, c] of newest) {
-      const fresh = (Date.now() - new Date(c.created_at).getTime()) < 30 * 86_400_000;
-      const ver = (c.result?.version ?? 1) >= CRAWL_CHECK_VERSION;
-      const sig = c.result?.signals;
-      if (fresh && ver && sig && buildFaultLines(sig).length > 0) s.add(leadId);
+    for (const [leadId, c] of crawlByLeadId) {
+      if (crawlResultFaults(c.result, new Date(c.created_at).getTime()).length > 0) s.add(leadId);
     }
     return s;
-  }, [crawlChecks]);
+  }, [crawlByLeadId]);
 
   // Lead ids with an audit run currently IN FLIGHT (pending/running) — drives the Inbox audit
   // button's spinner. Same audits fetch as above; refreshed by refetch() after firing one.
@@ -490,5 +496,5 @@ export function useInbox() {
       prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, status } : l)) } : prev),
     [queryClient, queryKey]);
 
-  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, isLoading, refetch: fetchAll, send, preview, patchLeadStatus };
+  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, refetch: fetchAll, send, preview, patchLeadStatus };
 }

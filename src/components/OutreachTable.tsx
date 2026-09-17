@@ -109,6 +109,8 @@ import { townGated } from '@/lib/townVerdict';
 import { Badge } from '@/components/ui/badge';
 import { OutreachMobileCard } from './OutreachMobileCard';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
+import { CrawlCheckButton } from './CrawlCheckButton';
+import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog } from './LeadDetailDialog';
 import { isDemoLead } from '@/lib/demoLeads';
 import { cn } from '@/lib/utils';
@@ -288,6 +290,8 @@ export function OutreachTable({
   const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
   const { user } = useAuth();
   const { isAdmin } = useSubscription();
+  // Newest crawl check per lead → the per-row Crawl-site button (same rows the Inbox reads).
+  const { crawlByLeadId, refetch: refetchCrawls } = useLeadCrawls();
   const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
   // Bulk AI-audit question-count + cost-confirm dialog. Count range mirrors the server's
   // HARD 3..5 clamp (default 3) — unified across wizard/bulk/auto-chain.
@@ -2610,6 +2614,9 @@ export function OutreachTable({
                           )}
                           {onUpdateLead && !isDemoLead(lead.id) && (
                             <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} className="contents" />
+                          )}
+                          {!isDemoLead(lead.id) && (
+                            <CrawlCheckButton lead={{ id: lead.id, website: lead.website }} crawl={crawlByLeadId.get(lead.id) ?? null} onDone={() => void refetchCrawls()} />
                           )}
                           {lead.phone ? (
                             <>

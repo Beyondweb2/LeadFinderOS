@@ -255,6 +255,26 @@ export function buildFaultLines(s: CrawlSignals): CrawlFault[] {
   return out.slice(0, 4);
 }
 
+/** How long a stored crawl check counts as current. A stale check describes a site as it was, so the
+ *  fault gate and the report both ignore it past this. */
+export const CRAWL_FRESH_MS = 30 * 86_400_000;
+
+/** The AI-visibility faults a STORED crawl row currently carries — the ONE rule the report's fault
+ *  section, the audit_followup_fault gate and the Crawl-site button's fault dot all read, so they can
+ *  never disagree. Applies the same fresh + v2 gate render-audit-report applies: a stale or pre-v2
+ *  row (which can carry a false finding) yields no faults. Returns [] rather than throwing on a
+ *  missing/old shape. */
+export function crawlResultFaults(
+  result: { version?: number; signals?: CrawlSignals } | null | undefined,
+  createdAtMs: number,
+): CrawlFault[] {
+  if (!result?.signals) return [];
+  const fresh = (Date.now() - createdAtMs) < CRAWL_FRESH_MS;
+  const currentVer = (result.version ?? 1) >= CRAWL_CHECK_VERSION;
+  if (!fresh || !currentVer) return [];
+  return buildFaultLines(result.signals);
+}
+
 /** The ONE sentence naming the site's main fault — the first (highest-priority) fault line's detail,
  *  or null when there is nothing to name (site unreachable, or a clean site). It is what the
  *  `audit_followup_fault` WhatsApp template's {{6}} carries, and — because Meta rejects an empty
