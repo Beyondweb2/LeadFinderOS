@@ -48,11 +48,18 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 
 Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 
-- **Offer: £99 to start AND £29.99 a month.** One shape, two halves. The £99 is the measurement, the
-  pages and the work to get them named; the £29.99 keeps them there. The monthly is a real, delayed
-  Stripe subscription (`_shared/delayed-subscription.ts`) starting the day the claim window closes
-  (four-week results + 14 days). Optional **£9.99/month hosting** if "build my site" is ticked
-  (`mode: subscription`, one line). The website build is INSIDE the £99.
+- **Offer: £99 to start, then a monthly — and TWO tiers since 2026-09-17** (`plan_tier` on
+  `onboarding_responses`, decided by the questionnaire's site-access answer, read server-side; the
+  browser never decides money). **KEEP YOUR SITE:** £99 + **£29.99/month** (`FINDABLE_MONTHLY_GBP`),
+  the default. **NEW SITE:** £99 + **£99/month for 12 months, then £29.99** (`FINDABLE_NEW_SITE_
+  MONTHLY_GBP`, `FINDABLE_NEW_SITE_TERM_MONTHS`), build + hosting included, the site is theirs. The
+  monthly is a real, delayed Stripe subscription (`_shared/delayed-subscription.ts`) starting the day
+  the claim window closes (four-week results + 14 days) — for new-site it is a **subscription
+  SCHEDULE** (phase 0 trial → phase 1 £99×12 → phase 2 £29.99 open-ended), so Stripe drops the price
+  itself, **no month-13 code**. ⛔ **The guarantee is identical on both tiers and applies to the £99
+  ONLY** (`REMEASURE_CLAIM_SENTENCE`, byte-locked); they keep the site either way. ⛔ **The £9.99
+  hosting add-on is RETIRED for new sign-ups** — hosting is inside the £99/mo on new-site; only a
+  LEGACY row (`plan_tier` null + old `website_addon`) still bills it.
 - **Constants own the words:** `src/lib/findableOffer.ts` — `FINDABLE_SETUP_PRICE_GBP`,
   `FINDABLE_MONTHLY_GBP`, `FINDABLE_GUARANTEE` (236 chars), `REMEASURE_CLAIM_SENTENCE`,
   `CARD_SAVED_NOTICE`. findable-site carries its own copies; `scripts/check-cross-repo-sync.mjs`

@@ -492,3 +492,37 @@ and every one of them was defensible alone. Together the site and the documents 
 
 ---
 
+
+## The two pricing tiers — keep-your-site vs new-site (2026-09-17)
+
+A second tier for clients who need a new website. `plan_tier` on `onboarding_responses` (values
+`keep` / `new_site`, null = legacy) decides the billing shape. It is set in the findable-site
+questionnaire from the SAME `needsNewWebsite(siteAccess)` decision that sets `website_addon`, sent in
+the submit, and read server-side — the browser never decides money.
+
+- **KEEP YOUR SITE** (default): £99 + £29.99/month (`FINDABLE_MONTHLY_GBP`), a plain delayed
+  subscription. Unchanged.
+- **NEW SITE**: £99 + £99/month for 12 months (`FINDABLE_NEW_SITE_MONTHLY_GBP` /
+  `FINDABLE_NEW_SITE_TERM_MONTHS`), then £29.99. Build + hosting included, the site is theirs. Billed
+  as a Stripe **subscription schedule** created by `delayed-subscription.ts` at results-send: phase 0
+  a £0 trial to the claim-window close, phase 1 £99 for 12 iterations, phase 2 £29.99 open-ended.
+  **Stripe transitions phase 1 → 2 itself — there is NO month-13 switcher.** The £99 price
+  (`FINDABLE_NEW_SITE_PRICE_ID`) is verified against the constant before anything is created, exactly
+  as the £29.99 one is; a failure means "not billed + Paul flagged", never an overcharge. `start_date`
+  is `now` so the subscription id exists immediately and the webhook keys on it as for the keep tier.
+
+⛔ **The guarantee is identical on both tiers and applies to the £99 ONLY** — `REMEASURE_CLAIM_SENTENCE`
+and `FINDABLE_GUARANTEE` untouched, byte-lock intact; the customer keeps the site either way. **Not a
+binding term**: cancel any time, keep the site, no early-exit charge (Stripe does not enforce it); the
+12 months only decides when the price drops, stated plainly on /terms and /refunds.
+
+⛔ **The £9.99 hosting add-on is retired for new sign-ups** — hosting is inside the £99/mo on
+new-site, keep has none. Only a LEGACY row (`plan_tier` null AND the old `website_addon` tick) still
+gets the £9.99 line (`delayed-subscription.ts` honours it only when `tier === null`).
+
+- Checkout copy is tier-aware (`CARD_SAVED_NOTICE_NEW_SITE`, the product-name line); money taken today
+  is unchanged (£99 payment mode). `findable-onboarding` accepts `plan_tier` in all three answer lists.
+- Deployed 2026-09-17: `findable-checkout`, `findable-onboarding`, `render-remeasure-results`,
+  `process-ai-audit-queue` + findable-site. `scripts/new-site-tier.test.ts` pins the numbers, the
+  notice copy, the guarantee byte-lock and the schedule phases (no month-13 code); the findable-site
+  `pay-footnote` test now requires the recurring monthly on BOTH tier branches.
