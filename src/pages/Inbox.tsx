@@ -10,6 +10,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
+import { shortReportUrl } from '@/lib/reportSlug';
 import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
 import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
 import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
@@ -669,18 +670,19 @@ const Inbox = () => {
   // (strictly the lead's own audit id, never another's). Drives the report-ready pill + Copy/Open,
   // and the audit_reply guard's report identifier.
   const activeReport = active?.leadId ? auditByLeadId[active.leadId] : undefined;
-  /* ⛔ NOT PUBLIC_SITE_ORIGIN ANY MORE. That constant is the BARBER product's origin
-     (yoursites.uk — /p/, /s/, booking subdomains) and reusing it here coupled the AI-visibility
-     report to a domain that has nothing to do with it. The report's prospect-facing home is
-     findable.live/report/<auditId>, a Pages Function proxy that forces text/html; the operator's
-     copy-link button must hand over exactly what a prospect would receive.
-     Deliberately the raw audit id and NOT the pretty name-plus-code slug: a pretty link only
-     resolves when a PUBLISHED business_reports row exists, and 14 of 74 audits have none, so
-     building one here would 404 for about a fifth of leads. The id always resolves directly. The
-     prospect-facing pitch link now does the SAME: audit-reply.ts's slug preference was deleted
-     2026-08-05 because it resolved only for slugs carrying the 8-hex code — 69 of 123 rows — so it
-     was a coin flip on whether a prospect got a dead link. Both surfaces use the id. */
-  const reportUrl = activeReport?.auditId ? `${REPORT_PUBLIC_ORIGIN}/report/${activeReport.auditId}` : null;
+  /* ⛔ NOT PUBLIC_SITE_ORIGIN. That constant is the BARBER product's origin (yoursites.uk) and
+     reusing it here coupled the AI-visibility report to a domain that has nothing to do with it. The
+     report's prospect-facing home is findable.live; the operator's copy-link button must hand over
+     exactly what a prospect would receive.
+     ⛔ NEVER the pretty name-plus-8-hex business_reports slug: it only resolves when a PUBLISHED
+     report row exists (14 of 74 audits have none), so it 404s for about a fifth of leads.
+     THE SHORT CODE IS SAFE and is what a prospect now gets everywhere (templates, emails):
+     findable.live/r/<code>, resolving on ai_audits.short_code — present on every audit (backfill +
+     insert trigger), unguessable, resolves directly. Falls back to the UUID /report/ form only if a
+     code is somehow absent, which also always resolves. */
+  const reportUrl = activeReport?.auditId
+    ? (activeReport.shortCode ? shortReportUrl(activeReport.shortCode) : `${REPORT_PUBLIC_ORIGIN}/report/${activeReport.auditId}`)
+    : null;
 
   /* Readable body for a thread bubble. Campaign/opener rows are stored as a bare slug
    * ("[initial_contact]") by the whatsapp_sends DB trigger; this fills the approved copy from the

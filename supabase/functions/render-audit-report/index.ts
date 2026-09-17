@@ -19,7 +19,7 @@ import { isInternalMeasurement } from "../../../src/lib/auditKind.ts";
 import { showOffer } from "../../../src/lib/buyOffer.ts";
 import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
 
-import { auditCodeFromSlug } from "../../../src/lib/reportSlug.ts";
+import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { buildFaultLines, CRAWL_CHECK_VERSION, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 
 /* ⛔ THE "VIEW ONLINE" FOOTER LINK WAS DEAD IN EVERY REPORT EVER SENT.
@@ -153,6 +153,15 @@ Deno.serve(async (req) => {
     let auditId: string;
     if (UUID_RE.test(slug)) {
       auditId = slug;
+    } else if (isShortCode(slug)) {
+      /* The SHORT link a prospect receives: /r/<code> → ai_audits.short_code. Unguessable (a random
+         code, not the id or the name), unique in the DB. A miss is an ordinary dead link, refused the
+         same way a bad code suffix is — no sentinel, nothing echoed back. */
+      const { data: bySc } = await service
+        .from("ai_audits").select("id").eq("short_code", slug.toLowerCase()).maybeSingle();
+      const scId = (bySc as { id?: string } | null)?.id ?? null;
+      if (!scId) return unavailable("This report link is no longer valid.");
+      auditId = scId;
     } else {
       const code = auditCodeFromSlug(slug);
       // No code → a bare name, or junk. Either way there is nothing to resolve.
@@ -179,7 +188,7 @@ Deno.serve(async (req) => {
       // baseline_target_runs decides the website section: graded for a paid baseline, plain issues
       // for everything a prospect sees before paying (seoStyleForAudit).
       // audit_purpose + is_measurement + baseline_target_runs feed isInternalMeasurement below.
-      .select("id, business_name, business_type, location_text, specialism, website, has_website, is_market, lead_id, baseline_target_runs, is_measurement, audit_purpose")
+      .select("id, short_code, business_name, business_type, location_text, specialism, website, has_website, is_market, lead_id, baseline_target_runs, is_measurement, audit_purpose")
       .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
     /* ⛔ THE PUBLIC RENDERER REFUSES INTERNAL MEASUREMENTS (2026-09-13). The full measure
@@ -312,7 +321,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    data.shareUrl = shareUrlFor(supabaseUrl, audit.id); // "View online" footer link — see shareUrlFor
+    /* "View online" footer link — the short /r/<code> a prospect gets everywhere else, falling back
+       to the UUID /report/ form only if a code is somehow absent (backfill + insert trigger mean it
+       never is). See shareUrlFor and reportSlug.ts. */
+    const auditShortCode = (audit as { short_code?: string | null }).short_code ?? null;
+    data.shareUrl = auditShortCode ? shortReportUrl(auditShortCode) : shareUrlFor(supabaseUrl, audit.id);
 
     /* ── WHAT'S STOPPING AI READING YOUR SITE + the Request-a-call button (2026-09-16) ────────────
        The faults come from the lead's STORED crawl-check (crawl-check writes lead_crawl_checks); we
