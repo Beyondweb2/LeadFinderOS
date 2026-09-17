@@ -118,6 +118,9 @@ export const OPEN_ATTRIBUTION_SLACK_MS = 60_000;
    campaign card's own comment records, now in one place. */
 export const REPORT_LINK_TEMPLATES: ReadonlySet<string> = new Set([
   'audit_reply', 'video_template', 'free_check_result', 'audit_reply_warm', 'competitor_hook', 'audit_followup',
+  // audit_followup_fault carries the report link in {{7}} — its opens are report opens, so it must
+  // be here or they fall into the "not attributable" bucket and the Inbox AUDIT pill drops.
+  'audit_followup_fault',
 ]);
 
 /* The day page-hit logging went live (findable-onboarding's prefill hook). Every site-visit read is

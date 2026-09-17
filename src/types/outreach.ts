@@ -529,6 +529,15 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      {{1}} carries its own article, so "an electrician" is written rather than refused. Measured
      2026-09-15, the vowel rule holds 179 of 1,066 lead-linked audits (16.8%) on its siblings. */
   { value: 'audit_followup_call', label: 'Audit follow-up + call — "I asked AI" note, no link (outreach)' },
+  /* audit_followup_fault — SUBMITTED TO META 2026-09-17. audit_followup_call PLUS a named site fault
+     and the report link: {{6}} is ONE sentence from the crawl check (the site's main fault), {{7}}
+     is the short report link.
+     ⚠️ THE LABEL SEPARATES IT FROM audit_followup_call by what it LEADS WITH — a specific fault on
+     their site plus the proof, where the call version names no fault and sends no link.
+     ⛔ OFFERED ONLY WHEN THE CRAWL CHECK FOUND A FAULT. {{6}} cannot be empty (Meta rejects it), so
+     the picker gates this on hasSiteFault and a clean-site lead gets audit_followup_call instead —
+     it never falls back either way. needsAudit (rivals + report link come from the audit). */
+  { value: 'audit_followup_fault', label: 'Audit follow-up + fault — names a site fault + report link (outreach)' },
   /* explain_offer — SUBMITTED TO META 2026-09-15. The full pitch: what we do, both figures, the
      guarantee and the sign-up link, over the same video header.
      ⚠️ THE LABEL SEPARATES IT FROM THE OTHER TWO VIDEO TEMPLATES by what it ASKS FOR. video_template

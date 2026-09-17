@@ -70,6 +70,15 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
      it to a number with no history would send a first touch. It is never queued — it carries no
      audit_url, so the drip cannot select it, and the Inbox is the only door. */
   "audit_followup_call",
+  /* audit_followup_fault — audit_followup_call PLUS a named site fault and the report link, 2026-09-17.
+     Same classification for the same reason: written for a lead who has already answered, so COLD
+     would refuse it for every lead it exists for. And, like audit_followup_call, its classification
+     is load-bearing in rivalHookDecision: a rival-naming CONTINUATION short of three names HOLDS
+     rather than falling back to the cold video_template.
+     ⚠️ Same accepted exposure as audit_followup: it DOES carry audit_url, so the drip could select a
+     lead queued with it — but it is never queued (Inbox only, the picker gates it on a site fault),
+     and if it ever were, the phone-history seatbelt is bypassed for continuations. Inbox is the door. */
+  "audit_followup_fault",
   /* explain_offer — the full pitch, Inbox only, 2026-09-15. Same reasoning as audit_followup above:
      it is sent into a conversation that already exists, so COLD would refuse it for every lead it
      is written for. ⚠️ It carries the same accepted exposure — exempt from the phone-history

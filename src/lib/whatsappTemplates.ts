@@ -50,6 +50,10 @@ export interface TemplateReq {
   needsUrl: boolean;
   /** Needs the lead's completed audit (competitors) + published report slug (audit_reply). */
   needsAudit: boolean;
+  /** Needs the lead's crawl check to have found a fault — its {{6}} names one and Meta rejects an
+   *  empty parameter, so this template is only OFFERED when there is a fault to name
+   *  (audit_followup_fault). Absent/false = no such requirement. */
+  needsSiteFault?: boolean;
   /** Coarse flow grouping — for optional visual labelling only, NOT for auto-hiding. */
   group: TemplateGroup;
 }
@@ -93,6 +97,14 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
      server-side at send time, where a lead short of three is HELD (this template is a continuation,
      so there is no cold fallback to substitute). */
   audit_followup_call:    { needsUrl: false, needsAudit: true,  group: 'audit' },
+  /* audit_followup_fault — submitted to Meta 2026-09-17. needsAudit like its siblings (rivals + the
+     report link {{7}} come from the completed audit). ⛔ needsSiteFault is the NEW gate: {{6}} names
+     the site's main crawl fault and Meta rejects an empty parameter, so it is only OFFERED when the
+     lead's crawl check found a fault — a clean-site lead gets audit_followup_call instead. The
+     server also fails closed (site_fault throws) if it is ever sent without one.
+     ⚠️ Like its siblings the picker does NOT check for three rivals — that is resolved server-side,
+     where a lead short of three is HELD (a continuation, no cold fallback). */
+  audit_followup_fault:   { needsUrl: false, needsAudit: true,  needsSiteFault: true, group: 'audit' },
   /* explain_offer - the full pitch. ⛔ needsAudit is FALSE and that is the point: its {{3}} is the
      SIGN-UP link, built from the lead id alone, so nothing here waits on a completed audit. It is
      the only outreach template that can go to a lead we have never audited.
@@ -140,6 +152,9 @@ export interface SendabilityAudit {
   /** Optional: the audit named ≥1 competitor ({{2}}). NOT required by this client guard —
    *  competitors are enforced at SEND time (resolveAuditReplyVars refuses if empty). */
   hasCompetitors?: boolean;
+  /** The lead's crawl check found a fault to name ({{6}} of audit_followup_fault). Presence gates
+   *  that one template; every other template ignores it. Resolved per-lead by the caller. */
+  hasSiteFault?: boolean;
 }
 
 export interface Sendability {
@@ -173,6 +188,12 @@ export function getTemplateSendability(
   // Competitors ({{2}}) are validated server-side at send (resolveAuditReplyVars), not here.
   if (req.needsAudit && !audit?.reportSlug) {
     return { ok: false, reason: 'Run an audit for this lead first.' };
+  }
+  /* audit_followup_fault names a specific site fault in {{6}}, and Meta rejects an empty parameter,
+     so it may only be offered when the lead's crawl check actually found one. A clean-site (or
+     un-crawled) lead is steered to the call version instead — the send would fail closed anyway. */
+  if (req.needsSiteFault && !audit?.hasSiteFault) {
+    return { ok: false, reason: 'No site fault to name yet — use the call version (audit_followup_call).' };
   }
   return { ok: true };
 }

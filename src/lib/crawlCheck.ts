@@ -255,6 +255,17 @@ export function buildFaultLines(s: CrawlSignals): CrawlFault[] {
   return out.slice(0, 4);
 }
 
+/** The ONE sentence naming the site's main fault — the first (highest-priority) fault line's detail,
+ *  or null when there is nothing to name (site unreachable, or a clean site). It is what the
+ *  `audit_followup_fault` WhatsApp template's {{6}} carries, and — because Meta rejects an empty
+ *  parameter — the presence of a value is exactly the gate that decides whether that template may be
+ *  offered at all. Single-sourced on buildFaultLines so the sentence in the message and the one in
+ *  the report can never disagree. Callers apply their own freshness / version gate first. */
+export function mainSiteFault(s: CrawlSignals): string | null {
+  const faults = buildFaultLines(s);
+  return faults.length ? faults[0].detail : null;
+}
+
 /** Build the paste-ready verdict from the signals — the single worst problem as the headline, in a
  *  fixed priority (a site AI can't read at all beats a cosmetic gap), plus the full list. Names the
  *  specific problem, never a grade. */

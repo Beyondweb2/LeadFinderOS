@@ -167,6 +167,9 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
      audit_followup_call carries NO report link, so counting it as a report sent would put the
      "report sent" badge on a thread that has never been sent one. */
   audit_followup_call: 'Audit follow-up + call ("I asked AI" note, no link)',
+  /* audit_followup_fault — IS in REPORT_TEMPLATES (it carries the report link in {{7}}), unlike the
+     call version above. Names a specific site fault plus the report. */
+  audit_followup_fault: 'Audit follow-up + fault (names a site fault + report)',
   explain_offer: 'Explain the offer (full pitch + sign-up link)',
   explain_offer_v2: 'Explain the offer v2 (adds the 941-audit proof)',
   onboarding_followup: 'Onboarding follow-up',
@@ -323,7 +326,7 @@ function AutoReplyToggle() {
 }
 
 const Inbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, isLoading, send, preview, refetch, patchLeadStatus } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, isLoading, send, preview, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
@@ -928,7 +931,9 @@ const Inbox = () => {
     { ok: boolean; body?: string; template?: string; fellBack?: string; error?: string; reason?: string } | null
   >(null);
 
-  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null });
+  /* hasSiteFault gates audit_followup_fault: it names a specific site fault in {{6}} and Meta rejects
+     an empty parameter, so it is only offered when this lead's crawl check found one. */
+  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false });
   /* getTemplateSendability('') returns ok:true, because an unknown name is not its business to
      block — so "nothing selected" has to be refused here or the button would be live with no
      template chosen. */
