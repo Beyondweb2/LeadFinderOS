@@ -286,6 +286,28 @@ export function mainSiteFault(s: CrawlSignals): string | null {
   return faults.length ? faults[0].detail : null;
 }
 
+/** The {{6}} line for a lead with NO WEBSITE AT ALL, where a crawl-fault line makes no sense — there
+ *  is nothing of theirs to crawl. Paul's usual voice: conversational, lowercase, short, no hype
+ *  (2026-09-17). */
+export const NO_WEBSITE_FAULT_LINE =
+  "you haven't got a website ai can read — right now you're relying entirely on directories to get named, there's nothing of your own for it to check";
+
+/** THE ONE RULE for audit_followup_fault's {{6}} AND for whether the template may be offered, so the
+ *  sender's value and the picker's gate can never disagree (Paul, 2026-09-17):
+ *   · no website          → the no-website line (always non-empty → the template IS available);
+ *   · a website + a fault → the main crawl fault (fresh + v2 gate, via crawlResultFaults);
+ *   · a website, no fault → null (the template is NOT offered / not sendable).
+ *  A caller treats a non-null return as "offer it, and this is {{6}}"; null as "not this lead". */
+export function siteFaultLine(
+  hasWebsite: boolean,
+  result: { version?: number; signals?: CrawlSignals } | null | undefined,
+  createdAtMs: number,
+): string | null {
+  if (!hasWebsite) return NO_WEBSITE_FAULT_LINE;
+  const faults = crawlResultFaults(result, createdAtMs);
+  return faults.length ? faults[0].detail : null;
+}
+
 /** Build the paste-ready verdict from the signals — the single worst problem as the headline, in a
  *  fixed priority (a site AI can't read at all beats a cosmetic gap), plus the full list. Names the
  *  specific problem, never a grade. */

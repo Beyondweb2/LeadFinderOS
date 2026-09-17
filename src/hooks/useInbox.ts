@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/lib/templateAttribution';
-import { crawlResultFaults } from '@/lib/crawlCheck';
+import { siteFaultLine } from '@/lib/crawlCheck';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
@@ -282,13 +282,21 @@ export function useInbox() {
     return m;
   }, [crawlChecks]);
 
+  /* Lead ids audit_followup_fault's {{6}} has a line for — the picker gate. siteFaultLine is the SAME
+     rule the sender (audit-reply.ts) applies, so what the picker offers and what the send builds
+     agree: a lead with NO WEBSITE gets the no-website line; a lead with a website gets its crawl fault
+     (fresh + v2); a lead with a website and no fault is left out. Iterates LEADS (not just crawl rows)
+     so a no-website lead with no crawl still qualifies. */
   const hasSiteFaultLeadIds = useMemo(() => {
     const s = new Set<string>();
-    for (const [leadId, c] of crawlByLeadId) {
-      if (crawlResultFaults(c.result, new Date(c.created_at).getTime()).length > 0) s.add(leadId);
+    for (const l of leads) {
+      const hasWebsite = !!(l.website ?? '').trim();
+      const c = crawlByLeadId.get(l.id);
+      const createdMs = c ? new Date(c.created_at).getTime() : 0;
+      if (siteFaultLine(hasWebsite, c?.result ?? null, createdMs) !== null) s.add(l.id);
     }
     return s;
-  }, [crawlByLeadId]);
+  }, [leads, crawlByLeadId]);
 
   // Lead ids with an audit run currently IN FLIGHT (pending/running) — drives the Inbox audit
   // button's spinner. Same audits fetch as above; refreshed by refetch() after firing one.
