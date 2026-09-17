@@ -12,6 +12,7 @@ import { WA_TEMPLATE_REQS } from "../src/lib/whatsappTemplates.ts";
 import { CONTINUATION_TEMPLATES } from "../src/lib/coldOutreach.ts";
 import { REPORT_LINK_TEMPLATES } from "../src/lib/templateAttribution.ts";
 import { buildsFromAudit, unsuppliedVars } from "../src/lib/templateRouting.ts";
+import { siteFaultLine, NO_WEBSITE_FAULT_LINE, CRAWL_CHECK_VERSION, type CrawlSignals } from "../src/lib/crawlCheck.ts";
 
 let f = 0;
 const ok = (c: boolean, m: string) => { console.log(`${c ? "PASS" : "FAIL"} ${m}`); if (!c) f++; };
@@ -75,6 +76,22 @@ ok(WA_TEMPLATE_REQS[NAME]?.needsAudit === true, "needsAudit");
 ok(WA_TEMPLATE_REQS[NAME]?.needsSiteFault === true, "needsSiteFault (the picker gate)");
 ok(CONTINUATION_TEMPLATES.has(NAME), "a CONTINUATION (Inbox only; holds rather than falling back)");
 ok(REPORT_LINK_TEMPLATES.has(NAME), "in REPORT_LINK_TEMPLATES (it carries the report link in {{7}})");
+
+console.log("\n── {{6}} HAS A LINE FOR A NO-WEBSITE LEAD, NOT JUST A CRAWL FAULT ──");
+const FAULTY: CrawlSignals = { homeUrl: "https://x", fetchFailed: false, searchBlocked: ["OAI-SearchBot"], readableAs: null, clientRendered: null, missingH1: false, noJsonLd: false, duplicates: null, thinPages: 0 };
+const CLEAN: CrawlSignals = { ...FAULTY, searchBlocked: [] };
+const now = Date.now();
+// No website → the no-website line, whether or not a crawl row exists.
+ok(siteFaultLine(false, null, 0) === NO_WEBSITE_FAULT_LINE, "no website → the no-website line (no crawl needed)");
+ok(NO_WEBSITE_FAULT_LINE === NO_WEBSITE_FAULT_LINE.toLowerCase(), "the no-website line is lowercase (Paul's voice)");
+ok(/directories/.test(NO_WEBSITE_FAULT_LINE), "it names directories (why they can't be found)");
+ok(!/\n|\t/.test(NO_WEBSITE_FAULT_LINE) && !/ {4,}/.test(NO_WEBSITE_FAULT_LINE), "it is one clean line (Meta rejects newline/tab/4+ spaces)");
+// A website: the crawl fault when there is one (fresh + v2), else null.
+ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: FAULTY }, now) !== null, "website + a fresh v2 fault → the crawl fault");
+ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: CLEAN }, now) === null, "website + a clean crawl → null (not offered)");
+ok(siteFaultLine(true, null, 0) === null, "website + no crawl at all → null (not offered)");
+ok(siteFaultLine(true, { version: 1, signals: FAULTY }, now) === null, "website + a PRE-v2 crawl → null (its findings aren't trusted)");
+ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: FAULTY }, now - 40 * 86_400_000) === null, "website + a STALE crawl → null");
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
 if (f) throw new Error(`${f} failures`);

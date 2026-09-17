@@ -203,7 +203,7 @@ const auditFollowupFaultBody = (_b: string, u: string, trade?: string, competito
   const t = articleTrade(trade);
   return `Hi mate, i was looking for ${t.ok ? t.value : (trade || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned ${competitors || 'other firms'}
 
-There's one thing on your site holding it back.
+Here's the main thing holding you back.
 
 I know how to get you showing up more in those answers so people are more likely to find you
 
