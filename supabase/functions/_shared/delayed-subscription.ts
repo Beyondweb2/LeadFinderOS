@@ -18,7 +18,7 @@
    client is reading. A failure means Paul is flagged and the client is simply not billed — the
    direction that costs us money rather than costing them trust.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { FINDABLE_MONTHLY_GBP } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_MONTHLY_GBP, FINDABLE_NEW_SITE_MONTHLY_GBP, FINDABLE_NEW_SITE_TERM_MONTHS } from "../../../src/lib/findableOffer.ts";
 import { monthlyStartIso } from "../../../src/lib/remeasureResults.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -56,18 +56,73 @@ async function stripe(secret: string, path: string, body?: string): Promise<{ ok
   return { ok: res.ok, json, text };
 }
 
+/** Which pricing tier the client bought (onboarding_responses.plan_tier). `null` is a LEGACY row —
+ *  a client who paid before the tier existed, billed the old way (£29.99, plus £9.99 hosting if their
+ *  website tick was set). */
+export type PlanTier = "keep" | "new_site";
+
+/** The Stripe subscription-schedule fields for the new-site tier, as a PURE function so the phase
+ *  shape can be tested without Stripe (Paul's (d): prove there is no month-13 switcher). Phase 0 is a
+ *  £0 trial to `trialEndUnix`; phase 1 is `newSitePriceId` for `termMonths` iterations; phase 2 is
+ *  `monthlyPriceId`, open-ended — Stripe transitions phase 1 → 2 itself. */
+export function newSiteScheduleFields(a: {
+  customerId: string; paymentMethodId: string; trialEndUnix: number;
+  newSitePriceId: string; monthlyPriceId: string; termMonths: number;
+  leadId: string; sentAtIso: string;
+}): Record<string, string> {
+  return {
+    customer: a.customerId,
+    start_date: "now",
+    end_behavior: "release",
+    "default_settings[default_payment_method]": a.paymentMethodId,
+    // Phase 0 — the delay: a trial until the claim window closes, £0.
+    "phases[0][items][0][price]": a.newSitePriceId,
+    "phases[0][items][0][quantity]": "1",
+    "phases[0][trial]": "true",
+    "phases[0][end_date]": String(a.trialEndUnix),
+    // Phase 1 — the new-site monthly for the term.
+    "phases[1][items][0][price]": a.newSitePriceId,
+    "phases[1][items][0][quantity]": "1",
+    "phases[1][iterations]": String(a.termMonths),
+    // Phase 2 — drops to the standard monthly, open-ended (no iterations / end_date → runs for ever).
+    "phases[2][items][0][price]": a.monthlyPriceId,
+    "phases[2][items][0][quantity]": "1",
+    "metadata[lead_id]": a.leadId,
+    "metadata[product]": "findable_new_site",
+    "metadata[results_sent_at]": a.sentAtIso,
+    "default_settings[metadata][lead_id]": a.leadId,
+    "default_settings[metadata][product]": "findable_new_site",
+  };
+}
+
+export interface DelayedSubscriptionPlan {
+  /** The tier from the onboarding row. null = legacy row (pre-tier). */
+  tier: PlanTier | null;
+  /** LEGACY hosting only: the old website_addon tick. Ignored for a new_site row (hosting is inside
+   *  the £99) and for a keep row (they keep their own site). Honoured only when tier is null. */
+  wantsHostingLegacy: boolean;
+}
+
 /**
- * Create the client's monthly subscription, starting the day their claim window closes.
+ * Create the client's monthly billing, starting the day their claim window closes.
+ *
+ * KEEP tier (and legacy): a plain subscription at FINDABLE_MONTHLY_GBP, trialing until the claim
+ * window closes, plus the £9.99 hosting line for a legacy website-tick row.
+ *
+ * NEW-SITE tier: a Stripe SUBSCRIPTION SCHEDULE — phase 0 a £0 trial until the claim window closes,
+ * phase 1 FINDABLE_NEW_SITE_MONTHLY_GBP for FINDABLE_NEW_SITE_TERM_MONTHS iterations, phase 2
+ * FINDABLE_MONTHLY_GBP open-ended. Stripe transitions phase 1 → phase 2 itself, so there is NO
+ * month-13 switcher to fail (Paul, 2026-09-17). If THIS creation fails the client is simply not
+ * billed and Paul is flagged — the same safe direction as the keep flow, never an overcharge.
  *
  * @param sentAtIso  the value written to outreach_leads.remeasure_results_sent_at, this instant
- * @param wantsHosting  whether the onboarding row's website tick was set — the record of what they
- *                      bought. Hosting rides the SAME anchor and the SAME invoice by Paul's call.
+ * @param plan  the tier bought, read off the onboarding row by the caller.
  */
 export async function createDelayedSubscription(
   service: Client,
   lead: DelayedSubscriptionLead,
   sentAtIso: string,
-  wantsHosting: boolean,
+  plan: DelayedSubscriptionPlan,
 ): Promise<DelayedSubscriptionOutcome> {
   /* ⛔ IDEMPOTENT ON THE STORED ID. The results send is once-only by its own claim, but this must
      survive a hand-run resend or a replayed tick: one subscription per lead, ever. */
@@ -120,9 +175,60 @@ export async function createDelayedSubscription(
     };
   }
 
+  /* ══ NEW-SITE TIER: A SUBSCRIPTION SCHEDULE, NOT A PLAIN SUBSCRIPTION (2026-09-17) ═══════════════
+     £99/month for 12 months, then £29.99/month, and STRIPE does the drop — phase 1 → phase 2 is a
+     native schedule transition, so there is no month-13 switcher that could fail and leave a client
+     stuck at £99. The £99 price is verified against our constant the same way the £29.99 one just was;
+     if it disagrees, nothing is created and Paul is flagged. */
+  if (plan.tier === "new_site") {
+    const rawNewSite = (Deno.env.get("FINDABLE_NEW_SITE_PRICE_ID") ?? "").trim();
+    if (!PRICE_ID_RE.test(rawNewSite)) {
+      return { kind: "failed", reason: `FINDABLE_NEW_SITE_PRICE_ID is not a usable Price id (${rawNewSite ? "wrong shape — a prod_ id is the recorded paste error" : "not set"})` };
+    }
+    const nsPrice = await stripe(secret, `prices/${encodeURIComponent(rawNewSite)}`);
+    if (!nsPrice.ok) return { kind: "failed", reason: `could not read the new-site price: ${nsPrice.text.slice(0, 200)}` };
+    const nsExpected = Math.round(FINDABLE_NEW_SITE_MONTHLY_GBP * 100);
+    const nsActual = Number(nsPrice.json.unit_amount);
+    const nsInterval = ((nsPrice.json.recurring ?? {}) as { interval?: string }).interval ?? "";
+    if (nsActual !== nsExpected || nsInterval !== "month") {
+      return {
+        kind: "failed",
+        reason: `the new-site Stripe price disagrees with our copy: Stripe says ${nsActual} pence / ${nsInterval || "no"} interval, we tell clients £${FINDABLE_NEW_SITE_MONTHLY_GBP} a month`,
+      };
+    }
+    /* Three phases. Phase 0 is a £0 trial to the claim-window close, so nothing is billed inside the
+       refund window — the same anchor trial_end gives the keep tier. Phase 1 is £99 for the term.
+       Phase 2 (the £29.99 price) is open-ended, so the subscription simply continues at that price
+       for ever. start_date=now creates the subscription immediately, so its id is available to store
+       and the webhook keys on it exactly as it does for the keep tier. */
+    const scheduleFields = newSiteScheduleFields({
+      customerId, paymentMethodId, trialEndUnix: trialEnd,
+      newSitePriceId: rawNewSite, monthlyPriceId: rawMonthly,
+      termMonths: FINDABLE_NEW_SITE_TERM_MONTHS, leadId: lead.id, sentAtIso,
+    });
+    const sched = await stripe(secret, "subscription_schedules", form(scheduleFields));
+    if (!sched.ok) return { kind: "failed", reason: `Stripe refused the subscription schedule: ${sched.text.slice(0, 300)}` };
+    /* start_date=now means the subscription exists already; `subscription` is its id (a string when
+       unexpanded). Store THAT — the webhook resolves renewals by stripe_subscription_id. */
+    const nsSubId = typeof sched.json.subscription === "string" ? sched.json.subscription : "";
+    if (!nsSubId) return { kind: "failed", reason: `the schedule was created (${String(sched.json.id ?? "?")}) but carries no subscription id yet` };
+    const { error: nsUpErr } = await service.from("outreach_leads").update({
+      stripe_subscription_id: nsSubId,
+      subscription_status: "trialing",
+      subscription_renews_at: startsAt,
+    }).eq("id", lead.id);
+    if (nsUpErr) console.error(`[delayed-subscription] created new-site schedule sub ${nsSubId} but could not store it on lead ${lead.id}: ${nsUpErr.message}`);
+    return { kind: "created", subscriptionId: nsSubId, startsAt };
+  }
+
+  /* ══ KEEP TIER (and legacy rows): a plain £29.99 subscription ════════════════════════════════════ */
   const rawHosting = (Deno.env.get("FINDABLE_HOSTING_PRICE_ID") ?? "").trim();
   const hostingPriceId = PRICE_ID_RE.test(rawHosting) ? rawHosting : "";
-  const hostingOn = wantsHosting && !!hostingPriceId;
+  /* ⛔ HOSTING IS LEGACY-ONLY NOW. The £9.99 add-on was retired for new sign-ups when the new-site
+     tier arrived (Paul, 2026-09-17): a new_site client gets hosting inside the £99, a keep client
+     keeps their own site. So it rides the invoice ONLY for a LEGACY row — tier null AND the old
+     website tick — preserving what those clients actually bought. */
+  const hostingOn = plan.tier === null && plan.wantsHostingLegacy && !!hostingPriceId;
 
   const fields: Record<string, string> = {
     customer: customerId,

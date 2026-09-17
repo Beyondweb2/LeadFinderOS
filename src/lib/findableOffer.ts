@@ -53,6 +53,24 @@ export const FINDABLE_SETUP_PRICE_GBP = 99;
  *  which in this file would take down the checkout, not a screen. It used to live at the bottom. */
 export const FINDABLE_MONTHLY_GBP = 29.99;
 
+/** 🔴 THE NEW-SITE TIER MONTHLY (Paul, 2026-09-17). A second pricing tier for clients who need a new
+ *  website built: £99 to start, then £99/month for 12 months (everything in, hosting too, the site
+ *  is theirs), then it DROPS to FINDABLE_MONTHLY_GBP a month. "Keep your site" (£99 + £29.99/month)
+ *  is unchanged and stays the default.
+ *  ⛔ THE GUARANTEE IS IDENTICAL ON BOTH TIERS and applies to the £99 ONLY — REMEASURE_CLAIM_SENTENCE
+ *  and FINDABLE_GUARANTEE do not change, and the customer keeps the site either way.
+ *  ⚠️ £99/month is a REAL Stripe recurring Price (FINDABLE_NEW_SITE_PRICE_ID). Its amount is checked
+ *  against THIS constant before any subscription schedule is created — _shared/delayed-subscription.ts,
+ *  exactly as the £29.99 price is — so a card is never charged a figure we do not publish. */
+export const FINDABLE_NEW_SITE_MONTHLY_GBP = 99;
+
+/** How many months the new-site tier bills at £99 before it drops to FINDABLE_MONTHLY_GBP. It is the
+ *  `iterations` of phase 1 of the Stripe subscription schedule; phase 2 (the £29.99 price) has no end.
+ *  ⛔ NOT A BINDING TERM. Stripe does not enforce it and there is no early-termination charge (Paul,
+ *  2026-09-17): a client can cancel any time, keeps the site, and simply stops being billed. The 12
+ *  months only decides WHEN the price drops, and the terms state it plainly. */
+export const FINDABLE_NEW_SITE_TERM_MONTHS = 12;
+
 /* The guarantee, WORK-based: we promise the audit, the work and the re-measurement, never the
    outcome. Anywhere this sentence is shown to a client must render it from this constant, not a
    local copy — three hardcoded copies drifted apart once already.
@@ -275,6 +293,16 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
    number in front of them at the moment they pay was the smaller half of what they owe. */
 export const CARD_SAVED_NOTICE =
   `You pay £${FINDABLE_SETUP_PRICE_GBP} today and £${FINDABLE_MONTHLY_GBP} a month after that. We keep your card on file so the monthly can start later — nothing else is taken until after you have seen your four-week results, and you can cancel before it does.`;
+
+/* ⛔ THE NEW-SITE TIER'S VERSION OF THE SAME NOTICE (2026-09-17). A SEPARATE named string, not a
+   function of CARD_SAVED_NOTICE, because check-cross-repo-sync.mjs parses a string CONSTANT and byte-
+   locks it to findable-site's copy — a function it could not read, and the pre-pay screen must say
+   exactly what the Stripe submit message says. The checkout picks this one when plan_tier is
+   new_site, CARD_SAVED_NOTICE otherwise. Both figures are interpolated from the constants so a price
+   move cannot leave a stale number on the card screen.
+   ⚠️ It names the drop, because a customer entering a card for £99/month is owed the end of it. */
+export const CARD_SAVED_NOTICE_NEW_SITE =
+  `You pay £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_NEW_SITE_MONTHLY_GBP} a month for ${FINDABLE_NEW_SITE_TERM_MONTHS} months and £${FINDABLE_MONTHLY_GBP} a month after that. We keep your card on file so the monthly can start later — nothing else is taken until after you have seen your four-week results, and you can cancel before it does.`;
 
 export const FINDABLE_CONTACT_EMAIL = "paul@move37.fun";
 
