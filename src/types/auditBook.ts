@@ -8,6 +8,8 @@
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
 export interface AuditRow { id: string; business_name: string; business_type: string | null; location_text: string | null; country: string | null; has_website: boolean; created_at: string;
+  /** Public, unguessable report code, assigned by the ai_audits insert trigger. */
+  short_code?: string | null;
   /** The client's own site. Selected so the report's "Cited as a source" figure can tell a
    *  citation of their OWN domain from a citation of somebody else's. May be null. */
   website?: string | null;

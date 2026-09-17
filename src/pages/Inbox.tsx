@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
 import { planBulkSend, groupSkips, type BulkCandidate } from '@/lib/inboxBulkSend';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite } from '@/hooks/useInbox';
+import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite, type WaMessage } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -326,8 +326,29 @@ function AutoReplyToggle() {
   );
 }
 
+function InboundMedia({ message }: { message: WaMessage }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    if (!message.media_path) { setUrl(null); return; }
+    const renew = async () => {
+      const { data } = await supabase.storage.from('whatsapp-media').createSignedUrl(message.media_path!, 60 * 5);
+      if (alive) setUrl(data?.signedUrl ?? null);
+    };
+    void renew();
+    const timer = window.setInterval(() => { void renew(); }, 4 * 60 * 1000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [message.media_path]);
+  if (!message.media_path) return message.error ? <p className="mt-1 text-xs text-muted-foreground">{message.error}</p> : null;
+  if (!url) return <p className="mt-1 text-xs text-muted-foreground">Loading attachment…</p>;
+  if (message.message_type === 'image' || message.message_type === 'sticker') return <img src={url} alt={message.media_filename ?? message.message_type} className="mt-1 max-h-72 rounded object-contain" />;
+  if (message.message_type === 'video') return <video src={url} controls className="mt-1 max-h-72 rounded" />;
+  if (message.message_type === 'audio') return <audio src={url} controls className="mt-1 max-w-full" />;
+  return <a href={url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 underline"><ExternalLink className="h-3 w-3" />{message.media_filename ?? 'Open document'}</a>;
+}
+
 const Inbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, send, preview, refetch, patchLeadStatus } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, isError, send, preview, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
@@ -1464,6 +1485,12 @@ const Inbox = () => {
           )}
           {isLoading ? (
             <div className="flex h-full items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+          ) : isError ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-muted-foreground">
+              <AlertTriangle className="h-6 w-6 text-destructive" />
+              <p className="text-sm">Couldn’t load conversations.</p>
+              <Button size="sm" variant="outline" onClick={() => void refetch()}>Retry</Button>
+            </div>
           ) : filteredList.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center px-4 text-center text-muted-foreground">
               <MessageSquare className="mb-2 h-6 w-6 opacity-40" />
@@ -1750,6 +1777,7 @@ const Inbox = () => {
                       <p className="whitespace-pre-wrap break-words">
                         {bubbleReadable(m) || templateLabel(m.template_name)}
                       </p>
+                      {m.direction === 'inbound' && <InboundMedia message={m} />}
                       <div className={cn('mt-0.5 flex items-center gap-1 text-[10px]',
                         m.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
                         <span>{relTime(m.created_at)}</span>

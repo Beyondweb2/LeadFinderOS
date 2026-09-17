@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, RefreshCw, Loader2, ArrowLeftRight } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, Loader2, ArrowLeftRight, Check, Copy } from 'lucide-react';
 import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtml';
 
 // In-app preview of the client report. Renders the EXACT downloadable HTML in an
@@ -16,10 +16,11 @@ import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtm
 // resets to client on every open (the parent gives this component key={reportRunId}, so opening a
 // report remounts it and showInternal falls back to false). onDownload is handed the CURRENT choice
 // so print follows the view. The parent's snapshot may carry internal:true; this override decides.
-export function AiAuditReport({ data, onBack, onDownload, onRegenerate, regenerating, onCompare }: {
+export function AiAuditReport({ data, onBack, onDownload, reportUrl, onRegenerate, regenerating, onCompare }: {
   data: AiAuditReportData;
   onBack: () => void;
   onDownload: (internal: boolean) => void;
+  reportUrl?: string;
   onRegenerate?: () => void;
   regenerating?: boolean;
   /** Switch to the before/after side-by-side. Absent when there is nothing to compare against, so
@@ -30,6 +31,7 @@ export function AiAuditReport({ data, onBack, onDownload, onRegenerate, regenera
   // Default false = CLIENT. Safety: never carry an internal state into the next report — the parent
   // remounts this component per report (key={reportRunId}), so every open starts on Client.
   const [showInternal, setShowInternal] = useState(false);
+  const [copied, setCopied] = useState(false);
   const html = renderReportHtml({ ...data, internal: showInternal });
   const frameRef = useRef<HTMLIFrameElement>(null);
 
@@ -39,6 +41,17 @@ export function AiAuditReport({ data, onBack, onDownload, onRegenerate, regenera
   };
   // Re-fit if the content changes.
   useEffect(fit, [html]);
+
+  const copyReportLink = async () => {
+    if (!reportUrl) return;
+    try {
+      await navigator.clipboard.writeText(reportUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access may be blocked outside a secure browser context.
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -91,6 +104,12 @@ export function AiAuditReport({ data, onBack, onDownload, onRegenerate, regenera
           >
             <Download className="mr-2 h-4 w-4" /> {data.measuring ? 'PDF available when measuring finishes' : showInternal ? 'Download PDF · Internal' : 'Download PDF · Client'}
           </Button>
+          {reportUrl && (
+            <Button size="sm" variant="outline" onClick={copyReportLink}>
+              {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+              {copied ? 'Copied' : 'Copy Report Link'}
+            </Button>
+          )}
         </div>
       </div>
 

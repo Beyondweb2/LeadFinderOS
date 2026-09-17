@@ -69,6 +69,44 @@ function bodyFor(msg: Record<string, unknown>): string {
   return `[${type}]`;
 }
 
+const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'document', 'sticker']);
+
+async function mediaObjectPath(userId: string | null, wamid: string, type: string): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(wamid));
+  const id = [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  const extension = ({ image: 'jpg', video: 'mp4', audio: 'ogg', document: 'bin', sticker: 'webp' } as Record<string, string>)[type] ?? 'bin';
+  return `${userId ?? 'unassigned'}/${id}.${extension}`;
+}
+
+async function saveInboundMedia(service: any, msg: Record<string, unknown>, userId: string | null, wamid: string) {
+  const type = typeof msg.type === 'string' ? msg.type : '';
+  if (!MEDIA_TYPES.has(type)) return { message_type: 'text', media_path: null, media_mime_type: null, media_filename: null, error: null };
+  const media = msg[type] as { id?: string; mime_type?: string; filename?: string } | undefined;
+  const mediaId = media?.id;
+  if (!mediaId || !wamid) return { message_type: type, media_path: null, media_mime_type: media?.mime_type ?? null, media_filename: media?.filename ?? null, error: 'Media unavailable: Meta did not provide an attachment id.' };
+  try {
+    const token = Deno.env.get('WHATSAPP_ACCESS_TOKEN') ?? '';
+    if (!token) throw new Error('WhatsApp access token is unavailable');
+    const meta = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(mediaId)}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!meta.ok) throw new Error(`Meta media lookup failed (${meta.status})`);
+    const details = await meta.json() as { url?: string; mime_type?: string; file_size?: number };
+    if (!details.url) throw new Error('Meta did not return a media URL');
+    if (Number(details.file_size ?? 0) > 20 * 1024 * 1024) throw new Error('Media exceeds the 20 MB limit');
+    const download = await fetch(details.url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!download.ok) throw new Error(`Meta media download failed (${download.status})`);
+    const bytes = new Uint8Array(await download.arrayBuffer());
+    if (bytes.byteLength > 20 * 1024 * 1024) throw new Error('Media exceeds the 20 MB limit');
+    const mime = details.mime_type ?? media?.mime_type ?? 'application/octet-stream';
+    const path = await mediaObjectPath(userId, wamid, type);
+    const { error } = await service.storage.from('whatsapp-media').upload(path, bytes, { contentType: mime, upsert: false });
+    if (error) throw error;
+    return { message_type: type, media_path: path, media_mime_type: mime, media_filename: media?.filename ?? `${type}`, error: null };
+  } catch (error) {
+    console.error(`[whatsapp-inbound] media save failed for ${wamid}:`, (error as Error).message);
+    return { message_type: type, media_path: null, media_mime_type: media?.mime_type ?? null, media_filename: media?.filename ?? null, error: `Media unavailable: ${(error as Error).message}` };
+  }
+}
+
 /** Meta unix-seconds timestamp → ISO, falling back to now() when absent/bad. */
 function tsToIso(ts: unknown): string {
   const n = Number(ts);
@@ -159,6 +197,7 @@ export async function handleInboundMessages(
 
       const { userId, leadId } = await resolveOwner(service, waPhone);
       const body = bodyFor(msg);
+      const media = await saveInboundMedia(service, msg, userId, wamid);
 
       const { error: insErr } = await service.from("whatsapp_messages").insert({
         direction: "inbound",
@@ -166,11 +205,15 @@ export async function handleInboundMessages(
         lead_id: leadId,
         phone: waPhone,
         body,
-        message_type: "text", // CHECK allows only text|template; inbound media → text + [type] body
+        message_type: media.message_type,
+        media_path: media.media_path,
+        media_mime_type: media.media_mime_type,
+        media_filename: media.media_filename,
         wa_message_id: wamid || null,
         status: "received",
         test_mode: false,
         created_at: tsToIso(msg?.timestamp),
+        error: media.error,
       });
 
       if (insErr) {

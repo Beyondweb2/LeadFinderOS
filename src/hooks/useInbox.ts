@@ -1,4 +1,5 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { groupInboxMessages, mergeInboxMessages, optionalInboxRows, patchInboxLead } from '@/lib/inboxCache';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,7 +40,10 @@ export interface WaMessage {
   lead_id: string | null;
   phone: string;
   body: string | null;
-  message_type: 'text' | 'template';
+  message_type: 'text' | 'template' | 'image' | 'video' | 'audio' | 'document' | 'sticker';
+  media_path?: string | null;
+  media_mime_type?: string | null;
+  media_filename?: string | null;
   template_name: string | null;
   status: string;
   test_mode: boolean;
@@ -133,7 +137,7 @@ const NO_PAGE_HITS: InboxData['pageHits'] = [];
 const NO_GEMINI: InboxData['geminiSignals'] = [];
 const NO_CRAWL: InboxData['crawlChecks'] = [];
 
-async function fetchInboxData(): Promise<InboxData> {
+async function fetchInboxData(previous?: InboxData, essentialOnly = false): Promise<InboxData> {
   const [msgRes, leadRes, reportRes, hitRes, gemRes, crawlRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
@@ -164,44 +168,44 @@ async function fetchInboxData(): Promise<InboxData> {
     // audit_reply guard + the running-audit spinner. Newest-first; RLS scopes to own audits.
     /* ⛔ PAGINATED — truncation here would silently drop the report-ready pill and the audit_reply
        guard for whichever leads fell outside the window. Same id tiebreaker. */
-    fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', (from, to) =>
+    essentialOnly ? { rows: previous?.audits ?? NO_AUDITS } : optionalInboxRows<InboxData['audits'][number]>(fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', (from, to) =>
       sb.from('ai_audits').select('id, short_code, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status)')
-        .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
+        .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to))),
     /* Sign-up page hits → the SITE pill. The SAME table and the SAME paginated read the campaign
        card uses (id tiebreaker); the SITE_TRACKING_START cutoff is applied in leadSiteVisitedAt. A
        failed read degrades to no pill, never to a wrong one. */
-    fetchAllRows<InboxData['pageHits'][number]>('Inbox (page hits)', (from, to) =>
+    essentialOnly ? { rows: previous?.pageHits ?? NO_PAGE_HITS } : optionalInboxRows<InboxData['pageHits'][number]>(fetchAllRows<InboxData['pageHits'][number]>('Inbox (page hits)', (from, to) =>
       sb.from('lead_page_hits').select('lead_id, created_at')
-        .order('id', { ascending: true }).range(from, to)),
+        .order('id', { ascending: true }).range(from, to))),
     /* Per-audit Gemini named/answers → the "Gemini X/Y" flag. Reads the audit_gemini_signal VIEW
        (security_invoker, so the operator's own-row RLS on ai_audit_queue still applies) rather than
        the 6.7k result blobs behind it: the DB does the count, the Inbox gets two ints per audit.
        audit_id is unique → the pagination tiebreaker. A failed read degrades to no pill. */
-    fetchAllRows<InboxData['geminiSignals'][number]>('Inbox (gemini signal)', (from, to) =>
+    essentialOnly ? { rows: previous?.geminiSignals ?? NO_GEMINI } : optionalInboxRows<InboxData['geminiSignals'][number]>(fetchAllRows<InboxData['geminiSignals'][number]>('Inbox (gemini signal)', (from, to) =>
       sb.from('audit_gemini_signal').select('audit_id, lead_id, gemini_answers, gemini_named')
-        .order('audit_id', { ascending: true }).range(from, to)),
+        .order('audit_id', { ascending: true }).range(from, to))),
     /* Stored crawl checks → whether a lead's site has a nameable fault, which gates the
        audit_followup_fault template in the picker (its {{6}} names one and Meta rejects an empty
        parameter). Paginated with the id tiebreaker; newest-per-lead is chosen in the hook. A failed
        read degrades to "no fault known", which simply keeps that template gated off — the safe way. */
-    fetchAllRows<InboxData['crawlChecks'][number]>('Inbox (crawl checks)', (from, to) =>
+    essentialOnly ? { rows: previous?.crawlChecks ?? NO_CRAWL } : optionalInboxRows<InboxData['crawlChecks'][number]>(fetchAllRows<InboxData['crawlChecks'][number]>('Inbox (crawl checks)', (from, to) =>
       sb.from('lead_crawl_checks').select('lead_id, result, created_at')
-        .order('id', { ascending: true }).range(from, to)),
+        .order('id', { ascending: true }).range(from, to))),
   ]);
   return {
     messages: msgRes.rows,
     leads: leadRes.rows.filter((l) => (l.phone ?? '').trim()),
-    audits: reportRes.rows,
-    pageHits: hitRes.rows,
-    geminiSignals: gemRes.rows,
-    crawlChecks: crawlRes.rows,
+    audits: reportRes?.rows ?? previous?.audits ?? NO_AUDITS,
+    pageHits: hitRes?.rows ?? previous?.pageHits ?? NO_PAGE_HITS,
+    geminiSignals: gemRes?.rows ?? previous?.geminiSignals ?? NO_GEMINI,
+    crawlChecks: crawlRes?.rows ?? previous?.crawlChecks ?? NO_CRAWL,
   };
 }
 
 export function useInbox() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const queryKey = inboxQueryKey(user?.id);
+  const queryKey = useMemo(() => inboxQueryKey(user?.id), [user?.id]);
 
   /* ⛔ REACT QUERY, THE SAME WAY useOutreach/useCoverage USE IT (App.tsx defaults:
      refetchOnWindowFocus:false, staleTime 5min). The old shape — useEffect→fetchAll with
@@ -214,9 +218,47 @@ export function useInbox() {
      list. patchLeadStatus keeps its optimistic no-spinner behaviour by patching the CACHE. */
   const query = useQuery({
     queryKey,
-    queryFn: fetchInboxData,
+    queryFn: () => fetchInboxData(queryClient.getQueryData<InboxData>(queryKey)),
     enabled: !!user?.id,
   });
+
+  const reconcile = useCallback(async () => {
+    const fresh = await fetchInboxData(queryClient.getQueryData<InboxData>(queryKey), true);
+    queryClient.setQueryData<InboxData>(queryKey, (current) => current
+      ? { ...current, messages: mergeInboxMessages(current.messages, fresh.messages), leads: fresh.leads }
+      : fresh);
+  }, [queryClient, queryKey]);
+
+  /* Subscription only patches cache. It never calls the six-read loader on connect. */
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = (supabase as any).channel(`inbox:${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_messages' }, (payload: any) => {
+        const row = (payload.new ?? payload.old) as WaMessage | undefined;
+        if (!row?.id) return;
+        queryClient.setQueryData<InboxData>(queryKey, (current) => {
+          if (!current) return current;
+          return { ...current, messages: mergeInboxMessages(current.messages, [row]) };
+        });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'outreach_leads' }, (payload: any) => {
+        const row = payload.new as LeadLite & { is_archived?: boolean } | undefined;
+        if (!row?.id) return;
+        queryClient.setQueryData<InboxData>(queryKey, (current) => current
+          ? { ...current, leads: patchInboxLead(current.leads, row) } : current);
+      })
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') void reconcile();
+      });
+    const onFocus = () => { if (document.visibilityState === 'visible') void reconcile(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+      void (supabase as any).removeChannel(channel);
+    };
+  }, [user?.id, queryClient, queryKey, reconcile]);
 
   const messages = query.data?.messages ?? NO_MESSAGES;
   const leads = query.data?.leads ?? NO_LEADS;
@@ -225,6 +267,7 @@ export function useInbox() {
   const geminiSignals = query.data?.geminiSignals ?? NO_GEMINI;
   const crawlChecks = query.data?.crawlChecks ?? NO_CRAWL;
   const isLoading = query.isLoading;
+  const isError = query.isError;
 
   /* Force-refresh: query.refetch always hits the network (staleTime does not apply to an explicit
      refetch). Same contract the old fetchAll gave its callers — awaiting it means the new rows
@@ -397,12 +440,10 @@ export function useInbox() {
   }, [audits, geminiSignals]);
 
   // Derive conversations from the message log, grouped by (user_id, phone).
+  const messagesByConversation = useMemo(() => groupInboxMessages<WaMessage>(messages), [messages]);
+
   const conversations = useMemo<WaConversation[]>(() => {
-    const groups = new Map<string, WaMessage[]>();
-    for (const msg of messages) {
-      const k = convKey(msg.user_id, msg.phone);
-      (groups.get(k) ?? groups.set(k, []).get(k)!).push(msg);
-    }
+    const groups = messagesByConversation;
     const out: WaConversation[] = [];
     for (const [key, msgs] of groups) {
       const last = msgs[msgs.length - 1];
@@ -432,11 +473,11 @@ export function useInbox() {
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [messages, leadNameById, campaignByLeadId, statusByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, geminiByLead]);
+  }, [messagesByConversation, leadNameById, campaignByLeadId, statusByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, geminiByLead]);
 
   const messagesForKey = useCallback(
-    (key: string) => messages.filter((m) => convKey(m.user_id, m.phone) === key),
-    [messages],
+    (key: string) => messagesByConversation.get(key) ?? NO_MESSAGES,
+    [messagesByConversation],
   );
 
   const send = useCallback(async (args: {
@@ -457,9 +498,12 @@ export function useInbox() {
     });
     if (error) return { ok: false, error: error.message };
     if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason };
-    await fetchAll();
+    if (data.message?.id) {
+      queryClient.setQueryData<InboxData>(queryKey, (current) => current
+        ? { ...current, messages: mergeInboxMessages(current.messages, [data.message as WaMessage]) } : current);
+    }
     return { ok: true, simulated: data.simulated };
-  }, [fetchAll]);
+  }, [queryClient, queryKey]);
 
   /* ⛔ PREVIEW WHAT WOULD BE SENT — the SAME endpoint, the same guards, nothing sent.
      `mode: "dry_run"` returns the built Meta payload and the transcript body immediately before the
@@ -504,5 +548,5 @@ export function useInbox() {
       prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, status } : l)) } : prev),
     [queryClient, queryKey]);
 
-  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, refetch: fetchAll, send, preview, patchLeadStatus };
+  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, preview, patchLeadStatus };
 }

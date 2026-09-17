@@ -51,6 +51,7 @@ import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, F
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { shortReportUrl } from '@/lib/reportSlug';
 import { ToastAction } from '@/components/ui/toast';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -133,7 +134,7 @@ const AUDIT_SEARCH_LIMIT = 200;
    costing 20 minutes of dead submissions: code shipped ahead of its columns.
    `auditSelectFallback` sheds the new column and the list keeps working, unarchived. */
 const AUDIT_SELECT_BASE =
-  'id, business_name, business_type, location_text, country, has_website, website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted, is_measurement, audit_purpose';
+  'id, short_code, business_name, business_type, location_text, country, has_website, website, created_at, is_market, lead_id, first_opened_at, open_count, baseline_target_runs, baseline_completed_at, baseline_error, baseline_runs_counted:baseline->>runs_counted, is_measurement, audit_purpose';
 const AUDIT_SELECT = `${AUDIT_SELECT_BASE}, archived_at`;
 
 /** True when a PostgREST error is "that column does not exist" (42703) rather than anything else.
@@ -2217,6 +2218,9 @@ const AiAudit = () => {
         /* Print follows the current view: the toggle hands us its choice; Client is the default and
            downloadReportHtml also fails safe to Client if internal is unset. */
         onDownload={(internal) => downloadReportHtml({ ...openReportData, internal })}
+        reportUrl={openAuditRow?.short_code
+          ? shortReportUrl(openAuditRow.short_code)
+          : auditId ? `https://findable.live/report/${auditId}` : undefined}
         onRegenerate={canRegenerate ? regenerateReport : undefined}
         regenerating={regenerating}
       />

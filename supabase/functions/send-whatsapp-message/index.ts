@@ -60,7 +60,7 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
    marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
    constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
 const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf"] as const;
-const BUILD_ID = "2026-09-16c";
+const BUILD_ID = "2026-09-17a";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -639,7 +639,7 @@ Deno.serve(async (req) => {
       status,
       test_mode: env.testMode,
       error: sendError,
-    }).select("id, created_at").maybeSingle();
+    }).select("*").maybeSingle();
     if (insErr) console.error("[send-whatsapp-message] log insert failed:", insErr.message);
 
     /* THE SEND AUDIT ROW. Until now only the campaign queue wrote whatsapp_sends, so every send
