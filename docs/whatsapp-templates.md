@@ -501,3 +501,36 @@ header, no buttons, Marketing, English. **explain_offer stays in place — Paul 
   templates live in route chunks — so grepping `index-*.js` for a template name reads "absent" on a
   deploy that is live. Cloudflare had built within ~5 minutes of the push this time. Still not proven
   by a real send; the Inbox Preview (`dry_run`) is the next cheapest proof.
+
+## audit_followup_fault — the 7-variable fault template (2026-09-17)
+
+`audit_followup_call` PLUS a named site fault and the report link. Seven vars: {{1}} trade WITH its
+own article, {{2}} town, {{3}}{{4}}{{5}} three rivals, {{6}} ONE sentence naming the site's main
+crawl fault, {{7}} the SHORT report link (`findable.live/r/<code>`).
+
+**The gate — {{6}} may never be empty (Meta rejects a blank parameter), so this is the ONLY thing
+deciding whether the template is offered.** Two layers, both fail closed, and it NEVER falls back
+either way:
+- **Picker (`getTemplateSendability`, new `needsSiteFault` req):** offered only when the lead's crawl
+  check found a fault. `useInbox` computes `hasSiteFaultLeadIds` from the newest `lead_crawl_checks`
+  per lead, same fresh(30d)+v2 gate the report uses. A clean-site / un-crawled lead is steered to
+  `audit_followup_call` instead.
+- **Send (`send-whatsapp-message`):** `site_fault` throws `unsafe_template_var:no_site_fault` if the
+  value is blank, returned as a visible hold. The fault sentence is resolved in the audit branch from
+  `resolveAuditReplyVars.siteFault` → `mainSiteFault(signals)` (single-sourced on `buildFaultLines`,
+  first/headline fault's detail).
+
+It is a **CONTINUATION** (Inbox only) and names rivals, so a lead short of three rivals **HOLDS**
+(no cold `video_template` fallback) — `rivalHookDecision` reads `CONTINUATION_TEMPLATES`. It carries
+`audit_url`, so it is `needsAudit` and in `REPORT_LINK_TEMPLATES` (its {{7}} opens are report opens).
+Accepted exposure noted in `coldOutreach.ts`: it *could* be drip-selected (unlike `audit_followup_call`,
+which has no `audit_url`), but it is never queued — Inbox is the only door.
+
+Registered in all eleven places (WA_TEMPLATES + body, the queue mirror, WHATSAPP_TEMPLATES,
+WA_TEMPLATE_REQS, CONTINUATION_TEMPLATES, READABLE_TEMPLATE_BODIES, Inbox TEMPLATE_DISPLAY,
+REPORT_LINK_TEMPLATES, BRANCH_SUPPLIES, and the tests). `scripts/audit-followup-fault.test.ts` pins
+the 7-param order and both fail-closed gates. **Meta registration is Paul's to do** — the code sends
+the moment Meta approves the name, no further change. Deployed 2026-09-17: the 15-function closure of
+the changed shared modules (whatsapp-send, audit-reply, crawlCheck, coldOutreach, templateRouting).
+Measured at deploy: 3 leads currently carry a fresh v2 crawl fault, so the template offers itself
+rarely today and will grow as crawl checks populate.
