@@ -108,15 +108,22 @@ function prettyDate(iso: string | null): string | null {
   return Number.isNaN(t.getTime()) ? null : t.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-async function wantsHostingFor(service: Client, leadId: string): Promise<boolean> {
+/** The tier and legacy hosting the client bought, from their onboarding row. `plan_tier` decides the
+ *  billing shape (keep vs new_site); a null tier is a LEGACY row, billed the old way with hosting if
+ *  the old website tick was set. Fails safe to the keep-flow default (no tier, no hosting) — the
+ *  direction that undercharges rather than over. */
+async function planFor(service: Client, leadId: string): Promise<{ tier: "keep" | "new_site" | null; wantsHostingLegacy: boolean }> {
   try {
     const { data } = await service.from("onboarding_responses")
-      .select("website_addon, status, created_at").eq("lead_id", leadId)
+      .select("plan_tier, website_addon, status, created_at").eq("lead_id", leadId)
       .order("created_at", { ascending: false }).limit(10);
-    const rows = (data ?? []) as Array<{ website_addon?: unknown; status?: string | null }>;
+    const rows = (data ?? []) as Array<{ plan_tier?: unknown; website_addon?: unknown; status?: string | null }>;
     const paid = rows.find((r) => ["paid", "payment_received", "in_delivery", "completed"].includes(String(r.status ?? "")));
-    return (paid ?? rows[0])?.website_addon === true;
-  } catch { return false; }
+    const row = paid ?? rows[0];
+    const rawTier = String(row?.plan_tier ?? "");
+    const tier = rawTier === "new_site" ? "new_site" : rawTier === "keep" ? "keep" : null;
+    return { tier, wantsHostingLegacy: row?.website_addon === true };
+  } catch { return { tier: null, wantsHostingLegacy: false }; }
 }
 
 async function emailOperator(subject: string, lines: string[]): Promise<void> {
@@ -246,7 +253,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
      a results email having provably gone out, because the call site is downstream of the send.
      ⛔ NON-FATAL, ALWAYS. The client is reading their results; a Stripe problem must not un-send
      them. A failure flags Paul and leaves the client unbilled. */
-  const sub = await createDelayedSubscription(service, lead, nowIso, await wantsHostingFor(service, lead.id));
+  const sub = await createDelayedSubscription(service, lead, nowIso, await planFor(service, lead.id));
   if (sub.kind === "failed") {
     await reportOnceAnHour(service, "delayed_subscription_failed", lead.id, sub.reason, { remeasure_audit_id: audit.id, sent_at: nowIso });
     await emailOperator(`MONTHLY NOT STARTED — ${businessName}`, [

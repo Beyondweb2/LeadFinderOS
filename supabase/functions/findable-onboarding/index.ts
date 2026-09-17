@@ -87,6 +87,10 @@ const WEBSITE_PLATFORM = new Set(["wordpress", "wix", "squarespace", "godaddy", 
    flow sent the value, and it was still silently dropped here, because this function builds its
    insert from an explicit key list and an unlisted key simply vanishes. */
 const WILLING_TO_MIGRATE = new Set(["yes", "not_sure", "no"]);
+/* The pricing tier the customer chose (2026-09-17): keep their own site (£99 + £29.99/month) or a
+   new site (£99 + £99/month for 12 months, then £29.99). findable-checkout and the subscription
+   builder read this off the row; anything not in this set stores null (a legacy/keep default). */
+const PLAN_TIER = new Set(["keep", "new_site"]);
 const SUBMIT_COOLDOWN_MS = 10 * 60_000;   // one submission per lead per 10 min
 
 const clip = (v: unknown, max: number): string | null => {
@@ -700,6 +704,10 @@ Deno.serve(async (req) => {
            "on" from some future form library cannot silently sell someone a website. Absent → null
            → shed by NEWER_COLS below → reads as not ticked, which is the safe direction. */
         website_addon: a.website_addon === true ? true : (a.website_addon === false ? false : null),
+        /* ⛔ THE TIER, IN ALL THREE LISTS LIKE website_addon (answers / NEWER_COLS / optional) or it
+           vanishes on the way to the row the checkout reads. Validated to the known set; anything
+           else stores null, which reads downstream as the keep default — the safe direction. */
+        plan_tier: typeof a.plan_tier === "string" && PLAN_TIER.has(a.plan_tier) ? a.plan_tier : null,
         incomplete,
       };
 
@@ -713,7 +721,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -729,7 +737,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon"];
+        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
