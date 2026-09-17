@@ -51,7 +51,6 @@ import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, F
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { shortReportUrl } from '@/lib/reportSlug';
 import { ToastAction } from '@/components/ui/toast';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -2218,9 +2217,9 @@ const AiAudit = () => {
         /* Print follows the current view: the toggle hands us its choice; Client is the default and
            downloadReportHtml also fails safe to Client if internal is unset. */
         onDownload={(internal) => downloadReportHtml({ ...openReportData, internal })}
-        reportUrl={openAuditRow?.short_code
-          ? shortReportUrl(openAuditRow.short_code)
-          : auditId ? `https://findable.live/report/${auditId}` : undefined}
+        /* The separate public-site deployment does not yet serve /r/:short_code; use the
+           established UUID route until that route is verified live. */
+        reportUrl={auditId ? `https://findable.live/report/${auditId}` : undefined}
         onRegenerate={canRegenerate ? regenerateReport : undefined}
         regenerating={regenerating}
       />
