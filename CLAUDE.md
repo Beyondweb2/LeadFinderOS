@@ -64,9 +64,13 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   `FINDABLE_MONTHLY_GBP`, `FINDABLE_GUARANTEE` (236 chars), `REMEASURE_CLAIM_SENTENCE`,
   `CARD_SAVED_NOTICE`. findable-site carries its own copies; `scripts/check-cross-repo-sync.mjs`
   (exists in BOTH repos) fails the build on drift. Change one repo, change the other.
-- ⛔ **No surface may name one figure without the other.** ⛔ **Binding copy counts from the
-  results, never "week six".** ⛔ **Never claim an SEO score.** "Reply to your reviews" is a real
-  promise (needs the client's GBP access).
+- ⛔ **No surface may name one figure without the other — EXCEPT the generic pricing card** (Paul,
+  2026-09-17): the monthly is path-dependent (£29.99 keep / £99 rebuild+host), so the home-page card
+  and `OFFER_COPY` name only **£99 to start** and say a monthly follows whose amount is chosen in the
+  flow. PATH-SPECIFIC surfaces (the flow's site-access panel, the pay screen, /terms, /refunds, the
+  FAQ) name both figures for that path. Do not "fix" the card back to a single monthly. ⛔ **Binding
+  copy counts from the results, never "week six".** ⛔ **Never claim an SEO score.** "Reply to your
+  reviews" is a real promise (needs the client's GBP access).
 - **Guarantee is outcome-conditional:** measure before, re-measure at four weeks on the same
   questions and engines, **judged in the home town only**; if the number has not gone up, they
   email within 14 days of their results and get the £99 back. `findable.live/refunds` is the

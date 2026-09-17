@@ -526,3 +526,24 @@ gets the £9.99 line (`delayed-subscription.ts` honours it only when `tier === n
   `process-ai-audit-queue` + findable-site. `scripts/new-site-tier.test.ts` pins the numbers, the
   notice copy, the guarantee byte-lock and the schedule phases (no month-13 code); the findable-site
   `pay-footnote` test now requires the recurring monthly on BOTH tier branches.
+
+## Pricing presentation — card £99-only, monthly path-dependent (2026-09-17)
+
+The monthly is not a single figure any more (£29.99 keep / £99 rebuild+host), so the GENERIC pricing
+surfaces cannot show one truthfully:
+- **The home-page pricing card** (findable-site `Pricing.astro`) and **`OFFER_COPY`** (`site.ts`) name
+  only **£99 to start** and say a monthly follows whose amount depends on the path, chosen in the
+  flow, stated in full on the pay screen. No monthly figure on the card. The card's timeline row drops
+  the £29.99 too.
+- **The flow's site-access question** (`OnboardingFlow.tsx` `SiteAccessBranch`) presents BOTH paths up
+  front — "Two ways to do it — £99 to start either way / Keep your own site £29.99/month / We rebuild
+  & host it £99/month" — framed against agency hosting costs and "optimised for AI visibility, the
+  site is yours". This is where the customer meets the £99/month, deliberately (not sprung on the pay
+  screen). It is the same `needsNewWebsite` decision that sets `plan_tier`.
+- **Path-specific surfaces** (the pay screen's "What you pay" block, /terms, /refunds, the FAQ) name
+  both figures for the chosen path, all interpolated from the constants (`CONTINUATION_MONTHLY_GBP`,
+  `NEW_SITE_MONTHLY_GBP`) — no typed prices.
+
+The subscription structure and the guarantee (£99 only, both paths) are unchanged from the tier build.
+Verified live 2026-09-17: the card on findable.live shows £99-only; the flow's step-4 "Your website"
+renders the two-path panel.
