@@ -16,6 +16,7 @@ import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
+import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. ASYNC start-and-poll: each tick (a) POLLs in-flight Apify runs and
@@ -812,6 +813,11 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   // Extraction invokes are QUEUED per-run and awaited AFTER the loop, so a slow extract-competitors
   // call never blocks finalising the other runs — but the edge runtime still can't cut them off.
   const extractionInvokes: Promise<void>[] = [];
+  /* Site crawl (crawl-check) — fired automatically for the lead of EVERY audit that finalises, so
+     every audited lead gets its crawlability faults + site info without the operator pressing the
+     button (Paul, 2026-09-17: "it's free, no reason to wait for me to remember"). Free (fetches
+     only, never Apify), queued like the extraction calls and awaited after the loop, fail-safe. */
+  const crawlInvokes: Promise<void>[] = [];
   // Automation B: runs that just completed AND came from an outreach lead → send the audit_reply
   // WhatsApp AFTER extraction finishes (so {{2}} competitors are the CLEANED list). Collected in the
   // loop, processed after the extraction await below.
@@ -1038,6 +1044,52 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     if (!Array.isArray(flipped) || flipped.length === 0) continue; // another poller already finalised this run
     finalised++;
 
+    /* ── AUTOMATIC SITE CRAWL (2026-09-17) ───────────────────────────────────────────────────────
+       Every audit that finalises crawls its lead's site — complete, capped OR failed, because the
+       crawl is about the SITE and is independent of whether the AI questions answered. Fires ONCE
+       per run's completion (this is the atomic transition winner), for a lead that has a website.
+       ⛔ DEDUPED so a 3-run baseline doesn't crawl the same site three times in five minutes: skip
+       when a CURRENT-version crawl younger than the freshness window already exists — the same
+       30d/v2 gate the report and the Crawl-site button apply, so an already-crawled lead is left
+       alone and a stale/pre-v2 one is refreshed. Internal auth (CRON_SECRET + x-internal-job), the
+       same door extract-competitors uses. Never throws; a crawl problem can't touch the audit. */
+    crawlInvokes.push((async () => {
+      try {
+        const auditId = runRow?.audit_id as string | undefined;
+        if (!auditId) return;
+        const { data: aud } = await service
+          .from("ai_audits").select("lead_id, is_market").eq("id", auditId).maybeSingle();
+        const cLeadId = (aud as { lead_id?: string | null } | null)?.lead_id ?? null;
+        if (!cLeadId || (aud as { is_market?: boolean } | null)?.is_market === true) return; // market/no-lead → nothing to crawl
+        const { data: lead } = await service
+          .from("outreach_leads").select("website").eq("id", cLeadId).maybeSingle();
+        const site = String((lead as { website?: string | null } | null)?.website ?? "").trim();
+        if (!site) return; // no website → crawl-check would refuse anyway
+        // Already have a current, fresh crawl? Leave it — this is the 3-run-baseline dedup.
+        const { data: cc } = await service
+          .from("lead_crawl_checks").select("result, created_at")
+          .eq("lead_id", cLeadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        const fresh = !!cc && (Date.now() - new Date((cc as { created_at: string }).created_at).getTime()) < 30 * 86_400_000;
+        const currentVer = ((cc as { result?: { version?: number } } | null)?.result?.version ?? 0) >= CRAWL_CHECK_VERSION;
+        if (fresh && currentVer) return;
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/crawl-check`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+            "x-internal-job": "1",
+          },
+          body: JSON.stringify({ lead_id: cLeadId }),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          console.error(`[process-ai-audit-queue] auto crawl-check failed for lead ${cLeadId}: HTTP ${res.status} ${txt.slice(0, 200)}`);
+        }
+      } catch (e) {
+        console.error(`[process-ai-audit-queue] auto crawl-check invoke error:`, e instanceof Error ? e.message : String(e));
+      }
+    })());
+
     // Auto-invoke extract-competitors ONCE per run, at the transition to terminal (prevStatus was
     // pending/running — never for a run already complete/capped/cancelled on entry). Queued here
     // (not awaited in-loop) so it can't block finalising other runs; strictly AFTER the results/
@@ -1110,6 +1162,8 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   }
   // Await the queued extraction calls so the edge runtime doesn't cut them off when we return.
   if (extractionInvokes.length) await Promise.allSettled(extractionInvokes);
+  // Same for the automatic site crawls — awaited so the runtime doesn't cut them off on return.
+  if (crawlInvokes.length) await Promise.allSettled(crawlInvokes);
 
   // PAID BASELINE chain. After extraction so a finalised snapshot reflects the cleaned
   // competitor data. Deduped per audit, and each call is wrapped: a baseline problem must
