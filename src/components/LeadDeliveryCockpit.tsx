@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { normalizeWaNumber } from '@/hooks/useInbox';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
+import { shortReportUrl } from '@/lib/reportSlug';
 import { isDemoLead } from '@/lib/demoLeads';
 import {
   TICKABLE_ITEMS, DELIVERY_REF_FIELDS, checklistDone, defaultRemeasureDue,
@@ -36,7 +37,7 @@ import { auditKind, isInternalMeasurement } from '@/lib/auditKind';
    key/dashboard/backups.
    ============================================================ */
 
-interface BaselineAudit { id: string; created_at: string; isBaseline: boolean; completedAt: string | null }
+interface BaselineAudit { id: string; created_at: string; isBaseline: boolean; completedAt: string | null; shortCode: string | null }
 
 export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
   lead: OutreachLead;
@@ -65,11 +66,11 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
     if (isDemoLead(lead.id)) { setAuditLoading(false); return; }
     let alive = true;
     void (async () => {
-      type Row = { id: string; created_at: string; baseline_completed_at: string | null; baseline_target_runs: number | null; is_market: boolean | null; is_measurement: boolean | null; audit_purpose: string | null };
+      type Row = { id: string; short_code: string | null; created_at: string; baseline_completed_at: string | null; baseline_target_runs: number | null; is_market: boolean | null; is_measurement: boolean | null; audit_purpose: string | null };
       // is_market / is_measurement / audit_purpose absent from generated types → through unknown.
       const { data } = await supabase
         .from('ai_audits')
-        .select('id, created_at, baseline_completed_at, baseline_target_runs, is_market, is_measurement, audit_purpose')
+        .select('id, short_code, created_at, baseline_completed_at, baseline_target_runs, is_market, is_measurement, audit_purpose')
         .eq('lead_id', lead.id)
         .order('created_at', { ascending: false }) as unknown as { data: Row[] | null };
       if (!alive) return;
@@ -82,7 +83,7 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
         ?? rows.find((a) => auditKind(a) === 'paid_baseline' || auditKind(a) === 'multi_run_unmarked')
         ?? rows[0]
         ?? null;
-      setAudit(chosen ? { id: chosen.id, created_at: chosen.created_at, isBaseline: !!pointed || chosen.baseline_target_runs != null, completedAt: chosen.baseline_completed_at ?? null } : null);
+      setAudit(chosen ? { id: chosen.id, created_at: chosen.created_at, isBaseline: !!pointed || chosen.baseline_target_runs != null, completedAt: chosen.baseline_completed_at ?? null, shortCode: chosen.short_code ?? null } : null);
       setAuditLoading(false);
     })();
     return () => { alive = false; };
@@ -203,7 +204,7 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted/60">
                 <HelpCircle className="h-3.5 w-3.5" /> Audit questions
               </button>
-              <a href={`${REPORT_PUBLIC_ORIGIN}/report/${audit.id}`} target="_blank" rel="noreferrer"
+              <a href={audit.shortCode ? shortReportUrl(audit.shortCode) : `${REPORT_PUBLIC_ORIGIN}/report/${audit.id}`} target="_blank" rel="noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted/60">
                 <ExternalLink className="h-3.5 w-3.5" /> Client report
               </a>
