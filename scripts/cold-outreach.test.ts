@@ -84,6 +84,15 @@ const EXPECTED_CONTINUATIONS = [
      video_template. So listing it here is also what stops a cold opener being substituted into a
      live thread — see scripts/article-trade-and-hold.test.ts. */
   "audit_followup_call",
+  /* audit_followup_fault — added 2026-09-17, audit_followup_call PLUS a named site fault and the
+     report link. Same classification for the same reason: written for a lead who has already
+     answered, so cold would refuse it for its whole audience. Its classification also does the
+     rivalHookDecision HOLD job (a rival-naming continuation short of three names holds rather than
+     falling back to the cold video_template).
+     ⚠️ Same accepted cost, and slightly more exposed than audit_followup_call because it DOES carry
+     audit_url: the drip could select a lead queued with it. It is never queued — Inbox only, gated
+     on a site fault — but if that ever changes this is the exposure to close. */
+  "audit_followup_fault",
   /* explain_offer — added 2026-09-15 with audit_followup's reasoning: Inbox-only, sent into a live
      conversation, so cold would refuse it for its whole audience. Same accepted cost. */
   "explain_offer",

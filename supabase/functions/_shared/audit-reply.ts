@@ -11,6 +11,7 @@ import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competit
 import { usableRivals, excludeSelfRivals } from "../../../src/lib/rivalHook.ts";
 import { nameMatches } from "../../../src/lib/nameMatch.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
+import { mainSiteFault, CRAWL_CHECK_VERSION, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
 /* ⛔ THE PROSPECT-FACING ORIGIN. findable.live/report/<auditId> — a Pages Function proxy that forces
@@ -68,7 +69,12 @@ export type AuditReplyVars =
      sends them as separate variables (competitor_hook's {{3}} {{4}} {{5}}). It can hold FEWER than
      three — that is the caller's decision to make (src/lib/rivalHook.ts), not a reason to refuse
      here: audit_reply and video_template are unaffected by how many there are. */
-  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string }
+  /* `siteFault` is the ONE sentence naming the lead's main site fault, from its stored crawl check —
+     `audit_followup_fault`'s {{6}}. NULL when the crawl found nothing to name (clean site, or the
+     site was unreachable). Meta rejects an empty parameter, so a null here is what makes that
+     template unsendable — the sender refuses rather than sending a broken message. Every other
+     template ignores it. */
+  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null }
   | { ok: false; reason: string };
 
 /**
@@ -232,5 +238,23 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
      client, so a rule written inline here would be a rule nothing asserts.
      ⛔ Dropping a self-match can leave fewer than three names; that is correct and already handled
      — rivalHookDecision falls back to video_template rather than padding. */
-  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id };
+  /* ── {{6}} FOR audit_followup_fault: the site's main crawl fault, ONE sentence ─────────────────
+     Read the lead's newest stored crawl check and take mainSiteFault. The SAME freshness + version
+     gate render-audit-report applies (30 days, v2+): a pre-v2 check can carry a false finding, and a
+     stale one describes a site as it was. Absent / clean / unreachable → null, which makes
+     audit_followup_fault unsendable (Meta rejects an empty {{6}}) rather than sending a blank line.
+     Never throws — every other template ignores this. */
+  let siteFault: string | null = null;
+  try {
+    const { data: cc } = await service
+      .from("lead_crawl_checks").select("result, created_at")
+      .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const fresh = !!cc && (Date.now() - new Date((cc as { created_at: string }).created_at).getTime()) < 30 * 86_400_000;
+    const stored = (cc as { result?: { version?: number; signals?: CrawlSignals } } | null)?.result;
+    const currentVer = (stored?.version ?? 1) >= CRAWL_CHECK_VERSION;
+    if (fresh && currentVer && stored?.signals) siteFault = mainSiteFault(stored.signals);
+  } catch (_e) {
+    siteFault = null;
+  }
+  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault };
 }

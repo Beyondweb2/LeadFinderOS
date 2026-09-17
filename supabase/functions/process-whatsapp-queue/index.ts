@@ -273,6 +273,13 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      ⛔ It does NOT inherit the three-names-or-fall-back rule: a continuation HOLDS instead, because
      the fallback is a cold opener. src/lib/rivalHook.ts owns that. */
   audit_followup_call: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3"] },
+  /* audit_followup_fault - submitted to Meta 2026-09-17. MIRRORS whatsapp-send.ts; change both together.
+     SEVEN vars: {{1}} trade WITH ARTICLE, {{2}} town, {{3}} {{4}} {{5}} rivals, {{6}} site fault,
+     {{7}} short report link. Inbox only - a CONTINUATION, and although it DOES carry audit_url the
+     queue still never selects it (it is never queued to a lead; the Inbox is the only door, same as
+     audit_followup / audit_followup_call). Present here for byte-identity with WA_TEMPLATES, which
+     re-engage-vars asserts in both directions. {{6}} is fail-closed on the send side. */
+  audit_followup_fault: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_fault", "audit_url"] },
   /* explain_offer - submitted to Meta 2026-09-15. MIRRORS whatsapp-send.ts; change both together.
      {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} the lead's onboarding link.
      Inbox only - it is a CONTINUATION and carries no audit_url, so this queue never selects it.

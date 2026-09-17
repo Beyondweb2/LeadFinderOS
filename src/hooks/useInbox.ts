@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/lib/templateAttribution';
+import { buildFaultLines, CRAWL_CHECK_VERSION, type CrawlSignals } from '@/lib/crawlCheck';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
 // (operators read their own; admin reads all incl. Unassigned).
@@ -113,6 +114,9 @@ interface InboxData {
    *  Inbox never ships 6k+ result blobs). Drives the "Gemini X/Y" flag — judged on Gemini alone,
    *  the engine pages move, per Paul 2026-09-16. */
   geminiSignals: Array<{ audit_id: string; lead_id: string | null; gemini_answers: number; gemini_named: number }>;
+  /** Per-lead stored crawl checks (result blob + when) → whether the site has a nameable fault, which
+   *  gates the audit_followup_fault template in the picker. Newest per lead wins in the hook. */
+  crawlChecks: Array<{ lead_id: string | null; result: { version?: number; signals?: CrawlSignals } | null; created_at: string }>;
 }
 
 /* Key includes the user id (the useCoverage pattern): firing before it resolves would cache the
@@ -125,9 +129,10 @@ const NO_LEADS: LeadLite[] = [];
 const NO_AUDITS: InboxData['audits'] = [];
 const NO_PAGE_HITS: InboxData['pageHits'] = [];
 const NO_GEMINI: InboxData['geminiSignals'] = [];
+const NO_CRAWL: InboxData['crawlChecks'] = [];
 
 async function fetchInboxData(): Promise<InboxData> {
-  const [msgRes, leadRes, reportRes, hitRes, gemRes] = await Promise.all([
+  const [msgRes, leadRes, reportRes, hitRes, gemRes, crawlRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
        This is the fastest-growing table in the system — every send and every reply. */
@@ -173,6 +178,13 @@ async function fetchInboxData(): Promise<InboxData> {
     fetchAllRows<InboxData['geminiSignals'][number]>('Inbox (gemini signal)', (from, to) =>
       sb.from('audit_gemini_signal').select('audit_id, lead_id, gemini_answers, gemini_named')
         .order('audit_id', { ascending: true }).range(from, to)),
+    /* Stored crawl checks → whether a lead's site has a nameable fault, which gates the
+       audit_followup_fault template in the picker (its {{6}} names one and Meta rejects an empty
+       parameter). Paginated with the id tiebreaker; newest-per-lead is chosen in the hook. A failed
+       read degrades to "no fault known", which simply keeps that template gated off — the safe way. */
+    fetchAllRows<InboxData['crawlChecks'][number]>('Inbox (crawl checks)', (from, to) =>
+      sb.from('lead_crawl_checks').select('lead_id, result, created_at')
+        .order('id', { ascending: true }).range(from, to)),
   ]);
   return {
     messages: msgRes.rows,
@@ -180,6 +192,7 @@ async function fetchInboxData(): Promise<InboxData> {
     audits: reportRes.rows,
     pageHits: hitRes.rows,
     geminiSignals: gemRes.rows,
+    crawlChecks: crawlRes.rows,
   };
 }
 
@@ -208,6 +221,7 @@ export function useInbox() {
   const audits = query.data?.audits ?? NO_AUDITS;
   const pageHits = query.data?.pageHits ?? NO_PAGE_HITS;
   const geminiSignals = query.data?.geminiSignals ?? NO_GEMINI;
+  const crawlChecks = query.data?.crawlChecks ?? NO_CRAWL;
   const isLoading = query.isLoading;
 
   /* Force-refresh: query.refetch always hits the network (staleTime does not apply to an explicit
@@ -247,6 +261,28 @@ export function useInbox() {
     }
     return m;
   }, [audits]);
+
+  /* Lead ids whose site has a NAMEABLE fault — the picker gate for audit_followup_fault (its {{6}}
+     names one; Meta rejects an empty parameter). Newest crawl check per lead, and the SAME freshness
+     + version rule render-audit-report and the sender apply (30 days, v2+): a stale or pre-v2 check
+     can carry a false finding. Absent / clean / unreachable → not in the set → the template stays
+     gated off, which is the safe direction. */
+  const hasSiteFaultLeadIds = useMemo(() => {
+    const newest = new Map<string, InboxData['crawlChecks'][number]>();
+    for (const c of crawlChecks) {
+      if (!c.lead_id) continue;
+      const prev = newest.get(c.lead_id);
+      if (!prev || new Date(c.created_at).getTime() > new Date(prev.created_at).getTime()) newest.set(c.lead_id, c);
+    }
+    const s = new Set<string>();
+    for (const [leadId, c] of newest) {
+      const fresh = (Date.now() - new Date(c.created_at).getTime()) < 30 * 86_400_000;
+      const ver = (c.result?.version ?? 1) >= CRAWL_CHECK_VERSION;
+      const sig = c.result?.signals;
+      if (fresh && ver && sig && buildFaultLines(sig).length > 0) s.add(leadId);
+    }
+    return s;
+  }, [crawlChecks]);
 
   // Lead ids with an audit run currently IN FLIGHT (pending/running) — drives the Inbox audit
   // button's spinner. Same audits fetch as above; refreshed by refetch() after firing one.
@@ -454,5 +490,5 @@ export function useInbox() {
       prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, status } : l)) } : prev),
     [queryClient, queryKey]);
 
-  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, isLoading, refetch: fetchAll, send, preview, patchLeadStatus };
+  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, isLoading, refetch: fetchAll, send, preview, patchLeadStatus };
 }

@@ -69,6 +69,11 @@ export const BRANCH_SUPPLIES: Record<TemplateBranch, ReadonlySet<string>> = {
   audit: new Set([
     "name", "trade", "trade_plural", "trade_article", "competitors", "rival_1", "rival_2", "rival_3",
     "town", "audit_url", "url",
+    /* site_fault (audit_followup_fault's {{6}}) is resolved in the audit branch, beside the rivals,
+       from the lead's stored crawl check (resolveAuditReplyVars.siteFault). It is crawl-derived
+       rather than audit-derived, so it is NOT in AUDIT_DERIVED_VARS — the template already routes to
+       the audit branch on its other vars — but the branch DOES supply it, so it is listed here. */
+    "site_fault",
   ]),
   plain: new Set(["name", "url", "town"]),
 };

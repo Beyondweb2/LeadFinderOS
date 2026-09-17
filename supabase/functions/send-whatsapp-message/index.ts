@@ -521,6 +521,12 @@ Deno.serve(async (req) => {
         if (templateNeedsRivals(tvars)) auditExtra.rivals = a.rivals;
         if (tvars.includes("town")) auditExtra.town = a.town;
         if (tvars.includes("audit_url")) auditExtra.auditUrl = a.link;
+        /* audit_followup_fault's {{6}}: the site's main crawl fault, resolved beside the rivals. An
+           empty value makes templateBodyParams throw unsafe_template_var (Meta rejects a blank
+           parameter), which the catch below returns as a visible hold — the fail-closed gate for a
+           lead with no fault. The picker keeps this template off a clean-site lead in the first
+           place. */
+        if (tvars.includes("site_fault")) auditExtra.siteFault = a.siteFault ?? "";
         /* ⛔ THE SAME TRADE/TOWN HOLD AS THE QUEUE (2026-09-12), and it matters MORE here because
            this is the manual path: the operator pressed send and is owed an answer. A plural trade
            or a town like "Bourne uk" would render "for a Locksmiths in Bourne uk" to a prospect, so

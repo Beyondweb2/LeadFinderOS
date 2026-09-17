@@ -193,6 +193,27 @@ Happy to explain it here or jump on a quick call if you'd rather
 Paul✌️`;
 };
 
+/* audit_followup_fault — submitted to Meta 2026-09-17. {{1}} trade WITH ITS OWN ARTICLE, {{2}} town,
+   {{3}} {{4}} {{5}} rivals, {{6}} the site's main fault, {{7}} the short report link.
+   ⛔ "i" is lowercase deliberately (Paul's wording). Do not capitalise it.
+   ⚠️ DISPLAY ONLY: the Inbox has no audit for rivals and no fault sentence threaded here, so {{3}}-
+   {{5}} degrade to "other firms" and {{6}} to a generic line, exactly as audit_followup_call
+   degrades its rivals. {{7}} (u) is the real report link. */
+const auditFollowupFaultBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
+  const t = articleTrade(trade);
+  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned ${competitors || 'other firms'}
+
+There's one thing on your site holding it back.
+
+I know how to get you showing up more in those answers so people are more likely to find you
+
+Here's the proof: ${u}
+
+Happy to explain more here or jump on a quick call if you'd rather
+
+Paul✌️`;
+};
+
 const auditReplyBody = (b: string, u: string, trade?: string, competitors?: string) =>
   `Hi, thanks for getting back.
 We asked AI tools like ChatGPT to recommend a ${trade || 'provider'} in your area, it's naming ${competitors || 'other firms'} - not ${b || 'you'}.
@@ -371,6 +392,7 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   audit_reply_warm: auditReplyWarmBody,
   audit_followup: auditFollowupBody,
   audit_followup_call: auditFollowupCallBody,
+  audit_followup_fault: auditFollowupFaultBody,
   explain_offer: explainOfferBody,
   explain_offer_v2: explainOfferV2Body,
 };

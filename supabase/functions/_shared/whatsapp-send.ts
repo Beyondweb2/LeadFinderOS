@@ -49,7 +49,7 @@ export function resolveWhatsAppEnv() {
    ask for the wrong grammar, and the failure would be a prospect reading "for a accountants".
    `rival_1|2|3` are the three competitor names competitor_hook sends as SEPARATE parameters — see
    src/lib/rivalHook.ts for why they are never padded and never degrade. */
-export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "trade_article" | "competitors" | "rival_1" | "rival_2" | "rival_3" | "onboarding_url" | "contact_first_name" | "town" | "audit_url";
+export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "trade_article" | "competitors" | "rival_1" | "rival_2" | "rival_3" | "onboarding_url" | "contact_first_name" | "town" | "audit_url" | "site_fault";
 
 /* ⛔ THE VIDEO HEADER'S URL, IN ONE PLACE (Paul, 2026-09-12).
    `video_template` is registered at Meta with a VIDEO header, which means the send MUST carry a
@@ -163,6 +163,20 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      is in src/lib/rivalHook.ts, keyed on the property, not on this name.
      No header, no buttons. MIRRORS process-whatsapp-queue; change both together. */
   audit_followup_call: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3"] },
+  /* audit_followup_fault — SUBMITTED TO META 2026-09-17. audit_followup_call PLUS a site fault and a
+     report link: {{1}} trade WITH ITS OWN ARTICLE, {{2}} town, {{3}} {{4}} {{5}} three rivals,
+     {{6}} ONE sentence naming the site's main crawl fault, {{7}} the SHORT report URL.
+     ⛔ {{6}} CANNOT BE EMPTY — Meta rejects a blank parameter and the whole send dies. So this
+     template is only ever OFFERED when the lead's crawl check found a fault (the picker gates on
+     hasSiteFault; getTemplateSendability), and the send FAILS CLOSED if it somehow arrives without
+     one (the site_fault case below throws unsafe_template_var). A clean-site lead gets
+     audit_followup_call instead — this NEVER falls back to it, and it never falls back FROM it.
+     ⛔ audit_url makes it needsAudit AND carries the report link ({{7}}); rival_1..3 make it
+     templateNeedsRivals, so a lead short of three rivals HOLDS (it is a CONTINUATION, no cold
+     fallback) exactly like audit_followup_call. site_fault is resolved in the audit branch from the
+     lead's crawl check (resolveAuditReplyVars.siteFault), so it lives beside the rivals it ships
+     with. No header, no buttons. MIRRORS process-whatsapp-queue; change both together. */
+  audit_followup_fault: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_fault", "audit_url"] },
   /* explain_offer — SUBMITTED TO META 2026-09-15. The full pitch: what we do, both figures, the
      guarantee, and the sign-up link, over the SAME video header video_template carries.
      THREE vars: {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} onboarding link.
@@ -594,6 +608,29 @@ Happy to explain it here or jump on a quick call if you'd rather
 Paul✌️`;
 };
 
+/* audit_followup_fault — SUBMITTED TO META 2026-09-17. audit_followup_call PLUS {{6}} the site's
+   main fault and {{7}} the SHORT report link. Seven vars: {{1}} trade WITH ITS OWN ARTICLE, {{2}}
+   town, {{3}} {{4}} {{5}} rivals, {{6}} fault sentence, {{7}} report link.
+   ⛔ "i" IS LOWERCASE — Paul's wording, same as its siblings. Do not "correct" it.
+   ⚠️ DISPLAY ONLY: the Inbox has no audit to read rivals from and no fault sentence threaded to this
+   builder, so {{3}}-{{5}} degrade to "other firms" and {{6}} to a generic line here, exactly as
+   audit_followup_call degrades its rivals. What the prospect actually received is on Meta's side,
+   filled from the resolved parameters. {{7}} (u) is the real report link. */
+const auditFollowupFaultBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
+  const t = articleTrade(trade);
+  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || "a local business")} in ${town || "your area"} so i asked AI and it mentioned ${competitors || "other firms"}
+
+There's one thing on your site holding it back.
+
+I know how to get you showing up more in those answers so people are more likely to find you
+
+Here's the proof: ${u}
+
+Happy to explain more here or jump on a quick call if you'd rather
+
+Paul✌️`;
+};
+
 /* audit_followup — SUBMITTED TO META 2026-09-15, re-registered the same day with the article
    removed. Six variables: {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} {{4}} {{5}} three
    rivals, {{6}} report link. No header, no buttons.
@@ -671,6 +708,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   audit_reply_warm: auditReplyWarmBody,
   audit_followup: auditFollowupBody,
   audit_followup_call: auditFollowupCallBody,
+  audit_followup_fault: auditFollowupFaultBody,
   explain_offer: explainOfferBody,
   explain_offer_v2: explainOfferV2Body,
 };
@@ -704,7 +742,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -812,6 +850,16 @@ export function templateBodyParams(
         if (!u) throw new Error("audit_url variable is empty — refusing to send a result with no link");
         return u;
       }
+      /* audit_followup_fault's {{6}} — the ONE sentence naming the site's main crawl fault. It is
+         the whole reason that template exists (a specific, checkable problem), and Meta rejects an
+         empty parameter outright, so a blank THROWS with the unsafe_template_var: prefix the send
+         sites already turn into a visible hold. This is the fail-closed backstop; the picker gates
+         the template out for a clean site before it ever gets here. */
+      case "site_fault": {
+        const f = (extra?.siteFault ?? "").trim();
+        if (!f) throw new Error("unsafe_template_var:no_site_fault:the crawl check found no fault to name — use the call version");
+        return f;
+      }
       /* ⛔ THE GREETING NAME. `business_name` is the Google Maps listing, so untouched it opens
          "Hi N Hammond Gas Plumbing & Heating Engineer" at a man who calls himself N Hammond —
          81.2% of the book carries a trade word and 26.4% carries Ltd/Limited/LLP. displayName.ts
@@ -864,7 +912,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got
