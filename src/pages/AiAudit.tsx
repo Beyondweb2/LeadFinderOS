@@ -43,6 +43,7 @@ import {
 import { tradeWord } from '@/lib/trade';
 import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
+import { shortReportUrl } from '@/lib/reportSlug';
 import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
 import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS } from '@/lib/auditQuestionCounts';
 /* The LLM "playbook" (playbookHtml.ts + the generate-playbook edge function) was DELETED
@@ -166,6 +167,7 @@ const LIST_POLL_MS = 5000;
 /** Stable empty list — a new [] each render would break every memo downstream. */
 const EMPTY_AUDITS: AuditLite[] = [];
 const EMPTY_LEADS: LeadOption[] = [];
+const LEAD_SELECT_COLUMNS = 'id, business_name, category, country, website, address, search_keyword, search_location';
 
 
 // Wizard state is persisted to localStorage (USER-SCOPED) so an in-progress New Audit survives
@@ -320,6 +322,12 @@ const AiAudit = () => {
   /* The archive confirm. Holds the audit AND the verdict computed before the dialog opened, so
      the dialog states a decision already made rather than re-deciding at click time. */
   const [archiveTarget, setArchiveTarget] = useState<{ audit: AuditLite; verdict: ProtectionVerdict } | null>(null);
+  // This only connects an existing audit to an existing outreach lead. It never creates or edits a
+  // lead: ai_audits.lead_id is the established relationship used by audits launched from Outreach.
+  const [connectBusinessOpen, setConnectBusinessOpen] = useState(false);
+  const [connectBusinessQuery, setConnectBusinessQuery] = useState('');
+  const [connectBusinessResults, setConnectBusinessResults] = useState<LeadOption[]>([]);
+  const [connectingLeadId, setConnectingLeadId] = useState<string | null>(null);
   /* Show the archived audits instead of the live ones. Deliberately NOT persisted: it is a
      temporary excursion, and coming back to the page in "archived" mode would read as an empty
      audit book (CLAUDE.md §6c — persist what you were looking at, not a detour). */
@@ -733,20 +741,19 @@ const AiAudit = () => {
     queryKey: ['ai-audit-leads', user?.id ?? null],
     enabled: !!user,
     queryFn: async () => {
-      const LEAD_COLS = 'id, business_name, category, country, website, address, search_keyword, search_location';
       /* MIGRATION-TOLERANT. derived_town is added by a migration Paul applies BY HAND, so until that
          SQL runs PostgREST fails the WHOLE select with a 400 and the lead picker would come back
          empty — breaking the wizard for a cosmetic prefill. Try with it, fall back without it. */
       let rows = (await supabase
         .from('outreach_leads')
-        .select(`${LEAD_COLS}, derived_town`)
+        .select(`${LEAD_SELECT_COLUMNS}, derived_town`)
         .eq('is_archived', false)
         .order('created_at', { ascending: false })
         .limit(500)).data as unknown as LeadOption[] | null;
       if (!rows) {
         rows = (await supabase
           .from('outreach_leads')
-          .select(LEAD_COLS)
+          .select(LEAD_SELECT_COLUMNS)
           .eq('is_archived', false)
           .order('created_at', { ascending: false })
           .limit(500)).data as unknown as LeadOption[] | null;
@@ -755,6 +762,38 @@ const AiAudit = () => {
     },
   });
   const leads = leadsQuery.data ?? EMPTY_LEADS;
+
+  // The normal new-audit picker deliberately loads only the recent 500 leads. Connecting a
+  // standalone audit must also find older businesses, so searching here asks the owner-scoped
+  // table directly by name and returns a bounded set with enough location detail to distinguish it.
+  useEffect(() => {
+    const term = connectBusinessQuery.trim();
+    if (!connectBusinessOpen || term.length < 2) {
+      setConnectBusinessResults([]);
+      return;
+    }
+    let alive = true;
+    const timer = window.setTimeout(async () => {
+      let rows = (await supabase
+        .from('outreach_leads')
+        .select(`${LEAD_SELECT_COLUMNS}, derived_town`)
+        .eq('is_archived', false)
+        .ilike('business_name', `%${term}%`)
+        .order('business_name', { ascending: true })
+        .limit(50)).data as unknown as LeadOption[] | null;
+      if (!rows) {
+        rows = (await supabase
+          .from('outreach_leads')
+          .select(LEAD_SELECT_COLUMNS)
+          .eq('is_archived', false)
+          .ilike('business_name', `%${term}%`)
+          .order('business_name', { ascending: true })
+          .limit(50)).data as unknown as LeadOption[] | null;
+      }
+      if (alive) setConnectBusinessResults(rows ?? EMPTY_LEADS);
+    }, 250);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [connectBusinessOpen, connectBusinessQuery]);
 
   /* ── Keep the landing list live while audits drain ──────────────────────────────
      THE BUG THIS FIXES. Both existing pollers are gated on step === 'results', so on the
@@ -1737,6 +1776,35 @@ const AiAudit = () => {
   }, [savedAudits, searchExtras]);
 
   const openAuditRow = listSource.find((a) => a.id === auditId) ?? null;
+  const connectedBusiness = openAuditRow?.lead_id
+    ? leads.find((lead) => lead.id === openAuditRow.lead_id) ?? null
+    : null;
+  const connectAuditToBusiness = async (lead: LeadOption) => {
+    if (!auditId || !openAuditRow || openAuditRow.lead_id || connectingLeadId) return;
+    setConnectingLeadId(lead.id);
+    try {
+      const { error } = await (supabase as unknown as SupabaseClient)
+        .from('ai_audits')
+        .update({ lead_id: lead.id })
+        .eq('id', auditId);
+      if (error) throw error;
+      setSavedAudits((previous) => previous.map((audit) =>
+        audit.id === auditId ? { ...audit, lead_id: lead.id } : audit,
+      ));
+      setConnectBusinessOpen(false);
+      setConnectBusinessQuery('');
+      setConnectBusinessResults([]);
+      toast({ title: 'Audit connected', description: `Connected to ${lead.business_name}.` });
+    } catch (error) {
+      toast({
+        title: "Couldn't connect this audit",
+        description: error instanceof Error ? error.message : 'Try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setConnectingLeadId(null);
+    }
+  };
   /* One run, always — a re-audit is a quick diagnostic. */
   const reAuditRuns = 1;
   const reAuditEstUsd = reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION * reAuditRuns;
@@ -2205,6 +2273,7 @@ const AiAudit = () => {
       );
     }
     return (
+      <>
       <AiAuditReport
         /* key per report: remounting on open resets the Client/Internal toggle to Client (safety —
            an internal selection never carries into the next report). */
@@ -2217,12 +2286,60 @@ const AiAudit = () => {
         /* Print follows the current view: the toggle hands us its choice; Client is the default and
            downloadReportHtml also fails safe to Client if internal is unset. */
         onDownload={(internal) => downloadReportHtml({ ...openReportData, internal })}
-        /* The separate public-site deployment does not yet serve /r/:short_code; use the
-           established UUID route until that route is verified live. */
-        reportUrl={auditId ? `https://findable.live/report/${auditId}` : undefined}
+        reportUrl={openAuditRow?.short_code
+          ? shortReportUrl(openAuditRow.short_code)
+          : auditId ? `https://findable.live/report/${auditId}` : undefined}
+        connectedBusinessLabel={openAuditRow?.lead_id
+          ? (connectedBusiness?.business_name ?? 'an outreach business')
+          : undefined}
+        onConnectBusiness={!openAuditRow?.lead_id ? () => setConnectBusinessOpen(true) : undefined}
         onRegenerate={canRegenerate ? regenerateReport : undefined}
         regenerating={regenerating}
       />
+      <Dialog open={connectBusinessOpen} onOpenChange={(open) => {
+        setConnectBusinessOpen(open);
+        if (!open) { setConnectBusinessQuery(''); setConnectBusinessResults([]); }
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Connect to Business</DialogTitle>
+            <DialogDescription>
+              Attach {openAuditRow?.business_name ?? 'this audit'} to an existing outreach business. No business or lead will be created.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={connectBusinessQuery}
+            onChange={(event) => setConnectBusinessQuery(event.target.value)}
+            placeholder="Search existing business name…"
+          />
+          <div className="max-h-72 overflow-y-auto rounded-md border">
+            {connectBusinessQuery.trim().length < 2 ? (
+              <p className="p-3 text-sm text-muted-foreground">Enter at least two characters to search your outreach businesses.</p>
+            ) : connectBusinessResults.length === 0 ? (
+              <p className="p-3 text-sm text-muted-foreground">No matching outreach business found.</p>
+            ) : connectBusinessResults.map((lead) => {
+              const location = lead.derived_town || lead.address || lead.search_location || lead.country;
+              return (
+                <button
+                  key={lead.id}
+                  type="button"
+                  disabled={!!connectingLeadId}
+                  onClick={() => { void connectAuditToBusiness(lead); }}
+                  className="flex w-full items-center justify-between gap-3 border-b px-3 py-2.5 text-left last:border-b-0 hover:bg-muted disabled:opacity-60"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{lead.business_name}</span>
+                    {location && <span className="block truncate text-xs text-muted-foreground">{location}</span>}
+                  </span>
+                  {connectingLeadId === lead.id && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+      </>
     );
   }
 
