@@ -616,11 +616,13 @@ Paul✌️`;
    builder, so {{3}}-{{5}} degrade to "other firms" and {{6}} to a generic line here, exactly as
    audit_followup_call degrades its rivals. What the prospect actually received is on Meta's side,
    filled from the resolved parameters. {{7}} (u) is the real report link. */
-const auditFollowupFaultBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
+const auditFollowupFaultBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string, siteFault?: string) => {
   const t = articleTrade(trade);
   return `Hi mate, i was looking for ${t.ok ? t.value : (trade || "a local business")} in ${town || "your area"} so i asked AI and it mentioned ${competitors || "other firms"}
 
 Here's the main thing holding you back.
+
+${siteFault}
 
 I know how to get you showing up more in those answers so people are more likely to find you
 
@@ -677,7 +679,7 @@ const auditReplyWarmBody = (_b: string, u: string, trade?: string, _c?: string, 
 Here's your result: ${u}
 More on how we can fix it, and how to get started: https://findable.live`;
 
-export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string) => string> = {
+export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string) => string> = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
   re_engage_49: reEngage49Body,
@@ -715,8 +717,11 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
 
 /** Render the display copy of a template body with its variables filled. `trade`/`competitors`
  *  are used only by audit_reply; the other (2-var) bodies ignore them. */
-export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string): string {
+export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string): string {
   const fn = WA_TEMPLATE_BODIES[templateName];
+  if (templateName === "audit_followup_fault" && !siteFault?.trim()) {
+    throw new Error("unsafe_template_var:no_site_fault:the crawl check found no fault to name — use the call version");
+  }
   /* ⛔ THE STORED BODY IS SHORTENED HERE, IN THE SAME FUNCTION THE META PARAMETER IS BUILT BESIDE,
      so the transcript and the message cannot diverge. Doing it at the ~15 call sites instead would
      be "one rule written out in N places" — the failure this codebase has recorded five times, and
@@ -730,7 +735,7 @@ export function renderTemplateBody(templateName: string, businessName: string, c
      arguments, so adding it cannot change a single stored transcript. video_template is the only
      body that reads it - without it the transcript would say "in your area" while the message the
      prospect received named their town, which is the display drift 11 already records for re_engage_49. */
-  return fn ? fn(businessName, claimUrl, trade, competitors, contactFirstName, town) : `[${templateName}]`;
+  return fn ? fn(businessName, claimUrl, trade, competitors, contactFirstName, town, siteFault?.trim()) : `[${templateName}]`;
 }
 
 /** Body params for a template, filled STRICTLY in the template's declared `vars`

@@ -337,10 +337,10 @@ export function mainSiteFault(s: CrawlSignals): string | null {
 }
 
 /** The {{6}} line for a lead with NO WEBSITE AT ALL, where a crawl-fault line makes no sense — there
- *  is nothing of theirs to crawl. Paul's usual voice: conversational, lowercase, short, no hype
- *  (2026-09-17). */
+ *  is nothing of theirs to crawl. It is deliberately truthful about third-party listings still
+ *  existing while naming the missing first-party evidence (2026-09-18). */
 export const NO_WEBSITE_FAULT_LINE =
-  "you haven't got a website ai can read — right now you're relying entirely on directories to get named, there's nothing of your own for it to check";
+  "You don't currently have a website, which means Google and other AI tools have very little first-party information to use when deciding whether to recommend your business.";
 
 /** THE ONE RULE for audit_followup_fault's {{6}} AND for whether the template may be offered, so the
  *  sender's value and the picker's gate can never disagree (Paul, 2026-09-17):

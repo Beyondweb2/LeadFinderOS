@@ -199,11 +199,13 @@ Paul✌️`;
    ⚠️ DISPLAY ONLY: the Inbox has no audit for rivals and no fault sentence threaded here, so {{3}}-
    {{5}} degrade to "other firms" and {{6}} to a generic line, exactly as audit_followup_call
    degrades its rivals. {{7}} (u) is the real report link. */
-const auditFollowupFaultBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
+const auditFollowupFaultBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string, siteFault?: string) => {
   const t = articleTrade(trade);
   return `Hi mate, i was looking for ${t.ok ? t.value : (trade || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned ${competitors || 'other firms'}
 
 Here's the main thing holding you back.
+
+${siteFault ?? ''}
 
 I know how to get you showing up more in those answers so people are more likely to find you
 
@@ -365,7 +367,7 @@ const barberFreshaBooksyBody = (b: string, u: string) =>
 /** One template's display renderer. Named so the superseded-bodies map can reuse it rather than
  *  restate the signature — two copies of it would drift the day a seventh argument appears. */
 export type TemplateBodyFn =
-  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string) => string;
+  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string) => string;
 
 /** DISPLAY-ONLY body renderers keyed by template name. Same signature as whatsapp-send.ts's
  *  WA_TEMPLATE_BODIES so the parity test can compare them one-to-one. */
@@ -405,6 +407,8 @@ export interface ReadableBodyOpts {
   firstName?: string | null;
   /** video_template's {{3}}. Only this body reads it; the rest ignore the extra argument. */
   town?: string | null;
+  /** audit_followup_fault's crawl-derived {{6}}. */
+  siteFault?: string | null;
   /* ⛔ WHEN THE MESSAGE WAS SENT — required for the greeting name to be honest.
      The greeting is shortened at send time (src/lib/displayName.ts), but this function re-renders a
      placeholder-bodied row from the lead's name as it is TODAY. Applying the rule blindly would
@@ -494,5 +498,6 @@ export function readableTemplateBody(
     opts.competitors ?? undefined,
     opts.firstName ?? undefined,
     opts.town ?? undefined,
+    opts.siteFault ?? undefined,
   ).trim();
 }

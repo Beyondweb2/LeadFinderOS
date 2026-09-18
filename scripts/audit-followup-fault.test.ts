@@ -7,7 +7,8 @@
 
    Run: npx tsx scripts/audit-followup-fault.test.ts
    ============================================================ */
-import { WA_TEMPLATES, claimTemplatePayload } from "../supabase/functions/_shared/whatsapp-send.ts";
+import { WA_TEMPLATES, claimTemplatePayload, renderTemplateBody } from "../supabase/functions/_shared/whatsapp-send.ts";
+import { readFileSync } from "node:fs";
 import { WA_TEMPLATE_REQS, getTemplateSendability } from "../src/lib/whatsappTemplates.ts";
 import { CONTINUATION_TEMPLATES } from "../src/lib/coldOutreach.ts";
 import { REPORT_LINK_TEMPLATES } from "../src/lib/templateAttribution.ts";
@@ -69,11 +70,33 @@ console.log("\n── A MISSING RIVAL STILL FAILS CLOSED (it names three) ──
   ok(threw, "only two rivals throws rivals_unavailable");
 }
 
+console.log("\nPREVIEW, IMMEDIATE AND QUEUED SEND SHARE THE SAME SITE FAULT");
+{
+  const fault = "Your service pages don't clearly tell AI which areas you cover.";
+  const rendered = renderTemplateBody(NAME, "RG Locksmiths", REPORT, "locksmith", "Keytek, LockRite and Timpson", undefined, "Huntingdon", fault);
+  ok(rendered.includes(`Here's the main thing holding you back.\n\n${fault}\n\n`), "preview/transcript inserts the exact non-empty fault after the heading");
+  ok(rendered.split(fault).length - 1 === 1, "the real crawl fault appears exactly once in the rendered message");
+  let threw = false;
+  try { renderTemplateBody(NAME, "RG Locksmiths", REPORT, "locksmith", "Keytek, LockRite and Timpson", undefined, "Huntingdon", "  "); }
+  catch (e) { threw = String((e as Error).message).startsWith("unsafe_template_var:no_site_fault"); }
+  ok(threw, "the preview/transcript renderer rejects a whitespace-only site fault");
+
+  const immediate = readFileSync("supabase/functions/send-whatsapp-message/index.ts", "utf8");
+  const queued = readFileSync("supabase/functions/process-whatsapp-queue/index.ts", "utf8");
+  ok(immediate.includes("a.town, a.siteFault ?? undefined"), "immediate send stores the same resolved site fault it sends to Meta");
+  ok(queued.includes("auditExtra.siteFault = vars.siteFault ?? \"\""), "queued first-reply path supplies the resolved site fault to Meta");
+  ok(queued.includes("vars.town, vars.siteFault ?? undefined"), "queued first-reply path stores that same fault in its transcript");
+  ok(queued.includes("templateExtra.siteFault = ar.siteFault ?? \"\""), "queued drip path supplies the resolved site fault to Meta");
+  ok(queued.includes("templateExtra.town, templateExtra.siteFault"), "queued drip path stores that same fault in its transcript");
+}
+
 console.log("\n── ROUTING, GATING AND ATTRIBUTION AGREE ──");
 ok(buildsFromAudit(entry.vars), "routes to the AUDIT branch (needs the completed audit)");
 ok(unsuppliedVars(entry.vars).length === 0, `the audit branch supplies every var (unsupplied: ${JSON.stringify(unsuppliedVars(entry.vars))})`);
 ok(WA_TEMPLATE_REQS[NAME]?.needsAudit === true, "needsAudit");
 ok(WA_TEMPLATE_REQS[NAME]?.needsSiteFault === true, "needsSiteFault (the picker gate)");
+ok(!getTemplateSendability(NAME, { shareToken: null }, { reportSlug: REPORT, hasSiteFault: false }).ok,
+  "the fault template is disabled when the resolver has no usable fault");
 ok(CONTINUATION_TEMPLATES.has(NAME), "a CONTINUATION (Inbox only; holds rather than falling back)");
 ok(REPORT_LINK_TEMPLATES.has(NAME), "in REPORT_LINK_TEMPLATES (it carries the report link in {{7}})");
 
@@ -83,9 +106,19 @@ const CLEAN: CrawlSignals = { ...FAULTY, searchBlocked: [] };
 const now = Date.now();
 // No website → the no-website line, whether or not a crawl row exists.
 ok(siteFaultLine(false, null, 0) === NO_WEBSITE_FAULT_LINE, "no website → the no-website line (no crawl needed)");
-ok(NO_WEBSITE_FAULT_LINE === NO_WEBSITE_FAULT_LINE.toLowerCase(), "the no-website line is lowercase (Paul's voice)");
-ok(/directories/.test(NO_WEBSITE_FAULT_LINE), "it names directories (why they can't be found)");
+ok(NO_WEBSITE_FAULT_LINE === "You don't currently have a website, which means Google and other AI tools have very little first-party information to use when deciding whether to recommend your business.", "the no-website line is truthful about limited first-party information");
 ok(!/\n|\t/.test(NO_WEBSITE_FAULT_LINE) && !/ {4,}/.test(NO_WEBSITE_FAULT_LINE), "it is one clean line (Meta rejects newline/tab/4+ spaces)");
+{
+  const noWebsiteFault = resolveSiteFault(false, [], null);
+  const rendered = renderTemplateBody(NAME, "No Site Ltd", REPORT, "electrician", "A, B and C", undefined, "Stockton-on-Tees", noWebsiteFault ?? undefined);
+  ok(noWebsiteFault === NO_WEBSITE_FAULT_LINE, "the shared resolver returns the valid no-website fault without a crawl");
+  ok(getTemplateSendability(NAME, { shareToken: null }, { reportSlug: REPORT, hasSiteFault: !!noWebsiteFault }).ok, "a no-website lead is selectable because it has the valid no-website fault");
+  ok(rendered.includes(NO_WEBSITE_FAULT_LINE), "the no-website fault reaches preview/immediate/queued body rendering");
+  const params = (claimTemplatePayload(NAME, "en", "No Site Ltd", REPORT, {
+    trade: "electrician", town: "Stockton-on-Tees", rivals: ["A", "B", "C"], siteFault: noWebsiteFault ?? "", auditUrl: REPORT,
+  }).template.components as Array<{ parameters: Array<{ text: string }> }>)[0].parameters;
+  ok(params[5].text === NO_WEBSITE_FAULT_LINE, "the no-website fault is the exact Meta {{6}} value");
+}
 // A website: the crawl fault when there is one (fresh + v2), else null.
 ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: FAULTY }, now) !== null, "website + a fresh v2 fault → the crawl fault");
 ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: CLEAN }, now) === null, "website + a clean crawl → null (not offered)");

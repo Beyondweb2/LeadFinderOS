@@ -1019,6 +1019,7 @@ Deno.serve(async (req) => {
             if (templateNeedsRivals(tmpl.vars)) auditExtra.rivals = vars.rivals;
             if (tmpl.vars.includes("town")) auditExtra.town = vars.town;
             if (tmpl.vars.includes("audit_url")) auditExtra.auditUrl = vars.link;
+            if (tmpl.vars.includes("site_fault")) auditExtra.siteFault = vars.siteFault ?? "";
             /* ⛔ AN UNSAFE TRADE OR TOWN HOLDS THE LEAD, IT DOES NOT SEND IT WRONG (2026-09-12).
                video_template's body is "for a {{2}} in {{3}}", so a plural trade or a town like
                "Bourne uk" would reach a prospect as visibly broken copy. templateBodyParams throws
@@ -1039,7 +1040,7 @@ Deno.serve(async (req) => {
               }
               throw e;
             }
-            renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors, undefined, vars.town);
+            renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors, undefined, vars.town, vars.siteFault ?? undefined);
             businessName = vars.business;
             claimUrl = vars.link;
           } else if (tmpl.vars.includes("onboarding_url")) {
@@ -1567,7 +1568,7 @@ Deno.serve(async (req) => {
        EVERY builder of its payload and count them before believing you have them all.
        ⚠️ The guard did its job: it refused rather than sending a message with a missing link, and
        failed_temporary means the lead retries rather than being burned. */
-    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string } = {};
+    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string; siteFault?: string } = {};
     /* Set only when a rival-naming template was swapped for the fallback, so the tick's answer can
        say so. Silence would make a substitution indistinguishable from a normal send. */
     let rivalFallbackReason = "";
@@ -1668,6 +1669,7 @@ Deno.serve(async (req) => {
       if (templateNeedsRivals(tvars)) templateExtra.rivals = ar.rivals;
       if (tvars.includes("town")) templateExtra.town = ar.town;
       if (tvars.includes("audit_url")) templateExtra.auditUrl = ar.link;
+      if (tvars.includes("site_fault")) templateExtra.siteFault = ar.siteFault ?? "";
       // Its "url" var is the AUDIT REPORT link, so it replaces the claim link for this send.
       // Sending the site claim link under audit_reply's copy ("we ran a full report … <link>")
       // would point the prospect at the wrong page entirely.
@@ -1872,7 +1874,7 @@ Deno.serve(async (req) => {
           phone: toNumber,                                   // the number actually messaged (E.164 digits)
           // town is the 6th positional arg (see renderTemplateBody) - without it the operator
           // transcript would read "in your area" while the prospect's message named their town.
-          body: renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town),
+          body: renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault),
           message_type: "template",
           template_name: templateName,
           wa_message_id: messageId,                          // null on a simulated (TEST_MODE) send
