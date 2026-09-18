@@ -70,8 +70,31 @@ Deno.serve(async (req) => {
     };
     if (action === "get") return json({ ok: true, baseline: details });
 
-    if (["generate", "save", "approve", "run"].indexOf(action) < 0) return json({ ok: false, error: "unsupported_action" }, 400);
+    if (["generate", "save", "approve", "run", "save_context"].indexOf(action) < 0) return json({ ok: false, error: "unsupported_action" }, 400);
     if (["running", "complete"].includes(status)) return json({ ok: true, baseline: details, skipped: "already_started" });
+
+    /* Context is saved on the same lead/onboarding pair the baseline already reads. This is only
+       an operator convenience for incomplete manual/onboarding records; it never creates a second
+       audit profile and is locked once the measurement has begun. */
+    if (action === "save_context") {
+      const location = typeof body.location === "string" ? body.location.trim() : String(details.location ?? "").trim();
+      const services = typeof body.services === "string" ? body.services.trim() : String(details.services ?? "").trim();
+      const serviceList = cleanQuestions(Array.isArray(body.services_list) ? body.services_list : row.services_list);
+      const areas = cleanQuestions(Array.isArray(body.areas_list) ? body.areas_list : row.areas_list);
+      const businessType = typeof body.business_type === "string" ? body.business_type.trim() : String(details.business_type ?? "").trim();
+      const website = typeof body.website === "string" ? body.website.trim() : String(details.website ?? "").trim();
+      if (!location || !services || !businessType) return json({ ok: false, error: "location_services_and_business_type_required" }, 400);
+      const now = new Date().toISOString();
+      const { error: onErr } = await service.from("onboarding_responses").update({
+        confirmed_location: location, services, services_list: serviceList, areas_list: areas, updated_at: now,
+      }).eq("id", row.id).eq("status", "paid");
+      if (onErr) throw onErr;
+      const { error: leadUpdateErr } = await service.from("outreach_leads").update({
+        category: businessType, website: website || null, search_location: location,
+      }).eq("id", lead.id).eq("user_id", user.id);
+      if (leadUpdateErr) throw leadUpdateErr;
+      return json({ ok: true, baseline: { ...details, location, services, services_list: serviceList, areas_list: areas, business_type: businessType, website } });
+    }
 
     let next = questions;
     if (action === "generate") {

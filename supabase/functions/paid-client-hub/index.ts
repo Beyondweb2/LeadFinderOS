@@ -44,21 +44,32 @@ Deno.serve(async (req) => {
     if (action === "get") {
       const leadId = text(body.lead_id);
       const { data: lead, error } = await service.from("outreach_leads")
-        .select("id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref")
+        .select("id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for")
         .eq("id", leadId).eq("user_id", user.id).maybeSingle();
       if (error) throw error;
       if (!lead) return json({ ok: false, error: "client_not_found" }, 404);
       const { data: onboarding } = await service.from("onboarding_responses")
-        .select("id,confirmed_location,services,services_list,areas_list,areas_wanted,contact_email,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id")
+        .select("id,confirmed_location,services,services_list,areas_list,areas_wanted,contact_email,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,gbp_consent,gbp_manager_email")
         .eq("lead_id", leadId).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
       const auditId = (lead as Record<string, unknown>).baseline_audit_id as string | null;
-      let audit: unknown = null, runs: unknown[] = [], pages: unknown[] = [];
+      let audit: unknown = null, runs: Array<Record<string, unknown>> = [], pages: unknown[] = [];
       if (auditId) {
         const [a, r] = await Promise.all([
           service.from("ai_audits").select("id,baseline_completed_at,short_code,created_at").eq("id", auditId).maybeSingle(),
           service.from("ai_audit_runs").select("id,run_number,status,created_at,completed_at").eq("audit_id", auditId).order("run_number"),
         ]);
-        audit = a.data; runs = r.data ?? [];
+        audit = a.data; runs = (r.data ?? []) as Array<Record<string, unknown>>;
+        const ids = runs.map((run) => String(run.id)).filter(Boolean);
+        if (ids.length) {
+          const { data: queue } = await service.from("ai_audit_queue").select("run_id,status").in("run_id", ids);
+          const counts = new Map<string, { total: number; complete: number }>();
+          for (const row of (queue ?? []) as Array<{ run_id: string; status: string | null }>) {
+            const c = counts.get(row.run_id) ?? { total: 0, complete: 0 };
+            c.total += 1; if (row.status === "complete") c.complete += 1;
+            counts.set(row.run_id, c);
+          }
+          runs = runs.map((run) => ({ ...run, queue_total: counts.get(String(run.id))?.total ?? 0, queue_complete: counts.get(String(run.id))?.complete ?? 0 }));
+        }
       }
       const p = await service.from("client_pages").select("id,status,primary_question,service,town,existing_url,recommendation,priority").eq("lead_id", leadId).order("created_at", { ascending: false });
       pages = p.data ?? [];
