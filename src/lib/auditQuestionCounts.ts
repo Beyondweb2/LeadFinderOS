@@ -29,7 +29,7 @@ export const WIZARD_MAX_QUESTIONS = 5;
 export const WIZARD_DEFAULT_QUESTIONS = 3;
 
 /**
- * PAID BASELINE — day 0. HOME TOWN ONLY, 12 questions, measured over BASELINE_RUNS runs and
+ * PAID BASELINE — day 0. HOME TOWN ONLY, 20 questions, measured over BASELINE_RUNS runs and
  * FROZEN: the refund is judged on this set and nothing else, and it is replayed verbatim at day 28
  * against outreach_leads.baseline_audit_id. Do NOT economise here: this is the money-back
  * guarantee's measuring stick, and the variance is brutal. Measured in this database, one business
@@ -45,7 +45,7 @@ export const WIZARD_DEFAULT_QUESTIONS = 3;
  * ⛔ NOT SEEDED from the outreach hook any more. The hook is throwaway and never compared; the
  * baseline is generated fresh for the home town.
  */
-export const BASELINE_QUESTIONS = 12;
+export const BASELINE_QUESTIONS = 20;
 export const BASELINE_RUNS = 3;
 
 /**

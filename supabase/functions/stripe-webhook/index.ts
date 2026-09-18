@@ -1,6 +1,6 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { startPaidBaseline } from "../_shared/audit-baseline.ts";
+import { preparePaidBaselineQuestions, startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { createDelayedSubscription } from "../_shared/delayed-subscription.ts";
 import { questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
 import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from "../../../src/lib/findableOffer.ts";
@@ -712,6 +712,16 @@ Deno.serve(async (req) => {
               onboardingId,
               "findable onboarding -> paid",
             );
+            /* Payment prepares fulfilment but never starts the paid audit. Preserve any later
+               operator state on webhook retries; only initialise an untouched row. */
+            await service.from("onboarding_responses")
+              .update({ baseline_status: "needs_questions", updated_at: new Date().toISOString() })
+              .eq("id", onboardingId).is("baseline_status", null);
+            /* Draft generation is preview-only: it creates no ai_audits row and queues no AI
+               answers. A failure remains visible to the operator as Needs Baseline, where the
+               explicit Generate action can retry it. */
+            const draft = await preparePaidBaselineQuestions(service, onboardingId);
+            if (!draft.ok) console.warn(`[stripe-webhook] baseline draft deferred for ${onboardingId}: ${draft.error}`);
             /* ⛔ RETIRE THE SAME PERSON'S OTHER UNPAID SUBMISSIONS (2026-09-13). A restarted form
                leaves an older row behind, and notify-onboarding-submit judged rows one at a time —
                so on 12 Sep the 12:35 attempt was reported "not paid" one minute before the 12:54
@@ -1080,7 +1090,7 @@ Deno.serve(async (req) => {
                            the measurement about the same customer. */
                         const outstanding = !questionnaireComplete(ob);
                         return outstanding
-                          ? "Details not yet collected — they still have the post-payment form to fill in (town and services). No baseline starts until it lands."
+                          ? "Details not yet collected — they still have the post-payment form to fill in (town and services). Draft questions and the paid baseline wait until it lands."
                           : null;
                       } catch {
                         /* Never block the email over this: a failed read means we simply do not add
@@ -1115,8 +1125,8 @@ Deno.serve(async (req) => {
                ⚠️ Requires findableLeadId: the phone lives on the lead and nowhere else (the
                questionnaire never asks for one). A payment with no lead is already reported to the
                operator by the note above, which is the route to fixing it by hand.
-               ⚠️ Ordered BEFORE the baseline deliberately — the baseline starts audits and can take
-               a while, and the customer's confirmation should not queue behind it. Neither can throw. */
+               ⚠️ Ordered BEFORE baseline preparation deliberately — the customer's confirmation should
+               not queue behind question drafting. Neither can throw. */
             if (!alreadyPaid && findableLeadId) {
               await sendFindablePaymentConfirmation(service, {
                 leadId: findableLeadId,

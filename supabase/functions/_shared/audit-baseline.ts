@@ -50,6 +50,7 @@ import { REFUNDED_STATUS } from "../../../src/lib/leadPayment.ts";
 import { missingQuestionnaireFields } from "../../../src/lib/questionnaireComplete.ts";
 import { pickAuditTown } from "./place-town.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
+import { reconcileActionPlan } from "./action-plan.ts";
 
 /** Towns this is not. Mirrors findable-onboarding: forcing scope='local' needs a real town. */
 const NON_TOWN = new Set([
@@ -475,10 +476,24 @@ export async function onBaselineFrozen(service: Client, audit: FrozenBaseline): 
   } catch (e) {
     console.error(`[baseline] remeasure_due_date fill threw for lead ${audit.lead_id}:`, e instanceof Error ? e.message : e);
   }
+  /* Full-measure remains available as an explicit broader-discovery tool, but it is not part of
+     normal paid fulfilment. Winnability is derived from this approved baseline's existing runs. */
   try {
-    await startFullMeasure(service, audit);
+    await service.from("onboarding_responses")
+      .update({ baseline_status: "complete", updated_at: new Date().toISOString() })
+      .eq("lead_id", audit.lead_id)
+      .eq("status", "paid")
+      .in("baseline_status", ["running", "approved"]);
   } catch (e) {
-    console.error(`[baseline] full measure start threw for audit ${audit.id}:`, e instanceof Error ? e.message : e);
+    console.warn(`[baseline] could not mark onboarding complete for lead ${audit.lead_id}:`, e instanceof Error ? e.message : e);
+  }
+  /* Deterministically reconcile the operator fulfilment plan from this frozen baseline. */
+  try {
+    const plan = await reconcileActionPlan(service, { auditId: audit.id, userId: audit.user_id, leadId: audit.lead_id });
+    if (!plan.ok) console.warn(`[baseline] action-plan reconciliation failed for ${audit.id}:`, plan.error);
+    else console.log(`[baseline] action plan ready for ${audit.lead_id}: ${plan.opportunities.length} opportunities, ${plan.technical.length} technical fixes`);
+  } catch (e) {
+    console.warn(`[baseline] action-plan reconciliation threw for ${audit.id}:`, e instanceof Error ? e.message : e);
   }
 }
 
@@ -767,12 +782,25 @@ export async function startPaidBaseline(
   try {
     const { data: row, error: rErr } = await service
       .from("onboarding_responses")
-      .select("id, lead_id, confirmed_location, services, areas_list")
+      .select("id, lead_id, confirmed_location, services, areas_list, baseline_status, baseline_questions, baseline_approved_at")
       .eq("id", onboardingId).maybeSingle();
     if (rErr) return { ok: false, error: `onboarding read failed: ${rErr.message}` };
     if (!row) return { ok: false, error: "onboarding row not found" };
     const leadId = row.lead_id as string | null;
     if (!leadId) return { ok: false, skipped: "no_lead_id" };
+
+    /* Payment prepares the client; only an operator-approved question set may
+       start paid work. The webhook and queue backstop both reach this guard. */
+    const baselineStatus = String((row as { baseline_status?: unknown }).baseline_status ?? "");
+    const approvedQuestions = Array.isArray((row as { baseline_questions?: unknown }).baseline_questions)
+      ? ((row as { baseline_questions: unknown[] }).baseline_questions)
+        .filter((q): q is string => typeof q === "string")
+        .map((q) => q.trim()).filter(Boolean)
+      : [];
+    if (baselineStatus !== "approved" || approvedQuestions.length === 0) {
+      return { ok: true, skipped: baselineStatus === "needs_approval" || baselineStatus === "approved"
+        ? "awaiting_operator_run" : "needs_baseline_questions" };
+    }
 
     /* Already has one? Nothing to do — this is what makes retries safe.
 
@@ -957,9 +985,9 @@ export async function startPaidBaseline(
         has_website: !!lead.website,
         ...(scopeIsLocal ? { business_scope: "local" } : {}),
         purpose: "baseline",
-        question_count: BASELINE_QUESTIONS,
+        question_count: approvedQuestions.length,
         baseline_target_runs: BASELINE_RUNS,
-        // No `areas`, no `questions`: single town, generated fresh. See the block above.
+        questions: approvedQuestions,
       }),
     });
     const body = await res.text();
@@ -999,29 +1027,73 @@ export async function startPaidBaseline(
         version: 2,
         mainTown: locationText,
         areasRequested: rawAreas,
-        allocation: [{ town: locationText, questions: BASELINE_QUESTIONS, isMain: true }],
+        allocation: [{ town: locationText, questions: approvedQuestions.length, isMain: true }],
         areasDropped: rawAreas,
         areasMeasuredInFullMeasure: rawAreas,
-        ceiling: BASELINE_QUESTIONS,
+        ceiling: approvedQuestions.length,
         ...(moneyAsked.length ? { moneyQuestions: moneyAsked } : {}),
         createdAt: new Date().toISOString(),
       };
       const { error: cErr } = await service.from("ai_audits")
         .update({ baseline_contract: contract }).eq("id", out.audit_id);
       if (cErr) console.warn(`[baseline] baseline_contract not stored (${cErr.message}) — baseline unaffected`);
-      else console.log(`[baseline] contract v2 frozen for audit ${out.audit_id}: "${locationText}" x ${BASELINE_QUESTIONS}, ${rawAreas.length} area(s) deferred to the full measure, ${moneyAsked.length} money question(s) flagged`);
+      else console.log(`[baseline] contract v2 frozen for audit ${out.audit_id}: "${locationText}" x ${approvedQuestions.length}, ${rawAreas.length} area(s) deferred to the optional full measure, ${moneyAsked.length} money question(s) flagged`);
     } catch (e) {
       console.warn(`[baseline] contract write threw (non-blocking):`, e instanceof Error ? e.message : e);
     }
 
     await service.from("onboarding_responses")
-      .update({ audit_id: out.audit_id, updated_at: new Date().toISOString() })
+      .update({ audit_id: out.audit_id, baseline_status: "running", updated_at: new Date().toISOString() })
       .eq("id", onboardingId);
     return { ok: true, audit_id: out.audit_id };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[baseline] start threw for onboarding ${onboardingId} (${source}):`, msg);
     return { ok: false, error: `threw: ${msg}` };
+  }
+}
+
+/** Prepare the operator's draft without creating an ai_audits row or queueing any provider work.
+ * This is intentionally separate from startPaidBaseline: payment may ask for a question proposal,
+ * but only the approved/run action may create the paid audit. */
+export async function preparePaidBaselineQuestions(service: Client, onboardingId: string): Promise<{ ok: boolean; skipped?: string; error?: string; questions?: string[] }> {
+  try {
+    const { data: row, error } = await service.from("onboarding_responses")
+      .select("id, lead_id, confirmed_location, services, services_list, areas_list, baseline_status, baseline_questions")
+      .eq("id", onboardingId).maybeSingle();
+    if (error) return { ok: false, error: `onboarding read failed: ${error.message}` };
+    if (!row?.lead_id) return { ok: true, skipped: "no_lead_id" };
+    const existing = Array.isArray((row as { baseline_questions?: unknown }).baseline_questions)
+      ? (row as { baseline_questions: unknown[] }).baseline_questions.filter((q): q is string => typeof q === "string" && q.trim()).map((q) => q.trim())
+      : [];
+    if (existing.length > 0 || String((row as { baseline_status?: unknown }).baseline_status ?? "") !== "needs_questions") {
+      return { ok: true, skipped: "draft_already_prepared" , questions: existing };
+    }
+    const { data: lead, error: leadError } = await service.from("outreach_leads")
+      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country")
+      .eq("id", row.lead_id).maybeSingle();
+    if (leadError || !lead) return { ok: false, error: `lead read failed: ${leadError?.message ?? "not found"}` };
+    const location = String((row as { confirmed_location?: unknown }).confirmed_location || lead.derived_town || lead.search_location || "").trim();
+    const response = await fetch(`${Deno.env.get("SUPABASE_URL") ?? ""}/functions/v1/create-ai-audit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`, "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "", "x-internal-job": "1" },
+      body: JSON.stringify({
+        preview: true, purpose: "baseline", user_id: lead.user_id, lead_id: lead.id,
+        business_name: lead.business_name, business_type: lead.category || lead.search_keyword || "business",
+        location_text: location, specialisms: row.services || "", areas: row.areas_list || [], website: lead.website || null,
+        country: lead.country || null, question_count: BASELINE_QUESTIONS,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.ok) return { ok: false, error: String(payload?.error || "draft_generation_failed") };
+    const questions = dedupeQuestions(Array.isArray(payload.questions) ? payload.questions : []).questions;
+    if (!questions.length) return { ok: false, error: "no_questions_generated" };
+    const { error: writeError } = await service.from("onboarding_responses").update({ baseline_questions: questions, baseline_status: "needs_approval", updated_at: new Date().toISOString() })
+      .eq("id", onboardingId).eq("status", "paid").eq("baseline_status", "needs_questions");
+    if (writeError) return { ok: false, error: `draft write failed: ${writeError.message}` };
+    return { ok: true, questions };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 

@@ -893,6 +893,16 @@ Deno.serve(async (req) => {
     const plan: PagePlan = buildPagePlan({ services, areas, homeTown, questions });
 
     if (action === "plan") {
+      let { data: storedPages, error: storedPagesError } = await service.from("client_pages")
+        .select("id, job, topic, primary_question, rationale, winnability, score, score_reasons, status, published_url, wave, position")
+        .eq("user_id", user.id).eq("baseline_audit_id", audit.id)
+        .not("status", "in", "(removed,merged)").order("wave", { ascending: true }).order("position", { ascending: true });
+      if (storedPagesError && /published_url/i.test(storedPagesError.message ?? "")) {
+        ({ data: storedPages, error: storedPagesError } = await service.from("client_pages")
+          .select("id, job, topic, primary_question, rationale, winnability, score, score_reasons, status, wave, position")
+          .eq("user_id", user.id).eq("baseline_audit_id", audit.id)
+          .not("status", "in", "(removed,merged)").order("wave", { ascending: true }).order("position", { ascending: true }));
+      }
       return json({
         ok: true,
         client: { lead_id: leadId, business_name: audit.business_name, trade: audit.business_type },
@@ -906,6 +916,12 @@ Deno.serve(async (req) => {
           baselineAuditId: audit.id, baselineRuns: runIds.length, questionCount: questions.length,
         },
         plan,
+        actionPlan: (storedPages ?? []).map((p) => ({
+          id: p.id, title: p.job, topic: p.topic, question: p.primary_question,
+          reason: p.rationale, winnability: p.winnability, score: p.score,
+          score_reasons: p.score_reasons, status: p.status, existing_url: p.published_url,
+          priority: p.wave, position: p.position,
+        })),
       });
     }
 

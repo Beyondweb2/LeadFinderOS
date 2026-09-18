@@ -39,6 +39,7 @@ interface PlanData {
     baselineRuns: number; questionCount: number;
   };
   plan: { pages: PlanPage[]; excluded: { question: string; reason: string }[]; unmeasuredAreas: string[] };
+  actionPlan?: { id: string; title: string; question: string; reason: string | null; winnability: string | null; score: number | null; status: string; existing_url: string | null; priority: number }[];
 }
 interface GeneratedPage {
   key: string; service?: string; town?: string; question?: string; queries: string[]; slug: string;
@@ -555,6 +556,34 @@ const PageGenerator = () => {
               )}
             </CardContent>
           </Card>
+
+          {(plan.actionPlan?.length ?? 0) > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Baseline action plan — build or optimise</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {plan.actionPlan!.map((item) => (
+                  <div key={item.id} className="rounded-md border border-border/60 p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{item.title}</span>
+                      <Badge variant="outline" className="text-[10px]">{item.winnability ?? 'planned'}</Badge>
+                      <Badge variant="outline" className="text-[10px]">{item.existing_url ? 'Optimise existing' : 'Build new'}</Badge>
+                      <span className="text-xs text-muted-foreground">priority {item.priority}</span>
+                      {(() => {
+                        const match = plan.plan.pages.find((p) => p.queries.includes(item.question));
+                        return match ? <Button size="sm" variant="outline" className="h-7 text-xs ml-auto" onClick={() => { setHighlightKey(match.key); document.getElementById(`pgpage-${match.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}>Open matching page</Button> : null;
+                      })()}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">“{item.question}”</p>
+                    {item.reason && <p className="mt-1 text-xs text-muted-foreground">{item.reason}</p>}
+                    {item.existing_url && <p className="mt-1 text-xs text-muted-foreground">Existing page: {item.existing_url}</p>}
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground">These opportunities come from the locked baseline questions. Select the matching measured page below to generate; no new audit is run.</p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="pb-2">

@@ -105,6 +105,9 @@ export function ClientDeliveryCard({ leads, onChanged }: { leads: OutreachLead[]
         )}
         {paying.map((l) => {
           const cl = checklistFor(l);
+          const technicalFixes = Array.isArray((cl as Record<string, unknown>).technical_fixes)
+            ? ((cl as Record<string, unknown>).technical_fixes as unknown[])
+            : [];
           const b = l.baseline_audit_id ? baselines.data?.[l.baseline_audit_id] ?? null : null;
           const baselineDate = b?.created_at ? b.created_at.slice(0, 10) : null;
           const due = l.remeasure_due_date ?? (baselineDate ? defaultRemeasureDue(baselineDate) : null);
@@ -137,7 +140,11 @@ export function ClientDeliveryCard({ leads, onChanged }: { leads: OutreachLead[]
                       </Link>
                     </Button>
                   ) : (
-                    <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-500" title="No baseline pointer on this lead — see the Deliver task">no baseline yet</span>
+                    <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                      <Link to={`/baseline-setup/${l.id}`} state={{ from: '/dashboard', fromLabel: 'Dashboard' }}>
+                        <FileText className="mr-1 h-3.5 w-3.5" /> Needs Baseline
+                      </Link>
+                    </Button>
                   )}
                   <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => navigate('/outreach', { state: { launch: { leadId: l.id, channel: 'open' } } })}>
                     <ExternalLink className="mr-1 h-3.5 w-3.5" /> Lead card
@@ -145,6 +152,7 @@ export function ClientDeliveryCard({ leads, onChanged }: { leads: OutreachLead[]
                   <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
                     <Link to="/page-plan"><ListChecks className="mr-1 h-3.5 w-3.5" /> Page plan</Link>
                   </Button>
+                  {technicalFixes.length > 0 && <span className="text-[11px] text-amber-600">{technicalFixes.length} technical fix{technicalFixes.length === 1 ? '' : 'es'}</span>}
                 </div>
               </div>
               <div className="mt-2">

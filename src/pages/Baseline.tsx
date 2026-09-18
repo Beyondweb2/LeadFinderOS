@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isAggregatorUrl } from '@/lib/aggregators';
-import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from '@/lib/auditReport';
+import { buildReportData, classifyWinnability, seoStyleForAudit, type EngineMap, type QueueRow, type RunRow } from '@/lib/auditReport';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
 import { type AiAuditReportData } from '@/lib/aiAuditReportHtml';
 import {
@@ -67,6 +67,32 @@ interface AuditRow {
   business_type: string | null;
   location_text: string | null;
   website: string | null;
+}
+
+type Opportunity = { classification: 'named' | 'winnable' | 'possible' | 'low'; reason: string; clientNamed: boolean; fragmentation: string };
+
+/* Reuses the shared deterministic classifier over the baseline's already-collected runs. This
+   deliberately performs no provider call and does not create a second measurement. */
+function opportunityFor(question: string, rows: QueueRow[], businessName: string, location: string, website: string): Opportunity {
+  const merged: EngineMap = {};
+  for (const row of rows.filter((r) => r.question.trim() === question.trim())) {
+    const result = (row.result ?? {}) as EngineMap;
+    for (const [engine, raw] of Object.entries(result)) {
+      if (!raw || typeof raw !== 'object') continue;
+      const cur = merged[engine] ?? { named: false, position: null, competitors: [], citations: [], answer_text: '' };
+      cur.named = cur.named || !!raw.named;
+      cur.self_named = cur.self_named || raw.self_named;
+      cur.position = cur.position == null ? raw.position : raw.position == null ? cur.position : Math.min(cur.position, raw.position);
+      cur.competitors = [...new Set([...cur.competitors, ...(raw.competitors ?? [])])];
+      cur.citations = [...cur.citations, ...(raw.citations ?? [])].filter((c, i, a) => a.findIndex((x) => x.url === c.url) === i);
+      cur.answer_text = cur.answer_text || raw.answer_text;
+      merged[engine] = cur;
+    }
+  }
+  const result = classifyWinnability(merged, { businessName, locationText: location, ownWebsite: website, isAggregatorUrl });
+  const classification = result.clientNamed ? 'named' : result.verdict === 'open' ? 'winnable' : result.verdict === 'contested' ? 'possible' : 'low';
+  const fragmentation = result.U >= 6 ? 'highly fragmented' : result.C === 0 && result.U >= 2 ? 'fragmented across engines' : result.U <= 3 && result.C >= 2 ? 'dominant competitors' : 'mixed competition';
+  return { classification, reason: result.reason, clientNamed: result.clientNamed, fragmentation };
 }
 
 export default function Baseline() {
@@ -249,11 +275,14 @@ export default function Baseline() {
     const report = assessTradeFit(view, audit.business_type);
     return { report, byQuestion: new Map(report.questions.map((q) => [q.question, q.state])) };
   })();
+  const internalOnly = isInternalMeasurement(audit);
+  const opportunities = audit.baseline_completed_at && !internalOnly
+    ? view.questions.map((q) => ({ question: q.question, ...opportunityFor(q.question, queueRows, audit.business_name ?? '', audit.location_text ?? '', audit.website ?? '') }))
+    : [];
+  const opportunityCounts = opportunities.reduce((m, q) => { m[q.classification] = (m[q.classification] ?? 0) + 1; return m; }, {} as Record<string, number>);
   /* A full measure / day-28 replay: operator document, no client report offered, labelled as
      what it is rather than "Baseline" (this route serves both — the cockpit and Compare link here
      for measurements too). */
-  const internalOnly = isInternalMeasurement(audit);
-
   return (
     <>
       <SEOHead
@@ -338,6 +367,32 @@ export default function Baseline() {
             </span>
           )}
         </div>
+
+        {opportunities.length > 0 && (
+          <Card>
+            <CardHeader className="p-3 pb-1.5 sm:p-4 sm:pb-2">
+              <CardTitle className="text-sm">Winnability from this baseline</CardTitle>
+              <p className="text-xs font-normal text-muted-foreground">Same approved questions and completed results; named means success. No additional audit was run.</p>
+            </CardHeader>
+            <CardContent className="space-y-2 p-3 pt-0 sm:p-4 sm:pt-0">
+              <div className="flex flex-wrap gap-1.5 text-[11px]">
+                <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-500">Named {opportunityCounts.named ?? 0}</span>
+                <span className="rounded bg-amber-500/15 px-2 py-1 text-amber-500">Winnable {opportunityCounts.winnable ?? 0}</span>
+                <span className="rounded bg-sky-500/15 px-2 py-1 text-sky-500">Possible {opportunityCounts.possible ?? 0}</span>
+                <span className="rounded bg-muted px-2 py-1 text-muted-foreground">Low priority {opportunityCounts.low ?? 0}</span>
+              </div>
+              <div className="space-y-1.5">
+                {opportunities.map((q) => (
+                  <div key={q.question} className="rounded border border-border/60 bg-muted/20 p-2 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium">{q.question}</span><span className="rounded bg-background px-1.5 py-0.5 text-[10px] font-semibold uppercase">{q.classification}</span></div>
+                    <p className="mt-1 text-muted-foreground">{q.reason} · {q.fragmentation}</p>
+                  </div>
+                ))}
+              </div>
+              <Button asChild variant="outline" size="sm"><Link to="/page-plan">Build Action Plan</Link></Button>
+            </CardContent>
+          </Card>
+        )}
 
         {BANDS.filter((b) => view.bandCounts[b] > 0).map((band) => (
           <Card key={band} className={band === 'no_race' ? 'opacity-60' : undefined}>

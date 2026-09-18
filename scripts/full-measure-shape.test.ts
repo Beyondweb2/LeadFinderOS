@@ -2,11 +2,10 @@
    THE THREE-TYPE MEASUREMENT MODEL: BASELINE IS HOME-TOWN-ONLY, THE FULL MEASURE IS DISJOINT.
 
    🔴 WHAT THIS PINS (Paul's spec, 2026-09-12):
-     · BASELINE  = 12 questions, home town, 3 runs, frozen, unseeded. The refund is judged on it.
-     · FULL MEASURE = 20 questions x 3 runs, day 0 AFTER the baseline freezes, spread across the
-       client's towns, and DISJOINT from the baseline — it is never compared to anything.
-     · ORDER MATTERS: the full measure starts from the tick that froze the baseline, and a paying
-       lead with no frozen baseline cannot be full-measured at all.
+     · BASELINE  = approximately 20 operator-approved questions, home town, 3 runs, frozen.
+       The refund and winnability are judged on it.
+     · FULL MEASURE = optional broader discovery and remains DISJOINT from the baseline.
+     · ORDER MATTERS: no paid audit starts until the operator approves and runs the baseline.
 
    ⛔ The pure halves are tested directly. The edge-function halves are read from SOURCE, because
    a test that models the server loosely passes while the server regresses (the audit-kind lesson).
@@ -24,7 +23,7 @@ const baselineSrc = stripComments(read("supabase/functions/_shared/audit-baselin
 const serverSrc = stripComments(read("supabase/functions/create-ai-audit/index.ts"));
 
 console.log("── THE NUMBERS ──");
-ok(BASELINE_QUESTIONS === 12, `BASELINE_QUESTIONS is 12 (got ${BASELINE_QUESTIONS})`);
+ok(BASELINE_QUESTIONS === 20, `BASELINE_QUESTIONS is 20 (got ${BASELINE_QUESTIONS})`);
 ok(FULL_MEASURE_QUESTIONS === 20, `FULL_MEASURE_QUESTIONS is 20 (got ${FULL_MEASURE_QUESTIONS})`);
 ok(BASELINE_RUNS === 3, "three runs");
 /* The reason the full measure need not re-ask the judged set: the baseline alone already clears
@@ -70,9 +69,9 @@ ok(many.allocation.reduce((n, a) => n + a.questions, 0) === FULL_MEASURE_QUESTIO
    `seven towns: still exactly ${FULL_MEASURE_QUESTIONS} questions, ${many.dropped.length} dropped and NAMED rather than measured on one question`);
 
 console.log("\n── SOURCE: THE BASELINE IS HOME-TOWN-ONLY AND UNSEEDED ──");
-const startBody = baselineSrc.slice(baselineSrc.indexOf("export async function startPaidBaseline"), baselineSrc.indexOf("export async function ensureBaselinesForPaidOnboardings"));
-ok(/question_count: BASELINE_QUESTIONS,/.test(startBody), "startPaidBaseline sends question_count: BASELINE_QUESTIONS");
-ok(!/\bareas:/.test(startBody), "…and sends NO `areas` (single town)");
+const startBody = baselineSrc.slice(baselineSrc.indexOf("export async function startPaidBaseline"), baselineSrc.indexOf("export async function preparePaidBaselineQuestions"));
+ok(/question_count: approvedQuestions\.length,/.test(startBody) && /questions: approvedQuestions,/.test(startBody), "startPaidBaseline sends the approved question set");
+ok(!/\bareas\s*:/.test(startBody), "…and sends NO `areas` (single town)");
 ok(!/\bquestions:\s*seed/i.test(startBody) && !/seedQuestions/.test(startBody), "…and sends NO seed questions");
 ok(!/decideGuarantee|allocateAreas\(/.test(baselineSrc), "decideGuarantee and the baseline's allocateAreas are gone from audit-baseline");
 ok(!/applySeed\(/.test(serverSrc) && !/export function applySeed/.test(stripComments(read("src/lib/seedGuard.ts"))), "applySeed is gone from the server and from seedGuard");
@@ -80,13 +79,14 @@ ok(/version: 2,/.test(startBody) && /areasMeasuredInFullMeasure: rawAreas/.test(
 
 console.log("\n── SOURCE: THE FULL MEASURE STARTS FROM THE WINNING FINALISATION, ONCE ──");
 ok(/\.is\("baseline", null\)\s*\.select\("id"\)/.test(baselineSrc), "the snapshot write is conditional on baseline IS NULL and selects the row it won");
-ok(/if \(won\) await onBaselineFrozen\(service, audit as FrozenBaseline\);/.test(baselineSrc), "the hand-off hangs off `won`, never off 'this code ran'");
+ok(/if \(won\) await onBaselineFrozen\(service, audit as FrozenBaseline\);/.test(baselineSrc), "the baseline freeze hand-off hangs off `won`, never off 'this code ran'");
 ok(/export async function startFullMeasure/.test(baselineSrc), "startFullMeasure exists");
 const sfm = baselineSrc.slice(baselineSrc.indexOf("export async function startFullMeasure"), baselineSrc.indexOf("export async function sweepStalledBaselines"));
 ok(/purpose: "measurement",/.test(sfm) && /question_count: FULL_MEASURE_QUESTIONS,/.test(sfm), "it asks for purpose measurement × FULL_MEASURE_QUESTIONS");
 ok(/town_confirmed: true,/.test(sfm), "…exempt from the town gate on the same evidence as the baseline");
 ok(/skip_seo: true,/.test(sfm), "…with SEO off");
 ok(/\.eq\("audit_purpose", "measurement"\)/.test(sfm), "…and skips if a full measure already exists for the lead");
+ok(!/await startFullMeasure\(service, audit\)/.test(baselineSrc), "normal paid fulfilment does not automatically start a full measure");
 
 console.log("\n── SOURCE: THE SERVER MAKES A MEASUREMENT DISJOINT AND ENFORCES THE ORDER ──");
 ok(/import \{ excludeAsked, overAskFor \} from "\.\.\/\.\.\/\.\.\/src\/lib\/fullMeasure\.ts";/.test(serverSrc), "create-ai-audit imports the pure helpers with an explicit .ts extension");
