@@ -1062,6 +1062,13 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       try {
         const auditId = runRow?.audit_id as string | undefined;
         if (!auditId) return;
+        const markUnavailable = async (error: string) => {
+          const { data: currentRun } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
+          const currentResults = currentRun?.results && typeof currentRun.results === "object" ? currentRun.results : {};
+          await service.from("ai_audit_runs").update({
+            results: { ...currentResults, crawl_check: { status: "unavailable", error: error.slice(0, 240) } },
+          }).eq("id", runId);
+        };
         const { data: aud } = await service
           .from("ai_audits").select("lead_id, is_market, website").eq("id", auditId).maybeSingle();
         const cLeadId = (aud as { lead_id?: string | null } | null)?.lead_id ?? null;
@@ -1101,9 +1108,20 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         if (!res.ok) {
           const txt = await res.text().catch(() => "");
           console.error(`[process-ai-audit-queue] auto crawl-check failed for lead ${cLeadId}: HTTP ${res.status} ${txt.slice(0, 200)}`);
+          await markUnavailable(`crawl-check HTTP ${res.status}: ${txt}`);
         }
       } catch (e) {
-        console.error(`[process-ai-audit-queue] auto crawl-check invoke error:`, e instanceof Error ? e.message : String(e));
+        const why = e instanceof Error ? e.message : String(e);
+        console.error(`[process-ai-audit-queue] auto crawl-check invoke error:`, why);
+        try {
+          const { data: currentRun } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
+          const currentResults = currentRun?.results && typeof currentRun.results === "object" ? currentRun.results : {};
+          await service.from("ai_audit_runs").update({
+            results: { ...currentResults, crawl_check: { status: "unavailable", error: why.slice(0, 240) } },
+          }).eq("id", runId);
+        } catch (stampError) {
+          console.error(`[process-ai-audit-queue] could not stamp crawl failure:`, stampError instanceof Error ? stampError.message : String(stampError));
+        }
       }
     })());
 
