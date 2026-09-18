@@ -10,6 +10,11 @@ export type PaidBaseline = {
   services_list: string[];
   areas_list: string[];
   website: string;
+  context_sources?: {
+    service_sources?: Record<string, string[]>;
+    area_sources?: Record<string, string[]>;
+  };
+  crawl_context_at?: string | null;
   status: 'needs_questions' | 'needs_approval' | 'approved' | 'running' | 'complete' | 'failed';
   questions: string[];
   approved_at: string | null;
@@ -21,8 +26,11 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   paid_onboarding_not_found: 'Baseline onboarding record could not be found.',
   lead_not_found: 'The linked client lead could not be found.',
   location_services_and_business_type_required: 'Add a location, service, and business category before saving client context.',
+  location_and_business_type_required: 'Add a primary location and business category before saving client context.',
   questions_must_be_between_1_and_40: 'Add between 1 and 40 questions before saving.',
   questions_required: 'Add at least one question before approving the baseline.',
+  question_generation_failed: 'Question generation failed. Please retry.',
+  no_questions_generated: 'No usable questions were generated. Please retry.',
 };
 
 /** One client-side request shape and one useful error path for every paid-baseline entry point. */

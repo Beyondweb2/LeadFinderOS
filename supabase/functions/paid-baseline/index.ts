@@ -2,6 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { BASELINE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
+import { mergeClientContext } from "../../../src/lib/clientContext.ts";
+import { CRAWL_CHECK_VERSION, CRAWL_FRESH_MS } from "../../../src/lib/crawlCheck.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +20,21 @@ function cleanQuestions(value: unknown): string[] {
   const raw = Array.isArray(value) ? value : [];
   return dedupeQuestions(raw.filter((q): q is string => typeof q === "string")
     .map((q) => q.trim()).filter(Boolean)).questions;
+}
+
+function cleanList(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return [...new Set(raw.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean))];
+}
+
+function currentCrawlInfo(row: Record<string, unknown> | null | undefined, website: string): { services?: unknown; towns?: unknown } | null {
+  const result = row?.result as { version?: number; url?: string; siteInfo?: { services?: unknown; towns?: unknown } } | null | undefined;
+  const created = typeof row?.created_at === "string" ? Date.parse(row.created_at) : NaN;
+  if (!result?.siteInfo || (result.version ?? 1) < CRAWL_CHECK_VERSION || !Number.isFinite(created) || Date.now() - created > CRAWL_FRESH_MS) return null;
+  try {
+    if (website && result.url && new URL(website).origin !== new URL(result.url).origin) return null;
+  } catch { return null; }
+  return result.siteInfo;
 }
 
 async function operator(req: Request) {
@@ -45,7 +62,7 @@ Deno.serve(async (req) => {
     const url = Deno.env.get("SUPABASE_URL")!;
     const service = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
     let q = service.from("onboarding_responses")
-      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by")
+      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by")
       .eq("status", "paid");
     if (onboardingId) q = q.eq("id", onboardingId);
     else q = q.eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(1);
@@ -55,17 +72,27 @@ Deno.serve(async (req) => {
     if (!row?.id || !row.lead_id) return json({ ok: false, error: "paid_onboarding_not_found" }, 404);
 
     const { data: lead, error: leadErr } = await service.from("outreach_leads")
-      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country")
+      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included, areas_wanted")
       .eq("id", row.lead_id).eq("user_id", user.id).maybeSingle();
     if (leadErr) throw leadErr;
     if (!lead) return json({ ok: false, error: "lead_not_found" }, 404);
 
+    const { data: crawlRow } = await service.from("lead_crawl_checks")
+      .select("result, created_at").eq("lead_id", row.lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const crawlInfo = currentCrawlInfo(crawlRow as Record<string, unknown> | null, String(lead.website || ""));
+    const merged = mergeClientContext({
+      onboarding: { confirmed_location: row.confirmed_location, services: row.services, services_list: row.services_list, areas_list: row.areas_list, areas_wanted: row.areas_wanted },
+      lead: lead as Record<string, unknown>,
+      crawl: crawlInfo,
+    });
     const status = (String(row.baseline_status ?? "needs_questions") || "needs_questions") as BaselineStatus;
     const questions = cleanQuestions(row.baseline_questions);
     const details = {
       onboarding_id: row.id, lead_id: row.lead_id, business_name: lead.business_name,
-      business_type: lead.category || lead.search_keyword || "", location: row.confirmed_location || lead.derived_town || lead.search_location || "",
-      services: row.services || "", services_list: row.services_list || [], areas_list: row.areas_list || [], website: lead.website || "",
+      business_type: merged.business_category, location: merged.primary_location,
+      services: merged.services.join(", "), services_list: merged.services, areas_list: merged.service_areas, website: merged.website,
+      context_sources: { service_sources: merged.service_sources, area_sources: merged.area_sources },
+      crawl_context_at: crawlInfo ? crawlRow?.created_at ?? null : null,
       status, questions, approved_at: row.baseline_approved_at || null,
     };
     if (action === "get") return json({ ok: true, baseline: details });
@@ -79,11 +106,11 @@ Deno.serve(async (req) => {
     if (action === "save_context") {
       const location = typeof body.location === "string" ? body.location.trim() : String(details.location ?? "").trim();
       const services = typeof body.services === "string" ? body.services.trim() : String(details.services ?? "").trim();
-      const serviceList = cleanQuestions(Array.isArray(body.services_list) ? body.services_list : row.services_list);
-      const areas = cleanQuestions(Array.isArray(body.areas_list) ? body.areas_list : row.areas_list);
+      const serviceList = cleanList(Array.isArray(body.services_list) ? body.services_list : details.services_list);
+      const areas = cleanList(Array.isArray(body.areas_list) ? body.areas_list : details.areas_list);
       const businessType = typeof body.business_type === "string" ? body.business_type.trim() : String(details.business_type ?? "").trim();
       const website = typeof body.website === "string" ? body.website.trim() : String(details.website ?? "").trim();
-      if (!location || !services || !businessType) return json({ ok: false, error: "location_services_and_business_type_required" }, 400);
+      if (!location || !businessType) return json({ ok: false, error: "location_and_business_type_required" }, 400);
       const now = new Date().toISOString();
       const { error: onErr } = await service.from("onboarding_responses").update({
         confirmed_location: location, services, services_list: serviceList, areas_list: areas, updated_at: now,
@@ -99,6 +126,12 @@ Deno.serve(async (req) => {
     let next = questions;
     if (action === "generate") {
       if (next.length === 0 || body.force === true) {
+        const contextLocation = typeof body.location === "string" ? body.location.trim() : details.location;
+        const contextServices = typeof body.services === "string" ? body.services.trim() : details.services;
+        const contextServiceList = cleanList(Array.isArray(body.services_list) ? body.services_list : details.services_list);
+        const contextAreas = cleanList(Array.isArray(body.areas_list) ? body.areas_list : details.areas_list);
+        const contextBusinessType = typeof body.business_type === "string" ? body.business_type.trim() : details.business_type;
+        const contextWebsite = typeof body.website === "string" ? body.website.trim() : details.website;
         const preview = await fetch(`${url}/functions/v1/create-ai-audit`, {
           method: "POST",
           headers: {
@@ -110,14 +143,17 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             preview: true, purpose: "baseline", user_id: user.id, lead_id: lead.id,
             business_name: lead.business_name,
-            business_type: lead.category || lead.search_keyword || "business",
-            location_text: details.location, specialisms: row.services || "",
-            areas: row.areas_list || [], website: lead.website || null, country: lead.country || null,
+            business_type: contextBusinessType || "business",
+            location_text: contextLocation, specialisms: contextServices || contextServiceList.join(", "),
+            areas: contextAreas, website: contextWebsite || null, has_website: Boolean(contextWebsite), country: lead.country || null,
             question_count: BASELINE_QUESTIONS,
           }),
         });
         const payload = await preview.json().catch(() => ({}));
-        if (!preview.ok || !payload?.ok) return json({ ok: false, error: payload?.error || "draft_generation_failed" }, 502);
+        if (!preview.ok || !payload?.ok) {
+          console.error(`[paid-baseline] generate downstream status=${preview.status} error=${String(payload?.error ?? "unknown")}`);
+          return json({ ok: false, error: "question_generation_failed" }, 502);
+        }
         next = cleanQuestions(payload.questions);
       }
       if (next.length === 0) return json({ ok: false, error: "no_questions_generated" }, 422);
