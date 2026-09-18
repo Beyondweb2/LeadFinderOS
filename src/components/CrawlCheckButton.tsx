@@ -320,8 +320,17 @@ export function CrawlCheckButton(
   const faulted = faults.length > 0;
 
   const base = 'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors';
+  const iconBase = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
 
   if (!hasRealSite) {
+    if (iconOnly) {
+      return (
+        <button type="button" disabled title="No website to crawl." aria-label="No website to crawl."
+          className={`${iconBase} cursor-not-allowed ${className ?? ''}`}>
+          <ScanSearch className="h-4 w-4" />
+        </button>
+      );
+    }
     return (
       <button type="button" disabled title="No website to crawl."
         className={`${base} cursor-not-allowed border-border/50 bg-muted/40 text-muted-foreground/50 ${className ?? ''}`}>
@@ -340,7 +349,7 @@ export function CrawlCheckButton(
     return (
       <>
         <button type="button" onClick={() => setOpen(true)} disabled={running} title={iconTitle} aria-label={iconTitle}
-          className={`${className ?? ''} ${failed || crawlFailed ? 'text-destructive hover:text-destructive' : faulted ? 'text-red-500 hover:text-red-500' : ran ? 'text-emerald-600 hover:text-emerald-600 dark:text-emerald-400' : ''}`}>
+          className={`${iconBase} ${failed || crawlFailed ? 'text-destructive hover:text-destructive' : faulted ? 'text-red-500 hover:text-red-500' : ran ? 'text-emerald-600 hover:text-emerald-600 dark:text-emerald-400' : ''} ${className ?? ''}`}>
           {running ? <ScanSearch className="h-4 w-4 animate-spin" /> : failed || crawlFailed ? <AlertTriangle className="h-4 w-4" /> : <ScanSearch className="h-4 w-4" />}
         </button>
         <CrawlCheckDialog open={open} onOpenChange={setOpen} lead={lead} initialCrawl={crawl} onDone={onDone} onRunningChange={setRunning} onErrorChange={setFailed} />
