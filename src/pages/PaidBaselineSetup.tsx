@@ -1,30 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Loader2, Lock, Play, RefreshCw, Save } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-
-type Baseline = {
-  onboarding_id: string; lead_id: string; business_name: string; business_type: string;
-  location: string; services: string; services_list: string[]; areas_list: string[]; website: string;
-  status: 'needs_questions' | 'needs_approval' | 'approved' | 'running' | 'complete' | 'failed';
-  questions: string[]; approved_at: string | null; audit_id?: string;
-};
-
-const invoke = async (action: string, lead_id: string, extra: Record<string, unknown> = {}) => {
-  const { data, error } = await supabase.functions.invoke('paid-baseline', { body: { action, lead_id, ...extra } });
-  if (error) throw new Error(error.message);
-  if (!data?.ok) throw new Error(data?.error || 'Could not update the baseline');
-  return data.baseline as Baseline;
-};
+import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
 
 export default function PaidBaselineSetup() {
   const { leadId = '' } = useParams<{ leadId: string }>();
   const { toast } = useToast();
-  const [baseline, setBaseline] = useState<Baseline | null>(null);
+  const [baseline, setBaseline] = useState<PaidBaseline | null>(null);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -33,7 +19,7 @@ export default function PaidBaselineSetup() {
     if (!leadId) return;
     setLoading(true);
     try {
-      const next = await invoke('get', leadId);
+      const next = await invokePaidBaseline('get', leadId);
       setBaseline(next);
       setDraft(next.questions.join('\n'));
     } catch (e) {
@@ -45,7 +31,7 @@ export default function PaidBaselineSetup() {
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
     setBusy(action);
     try {
-      const next = await invoke(action, leadId, extra);
+      const next = await invokePaidBaseline(action, leadId, extra);
       setBaseline(next);
       setDraft(next.questions.join('\n'));
       toast({ title: action === 'run' ? 'Baseline queued' : 'Baseline updated' });

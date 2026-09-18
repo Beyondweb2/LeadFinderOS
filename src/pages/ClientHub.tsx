@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Clipboard, ExternalLink, FileCode2, FileText, Loader2, Lock, MessageSquareQuote, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,10 +14,10 @@ import { remeasureStatus } from '@/lib/deliveryCockpit';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
 
 type AnyRecord = Record<string, any>;
-type Baseline = { business_name: string; business_type: string; location: string; services: string; services_list: string[]; areas_list: string[]; website: string; status: string; questions: string[] };
+type Baseline = PaidBaseline;
 type Hub = { lead: AnyRecord; onboarding: AnyRecord | null; audit: AnyRecord | null; runs: AnyRecord[]; pages: AnyRecord[] };
 const call = async (body: Record<string, unknown>) => { const { data, error } = await supabase.functions.invoke('paid-client-hub', { body }); if (error || !data?.ok) throw new Error(error?.message || data?.error || 'Request failed'); return data; };
-const baselineCall = async (action: string, lead_id: string, extra: Record<string, unknown> = {}) => { const { data, error } = await supabase.functions.invoke('paid-baseline', { body: { action, lead_id, ...extra } }); if (error || !data?.ok) throw new Error(error?.message || data?.error || 'Baseline request failed'); return data.baseline as Baseline; };
+const baselineCall = invokePaidBaseline;
 const Stage = ({ title, children }: { title: string; children: ReactNode }) => <Card><CardHeader className="pb-2"><CardTitle className="text-base">{title}</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{children}</CardContent></Card>;
 const values = (v: unknown) => Array.isArray(v) ? v.filter(Boolean).join(', ') : String(v || '—');
 const copy = async (value: string) => { if (value) await navigator.clipboard.writeText(value); };
@@ -48,7 +49,7 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
   const act = async (action: string, extra: Record<string, unknown> = {}) => { setBusy(action); try { const next = await baselineCall(action, leadId, extra); setData(next); setQuestions(next.questions); await onChanged(); return next; } catch (e) { toast({ title: 'Could not update baseline', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' }); return null; } finally { setBusy(null); } };
   const approveAndRun = async () => { const qs = clean(questions); if (!(await act('save', { questions: qs }))) return; if (!(await act('approve', { questions: qs }))) return; if (await act('run')) { toast({ title: 'Baseline queued', description: 'It continues on the server if you close this dialog.' }); onOpenChange(false); } };
   const saveContext = () => data && act('save_context', { location: data.location, services: data.services, services_list: data.services_list, areas_list: data.areas_list, business_type: data.business_type, website: data.website });
-  const generate = async (force = false) => { if (!data || !(await saveContext())) return; await act('generate', force ? { force: true } : {}); };
+  const generate = async (force = false) => { if (!data) return; await act('generate', force ? { force: true } : {}); };
   const addPaste = () => { const next = clean(paste.split(/\r?\n/)); if (next.length) { setQuestions((q) => [...q, ...next]); setPaste(''); } };
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Prepare baseline</DialogTitle></DialogHeader>{!data || busy === 'load' ? <div className="flex justify-center py-12"><Loader2 className="animate-spin"/></div> : <div className="space-y-5">
     <p className="text-sm text-muted-foreground">Review context and questions before approval. Only the approved wording and order is queued and later replayed for remeasure.</p>
