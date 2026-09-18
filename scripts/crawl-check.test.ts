@@ -6,7 +6,7 @@
 import {
   visibleText, detectClientRendered, hasH1, hasJsonLd, wordCount,
   looksChallenged, extractSitemapLocs, patternKey, clusterUrls, pageSimilarity, buildVerdict,
-  buildFaultLines, type CrawlSignals,
+  buildFaultLines, selectCrawlUrls, crawlPageKind, MAX_CRAWL_PAGES, type CrawlSignals,
 } from '../src/lib/crawlCheck.ts';
 
 let f = 0;
@@ -109,6 +109,25 @@ console.log('\n── report fault lines (each carries its number; amber only fo
   const cr = buildFaultLines({ ...base, clientRendered: { flagged: true, visibleChars: 64, htmlBytes: 9000, appShell: true } })[0];
   ok(cr.detail.includes('64') && !cr.minor, 'client-render line carries the char count, red');
   ok(buildFaultLines({ ...base, duplicates: { clusterSize: 9, sampleSize: 3, similarityPct: 95 }, thinPages: 6, missingH1: true, noJsonLd: true }).length === 4, 'capped at 4 lines');
+}
+
+console.log('\nBOUNDED IMPORTANT-PAGE SELECTION');
+{
+  const home = 'https://x.co/';
+  const pages = selectCrawlUrls([
+    'https://x.co/', 'https://x.co/services/boiler-repair', 'https://x.co/areas/leeds',
+    'https://x.co/about', 'https://x.co/contact', 'https://x.co/blog/useful-guide',
+    'https://x.co/wp-admin/edit.php', 'https://x.co/cart', 'https://x.co/logo.svg',
+    'https://elsewhere.co/services', 'https://x.co/services/boiler-repair#pricing',
+  ], home, 5);
+  ok(pages.length <= 5 && pages.length <= MAX_CRAWL_PAGES, 'page selection is hard-capped');
+  ok(pages.every((u) => new URL(u).origin === 'https://x.co'), 'only same-domain URLs are selected');
+  ok(!pages.some((u) => /wp-admin|cart|\.svg/.test(u)), 'admin, transactional and asset URLs are excluded');
+  ok(pages.some((u) => crawlPageKind(u) === 'service'), 'a service page is considered');
+  ok(pages.some((u) => crawlPageKind(u) === 'location'), 'a location page is considered');
+  ok(pages.some((u) => crawlPageKind(u) === 'about'), 'an about page is considered');
+  ok(pages.some((u) => crawlPageKind(u) === 'contact'), 'a contact page is considered');
+  ok(new Set(pages).size === pages.length, 'URLs are deduplicated after fragments/queries are removed');
 }
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILED`);

@@ -9,6 +9,7 @@ import type { SiteInfo } from './siteInfo';
 export interface CrawlStoredResult {
   version?: number;
   siteInfoVersion?: number;
+  checked_at?: string;
   url?: string;
   town?: string | null;
   signals?: CrawlSignals;

@@ -259,10 +259,10 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     .filter((r: { status?: string | null }) => r.status === "complete" || r.status === "capped")
     .sort((a: { run_number?: number | null }, b: { run_number?: number | null }) => (b.run_number ?? 0) - (a.run_number ?? 0))
     .map((r: { results?: { crawl_check?: unknown }; created_at?: string | null }) => {
-      const crawl = r.results?.crawl_check as { status?: string; version?: number; signals?: CrawlSignals } | undefined;
+      const crawl = r.results?.crawl_check as { status?: string; version?: number; checked_at?: string; signals?: CrawlSignals } | undefined;
       return {
         result: crawl,
-        createdAtMs: r.created_at ? new Date(r.created_at).getTime() : 0,
+        createdAtMs: crawl?.checked_at ? new Date(crawl.checked_at).getTime() : r.created_at ? new Date(r.created_at).getTime() : 0,
         complete: crawl?.status === "complete",
       };
     });

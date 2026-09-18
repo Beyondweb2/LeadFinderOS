@@ -5,6 +5,8 @@ const root = resolve(import.meta.dirname, "..");
 const queue = readFileSync(resolve(root, "supabase/functions/process-ai-audit-queue/index.ts"), "utf8");
 const crawl = readFileSync(resolve(root, "supabase/functions/crawl-check/index.ts"), "utf8");
 const report = readFileSync(resolve(root, "supabase/functions/render-audit-report/index.ts"), "utf8");
+const inbox = readFileSync(resolve(root, "src/hooks/useInbox.ts"), "utf8");
+const crawlButton = readFileSync(resolve(root, "src/components/CrawlCheckButton.tsx"), "utf8");
 
 const checks: Array<[string, boolean]> = [
   ["queue claims processing before final completion", queue.includes('status: "processing"')],
@@ -15,6 +17,8 @@ const checks: Array<[string, boolean]> = [
   ["crawl stores findings on the exact audit run", crawl.includes("crawl_check") && crawl.includes('eq("id", runId)')],
   ["report prefers exact-run crawl findings", report.includes("runCrawl") && report.includes("data.crawlFaults")],
   ["queue gates terminal status on readiness", queue.includes("readyRuns") && queue.includes('status: "pending"'),],
+  ["Inbox refreshes when persisted crawl or audit-run state changes", inbox.includes("table: 'lead_crawl_checks'") && inbox.includes("table: 'ai_audit_runs'")],
+  ["Inbox crawl control exposes running state and blocks duplicate clicks", crawlButton.includes("iconOnly") && crawlButton.includes("disabled={running}") && crawlButton.includes("animate-spin")],
 ];
 
 let failures = 0;

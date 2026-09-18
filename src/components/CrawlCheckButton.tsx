@@ -35,7 +35,7 @@ interface Verdict { ok: boolean; headline: string; problems: string[] }
 interface Result {
   ok: boolean; url?: string; verdict?: Verdict;
   signals?: CrawlSignals; siteInfo?: SiteInfo | null;
-  fetches?: number; ms?: number; error?: string;
+  fetches?: number; ms?: number; error?: string; checked_at?: string;
 }
 
 /** Seed the popup's display state from a stored crawl row (so "already run" shows instantly). */
@@ -43,7 +43,7 @@ function resultFromRow(row: CrawlRow | null | undefined): Result | null {
   if (!row?.result?.signals) return null;
   return {
     ok: true, url: row.result.url,
-    verdict: row.result.verdict, signals: row.result.signals, siteInfo: row.result.siteInfo ?? null,
+    verdict: row.result.verdict, signals: row.result.signals, siteInfo: row.result.siteInfo ?? null, checked_at: row.result.checked_at ?? row.created_at,
   };
 }
 
@@ -142,8 +142,8 @@ function SiteInfoView({ info }: { info: SiteInfo | null | undefined }) {
 /* ── the dialog ─────────────────────────────────────────────────────────────────────────────────── */
 
 function CrawlCheckDialog(
-  { open, onOpenChange, lead, initialCrawl, urlMode, onDone }:
-  { open: boolean; onOpenChange: (o: boolean) => void; lead?: CrawlLead; initialCrawl?: CrawlRow | null; urlMode?: boolean; onDone?: () => void },
+  { open, onOpenChange, lead, initialCrawl, urlMode, onDone, onRunningChange, onErrorChange }:
+  { open: boolean; onOpenChange: (o: boolean) => void; lead?: CrawlLead; initialCrawl?: CrawlRow | null; urlMode?: boolean; onDone?: () => void; onRunningChange?: (running: boolean) => void; onErrorChange?: (failed: boolean) => void },
 ) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -152,11 +152,13 @@ function CrawlCheckDialog(
   const [url, setUrl] = useState('');
 
   const run = async (body: { lead_id?: string; url?: string; town?: string }) => {
-    setRunning(true); setResult(null);
+    setRunning(true); onRunningChange?.(true); setResult(null); onErrorChange?.(false);
     try {
       const { data, error } = await supabase.functions.invoke('crawl-check', { body });
       if (error) throw new Error(error.message);
-      setResult(data as Result);
+      const next = data as Result;
+      if (!next?.ok) throw new Error(next?.error || 'check failed');
+      setResult(next);
       if (body.lead_id) {
         // Inbox intentionally has a five-minute cache; invalidate it so returning to a
         // conversation immediately re-reads this manual crawl for audit_followup_fault.
@@ -165,8 +167,10 @@ function CrawlCheckDialog(
       if (body.lead_id) onDone?.();     // stored → let the parent refresh the button state
     } catch (e) {
       setResult({ ok: false, error: e instanceof Error ? e.message : 'check failed' });
+      onErrorChange?.(true);
     } finally {
       setRunning(false);
+      onRunningChange?.(false);
     }
   };
 
@@ -220,6 +224,14 @@ function CrawlCheckDialog(
           <div className="space-y-5">
             {result.error && <p className="text-sm text-destructive">{result.error}</p>}
 
+            {result.signals && (
+              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{fetchFailed ? 'Could not read website' : 'Crawl complete'}</span>
+                {result.signals.pagesChecked != null && ` · ${result.signals.pagesChecked} pages checked`}
+                {result.checked_at && ` · ${new Date(result.checked_at).toLocaleString()}`}
+              </div>
+            )}
+
             {/* ── SECTION 1: AI VISIBILITY (the faults — this feeds audit_followup_fault) ── */}
             {result.signals && (
               <section className="space-y-2">
@@ -250,10 +262,32 @@ function CrawlCheckDialog(
             )}
 
             {/* ── SECTION 2: SITE INFO (reading material — never gates a template) ── */}
+            {result.signals && !fetchFailed && (
+              <p className={`text-xs ${faults.length ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                {faults.length
+                  ? 'Usable for audit_followup_fault — the first finding is the client-facing fault.'
+                  : 'Not usable for audit_followup_fault — this crawl found no meaningful fault.'}
+              </p>
+            )}
+
             {!urlMode && (
               <section className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Site info</h3>
                 <SiteInfoView info={result.siteInfo} />
+              </section>
+            )}
+
+            {result.signals?.checkedPages && result.signals.checkedPages.length > 0 && (
+              <section className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pages checked</h3>
+                <ul className="space-y-1 text-xs">
+                  {result.signals.checkedPages.map((page) => (
+                    <li key={page.url} className="flex items-start justify-between gap-3 rounded border border-border/50 px-2 py-1.5">
+                      <a href={page.url} target="_blank" rel="noreferrer" className="min-w-0 truncate text-primary hover:underline">{page.url}</a>
+                      <span className="shrink-0 text-muted-foreground">{page.kind} · {page.readable ? page.words + ' words' : 'unreadable'}</span>
+                    </li>
+                  ))}
+                </ul>
               </section>
             )}
 
@@ -273,12 +307,15 @@ function CrawlCheckDialog(
  *  map), or null/undefined when it hasn't been run. The dot reflects ONLY an AI-visibility fault.
  *  `onDone` refetches the caller's crawl data after a run so the button restyles. */
 export function CrawlCheckButton(
-  { lead, crawl, onDone, className }:
-  { lead: CrawlLead; crawl?: CrawlRow | null; onDone?: () => void; className?: string },
+  { lead, crawl, onDone, className, iconOnly = false }:
+  { lead: CrawlLead; crawl?: CrawlRow | null; onDone?: () => void; className?: string; iconOnly?: boolean },
 ) {
   const [open, setOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [failed, setFailed] = useState(false);
   const hasRealSite = !!lead.website?.trim() && !isAggregatorUrl(lead.website);
   const ran = !!crawl?.result?.signals;
+  const crawlFailed = crawl?.result?.signals?.fetchFailed === true;
   const faults = ran ? buildFaultLines(crawl!.result!.signals!) : [];
   const faulted = faults.length > 0;
 
@@ -298,6 +335,19 @@ export function CrawlCheckButton(
     : faulted
       ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20'
       : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20';
+  if (iconOnly) {
+    const iconTitle = running ? 'Crawling website…' : failed || crawlFailed ? 'Crawl failed — click to retry' : ran ? 'View crawl result' : 'Crawl website';
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)} disabled={running} title={iconTitle} aria-label={iconTitle}
+          className={`${className ?? ''} ${failed || crawlFailed ? 'text-destructive hover:text-destructive' : faulted ? 'text-red-500 hover:text-red-500' : ran ? 'text-emerald-600 hover:text-emerald-600 dark:text-emerald-400' : ''}`}>
+          {running ? <ScanSearch className="h-4 w-4 animate-spin" /> : failed || crawlFailed ? <AlertTriangle className="h-4 w-4" /> : <ScanSearch className="h-4 w-4" />}
+        </button>
+        <CrawlCheckDialog open={open} onOpenChange={setOpen} lead={lead} initialCrawl={crawl} onDone={onDone} onRunningChange={setRunning} onErrorChange={setFailed} />
+      </>
+    );
+  }
+
   const title = !ran
     ? 'Not checked yet — click to crawl the site (free)'
     : faulted
@@ -312,7 +362,7 @@ export function CrawlCheckButton(
           ? <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />
           : <CircleCheck className="ml-0.5 h-3 w-3" />)}
       </button>
-      <CrawlCheckDialog open={open} onOpenChange={setOpen} lead={lead} initialCrawl={crawl} onDone={onDone} />
+      <CrawlCheckDialog open={open} onOpenChange={setOpen} lead={lead} initialCrawl={crawl} onDone={onDone} onRunningChange={setRunning} onErrorChange={setFailed} />
     </>
   );
 }

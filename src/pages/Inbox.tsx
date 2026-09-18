@@ -1631,6 +1631,7 @@ const Inbox = () => {
                       crawl={crawlByLeadId.get(active.leadId) ?? null}
                       onDone={refetch}
                       className="self-center"
+                      iconOnly
                     />
                   )}
                   {/* Google Maps — stored URL preferred, else built from place_id. */}

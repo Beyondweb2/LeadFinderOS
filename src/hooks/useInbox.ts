@@ -247,6 +247,15 @@ export function useInbox() {
         queryClient.setQueryData<InboxData>(queryKey, (current) => current
           ? { ...current, leads: patchInboxLead(current.leads, row) } : current);
       })
+      // Crawl completion is written by the background audit queue, not by either of the rows
+      // above. Invalidate the complete Inbox snapshot so the fault-template gate and crawl icon
+      // update as soon as the persisted crawl/run result arrives.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lead_crawl_checks' }, () => {
+        void queryClient.invalidateQueries({ queryKey });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ai_audit_runs' }, () => {
+        void queryClient.invalidateQueries({ queryKey });
+      })
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') void reconcile();
       });
@@ -322,8 +331,24 @@ export function useInbox() {
       const prev = m.get(c.lead_id);
       if (!prev || new Date(c.created_at).getTime() > new Date(prev.created_at).getTime()) m.set(c.lead_id, c);
     }
+    // A lead-level cache write is best-effort. When an audit has its own completed crawl but that
+    // cache row is absent, surface the exact run result in the same icon/modal instead of showing
+    // a false “not checked” state.
+    for (const audit of audits) {
+      if (!audit.lead_id || m.has(audit.lead_id)) continue;
+      const run = (audit.ai_audit_runs ?? [])
+        .filter((r) => (r.status === 'complete' || r.status === 'capped') && r.crawl_check?.status === 'complete')
+        .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))[0];
+      if (run?.crawl_check?.signals) {
+        m.set(audit.lead_id, {
+          lead_id: audit.lead_id,
+          result: run.crawl_check,
+          created_at: run.crawl_check.checked_at ?? run.created_at ?? audit.created_at ?? new Date(0).toISOString(),
+        });
+      }
+    }
     return m;
-  }, [crawlChecks]);
+  }, [crawlChecks, audits]);
 
   /* Lead ids audit_followup_fault's {{6}} has a line for — the picker gate. siteFaultLine is the SAME
      rule the sender (audit-reply.ts) applies, so what the picker offers and what the send builds
@@ -339,7 +364,7 @@ export function useInbox() {
       const runSources = (audit?.ai_audit_runs ?? [])
         .filter((r) => r.status === 'complete' || r.status === 'capped')
         .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))
-        .map((r) => ({ result: r.crawl_check, createdAtMs: r.created_at ? new Date(r.created_at).getTime() : 0, complete: r.crawl_check?.status === 'complete' }));
+        .map((r) => ({ result: r.crawl_check, createdAtMs: r.crawl_check?.checked_at ? new Date(r.crawl_check.checked_at).getTime() : r.created_at ? new Date(r.created_at).getTime() : 0, complete: r.crawl_check?.status === 'complete' }));
       if (resolveSiteFault(hasWebsite, runSources, c ? { result: c.result, createdAtMs: new Date(c.created_at).getTime() } : null) !== null) s.add(l.id);
     }
     return s;

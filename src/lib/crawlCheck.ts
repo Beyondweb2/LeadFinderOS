@@ -21,11 +21,11 @@ export const DUP_MIN_CLUSTER = 3;
 export const DUP_SIMILARITY = 0.90;      // 0..1; reported as a percentage
 /** A service/content page thinner than this (words of visible text) is "thin". */
 export const THIN_WORDS = 120;
+/** Homepage plus at most this many same-domain internal pages are fetched per crawl. */
+export const MAX_CRAWL_PAGES = 8;
 
-/** Bump when the crawl-check's MEANING changes so stored results from the old logic are ignored by
- *  the report rather than shown. v2 = the SEARCH-crawler rewrite (2026-09-16): we fetch as the
- *  crawlers that fetch a page when someone ASKS an AI, not as GPTBot (a TRAINING crawler whose block
- *  is legitimate and was producing false findings — one nearly reached a prospect). */
+/** Bump only when a stored fault's meaning changes. v2 is the search-crawler rewrite; the bounded
+ * page evidence added later is additive, so valid existing v2 findings remain usable. */
 export const CRAWL_CHECK_VERSION = 2;
 
 /* ⛔ TWO KINDS OF AI CRAWLER, AND ONLY ONE IS THE FAULT (Paul, 2026-09-16, tested on mc-locksmiths).
@@ -120,6 +120,52 @@ export function extractSitemapLocs(xml: string): { locs: string[]; isIndex: bool
   return { locs, isIndex };
 }
 
+export type CrawlPageKind = 'service' | 'location' | 'about' | 'contact' | 'other';
+
+/** Classify a URL only for operator display and bounded-crawl prioritisation. */
+export function crawlPageKind(url: string): CrawlPageKind {
+  let path = '';
+  try { path = new URL(url).pathname.toLowerCase(); } catch { return 'other'; }
+  if (/(?:service|services|what-we-do|solution|repair|installation)/.test(path)) return 'service';
+  if (/(?:location|areas?|coverage|town|city|region)/.test(path)) return 'location';
+  if (/(?:about|team|company|our-story)/.test(path)) return 'about';
+  if (/(?:contact|enquir|quote|book)/.test(path)) return 'contact';
+  return 'other';
+}
+
+/** A deterministic same-domain page set. Assets and transactional/admin paths are excluded;
+ * service, location, about and contact pages are considered before other internal links. */
+export function selectCrawlUrls(urls: string[], homeUrl: string, limit = MAX_CRAWL_PAGES): string[] {
+  let origin = '';
+  try { origin = new URL(homeUrl).origin; } catch { return []; }
+  const ignore = /\/(?:wp-admin|admin|login|logout|cart|checkout|account|my-account|wp-json)(?:\/|$)|\.(?:jpg|jpeg|png|gif|webp|svg|pdf|zip|css|js|xml|ico|mp4|mp3)$/i;
+  const unique = new Map<string, { url: string; score: number; index: number }>();
+  urls.forEach((raw, index) => {
+    try {
+      const u = new URL(raw, origin);
+      if (u.origin !== origin || !/^https?:$/.test(u.protocol) || ignore.test(u.pathname)) return;
+      u.hash = ''; u.search = '';
+      const normal = u.href.replace(/\/$/, '') || u.origin;
+      if (normal === homeUrl.replace(/\/$/, '')) return;
+      const kind = crawlPageKind(normal);
+      const score = kind === 'service' || kind === 'location' ? 3 : kind === 'about' || kind === 'contact' ? 2 : 1;
+      if (!unique.has(normal)) unique.set(normal, { url: normal, score, index });
+    } catch { /* skip malformed URLs */ }
+  });
+  const sorted = [...unique.values()].sort((a, b) => b.score - a.score || a.index - b.index);
+  const selected: typeof sorted = [];
+  // Preserve breadth first: one of each meaningful page kind where the site exposes one.
+  for (const kind of ['service', 'location', 'about', 'contact'] as CrawlPageKind[]) {
+    const found = sorted.find((x) => crawlPageKind(x.url) === kind);
+    if (found) selected.push(found);
+  }
+  for (const candidate of sorted) {
+    if (selected.length >= Math.max(0, limit)) break;
+    if (!selected.some((x) => x.url === candidate.url)) selected.push(candidate);
+  }
+  return selected.slice(0, Math.max(0, limit)).map((x) => x.url);
+}
+
 const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Normalise a URL path into a PATTERN key that collapses templated location pages onto one key,
@@ -212,6 +258,10 @@ export interface CrawlSignals {
   noJsonLd: boolean;
   duplicates: { clusterSize: number; sampleSize: number; similarityPct: number } | null;
   thinPages: number;                // count of sampled service pages under THIN_WORDS
+  /** Bounded page-level evidence for the operator; absent on pre-v3 stored checks. */
+  pagesChecked?: number;
+  checkedPages?: Array<{ url: string; kind: CrawlPageKind; words: number; hasH1: boolean; readable: boolean }>;
+  thinPageUrls?: string[];
 }
 
 export interface CrawlVerdict {
