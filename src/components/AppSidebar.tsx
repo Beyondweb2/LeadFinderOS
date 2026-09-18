@@ -11,7 +11,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered,
+  LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
   MessageSquareQuote, Inbox, Sparkles, Map
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,7 @@ export function AppSidebar() {
     { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
     { title: 'Inbox', url: '/inbox', icon: Inbox, description: 'WhatsApp conversations' },
+    { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client fulfilment hubs' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
     { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },
     { title: 'Review replies', url: '/review-replies', icon: MessageSquareQuote, description: 'Draft replies to client Google reviews' },

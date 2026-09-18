@@ -27,6 +27,8 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Templates = lazy(() => import("./pages/Templates"));
 const BaselinePage = lazy(() => import("./pages/Baseline"));
 const PaidBaselineSetup = lazy(() => import("./pages/PaidBaselineSetup"));
+const PaidClients = lazy(() => import("./pages/PaidClients"));
+const ClientHub = lazy(() => import("./pages/ClientHub"));
 const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
 const PlaybookPage = lazy(() => import("./pages/Playbook"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
@@ -204,6 +206,8 @@ const App = () => {
               not the working detail. */}
               <Route path="/baseline/:auditId" element={<BaselinePage />} />
               <Route path="/baseline-setup/:leadId" element={<PaidBaselineSetup />} />
+              <Route path="/paid-clients" element={<PaidClients />} />
+              <Route path="/paid-clients/:leadId" element={<ClientHub />} />
               {/* BEFORE/AFTER. Operator-side like the baseline it hangs off: the noise band and the
               unproven markings are part of the document, so it is shown WITH them or not at all. */}
               <Route path="/compare/:auditId" element={<ComparePage />} />
@@ -211,9 +215,6 @@ const App = () => {
               WHO'S WINNING is the client's competitor list, which is working intelligence, not
               something the client is shown. The id resolves as an AUDIT id first — see usePlaybook. */}
               <Route path="/playbook/:id" element={<PlaybookPage />} />
-              {/* /paid-clients is GONE (2026-08-12). Paying customers live in Outreach (the
-              "Paid (money in)" filter, keyed on amount_paid > 0) and in the Inbox (paid
-              conversations are exempt from the status filter). */}
               {/* THE MOCKUP PICKER — one screen per business.
                   /mockups      the mockups-waiting list (in the app rather than in SQL, Paul's ask)
                   /mockups/:id  place the images for one business
