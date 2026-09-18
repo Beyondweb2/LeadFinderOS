@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/lib/templateAttribution';
-import { siteFaultLine } from '@/lib/crawlCheck';
+import { resolveSiteFault } from '@/lib/crawlCheck';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
@@ -112,7 +112,7 @@ export function windowFor(lastInboundAt: string | null): { open: boolean; hoursL
 interface InboxData {
   messages: WaMessage[];
   leads: LeadLite[];
-  audits: Array<{ id: string; short_code: string | null; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; ai_audit_runs: Array<{ status: string | null }> | null }>;
+  audits: Array<{ id: string; short_code: string | null; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; ai_audit_runs: Array<{ status: string | null; run_number: number | null; created_at: string | null; crawl_check: (CrawlStoredResult & { status?: string }) | null }> | null }>;
   /** Sign-up page landings (findable-onboarding's prefill hook) → the SITE pill. */
   pageHits: Array<{ lead_id: string | null; created_at: string }>;
   /** Per-audit Gemini named/answers, from the audit_gemini_signal view (aggregated server-side so the
@@ -169,7 +169,7 @@ async function fetchInboxData(previous?: InboxData, essentialOnly = false): Prom
     /* ⛔ PAGINATED — truncation here would silently drop the report-ready pill and the audit_reply
        guard for whichever leads fell outside the window. Same id tiebreaker. */
     essentialOnly ? { rows: previous?.audits ?? NO_AUDITS } : optionalInboxRows<InboxData['audits'][number]>(fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', (from, to) =>
-      sb.from('ai_audits').select('id, short_code, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status)')
+      sb.from('ai_audits').select('id, short_code, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status, run_number, created_at, crawl_check:results->crawl_check)')
         .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to))),
     /* Sign-up page hits → the SITE pill. The SAME table and the SAME paginated read the campaign
        card uses (id tiebreaker); the SITE_TRACKING_START cutoff is applied in leadSiteVisitedAt. A
@@ -335,11 +335,15 @@ export function useInbox() {
     for (const l of leads) {
       const hasWebsite = !!(l.website ?? '').trim();
       const c = crawlByLeadId.get(l.id);
-      const createdMs = c ? new Date(c.created_at).getTime() : 0;
-      if (siteFaultLine(hasWebsite, c?.result ?? null, createdMs) !== null) s.add(l.id);
+      const audit = audits.find((a) => a.lead_id === l.id && (a.ai_audit_runs ?? []).some((r) => r.status === 'complete' || r.status === 'capped'));
+      const runSources = (audit?.ai_audit_runs ?? [])
+        .filter((r) => r.status === 'complete' || r.status === 'capped')
+        .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))
+        .map((r) => ({ result: r.crawl_check, createdAtMs: r.created_at ? new Date(r.created_at).getTime() : 0, complete: r.crawl_check?.status === 'complete' }));
+      if (resolveSiteFault(hasWebsite, runSources, c ? { result: c.result, createdAtMs: new Date(c.created_at).getTime() } : null) !== null) s.add(l.id);
     }
     return s;
-  }, [leads, crawlByLeadId]);
+  }, [leads, audits, crawlByLeadId]);
 
   // Lead ids with an audit run currently IN FLIGHT (pending/running) — drives the Inbox audit
   // button's spinner. Same audits fetch as above; refreshed by refetch() after firing one.

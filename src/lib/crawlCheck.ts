@@ -308,6 +308,29 @@ export function siteFaultLine(
   return faults.length ? faults[0].detail : null;
 }
 
+/** A checked crawl result from either the completed audit run or the lead-level cache. */
+export interface SiteFaultSource {
+  result: { version?: number; signals?: CrawlSignals } | null | undefined;
+  createdAtMs: number;
+  /** An explicit crawl failure is never usable as a message fault. */
+  complete?: boolean;
+}
+
+/** Prefer the current audit's crawl, then a valid lead-level cache fallback. */
+export function resolveSiteFault(
+  hasWebsite: boolean,
+  auditRunCrawls: SiteFaultSource[] = [],
+  leadCrawl?: SiteFaultSource | null,
+): string | null {
+  if (!hasWebsite) return NO_WEBSITE_FAULT_LINE;
+  for (const source of [...auditRunCrawls, ...(leadCrawl ? [leadCrawl] : [])]) {
+    if (source.complete === false) continue;
+    const fault = siteFaultLine(true, source.result, source.createdAtMs);
+    if (fault) return fault;
+  }
+  return null;
+}
+
 /** Build the paste-ready verdict from the signals — the single worst problem as the headline, in a
  *  fixed priority (a site AI can't read at all beats a cosmetic gap), plus the full list. Names the
  *  specific problem, never a grade. */

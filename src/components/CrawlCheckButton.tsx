@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { buildFaultLines, type CrawlSignals, type CrawlFault } from '@/lib/crawlCheck';
@@ -145,6 +146,7 @@ function CrawlCheckDialog(
   { open: boolean; onOpenChange: (o: boolean) => void; lead?: CrawlLead; initialCrawl?: CrawlRow | null; urlMode?: boolean; onDone?: () => void },
 ) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [url, setUrl] = useState('');
@@ -155,6 +157,11 @@ function CrawlCheckDialog(
       const { data, error } = await supabase.functions.invoke('crawl-check', { body });
       if (error) throw new Error(error.message);
       setResult(data as Result);
+      if (body.lead_id) {
+        // Inbox intentionally has a five-minute cache; invalidate it so returning to a
+        // conversation immediately re-reads this manual crawl for audit_followup_fault.
+        void queryClient.invalidateQueries({ queryKey: ['inbox'] });
+      }
       if (body.lead_id) onDone?.();     // stored → let the parent refresh the button state
     } catch (e) {
       setResult({ ok: false, error: e instanceof Error ? e.message : 'check failed' });

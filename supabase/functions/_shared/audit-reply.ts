@@ -11,7 +11,7 @@ import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competit
 import { usableRivals, excludeSelfRivals } from "../../../src/lib/rivalHook.ts";
 import { nameMatches } from "../../../src/lib/nameMatch.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
-import { siteFaultLine } from "../../../src/lib/crawlCheck.ts";
+import { resolveSiteFault, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
 /* ⛔ THE PROSPECT-FACING ORIGIN. findable.live/report/<auditId> — a Pages Function proxy that forces
@@ -255,7 +255,21 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
       cc = data;
     } catch (_e) { cc = null; }
   }
-  const createdMs = cc?.created_at ? new Date(cc.created_at).getTime() : 0;
-  const siteFault = siteFaultLine(hasWebsite, cc?.result ?? null, createdMs);
+  const runSources = (audit.ai_audit_runs ?? [])
+    .filter((r: { status?: string | null }) => r.status === "complete" || r.status === "capped")
+    .sort((a: { run_number?: number | null }, b: { run_number?: number | null }) => (b.run_number ?? 0) - (a.run_number ?? 0))
+    .map((r: { results?: { crawl_check?: unknown }; created_at?: string | null }) => {
+      const crawl = r.results?.crawl_check as { status?: string; version?: number; signals?: CrawlSignals } | undefined;
+      return {
+        result: crawl,
+        createdAtMs: r.created_at ? new Date(r.created_at).getTime() : 0,
+        complete: crawl?.status === "complete",
+      };
+    });
+  const siteFault = resolveSiteFault(
+    hasWebsite,
+    runSources,
+    cc ? { result: cc.result ?? null, createdAtMs: new Date(cc.created_at).getTime() } : null,
+  );
   return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault };
 }

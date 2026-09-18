@@ -8,11 +8,11 @@
    Run: npx tsx scripts/audit-followup-fault.test.ts
    ============================================================ */
 import { WA_TEMPLATES, claimTemplatePayload } from "../supabase/functions/_shared/whatsapp-send.ts";
-import { WA_TEMPLATE_REQS } from "../src/lib/whatsappTemplates.ts";
+import { WA_TEMPLATE_REQS, getTemplateSendability } from "../src/lib/whatsappTemplates.ts";
 import { CONTINUATION_TEMPLATES } from "../src/lib/coldOutreach.ts";
 import { REPORT_LINK_TEMPLATES } from "../src/lib/templateAttribution.ts";
 import { buildsFromAudit, unsuppliedVars } from "../src/lib/templateRouting.ts";
-import { siteFaultLine, NO_WEBSITE_FAULT_LINE, CRAWL_CHECK_VERSION, type CrawlSignals } from "../src/lib/crawlCheck.ts";
+import { siteFaultLine, resolveSiteFault, NO_WEBSITE_FAULT_LINE, CRAWL_CHECK_VERSION, type CrawlSignals } from "../src/lib/crawlCheck.ts";
 
 let f = 0;
 const ok = (c: boolean, m: string) => { console.log(`${c ? "PASS" : "FAIL"} ${m}`); if (!c) f++; };
@@ -92,6 +92,28 @@ ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: CLEAN }, now) ==
 ok(siteFaultLine(true, null, 0) === null, "website + no crawl at all → null (not offered)");
 ok(siteFaultLine(true, { version: 1, signals: FAULTY }, now) === null, "website + a PRE-v2 crawl → null (its findings aren't trusted)");
 ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: FAULTY }, now - 40 * 86_400_000) === null, "website + a STALE crawl → null");
+
+console.log("\nRUN-LEVEL SOURCE OF TRUTH");
+ok(
+  resolveSiteFault(true, [{ result: { status: "complete", version: CRAWL_CHECK_VERSION, signals: FAULTY }, createdAtMs: now, complete: true }], null) !== null,
+  "a completed audit run's crawl fault enables the template without a lead cache row",
+);
+ok(
+  resolveSiteFault(true, [{ result: { status: "unavailable", version: CRAWL_CHECK_VERSION, signals: FAULTY }, createdAtMs: now, complete: false }], null) === null,
+  "an unavailable run never invents a usable fault",
+);
+ok(
+  resolveSiteFault(true, [], { result: { version: CRAWL_CHECK_VERSION, signals: FAULTY }, createdAtMs: now }) !== null,
+  "a fresh lead-level manual crawl remains a valid fallback",
+);
+ok(
+  resolveSiteFault(true, [{ result: { status: "complete", version: CRAWL_CHECK_VERSION, signals: CLEAN }, createdAtMs: now, complete: true }], { result: { version: CRAWL_CHECK_VERSION, signals: FAULTY }, createdAtMs: now }) !== null,
+  "a clean run can fall back to a fresh real lead-level fault",
+);
+ok(
+  getTemplateSendability("audit_followup_call", { shareToken: null }, { reportSlug: REPORT, hasSiteFault: false }).ok,
+  "the call follow-up remains available when no site fault exists",
+);
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");
 if (f) throw new Error(`${f} failures`);
