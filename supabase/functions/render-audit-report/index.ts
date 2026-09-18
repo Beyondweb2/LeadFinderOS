@@ -15,7 +15,6 @@ import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from ".
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 import { measuringState } from "../../../src/lib/measuringState.ts";
-import { isInternalMeasurement } from "../../../src/lib/auditKind.ts";
 import { showOffer } from "../../../src/lib/buyOffer.ts";
 import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
 
@@ -73,28 +72,6 @@ function htmlResponse(html: string, status = 200, opts: { noStore?: boolean } = 
         : status === 200 ? "public, max-age=120" : "public, max-age=0, must-revalidate",
     },
   });
-}
-
-/* ⛔ THE OPERATOR-ONLY NOTICE (2026-09-13). A full measure or a day-28 replay is an internal
-   working document — it is what the operator uses to decide which pages to build and, for the
-   replay, what a refund is judged against. Until today this route rendered either as a CLIENT
-   report to anyone holding the URL, and the only thing stopping a client seeing one was that no
-   path sent the link. Refused here, at the one door an outsider can reach, with a page that names
-   what it is and points a client at the document that IS theirs — and echoes NONE of the working
-   detail (no counts, no questions, no business name). 403 rather than 404 because the audit does
-   exist; `no-store` because whether an id is internal is not something to cache into a CDN. */
-function operatorOnly(): Response {
-  return htmlResponse(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
-    `<meta name="viewport" content="width=device-width, initial-scale=1"><title>Internal document</title>` +
-    `<meta name="robots" content="noindex"></head>` +
-    `<body style="font-family:system-ui,sans-serif;max-width:640px;margin:80px auto;padding:0 20px;color:#0f172a">` +
-    `<h1>This is an internal Findable working document</h1>` +
-    `<p>It is not a client report and is not published. If you are a Findable client, your report is the ` +
-    `one we sent you; if you are the operator, open this audit inside the app.</p></body></html>`,
-    403,
-    { noStore: true },
-  );
 }
 
 /** Minimal, crawlable, noindex fallback for a missing / not-yet-ready report. */
@@ -191,15 +168,8 @@ Deno.serve(async (req) => {
       .select("id, short_code, business_name, business_type, location_text, specialism, website, has_website, is_market, lead_id, baseline_target_runs, is_measurement, audit_purpose")
       .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
-    /* ⛔ THE PUBLIC RENDERER REFUSES INTERNAL MEASUREMENTS (2026-09-13). The full measure
-       (`measurement`) and the day-28 replay (`remeasure`) — and their legacy shape, multi-run with
-       is_measurement, which is RG's re-measures — are operator documents. One shared predicate
-       (src/lib/auditKind.ts) so this door, the Baseline screen and the cockpit agree. Checked
-       BEFORE any run or queue row is read: the refusal must not depend on what the audit holds. */
-    if (isInternalMeasurement(audit as { audit_purpose?: string | null; is_measurement?: boolean | null; baseline_target_runs?: number | null })) {
-      console.log(`[render-audit-report] REFUSED internal measurement ${audit.id}: operator document, not a client report.`);
-      return operatorOnly();
-    }
+    // Every non-market audit is rendered as the same client-facing report, whether it contains a
+    // single audit run or a multi-run measurement. Operator controls exist only in the SPA.
     /* ⛔ THE PUBLIC RENDERER REFUSES MARKET AUDITS. This is the one an outsider could reach with a
        URL, so it refuses the same way it refuses a missing audit — no error page, no sentinel name
        echoed back. A market audit has no business, so there is nothing here to show anybody.
