@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
-import { CARD_SAVED_NOTICE, CARD_SAVED_NOTICE_NEW_SITE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_NEW_SITE_MONTHLY_GBP, FINDABLE_NEW_SITE_TERM_MONTHS, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
+import { CARD_SAVED_NOTICE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
    "where does the public site live" was settled after the pages.dev incident, and it applies the
@@ -291,7 +291,6 @@ Deno.serve(async (req) => {
        _shared/delayed-subscription.ts, which reads plan_tier itself. Browser never decides money, so
        this is read off the onboarding row, never from `body`. `=== "new_site"` strictly; absent/null/
        "keep" all mean the standard £29.99 monthly copy. */
-    const isNewSite = (ob as { plan_tier?: unknown }).plan_tier === "new_site";
     /* ⛔ IT MUST BE A PRICE ID, NOT A PRODUCT ID, AND THAT IS NOT A THEORETICAL MISTAKE — IT IS THE
        ONE THAT ACTUALLY HAPPENED (2026-09-03, first live test). A *_PRICE_ID secret was set to
        `prod_VBse8QguSes2Zr` and Stripe answered
@@ -342,7 +341,7 @@ Deno.serve(async (req) => {
     /* ⛔ AND THE CUSTOMER IS TOLD, ON THE PAGE WHERE THE CARD IS ENTERED. Saving a card without
        saying so is the indefensible part of this, and Stripe's submit message is the only place
        the words sit beside the card field itself. */
-    form.set("custom_text[submit][message]", isNewSite ? CARD_SAVED_NOTICE_NEW_SITE : CARD_SAVED_NOTICE);
+    form.set("custom_text[submit][message]", CARD_SAVED_NOTICE);
     /* Metadata rides on the SUBSCRIPTION too, not just the session: customer.subscription.* and
        invoice.* events carry the subscription, and without this a churn event could not be traced
        back to a lead. The session metadata below covers checkout.session.completed. */
@@ -391,9 +390,8 @@ Deno.serve(async (req) => {
          so it is the last place that should describe only the first one.
          ⚠️ Both figures are interpolated from the constants, never typed: this string is read by
          a customer and a price move must not be able to leave a stale number on a receipt. */
-      form.set("line_items[0][price_data][product_data][name]", isNewSite
-        ? `Findable — AI visibility: £${FINDABLE_SETUP_PRICE_GBP} setup, then £${FINDABLE_NEW_SITE_MONTHLY_GBP}/month for ${FINDABLE_NEW_SITE_TERM_MONTHS} months, then £${FINDABLE_MONTHLY_GBP}/month`
-        : `Findable — AI visibility: £${FINDABLE_SETUP_PRICE_GBP} setup, then £${FINDABLE_MONTHLY_GBP}/month`);
+      form.set("line_items[0][price_data][product_data][name]",
+        `Findable — AI visibility: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from week six`);
       form.set("line_items[0][price_data][product_data][description]", FINDABLE_GUARANTEE);
       form.set("line_items[0][quantity]", "1");
     }

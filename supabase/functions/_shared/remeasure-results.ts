@@ -29,8 +29,6 @@ import {
 } from "../../../src/lib/remeasureResults.ts";
 import { REPORT_PUBLIC_ORIGIN } from "../../../src/lib/findableOffer.ts";
 import { reportOnceAnHour } from "./audit-baseline.ts";
-import { createDelayedSubscription } from "./delayed-subscription.ts";
-import { monthlyStartIso } from "../../../src/lib/remeasureResults.ts";
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -253,7 +251,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
      a results email having provably gone out, because the call site is downstream of the send.
      ⛔ NON-FATAL, ALWAYS. The client is reading their results; a Stripe problem must not un-send
      them. A failure flags Paul and leaves the client unbilled. */
-  const sub = await createDelayedSubscription(service, lead, nowIso, await planFor(service, lead.id));
+  const sub = { kind: "skipped", reason: "subscription is created at signup" };
   if (sub.kind === "failed") {
     await reportOnceAnHour(service, "delayed_subscription_failed", lead.id, sub.reason, { remeasure_audit_id: audit.id, sent_at: nowIso });
     await emailOperator(`MONTHLY NOT STARTED — ${businessName}`, [

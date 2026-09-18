@@ -51,7 +51,10 @@ export const FINDABLE_SETUP_PRICE_GBP = 99;
  *  ⚠️ DECLARED HERE, ABOVE CARD_SAVED_NOTICE, AND THAT IS STRUCTURAL. That constant interpolates
  *  this one, and a const referenced before its declaration throws ReferenceError at module load —
  *  which in this file would take down the checkout, not a screen. It used to live at the bottom. */
-export const FINDABLE_MONTHLY_GBP = 29.99;
+export const FINDABLE_MONTHLY_GBP = 99;
+
+/** The first recurring payment is exactly six weeks after the successful £99 signup payment. */
+export const FINDABLE_MONTHLY_DELAY_DAYS = 42;
 
 /** 🔴 THE NEW-SITE TIER MONTHLY (Paul, 2026-09-17). A second pricing tier for clients who need a new
  *  website built: £99 to start, then £99/month for 12 months (everything in, hosting too, the site
@@ -292,7 +295,7 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
    monthly without ever pricing it, on the one screen where somebody enters a card — so the only
    number in front of them at the moment they pay was the smaller half of what they owe. */
 export const CARD_SAVED_NOTICE =
-  `You pay £${FINDABLE_SETUP_PRICE_GBP} today and £${FINDABLE_MONTHLY_GBP} a month after that. We keep your card on file so the monthly can start later — nothing else is taken until after you have seen your four-week results, and you can cancel before it does.`;
+  `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card and £${FINDABLE_MONTHLY_GBP} a month starts six weeks from today. You can cancel before it starts.`;
 
 /* ⛔ THE NEW-SITE TIER'S VERSION OF THE SAME NOTICE (2026-09-17). A SEPARATE named string, not a
    function of CARD_SAVED_NOTICE, because check-cross-repo-sync.mjs parses a string CONSTANT and byte-

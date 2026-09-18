@@ -1,6 +1,7 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
+import { createDelayedSubscription } from "../_shared/delayed-subscription.ts";
 import { questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
 import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
@@ -997,6 +998,27 @@ Deno.serve(async (req) => {
                   console.error(`[stripe-webhook] could not store the Stripe ids for lead ${findableLeadId}: ${subErr.message} - the payment IS recorded; hosting will be untrackable until this is fixed`);
                 } else {
                   console.log(`[stripe-webhook] stored stripe ids for lead ${findableLeadId}: customer=${stripeCustomerId ?? "(none)"} subscription=${stripeSubscriptionId ?? "(none)"}`);
+                }
+              }
+              /* The standard recurring plan is created at successful signup, with Stripe holding a
+                 42-day trial. This makes the promised six-week start independent of when the
+                 four-week measurement email happens to be sent. A replayed webhook reads the
+                 stored subscription id and therefore cannot create a duplicate. */
+              if (stripeCustomerId) {
+                const { data: billingLead } = await service.from("outreach_leads")
+                  .select("id, business_name, stripe_customer_id, stripe_subscription_id")
+                  .eq("id", findableLeadId).maybeSingle();
+                const subscription = await createDelayedSubscription(
+                  service,
+                  (billingLead as { id: string; business_name: string | null; stripe_customer_id: string | null; stripe_subscription_id: string | null }) ?? {
+                    id: findableLeadId, business_name: null, stripe_customer_id: stripeCustomerId, stripe_subscription_id: null,
+                  },
+                  new Date().toISOString(),
+                );
+                if (subscription.kind === "failed") {
+                  await recordPaymentFailure("monthly_subscription_create_failed", {
+                    onboarding_id: onboardingId, lead_id: findableLeadId, reason: subscription.reason,
+                  });
                 }
               }
             } else {
