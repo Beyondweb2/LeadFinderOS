@@ -304,6 +304,14 @@ Deno.serve(async (req) => {
        phone are derived server-side by request-call from this id alone. */
     data.auditId = audit.id;
     data.requestCallUrl = `${supabaseUrl}/functions/v1/request-call`;
+    // Prefer the crawl attached to this exact run. This covers standalone audits and keeps a
+    // lead's newer crawl from leaking into an older/different audit. Unavailable crawls are
+    // intentionally represented by silence; no findings are invented.
+    const runCrawl = (run.results as { crawl_check?: { status?: string; version?: number; signals?: CrawlSignals } } | null)?.crawl_check;
+    if (runCrawl?.status === "complete" && (runCrawl.version ?? 0) >= CRAWL_CHECK_VERSION && runCrawl.signals) {
+      const faults = buildFaultLines(runCrawl.signals);
+      if (faults.length) data.crawlFaults = faults;
+    }
     if (leadId) {
       const { data: cc } = await service
         .from("lead_crawl_checks").select("result, created_at")
@@ -317,7 +325,7 @@ Deno.serve(async (req) => {
       const sig = stored?.signals;
       if (fresh && currentVer && sig) {
         const faults = buildFaultLines(sig);
-        if (faults.length) data.crawlFaults = faults;
+        if (faults.length && !data.crawlFaults) data.crawlFaults = faults;
       }
       /* Background-populate when there's no fresh CURRENT-version check and they have a real site, so
          the section is there on the next open. Fire-and-forget via waitUntil — never blocks this

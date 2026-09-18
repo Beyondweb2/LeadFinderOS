@@ -804,7 +804,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   if (ids.length === 0) {
     // Discover runs that are still open but may now be fully settled.
     const { data: openRuns } = await service
-      .from("ai_audit_runs").select("id").in("status", ["pending", "running"]).limit(20);
+      .from("ai_audit_runs").select("id").in("status", ["pending", "running", "processing"]).limit(20);
     ids = (openRuns ?? []).map((r: Row) => r.id);
   }
   let finalised = 0;
@@ -818,6 +818,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
      button (Paul, 2026-09-17: "it's free, no reason to wait for me to remember"). Free (fetches
      only, never Apify), queued like the extraction calls and awaited after the loop, fail-safe. */
   const crawlInvokes: Promise<void>[] = [];
+  const processingRuns: Array<{ runId: string; auditId: string; finalStatus: string; allFailed: boolean }> = [];
   // Automation B: runs that just completed AND came from an outreach lead → send the audit_reply
   // WhatsApp AFTER extraction finishes (so {{2}} competitors are the CLEANED list). Collected in the
   // loop, processed after the extraction await below.
@@ -1017,19 +1018,22 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       console.error(`[process-ai-audit-queue] run ${runId}: ALL ${rows.length} questions failed — ${dominantError}`);
     }
     const runStatus = isCapped ? "capped" : allFailed ? "failed" : "complete";
-    // ATOMIC completion flip: gate on .in(status,[pending,running]) + .select() so only the tick that
-    // actually transitions the run pending/running → terminal "wins". Overlapping pollers can't both
-    // flip the same run, so every completion side-effect (extract-competitors, audit_reply, auto-report)
-    // fires EXACTLY ONCE — for the winner. A later tick that re-sees a settled run updates 0 rows and
-    // skips, which also stops it clobbering extract-competitors' cleaned results.
+    // Claim the settled run as processing first. Required post-processing (crawl + competitor
+    // cleanup) must finish before the run is exposed as terminal; retries return it to pending.
     // actor_cost_usd is written alongside; migration-tolerant retry below if the column is absent.
     const flipRun = (extra: Record<string, unknown>) =>
       service.from("ai_audit_runs")
-        .update({ results, mention_rate: mentionRate, status: runStatus, ...extra })
+        .update({ results, mention_rate: mentionRate, status: "processing", ...extra })
         .eq("id", runId)
         .in("status", ["pending", "running"])
         .select("id");
-    let { data: flipped, error: writeErr } = await flipRun({ actor_cost_usd: actorCostUsd });
+    let flipped: Row[] | null = null;
+    let writeErr: Row | null = null;
+    if (prevStatus === "processing") {
+      flipped = [{ id: runId }];
+    } else {
+      ({ data: flipped, error: writeErr } = await flipRun({ actor_cost_usd: actorCostUsd }));
+    }
     // This IS the atomic completion flip, so a missing column must never stall a run: if the
     // actor_cost_usd migration has not been applied, flip without it rather than retrying
     // forever and leaving every audit stuck in 'running'.
@@ -1041,8 +1045,9 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       console.error(`[process-ai-audit-queue] finalise write failed for run ${runId}:`, writeErr.message);
       continue; // don't fire side-effects on a failed write — the run retries next tick
     }
-    if (!Array.isArray(flipped) || flipped.length === 0) continue; // another poller already finalised this run
+    if (!Array.isArray(flipped) || flipped.length === 0) continue; // another poller already claimed this run
     finalised++;
+    processingRuns.push({ runId, auditId: runRow?.audit_id as string, finalStatus: runStatus, allFailed });
 
     /* ── AUTOMATIC SITE CRAWL (2026-09-17) ───────────────────────────────────────────────────────
        Every audit that finalises crawls its lead's site — complete, capped OR failed, because the
@@ -1058,20 +1063,32 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         const auditId = runRow?.audit_id as string | undefined;
         if (!auditId) return;
         const { data: aud } = await service
-          .from("ai_audits").select("lead_id, is_market").eq("id", auditId).maybeSingle();
+          .from("ai_audits").select("lead_id, is_market, website").eq("id", auditId).maybeSingle();
         const cLeadId = (aud as { lead_id?: string | null } | null)?.lead_id ?? null;
-        if (!cLeadId || (aud as { is_market?: boolean } | null)?.is_market === true) return; // market/no-lead → nothing to crawl
-        const { data: lead } = await service
-          .from("outreach_leads").select("website").eq("id", cLeadId).maybeSingle();
-        const site = String((lead as { website?: string | null } | null)?.website ?? "").trim();
+        if ((aud as { is_market?: boolean } | null)?.is_market === true) return;
+        const { data: lead } = cLeadId
+          ? await service.from("outreach_leads").select("website").eq("id", cLeadId).maybeSingle()
+          : { data: null };
+        const site = String((lead as { website?: string | null } | null)?.website ?? "").trim()
+          || String((aud as { website?: string | null } | null)?.website ?? "").trim();
         if (!site) return; // no website → crawl-check would refuse anyway
         // Already have a current, fresh crawl? Leave it — this is the 3-run-baseline dedup.
-        const { data: cc } = await service
-          .from("lead_crawl_checks").select("result, created_at")
-          .eq("lead_id", cLeadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        const { data: cc } = cLeadId
+          ? await service.from("lead_crawl_checks").select("result, created_at")
+              .eq("lead_id", cLeadId).order("created_at", { ascending: false }).limit(1).maybeSingle()
+          : { data: null };
         const fresh = !!cc && (Date.now() - new Date((cc as { created_at: string }).created_at).getTime()) < 30 * 86_400_000;
         const currentVer = ((cc as { result?: { version?: number } } | null)?.result?.version ?? 0) >= CRAWL_CHECK_VERSION;
-        if (fresh && currentVer) return;
+        if (fresh && currentVer) {
+          if (runId && cc?.result) {
+            const { data: currentRun } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
+            const currentResults = currentRun?.results && typeof currentRun.results === "object" ? currentRun.results : {};
+            await service.from("ai_audit_runs").update({
+              results: { ...currentResults, crawl_check: { status: "complete", ...(cc as { result: Row }).result } },
+            }).eq("id", runId);
+          }
+          return;
+        }
         const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/crawl-check`, {
           method: "POST",
           headers: {
@@ -1079,7 +1096,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
             "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
             "x-internal-job": "1",
           },
-          body: JSON.stringify({ lead_id: cLeadId }),
+          body: JSON.stringify({ lead_id: cLeadId, audit_id: auditId, run_id: runId, url: site }),
         });
         if (!res.ok) {
           const txt = await res.text().catch(() => "");
@@ -1097,7 +1114,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     // and rewrites. Fail-safe: never throws; a non-2xx is logged (a 401/403 misconfig is visible,
     // not a silent no-op) and can never flip the run back out of complete.
     // Nothing to extract from a run with no answers, so skip the call entirely.
-    if (!allFailed && (prevStatus === "pending" || prevStatus === "running")) {
+    if (!allFailed && (prevStatus === "pending" || prevStatus === "running" || prevStatus === "processing")) {
       extractionInvokes.push((async () => {
         try {
           /* ⛔ NO Authorization HEADER, ON PURPOSE — and the load-bearing half of the 2026-08-14 fix
@@ -1164,6 +1181,41 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
   if (extractionInvokes.length) await Promise.allSettled(extractionInvokes);
   // Same for the automatic site crawls — awaited so the runtime doesn't cut them off on return.
   if (crawlInvokes.length) await Promise.allSettled(crawlInvokes);
+
+  // A run is terminal only after the automatic crawl and competitor cleanup have reached a
+  // terminal outcome. Crawl unavailability is honest and terminal; missing work is retried.
+  const readyRuns = new Set<string>();
+  for (const p of processingRuns) {
+    const { data: fresh } = await service.from("ai_audit_runs").select("results").eq("id", p.runId).maybeSingle();
+    let current = fresh?.results && typeof fresh.results === "object" ? fresh.results as Row : {};
+    const qs = Array.isArray(current.questions) ? current.questions as Row[] : [];
+    const hasAnswerText = qs.some((q) => q?.engines && Object.values(q.engines as Row).some((e: Row) => typeof e?.answer_text === "string" && e.answer_text.trim()));
+    if (!hasAnswerText && !p.allFailed && current.competitor_cleaning == null) {
+      current = { ...current, competitor_cleaning: { at: new Date().toISOString(), model: null, attempts: 0, items_total: 0, items_cleaned: 0, complete: true, errors: [] } };
+      await service.from("ai_audit_runs").update({ results: current }).eq("id", p.runId).eq("status", "processing");
+    }
+    const { data: audit } = await service.from("ai_audits").select("website, lead_id").eq("id", p.auditId).maybeSingle();
+    let site = String(audit?.website ?? "").trim();
+    if (audit?.lead_id && !site) {
+      const { data: lead } = await service.from("outreach_leads").select("website").eq("id", audit.lead_id).maybeSingle();
+      site = String(lead?.website ?? "").trim();
+    }
+    const crawl = current.crawl_check as Row | undefined;
+    const crawlReady = !site || crawl?.status === "complete" || crawl?.status === "unavailable";
+    const cleaningReady = p.allFailed || current.competitor_cleaning?.complete === true;
+    if (crawlReady && cleaningReady) {
+      const { error } = await service.from("ai_audit_runs").update({ status: p.finalStatus }).eq("id", p.runId).eq("status", "processing");
+      if (!error) readyRuns.add(p.runId);
+    } else {
+      await service.from("ai_audit_runs").update({ status: "pending" }).eq("id", p.runId).eq("status", "processing");
+      console.warn(`[process-ai-audit-queue] run ${p.runId} held pending: crawlReady=${crawlReady}, cleaningReady=${cleaningReady}`);
+    }
+  }
+  const auditReady = (auditId: string) => processingRuns.some((p) => p.auditId === auditId && readyRuns.has(p.runId));
+  for (let i = reportJobs.length - 1; i >= 0; i--) if (!auditReady(reportJobs[i].auditId)) reportJobs.splice(i, 1);
+  for (let i = freeCheckJobs.length - 1; i >= 0; i--) if (!auditReady(freeCheckJobs[i].auditId)) freeCheckJobs.splice(i, 1);
+  for (let i = completionSendJobs.length - 1; i >= 0; i--) if (!auditReady(completionSendJobs[i].auditId)) completionSendJobs.splice(i, 1);
+  for (let i = baselineJobs.length - 1; i >= 0; i--) if (!auditReady(baselineJobs[i].auditId)) baselineJobs.splice(i, 1);
 
   // PAID BASELINE chain. After extraction so a finalised snapshot reflects the cleaned
   // competitor data. Deduped per audit, and each call is wrapped: a baseline problem must
