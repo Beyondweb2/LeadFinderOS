@@ -14,4 +14,7 @@ for (const file of writers) {
 }
 assert.match(fs.readFileSync('src/pages/Inbox.tsx', 'utf8'), /WhatsAppTemplateMessage/, 'Inbox uses structured template renderer');
 assert.match(fs.readFileSync('src/hooks/useInbox.ts', 'utf8'), /template_snapshot/, 'Inbox realtime type retains template snapshot');
+const immediate = fs.readFileSync('supabase/functions/send-whatsapp-message/index.ts', 'utf8');
+assert.equal((immediate.match(/language: WA_TEMPLATES\[usedTemplate\]\.lang/g) ?? []).length, 2,
+  'manual preview and send snapshots use the final template registry language, not a block-scoped variable');
 console.log('whatsapp-template-snapshot-paths: all assertions passed');
