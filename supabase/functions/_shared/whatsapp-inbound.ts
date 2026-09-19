@@ -41,8 +41,9 @@ const NO_DOWNGRADE = "(payment_received,replied,interested,price_given,in_delive
 
 /** Best text/body for an inbound message. Text → the text body; a template QUICK-REPLY BUTTON
  *  or an INTERACTIVE reply → the button/list LABEL (so "Yes please" is stored and treated as a
- *  real reply, not "[button]"); any other type (image/audio/document/reaction/…) → a "[type]"
- *  placeholder so the operator can see a reply landed and follow up.
+ *  real reply, not "[button]"); reactions retain their actual emoji and attachments retain any
+ *  caption. Other non-text types fall back to a "[type]" placeholder so the operator can see a
+ *  reply landed and follow up.
  *  ⛔ Load-bearing for the auto-pitch: the arm gate keys on isSubstantiveText(body), which rejects
  *  "[...]" placeholders — so a button reply only triggers a pitch because its label is extracted
  *  HERE. WhatsApp shapes: text→msg.text.body, template button→msg.button.text (payload as
@@ -65,6 +66,20 @@ function bodyFor(msg: Record<string, unknown>): string {
     } | undefined;
     const txt = (it?.button_reply?.title ?? it?.list_reply?.title ?? "").toString().trim();
     if (txt) return txt;
+  }
+  // Reactions are normal inbound customer replies too. Preserve the actual emoji rather than
+  // collapsing it to "[reaction]", so the Inbox transcript matches what the operator received.
+  if (type === "reaction") {
+    const reaction = msg?.reaction as { emoji?: string } | undefined;
+    const emoji = (reaction?.emoji ?? "").toString().trim();
+    if (emoji) return emoji;
+  }
+  // Keep a sender-provided caption beside the stored attachment. The image/video itself is
+  // downloaded separately by saveInboundMedia and rendered from the private media bucket.
+  if (type === "image" || type === "video" || type === "document") {
+    const media = msg?.[type] as { caption?: string } | undefined;
+    const caption = (media?.caption ?? "").toString().trim();
+    if (caption) return caption;
   }
   return `[${type}]`;
 }
