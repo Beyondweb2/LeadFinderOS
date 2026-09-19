@@ -609,7 +609,7 @@ Deno.serve(async (req) => {
         payload,
         /* What the Inbox would store as the transcript — what the prospect reads. */
         body: storedBody,
-        ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: lang, body: storedBody, payload }) } : {}),
+        ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload }) } : {}),
         ...(fellBackReason ? { fell_back: fellBackReason } : {}),
       });
     }
@@ -641,7 +641,7 @@ Deno.serve(async (req) => {
       status,
       test_mode: env.testMode,
       error: sendError,
-      ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: lang, body: storedBody, payload }) } : {}),
+      ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload }) } : {}),
     }).select("*").maybeSingle();
     if (insErr) console.error("[send-whatsapp-message] log insert failed:", insErr.message);
 
