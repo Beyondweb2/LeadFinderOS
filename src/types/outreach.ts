@@ -253,7 +253,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
      un-hides these leads (see OutreachTable's default-hide). Unique label → its own filter group. */
   { value: 'already_visible', label: 'Already Visible' },
   { value: 'price_given', label: 'Price Given' },
-  { value: 'interested', label: 'Interested ⭐' },
+  { value: 'interested', label: 'Interested ⭐ (star only)' },
   { value: 'not_interested', label: 'Not Interested' },
   /* ⚠️ THE FILTER LIST IS A THIRD LABEL SOURCE, and it is the one the operator reads BEFORE
      choosing. It must match the pill, so these carry the same simplification — see
@@ -665,7 +665,7 @@ export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[]
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'report_sent', label: 'Report Sent' },
   { value: 'price_given', label: 'Price Given' },
-  { value: 'interested', label: 'Interested ⭐' },
+  { value: 'interested', label: 'Interested ⭐ (star only)' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'payment_received', label: 'Paid' },
   { value: 'in_delivery', label: 'In Delivery' },

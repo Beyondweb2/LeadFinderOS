@@ -97,9 +97,11 @@ export interface WaConversation {
    *  The pill fires at >= 2/3 (Inbox), a look-before-you-send signal, never an automatic skip. */
   geminiNamed: number | null;
   geminiAnswers: number | null;
+  /** Interested is a separate operator marker, persisted as is_potential_work. */
+  isPotentialWork: boolean;
 }
 
-export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null; contact_name: string | null; hook_followup_queued_at: string | null }
+export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null; contact_name: string | null; hook_followup_queued_at: string | null; is_potential_work: boolean | null }
 
 const convKey = (userId: string | null, phone: string) => `${userId ?? 'unassigned'}::${phone}`;
 
@@ -178,7 +180,7 @@ async function fetchInboxData(previous?: InboxData, essentialOnly = false): Prom
        can be fetched twice and another missed at a page boundary — the same reasoning already
        written above the messages read. */
     fetchAllRows<LeadLite>('Inbox (leads)', (from, to) =>
-      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at')
+      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work')
         .eq('is_archived', false).not('phone', 'is', null)
         .order('id', { ascending: true }).range(from, to)),
     // Per-lead audits + run statuses → the report-ready pill (/a/<auditId>, served live) + the
@@ -515,6 +517,7 @@ export function useInbox() {
         siteVisitedAt: siteVisitedAtByLead.get(leadId) ?? null,
         geminiNamed: geminiByLead.get(leadId)?.named ?? null,
         geminiAnswers: geminiByLead.get(leadId)?.answers ?? null,
+        isPotentialWork: !!lead.is_potential_work,
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
@@ -593,5 +596,10 @@ export function useInbox() {
       prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, status } : l)) } : prev),
     [queryClient, queryKey]);
 
-  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, preview, patchLeadStatus };
+  const patchLeadPotentialWork = useCallback((leadId: string, value = true) =>
+    queryClient.setQueryData<InboxData>(queryKey, (prev) =>
+      prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, is_potential_work: value } : l)) } : prev),
+    [queryClient, queryKey]);
+
+  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, preview, patchLeadStatus, patchLeadPotentialWork };
 }

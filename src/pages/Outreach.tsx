@@ -167,15 +167,18 @@ const Outreach = () => {
 
   const handlePipelineStatusChange = useCallback(async (leadId: string, status: PipelineStatus) => {
     if (isDemoLead(leadId)) return;
-    await updateStatus(leadId, status as any);
-    window.dispatchEvent(new CustomEvent('demo-checklist-pipeline-status-set'));
+    // Interested is a separate operator marker, not a pipeline stage. Keep the current status and
+    // add the tracked/starred flag so the lead can continue through the real pipeline stages.
     if (status === 'interested') {
       const lead = allLeads.find(l => l.id === leadId);
       if (lead && !lead.is_potential_work) {
         await updateLead(leadId, { is_potential_work: true });
         window.dispatchEvent(new CustomEvent('track-lead-added'));
       }
+      return;
     }
+    await updateStatus(leadId, status as any);
+    window.dispatchEvent(new CustomEvent('demo-checklist-pipeline-status-set'));
   }, [updateStatus, updateLead, allLeads]);
 
   if (isLoading) {
@@ -261,6 +264,7 @@ const Outreach = () => {
         onLeadClick={() => {}}
         onStatusChange={(leadId, status) => {
           if (isDemoLead(leadId)) return;
+          if (status === 'interested') return handlePipelineStatusChange(leadId, status);
           return updateStatus(leadId, status);
         }}
         onContactMethodChange={handleContactMethodChange}

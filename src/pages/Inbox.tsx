@@ -35,7 +35,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from '@/lib/utils';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
-import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2 } from 'lucide-react';
+import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
 import {
@@ -348,7 +348,7 @@ function InboundMedia({ message }: { message: WaMessage }) {
 }
 
 const Inbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, isError, send, preview, refetch, patchLeadStatus } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, isError, send, preview, refetch, patchLeadStatus, patchLeadPotentialWork } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
@@ -464,7 +464,9 @@ const Inbox = () => {
      AdminSiteManage earlier; this was the last one. '' means "not set" and the send button stays
      disabled until the operator picks. */
   const [template, setTemplate] = useState('');
-  const [sending, setSending] = useState(false);
+  const [sendingKeys, setSendingKeys] = useState<Set<string>>(new Set());
+  const sendingKeysRef = useRef(new Set<string>());
+  const sending = !!activeKey && sendingKeys.has(activeKey);
   const [newOpen, setNewOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
@@ -616,7 +618,18 @@ const Inbox = () => {
   // Manual override — no forward-only guard — EXCEPT a confirm when moving a paying
   // customer AWAY from payment_received (mis-click protection).
   const handleSetStatus = async (c: WaConversation, status: PipelineStatus) => {
-    if (!c.leadId || status === c.leadStatus) return;
+    if (!c.leadId || (status === c.leadStatus && (status !== 'interested' || c.isPotentialWork))) return;
+    // “Interested” is an operator marker, not a pipeline stage. Preserve the current status and
+    // persist the separate tracked/starred flag instead.
+    if (status === 'interested') {
+      const { error } = await (supabase as unknown as { from: (t: string) => any })
+        .from('outreach_leads').update({ is_potential_work: true }).eq('id', c.leadId);
+      if (error) { toast({ title: 'Could not mark interested', description: error.message, variant: 'destructive' }); return; }
+      patchLeadPotentialWork(c.leadId, true);
+      setSynthetic((s) => (s && s.leadId === c.leadId ? { ...s, isPotentialWork: true } : s));
+      toast({ title: 'Marked interested', description: 'The pipeline status was left unchanged.' });
+      return;
+    }
     if (c.leadStatus === 'payment_received' && status !== 'payment_received') {
       if (!window.confirm(`${c.label} is marked Paid. Change it to "${status.replace(/_/g, ' ')}"? This removes it from the paid state.`)) return;
     }
@@ -1184,7 +1197,7 @@ const Inbox = () => {
         /* A freshly-opened thread has no messages, so no report link was sent and no engagement is
            attributable yet; a lead with real engagement has real messages and a real conversation. */
         reportOpenedAt: null, siteVisitedAt: null,
-        geminiNamed: null, geminiAnswers: null,
+        geminiNamed: null, geminiAnswers: null, isPotentialWork: !!lead.is_potential_work,
       };
       setSynthetic(synth);
       setActiveKey(key);
@@ -1222,7 +1235,8 @@ const Inbox = () => {
     // the composer's Enter key and the template picker can both reach here, and two taps inside the
     // same tick would both pass a disabled check that has not re-rendered yet. A template send is
     // not repeatable-for-free, so the guard lives at the top of the action itself.
-    if (sending) return false;
+    const sendKey = active.key;
+    if (sendingKeysRef.current.has(sendKey)) return false;
     // Explicit template send (asTemplate=true, from the WhatsApp-template picker) works in ANY
     // window state; otherwise fall back to the window default (out-of-window → template, in → text).
     const useTemplate = asTemplate ?? !win.open;
@@ -1241,34 +1255,21 @@ const Inbox = () => {
     }
     const body = (freeText ?? text).trim();
     if (!useTemplate && !body) return false;
-    /* CONFIRM A TEMPLATE SEND. A template goes to a real business the moment it is tapped and
-       cannot be recalled, so it gets the same treatment as the audit button above: a plain
-       window.confirm naming exactly what is about to happen and to whom.
-       Free-form replies are NOT confirmed — they are inside an open conversation, cheap to correct,
-       and a prompt on every message would be noise people learn to dismiss. */
-    let allowResend = false;
-    if (useTemplate) {
-      const label = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
-      const who = activeLead?.business_name || active.label;
-      // Already had THIS template? The thread is already loaded, so this needs no extra query.
-      // A repeat is legitimate (they asked again, the first went to a dead handset) but it must be
-      // a decision, not a slip — so the wording says so, and only then is the override sent.
-      const alreadySent = thread.some((m) => m.direction === 'outbound' && m.template_name === template);
-      const question = alreadySent
-        ? `${who} has already had "${label}".\n\nSend it AGAIN?`
-        : `Send "${label}" to ${who}?`;
-      if (!window.confirm(question)) return false;
-      allowResend = alreadySent;
-    }
-    setSending(true);
+    // Template sends are deliberate button actions; do not add a second confirmation step.
+    // Repeats still pass the explicit server override automatically so removing the browser prompt
+    // does not turn a valid repeat into a confusing duplicate refusal.
+    const alreadySent = useTemplate && thread.some((m) => m.direction === 'outbound' && m.template_name === template);
+    sendingKeysRef.current.add(sendKey);
+    setSendingKeys((prev) => new Set(prev).add(sendKey));
     const res = await send({
       phone: active.phone,
       leadId: active.leadId,
       body: useTemplate ? undefined : body,
       templateName: useTemplate ? template : undefined,
-      allowResend,
+      allowResend: alreadySent,
     });
-    setSending(false);
+    sendingKeysRef.current.delete(sendKey);
+    setSendingKeys((prev) => { const next = new Set(prev); next.delete(sendKey); return next; });
     if (!res.ok) {
       const map: Record<string, string> = {
         window_closed: 'The 24h reply window is closed — send an approved template instead.',
@@ -1286,10 +1287,10 @@ const Inbox = () => {
     }
     /* The composer clears ITSELF on a true return (and clears its own draft). This still runs for
        the template path, which has no composer text to clear but may hold a draft. */
-    setText('');
-    setSynthetic(null); // the real conversation now exists under the same key
+    setDrafts((prev) => setDraft(prev, sendKey, ''));
+    if (activeKey === sendKey) setSynthetic(null); // the real conversation now exists under the same key
     toast({ title: res.simulated ? 'Sent (simulated — test mode)' : 'Sent ✓' });
-    setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
+    if (activeKey === sendKey) setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
     return true;
   };
 
@@ -1537,6 +1538,7 @@ const Inbox = () => {
                   )}
                   {c.unassigned && <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
                   <span className="truncate">{c.unassigned ? `Unassigned · +${c.phone}` : c.label}</span>
+                  {!c.unassigned && c.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" title="Interested" />}
                 </span>
                 {c.lastMessage && <span className="shrink-0 text-[10px] text-muted-foreground">{relTime(c.lastMessageAt)}</span>}
               </div>
@@ -1574,7 +1576,10 @@ const Inbox = () => {
               {/* Thread header */}
               <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{active.unassigned ? `Unassigned · +${active.phone}` : active.label}</p>
+                  <p className="flex items-center gap-1 truncate text-sm font-semibold">
+                    <span className="truncate">{active.unassigned ? `Unassigned · +${active.phone}` : active.label}</span>
+                    {!active.unassigned && active.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" title="Interested" />}
+                  </p>
                   {/* ⛔ SAME PILL, SAME STATE, SAME HANDLER as the list pill below — deliberately NOT a
                       second copy. `active` IS the list's own conversation object (conversations.find
                       by activeKey), and handleSetStatus → patchLeadStatus patches `leads` by leadId in

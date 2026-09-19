@@ -11,7 +11,11 @@ function ymd(d: Date): string {
 
 /** The DB patch for a status change (no side-effects, no I/O). */
 export function statusUpdatePatch(status: LeadStatus): Partial<OutreachLead> {
-  const updates: Partial<OutreachLead> = { status };
+  // Interested is a separate operator marker, not a pipeline stage. Preserve the current status and
+  // persist the gold-star/tracked flag instead.
+  const updates: Partial<OutreachLead> = status === 'interested'
+    ? { is_potential_work: true }
+    : { status };
   /* ⛔ "Replied" NO LONGER WRITES A 'send_draft' NEXT ACTION (2026-09-13). It piled up: the
      inbound handler wrote the same value on every reply and nothing cleared it on answering, so
      625 leads carried an overdue task the card had to hide. "They replied and you have not

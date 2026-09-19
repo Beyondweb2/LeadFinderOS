@@ -2476,8 +2476,8 @@ export function OutreachTable({
                               Google couldn&rsquo;t confirm the town
                             </Badge>
                           )}
-                          {lead.status === 'interested' && (
-                            <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+                          {lead.is_potential_work && (
+                            <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" title="Interested" />
                           )}
                           {!!lead.notes && lead.notes.trim().length > 0 && (
                             <span title="Has a note" className="inline-flex flex-shrink-0">
