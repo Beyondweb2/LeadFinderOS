@@ -342,11 +342,18 @@ export function mainSiteFault(s: CrawlSignals): string | null {
 export const NO_WEBSITE_FAULT_LINE =
   "You don't currently have a website, which means Google and other AI tools have very little first-party information to use when deciding whether to recommend your business.";
 
+/** Used only when a website was successfully crawled and the completed AI audit still shows a
+ *  visibility gap. A clean crawl is not itself a fault, so this is never used for a pending,
+ *  failed, unavailable, stale or pre-v2 crawl. */
+export const CLEAN_SITE_FAULT_LINE =
+  "Right now, AI has stronger reasons to recommend other local businesses ahead of you.";
+
 /** THE ONE RULE for audit_followup_fault's {{6}} AND for whether the template may be offered, so the
  *  sender's value and the picker's gate can never disagree (Paul, 2026-09-17):
  *   · no website          → the no-website line (always non-empty → the template IS available);
  *   · a website + a fault → the main crawl fault (fresh + v2 gate, via crawlResultFaults);
- *   · a website, no fault → null (the template is NOT offered / not sendable).
+ *   · a website + successful clean crawl + measured visibility gap → CLEAN_SITE_FAULT_LINE;
+ *   · a website, no usable crawl → null (the template is NOT offered / not sendable).
  *  A caller treats a non-null return as "offer it, and this is {{6}}"; null as "not this lead". */
 export function siteFaultLine(
   hasWebsite: boolean,
@@ -358,9 +365,32 @@ export function siteFaultLine(
   return faults.length ? faults[0].detail : null;
 }
 
+/** True when a completed run has measured the business as missing from at least one AI answer. */
+export function auditShowsVisibilityGap(
+  runs: Array<{ status?: string | null; mention_rate?: number | null; audit_summary?: { mention_rate?: number | null } | null; results?: unknown }> = [],
+): boolean {
+  return runs.some((run) => {
+    if (run.status !== "complete" && run.status !== "capped") return false;
+    const summary = run.results && typeof run.results === "object"
+      ? (run.results as { summary?: { mention_rate?: number | null } }).summary
+      : undefined;
+    const rate = typeof run.mention_rate === "number" ? run.mention_rate : run.audit_summary?.mention_rate ?? summary?.mention_rate;
+    return typeof rate === "number" && Number.isFinite(rate) && rate < 1;
+  });
+}
+
+/** True when the stored result is a current, successful crawl, including a clean one. */
+function isSuccessfulCurrentCrawl(
+  result: { version?: number; status?: string; signals?: CrawlSignals } | null | undefined,
+  createdAtMs: number,
+): boolean {
+  if (!result?.signals || result.signals.fetchFailed || result.status === "unavailable") return false;
+  return (Date.now() - createdAtMs) < CRAWL_FRESH_MS && (result.version ?? 1) >= CRAWL_CHECK_VERSION;
+}
+
 /** A checked crawl result from either the completed audit run or the lead-level cache. */
 export interface SiteFaultSource {
-  result: { version?: number; signals?: CrawlSignals } | null | undefined;
+  result: { version?: number; status?: string; signals?: CrawlSignals } | null | undefined;
   createdAtMs: number;
   /** An explicit crawl failure is never usable as a message fault. */
   complete?: boolean;
@@ -371,14 +401,17 @@ export function resolveSiteFault(
   hasWebsite: boolean,
   auditRunCrawls: SiteFaultSource[] = [],
   leadCrawl?: SiteFaultSource | null,
+  auditVisibilityGap = false,
 ): string | null {
   if (!hasWebsite) return NO_WEBSITE_FAULT_LINE;
+  let successfulCleanCrawl = false;
   for (const source of [...auditRunCrawls, ...(leadCrawl ? [leadCrawl] : [])]) {
     if (source.complete === false) continue;
     const fault = siteFaultLine(true, source.result, source.createdAtMs);
     if (fault) return fault;
+    if (isSuccessfulCurrentCrawl(source.result, source.createdAtMs)) successfulCleanCrawl = true;
   }
-  return null;
+  return auditVisibilityGap && successfulCleanCrawl ? CLEAN_SITE_FAULT_LINE : null;
 }
 
 /** Build the paste-ready verdict from the signals — the single worst problem as the headline, in a

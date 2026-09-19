@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Loader2, Lock, Play, RefreshCw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
+import { AuditQuestionEditor, cleanAuditQuestions } from '@/components/AuditQuestionEditor';
 import { useToast } from '@/hooks/use-toast';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
 
@@ -11,7 +11,7 @@ export default function PaidBaselineSetup() {
   const { leadId = '' } = useParams<{ leadId: string }>();
   const { toast } = useToast();
   const [baseline, setBaseline] = useState<PaidBaseline | null>(null);
-  const [draft, setDraft] = useState('');
+  const [questions, setQuestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -21,7 +21,7 @@ export default function PaidBaselineSetup() {
     try {
       const next = await invokePaidBaseline('get', leadId);
       setBaseline(next);
-      setDraft(next.questions.join('\n'));
+      setQuestions(next.questions);
     } catch (e) {
       toast({ title: 'Could not load baseline', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
     } finally { setLoading(false); }
@@ -33,8 +33,11 @@ export default function PaidBaselineSetup() {
     try {
       const next = await invokePaidBaseline(action, leadId, extra);
       setBaseline(next);
-      setDraft(next.questions.join('\n'));
-      toast({ title: action === 'run' ? 'Baseline queued' : 'Baseline updated' });
+      setQuestions(next.questions);
+      toast({
+        title: action === 'run' ? (next.status === 'running' ? 'Baseline queued' : 'Baseline approved but waiting') : 'Baseline updated',
+        ...(action === 'run' && next.status !== 'running' ? { description: next.start_note || 'Complete the required client context, then retry.' } : {}),
+      });
     } catch (e) {
       toast({ title: 'Could not update baseline', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
     } finally { setBusy(null); }
@@ -44,7 +47,7 @@ export default function PaidBaselineSetup() {
   if (!baseline) return <div className="mx-auto max-w-2xl py-12 text-center text-sm text-muted-foreground">No paid baseline found.</div>;
 
   const locked = ['approved', 'running', 'complete'].includes(baseline.status);
-  const lines = draft.split(/\r?\n/).map((q) => q.trim()).filter(Boolean);
+  const lines = cleanAuditQuestions(questions);
   return (
     <div className="mx-auto max-w-4xl space-y-4 py-6">
       <Link to="/dashboard" className="text-xs text-muted-foreground hover:text-foreground">← Dashboard</Link>
@@ -70,7 +73,7 @@ export default function PaidBaselineSetup() {
           <p className="text-xs text-muted-foreground">These exact questions are measured now and replayed at week 4. Review them before approving.</p>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} disabled={locked} rows={14} placeholder="One customer question per line" />
+          <AuditQuestionEditor questions={questions} onChange={setQuestions} disabled={locked} busy={!!busy}/>
           <div className="flex flex-wrap gap-2">
             {!locked && <Button variant="outline" onClick={() => void act('save', { questions: lines })} disabled={!!busy || lines.length === 0}><Save className="mr-2 h-4 w-4" /> Save edits</Button>}
             {!locked && <Button variant="outline" onClick={() => void act('generate', { force: true })} disabled={!!busy}><RefreshCw className="mr-2 h-4 w-4" /> Regenerate draft</Button>}

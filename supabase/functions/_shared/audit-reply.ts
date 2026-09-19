@@ -11,7 +11,7 @@ import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competit
 import { usableRivals, excludeSelfRivals } from "../../../src/lib/rivalHook.ts";
 import { nameMatches } from "../../../src/lib/nameMatch.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
-import { resolveSiteFault, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
+import { auditShowsVisibilityGap, resolveSiteFault, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
 /* ⛔ THE PROSPECT-FACING ORIGIN. findable.live/report/<auditId> — a Pages Function proxy that forces
@@ -266,10 +266,12 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
         complete: crawl?.status === "complete",
       };
     });
+  const auditVisibilityGap = auditShowsVisibilityGap(audit.ai_audit_runs ?? []);
   const siteFault = resolveSiteFault(
     hasWebsite,
     runSources,
     cc ? { result: cc.result ?? null, createdAtMs: new Date(cc.created_at).getTime() } : null,
+    auditVisibilityGap,
   );
   return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault };
 }

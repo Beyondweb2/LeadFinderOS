@@ -15,10 +15,12 @@ export type PaidBaseline = {
     area_sources?: Record<string, string[]>;
   };
   crawl_context_at?: string | null;
+  crawl_context_source?: 'run' | 'lead' | null;
   status: 'needs_questions' | 'needs_approval' | 'approved' | 'running' | 'complete' | 'failed';
   questions: string[];
   approved_at: string | null;
   audit_id?: string;
+  start_note?: string;
 };
 
 const FRIENDLY_ERRORS: Record<string, string> = {
@@ -31,6 +33,12 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   questions_required: 'Add at least one question before approving the baseline.',
   question_generation_failed: 'Question generation failed. Please retry.',
   no_questions_generated: 'No usable questions were generated. Please retry.',
+  baseline_state_changed: 'Baseline setup changed in another session. Reload it and try again.',
+  paid_onboarding_update_conflict: 'The paid onboarding record changed or could not be updated. Reload and try again.',
+  lead_update_conflict: 'The linked client record changed or could not be updated. Reload and try again.',
+  baseline_request_failed: 'Could not load or update baseline setup. Please retry.',
+  no_business_type: 'Add a business category before starting the baseline.',
+  no_location: 'Add a primary location before starting the baseline.',
 };
 
 /** One client-side request shape and one useful error path for every paid-baseline entry point. */

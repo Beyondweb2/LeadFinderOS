@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/lib/templateAttribution';
-import { resolveSiteFault } from '@/lib/crawlCheck';
+import { auditShowsVisibilityGap, resolveSiteFault } from '@/lib/crawlCheck';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
@@ -14,6 +14,23 @@ import type { CrawlStoredResult } from '@/lib/crawlResult';
 const sb = supabase as unknown as { from: (t: string) => any; functions: typeof supabase.functions };
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/* The report-ready audit read is an Inbox enhancement, but it is also the source for the
+ * audit-template gate. Keep the richer projection (crawl + visibility summary) and fall back to
+ * the historically working projection if a deployed PostgREST schema rejects one of the optional
+ * JSON projections. Without this fallback optionalInboxRows turns the error into an empty list,
+ * making completed reports look missing and disabling every audit template. */
+const AUDIT_SELECT = 'id, short_code, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status, run_number, created_at, mention_rate, audit_summary:results->summary, crawl_check:results->crawl_check)';
+const AUDIT_SELECT_FALLBACK = 'id, short_code, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status, run_number, created_at, crawl_check:results->crawl_check)';
+
+async function fetchInboxAudits(from: number, to: number) {
+  const rich = await sb.from('ai_audits').select(AUDIT_SELECT)
+    .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
+  if (!rich.error) return rich;
+  console.warn('Inbox (audits): rich projection failed; retrying report-ready projection', rich.error);
+  return sb.from('ai_audits').select(AUDIT_SELECT_FALLBACK)
+    .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
+}
 
 /** Out-of-window reply templates (mirror the edge allowlist). */
 /* 🔴 THE SENDABLE LIST LIVES IN ONE PLACE: `WHATSAPP_TEMPLATES` (src/types/outreach.ts).
@@ -112,7 +129,7 @@ export function windowFor(lastInboundAt: string | null): { open: boolean; hoursL
 interface InboxData {
   messages: WaMessage[];
   leads: LeadLite[];
-  audits: Array<{ id: string; short_code: string | null; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; ai_audit_runs: Array<{ status: string | null; run_number: number | null; created_at: string | null; crawl_check: (CrawlStoredResult & { status?: string }) | null }> | null }>;
+  audits: Array<{ id: string; short_code: string | null; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; ai_audit_runs: Array<{ status: string | null; run_number: number | null; created_at: string | null; mention_rate: number | null; audit_summary: { mention_rate?: number | null } | null; crawl_check: (CrawlStoredResult & { status?: string }) | null }> | null }>;
   /** Sign-up page landings (findable-onboarding's prefill hook) → the SITE pill. */
   pageHits: Array<{ lead_id: string | null; created_at: string }>;
   /** Per-audit Gemini named/answers, from the audit_gemini_signal view (aggregated server-side so the
@@ -168,9 +185,7 @@ async function fetchInboxData(previous?: InboxData, essentialOnly = false): Prom
     // audit_reply guard + the running-audit spinner. Newest-first; RLS scopes to own audits.
     /* ⛔ PAGINATED — truncation here would silently drop the report-ready pill and the audit_reply
        guard for whichever leads fell outside the window. Same id tiebreaker. */
-    essentialOnly ? { rows: previous?.audits ?? NO_AUDITS } : optionalInboxRows<InboxData['audits'][number]>(fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', (from, to) =>
-      sb.from('ai_audits').select('id, short_code, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status, run_number, created_at, crawl_check:results->crawl_check)')
-        .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to))),
+    essentialOnly ? { rows: previous?.audits ?? NO_AUDITS } : optionalInboxRows<InboxData['audits'][number]>(fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', fetchInboxAudits)),
     /* Sign-up page hits → the SITE pill. The SAME table and the SAME paginated read the campaign
        card uses (id tiebreaker); the SITE_TRACKING_START cutoff is applied in leadSiteVisitedAt. A
        failed read degrades to no pill, never to a wrong one. */
@@ -365,7 +380,8 @@ export function useInbox() {
         .filter((r) => r.status === 'complete' || r.status === 'capped')
         .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))
         .map((r) => ({ result: r.crawl_check, createdAtMs: r.crawl_check?.checked_at ? new Date(r.crawl_check.checked_at).getTime() : r.created_at ? new Date(r.created_at).getTime() : 0, complete: r.crawl_check?.status === 'complete' }));
-      if (resolveSiteFault(hasWebsite, runSources, c ? { result: c.result, createdAtMs: new Date(c.created_at).getTime() } : null) !== null) s.add(l.id);
+      const visibilityGap = auditShowsVisibilityGap(audit?.ai_audit_runs ?? []);
+      if (resolveSiteFault(hasWebsite, runSources, c ? { result: c.result, createdAtMs: new Date(c.created_at).getTime() } : null, visibilityGap) !== null) s.add(l.id);
     }
     return s;
   }, [leads, audits, crawlByLeadId]);

@@ -2,8 +2,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { BASELINE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
-import { mergeClientContext } from "../../../src/lib/clientContext.ts";
-import { CRAWL_CHECK_VERSION, CRAWL_FRESH_MS } from "../../../src/lib/crawlCheck.ts";
+import { mergeClientContext, selectClientCrawlContext } from "../../../src/lib/clientContext.ts";
+import {
+  EDITABLE_BASELINE_STATUS_FILTER,
+  normalizePaidBaselineStatus,
+  paidBaselineRunState,
+  requireUpdatedRow,
+} from "../../../src/lib/paidBaselineState.ts";
+import { buildAuditPreviewRequest } from "../../../src/lib/auditQuestionContext.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,8 +20,6 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 });
 const errMsg = (e: unknown) => e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e);
 
-type BaselineStatus = "needs_questions" | "needs_approval" | "approved" | "running" | "complete" | "failed";
-
 function cleanQuestions(value: unknown): string[] {
   const raw = Array.isArray(value) ? value : [];
   return dedupeQuestions(raw.filter((q): q is string => typeof q === "string")
@@ -25,16 +29,6 @@ function cleanQuestions(value: unknown): string[] {
 function cleanList(value: unknown): string[] {
   const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   return [...new Set(raw.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean))];
-}
-
-function currentCrawlInfo(row: Record<string, unknown> | null | undefined, website: string): { services?: unknown; towns?: unknown } | null {
-  const result = row?.result as { version?: number; url?: string; siteInfo?: { services?: unknown; towns?: unknown } } | null | undefined;
-  const created = typeof row?.created_at === "string" ? Date.parse(row.created_at) : NaN;
-  if (!result?.siteInfo || (result.version ?? 1) < CRAWL_CHECK_VERSION || !Number.isFinite(created) || Date.now() - created > CRAWL_FRESH_MS) return null;
-  try {
-    if (website && result.url && new URL(website).origin !== new URL(result.url).origin) return null;
-  } catch { return null; }
-  return result.siteInfo;
 }
 
 async function operator(req: Request) {
@@ -72,27 +66,38 @@ Deno.serve(async (req) => {
     if (!row?.id || !row.lead_id) return json({ ok: false, error: "paid_onboarding_not_found" }, 404);
 
     const { data: lead, error: leadErr } = await service.from("outreach_leads")
-      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included, areas_wanted")
+      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included")
       .eq("id", row.lead_id).eq("user_id", user.id).maybeSingle();
     if (leadErr) throw leadErr;
     if (!lead) return json({ ok: false, error: "lead_not_found" }, 404);
 
     const { data: crawlRow } = await service.from("lead_crawl_checks")
       .select("result, created_at").eq("lead_id", row.lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const crawlInfo = currentCrawlInfo(crawlRow as Record<string, unknown> | null, String(lead.website || ""));
+    const { data: recentAudits } = await service.from("ai_audits").select("id").eq("lead_id", row.lead_id).order("created_at", { ascending: false }).limit(5);
+    const auditIds = (recentAudits ?? []).map((audit: { id?: string }) => audit.id).filter((id): id is string => !!id);
+    const { data: recentRuns } = auditIds.length
+      ? await service.from("ai_audit_runs").select("results, created_at").in("audit_id", auditIds).order("created_at", { ascending: false }).limit(10)
+      : { data: [] };
+    const selectedCrawl = selectClientCrawlContext({
+      runCrawls: (recentRuns ?? []).map((run: { results?: { crawl_check?: unknown }; created_at?: string }) => ({ result: run.results?.crawl_check, created_at: run.created_at })),
+      leadCrawl: crawlRow as Record<string, unknown> | null,
+      website: String(lead.website || ""),
+    });
+    const crawlInfo = selectedCrawl?.info ?? null;
     const merged = mergeClientContext({
       onboarding: { confirmed_location: row.confirmed_location, services: row.services, services_list: row.services_list, areas_list: row.areas_list, areas_wanted: row.areas_wanted },
       lead: lead as Record<string, unknown>,
       crawl: crawlInfo,
     });
-    const status = (String(row.baseline_status ?? "needs_questions") || "needs_questions") as BaselineStatus;
+    const status = normalizePaidBaselineStatus(row.baseline_status);
     const questions = cleanQuestions(row.baseline_questions);
     const details = {
-      onboarding_id: row.id, lead_id: row.lead_id, business_name: lead.business_name,
+      onboarding_id: row.id, lead_id: row.lead_id, business_name: merged.business_name,
       business_type: merged.business_category, location: merged.primary_location,
       services: merged.services.join(", "), services_list: merged.services, areas_list: merged.service_areas, website: merged.website,
       context_sources: { service_sources: merged.service_sources, area_sources: merged.area_sources },
-      crawl_context_at: crawlInfo ? crawlRow?.created_at ?? null : null,
+      crawl_context_at: selectedCrawl?.created_at ?? null,
+      crawl_context_source: selectedCrawl?.source ?? null,
       status, questions, approved_at: row.baseline_approved_at || null,
     };
     if (action === "get") return json({ ok: true, baseline: details });
@@ -112,14 +117,16 @@ Deno.serve(async (req) => {
       const website = typeof body.website === "string" ? body.website.trim() : String(details.website ?? "").trim();
       if (!location || !businessType) return json({ ok: false, error: "location_and_business_type_required" }, 400);
       const now = new Date().toISOString();
-      const { error: onErr } = await service.from("onboarding_responses").update({
+      const { data: updatedOnboarding, error: onErr } = await service.from("onboarding_responses").update({
         confirmed_location: location, services, services_list: serviceList, areas_list: areas, updated_at: now,
-      }).eq("id", row.id).eq("status", "paid");
+      }).eq("id", row.id).eq("status", "paid").select("id").maybeSingle();
       if (onErr) throw onErr;
-      const { error: leadUpdateErr } = await service.from("outreach_leads").update({
+      requireUpdatedRow(updatedOnboarding, "paid_onboarding_update_conflict");
+      const { data: updatedLead, error: leadUpdateErr } = await service.from("outreach_leads").update({
         category: businessType, website: website || null, search_location: location,
-      }).eq("id", lead.id).eq("user_id", user.id);
+      }).eq("id", lead.id).eq("user_id", user.id).select("id").maybeSingle();
       if (leadUpdateErr) throw leadUpdateErr;
+      requireUpdatedRow(updatedLead, "lead_update_conflict");
       return json({ ok: true, baseline: { ...details, location, services, services_list: serviceList, areas_list: areas, business_type: businessType, website } });
     }
 
@@ -140,14 +147,16 @@ Deno.serve(async (req) => {
             "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
             "x-internal-job": "1",
           },
-          body: JSON.stringify({
-            preview: true, purpose: "baseline", user_id: user.id, lead_id: lead.id,
-            business_name: lead.business_name,
-            business_type: contextBusinessType || "business",
-            location_text: contextLocation, specialisms: contextServices || contextServiceList.join(", "),
-            areas: contextAreas, website: contextWebsite || null, has_website: Boolean(contextWebsite), country: lead.country || null,
-            question_count: BASELINE_QUESTIONS,
-          }),
+          body: JSON.stringify(buildAuditPreviewRequest({
+            business_name: String(lead.business_name ?? ""),
+            business_category: String(contextBusinessType ?? ""),
+            primary_location: String(contextLocation ?? ""),
+            country: String(lead.country ?? ""),
+            website: String(contextWebsite ?? ""),
+            services: contextServiceList.length ? contextServiceList : cleanList(contextServices),
+            service_areas: contextAreas,
+            specialisms: [],
+          }, { questionCount: BASELINE_QUESTIONS, purpose: "baseline", userId: user.id, leadId: String(lead.id) })),
         });
         const payload = await preview.json().catch(() => ({}));
         if (!preview.ok || !payload?.ok) {
@@ -157,10 +166,11 @@ Deno.serve(async (req) => {
         next = cleanQuestions(payload.questions);
       }
       if (next.length === 0) return json({ ok: false, error: "no_questions_generated" }, 422);
-      const { error } = await service.from("onboarding_responses").update({
+      const { data: updated, error } = await service.from("onboarding_responses").update({
         baseline_questions: next, baseline_status: "needs_approval", updated_at: new Date().toISOString(),
-      }).eq("id", row.id).eq("status", "paid").in("baseline_status", ["needs_questions", "needs_approval", "failed"]);
+      }).eq("id", row.id).eq("status", "paid").or(EDITABLE_BASELINE_STATUS_FILTER).select("id").maybeSingle();
       if (error) throw error;
+      requireUpdatedRow(updated, "baseline_state_changed");
       return json({ ok: true, baseline: { ...details, status: "needs_approval", questions: next } });
     }
 
@@ -168,17 +178,21 @@ Deno.serve(async (req) => {
       if (["approved", "running", "complete"].includes(status)) return json({ ok: false, error: "baseline_questions_locked" }, 409);
       next = cleanQuestions(body.questions);
       if (next.length === 0 || next.length > 40) return json({ ok: false, error: "questions_must_be_between_1_and_40" }, 400);
-      const { error } = await service.from("onboarding_responses").update({ baseline_questions: next, baseline_status: "needs_approval", updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "paid");
+      const { data: updated, error } = await service.from("onboarding_responses").update({ baseline_questions: next, baseline_status: "needs_approval", updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "paid").select("id").maybeSingle();
       if (error) throw error;
+      requireUpdatedRow(updated, "paid_onboarding_update_conflict");
       return json({ ok: true, baseline: { ...details, status: "needs_approval", questions: next } });
     }
 
     if (action === "approve") {
+      next = cleanQuestions(body.questions);
       if (next.length === 0) return json({ ok: false, error: "questions_required" }, 400);
-      const { error } = await service.from("onboarding_responses").update({
+      if (next.length > 40) return json({ ok: false, error: "questions_must_be_between_1_and_40" }, 400);
+      const { data: updated, error } = await service.from("onboarding_responses").update({
         baseline_questions: next, baseline_status: "approved", baseline_approved_at: new Date().toISOString(), baseline_approved_by: user.id, updated_at: new Date().toISOString(),
-      }).eq("id", row.id).eq("status", "paid").in("baseline_status", ["needs_questions", "needs_approval", "failed"]);
+      }).eq("id", row.id).eq("status", "paid").or(EDITABLE_BASELINE_STATUS_FILTER).select("id").maybeSingle();
       if (error) throw error;
+      requireUpdatedRow(updated, "baseline_state_changed");
       return json({ ok: true, baseline: { ...details, status: "approved", questions: next } });
     }
 
@@ -187,11 +201,16 @@ Deno.serve(async (req) => {
     const started = await startPaidBaseline(service, String(row.id), "operator");
     if (!started.ok) {
       await service.from("onboarding_responses").update({ baseline_status: "failed", updated_at: new Date().toISOString() }).eq("id", row.id);
-      return json({ ok: false, error: started.error || "baseline_start_failed" }, 502);
+      return json({ ok: false, error: started.error || started.skipped || "baseline_start_failed" }, 502);
     }
-    return json({ ok: true, baseline: { ...details, status: "running", audit_id: started.audit_id }, skipped: started.skipped || null });
+    const runState = paidBaselineRunState(started);
+    return json({ ok: true, baseline: { ...details, ...runState }, skipped: started.skipped || null });
   } catch (e) {
     console.error("[paid-baseline]", errMsg(e));
-    return json({ ok: false, error: "server_error" }, 500);
+    const code = errMsg(e);
+    if (["baseline_state_changed", "paid_onboarding_update_conflict", "lead_update_conflict"].includes(code)) {
+      return json({ ok: false, error: code }, 409);
+    }
+    return json({ ok: false, error: "baseline_request_failed" }, 500);
   }
 });

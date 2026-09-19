@@ -17,6 +17,8 @@ const checks: Array<[string, boolean]> = [
   ["crawl stores findings on the exact audit run", crawl.includes("crawl_check") && crawl.includes('eq("id", runId)')],
   ["report prefers exact-run crawl findings", report.includes("runCrawl") && report.includes("data.crawlFaults")],
   ["queue gates terminal status on readiness", queue.includes("readyRuns") && queue.includes('status: "pending"'),],
+  ["no-website audits persist an explicit crawl-unavailable reason", queue.includes('reason: "no_website"')],
+  ["crawl failures are terminally distinguished from clean results", crawl.includes('status: signals.fetchFailed ? "unavailable" : "complete"')],
   ["Inbox refreshes when persisted crawl or audit-run state changes", inbox.includes("table: 'lead_crawl_checks'") && inbox.includes("table: 'ai_audit_runs'")],
   ["Inbox crawl control exposes running state and blocks duplicate clicks", crawlButton.includes("iconOnly") && crawlButton.includes("disabled={running}") && crawlButton.includes("animate-spin")],
 ];

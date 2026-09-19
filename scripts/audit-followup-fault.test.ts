@@ -13,7 +13,7 @@ import { WA_TEMPLATE_REQS, getTemplateSendability } from "../src/lib/whatsappTem
 import { CONTINUATION_TEMPLATES } from "../src/lib/coldOutreach.ts";
 import { REPORT_LINK_TEMPLATES } from "../src/lib/templateAttribution.ts";
 import { buildsFromAudit, unsuppliedVars } from "../src/lib/templateRouting.ts";
-import { siteFaultLine, resolveSiteFault, NO_WEBSITE_FAULT_LINE, CRAWL_CHECK_VERSION, type CrawlSignals } from "../src/lib/crawlCheck.ts";
+import { siteFaultLine, resolveSiteFault, NO_WEBSITE_FAULT_LINE, CLEAN_SITE_FAULT_LINE, CRAWL_CHECK_VERSION, auditShowsVisibilityGap, type CrawlSignals } from "../src/lib/crawlCheck.ts";
 
 let f = 0;
 const ok = (c: boolean, m: string) => { console.log(`${c ? "PASS" : "FAIL"} ${m}`); if (!c) f++; };
@@ -125,6 +125,13 @@ ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: CLEAN }, now) ==
 ok(siteFaultLine(true, null, 0) === null, "website + no crawl at all → null (not offered)");
 ok(siteFaultLine(true, { version: 1, signals: FAULTY }, now) === null, "website + a PRE-v2 crawl → null (its findings aren't trusted)");
 ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: FAULTY }, now - 40 * 86_400_000) === null, "website + a STALE crawl → null");
+ok(resolveSiteFault(true, [{ result: { status: "complete", version: CRAWL_CHECK_VERSION, signals: CLEAN }, createdAtMs: now, complete: true }], null, true) === CLEAN_SITE_FAULT_LINE,
+  "website + successful clean crawl + measured visibility gap → the exact clean-site fallback");
+ok(resolveSiteFault(true, [{ result: { status: "unavailable", version: CRAWL_CHECK_VERSION, signals: CLEAN }, createdAtMs: now, complete: false }], null, true) === null,
+  "website + unavailable crawl + visibility gap → unavailable (never clean fallback)");
+ok(resolveSiteFault(true, [], null, true) === null, "website + no crawl + visibility gap → unavailable (never clean fallback)");
+ok(auditShowsVisibilityGap([{ status: "complete", mention_rate: 0 }]), "zero mention rate is a visibility gap");
+ok(!auditShowsVisibilityGap([{ status: "complete", mention_rate: 1 }]), "fully named audit is not a visibility gap");
 
 console.log("\nRUN-LEVEL SOURCE OF TRUTH");
 ok(

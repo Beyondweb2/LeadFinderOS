@@ -91,7 +91,7 @@ ok(!/await startFullMeasure\(service, audit\)/.test(baselineSrc), "normal paid f
 console.log("\n── SOURCE: THE SERVER MAKES A MEASUREMENT DISJOINT AND ENFORCES THE ORDER ──");
 ok(/import \{ excludeAsked, overAskFor \} from "\.\.\/\.\.\/\.\.\/src\/lib\/fullMeasure\.ts";/.test(serverSrc), "create-ai-audit imports the pure helpers with an explicit .ts extension");
 ok(/const disjoint = \(qs: string\[\]\) => excludeAsked\(qs, baselineAsked\);/.test(serverSrc), "the exclusion is applied through excludeAsked");
-ok(/coverage = coverageDirective\(baselineAsked, businessType\)/.test(serverSrc), "…and the model is steered by a coverage directive built from the baseline's asked set");
+ok(/coverageDirective\(baselineAsked, businessType\)/.test(serverSrc), "…and the model is steered by a coverage directive built from the baseline's asked set");
 ok(/refuse\("baseline_not_frozen"/.test(serverSrc) && /isMeasurement && leadPaid && !\(pointer && pointerFrozen\)/.test(serverSrc), "a paying lead with no frozen baseline is refused with baseline_not_frozen");
 /* judgeRemeasure gates ONLY the replay (purpose remeasure). A full measure must be disjoint, so it must never be judged like-for-like. */
 const judged = serverSrc.slice(serverSrc.indexOf("if (isRemeasure) {"), serverSrc.indexOf("if (isMeasurement && leadPaid"));

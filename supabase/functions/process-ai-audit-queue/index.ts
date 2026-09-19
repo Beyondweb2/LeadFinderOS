@@ -1078,7 +1078,17 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
           : { data: null };
         const site = String((lead as { website?: string | null } | null)?.website ?? "").trim()
           || String((aud as { website?: string | null } | null)?.website ?? "").trim();
-        if (!site) return; // no website → crawl-check would refuse anyway
+        if (!site) {
+          // No website is a valid audit outcome, not a missing/failed crawl. Persist the explicit
+          // terminal state so the run, report and Inbox can distinguish it from a crawl that never
+          // ran or errored.
+          const { data: currentRun } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
+          const currentResults = currentRun?.results && typeof currentRun.results === "object" ? currentRun.results : {};
+          await service.from("ai_audit_runs").update({
+            results: { ...currentResults, crawl_check: { status: "unavailable", reason: "no_website" } },
+          }).eq("id", runId);
+          return;
+        }
         // Already have a current, fresh crawl? Leave it — this is the 3-run-baseline dedup.
         const { data: cc } = cLeadId
           ? await service.from("lead_crawl_checks").select("result, created_at")

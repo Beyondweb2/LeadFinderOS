@@ -29,6 +29,7 @@
 export interface QuestionnaireAnswers {
   confirmed_location?: string | null;
   services?: string | null;
+  services_list?: unknown;
 }
 
 /* ⛔ THESE TWO, AND THE REASON IS NOT TASTE. They are exactly what `startPaidBaseline` waits for
@@ -49,7 +50,24 @@ const given = (v: string | null | undefined): boolean => !!String(v ?? '').trim(
  * caller that had to re-derive that would be a fifth copy of this rule in all but name.
  */
 export function missingQuestionnaireFields(row: QuestionnaireAnswers | null | undefined): string[] {
-  return QUESTIONNAIRE_REQUIRED_FIELDS.filter((f) => !given(row?.[f]));
+  return QUESTIONNAIRE_REQUIRED_FIELDS.filter((field) => field === 'services'
+    ? effectiveQuestionnaireServices(row).length === 0
+    : !given(row?.[field]));
+}
+
+/** One service representation for every caller: the legacy string and structured list are peers. */
+export function effectiveQuestionnaireServices(row: QuestionnaireAnswers | null | undefined): string[] {
+  const raw = [
+    ...(Array.isArray(row?.services_list) ? row.services_list : []),
+    ...String(row?.services ?? '').split(','),
+  ];
+  const seen = new Set<string>();
+  return raw.flatMap((value) => typeof value === 'string' ? [value.trim()] : []).filter((value) => {
+    const key = value.toLocaleLowerCase();
+    if (!value || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**

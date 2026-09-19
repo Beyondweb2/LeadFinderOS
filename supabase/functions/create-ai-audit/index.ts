@@ -6,6 +6,7 @@ import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanc
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
+import { normalizeAuditList, serviceAreaQuestionDirective } from "../../../src/lib/auditQuestionContext.ts";
 import { excludeAsked, overAskFor } from "../../../src/lib/fullMeasure.ts";
 import { fillToTarget, dedupeByIntent } from "../../../src/lib/questionFill.ts";
 import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
@@ -375,6 +376,8 @@ Deno.serve(async (req) => {
     // Optional free-text specialisms ("kava, pool tables"). Weights the niche/differentiator
     // questions; blank → the generator infers the specialism from the name + type.
     const specialisms: string = typeof body.specialisms === "string" ? body.specialisms.trim().slice(0, 200) : "";
+    const serviceAreas = normalizeAuditList(body.service_areas).slice(0, 12);
+    const serviceAreaCoverage = serviceAreaQuestionDirective(locationText, serviceAreas);
     // Explicit client-engagement scope from the wizard. Only the three known values are stored;
     // anything else (incl. absent) → null, so the downstream heuristic still applies.
     const VALID_SCOPES = new Set(["national", "local", "hybrid"]);
@@ -618,11 +621,12 @@ Deno.serve(async (req) => {
       } else if (isBaseline || isMeasurement) {
         const mixed = await generateWithMoney(
           businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country,
+          questionCount, serviceAreaCoverage,
         );
         qs = mixed.questions;
         previewMoney = mixed.money;
       } else {
-        qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, "", moneyQuestionCount);
+        qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount);
       }
       return json({
         ok: true,
@@ -855,13 +859,13 @@ Deno.serve(async (req) => {
       /* Coverage hint for the generator. Empty here; the full-measure exclusion (slice 1b of
          the 2026-09-12 measurement work) is what fills it — the baseline's asked set, so the
          measure never re-asks the judged questions. */
-      let coverage = "";
+      let coverage = serviceAreaCoverage;
       /* ⛔ THE FULL MEASURE IS DISJOINT FROM THE BASELINE, IN TWO LAYERS. `coverage` asks the
          model to steer clear of the judged intents (the polite request); `excludeAsked` removes
          any paraphrase that came back anyway (the guarantee); `overAskFor` asks for enough extra
          that the target survives the filter, never above the generator's named ceiling. Every
          other caller has an empty exclusion set and is byte-for-byte unchanged. */
-      if (isMeasurement && baselineAsked.length) coverage = coverageDirective(baselineAsked, businessType);
+      if (isMeasurement && baselineAsked.length) coverage = [coverage, coverageDirective(baselineAsked, businessType)].filter(Boolean).join("\n\n");
       const disjoint = (qs: string[]) => excludeAsked(qs, baselineAsked);
       const ask = (n: number) => overAskFor(n, baselineAsked.length);
 

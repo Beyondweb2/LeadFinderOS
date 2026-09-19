@@ -47,9 +47,10 @@ import { isRemeasureDue, utcDateISO } from "../../../src/lib/remeasureDue.ts";
 import { remeasureDueFill, workIncompleteFor } from "../../../src/lib/remeasureFill.ts";
 import { planReplay } from "../../../src/lib/baselineReplay.ts";
 import { REFUNDED_STATUS } from "../../../src/lib/leadPayment.ts";
-import { missingQuestionnaireFields } from "../../../src/lib/questionnaireComplete.ts";
+import { effectiveQuestionnaireServices, missingQuestionnaireFields } from "../../../src/lib/questionnaireComplete.ts";
 import { pickAuditTown } from "./place-town.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
+import { orderedFrozenQuestions } from "../../../src/lib/baselineReplay.ts";
 import { reconcileActionPlan } from "./action-plan.ts";
 
 /** Towns this is not. Mirrors findable-onboarding: forcing scope='local' needs a real town. */
@@ -230,7 +231,7 @@ export async function advanceBaseline(service: Client, auditId: string, source =
          would look present and do nothing. Caught before shipping; do not slim this select. */
       .from("ai_audit_runs").select("id, run_number, status, results, created_at")
       .eq("audit_id", auditId).order("run_number", { ascending: true });
-    const all = (runs ?? []) as Array<{ id: string; status: string; results?: unknown }>;
+    const all = (runs ?? []) as Array<{ id: string; run_number: number; status: string; results?: unknown }>;
     const usable = all.filter((r) => r.status === "complete" || r.status === "capped");
     const inFlight = all.filter((r) => r.status === "pending" || r.status === "running");
     /* Did run 1 decline the SEO scan? create-ai-audit stamps `results.seo = { skipped: … }` at run
@@ -335,19 +336,15 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     }
 
     // Runs remain: fire the next one with the SAME questions so the runs are like-for-like.
-    const latest = usable[usable.length - 1];
+    const first = all.find((run) => Number(run.run_number) === 1) ?? all[0];
     const { data: qrows } = await service
-      .from("ai_audit_queue").select("question").eq("run_id", latest.id).order("created_at", { ascending: true });
-    /* Case-insensitive: repeating a run must not repeat two casings of one question. This is the
-       week-eight / run-2-3 path, so a duplicate here would be paid for on every subsequent run. */
-    const repeat = dedupeQuestions(((qrows ?? []) as Array<{ question: string }>).map((r) => r.question ?? ""));
-    const questions: string[] = repeat.questions;
-    if (repeat.duplicates.length) {
-      console.warn(`[baseline] audit ${auditId}: ${repeat.duplicates.length} case-duplicate question(s) not repeated: ${repeat.duplicates.join(" | ")}`);
-    }
+      .from("ai_audit_queue").select("question").eq("run_id", first.id).order("created_at", { ascending: true });
+    /* Runs 2 and 3 always replay run 1, never the latest repeat. A corrupted repeat therefore cannot
+       become the source for the next run and silently move the frozen comparison set. */
+    const questions = orderedFrozenQuestions(((qrows ?? []) as Array<{ question: string }>).map((row) => row.question ?? ""));
     if (!questions.length) {
       console.warn(`[baseline] audit ${auditId}: no questions to repeat`);
-      await record({ action: "error", detail: `run ${latest.id} has no questions to repeat`, runs_usable: usable.length, runs_target: target });
+      await record({ action: "error", detail: `run ${first.id} has no questions to repeat`, runs_usable: usable.length, runs_target: target });
       return;
     }
 
@@ -782,7 +779,7 @@ export async function startPaidBaseline(
   try {
     const { data: row, error: rErr } = await service
       .from("onboarding_responses")
-      .select("id, lead_id, confirmed_location, services, areas_list, baseline_status, baseline_questions, baseline_approved_at")
+      .select("id, lead_id, confirmed_location, services, services_list, areas_list, baseline_status, baseline_questions, baseline_approved_at")
       .eq("id", onboardingId).maybeSingle();
     if (rErr) return { ok: false, error: `onboarding read failed: ${rErr.message}` };
     if (!row) return { ok: false, error: "onboarding row not found" };
@@ -979,7 +976,7 @@ export async function startPaidBaseline(
         business_name: lead.business_name,
         business_type: bizType,
         location_text: locationText,
-        specialisms: ((row.services as string) ?? "").slice(0, 200),
+        specialisms: effectiveQuestionnaireServices(row).join(", ").slice(0, 200),
         country: lead.country ?? null,
         website: lead.website ?? null,
         has_website: !!lead.website,

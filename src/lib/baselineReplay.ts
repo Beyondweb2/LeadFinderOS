@@ -77,6 +77,11 @@ export interface BaselineSource {
   contract?: unknown;
 }
 
+/** The one ordered normalisation used for baseline repeats and the later remeasure. */
+export function orderedFrozenQuestions(value: readonly string[] | null | undefined): string[] {
+  return dedupeQuestions([...(value ?? [])].map((question) => String(question ?? '').trim()).filter(Boolean)).questions;
+}
+
 /**
  * How many questions did the baseline INTEND to ask?
  *
@@ -126,8 +131,8 @@ export function planReplay(src: BaselineSource): ReplayPlan | ReplayRefused {
   }
   /* Deduped exactly as the audit queue dedupes, so a replay cannot carry two casings of one
      question into a comparison that joins on the text. */
-  const asked = dedupeQuestions([...(src.askedQuestions ?? [])].map((q) => (q ?? '').trim()).filter(Boolean));
-  if (asked.questions.length === 0) {
+  const asked = orderedFrozenQuestions(src.askedQuestions);
+  if (asked.length === 0) {
     return {
       ok: false,
       reason: 'baseline_has_no_questions',
@@ -136,7 +141,7 @@ export function planReplay(src: BaselineSource): ReplayPlan | ReplayRefused {
     };
   }
   const intended = intendedCount(src.contract);
-  const n = asked.questions.length;
+  const n = asked.length;
   const short = intended !== null && n < intended;
   /* ⚠️ THE SHORT CASE IS STATED, NEVER SMOOTHED. A baseline that intended 12 and asked 9 is a valid
      yardstick for those 9 — and describing it as the whole measurement is how a partial before/after
@@ -147,7 +152,7 @@ export function planReplay(src: BaselineSource): ReplayPlan | ReplayRefused {
     : intended === null
       ? `Replaying all ${n} questions from the recorded baseline (the intended count is not recorded).`
       : `Replaying all ${n} questions from the recorded baseline.`;
-  return { ok: true, questions: asked.questions, asked: n, intended, short, summary, baselineAuditId: pointer };
+  return { ok: true, questions: asked, asked: n, intended, short, summary, baselineAuditId: pointer };
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -165,9 +170,8 @@ export function planReplay(src: BaselineSource): ReplayPlan | ReplayRefused {
      · a Quick 1-run re-audit                    → ALLOWED; it is a diagnostic, not a measurement.
        It is refused a PLACE IN THE BEFORE/AFTER, not refused execution. Blocking it would remove a
        cheap look at a client for no safety gain.
-     · a deliberately changed town               → allowed with a NAMED operator override, recorded
-       on the audit so the comparison can say the set changed and why.
-   Anything else — a re-measure whose questions differ for no recorded reason — is refused.
+     · a deliberately changed town               → requires a new baseline cycle.
+   Any multi-run re-measure whose text or ordering differs is refused.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 export type RemeasureVerdict =
@@ -175,8 +179,6 @@ export type RemeasureVerdict =
   | { allow: true; countsAsMeasurement: true; reason: 'matches_baseline'; detail: string }
   /** Runs, but must not be compared: a single-run diagnostic. */
   | { allow: true; countsAsMeasurement: false; reason: 'quick_diagnostic'; detail: string }
-  /** Runs, set deliberately changed, recorded with the operator's reason. */
-  | { allow: true; countsAsMeasurement: true; reason: 'operator_override'; detail: string }
   /** Refused. */
   | { allow: false; reason: 'questions_differ_from_baseline' | 'no_baseline_recorded'; detail: string };
 
@@ -187,12 +189,9 @@ export interface RemeasureRequest {
   baselineAsked: readonly string[] | null;
   /** How many runs this audit will do. 1 = a Quick diagnostic. */
   targetRuns: number;
-  /** The operator's stated reason for changing the set, when they gave one. */
+  /** Retained for older callers; it cannot override the exact replay contract. */
   overrideReason?: string | null;
 }
-
-/** Case- and whitespace-insensitive identity, matching the audit queue's own dedupe rule. */
-const key = (q: string) => q.trim().toLowerCase();
 
 export function judgeRemeasure(req: RemeasureRequest): RemeasureVerdict {
   /* ⛔ THE QUICK DIAGNOSTIC IS DECIDED FIRST, AND IT IS ALLOWED WHATEVER IT ASKS. A single run
@@ -214,30 +213,19 @@ export function judgeRemeasure(req: RemeasureRequest): RemeasureVerdict {
         + 'be like-for-like with. Record the baseline pointer first.',
     };
   }
-  const want = new Set(baseline.map(key));
-  const got = new Set(req.proposed.map(key));
-  const missing = [...want].filter((k) => !got.has(k));
-  const added = [...got].filter((k) => !want.has(k));
-  if (missing.length === 0 && added.length === 0) {
+  const proposed = [...req.proposed];
+  const firstMismatch = baseline.findIndex((question, index) => proposed[index] !== question);
+  if (baseline.length === proposed.length && firstMismatch === -1) {
     return {
       allow: true, countsAsMeasurement: true, reason: 'matches_baseline',
-      detail: `Like-for-like: all ${want.size} baseline questions, no additions.`,
+      detail: `Like-for-like: all ${baseline.length} baseline questions in the original order, with exact text.`,
     };
   }
-  /* ⚠️ THE OVERRIDE IS A REASON, NOT A FLAG. A boolean would let a caller wave any change through
-     with no record; requiring words means the comparison can print WHY the set changed, which is
-     the difference between a documented change and silent drift. */
-  const why = (req.overrideReason ?? '').trim();
-  if (why.length >= 10) {
-    return {
-      allow: true, countsAsMeasurement: true, reason: 'operator_override',
-      detail: `Question set changed by operator (${missing.length} dropped, ${added.length} added): ${why}`,
-    };
-  }
+  const position = firstMismatch >= 0 ? firstMismatch + 1 : Math.min(baseline.length, proposed.length) + 1;
   return {
     allow: false, reason: 'questions_differ_from_baseline',
-    detail: `Refused: ${missing.length} baseline question(s) would lose their before side and `
-      + `${added.length} new one(s) have none. Replay the baseline's questions, or state a reason `
-      + 'for changing the set (at least 10 characters).',
+    detail: `Refused: the remeasure must replay the exact ordered baseline array. `
+      + `Expected ${baseline.length} question(s), received ${proposed.length}; first difference is at position ${position}. `
+      + `A changed set requires a new baseline cycle, not an override.`,
   };
 }

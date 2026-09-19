@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { parseQuestionPaste, pasteLineCount } from '@/lib/questionPaste';
+import { buildAuditPreviewRequest } from '@/lib/auditQuestionContext';
+import { AuditQuestionEditor } from '@/components/AuditQuestionEditor';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -351,7 +353,6 @@ const AiAudit = () => {
   const [previewMoney, setPreviewMoney] = useState<string[]>(persisted?.previewMoney ?? []);
   // "Paste your own questions" box (review step). Session-only scratch — not persisted; once applied
   // it REPLACES the questions list, and that list is what persists and runs.
-  const [pasteQuestions, setPasteQuestions] = useState('');
   // Editable re-run (results view): an inline editor seeded with the current run's questions.
   // Persisted (session, per-user) so a tab-away/reload doesn't lose the operator's edits — the
   // editor reopens with them. reRunForRunId scopes the editor to the run it was opened for, so a
@@ -1254,17 +1255,20 @@ const AiAudit = () => {
     setPreviewing(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-ai-audit', {
-        body: {
-          preview: true,
-          business_name: businessName, business_type: businessType,
-          location_text: locationText, country, has_website: hasWebsite,
-          website: website || undefined, business_scope: businessScope || undefined,
-          specialisms: specialisms || undefined,
-          question_count: questionCount,
-          // Full measurement: same purpose the run uses, so the PREVIEW generates the full count
-          // (a plain call would be clamped to the wizard's 5).
-          ...(fullMode ? { purpose: 'measurement', skip_seo: true } : {}),
-        },
+        body: buildAuditPreviewRequest({
+          business_name: businessName,
+          business_category: businessType,
+          primary_location: locationText,
+          country,
+          website: hasWebsite ? website : '',
+          services: [],
+          service_areas: [],
+          specialisms: specialisms ? [specialisms] : [],
+        }, {
+          questionCount,
+          businessScope: businessScope || undefined,
+          ...(fullMode ? { purpose: 'measurement' as const } : {}),
+        }),
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'preview failed');
       setQuestions(Array.isArray(data.questions) ? data.questions : []);
@@ -2654,64 +2658,13 @@ const AiAudit = () => {
                 These are the searches we'll run across {SCORED_ENGINES.map((e) => ENGINE_LABELS[e]).join(' + ')} (plus AI Overview & Google). Edit, add or remove any.
               </p>
 
-              {/* ── PASTE YOUR OWN QUESTIONS (verbatim benchmark) ──────────────────────────────────
-                  For a fixed benchmark the operator supplies the EXACT questions and a re-measure
-                  compares like-for-like, so this REPLACES the whole list — nothing auto-generated is
-                  left mixed in. One per line, stored and run word-for-word (create-ai-audit uses a
-                  full provided set verbatim: no paraphrase, no town injection, no regeneration). */}
-              {(() => {
-                const parsed = pasteQuestions.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-                return (
-                  <div className="rounded-md border border-primary/30 bg-primary/[0.04] p-3 space-y-2">
-                    <Label className="text-xs font-medium">Paste your own questions (one per line)</Label>
-                    <p className="text-[11px] text-muted-foreground -mt-0.5">
-                      <strong>Replaces the list below entirely</strong> — exactly what you paste is what runs and gets stored, word-for-word. Use this for a fixed benchmark you'll re-measure against.
-                    </p>
-                    <Textarea
-                      value={pasteQuestions}
-                      onChange={(e) => setPasteQuestions(e.target.value)}
-                      rows={6}
-                      placeholder={"One question per line…\ne.g. best online menopause clinic UK\nHRT prescription online UK"}
-                      className="text-sm"
-                    />
-                    <div className="flex items-center gap-3">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={parsed.length === 0}
-                        onClick={() => {
-                          setQuestions(parsed);        // REPLACE — no auto-generated questions remain
-                          setPasteQuestions('');
-                          toast({ title: `Replaced with ${parsed.length} pasted question${parsed.length === 1 ? '' : 's'}`, description: 'These run and are stored exactly as pasted.' });
-                        }}
-                      >
-                        Replace list with these
-                      </Button>
-                      <span className="text-[11px] text-muted-foreground">{parsed.length} line{parsed.length === 1 ? '' : 's'}</span>
-                    </div>
-                  </div>
-                );
-              })()}
-
               {previewing ? (
                 <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin text-primary" /> Generating questions…
                 </div>
               ) : (
                 <>
-                  <div className="space-y-2">
-                    {questions.map((q, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <Input value={q} onChange={(e) => setQuestions((prev) => prev.map((x, xi) => xi === i ? e.target.value : x))} />
-                        <Button variant="ghost" size="icon" onClick={() => setQuestions((prev) => prev.filter((_, xi) => xi !== i))} title="Remove">
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button variant="outline" size="sm" onClick={() => setQuestions((prev) => [...prev, ''])}>
-                      <Plus className="mr-1 h-4 w-4" /> Add question
-                    </Button>
-                  </div>
+                  <AuditQuestionEditor questions={questions} onChange={setQuestions} busy={running}/>
                   <div className="flex items-center justify-between pt-2">
                     <span className="text-xs text-muted-foreground">
                       {questions.length} question{questions.length === 1 ? '' : 's'} · est. cost ~${estimatedCost.toFixed(2)}

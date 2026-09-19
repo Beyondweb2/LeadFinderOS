@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { attachPersistedQueueProgress } from "../../../src/lib/baselineProgress.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -62,13 +63,7 @@ Deno.serve(async (req) => {
         const ids = runs.map((run) => String(run.id)).filter(Boolean);
         if (ids.length) {
           const { data: queue } = await service.from("ai_audit_queue").select("run_id,status").in("run_id", ids);
-          const counts = new Map<string, { total: number; complete: number }>();
-          for (const row of (queue ?? []) as Array<{ run_id: string; status: string | null }>) {
-            const c = counts.get(row.run_id) ?? { total: 0, complete: 0 };
-            c.total += 1; if (row.status === "complete") c.complete += 1;
-            counts.set(row.run_id, c);
-          }
-          runs = runs.map((run) => ({ ...run, queue_total: counts.get(String(run.id))?.total ?? 0, queue_complete: counts.get(String(run.id))?.complete ?? 0 }));
+          runs = attachPersistedQueueProgress(runs, (queue ?? []) as Array<{ run_id: string; status: string | null }>);
         }
       }
       const p = await service.from("client_pages").select("id,status,primary_question,service,town,existing_url,recommendation,priority").eq("lead_id", leadId).order("created_at", { ascending: false });

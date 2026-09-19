@@ -89,30 +89,25 @@ ok(quick.allow === true && quick.countsAsMeasurement === false, "…and does NOT
 ok(judgeRemeasure({ proposed: [], baselineAsked: null, targetRuns: 1 }).allow === true,
    "…even with no baseline recorded at all");
 
-/* 4. A deliberately changed town, with a named reason recorded on the audit. */
+/* A reason cannot turn a changed set into the contractual day-28 replay. */
 const overridden = j({ proposed: [...BASE, "locksmith in Ely"], overrideReason: "Client stopped serving St Neots, added Ely" });
-ok(overridden.allow === true && overridden.reason === "operator_override", "a named override is allowed");
-ok(overridden.allow === true && /Ely/.test(overridden.detail), "…and the REASON is carried into the record");
+ok(overridden.allow === false && overridden.reason === "questions_differ_from_baseline", "a named override is still refused");
 
 console.log("\n── ANYTHING ELSE IS REFUSED ──");
 const drifted = j({ proposed: ["a brand new question", "and another"] });
 ok(drifted.allow === false && drifted.reason === "questions_differ_from_baseline", "a silently different set → refused");
-ok(drifted.allow === false && /before side/.test(drifted.detail), "…and the refusal says what would be lost");
+ok(drifted.allow === false && /exact ordered baseline array/.test(drifted.detail), "…and the refusal names the exact-order contract");
 ok(j({ proposed: BASE.slice(0, 2) }).allow === false, "dropping a baseline question → refused");
 ok(j({ proposed: [...BASE, "extra"] }).allow === false, "adding one → refused");
 ok(j({ baselineAsked: null }).allow === false, "a multi-run re-measure with no baseline → refused");
 
-console.log("\n── AN OVERRIDE MUST BE WORDS, NOT A FLAG ──");
-/* A boolean would let any caller wave a change through with no record. Requiring a reason means the
-   comparison can print WHY the set changed — the difference between a documented change and drift. */
-for (const r of [null, undefined, "", "   ", "changed", "because"]) {
-  ok(j({ proposed: ["totally different"], overrideReason: r as string | null }).allow === false,
-     `override reason ${JSON.stringify(r)} is too thin → still refused`);
-}
-
-console.log("\n── ORDER AND CASE ARE NOT IDENTITY ──");
-ok(j({ proposed: [BASE[2], BASE[0], BASE[1]] }).reason === "matches_baseline", "reordered → still like-for-like");
-ok(j({ proposed: BASE.map((q) => q.toUpperCase()) }).reason === "matches_baseline", "re-cased → still like-for-like");
+console.log("\n── EXACT TEXT AND ORDER ARE IDENTITY ──");
+ok(j({ proposed: [BASE[2], BASE[0], BASE[1]] }).allow === false, "reordered → refused");
+ok(j({ proposed: BASE.map((q) => q.toUpperCase()) }).allow === false, "re-cased → refused");
+ok(j({ proposed: [BASE[0], `${BASE[1]}!`, BASE[2]] }).allow === false, "one changed character → refused");
+ok(j({ proposed: BASE.slice(0, -1) }).allow === false, "removed question → refused");
+ok(j({ proposed: [...BASE, "extra"] }).allow === false, "added question → refused");
+ok(j({ proposed: [...BASE] }).reason === "matches_baseline", "exact ordered replay → allowed");
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);
 if (f) process.exit(1);
