@@ -76,7 +76,7 @@ for (const name of Object.keys(MIRROR)) {
 console.log('\n-- 🔴 the drip builds NO payload of its own --');
 /* The one line that caused this. If an inline template payload ever comes back, a header-bearing
    template silently loses its header again and Meta rejects every send. */
-ok(/\.\.\.claimTemplatePayload\(templateName, lang, lead\.business_name as string, resolvedUrl, templateExtra\)/.test(queue),
+ok(/(?:\.\.\.|const campaignPayload = )claimTemplatePayload\(templateName, lang, lead\.business_name as string, resolvedUrl, templateExtra\)/.test(queue),
    'the drip sends via claimTemplatePayload');
 ok(!/components: templateBodyParams\(/.test(queue), 'and never assembles `components` itself');
 ok(!/import \{[^}]*templateBodyParams/.test(queue), 'templateBodyParams is not even imported any more');

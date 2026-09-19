@@ -13,6 +13,7 @@ import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, monthlyStartingSoonEmai
 import {
   claimTemplatePayload, renderTemplateBody, resolveWhatsAppEnv, sendViaGraph, toWhatsAppNumber,
 } from "../_shared/whatsapp-send.ts";
+import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 
 // stripe-webhook — flips generated_sites.is_paid from Stripe subscription events.
 //
@@ -294,6 +295,8 @@ async function sendFindablePaymentConfirmation(
        one-variable guess into Meta rejection #132000 on re_engage. The claimUrl argument is unused
        because this template's vars are ["name"] only. */
     const payload = claimTemplatePayload(TEMPLATE_PAYMENT_CONFIRM, "en", businessName, "");
+    const templateBody = renderTemplateBody(TEMPLATE_PAYMENT_CONFIRM, businessName, "");
+    const templateSnapshot = createTemplateSnapshot({ templateName: TEMPLATE_PAYMENT_CONFIRM, language: "en", body: templateBody, payload });
 
     const env = resolveWhatsAppEnv();
     if (!env.live) {
@@ -319,13 +322,14 @@ async function sendFindablePaymentConfirmation(
         user_id: (lead.user_id as string | null) ?? null,
         lead_id: lead.id,
         phone: to,
-        body: renderTemplateBody(TEMPLATE_PAYMENT_CONFIRM, businessName, ""),
+        body: templateBody,
         message_type: "template",
         template_name: TEMPLATE_PAYMENT_CONFIRM,
         wa_message_id: res.messageId,
         status,
         test_mode: env.testMode,
         error: res.error,
+        template_snapshot: templateSnapshot,
       });
     } catch (e) {
       console.error(`${tag}: message-log insert threw (non-blocking):`, (e as Error).message);

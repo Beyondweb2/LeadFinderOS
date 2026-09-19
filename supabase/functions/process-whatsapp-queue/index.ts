@@ -19,6 +19,7 @@ import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
+import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -1099,6 +1100,7 @@ Deno.serve(async (req) => {
             direction: "outbound", user_id: (lead.user_id as string | null) ?? null, lead_id: row.lead_id,
             phone: row.phone, body: renderedBody, message_type: "template", template_name: templateName,
             wa_message_id: messageId, status: sendStatus, test_mode: !live, error: sendErr,
+            template_snapshot: createTemplateSnapshot({ templateName, language: tmpl.lang, body: renderedBody, payload }),
           });
           /* And the send-audit row. This branch wrote only the message log, so auto-replies were
              invisible to whatsapp_sends — including to the DAILY CAP counted a few hundred lines
@@ -1306,8 +1308,10 @@ Deno.serve(async (req) => {
         let hDelivery = "simulated";
         let hOutcome: "sent" | "no_whatsapp" | "temporary" = "sent";
         let hError: string | null = null;
+        const hBody = renderTemplateBody("hook_followup", (hookLead.business_name as string) ?? "", "", undefined, undefined, first);
+        const hPayload = claimTemplatePayload("hook_followup", hLang, (hookLead.business_name as string) ?? "", "", { contactName: first });
         if (live) {
-          const payload = claimTemplatePayload("hook_followup", hLang, (hookLead.business_name as string) ?? "", "", { contactName: first });
+          const payload = hPayload;
           const r = await sendViaGraph(accessToken, phoneNumberId, to, payload);
           if (r.ok) { hMessageId = r.messageId; hDelivery = "sent"; hOutcome = "sent"; }
           else {
@@ -1335,9 +1339,10 @@ Deno.serve(async (req) => {
           try {
             await service.from("whatsapp_messages").insert({
               direction: "outbound", user_id: (hookLead.user_id as string | null) ?? null, lead_id: hookLead.id,
-              phone: to, body: renderTemplateBody("hook_followup", (hookLead.business_name as string) ?? "", "", undefined, undefined, first),
+              phone: to, body: hBody,
               message_type: "template", template_name: "hook_followup", wa_message_id: hMessageId,
               status: hDelivery, test_mode: testMode,
+              template_snapshot: createTemplateSnapshot({ templateName: "hook_followup", language: hLang, body: hBody, payload: hPayload }),
             });
           } catch (e) { console.error(`[hook_followup] message-log insert threw (non-blocking, ${hookLead.id}):`, (e as Error).message); }
         } else if (hOutcome === "no_whatsapp") {
@@ -1404,8 +1409,10 @@ Deno.serve(async (req) => {
         let cDelivery = "simulated";
         let cOutcome: "sent" | "no_whatsapp" | "temporary" = "sent";
         let cError: string | null = null;
+        const cBody = renderTemplateBody("contact_followup", (contactLead.business_name as string) ?? "", "");
+        const cPayload = claimTemplatePayload("contact_followup", cLang, (contactLead.business_name as string) ?? "", "");
         if (live) {
-          const payload = claimTemplatePayload("contact_followup", cLang, (contactLead.business_name as string) ?? "", "");
+          const payload = cPayload;
           const r = await sendViaGraph(accessToken, phoneNumberId, to, payload);
           if (r.ok) { cMessageId = r.messageId; cDelivery = "sent"; cOutcome = "sent"; }
           else {
@@ -1433,9 +1440,10 @@ Deno.serve(async (req) => {
           try {
             await service.from("whatsapp_messages").insert({
               direction: "outbound", user_id: (contactLead.user_id as string | null) ?? null, lead_id: contactLead.id,
-              phone: to, body: renderTemplateBody("contact_followup", (contactLead.business_name as string) ?? "", ""),
+              phone: to, body: cBody,
               message_type: "template", template_name: "contact_followup", wa_message_id: cMessageId,
               status: cDelivery, test_mode: testMode,
+              template_snapshot: createTemplateSnapshot({ templateName: "contact_followup", language: cLang, body: cBody, payload: cPayload }),
             });
           } catch (e) { console.error(`[contact_followup] message-log insert threw (non-blocking, ${contactLead.id}):`, (e as Error).message); }
         } else if (cOutcome === "no_whatsapp") {
@@ -1789,6 +1797,9 @@ Deno.serve(async (req) => {
     let deliveryStatus = "simulated";
     let failCode: number | undefined;
     let sendError: string | null = null;
+    const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, templateExtra);
+    const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault);
+    const campaignSnapshot = createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
 
     if (live) {
       try {
@@ -1812,7 +1823,7 @@ Deno.serve(async (req) => {
                calls it; this one kept a private copy of the assembly, and a copy cannot learn about
                a field added after it was written.
                ⚠️ It supplies `type` AND `template`, so neither is spelled out here any more. */
-            ...claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, templateExtra),
+            ...campaignPayload,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -1874,12 +1885,13 @@ Deno.serve(async (req) => {
           phone: toNumber,                                   // the number actually messaged (E.164 digits)
           // town is the 6th positional arg (see renderTemplateBody) - without it the operator
           // transcript would read "in your area" while the prospect's message named their town.
-          body: renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault),
+          body: campaignBody,
           message_type: "template",
           template_name: templateName,
           wa_message_id: messageId,                          // null on a simulated (TEST_MODE) send
           status: deliveryStatus,                            // 'sent' | 'simulated'
           test_mode: testMode,
+          template_snapshot: campaignSnapshot,
         });
         if (msgErr) console.error(`[whatsapp] outbound message-log insert failed (non-blocking, ${lead.id}):`, (msgErr as { message?: string }).message);
       } catch (e) {

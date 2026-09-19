@@ -23,6 +23,7 @@ import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHo
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
+import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -608,6 +609,7 @@ Deno.serve(async (req) => {
         payload,
         /* What the Inbox would store as the transcript — what the prospect reads. */
         body: storedBody,
+        ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: lang, body: storedBody, payload }) } : {}),
         ...(fellBackReason ? { fell_back: fellBackReason } : {}),
       });
     }
@@ -639,6 +641,7 @@ Deno.serve(async (req) => {
       status,
       test_mode: env.testMode,
       error: sendError,
+      ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: lang, body: storedBody, payload }) } : {}),
     }).select("*").maybeSingle();
     if (insErr) console.error("[send-whatsapp-message] log insert failed:", insErr.message);
 

@@ -28,14 +28,15 @@ const U = "https://x.test/onboard";
 const TRADE = "plumber";
 const COMP = "Rival Plumbing, Other Co";
 const FIRST = "Sam";
+const SITE_FAULT = "Your service pages do not clearly tell AI which areas you cover.";
 
 console.log("── EVERY SEND-SIDE TEMPLATE RENDERS IDENTICALLY ──");
 for (const name of Object.keys(WA_TEMPLATE_BODIES)) {
-  const sent = renderTemplateBody(name, B, U, TRADE, COMP, FIRST);
+  const sent = renderTemplateBody(name, B, U, TRADE, COMP, FIRST, undefined, SITE_FAULT);
   const mine = READABLE_TEMPLATE_BODIES[name];
   ok(!!mine, `${name}: has a readable body`);
   if (!mine) continue;
-  const shown = mine(B, U, TRADE, COMP, FIRST);
+  const shown = mine(B, U, TRADE, COMP, FIRST, undefined, SITE_FAULT);
   ok(shown === sent, `${name}: readable body === sent body`);
   if (shown !== sent) {
     console.log(`   sent : ${JSON.stringify(sent).slice(0, 120)}`);
@@ -104,9 +105,9 @@ console.log("\n── ⛔ THE GREETING NAME IS APPLIED IDENTICALLY ON BOTH SIDES
   const RECENT = new Date().toISOString();
   let drift: string[] = [];
   for (const name of Object.keys(WA_TEMPLATE_BODIES)) {
-    const sent = renderTemplateBody(name, LISTING, U, TRADE, COMP, FIRST);
+    const sent = renderTemplateBody(name, LISTING, U, TRADE, COMP, FIRST, undefined, SITE_FAULT);
     const shown = readableTemplateBody(`[${name}]`, name, {
-      businessName: LISTING, url: U, trade: TRADE, competitors: COMP, firstName: FIRST, sentAt: RECENT,
+      businessName: LISTING, url: U, trade: TRADE, competitors: COMP, firstName: FIRST, siteFault: SITE_FAULT, sentAt: RECENT,
     });
     if (shown !== sent) drift.push(name);
   }
