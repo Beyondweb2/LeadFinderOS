@@ -8,6 +8,7 @@ import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/lib/templateAttribution';
 import { auditShowsVisibilityGap, resolveSiteFault } from '@/lib/crawlCheck';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
+import type { WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
 // (operators read their own; admin reads all incl. Unassigned).
@@ -65,6 +66,7 @@ export interface WaMessage {
   status: string;
   test_mode: boolean;
   error: string | null;
+  template_snapshot?: WhatsAppTemplateSnapshot | null;
 }
 
 export interface WaConversation {
@@ -568,7 +570,7 @@ export function useInbox() {
      like a write. */
   const preview = useCallback(async (args: {
     phone: string; leadId: string | null; country?: string | null; templateName: string; allowResend?: boolean;
-  }): Promise<{ ok: boolean; body?: string; template?: string; fellBack?: string; error?: string; reason?: string }> => {
+  }): Promise<{ ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string }> => {
     const { data, error } = await sb.functions.invoke('send-whatsapp-message', {
       body: {
         mode: 'dry_run',
@@ -588,7 +590,7 @@ export function useInbox() {
     if (data?.mode !== 'dry_run') {
       return { ok: false, error: 'preview_unsupported', reason: 'The live function does not have the preview yet — deploy send-whatsapp-message.' };
     }
-    return { ok: true, body: data.body ?? '', template: data.template ?? args.templateName, fellBack: data.fell_back };
+    return { ok: true, body: data.body ?? '', snapshot: data.template_snapshot ?? undefined, template: data.template ?? args.templateName, fellBack: data.fell_back };
   }, []);
 
   // Optimistic single-lead status patch — updates local `leads` state so the derived

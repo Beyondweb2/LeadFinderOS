@@ -19,6 +19,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
 import { firstNameFrom, hookFollowupBody, contactFollowupBody } from '@/lib/questionnaireFollowup';
 import { readableTemplateBody } from '@/lib/templateBodies';
+import { parseTemplateSnapshot, type WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
+import { WhatsAppTemplateMessage } from '@/components/WhatsAppTemplateMessage';
 import { Button } from '@/components/ui/button';
 import { InboxComposer } from '@/components/InboxComposer';
 import { Input } from '@/components/ui/input';
@@ -963,7 +965,7 @@ const Inbox = () => {
   const [previewing, setPreviewing] = useState(false);
   const [previewOf, setPreviewOf] = useState<{ template: string; key: string } | null>(null);
   const [previewResult, setPreviewResult] = useState<
-    { ok: boolean; body?: string; template?: string; fellBack?: string; error?: string; reason?: string } | null
+    { ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string } | null
   >(null);
 
   /* hasSiteFault gates audit_followup_fault: it names a specific site fault in {{6}} and Meta rejects
@@ -1015,7 +1017,7 @@ const Inbox = () => {
             setPreviewOf({ template, key: active.key });
             const r = await preview({ phone: active.phone, leadId: active.leadId, country: activeLead?.country ?? null, templateName: template, allowResend: thread.some((m) => m.direction === 'outbound' && m.template_name === template) });
             setPreviewResult(r.ok
-              ? { ok: true, body: r.body ?? '', template: r.template ?? template, fellBack: r.fellBack }
+              ? { ok: true, body: r.body ?? '', snapshot: r.snapshot, template: r.template ?? template, fellBack: r.fellBack }
               : { ok: false, error: r.error ?? 'preview_failed', reason: r.reason });
             setPreviewing(false);
           }}
@@ -1038,7 +1040,7 @@ const Inbox = () => {
               {previewResult.template !== template && ` It would fall back to "${previewResult.template}".`}
             </p>
             {previewResult.fellBack && <p className="text-[10px] text-muted-foreground">{previewResult.fellBack}</p>}
-            <pre className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-snug">{previewResult.body}</pre>
+            <div className="mt-2 rounded-xl bg-primary/90 p-3 text-[11px] text-primary-foreground">{previewResult.snapshot ? <WhatsAppTemplateMessage snapshot={previewResult.snapshot} /> : <pre className="whitespace-pre-wrap break-words leading-snug">{previewResult.body}</pre>}</div>
           </div>
         ) : (
           <div className="mt-2 rounded-md border border-amber-600/30 bg-amber-50/60 p-2 dark:bg-amber-950/20">
@@ -1776,13 +1778,15 @@ const Inbox = () => {
               <div ref={threadRef} className="flex-1 space-y-2 overflow-y-auto p-3">
                 {thread.length === 0 ? (
                   <p className="py-8 text-center text-xs text-muted-foreground/60">No messages yet — send the first below.</p>
-                ) : thread.map((m) => (
+                ) : thread.map((m) => {
+                  const templateSnapshot = m.message_type === 'template' ? parseTemplateSnapshot(m.template_snapshot) : null;
+                  return (
                   <div key={m.id} className={cn('flex', m.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
                     <div className={cn('max-w-[78%] rounded-2xl px-3 py-2 text-sm',
                       m.direction === 'outbound' ? 'bg-primary/90 text-primary-foreground' : 'bg-muted')}>
-                      <p className="whitespace-pre-wrap break-words">
-                        {bubbleReadable(m) || templateLabel(m.template_name)}
-                      </p>
+                      {m.direction === 'outbound' && templateSnapshot
+                        ? <WhatsAppTemplateMessage snapshot={templateSnapshot} />
+                        : <p className="whitespace-pre-wrap break-words">{bubbleReadable(m) || templateLabel(m.template_name)}</p>}
                       {m.direction === 'inbound' && <InboundMedia message={m} />}
                       <div className={cn('mt-0.5 flex items-center gap-1 text-[10px]',
                         m.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
@@ -1794,7 +1798,7 @@ const Inbox = () => {
                       </div>
                     </div>
                   </div>
-                ))}
+                ); })}
               </div>
 
               {/* Reply box */}

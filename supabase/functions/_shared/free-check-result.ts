@@ -33,7 +33,8 @@
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
 import { onboardingUrl, resolveSiteOrigin } from "./onboarding-followup.ts";
-import { resolveWhatsAppEnv, toWhatsAppNumber, claimTemplatePayload, sendViaGraph, WA_TEMPLATES } from "./whatsapp-send.ts";
+import { resolveWhatsAppEnv, toWhatsAppNumber, claimTemplatePayload, renderTemplateBody, sendViaGraph, WA_TEMPLATES } from "./whatsapp-send.ts";
+import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { checkSuppressed } from "./suppression.ts";
 import { freeCheckSendGate } from "../../../src/lib/auditKind.ts";
 import { measuringState, MEASURING_STALL_MS } from "../../../src/lib/measuringState.ts";
@@ -571,6 +572,8 @@ export async function maybeSendFreeCheckResult(
         const payload = claimTemplatePayload(FREE_CHECK_TEMPLATE, WA_TEMPLATES[FREE_CHECK_TEMPLATE].lang, name, "", {
           trade, town, auditUrl: reportLink, onboardingUrl: onboardLink,
         });
+        const templateBody = renderTemplateBody(FREE_CHECK_TEMPLATE, name, reportLink, trade, undefined, undefined, town);
+        const templateSnapshot = createTemplateSnapshot({ templateName: FREE_CHECK_TEMPLATE, language: WA_TEMPLATES[FREE_CHECK_TEMPLATE].lang, body: templateBody, payload });
         const sent = await sendViaGraph(wa.accessToken, wa.phoneNumberId, to, payload);
         if (sent.ok) {
           texted = true;
@@ -579,9 +582,10 @@ export async function maybeSendFreeCheckResult(
           try {
             await service.from("whatsapp_messages").insert({
               lead_id: lead.id, user_id: lead.user_id ?? null, direction: "outbound", phone: to,
-              body: `Your AI visibility check for ${name}: ${reportLink}`,
+              body: templateBody,
               message_type: "template", template_name: FREE_CHECK_TEMPLATE,
               status: "sent", wa_message_id: sent.messageId,
+              template_snapshot: templateSnapshot,
             });
             /* 🔴 THE COLUMN IS `template`, NOT `template_name`, AND THIS FAILED SILENTLY FOR THE
                FIRST REAL SEND (fixed 2026-09-02). Two mistakes compounded: the wrong column name,
