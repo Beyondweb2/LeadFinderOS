@@ -1,5 +1,10 @@
 import { toWhatsAppNumber } from "./whatsapp-send.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
+import { armFirstReplyAuditIntent } from "./first-reply-audit.ts";
+import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
+import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, armStatusFor, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, modeSends, phoneSuppressed, pitchEverSent, type FirstReplyMode } from "./auto-reply-rules.ts";
+import { suppress } from "./suppression.ts";
+import { createMockupRow, fillMockupFromSite } from "./mockup-trigger.ts";
 
 /* A DIRECTORY OR SOCIAL URL IS NOT A WEBSITE. `!!lead.website` was a bare truthiness test, so a
    listing whose only "website" is a Facebook page reported has_website: true — and
@@ -13,10 +18,6 @@ function ownWebsite(raw: string | null | undefined): string | null {
   const w = (raw ?? "").trim();
   return w && !isAggregatorUrl(w) ? w : null;
 }
-import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
-import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, armStatusFor, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isSubstantiveText, looksAutomated, modeSends, phoneSuppressed, pitchEverSent, type FirstReplyMode } from "./auto-reply-rules.ts";
-import { suppress } from "./suppression.ts";
-import { createMockupRow, fillMockupFromSite } from "./mockup-trigger.ts";
 
 // Inbound WhatsApp message handling — barber replies arriving on the SAME Meta
 // webhook that delivers statuses (Cloud API has ONE callback URL; inbound lives in
@@ -181,6 +182,49 @@ async function resolveOwner(
   // 3. Unknown sender.
   return { userId: null, leadId: null };
 }
+/** The first persisted inbound after outreach began. Meta redelivery is already removed by wamid's
+ * unique index; timestamp plus id gives two genuine rapid replies a deterministic winner. */
+async function firstInboundForLead(service: any, leadId: string, insertedMessageId: string): Promise<{ first: boolean; reliable: boolean }> {
+  const { data: firstOutbound, error: outboundError } = await service.from("whatsapp_messages")
+    .select("created_at").eq("lead_id", leadId).eq("direction", "outbound").neq("status", "failed")
+    .order("created_at", { ascending: true }).order("id", { ascending: true }).limit(1).maybeSingle();
+  if (outboundError) {
+    console.error(`[whatsapp-inbound] first-outbound lookup failed (${leadId}): ${outboundError.message}`);
+    return { first: false, reliable: false };
+  }
+  if (!firstOutbound?.created_at) return { first: false, reliable: true };
+  const { data, error } = await service.from("whatsapp_messages").select("id")
+    .eq("lead_id", leadId).eq("direction", "inbound").gte("created_at", firstOutbound.created_at)
+    .order("created_at", { ascending: true }).order("id", { ascending: true }).limit(1).maybeSingle();
+  if (error) {
+    console.error(`[whatsapp-inbound] first-inbound lookup failed (${leadId}): ${error.message}`);
+    return { first: false, reliable: false };
+  }
+  return { first: data?.id === insertedMessageId, reliable: true };
+}
+
+/** Mockup preparation remains independent and non-blocking: it must never decide whether the
+ * durable audit intent is recorded, nor extend Meta's webhook response time. */
+async function prepareMockupForFirstReply(service: any, leadId: string) {
+  try {
+    const outcome = await createMockupRow(service, leadId);
+    if (!outcome.started) return;
+    const fill = () => fillMockupFromSite(service, outcome.siteId, {
+      website: outcome.website,
+      businessName: outcome.businessName,
+      niche: outcome.niche,
+      leadId,
+      ownerId: outcome.ownerId,
+    }, {
+      supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
+      auth: { kind: "internal" as const, cronSecret: Deno.env.get("CRON_SECRET") ?? "" },
+    }).catch((e) => console.error(`[mockup] lead ${leadId}: scrape failed`, e instanceof Error ? e.message : String(e)));
+    const runtime = (globalThis as any).EdgeRuntime;
+    if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(fill());
+  } catch (e) {
+    console.error(`[mockup] lead ${leadId}: prepare failed`, e instanceof Error ? e.message : String(e));
+  }
+}
 
 /**
  * Handle every inbound message in a webhook `change.value`. Idempotent per message
@@ -188,6 +232,69 @@ async function resolveOwner(
  * the number of NEW rows inserted.
  */
 export async function handleInboundMessages(
+  service: any,
+  value: any,
+): Promise<number> {
+  const messages = Array.isArray(value?.messages) ? value.messages : [];
+  const contacts = Array.isArray(value?.contacts) ? value.contacts : [];
+  let inserted = 0;
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i] as Record<string, unknown>;
+    try {
+      const wamid = typeof msg?.id === "string" ? msg.id : "";
+      const rawFrom = (typeof msg?.from === "string" && msg.from) ||
+        (typeof contacts[i]?.wa_id === "string" && contacts[i].wa_id) || "";
+      const waPhone = toWhatsAppNumber(String(rawFrom), null);
+      if (!waPhone) {
+        console.warn(`[whatsapp-inbound] message ${wamid || "(no id)"} has no usable phone — skipping`);
+        continue;
+      }
+      const { userId, leadId } = await resolveOwner(service, waPhone);
+      const body = bodyFor(msg);
+      const media = await saveInboundMedia(service, msg, userId, wamid);
+      const { data: insertedRow, error: insErr } = await service.from("whatsapp_messages").insert({
+        direction: "inbound", user_id: userId, lead_id: leadId, phone: waPhone, body,
+        message_type: media.message_type, media_path: media.media_path,
+        media_mime_type: media.media_mime_type, media_filename: media.media_filename,
+        wa_message_id: wamid || null, status: "received", test_mode: false,
+        created_at: tsToIso(msg?.timestamp), error: media.error,
+      }).select("id").single();
+      if (insErr) {
+        if ((insErr as { code?: string }).code === "23505") {
+          console.log(`[whatsapp-inbound] duplicate ${wamid} — already stored, skipping`);
+          continue;
+        }
+        console.error(`[whatsapp-inbound] insert failed for ${wamid}: ${(insErr as { message?: string }).message}`);
+        continue;
+      }
+      inserted++;
+      if (!leadId || !insertedRow?.id) continue;
+
+      await service.from("outreach_leads").update({ status: "replied" })
+        .eq("id", leadId).not("status", "in", NO_DOWNGRADE);
+      const firstInbound = await firstInboundForLead(service, leadId, insertedRow.id as string);
+      const { data: lead } = await service.from("outreach_leads")
+        .select("is_archived").eq("id", leadId).maybeSingle();
+      const armed = await armFirstReplyAuditIntent({
+        service, leadId, phone: waPhone, wamid: wamid || null,
+        firstInbound: firstInbound.first, firstInboundReliable: firstInbound.reliable,
+        archived: lead?.is_archived === true,
+      });
+      console.log(`[first-reply-audit] lead ${leadId}: ${armed.reason}`);
+      if (armed.armed) await prepareMockupForFirstReply(service, leadId);
+    } catch (e) {
+      // The inbound row is durable before automation is considered. Any later failure is visible
+      // in function logs and cannot make Meta redeliver a duplicate message.
+      console.error("[whatsapp-inbound] durable handler error:", e instanceof Error ? e.message : String(e));
+    }
+  }
+  return inserted;
+}
+
+/* Legacy body retained temporarily for source-history comparison only. It is intentionally not
+   exported; whatsapp-status calls the durable handler above. */
+async function legacyHandleInboundMessages(
   // deno-lint-ignore no-explicit-any
   service: any,
   // deno-lint-ignore no-explicit-any

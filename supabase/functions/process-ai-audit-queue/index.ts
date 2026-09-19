@@ -13,6 +13,7 @@ import { advanceBaseline, sweepStalledBaselines, ensureBaselinesForPaidOnboardin
 import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
 import { maybeSendRemeasureResults } from "../_shared/remeasure-results.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
+import { reconcileFirstReplyAuditIntents } from "../_shared/first-reply-audit.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
@@ -136,6 +137,16 @@ Deno.serve(async (req) => {
       const { data: roleRow } = await service
         .from("user_roles").select("role").eq("user_id", u.user.id).eq("role", "admin").maybeSingle();
       if (!roleRow) return json({ ok: false, error: "forbidden" }, 403);
+    }
+
+    /* The reply webhook only records durable intent. Reconciliation lives on this existing cron so
+       a cold-start/network failure cannot strand a qualifying first reply, and it runs before the
+       Apify token guard because creating the queue is separate from consuming it. */
+    try {
+      const replyRecovery = await reconcileFirstReplyAuditIntents(service);
+      if (replyRecovery.checked) console.log(`[first-reply-audit] reconciliation ${JSON.stringify(replyRecovery)}`);
+    } catch (e) {
+      console.error("[first-reply-audit] reconciliation failed:", e instanceof Error ? e.message : String(e));
     }
 
     const apifyToken = Deno.env.get("APIFY_TOKEN") ?? "";
@@ -1434,8 +1445,14 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         // reach here (completionSendJobs is complete-only), so their rows stay visible for a human.
         // The processor re-checks declines-since-queue-time at fire time, so a "no thanks" sent
         // during the audit run still cancels the pitch.
-        try {
-          const { data: upgraded } = await service.from("whatsapp_auto_replies")
+      try {
+        // Audit intent state is independent from the optional reply row status. Mark it terminal
+        // for both modes before the legacy awaiting_audit → pending reply upgrade below.
+        await service.from("whatsapp_auto_replies")
+          .update({ audit_status: "complete", audit_last_error: null, audit_next_attempt_at: null, audit_claimed_at: null, updated_at: new Date().toISOString() })
+          .eq("audit_id", job.auditId).eq("audit_required", true)
+          .in("audit_status", ["queued", "starting", "pending", "retry_pending"]);
+        const { data: upgraded } = await service.from("whatsapp_auto_replies")
             .update({ status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString(), updated_at: new Date().toISOString() })
             .eq("lead_id", leadId).eq("status", "awaiting_audit")
             .select("id");
