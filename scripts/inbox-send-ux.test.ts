@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const inbox = fs.readFileSync('src/pages/Inbox.tsx', 'utf8');
 const statusPatch = fs.readFileSync('src/lib/statusPatch.ts', 'utf8');
 const outreach = fs.readFileSync('src/pages/Outreach.tsx', 'utf8');
+const inboxHook = fs.readFileSync('src/hooks/useInbox.ts', 'utf8');
 const ok = (value: unknown, message: string) => {
   if (!value) throw new Error(`FAIL: ${message}`);
   console.log(`PASS: ${message}`);
@@ -18,5 +19,7 @@ ok(sendBody.includes('setDrafts((prev) => setDraft(prev, sendKey'), 'completed s
 ok(sendBody.includes('if (activeKey === sendKey)'), 'switching chats does not mutate the newly active chat');
 ok(statusPatch.includes("status === 'interested'") && statusPatch.includes('is_potential_work: true'), 'interested is persisted as a separate star marker');
 ok(outreach.includes("if (status === 'interested')") && outreach.includes('return;'), 'Outreach interested action leaves pipeline status unchanged');
+ok(inboxHook.includes('potentialWorkByLeadId') && inboxHook.includes('potentialWorkByLeadId[leadId]'), 'Inbox derives interested marker from the lead map');
+ok(!inboxHook.includes('isPotentialWork: !!lead.is_potential_work'), 'conversation derivation has no undefined lead access');
 
 console.log('All Inbox send/status UX checks passed.');

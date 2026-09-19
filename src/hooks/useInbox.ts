@@ -320,6 +320,12 @@ export function useInbox() {
     return m;
   }, [leads]);
 
+  const potentialWorkByLeadId = useMemo(() => {
+    const m: Record<string, boolean> = {};
+    for (const l of leads) m[l.id] = !!l.is_potential_work;
+    return m;
+  }, [leads]);
+
   // Per-lead latest COMPLETED audit → its /a/<auditId> report (built live by render-audit-report;
   // no stored report row). Keyed STRICTLY by lead_id (the lead's own audit) — never cross-leaks.
   // Newest-first, so the first audit per lead that has a complete/capped run wins.
@@ -517,11 +523,11 @@ export function useInbox() {
         siteVisitedAt: siteVisitedAtByLead.get(leadId) ?? null,
         geminiNamed: geminiByLead.get(leadId)?.named ?? null,
         geminiAnswers: geminiByLead.get(leadId)?.answers ?? null,
-        isPotentialWork: !!lead.is_potential_work,
+        isPotentialWork: leadId ? (potentialWorkByLeadId[leadId] ?? false) : false,
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [messagesByConversation, leadNameById, campaignByLeadId, statusByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, geminiByLead]);
+  }, [messagesByConversation, leadNameById, campaignByLeadId, statusByLeadId, potentialWorkByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, geminiByLead]);
 
   const messagesForKey = useCallback(
     (key: string) => messagesByConversation.get(key) ?? NO_MESSAGES,
