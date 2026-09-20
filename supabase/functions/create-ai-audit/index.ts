@@ -267,6 +267,13 @@ Deno.serve(async (req) => {
     // Optional: re-run an EXISTING audit (Phase 4 "re-run" hook). Reuses the audit's
     // business + its previous questions so before/after compares like-for-like.
     const reuseAuditId: string | null = typeof body.audit_id === "string" && body.audit_id ? body.audit_id : null;
+    /* ⛔ fresh_audit — INTERNAL CALLERS ONLY (2026-09-20, the first-reply chain). Bypasses the
+       per-lead reuse below so a reply-triggered audit is a NEW audit even when the lead already
+       carries an ordinary one (the drip's pre-send hook audit). Without it the reply intent was
+       handed the old audit's id with a run bolted on, and its "complete" check was satisfied by a
+       run that predated the reply. Internal-only so a public caller cannot mint duplicates; every
+       other caller's behaviour is byte-for-byte unchanged. */
+    const freshAudit: boolean = isInternal && body.fresh_audit === true;
     // preview: generate (or price) the questions WITHOUT creating any rows — powers the
     // wizard's editable review screen. questions[]: an explicit override (edited list)
     // used instead of generating; capped so a client can't enqueue an unbounded run.
@@ -455,7 +462,7 @@ Deno.serve(async (req) => {
     /* !isMeasurement, same reason as !isBaseline: a full measurement must be its OWN audit so the
        start and re-measure gathers are two distinct, comparable audits on the lead — not extra runs
        bolted onto an old 3-question outreach audit. */
-    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isRemeasure) {
+    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isRemeasure && !freshAudit) {
       const { data: candidates } = await service
         .from("ai_audits")
         .select("id, baseline_target_runs, created_at")

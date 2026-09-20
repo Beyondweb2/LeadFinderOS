@@ -1446,12 +1446,11 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         // The processor re-checks declines-since-queue-time at fire time, so a "no thanks" sent
         // during the audit run still cancels the pitch.
       try {
-        // Audit intent state is independent from the optional reply row status. Mark it terminal
-        // for both modes before the legacy awaiting_audit → pending reply upgrade below.
-        await service.from("whatsapp_auto_replies")
-          .update({ audit_status: "complete", audit_last_error: null, audit_next_attempt_at: null, audit_claimed_at: null, updated_at: new Date().toISOString() })
-          .eq("audit_id", job.auditId).eq("audit_required", true)
-          .in("audit_status", ["queued", "starting", "pending", "retry_pending"]);
+        /* ⛔ The first-reply AUDIT intent is NOT completed here any more (2026-09-20). This block only
+           runs when completionSendJobs exist AND autoReplyEnvOn(), so the intent's completion used
+           to depend on the reply kill-switch. reconcileFirstReplyAuditIntents settles `queued`
+           intents from their own audit's run status on every tick, independent of any reply gate;
+           this block owns the REPLY side only (the awaiting_audit → pending upgrade below). */
         const { data: upgraded } = await service.from("whatsapp_auto_replies")
             .update({ status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString(), updated_at: new Date().toISOString() })
             .eq("lead_id", leadId).eq("status", "awaiting_audit")
