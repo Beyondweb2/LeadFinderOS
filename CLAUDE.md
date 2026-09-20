@@ -335,7 +335,20 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **`classifySource` grades any `.org` as authority** — known report-accuracy bug, not yet fixed.
 
 **Derived, never stored** — `serveGate`, `townVerdict`, `nameIsJudgeable`, `needsQ2`, the free-check
-progress stage, the coverage rung. A stored verdict freezes old rows at a stale rule.
+progress stage, the coverage rung, `townRequiredFor`/`audienceUsefulFor`. A stored verdict freezes
+old rows at a stale rule.
+
+**The market model is the MARKET, never the delivery** (`src/lib/marketModel.ts`, 2026-09-20).
+`local` / `national` / `hybrid` all HARD-FORCE their own prompt block; only a null scope is
+classified by the model. A national set is an INTENT MIX (provider / problem / service / audience /
+category / comparison / terminology, weighted), never one sentence pattern — the pattern is what made
+a 20-question national audit twenty paraphrases. ⛔ **Never inject a town into a national question**,
+and ⛔ **`dropMissingTown` must never bind hybrid** (it deleted the wider half and topped it up with
+local templates). `offTradeReason`'s third door — the operator's own topics/sectors/audience — is
+national/hybrid ONLY; the local guard was measured on 3,198 questions and stays tight. One context
+shape (`auditQuestionContext.ts`) builds BOTH the preview and the confirm request: a second
+hand-written payload is how a field shapes the reviewed questions and never reaches the stored audit.
+`FULL_MEASURE_QUESTIONS` stays 20 — raising it is a spend decision, not a code one.
 
 **Absence is never an answer** — `serveGate` flags, never blocks, on a skipped question; `clientHeld`
 `heldValue()` is the only way the client sheet holds a value; `townVerdict` gates only on
@@ -509,6 +522,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
 | Any WhatsApp template, sender, greeting name, the Inbox list, the reply rule | `docs/whatsapp-templates.md` (§6g, §16, §29, §30–30e, §32) |
 | The client report, wrong-town history, partial results, the name that scores itself | `docs/reports.md` (§6b, §22, §27) |
+| The manual audit wizard, the market model, how a national/hybrid question set is built | `docs/market-model-audits.md` |
 | The free-check lane, its dedupe, its emails, where it meets the baseline | `docs/free-check.md` (§6j, §15, §21) |
 | Dashboard numbers, the campaign card, the client card, stored tasks | `docs/dashboard.md` (§6h, §14, §23) |
 | The page generator, the page-plan queue, Q&A modes | `docs/page-generator.md` (§6i) |

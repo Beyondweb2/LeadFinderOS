@@ -73,4 +73,5 @@
 - `docs/other-docs.md` — The other docs and how much to trust them (original §10) (§10; 20 lines)
 - `docs/measurement.md` — Measurement — before/after, the pointer, the three-type model, the results sender, the run gap, named-by-model (§17, §19, §18, §24, §25, §31; 559 lines)
 - `docs/findable-site.md` — findable-site — the home page order and the credibility pass (§20, §28; 137 lines)
+- `docs/market-model-audits.md` — Market-model audits — local / national / hybrid, the national intent mix, the three guards that gave way (2026-09-20)
 
