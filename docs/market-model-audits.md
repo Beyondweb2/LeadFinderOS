@@ -229,6 +229,56 @@ looking for.
 3 and not 5: cost is linear (40 × 3 = 120 Apify questions on one audit, against a shared monthly
 cap), and the paid baseline's own confidence number is 3.
 
+## The three audit actions (2026-09-20, follow-up)
+
+The screen offered **Re-audit** and **Re-run**. Neither label said whether it made a new audit or
+added a run to the old one, and both decided what they were dealing with by reading columns in the
+browser — the same guesswork that produced the 0/5. What they actually did:
+
+| old action | what it did | was it right? |
+|---|---|---|
+| Re-audit | copied the business row into a NEW audit, one run, questions editable | **broken for Discovery**: `SRC_SELECT` copied no `audit_purpose` and no `baseline_target_runs`, so a 40×3 scan came back as a purposeless copy — and with the new inherited-ceiling rule that is a 5-question audit |
+| Re-run | posted `{audit_id, questions}` and added a run to the **same** audit | worked, but it is how an "after" gets mixed into a "before", and it was the site of the 0/5 |
+
+Replaced by three actions with one meaning each, all driven from `src/lib/auditLifecycle.ts`:
+
+**Run again** — a NEW audit with the same configuration: same business, same stored purpose, same
+questions in the same order, same run count. The original keeps its own runs and results, so the two
+are independent measurement events rather than runs 4, 5 and 6 of one row. The dialog is a
+**confirmation, not an editor**: the moment it could edit questions, "run it again" and "measure
+something else" were one button again.
+
+**Start new audit** — the wizard, prefilled from the audit's business context, with mode, run count
+and questions all reset to defaults. Spends nothing; review-before-spend is unchanged.
+
+**Delete audit** — destructive, confirmed, and it cancels any work in flight first through the
+existing `cancelRun` path. Only `ai_audits` is deleted: `ai_audit_runs` and `ai_audit_queue` go by
+**ON DELETE CASCADE**, and everything else that points at an audit is **ON DELETE SET NULL**
+(`outreach_leads`' three pointers, `client_pages`, `client_page_questions`, `client_listings`,
+`whatsapp_auto_replies`) — verified against the live schema. The lead, its messages, its other
+audits and the paid relationship all survive.
+
+### What may be repeated, and what may be deleted
+
+Both lists are **positive**, and both read the stored purpose through `auditKind`. Repeatable:
+`audit` and `discovery` only — the two manual products with no machinery hanging off them. Excluded:
+`baseline` (a copy would carry purpose 'baseline' and `claim_baseline_pointer` would claim any lead
+whose pointer is still null), `remeasure` (one per baseline, ever), `measurement` (starts from a
+frozen baseline and claims `full_measure_audit_id`; its repeat is `startFullMeasure`'s job),
+`free_check` (a copy could email the visitor again).
+
+🔴 **The paid baseline is protected from deletion by a foreign key, not by taste.**
+`outreach_leads.baseline_audit_id` is ON DELETE SET NULL and `claim_baseline_pointer` fires only
+AFTER INSERT — so deleting a paid baseline nulls the guarantee's before-side pointer and **nothing
+can ever re-claim it**. Same for `remeasure_audit_id`, which a partial unique index makes once-ever.
+A legacy multi-run row with no purpose is protected too: on those columns a paid baseline and a free
+check are identical, so it fails closed.
+
+⚠️ **Audience and specialist sectors do not return as their own fields** in Start new audit, and
+that is a property of the schema: both are question-shaping inputs that merge into the one
+`specialism` column, so they come back inside *Main services / topics*, visible and editable. Said
+out loud in `prefillFromAudit` so nobody later "fixes" a loss that is not silent.
+
 ## Files
 
 `src/lib/marketModel.ts` (new) · `src/lib/auditQuestionContext.ts` · `src/lib/seedGuard.ts` ·
@@ -239,6 +289,9 @@ Discovery adds: `src/lib/auditQuestionCounts.ts` · `src/lib/auditKind.ts` ·
 `src/components/audit/AuditPills.tsx` · `scripts/discovery-audit.test.ts` (new).
 
 The 0/5 fix and the run selector add: `supabase/functions/_shared/audit-baseline.ts`.
+
+The three actions add: `src/lib/auditLifecycle.ts` (new) · `src/lib/reAudit.ts` ·
+`scripts/audit-lifecycle.test.ts` (new).
 
 Deployed: `create-ai-audit`, `paid-baseline`, `process-ai-audit-queue`, `render-remeasure-results`,
 `stripe-webhook` — the last three because they reach `seedGuard.ts`.

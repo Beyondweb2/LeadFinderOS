@@ -44,22 +44,37 @@ export type ReAuditOutcome =
    differs; re-measuring a full measure is meaningless, because a full measure is never compared.
    A dialog that could mint a 3-run copy of any audit was a second route to a comparable set that
    nothing recorded. */
+/* ⛔ audit_purpose AND baseline_target_runs ARE COPIED NOW, AND THAT IS THE WHOLE POINT OF
+   "Run again" (2026-09-20). They used to be deliberately left off so a copy could never look like
+   a paid baseline — correct then, wrong the moment Discovery existed: without the purpose the copy
+   had none, so create-ai-audit's inherited ceiling read 0 and a 40-question discovery set came back
+   as 5, and without the run count a 40x3 scan repeated as 40x1.
+   ⚠️ SAFE BECAUSE THE CALLER IS GATED. auditLifecycle.auditRepeatable is a positive list of two
+   purposes — ordinary and discovery — so `baseline`, `remeasure`, `measurement` and `free_check`
+   never reach this function and their pointer-claiming INSERT triggers can never fire from a copy.
+   The finalised-state columns (`baseline`, `baseline_completed_at`, `is_measurement`) are still NOT
+   copied: a repeat has measured nothing yet, and it is not a measurement. */
 const SRC_SELECT: string =
   'lead_id, business_name, business_type, location_text, country, has_website, website, business_scope, ' +
-  'specialism, credentials, business_phone, business_address, business_email, client_links';
+  'specialism, credentials, business_phone, business_address, business_email, client_links, ' +
+  'audit_purpose, baseline_target_runs';
 
 /**
- * Re-audit `sourceAuditId` into a fresh single-run audit owned by `userId`, asking `questions`.
+ * RUN AGAIN — copy `sourceAuditId` into a NEW audit owned by `userId` and run `questions` on it.
  * Returns the new audit id + first run id, or an error. Never throws. The source audit is left
- * untouched. Excluded from every before/after by construction (one run cannot support a
- * per-question claim — judgeRemeasure's `quick_diagnostic`).
+ * completely untouched, so the original keeps its own runs, results and timestamps and the two are
+ * independent measurement events rather than runs 4, 5 and 6 of one.
+ *
+ * ⛔ THE QUESTIONS ARRIVE IN ORDER AND LEAVE IN ORDER. Only blanks are dropped: no sort, no dedupe,
+ * no regeneration. create-ai-audit's reuse branch takes `providedQuestions` verbatim, and the copied
+ * `audit_purpose` is what raises its ceiling to the size the original was created at.
  */
-export async function reAuditFromSource(
+export async function runAgainFromSource(
   supabase: SupabaseClient,
   opts: { sourceAuditId: string; userId: string; questions: string[] },
 ): Promise<ReAuditOutcome> {
   const clean = opts.questions.map((q) => (q ?? '').trim()).filter(Boolean);
-  if (clean.length === 0) return { ok: false, error: 'no questions to re-audit' };
+  if (clean.length === 0) return { ok: false, error: 'no questions to run again' };
 
   const { data: src, error: readErr } = await supabase
     .from('ai_audits').select(SRC_SELECT).eq('id', opts.sourceAuditId).maybeSingle();
@@ -74,6 +89,9 @@ export async function reAuditFromSource(
     .single();
   if (insErr || !created) return { ok: false, error: insErr?.message ?? 'could not create the new audit' };
 
+  /* ⛔ NOTHING IS DECLARED HERE. The request names the new audit and its questions; the server
+     reads that audit's own stored purpose for the ceiling. A browser that lists today's purposes
+     is the guard that expired three times (CLAUDE.md §6). */
   const { data, error } = await supabase.functions.invoke('create-ai-audit', {
     body: { audit_id: (created as { id: string }).id, questions: clean },
   });

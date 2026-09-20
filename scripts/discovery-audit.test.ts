@@ -168,9 +168,12 @@ ok(/audit_purpose"\)\.eq\("id", reuseAuditId\)/.test(fn),
 /* ⛔ AND THE BROWSER STOPS GUESSING. The old code sent purpose:"measurement" when
    `is_measurement === true || baseline_target_runs > 1` — a list of the purposes that existed when
    it was written, which is exactly what discovery fell outside of. */
-ok(!/curIsMeasurement/.test(ui), 'the wizard no longer infers a re-run purpose from two columns');
-ok(/body: \{ audit_id: auditId, questions: clean \}/.test(ui),
-   'a re-run just names the audit and its questions; the server knows the rest');
+ok(!/curIsMeasurement/.test(ui), 'the wizard no longer infers a repeat purpose from two columns');
+/* The repeat request moved out of the page into src/lib/reAudit.ts when "Re-run" was replaced by
+   "Run again" (see audit-lifecycle.test.ts). Same shape, same reason: it names the audit and its
+   questions, and the SERVER reads the purpose off the row. */
+ok(/body: \{ audit_id: \(created as \{ id: string \}\)\.id, questions: clean \}/.test(strip(read('src/lib/reAudit.ts'))),
+   'a repeat just names the audit and its questions; the server knows the rest');
 
 /* ── MULTI-RUN: THE SAME QUESTIONS, NEVER REGENERATED ─────────────────────────────────────────── */
 console.log('\n-- B/C/D. 2 and 3 runs replay the SAME approved set, in order, with no regeneration --');

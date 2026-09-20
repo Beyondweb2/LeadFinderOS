@@ -4,7 +4,8 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 import { cellNamed } from '@/lib/namedSignal';
 import { asPence, SEO_SCAN_USD } from '@/lib/marketView';
 import { supabase } from '@/integrations/supabase/client';
-import { reAuditFromSource, RE_AUDIT_EST_USD_PER_QUESTION } from '@/lib/reAudit';
+import { runAgainFromSource, RE_AUDIT_EST_USD_PER_QUESTION } from '@/lib/reAudit';
+import { auditRepeatable, auditDeletable, repeatRunCount, prefillFromAudit } from '@/lib/auditLifecycle';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -23,7 +24,7 @@ import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, Globe, Map as MapIcon, Download, ChevronDown,
   Copy, Save, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2,
-  Archive, ShieldCheck, MoreHorizontal, Compass } from 'lucide-react';
+  Archive, ShieldCheck, MoreHorizontal, Compass, Trash2 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
@@ -388,20 +389,13 @@ const AiAudit = () => {
   const [previewMoney, setPreviewMoney] = useState<string[]>(persisted?.previewMoney ?? []);
   // "Paste your own questions" box (review step). Session-only scratch — not persisted; once applied
   // it REPLACES the questions list, and that list is what persists and runs.
-  // Editable re-run (results view): an inline editor seeded with the current run's questions.
-  // Persisted (session, per-user) so a tab-away/reload doesn't lose the operator's edits — the
-  // editor reopens with them. reRunForRunId scopes the editor to the run it was opened for, so a
-  // persisted "editing" flag can't reopen a stale editor over a DIFFERENT audit.
-  const [reRunEditing, setReRunEditing] = usePersistedState<boolean>(
-    'ai-audit-rerun-editing', false, { tier: 'session', scope: user?.id ?? null, version: 1 },
-  );
-  const [reRunForRunId, setReRunForRunId] = usePersistedState<string | null>(
-    'ai-audit-rerun-run', null, { tier: 'session', scope: user?.id ?? null, version: 1 },
-  );
-  // RE-AUDIT (a NEW audit row for the same business) — transient, unlike the re-run editor: it is
-  // confirmed or abandoned in one sitting, and a stale persisted copy pointing at a previous audit
-  // is a worse failure than losing a few typed edits.
+  /* RUN AGAIN / DELETE — transient dialogs. Deliberately NOT persisted: each is confirmed or
+     abandoned in one sitting, and a stale persisted copy pointing at a previous audit is a worse
+     failure than losing a click. (The old re-run editor WAS persisted, which is how an "editing"
+     flag could reopen over a different audit; scoping it by run id was the patch for that.) */
   const [reAuditOpen, setReAuditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [reAuditQuestions, setReAuditQuestions] = useState<string[]>([]);
   /* Paste-a-list: the raw textarea and its open/closed state. Parsed by the pure
      parseQuestionPaste (blank lines dropped, list markers stripped, duplicates collapsed) into the
@@ -410,9 +404,6 @@ const AiAudit = () => {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [reAuditBusy, setReAuditBusy] = useState(false);
-  const [reRunQuestions, setReRunQuestions] = usePersistedState<string[]>(
-    'ai-audit-rerun-questions', [], { tier: 'session', scope: user?.id ?? null, version: 1 },
-  );
   const [unitCost, setUnitCost] = useState(persisted?.unitCost ?? 0);
   const [engineCount, setEngineCount] = useState(persisted?.engineCount ?? SCORED_ENGINES.length);
   const [running, setRunning] = useState(false);
@@ -1423,23 +1414,6 @@ const AiAudit = () => {
     }
   };
 
-  // ── Re-run (new run on the SAME audit) — now EDITABLE. "Re-run" opens an inline editor
-  //    seeded with the current run's questions; the operator tweaks the terms and confirms.
-  //    Submit sends { audit_id, questions } — create-ai-audit honors providedQuestions on the
-  //    reuse path (else reuses verbatim), so edits take effect on the same audit.
-  const startReRun = () => {
-    if (!auditId || isDraining) return;
-    const seen = new Set<string>();
-    const seed = queueRows
-      .map((r) => (r.question ?? '').trim())
-      .filter((q) => { if (!q) return false; const k = q.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-    setReRunQuestions(seed.length ? seed : ['']);
-    setReRunForRunId(runId);   // scope this editor to the currently-open run
-    setReRunEditing(true);
-  };
-
-  const cancelReRun = () => { setReRunEditing(false); setReRunForRunId(null); setReRunQuestions([]); };
-
   /* ── RE-AUDIT: a NEW ai_audits row for the same business ──────────────────────────────────────
      Distinct from Re-run, which adds a run to the SAME audit row. Mixing post-work runs into the
      original row would destroy the only before-and-after measurement that exists, so this mints a
@@ -1475,7 +1449,7 @@ const AiAudit = () => {
   // RE_AUDIT_EST_USD_PER_QUESTION now lives in src/lib/reAudit.ts (imported above) — shared with the
   // Baseline page's "Re-run this measurement" cost line so the two estimates cannot drift.
 
-  const startReAudit = () => {
+  const startRunAgain = () => {
     if (!auditId || isDraining) return;
     const seen = new Set<string>();
     /* VERBATIM, deliberately — including misspellings. "accoutnant in wisbech" asked again is a
@@ -1511,63 +1485,91 @@ const AiAudit = () => {
       description: 'Edit or delete any of them below before running.' });
   };
 
-  const confirmReAudit = async () => {
+  /* ── RUN AGAIN ────────────────────────────────────────────────────────────────────────────────
+     A NEW audit with the SAME configuration: same business, same stored purpose, same questions in
+     the same order, same number of runs. The original is untouched, so the two are independent
+     measurement events rather than runs 4, 5 and 6 of one row.
+     ⛔ NOTHING IS RE-DECIDED IN THE BROWSER. The copy carries the stored purpose and run count
+     (src/lib/reAudit.ts), and the server reads that copy's own purpose for the question ceiling. */
+  const confirmRunAgain = async () => {
     if (!auditId || !user) return;
     const clean = reAuditQuestions.map((q) => q.trim()).filter(Boolean);
-    if (clean.length === 0) { toast({ title: 'Add at least one question', variant: 'destructive' }); return; }
+    if (clean.length === 0) { toast({ title: 'This audit has no questions to repeat', variant: 'destructive' }); return; }
+    const verdict = auditRepeatable(openAuditRow);
+    if (!verdict.ok) { toast({ title: "Can't run this one again", description: verdict.reason, variant: 'destructive' }); return; }
     setReAuditBusy(true);
     try {
-      /* A re-audit is a ONE-RUN quick diagnostic on a fresh copy (src/lib/reAudit.ts). The 3-run
-         "measurement" mode went on 2026-09-12: re-measuring a baseline is the queue's day-28
-         replay, and a full measure is never compared, so there was nothing left for it to do. */
-      const res = await reAuditFromSource(supabase as unknown as SupabaseClient, {
+      const res = await runAgainFromSource(supabase as unknown as SupabaseClient, {
         sourceAuditId: auditId, userId: user.id, questions: clean,
       });
-      if (!res.ok) throw new Error('error' in res ? res.error : 're-audit failed');
+      if (!res.ok) throw new Error('error' in res ? res.error : 'run again failed');
 
       setReAuditOpen(false); setReAuditQuestions([]);
       setAuditId(res.auditId);
       if (res.runId) { setRunId(res.runId); setOpenRunId(res.runId); }
       setRun(null); setQueueRows([]);
-      toast({ title: 'Re-audit started', description: 'New audit row created — the original is untouched.' });
+      toast({ title: 'Running again', description: `New audit started — ${clean.length} question${clean.length === 1 ? '' : 's'} × ${runAgainRuns} run${runAgainRuns === 1 ? '' : 's'}. The original is untouched.` });
       loadSaved();
     } catch (e) {
-      toast({ title: "Couldn't re-audit", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+      toast({ title: "Couldn't run it again", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
     } finally {
       setReAuditBusy(false);
     }
   };
 
-  const confirmReRun = async () => {
-    if (!auditId) return;
-    const clean = reRunQuestions.map((q) => q.trim()).filter(Boolean);
-    if (clean.length === 0) { toast({ title: 'Add at least one question', variant: 'destructive' }); return; }
-    setRunning(true);
+  /* ── START NEW AUDIT ──────────────────────────────────────────────────────────────────────────
+     The same business as a starting point, everything else open. Opens the wizard prefilled and
+     spends nothing: questions are generated at the review step and run only on Confirm & run. */
+  const startNewAuditFromThis = () => {
+    if (!openAuditRow) return;
+    const pre = prefillFromAudit(openAuditRow);
+    setMode('new'); setLeadId(openAuditRow.lead_id ?? null);
+    setBusinessName(pre.businessName); setBusinessType(pre.businessType);
+    setLocationText(pre.locationText); setCountry(pre.country as Country | '');
+    setHasWebsite(pre.hasWebsite); setWebsite(pre.website);
+    setBusinessScope(pre.businessScope); setSpecialisms(pre.specialisms);
+    /* The question-shaping extras are NOT stored columns (see prefillFromAudit) — they come back
+       inside Main services / topics. Cleared here so nothing stale is silently re-sent. */
+    setTargetAudience(''); setServiceAreasText(''); setSectorsText('');
+    /* A fresh decision every time: mode, run count and questions are the operator's to set. */
+    setAuditMode('quick'); setQuestionCount(defaultCountForMode('quick')); setDiscoveryRuns(DISCOVERY_RUNS);
+    setQuestions([]); setPreviewMoney([]); setUnitCost(0);
+    setRevealed(WIZARD_STEPS.indexOf('specialisms'));
+    setStep('source'); setFormOpen(true);
+  };
+
+  /* ── DELETE AUDIT ─────────────────────────────────────────────────────────────────────────────
+     ⛔ CANCEL FIRST, THEN DELETE. ai_audit_runs and ai_audit_queue are ON DELETE CASCADE from
+     ai_audits, so the rows go — but a row the processor has ALREADY claimed is work in flight, and
+     deleting the parent out from under it is not the same as stopping it. cancelRun is the existing
+     stop path (the same one the Stop button uses); nothing new is built here.
+     ⚠️ Everything else that points at an audit is ON DELETE SET NULL (outreach_leads' three
+     pointers, client_pages, client_page_questions, client_listings, whatsapp_auto_replies) —
+     verified against the live schema — so the lead, its messages, its other audits and the paid
+     relationship all survive. That is also exactly why a paid baseline may not be deleted:
+     auditDeletable refuses it, because nulling baseline_audit_id is unrecoverable. */
+  const deleteAudit = async () => {
+    if (!auditId || !openAuditRow) return;
+    const verdict = auditDeletable(openAuditRow);
+    if (!verdict.ok) { toast({ title: "This audit can't be deleted", description: verdict.reason, variant: 'destructive' }); return; }
+    setDeleteBusy(true);
     try {
-      /* 🔴 THE BROWSER NO LONGER DECIDES WHAT IT IS RE-RUNNING, AND THAT IS THE FIX FOR "0/5".
-         This used to read `is_measurement === true || baseline_target_runs > 1` and send
-         purpose:'measurement' to stop the set being clamped to the 5-question wizard cap. A
-         DISCOVERY audit is neither of those things, so on 2026-09-20 a re-run of Findable's
-         40-question discovery audit (9a0c2b79) posted 40 questions with no purpose and the server
-         sliced them to 5 — a real second run of five questions, which is what "0/5" was.
-         create-ai-audit now reads the STORED audit's own purpose and raises the cap from that, so
-         this request needs to say nothing: the audit row already knows what it is, and a list of
-         today's purposes in the browser is a guard that expires the next time one is added. */
-      const { data, error } = await supabase.functions.invoke('create-ai-audit', {
-        body: { audit_id: auditId, questions: clean },
-      });
-      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 're-run failed');
-      // Editor done → clear its persisted state so it doesn't reopen after the new run starts.
-      setReRunEditing(false); setReRunForRunId(null); setReRunQuestions([]);
-      setRunId(data.run_id);
-      setOpenRunId(data.run_id);
-      setRun(null); setQueueRows([]);
+      for (const r of (openAuditRow.runs ?? [])) {
+        if (!TERMINAL.has(r.status)) await cancelRun(r.id);
+      }
+      const { error } = await supabase.from('ai_audits').delete().eq('id', auditId);
+      if (error) throw new Error(error.message);
+      setDeleteOpen(false);
+      setAuditId(null); setRunId(null); setRun(null); setQueueRows([]); setOpenRunId(null);
+      toast({ title: 'Audit deleted', description: 'Its runs and results are gone. The business is untouched.' });
+      loadSaved();
     } catch (e) {
-      toast({ title: "Couldn't re-run", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
+      toast({ title: "Couldn't delete the audit", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
     } finally {
-      setRunning(false);
+      setDeleteBusy(false);
     }
   };
+
 
   // Re-extract competitors for THIS run from its already-stored answer text — FREE-ish /
   // instant, NO Apify re-scrape. Calls the extract-competitors edge fn, which has an AI read
@@ -1828,6 +1830,11 @@ const AiAudit = () => {
   }, [savedAudits, searchExtras]);
 
   const openAuditRow = listSource.find((a) => a.id === auditId) ?? null;
+  /* ⛔ THE THREE ACTIONS ASK THE SAME MODULE, WHICH ASKS THE STORED PURPOSE. Nothing here reads a
+     run count, `is_measurement` on its own, or a question count to decide what this audit is. */
+  const runAgainVerdict = auditRepeatable(openAuditRow);
+  const deleteVerdict = auditDeletable(openAuditRow);
+  const runAgainRuns = repeatRunCount(openAuditRow);
   const connectedBusiness = openAuditRow?.lead_id
     ? leads.find((lead) => lead.id === openAuditRow.lead_id) ?? null
     : null;
@@ -1858,12 +1865,10 @@ const AiAudit = () => {
     }
   };
   /* One run, always — a re-audit is a quick diagnostic. */
-  const reAuditRuns = 1;
-  const reAuditEstUsd = reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION * reAuditRuns;
+  const reAuditEstUsd = reAuditQuestions.filter((q) => q.trim()).length * RE_AUDIT_EST_USD_PER_QUESTION * runAgainRuns;
 
   // The re-run editor is open only for the run it was opened for (persisted flag is run-scoped),
   // so a stale editor can't reopen over a different audit after a tab-away/reload.
-  const reRunOpen = reRunEditing && !!runId && reRunForRunId === runId;
 
   // Scorecard: per-engine hit-rate across the completed questions + the competitors AI
   // named most often (from the per-engine "instead" lists). Cheap; recomputed from the
@@ -3040,21 +3045,30 @@ const AiAudit = () => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-64">
-                      <DropdownMenuLabel>Measure again</DropdownMenuLabel>
-                      {/* RE-AUDIT — a NEW audit row, prefilled. The measurement you want at week 4:
-                          "Re-run" would add runs to THIS row and mix the after into the before. */}
+                      <DropdownMenuLabel>Audit this business again</DropdownMenuLabel>
+                      {/* ⛔ TWO ACTIONS, TWO MEANINGS, AND THEY NO LONGER OVERLAP. "Re-audit" and
+                          "Re-run" sat here together: one minted a copy, the other added a run to
+                          THIS row, and neither label said which. Run again repeats the whole
+                          configuration as a NEW audit; Start new audit reopens the wizard on the
+                          same business so everything can change. Nothing adds runs to an audit that
+                          has already been measured — that is what mixed an after into a before. */}
                       {!isDraining && auditId && (
-                        <DropdownMenuItem onSelect={startReAudit}
-                          disabled={running || isDraining || reAuditOpen || reAuditBusy}>
-                          <CopyPlus className="mr-2 h-4 w-4" />
-                          <span className="flex-1">Re-audit</span>
-                          <span className="text-[10px] text-muted-foreground">new audit</span>
+                        <DropdownMenuItem
+                          onSelect={startRunAgain}
+                          disabled={running || isDraining || reAuditOpen || reAuditBusy || !runAgainVerdict.ok}
+                          title={runAgainVerdict.ok ? undefined : runAgainVerdict.reason}
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          <span className="flex-1">Run again</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {runAgainVerdict.ok ? `same set × ${runAgainRuns}` : 'not for this kind'}
+                          </span>
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem onSelect={startReRun} disabled={running || isDraining || reRunOpen}>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        <span className="flex-1">Re-run</span>
-                        <span className="text-[10px] text-muted-foreground">same audit</span>
+                      <DropdownMenuItem onSelect={startNewAuditFromThis} disabled={running || !openAuditRow}>
+                        <CopyPlus className="mr-2 h-4 w-4" />
+                        <span className="flex-1">Start new audit</span>
+                        <span className="text-[10px] text-muted-foreground">prefilled</span>
                       </DropdownMenuItem>
                       {/* Automated SEO scan — website audits only. Price on the face: the house
                           rule is that every spend says what it costs, derived from the
@@ -3127,10 +3141,31 @@ const AiAudit = () => {
                           <span className="truncate">Resume draft — {draftSummary}</span>
                         </DropdownMenuItem>
                       )}
-                      {/* ⚠️ DISCARDS the draft above, on purpose — that is what "new" means here. */}
+                      {/* ⚠️ DISCARDS the draft above, on purpose. Named "blank" so it cannot be
+                          confused with "Start new audit", which prefills from THIS business. */}
                       <DropdownMenuItem onSelect={startNewAudit}>
-                        <Plus className="mr-2 h-4 w-4" /> New audit
+                        <Plus className="mr-2 h-4 w-4" /> New audit — blank
                       </DropdownMenuItem>
+
+                      {/* ⛔ DESTRUCTIVE, LAST, AND SEPARATED. Refused outright for a paid baseline
+                          or a day-28 replay: deleting one nulls the lead's pointer and the claim
+                          trigger is AFTER INSERT only, so nothing can ever put it back. The reason
+                          is on the item rather than in a toast nobody reads. */}
+                      {auditId && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={() => setDeleteOpen(true)}
+                            disabled={deleteBusy || !deleteVerdict.ok}
+                            title={deleteVerdict.ok ? undefined : deleteVerdict.reason}
+                            className={deleteVerdict.ok ? 'text-destructive focus:text-destructive' : undefined}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            <span className="flex-1">Delete audit</span>
+                            {!deleteVerdict.ok && <span className="text-[10px] text-muted-foreground">protected</span>}
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -3203,85 +3238,43 @@ const AiAudit = () => {
               {/* RE-AUDIT confirmation — questions prefilled VERBATIM from the audit being re-audited,
                   editable, with the cost stated before anything is created. Nothing is written until
                   Start re-audit is pressed. */}
+              {/* ── RUN AGAIN — CONFIRMATION, NOT AN EDITOR ────────────────────────────────────
+                  ⛔ READ-ONLY ON PURPOSE. "Run again" means the SAME set, in the SAME order, with
+                  the SAME settings — an independent repeat of one measurement. The moment this
+                  screen let the questions be edited, "run it again" and "measure something else"
+                  became one button, which is the ambiguity this whole change removes. Editing (and
+                  pasting) lives in the wizard, one item up, behind "Start new audit".
+                  Nothing is written until Run again is pressed. */}
               {reAuditOpen && (
                 <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold">Re-audit — creates a NEW audit</span>
+                    <span className="text-sm font-semibold">Run again — creates a NEW audit</span>
                     <Button variant="ghost" size="sm" onClick={cancelReAudit} disabled={reAuditBusy}>Cancel</Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    A separate audit row for <span className="font-medium text-foreground">{resultsBusinessName || 'this business'}</span>,
-                    carrying over the business details and credentials. <span className="font-medium text-foreground">This audit is not
-                    modified</span> — it stays as your before.
+                    A separate audit for <span className="font-medium text-foreground">{resultsBusinessName || 'this business'}</span>,
+                    with the same questions, the same order and the same settings.
+                    <span className="font-medium text-foreground"> This audit is not modified</span> — it keeps its own
+                    runs and results.
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    Questions are copied exactly as they were asked, including any misspellings, so the
-                    comparison is like-for-like. Edit them only if you want to measure something different.
+                    Questions are copied exactly as they were asked, including any misspellings, so the two
+                    are like-for-like. To change anything, use <span className="font-medium text-foreground">Start new audit</span> instead.
                   </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    One run. A re-audit is a quick look, not a measurement — it is left out of every
-                    before/after. The day-28 re-measure of a paid baseline runs itself from the queue.
-                  </p>
-                  {/* PASTE A LIST — one question per line; numbered/bulleted lines are cleaned. */}
-                  <div className="rounded-md border border-border/60 bg-background/60 p-2">
-                    {!pasteOpen ? (
-                      <Button variant="outline" size="sm" disabled={reAuditBusy} onClick={() => setPasteOpen(true)}>
-                        <ClipboardList className="mr-2 h-4 w-4" /> Paste a list
-                      </Button>
-                    ) : (
-                      <div className="space-y-2">
-                        <p className="text-[11px] text-muted-foreground">
-                          One question per line. Blank lines are ignored, and numbered or bulleted lines
-                          (&ldquo;1.&rdquo;, &ldquo;2)&rdquo;, &ldquo;-&rdquo;) are cleaned up automatically.
-                        </p>
-                        <Textarea
-                          value={pasteText}
-                          onChange={(e) => setPasteText(e.target.value)}
-                          disabled={reAuditBusy}
-                          rows={8}
-                          placeholder={['How much does AndroFeme cost in the UK?', 'Can I get HRT online without a GP referral?', '3. Which UK clinics prescribe testosterone?'].join('\n')}
-                          className="text-sm"
-                        />
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button size="sm" disabled={reAuditBusy || !pasteText.trim()} onClick={() => applyPaste('replace')}>
-                            Replace all ({parseQuestionPaste(pasteText).length})
-                          </Button>
-                          <Button variant="outline" size="sm" disabled={reAuditBusy || !pasteText.trim()} onClick={() => applyPaste('append')}>
-                            Add to list ({parseQuestionPaste(pasteText).length})
-                          </Button>
-                          <Button variant="ghost" size="sm" disabled={reAuditBusy} onClick={() => { setPasteOpen(false); setPasteText(''); }}>Cancel</Button>
-                          {pasteText.trim() && (
-                            <span className="text-[11px] text-muted-foreground">
-                              {parseQuestionPaste(pasteText).length} clean question{parseQuestionPaste(pasteText).length === 1 ? '' : 's'} from {pasteLineCount(pasteText)} line{pasteLineCount(pasteText) === 1 ? '' : 's'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    {reAuditQuestions.map((q, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <Input value={q} disabled={reAuditBusy}
-                          onChange={(e) => setReAuditQuestions((prev) => prev.map((x, xi) => xi === i ? e.target.value : x))} />
-                        <Button variant="ghost" size="icon" disabled={reAuditBusy} title="Remove"
-                          onClick={() => setReAuditQuestions((prev) => prev.filter((_, xi) => xi !== i))}>
-                          <X className="h-4 w-4" />
-                        </Button>
+                  <div className="max-h-60 space-y-1 overflow-y-auto rounded-md border border-border/60 bg-background/60 p-2">
+                    {reAuditQuestions.filter((q) => q.trim()).map((q, i) => (
+                      <div key={i} className="flex gap-2 text-xs text-muted-foreground">
+                        <span className="w-5 shrink-0 text-right tabular-nums text-muted-foreground/60">{i + 1}.</span>
+                        <span className="text-foreground">{q}</span>
                       </div>
                     ))}
                   </div>
-                  <Button variant="outline" size="sm" disabled={reAuditBusy}
-                    onClick={() => setReAuditQuestions((prev) => [...prev, ''])}>
-                    <Plus className="mr-2 h-4 w-4" /> Add question
-                  </Button>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
                     <div className="text-xs text-muted-foreground">
-                      {/* One run, so the estimate is questions × the per-question figure. The 3-run
-                          "measurement" mode that once priced here is gone (2026-09-12). */}
+                      {/* The run count is the STORED one, so a 40 x 3 discovery scan repeats as 40 x 3. */}
                       <span className="font-medium text-foreground">
                         {reAuditQuestions.filter((q) => q.trim()).length} question{reAuditQuestions.filter((q) => q.trim()).length === 1 ? '' : 's'}
-                        {' × '}{reAuditRuns} run{reAuditRuns === 1 ? '' : 's'}
+                        {' × '}{runAgainRuns} run{runAgainRuns === 1 ? '' : 's'}
                       </span>
                       {' · '}
                       estimated cost{' '}
@@ -3290,52 +3283,44 @@ const AiAudit = () => {
                       </span>
                       {' '}(~£{(reAuditEstUsd * 0.8).toFixed(2)})
                       <span className="block text-[10px] text-muted-foreground/70">
-                        ${RE_AUDIT_EST_USD_PER_QUESTION}/question × {reAuditRuns} run,
+                        ${RE_AUDIT_EST_USD_PER_QUESTION}/question × {runAgainRuns} run{runAgainRuns === 1 ? '' : 's'},
                         from measured spend (81 runs, mean $0.042/run). Varies per run — the actual figure
                         is recorded when it finishes.
                       </span>
                     </div>
-                    <Button size="sm" onClick={confirmReAudit}
+                    <Button size="sm" onClick={confirmRunAgain}
                       disabled={reAuditBusy || reAuditQuestions.filter((q) => q.trim()).length === 0}>
-                      {reAuditBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CopyPlus className="mr-2 h-4 w-4" />}
-                      {reAuditBusy ? 'Creating…' : 'Start re-audit'}
+                      {reAuditBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                      {reAuditBusy ? 'Starting…' : 'Run again'}
                     </Button>
                   </div>
                 </div>
               )}
 
-              {/* Editable re-run — inline editor seeded with the current run's questions. Edit/add/
-                  remove terms, then Start re-run (submits { audit_id, questions } on the SAME audit).
-                  Leaving them unchanged re-runs the same questions. */}
-              {reRunOpen && (
-                <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold">Edit questions for the re-run</span>
-                    <Button variant="ghost" size="sm" onClick={cancelReRun} disabled={running}>Cancel</Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground -mt-1">
-                    Edit, add or remove the search terms for this re-run. Leaving them unchanged re-runs the same questions on this audit.
+              {/* ⛔ THE "Re-run" EDITOR IS GONE (2026-09-20). It added a run to THIS audit with
+                  edited questions — a second measurement wearing the first one's id, which is how an
+                  "after" gets mixed into a "before". Its two real jobs are now separate and named:
+                  repeat it exactly → Run again (a new audit); measure something different → Start
+                  new audit (the wizard, with paste and editing). */}
+
+              {deleteOpen && (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-3">
+                  <span className="text-sm font-semibold text-destructive">Delete this audit?</span>
+                  <p className="text-xs text-muted-foreground">
+                    This permanently removes this audit and its runs and results.
+                    <span className="font-medium text-foreground"> The business itself will not be deleted</span> —
+                    its lead, its messages and any other audits it has are untouched.
                   </p>
-                  <div className="space-y-2">
-                    {reRunQuestions.map((q, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <Input value={q} onChange={(e) => setReRunQuestions((prev) => prev.map((x, xi) => xi === i ? e.target.value : x))} />
-                        <Button variant="ghost" size="icon" onClick={() => setReRunQuestions((prev) => prev.filter((_, xi) => xi !== i))} title="Remove">
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button variant="outline" size="sm" onClick={() => setReRunQuestions((prev) => [...prev, ''])}>
-                      <Plus className="mr-1 h-4 w-4" /> Add question
-                    </Button>
-                  </div>
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-muted-foreground">
-                      {reRunQuestions.filter((q) => q.trim()).length} question{reRunQuestions.filter((q) => q.trim()).length === 1 ? '' : 's'}
-                    </span>
-                    <Button size="sm" onClick={confirmReRun} disabled={running || reRunQuestions.filter((q) => q.trim()).length === 0}>
-                      {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                      Start re-run
+                  {(openAuditRow?.runs ?? []).some((r) => !TERMINAL.has(r.status)) && (
+                    <p className="text-[11px] text-muted-foreground">
+                      This audit still has work in flight. It will be stopped first, so nothing can run after it is gone.
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center justify-end gap-2 border-t border-destructive/30 pt-3">
+                    <Button variant="ghost" size="sm" onClick={() => setDeleteOpen(false)} disabled={deleteBusy}>Cancel</Button>
+                    <Button variant="destructive" size="sm" onClick={deleteAudit} disabled={deleteBusy}>
+                      {deleteBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                      {deleteBusy ? 'Deleting…' : 'Delete audit'}
                     </Button>
                   </div>
                 </div>

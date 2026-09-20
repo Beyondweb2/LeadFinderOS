@@ -369,6 +369,15 @@ repeating** — that is the guard-keyed-to-today's-instances trap, and it has no
 Same rule in `advanceBaseline`: a repeat sends the purpose that is STORED, with the two-column
 reading kept only for rows written before the column existed.
 
+**Three audit actions, one meaning each** (`src/lib/auditLifecycle.ts`, 2026-09-20): **Run again**
+(a NEW audit, same purpose/questions/order/run count — a confirmation, never an editor), **Start new
+audit** (the wizard prefilled, everything re-choosable, spends nothing), **Delete audit**. "Re-audit"
+and "Re-run" are gone. `auditRepeatable` is a POSITIVE list of `audit` + `discovery`;
+`auditDeletable` refuses `baseline` and `remeasure` — ⛔ **deleting one nulls
+`outreach_leads.baseline_audit_id` (ON DELETE SET NULL) and `claim_baseline_pointer` is AFTER INSERT
+only, so nothing can re-claim it.** Delete cancels work in flight via the existing `cancelRun` first;
+runs and queue rows go by CASCADE, every other reference by SET NULL, so the lead survives.
+
 **Absence is never an answer** — `serveGate` flags, never blocks, on a skipped question; `clientHeld`
 `heldValue()` is the only way the client sheet holds a value; `townVerdict` gates only on
 `unverifiable`; `firstReplyMode` resolves anything unknown to `audit_only`; `seoScanAllowed()` is a
