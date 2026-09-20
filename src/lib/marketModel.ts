@@ -184,6 +184,10 @@ const AUDIENCES_FALLBACK = ['small businesses', 'startups', 'sole traders', 'eco
 const withRegion = (phrase: string, region: string) =>
   phrase.toLowerCase().includes(region.toLowerCase()) ? phrase : `${phrase} ${region}`;
 
+/** "a" vs "an". A template that writes "a ai visibility service" reads as machine output, and these
+ *  strings are the floor a real audit falls back to when OpenAI is unavailable. */
+const article = (word: string) => (/^[aeiou]/i.test(word.trim()) ? 'an' : 'a');
+
 function templatesFor(intent: NationalIntent, t: string, ctx: MarketContext): string[] {
   const r = ctx.region;
   const aud = ctx.audience ? [ctx.audience, ...AUDIENCES_FALLBACK] : AUDIENCES_FALLBACK;
@@ -225,8 +229,8 @@ function templatesFor(intent: NationalIntent, t: string, ctx: MarketContext): st
       ];
     case 'comparison':
       return [
-        R(`alternatives to a ${t} agency`),
-        R(`how to choose a ${t} provider`),
+        R(`alternatives to ${article(t)} ${t} agency`),
+        R(`how to choose ${article(t)} ${t} provider`),
         R(`is ${t} worth it for ${aud[0]}`),
         ...topics.slice(0, 3).map((s) => R(`who is best for ${s} vs doing it in house`)),
       ];
