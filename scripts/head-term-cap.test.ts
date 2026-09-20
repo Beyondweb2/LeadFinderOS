@@ -95,8 +95,15 @@ ok(/capHeads = false,/.test(fn), 'the cap is opt-in, default off');
    it to one head term changes cold outreach — a decision nobody asked for. */
 ok((fn.match(/coverage, true,?\n?\s*\)?;?/g) ?? []).length >= 1 || /coverage, true\)/.test(fn),
    'the judged call sites pass true');
-ok(/generateQuestions\(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, "", moneyQuestionCount\)/.test(fn),
-   'and the outreach hook call site is untouched — no flag, no cap');
+/* ⚠️ THE ASSERTION IS ON WHAT MATTERS, NOT ON THE ARGUMENT LIST. It used to pin the hook's call
+   site character for character, including a literal "" for the coverage argument — so it went red
+   the day service-area coverage was threaded through, and again when the market context was, both
+   times for reasons that have nothing to do with the head-term cap. What this guard is FOR is that
+   the hook passes NO capHeads flag. Test the property, never the identifier (CLAUDE.md §4). */
+const hookCall = fn.match(/qs = await generateQuestions\([^;]*\);/);
+ok(!!hookCall, 'the outreach hook call site is still a direct generateQuestions call');
+ok(!!hookCall && /moneyQuestionCount/.test(hookCall[0]) && !/true/.test(hookCall[0]),
+   'and it is untouched by the cap — no capHeads flag, so the hook is never capped');
 ok(/pooled\.questions = spread\.questions;/.test(fn), 'the cap runs on the POOLED set, before the caller slices');
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);

@@ -290,7 +290,18 @@ const intentAlternatives = (intent: string): string[][] =>
  * off, and refusing on absence would empty the question set for every lead whose trade we never
  * captured — absence is not an answer (CLAUDE.md §6).
  */
-export function offTradeReason(question: string, businessType: string): string | null {
+export function offTradeReason(
+  question: string,
+  businessType: string,
+  /* ⛔ DOOR THREE, OPT-IN, DEFAULT EMPTY — so every caller that has not opted in is byte-for-byte
+     unchanged. The operator's own services/topics, sectors and audience. It exists because a
+     NATIONAL business's best questions are problem-shaped ("who can help if chatgpt recommends my
+     competitors instead of my business") and carry neither the category's words nor any entry in
+     TRADE_INTENTS, so this guard — tuned on "electrician in Thetford" — would throw them all away.
+     ⚠️ Passed by create-ai-audit for national and hybrid scope ONLY. A local trade keeps the tight
+     guard the 3,198-question corpus was measured against. */
+  extraVocabulary: readonly string[] = [],
+): string | null {
   const trade = contentTokens(businessType);
   if (!trade.length) return null;
   const qTokens = normalise(question).split(' ').filter(Boolean);
@@ -298,6 +309,17 @@ export function offTradeReason(question: string, businessType: string): string |
 
   // Door one: the trade's own word, by STEM.
   if (trade.some((t) => tradeStemHit(qTokens, t))) return null;
+
+  /* Door three. Same stem test as door one for ordinary words, PLUS exact matching for the short
+     ones — contentTokens drops anything under four characters, which silently threw away every
+     acronym an operator actually typed ("SEO", "GEO", "AI"), and those are exactly the words a
+     national business's questions are built from. Exact match only, so a two-letter token cannot
+     match half the language. */
+  for (const term of extraVocabulary) {
+    for (const word of normalise(term).split(' ').filter((w) => w.length >= 2)) {
+      if (word.length >= 4 ? tradeStemHit(qTokens, word) : qTokens.includes(word)) return null;
+    }
+  }
 
   // Door two: a known intent for this trade, every token of one alternative present.
   /* ⚠️ INTENT TOKENS MATCH ON A SHARED PREFIX, NOT ON EQUALITY. "installing gas appliances" and
@@ -336,6 +358,8 @@ export function dropOffTrade(
   fallback: string[],
   target: number,
   businessType: string,
+  /** See offTradeReason — opt-in, default empty, national/hybrid only. */
+  extraVocabulary: readonly string[] = [],
 ): { questions: string[]; rejected: Array<{ question: string; reason: string }> } {
   const rejected: Array<{ question: string; reason: string }> = [];
   const seen = new Set<string>();
@@ -347,7 +371,7 @@ export function dropOffTrade(
       if (!t) continue;
       const key = questionKey(t);
       if (seen.has(key)) continue;
-      const reason = offTradeReason(t, businessType);
+      const reason = offTradeReason(t, businessType, extraVocabulary);
       if (reason) { rejected.push({ question: t, reason }); seen.add(key); continue; }
       seen.add(key);
       out.push(t);

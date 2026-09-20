@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { parseQuestionPaste, pasteLineCount } from '@/lib/questionPaste';
-import { buildAuditPreviewRequest } from '@/lib/auditQuestionContext';
+import { buildAuditPreviewRequest, buildAuditRunRequest } from '@/lib/auditQuestionContext';
 import { AuditQuestionEditor } from '@/components/AuditQuestionEditor';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
@@ -48,6 +48,7 @@ import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { shortReportUrl } from '@/lib/reportSlug';
 import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
 import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS } from '@/lib/auditQuestionCounts';
+import { MARKET_MODEL_OPTIONS, MARKET_MODEL_QUESTION, audienceUsefulFor, townRequiredFor, type MarketModel } from '@/lib/marketModel';
 /* The LLM "playbook" (playbookHtml.ts + the generate-playbook edge function) was DELETED
    2026-09-09. It recommended Bing Places — zero citations across 10,615 — and ICAEW to an ACCA
    firm. The evidence-derived playbook at /playbook/:id is the only one now. */
@@ -192,8 +193,11 @@ interface PersistedWizard {
   country: Country | '';
   hasWebsite: boolean | null;
   website: string;
-  businessScope: 'national' | 'local' | 'hybrid' | null;
+  businessScope: MarketModel | null;
   specialisms: string;
+  targetAudience?: string;
+  serviceAreasText?: string;
+  sectorsText?: string;
   auditMode?: 'quick' | 'full';
   questionCount: number;
   questions: string[];
@@ -286,8 +290,13 @@ const AiAudit = () => {
   const [website, setWebsite] = useState(persisted?.website ?? '');
   // How the client engages — sets business scope explicitly (overrides the downstream guess).
   // Optional: null when the user skips it (then we send null and the heuristic still applies).
-  const [businessScope, setBusinessScope] = useState<'national' | 'local' | 'hybrid' | null>(persisted?.businessScope ?? null);
-  const [specialisms, setSpecialisms] = useState(persisted?.specialisms ?? ''); // optional — grounds question generation
+  const [businessScope, setBusinessScope] = useState<MarketModel | null>(persisted?.businessScope ?? null);
+  const [specialisms, setSpecialisms] = useState(persisted?.specialisms ?? ''); // main services / topics — grounds question generation
+  /* MARKET-MODEL FIELDS. All optional, all free text, none persisted in their own column: they
+     shape the question set, which is the thing being bought. */
+  const [targetAudience, setTargetAudience] = useState(persisted?.targetAudience ?? '');
+  const [serviceAreasText, setServiceAreasText] = useState(persisted?.serviceAreasText ?? '');
+  const [sectorsText, setSectorsText] = useState(persisted?.sectorsText ?? '');
   /* Quick audit (current, unchanged) vs Full measurement (deliberate bulk gather). Additive. */
   const [auditMode, setAuditMode] = useState<'quick' | 'full'>(persisted?.auditMode ?? 'quick');
   const fullMode = auditMode === 'full';
@@ -512,7 +521,7 @@ const AiAudit = () => {
   useEffect(() => {
     try {
       localStorage.setItem(wizardKey(user?.id), JSON.stringify({
-        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, previewMoney, unitCost, engineCount,
+        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, targetAudience, serviceAreasText, sectorsText, auditMode, questionCount, questions, previewMoney, unitCost, engineCount,
       }));
       /* A draft now EXISTS on disk. Tracked in state (rather than re-reading storage at render time)
          so the "Resume draft" button below can appear and disappear truthfully. React bails out when
@@ -520,7 +529,7 @@ const AiAudit = () => {
       setDraftSaved(true);
     } catch { /* storage unavailable — persistence is best-effort */ }
     // `step` is deliberately NOT a dependency: this effect no longer branches on it (see above).
-  }, [revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, previewMoney, unitCost, engineCount, user?.id]);
+  }, [revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, targetAudience, serviceAreasText, sectorsText, auditMode, questionCount, questions, previewMoney, unitCost, engineCount, user?.id]);
 
   /* SETTLED-QUESTION COUNTS for a set of runs — the ONE implementation of "2 of 3 done".
      The queue's terminal statuses are 'done' and 'failed' (NOT 'complete', which is a RUN
@@ -982,6 +991,7 @@ const AiAudit = () => {
     dropDraft(); // drop the saved draft too, so "start fresh" is truly fresh
     setMode(null); setLeadId(null); setBusinessName(''); setBusinessType('');
     setLocationText(''); setCountry(''); setHasWebsite(null); setWebsite(''); setSpecialisms('');
+    setBusinessScope(null); setTargetAudience(''); setServiceAreasText(''); setSectorsText('');
     setAuditMode('quick'); setQuestionCount(DEFAULT_QUESTION_COUNT);
     setQuestions([]); setPreviewMoney([]); setUnitCost(0); setEngineCount(SCORED_ENGINES.length);
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
@@ -1250,21 +1260,30 @@ const AiAudit = () => {
     setSearchParams({}, { replace: true });
   }, [user, searchParams, leads, rehydrateOpenRun, setSearchParams, pickLead, setMode, setStep, toast, setOpenRunId, setRunId, setRun]);
 
+  /* ⛔ THE ONE CONTEXT. Preview and confirm both build their request from this object, so a field
+     cannot shape the questions the operator reviews and then fail to reach the audit that is
+     stored — which is what happened while confirm hand-wrote its own body. */
+  const auditContext = useMemo(() => ({
+    business_name: businessName,
+    business_category: businessType,
+    primary_location: locationText,
+    country,
+    website: hasWebsite ? website : '',
+    has_website: hasWebsite === true,
+    market_model: businessScope,
+    target_audience: audienceUsefulFor(businessScope) ? targetAudience : '',
+    services: specialisms ? [specialisms] : [],
+    service_areas: businessScope === 'national' ? [] : (serviceAreasText ? [serviceAreasText] : []),
+    specialisms: [],
+    specialist_sectors: audienceUsefulFor(businessScope) && sectorsText ? [sectorsText] : [],
+  }), [businessName, businessType, locationText, country, hasWebsite, website, businessScope, targetAudience, specialisms, serviceAreasText, sectorsText]);
+
   // ── Preview questions (generate for the review step) ─────────────────────────
   const runPreview = useCallback(async () => {
     setPreviewing(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-ai-audit', {
-        body: buildAuditPreviewRequest({
-          business_name: businessName,
-          business_category: businessType,
-          primary_location: locationText,
-          country,
-          website: hasWebsite ? website : '',
-          services: [],
-          service_areas: [],
-          specialisms: specialisms ? [specialisms] : [],
-        }, {
+        body: buildAuditPreviewRequest(auditContext, {
           questionCount,
           businessScope: businessScope || undefined,
           ...(fullMode ? { purpose: 'measurement' as const } : {}),
@@ -1280,7 +1299,7 @@ const AiAudit = () => {
     } finally {
       setPreviewing(false);
     }
-  }, [businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, questionCount, fullMode, toast]);
+  }, [auditContext, businessScope, questionCount, fullMode, toast]);
 
   // When the review step is first revealed with no questions yet, generate them.
   // Editing type/location later does NOT auto-wipe/regenerate (only reveal-fresh or the
@@ -1305,25 +1324,19 @@ const AiAudit = () => {
     setRunning(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-ai-audit', {
-        body: {
-          business_name: businessName, business_type: businessType,
-          location_text: locationText, country, has_website: hasWebsite,
-          website: website || undefined, lead_id: leadId || undefined,
-          business_scope: businessScope || undefined,
-          specialisms: specialisms || undefined,
-          question_count: questionCount,
+        /* Same builder as the preview — see auditContext. `questions` travels verbatim, so
+           confirming spends nothing on generation: the reviewed set IS the set that runs.
+           Full measurement: the server clamps to the measurement ceiling, forces SEO off (the
+           builder sends skip_seo) and creates its OWN audit so start vs re-measure stay comparable. */
+        body: buildAuditRunRequest(auditContext, {
+          questionCount,
+          businessScope: businessScope || undefined,
+          leadId: leadId || undefined,
+          ...(fullMode ? { purpose: 'measurement' as const } : {}),
           questions: clean,
-          /* The money flag for the set being sent. Filtered to `clean` here as well as server-side,
-             so an edited or removed question cannot arrive flagged. */
-          ...(previewMoney.length
-            ? { money_questions: previewMoney.filter((q) => clean.includes(q)) }
-            : {}),
-          // Full measurement: the deliberate bulk gather. Server clamps to the measurement ceiling,
-          // forces SEO off, and creates its OWN audit (not a run on an existing one) so start vs
-          // re-measure stay comparable. The queue paces the run — this never fires all at once.
-          ...(fullMode ? { purpose: 'measurement', skip_seo: true } : {}),
-          ...(overrideDistance ? { override_distance: true } : {}),
-        },
+          moneyQuestions: previewMoney,
+          overrideDistance,
+        }),
       });
       /* ⛔ NOT AN ERROR TO THROW. It is a question to put to the operator, so it opens the dialog
          and returns rather than landing in the generic catch as a red toast with a machine string. */
@@ -2033,12 +2046,14 @@ const AiAudit = () => {
   // All required fields present → questions can be generated. Website URL is required
   // only when "has website" is Yes (preserves the has_website behaviour). Specialisms
   // are optional.
-  /* Location is required for LOCAL/HYBRID audits — the questions are "[service] in [town]" and the
-     server refuses a town-less local audit (create-ai-audit: local_scope_needs_town). A NATIONAL /
-     remote client has NO town, and the server skips that gate for business_scope 'national', so a
-     town must NOT be forced here either. Any other scope (including unset) still needs a town. */
+  /* Location is required for LOCAL/HYBRID audits — both ask "[service] in [town]" questions and the
+     server refuses a town-less local audit (create-ai-audit: local_scope_needs_town). A NATIONAL
+     business has no town and must not be asked for one. townRequiredFor is the ONE rule, shared
+     with the server's own gate, so the screen and the refusal cannot disagree. */
+  const needsTown = townRequiredFor(businessScope);
+  const showAudienceFields = audienceUsefulFor(businessScope);
   const canGenerate = !!businessName.trim() && !!businessType.trim()
-    && (!!locationText.trim() || businessScope === 'national')
+    && (!!locationText.trim() || !needsTown)
     && !!country && hasWebsite !== null && (hasWebsite === false || !!website.trim());
 
   // Open a report: prefer the stored snapshot for that run (shown as-is), else the live
@@ -2517,20 +2532,43 @@ const AiAudit = () => {
 
                 {/* Type */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Business type</Label>
+                  <Label className="text-xs text-muted-foreground">Business category / what they do</Label>
                   <Input ref={typeRef} value={businessType} onChange={(e) => setBusinessType(e.target.value)}
-                    placeholder="e.g. barber, plumber, dentist" />
+                    placeholder="e.g. electrician, dentist, AI visibility service" />
+                </div>
+
+                {/* ⛔ THE MARKET MODEL, AND IT SITS ABOVE THE TOWN ON PURPOSE. It decides whether a
+                    town is required at all, so asking it after the town field is what let a national
+                    business be typed in as a local one. Wording comes from marketModel.ts — the same
+                    module the generator's prompt blocks are built from. */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">{MARKET_MODEL_QUESTION}</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {MARKET_MODEL_OPTIONS.map((opt) => (
+                      <ChoiceButton
+                        key={opt.value}
+                        active={businessScope === opt.value}
+                        onClick={() => setBusinessScope(opt.value)}
+                        label={opt.label}
+                        hint={opt.blurb}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">This decides the shape of the questions: local searches, national buying questions, or both.</p>
                 </div>
 
                 {/* Location + country */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2 space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Town / city</Label>
+                    <Label className="text-xs text-muted-foreground">
+                      {needsTown ? 'Town / city' : 'Town / city (not needed)'}
+                    </Label>
                     <Input ref={townRef} value={locationText} onChange={(e) => setLocationText(e.target.value)}
-                      placeholder="e.g. Leeds" />
+                      disabled={!needsTown}
+                      placeholder={needsTown ? 'e.g. Leeds' : 'Not used — this business is not chosen for proximity'} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Country</Label>
+                    <Label className="text-xs text-muted-foreground">{businessScope === 'national' ? 'Country / market' : 'Country'}</Label>
                     <Select value={country || undefined} onValueChange={(v) => setCountry(v as Country)}>
                       <SelectTrigger><SelectValue placeholder="Country" /></SelectTrigger>
                       <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
@@ -2551,24 +2589,42 @@ const AiAudit = () => {
                   )}
                 </div>
 
-                {/* Engagement scope — sets business_scope explicitly (overrides the downstream guess) */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">How do clients work with you?</Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <ChoiceButton active={businessScope === 'local'} onClick={() => setBusinessScope('local')} label="They come to my premises" hint="Local" />
-                    <ChoiceButton active={businessScope === 'national'} onClick={() => setBusinessScope('national')} label="I work remotely / across the country" hint="National" />
-                    <ChoiceButton active={businessScope === 'hybrid'} onClick={() => setBusinessScope('hybrid')} label="A mix of both" hint="Hybrid" />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">This shapes whether we focus on local listings or national directories.</p>
+                {/* Main services / topics (optional) — the grounding list every scope reads. */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Main services / topics</Label>
+                  <Input ref={specialismsRef} value={specialisms} onChange={(e) => setSpecialisms(e.target.value)}
+                    placeholder="e.g. rewires, EV chargers, fuse board upgrades" />
+                  <p className="text-[11px] text-muted-foreground">Optional — helps us generate realistic searches customers might use.</p>
                 </div>
 
-                {/* Specialisms (optional) */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">What are they known for? (optional)</Label>
-                  <Input ref={specialismsRef} value={specialisms} onChange={(e) => setSpecialisms(e.target.value)}
-                    placeholder="e.g. kava, pool tables, vinyl" />
-                  <p className="text-[11px] text-muted-foreground">Optional — helps ground the questions.</p>
-                </div>
+                {/* Extra service areas — local and hybrid only; a national market has no towns. */}
+                {needsTown && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Other service areas</Label>
+                    <Input value={serviceAreasText} onChange={(e) => setServiceAreasText(e.target.value)}
+                      placeholder="e.g. Rotherham, Barnsley" />
+                    <p className="text-[11px] text-muted-foreground">Optional — a minority of questions may use these. We do not repeat the same question per town.</p>
+                  </div>
+                )}
+
+                {/* Audience + sectors — national and hybrid only. A local trade's buyer is "people
+                    in the town", so asking it there would add a field that changes nothing. */}
+                {showAudienceFields && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Target customer / audience</Label>
+                      <Input value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)}
+                        placeholder="e.g. UK local businesses" />
+                      <p className="text-[11px] text-muted-foreground">Optional — who is doing the searching.</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Specialist sectors / niches</Label>
+                      <Input value={sectorsText} onChange={(e) => setSectorsText(e.target.value)}
+                        placeholder="e.g. trades, hospitality" />
+                      <p className="text-[11px] text-muted-foreground">Optional — used for a minority of the questions at most.</p>
+                    </div>
+                  </>
+                )}
 
                 {/* ── MODE TOGGLE: Quick audit (current) vs Full measurement (bulk gather) ────────
                     Quick is unchanged (3–5 questions). Full is the deliberate before/after gather —
@@ -2634,8 +2690,8 @@ const AiAudit = () => {
                   </Button>
                   {!canGenerate && (
                     <p className="text-[11px] text-muted-foreground mt-1.5">
-                      Fill in name, type, {businessScope === 'national' ? '' : 'location, '}country and the website choice to continue.
-                      {businessScope !== 'national' && ' (Location is optional if you pick “I work remotely / across the country”.)'}
+                      Fill in name, category, {needsTown ? 'town, ' : ''}country and the website choice to continue.
+                      {needsTown && ' (No town is needed if you pick “National / remote”.)'}
                     </p>
                   )}
                 </div>
@@ -2656,6 +2712,18 @@ const AiAudit = () => {
               </div>
               <p className="text-xs text-muted-foreground -mt-1">
                 These are the searches we'll run across {SCORED_ENGINES.map((e) => ENGINE_LABELS[e]).join(' + ')} (plus AI Overview & Google). Edit, add or remove any.
+              </p>
+              {/* WHY THIS SET. Without it the operator is judging questions with no sight of the
+                  context they came from, which is how a national business's local-looking set got
+                  approved. Reads straight off the same state the request was built from. */}
+              <p className="text-[11px] text-muted-foreground -mt-2">
+                Generated for <strong>{businessName || 'this business'}</strong>
+                {businessType ? ` · ${businessType}` : ''}
+                {` · ${MARKET_MODEL_OPTIONS.find((o) => o.value === businessScope)?.label ?? 'market model not set'}`}
+                {needsTown && locationText ? ` · ${locationText}` : ''}
+                {country ? ` · ${country}` : ''}
+                {showAudienceFields && targetAudience ? ` · for ${targetAudience}` : ''}
+                {specialisms ? ` · ${specialisms}` : ''}
               </p>
 
               {previewing ? (

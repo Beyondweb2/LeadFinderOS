@@ -1,3 +1,15 @@
+import type { MarketModel } from './marketModel.ts';
+
+/**
+ * THE ONE business-context shape question generation reads, for every manual audit path.
+ *
+ * ⛔ ONE SHAPE, TWO REQUESTS. The wizard used to build the preview body from this and then hand-
+ * write a SECOND, different body on confirm — which is how a field could exist on the screen,
+ * shape the previewed questions, and then never reach the stored audit. Both requests are built
+ * here now (buildAuditPreviewRequest / buildAuditRunRequest) off the same object.
+ *
+ * IMPORTED BY AN EDGE FUNCTION: relative imports with an explicit .ts extension only (CLAUDE.md §4).
+ */
 export type AuditQuestionContext = {
   business_name: string;
   business_category: string;
@@ -7,6 +19,16 @@ export type AuditQuestionContext = {
   service_areas: string[];
   specialisms: string[];
   country: string;
+  /** Explicit answer to "does it have a website?". Falls back to "a URL was given" when absent —
+   *  they differ when the operator ticks Yes and has not typed the URL yet, and has_website
+   *  branches the whole framing (service/booking angles vs presence/discovery). */
+  has_website?: boolean;
+  /** Where the business actually competes. Null = let the server's heuristic classify. */
+  market_model?: MarketModel | null;
+  /** e.g. "UK local businesses". National/hybrid only; a local trade's buyer is "people in the town". */
+  target_audience?: string;
+  /** Optional niches, kept separate from services so a sector can be a minority of the set. */
+  specialist_sectors?: string[];
 };
 
 const clean = (value: unknown) => typeof value === 'string' ? value.trim() : '';
@@ -26,15 +48,30 @@ export function normalizeAuditList(value: unknown): string[] {
   return result;
 }
 
-export function buildAuditPreviewRequest(
-  context: AuditQuestionContext,
-  options: { questionCount: number; purpose?: 'baseline' | 'measurement'; businessScope?: 'local' | 'national' | 'hybrid'; userId?: string; leadId?: string } ,
-): Record<string, unknown> {
+type AuditRequestOptions = {
+  questionCount: number;
+  purpose?: 'baseline' | 'measurement';
+  /** Explicit override; otherwise the context's own market_model is used. */
+  businessScope?: MarketModel;
+  userId?: string;
+  leadId?: string;
+};
+
+/** The fields BOTH requests carry, derived from the context and nothing else. */
+function baseRequest(context: AuditQuestionContext, options: AuditRequestOptions): Record<string, unknown> {
   const services = normalizeAuditList(context.services);
   const specialisms = normalizeAuditList(context.specialisms);
+  const sectors = normalizeAuditList(context.specialist_sectors);
   const serviceAreas = normalizeAuditList(context.service_areas);
+  const scope = options.businessScope ?? context.market_model ?? null;
+  /* ⛔ THE MODEL DECIDES WHICH FIELDS EXIST, IN ONE PLACE. A local trade's buyer is "whoever is in
+     the town", so an audience on a local audit is a field that changes nothing and a number in the
+     stored row that nobody can act on. Enforced here rather than only in the wizard, so a caller
+     that fills the whole context in cannot smuggle one in. */
+  const wide = scope === 'national' || scope === 'hybrid';
+  const audience = wide ? clean(context.target_audience) : '';
+  const areas = scope === 'national' ? [] : serviceAreas;
   return {
-    preview: true,
     ...(options.purpose ? { purpose: options.purpose } : {}),
     ...(options.userId ? { user_id: options.userId } : {}),
     ...(options.leadId ? { lead_id: options.leadId } : {}),
@@ -42,13 +79,48 @@ export function buildAuditPreviewRequest(
     business_type: clean(context.business_category) || 'business',
     location_text: clean(context.primary_location),
     country: clean(context.country) || null,
-    has_website: Boolean(clean(context.website)),
+    has_website: typeof context.has_website === 'boolean' ? context.has_website : Boolean(clean(context.website)),
     ...(clean(context.website) ? { website: clean(context.website) } : {}),
-    ...(options.businessScope ? { business_scope: options.businessScope } : {}),
-    specialisms: normalizeAuditList([...services, ...specialisms]).join(', '),
-    service_areas: serviceAreas,
+    ...(scope ? { business_scope: scope } : {}),
+    /* Services, specialisms and sectors all land in the one free-text `specialisms` column the
+       audit row already has — no migration, and the generator reads them as one grounding list.
+       `specialist_sectors` travels separately as well so the prompt can hold sectors to a minority
+       rather than treating a niche as a headline service. */
+    specialisms: normalizeAuditList([...services, ...specialisms, ...sectors]).join(', '),
+    ...(wide && sectors.length ? { specialist_sectors: sectors } : {}),
+    ...(audience ? { target_audience: audience } : {}),
+    service_areas: areas,
     question_count: options.questionCount,
     ...(options.purpose === 'measurement' ? { skip_seo: true } : {}),
+  };
+}
+
+export function buildAuditPreviewRequest(
+  context: AuditQuestionContext,
+  options: AuditRequestOptions,
+): Record<string, unknown> {
+  return { preview: true, ...baseRequest(context, options) };
+}
+
+/**
+ * The confirm request: the same context plus the set the operator actually approved. The questions
+ * travel verbatim, so no provider work happens between review and run.
+ */
+export function buildAuditRunRequest(
+  context: AuditQuestionContext,
+  options: AuditRequestOptions & {
+    questions: string[];
+    moneyQuestions?: string[];
+    overrideDistance?: boolean;
+  },
+): Record<string, unknown> {
+  const questions = options.questions.map((q) => q.trim()).filter(Boolean);
+  const money = (options.moneyQuestions ?? []).filter((q) => questions.includes(q));
+  return {
+    ...baseRequest(context, options),
+    questions,
+    ...(money.length ? { money_questions: money } : {}),
+    ...(options.overrideDistance ? { override_distance: true } : {}),
   };
 }
 

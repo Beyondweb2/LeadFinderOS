@@ -7,6 +7,10 @@ import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
 import { normalizeAuditList, serviceAreaQuestionDirective } from "../../../src/lib/auditQuestionContext.ts";
+import {
+  nationalIntentDirective, hybridIntentDirective, nationalFallbackQuestions, marketVocabulary,
+  hybridAllocation, type MarketContext,
+} from "../../../src/lib/marketModel.ts";
 import { excludeAsked, overAskFor } from "../../../src/lib/fullMeasure.ts";
 import { fillToTarget, dedupeByIntent } from "../../../src/lib/questionFill.ts";
 import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
@@ -129,6 +133,39 @@ function isNationalScope(loc: string, specialisms: string): boolean {
   return false;
 }
 
+/** The country/market word a NATIONAL question is qualified by ("uk"). Never a town: a national
+ *  business is not chosen for proximity, so the place in its questions is the market it sells into.
+ *  Falls back to "uk" — the only market this product sells in — rather than to the location, which
+ *  on a national audit is frequently blank. */
+function marketRegion(loc: string, country: string | null): string {
+  const c = (country ?? "").trim().toLowerCase();
+  if (c === "gb" || c === "uk" || c === "united kingdom") return "uk";
+  if (c) return c;
+  const l = loc.trim().toLowerCase();
+  if (l && NATIONAL_LOC_TERMS.has(l) && !NON_GEO_NATIONAL.has(l)) return l;
+  return "uk";
+}
+
+/** Build the one market context the national/hybrid prompt blocks, the deterministic templates and
+ *  the trade guard's third door all read. `specialisms` is the merged services/topics free text the
+ *  audit row already stores; `sectors` and `audience` are the market-model fields. */
+function buildMarketContext(
+  businessType: string,
+  locationText: string,
+  specialisms: string,
+  country: string | null,
+  audience: string,
+  sectors: string[],
+): MarketContext {
+  return {
+    businessType: businessType || "business",
+    region: marketRegion(locationText, country),
+    audience,
+    topics: normalizeAuditList(specialisms),
+    sectors,
+  };
+}
+
 /** A usable town for LOCAL "[service] in [town]" framing — not empty, not the "the local
  *  area" placeholder, and not a bare country/region term. Used to reject a forced-local
  *  audit that has no town rather than silently producing national ("uk") questions. */
@@ -145,7 +182,7 @@ function hasUsableTown(loc: string): boolean {
  *  audience-qualified "[service] for [audience] [country]" with NO broad best/top head-terms.
  *  Grounded in "known for" when given.
  *  Sliced to `count`. */
-function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number, scope: BusinessScope, country: string | null, moneyCount = 0): string[] {
+function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number, scope: BusinessScope, country: string | null, moneyCount = 0, market: MarketContext | null = null): string[] {
   const t = type || "business";
   // UK LOCAL audits: UNCONDITIONALLY disambiguate the town in question text ("Stamford UK") —
   // town names shared with bigger non-UK places (Stamford CT, Peterborough Ontario, Boston MA…)
@@ -160,7 +197,26 @@ function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, speci
   let base: string[];
   // 'local'/'national' force the branch; 'hybrid'/null keep the location heuristic.
   const national = scope === "local" ? false : scope === "national" ? true : isNationalScope(loc, specialisms);
-  if (national) {
+  /* ⛔ HYBRID SPLITS THE TEMPLATE SET TOO, not just the prompt. A hybrid fallback that produced
+     only local templates would silently be a local audit on the day OpenAI is down — the exact
+     class of fault this whole change exists to remove. */
+  if (scope === "hybrid" && market) {
+    const split = hybridAllocation(Math.max(1, count));
+    const where = loc ? ` in ${ukTown(loc)}` : "";
+    const localSide = [
+      ...niches.map((nk) => `${nk} ${t}${where}`),
+      `best ${t}${where}`,
+      `which ${t}${where} do people recommend`,
+      `${t}${where} with great reviews`,
+      `affordable ${t}${where}`,
+      `where to find a good ${t}${where}`,
+    ].slice(0, Math.max(0, split.local));
+    base = [...localSide, ...nationalFallbackQuestions(t, market, Math.max(0, split.national))];
+  } else if (national && market) {
+    /* Intent-spread national templates (marketModel.ts) rather than thirteen
+       "[trade] for [audience] uk" lines, which was the fallback's own version of the fault. */
+    base = nationalFallbackQuestions(t, market, Math.max(1, count));
+  } else if (national) {
     const l = loc.trim().toLowerCase();
     // Use the real country/region from the location when it is one; else default to "uk".
     const region = l && NATIONAL_LOC_TERMS.has(l) && !NON_GEO_NATIONAL.has(l) ? ` ${l}` : " uk";
@@ -394,6 +450,12 @@ Deno.serve(async (req) => {
     const specialisms: string = typeof body.specialisms === "string" ? body.specialisms.trim().slice(0, 200) : "";
     const serviceAreas = normalizeAuditList(body.service_areas).slice(0, 12);
     const serviceAreaCoverage = serviceAreaQuestionDirective(locationText, serviceAreas);
+    /* MARKET-MODEL FIELDS. Both optional and both additive: absent means the generator behaves
+       exactly as it did before they existed. Neither is persisted in its own column — the audit row
+       already stores the merged services/topics in `specialisms`, and the shape of the question set
+       is what they are for. */
+    const targetAudience: string = typeof body.target_audience === "string" ? body.target_audience.trim().slice(0, 120) : "";
+    const specialistSectors = normalizeAuditList(body.specialist_sectors).slice(0, 8);
     // Explicit client-engagement scope from the wizard. Only the three known values are stored;
     // anything else (incl. absent) → null, so the downstream heuristic still applies.
     const VALID_SCOPES = new Set(["national", "local", "hybrid"]);
@@ -625,6 +687,14 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "local_scope_needs_town" }, 400);
     }
 
+    /* ⛔ ONE CONTEXT, BUILT ONCE, AFTER THE TOWN IS RESOLVED. Null when the caller sent no
+       business_scope — every legacy caller (the outreach hook, a repeat, anything not updated)
+       therefore generates byte-for-byte what it generated before. For scope 'local' it is built
+       but reads as inert: nothing on the local path consults it. */
+    const marketContext: MarketContext | null = businessScope
+      ? buildMarketContext(businessType, locationText, specialisms, country, targetAudience, specialistSectors)
+      : null;
+
     const estCost = SOURCES.ai_search.estCostUsd;
     // ONE actor run per question covers every engine, so the cost is per QUESTION. Multiplying
     // by AUDIT_ENGINES.length double-counted it and, on top of the old 20x-high unit price,
@@ -650,12 +720,12 @@ Deno.serve(async (req) => {
       } else if (isBaseline || isMeasurement) {
         const mixed = await generateWithMoney(
           businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country,
-          questionCount, serviceAreaCoverage,
+          questionCount, serviceAreaCoverage, false, marketContext,
         );
         qs = mixed.questions;
         previewMoney = mixed.money;
       } else {
-        qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount);
+        qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount, null, false, marketContext);
       }
       return json({
         ok: true,
@@ -907,9 +977,9 @@ Deno.serve(async (req) => {
         for (const area of areaAllocation) {
           if (area.isMain) continue;
           try {
-            const mixed = await generateWithMoney(businessName, businessType, area.town, hasWebsite, specialisms, ask(area.questions), "local", country, area.questions, coverage, true);
+            const mixed = await generateWithMoney(businessName, businessType, area.town, hasWebsite, specialisms, ask(area.questions), "local", country, area.questions, coverage, true, null);
             const kept = fillGenerated(`area "${area.town}"`, mixed.questions, area.questions, baselineAsked,
-              { type: businessType, loc: area.town, hasWebsite, specialisms, scope: "local", country });
+              { type: businessType, loc: area.town, hasWebsite, specialisms, scope: "local", country, market: null });
             perArea.push(...kept);
             /* Only the ones that SURVIVED are flagged. An area whose allocation is under
                MONEY_QUESTION_MIN_COUNT gets none at all (baselineMoneyQuestionShare returns 0). */
@@ -924,9 +994,9 @@ Deno.serve(async (req) => {
         if (providedQuestions?.length) {
           mainQs = disjoint(providedQuestions).slice(0, mainShare);
         } else {
-          const mixed = await generateWithMoney(businessName, businessType, locationText, hasWebsite, specialisms, ask(mainShare), businessScope, country, mainShare, coverage, true);
+          const mixed = await generateWithMoney(businessName, businessType, locationText, hasWebsite, specialisms, ask(mainShare), businessScope, country, mainShare, coverage, true, marketContext);
           mainQs = fillGenerated(`main town "${locationText}"`, mixed.questions, mainShare, baselineAsked,
-            { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country });
+            { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
           const keptMain = new Set(mainQs);
           moneyGenerated.push(...mixed.money.filter((q) => keptMain.has(q)));
         }
@@ -953,19 +1023,19 @@ Deno.serve(async (req) => {
              the two-call generator, so the before/after can include or exclude them by choice. */
           const mixed = await generateWithMoney(
             businessName, businessType, locationText, hasWebsite, specialisms, ask(questionCount),
-            businessScope, country, questionCount, coverage, true,
+            businessScope, country, questionCount, coverage, true, marketContext,
           );
           /* ⛔ FILL, DON'T SLICE (2026-09-13): exclude → dedupe by intent → slice → top up from the
              templates. This is the site that queued AD Locksmithing's 11-of-12 baseline and
              18-of-20 measure — the dedupe used to run after this slice, with nothing to top up. */
           questions = fillGenerated(isBaseline ? "paid baseline" : "full measure", mixed.questions, questionCount, baselineAsked,
-            { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country });
+            { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
           const kept = new Set(questions);
           moneyGenerated.push(...mixed.money.filter((q) => kept.has(q)));
         } else {
           questions = await generateQuestions(
             businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
-            businessScope, country, coverage, moneyQuestionCount,
+            businessScope, country, coverage, moneyQuestionCount, null, false, marketContext,
           );
         }
       }
@@ -1279,6 +1349,8 @@ async function generateWithMoney(
      the outreach hook is 3 throwaway questions and capping it would change cold outreach, which is
      a decision nobody has asked for. */
   capHeads = false,
+  /** The market context, forwarded verbatim to both calls. Null for any caller not updated. */
+  market: MarketContext | null = null,
 ): Promise<{ questions: string[]; money: string[] }> {
   const total = Math.max(0, Math.floor(Number(count) || 0));
   const moneyN = Math.min(total, baselineMoneyQuestionShare(moneySlots));
@@ -1286,6 +1358,7 @@ async function generateWithMoney(
     // Too small to spend a slot on a buying-moment query — byte-identical to the old behaviour.
     const only = await generateQuestions(
       businessName, businessType, locationText, hasWebsite, specialisms, total, scope, country, coverage,
+      0, null, false, market,
     );
     return { questions: only.slice(0, total), money: [] };
   }
@@ -1294,12 +1367,13 @@ async function generateWithMoney(
     ? (await generateQuestions(
         businessName, businessType, locationText, hasWebsite, specialisms,
         Math.max(MIN_QUESTION_COUNT, standardN), scope, country, coverage,
+        0, null, false, market,
       )).slice(0, standardN)
     : [];
   const askMoney = Math.max(MIN_QUESTION_COUNT, moneyN);
   const money = (await generateQuestions(
     businessName, businessType, locationText, hasWebsite, specialisms,
-    askMoney, scope, country, coverage, askMoney, askMoney,
+    askMoney, scope, country, coverage, askMoney, askMoney, false, market,
   )).slice(0, moneyN);
   /* ⛔ MONEY FIRST, AND IT IS LOAD-BEARING. Callers slice this pool IN ORDER to their target
      after the baseline-exclusion filter, so whatever is last is what gets cut. With money last, a
@@ -1348,10 +1422,10 @@ function fillGenerated(
   candidates: readonly string[],
   target: number,
   excluded: readonly string[],
-  tpl: { type: string; loc: string; hasWebsite: boolean; specialisms: string; scope: BusinessScope; country: string | null },
+  tpl: { type: string; loc: string; hasWebsite: boolean; specialisms: string; scope: BusinessScope; country: string | null; market?: MarketContext | null },
 ): string[] {
   // Over-generate the template list: it is deduped and exclusion-filtered too, so ask for plenty.
-  const topUp = target > 0 ? fallbackQuestions(tpl.type, tpl.loc, tpl.hasWebsite, tpl.specialisms, Math.max(target * 2, 12), tpl.scope, tpl.country) : [];
+  const topUp = target > 0 ? fallbackQuestions(tpl.type, tpl.loc, tpl.hasWebsite, tpl.specialisms, Math.max(target * 2, 12), tpl.scope, tpl.country, 0, tpl.market ?? null) : [];
   const fill = fillToTarget({ candidates, target, excluded, topUp });
   if (fill.duplicates.length || fill.excluded.length || fill.toppedUp || fill.short) {
     console.warn(`[create-ai-audit] ${label}: ${fill.questions.length}/${target} — dropped ${fill.duplicates.length} duplicate(s), excluded ${fill.excluded.length} judged, topped up ${fill.toppedUp} from templates${fill.short ? `, STILL SHORT BY ${fill.short}` : ""}`
@@ -1400,6 +1474,11 @@ async function generateQuestions(
      would change cold outreach, which is a different decision nobody has asked for. Default false,
      so every caller that has not opted in generates exactly what it generated before. */
   capHeads = false,
+  /* ⛔ THE MARKET CONTEXT — services/topics, sectors, audience and the market region. Optional and
+     defaulted to null so any caller that has not been updated produces exactly what it produced
+     before. When present it drives the NATIONAL intent mix, the HYBRID split, the deterministic
+     templates and the trade guard's third door. */
+  market: MarketContext | null = null,
 ): Promise<string[]> {
   // The CALLER has already applied the right POLICY ceiling: MAX_QUESTION_COUNT for the outreach
   // hook, BASELINE_MAX_QUESTION_COUNT for a paid baseline, FULL_MEASURE_QUESTIONS for a measure.
@@ -1415,12 +1494,16 @@ async function generateQuestions(
   const moneyN = typeof moneyExact === "number" && moneyExact > 0
     ? Math.min(Math.floor(moneyExact), n)
     : (moneyCount > 0 ? moneyQuestionShare(n) : 0);
-  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n, scope, country, moneyN);
+  const fallback = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, n, scope, country, moneyN, market);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) return fallback;
-  // 'local'/'national' hard-force the prompt's scope block; 'hybrid'/null let the model classify.
+  /* 'local'/'national'/'hybrid' now ALL hard-force their own block. Only a null scope (an older
+     caller, or a lead we never asked) still falls through to the model's own classification.
+     ⛔ HYBRID USED TO BE IN THAT FALLTHROUGH, and that was the bug: "classify from the location"
+     saw a town and produced a purely LOCAL set, so picking "a mix of both" changed nothing at all. */
   const forceLocal = scope === "local";
   const forceNational = scope === "national";
+  const forceHybrid = scope === "hybrid" && market !== null;
 
   const name = businessName || "the business";
   const type = businessType || "local business";
@@ -1461,7 +1544,14 @@ async function generateQuestions(
 - Broad head-terms are allowed here (a small local pool is winnable): e.g. "best [service] in ${locQ}", "top [service] in ${locQ}".
 - NEVER use "near me" in any form — always name the actual place (${locQ}) instead.`;
 
-  const NATIONAL_RULES = `- NEVER use "near me".
+  /* ⛔ THE NATIONAL BLOCK IS AN INTENT MIX, NOT A SENTENCE PATTERN. It used to say "use the pattern
+     '[specific service] for [audience] [country]'", so every national audit — 20 questions or 40 —
+     was that one query rewritten. marketModel.ts owns the mix; this file just asks for it.
+     ⚠️ The pattern-only text is kept as the fallback for a caller with no market context, so
+     nothing that has not been updated changes shape. */
+  const NATIONAL_RULES = market
+    ? nationalIntentDirective(n, market)
+    : `- NEVER use "near me".
 - NEVER use broad head-terms like "best [service] in [country]", "top [service] in [country]", or "leading [service] in [country]". These are dominated by directories and comparison sites, are unwinnable for a single firm, and prove nothing — do not produce any.
 - EVERY question must be a SPECIFIC service or problem, qualified by AUDIENCE and national scope. Use the pattern "[specific service] for [audience] [country]" or "[niche] [service] [country]" — e.g. "[service] for small businesses uk", "[niche] [service] uk". Use the real country/region from the location; if the location gives no country, use "uk". Prioritise the differentiators / niches in the "known for" field.`;
 
@@ -1475,12 +1565,19 @@ ${ALWAYS_RULES}
 LOCAL RULES:
 ${LOCAL_RULES}`
     : forceNational
-    ? `SCOPE — FORCED NATIONAL: This business serves clients NATIONALLY (remote / across the country). Generate NATIONAL questions ONLY; do NOT use local town framing.
+    ? `SCOPE — FORCED NATIONAL: This business competes across a whole country/market and is NOT chosen for proximity to a town. Generate NATIONAL questions ONLY; do NOT use local town framing and do NOT name any town.
 
 ${ALWAYS_RULES}
 
 NATIONAL RULES:
 ${NATIONAL_RULES}`
+    : forceHybrid
+    ? `SCOPE — FORCED HYBRID: This business has a real LOCAL market in ${locQ} AND a wider ${market!.region} market. Generate BOTH, in the proportions below.
+
+${ALWAYS_RULES}
+
+HYBRID RULES:
+${hybridIntentDirective(n, market!, locQ)}`
     : `STEP 1 — CLASSIFY THE SCOPE (decide this first, silently, from the location and "known for"):
 - NATIONAL if the location names a country, nation, or large region (e.g. "UK", "United Kingdom", "England", "Britain", "Scotland", "Wales", "Ireland", "USA", "Australia"), OR is empty / says "nationwide" / "national" / "online" / "remote", OR the "known for" text says the business serves clients nationally, works remotely, or has no physical office.
 - LOCAL if the location names a specific town, city, or local area (e.g. "Leeds", "Chiang Mai", "Camden").
@@ -1516,7 +1613,9 @@ Return via the return_questions tool.`;
 The place is ALWAYS written exactly "${locQ}" — that trailing country word is PART OF THE PLACE and is required, not a "national term".
 Do not otherwise widen the question to a country or region: no "for [audience] in England", no "nationwide", no "online".`
     : forceNational
-    ? `This business is NATIONAL. Generate ${n} short, single-intent phrases qualified by audience + country — no "near me", no broad head-terms.`
+    ? `This business is NATIONAL. Generate ${n} short, single-intent phrases across the INTENT MIX above — no town, no "near me", no broad head-terms, and never one intent reworded to fill another's slots.`
+    : forceHybrid
+    ? `This business is HYBRID. Generate ${n} phrases: ${hybridAllocation(n).local} LOCAL ones written with the place exactly "${locQ}", and ${hybridAllocation(n).national} WIDER ${market!.region} ones with NO town in them at all. Different services on each side — never the same question with and without the town.`
     : `First classify this business as NATIONAL or LOCAL from the location, then generate ${n} short, single-intent search phrases under the matching rules.`;
 
   const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation as given: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for: ${specialisms}` : ""}\n\n${userScopeLine} One intent each, grounded in its real services, no "and", no invented services.`;
@@ -1598,7 +1697,13 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
        ⚠️ Trade word OR a known intent for the trade — see offTradeReason. Measured over all 3,198
        questions on file it rejects 118 and throws away ONE good question; the rule was tuned
        against that corpus, not guessed. */
-    const onTrade = dropOffTrade(guarded.questions, fallback, n, businessType);
+    /* ⚠️ THE THIRD DOOR IS OPENED FOR NATIONAL AND HYBRID ONLY. A national business's best
+       questions are problem-shaped ("who can help if chatgpt recommends my competitors instead of
+       my business") and carry neither the category's own words nor any entry in TRADE_INTENTS, so
+       this guard — measured and tuned on "electrician in Thetford" — would reject the whole
+       PROBLEM intent. Local audits pass an empty vocabulary and keep the tight guard exactly. */
+    const tradeVocabulary = market && (forceNational || forceHybrid) ? marketVocabulary(market) : [];
+    const onTrade = dropOffTrade(guarded.questions, fallback, n, businessType, tradeVocabulary);
     if (onTrade.rejected.length) {
       console.warn(
         `[create-ai-audit] off-trade questions dropped (${onTrade.rejected.length}) for "${businessType}": `
@@ -1627,7 +1732,14 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
        which is how "emergency locksmith for homes uk" reached a Hastings locksmith audit. Enforced
        only when this audit HAS a usable town and is not explicitly national: a genuinely national
        business's questions are supposed to omit the town. */
-    if (scope !== "national" && hasUsableTown(locationText)) {
+    /* ⛔ HYBRID IS EXEMPT FROM dropMissingTown, AND THAT IS THE WHOLE POINT OF HYBRID. This test
+       demands EVERY question name the town, so before this change a hybrid audit had its entire
+       wider-market half rejected and topped up with local templates — "a mix of both" silently
+       produced a local-only set. qualifyPlace still runs below: it only touches questions that DO
+       name the town, so the local half is still pinned to "<town> UK" and the wider half is left
+       alone. A null scope keeps the old behaviour: the model classified it, so it was told to put
+       the town in. */
+    if (scope !== "national" && scope !== "hybrid" && hasUsableTown(locationText)) {
       /* The town as the questions should carry it. locationText is already the bare town by the
          time it reaches here (create-ai-audit resolves it via pickAuditTown), so the check is on
          that value — not on locQ, which appends " UK" for engine disambiguation. */
@@ -1653,6 +1765,20 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
       if (pinned.repaired.length) {
         console.warn(
           `[create-ai-audit] country marker added to ${pinned.repaired.length} question(s) for "${town}": `
+          + pinned.repaired.map((r) => `"${r.before}" -> "${r.after}"`).join(" | "),
+        );
+      }
+      return pinned.questions;
+    }
+    /* HYBRID: pin the LOCAL half's place without demanding a town of the wider half. qualifyPlace
+       returns any question that does not mention the town untouched, so this is safe on a set that
+       is half national by design. */
+    if (scope === "hybrid" && hasUsableTown(locationText)) {
+      const town = locationText.trim();
+      const pinned = qualifyPlace(spread.questions, town);
+      if (pinned.repaired.length) {
+        console.warn(
+          `[create-ai-audit] hybrid: country marker added to ${pinned.repaired.length} local question(s) for "${town}": `
           + pinned.repaired.map((r) => `"${r.before}" -> "${r.after}"`).join(" | "),
         );
       }
