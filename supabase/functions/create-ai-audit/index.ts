@@ -274,7 +274,15 @@ Deno.serve(async (req) => {
        handed the old audit's id with a run bolted on, and its "complete" check was satisfied by a
        run that predated the reply. Internal-only so a public caller cannot mint duplicates; every
        other caller's behaviour is byte-for-byte unchanged. */
-    const freshAudit: boolean = isInternal && body.fresh_audit === true;
+    /* hook_audit — the EXPLICIT hook/outreach marker (2026-09-20). Set only by the genuine hook
+       callers: the first-reply chain, the drip's pre-send audit and the Inbox hook button. It is
+       what makes an audit ADAPTIVE (see isHookAudit below); it is never inferred from the question
+       count, the purpose, or who is calling. A separate concept from fresh_audit. */
+    const hookAuditRequested: boolean = body.hook_audit === true;
+    // fresh_audit is honoured for internal callers, and for an authenticated caller that has declared
+    // a hook (the Inbox re-run): a hook re-run is a new hook by product rule, and it can only ever
+    // reduce reuse, never raise a ceiling.
+    const freshAudit: boolean = body.fresh_audit === true && (isInternal || hookAuditRequested);
     // preview: generate (or price) the questions WITHOUT creating any rows — powers the
     // wizard's editable review screen. questions[]: an explicit override (edited list)
     // used instead of generating; capped so a client can't enqueue an unbounded run.
@@ -415,15 +423,17 @@ Deno.serve(async (req) => {
       : isFreeCheck ? FREE_CHECK_AUDIT_PURPOSE
       : ORDINARY_AUDIT_PURPOSE;
     const skipSeo: boolean = body.skip_seo === true || !seoScanAllowed(auditPurpose);
-    /* ⛔ THE HOOK AUDIT IS ADAPTIVE (Paul, 2026-09-20). An ORDINARY audit whose questions this
-       function GENERATES — the Inbox button, the reply chain, the drip's pre-send audit, the bulk
-       runner — plans up to HOOK_MAX_QUESTIONS in order, queues ONLY the first, and the queue
+    /* ⛔ THE HOOK AUDIT IS ADAPTIVE, AND ONLY WHEN THE CALLER SAYS SO (Paul, 2026-09-20). A request
+       carrying `hook_audit: true` — the reply chain, the drip's pre-send audit, the Inbox hook
+       button — plans up to HOOK_MAX_QUESTIONS in order, queues ONLY the first, and the queue
        processor asks the next only while every scored engine keeps naming the business. It stops
        on the first platform-specific gap. Never a second ai_audit_run.
-       NOT adaptive: a caller-supplied `questions[]` (the wizard's reviewed list), a re-run by
-       audit_id, a preview, and every purpose that is not ordinary (baseline, measurement, remeasure,
-       free_check) — those keep their full fan-out exactly as before. */
-    const isHookAudit: boolean = auditPurpose === ORDINARY_AUDIT_PURPOSE && !providedQuestions && !reuseAuditId && !preview;
+       ⛔ NEVER INFERRED. The first cut classified every generated ordinary audit as a hook, which
+       silently turned a 5-question bulk audit into a 3-question adaptive one. Question count,
+       purpose and caller identity decide nothing here: the bulk runner, the wizard (reviewed list
+       or not), a re-run by audit_id, a preview and every non-ordinary purpose (baseline, measurement,
+       remeasure, free_check) keep their full fan-out exactly as before. */
+    const isHookAudit: boolean = hookAuditRequested && auditPurpose === ORDINARY_AUDIT_PURPOSE && !reuseAuditId && !preview;
     /* ⛔ ONE PREDICATE GOVERNS BOTH ENDS — the preview the operator reviews and the run that
        actually happens. Money questions are for the ordinary per-business audit only: a paid
        baseline is the guarantee's day-0 and must not change character under a client

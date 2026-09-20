@@ -83,7 +83,8 @@ ok(!helper.includes('ai_audit_runs(status)') && !/\.eq\("lead_id", row\.lead_id\
 ok(/audit_status: "queued", audit_id: payload\.audit_id/.test(helper), 'the created audit id is persisted on the intent and reconciled against thereafter');
 ok(!/audit_id: row\.audit_id/.test(helper) && !helper.includes('nextAuditRequest'), 'a retry after a failed run mints a fresh hook audit — a hook audit never gains run 2');
 ok(!auditIntentIsDue({ status: 'queued', nextAttemptAt: null, claimedAt: null, nowMs: now, staleClaimMs: 300000 }), 'an already-associated reply audit is not duplicated: a queued intent is never re-claimed');
-ok(/const freshAudit: boolean = isInternal && body\.fresh_audit === true;/.test(createAudit), 'create-ai-audit honours fresh_audit for internal callers only');
+ok(/const freshAudit: boolean = body\.fresh_audit === true && \(isInternal \|\| hookAuditRequested\);/.test(createAudit), 'create-ai-audit honours fresh_audit for internal callers and declared hooks only');
+ok(/fresh_audit: true,[^\n]*\n\s*hook_audit: true,/.test(helper), 'the first-reply audit is an explicit hook (adaptive) and always fresh — two separate flags');
 ok(/&& !isRemeasure && !freshAudit && !isHookAudit\) \{/.test(createAudit), 'fresh_audit bypasses the per-lead reuse and nothing else');
 ok((createAudit.match(/freshAudit/g) ?? []).length === 2, 'fresh_audit touches exactly the declaration and the reuse condition (paid baseline paths untouched)');
 

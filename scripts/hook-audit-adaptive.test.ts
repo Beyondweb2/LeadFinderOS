@@ -157,8 +157,25 @@ const baseline = readFileSync(resolve(root, 'supabase/functions/_shared/audit-ba
 const report = readFileSync(resolve(root, 'src/lib/auditReport.ts'), 'utf8');
 const html = readFileSync(resolve(root, 'src/lib/aiAuditReportHtml.ts'), 'utf8');
 
-// Hook gate and fan-out in create-ai-audit.
-ok(/const isHookAudit: boolean = auditPurpose === ORDINARY_AUDIT_PURPOSE && !providedQuestions && !reuseAuditId && !preview;/.test(createAudit), 'a hook is an ORDINARY audit with generated questions; supplied lists, re-runs, previews and every other purpose are excluded');
+// Hook gate and fan-out in create-ai-audit: EXPLICIT marker, never a heuristic.
+ok(/const hookAuditRequested: boolean = body\.hook_audit === true;/.test(createAudit), 'the hook is an explicit request marker (hook_audit: true)');
+ok(/const isHookAudit: boolean = hookAuditRequested && auditPurpose === ORDINARY_AUDIT_PURPOSE && !reuseAuditId && !preview;/.test(createAudit), 'adaptive applies only to a declared hook on an ordinary audit; re-runs, previews and every other purpose are excluded');
+{
+  const decl = createAudit.slice(createAudit.indexOf('const isHookAudit: boolean ='), createAudit.indexOf(';', createAudit.indexOf('const isHookAudit: boolean =')));
+  ok(!/question_count|questionCount|providedQuestions|MAX_QUESTION|isInternal|OUTREACH_HOOK/.test(decl), 'B/C/D: question count, a supplied list and caller identity decide NOTHING about hook status');
+}
+const bulkJobs = readFileSync(resolve(root, 'supabase/functions/bulk-jobs/index.ts'), 'utf8');
+const wizard = readFileSync(resolve(root, 'src/pages/AiAudit.tsx'), 'utf8');
+ok(!bulkJobs.includes('hook_audit'), 'B: a bulk audit (3, 4 or 5 questions) sends no hook marker — full fan-out, not adaptive, not reduced to 3, normal report');
+ok(!wizard.includes('hook_audit'), 'C/D: a manual or wizard audit (3 questions, or a reviewed list) sends no hook marker — existing behaviour');
+ok(!baseline.includes('hook_audit'), 'G: the paid baseline chain sends no hook marker');
+ok(/fresh_audit: true,[^\n]*\n\s*hook_audit: true,/.test(helper), 'E: the first reply sends fresh_audit AND the explicit hook marker');
+ok(outreachAudit.includes('hook_audit: true,'), 'the drip pre-send audit sends the explicit hook marker');
+ok(/hook_audit: true,\s*fresh_audit: true,/.test(inbox), 'F: the Inbox re-run sends the explicit hook marker AND fresh_audit');
+ok(/const freshAudit: boolean = body\.fresh_audit === true && \(isInternal \|\| hookAuditRequested\);/.test(createAudit), 'fresh_audit and hook_audit stay separate flags; a declared hook may ask for freshness');
+// H: the report keys on the persisted hook state, not on the question count.
+ok(buildHookReportSummary({ state: undefined, rows: [{ question: 'q', status: 'done', result: { chatgpt: cell(false) } }], engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead }) === null, 'H: a one-question ordinary run with no hook state gets the normal report, never the hook UX');
+ok(buildHookReportSummary({ state: { ...initialHookState(['q']), executed: 1, stop_reason: 'max_questions_reached' }, rows: [{ question: 'q', status: 'done', result: { chatgpt: cell(true) } }], engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead }) !== null, 'H: hook state present → hook UX');
 ok(createAudit.includes('questions = planHookQuestions(questions, { town: locationText });') && createAudit.includes('hookState = initialHookState(questions);'), 'create-ai-audit plans and orders the hook questions');
 ok(createAudit.includes('(hookState ? questions.slice(0, 1) : questions).map('), 'create-ai-audit queues ONLY Q1 for a hook; every other audit still fans out in full');
 ok(createAudit.includes('if (hookState) runResults.hook = hookState;'), 'the plan lives on the run (results.hook) — no migration');
@@ -191,7 +208,7 @@ ok(baseline.includes('questions: plan.questions,') && baseline.includes('purpose
 ok(!baseline.includes('hookAudit') && !baseline.includes('planHookQuestions'), 'I: no adaptive sequencing reaches the baseline module');
 
 // J. Full/manual measurement unchanged: purpose measurement is never a hook, and a supplied list is never a hook.
-ok(createAudit.includes('isMeasurement ? MEASUREMENT_AUDIT_PURPOSE') && /isHookAudit: boolean = auditPurpose === ORDINARY_AUDIT_PURPOSE/.test(createAudit), 'J: a measurement (or any non-ordinary purpose) can never be adaptive');
+ok(createAudit.includes('isMeasurement ? MEASUREMENT_AUDIT_PURPOSE') && /isHookAudit: boolean = hookAuditRequested && auditPurpose === ORDINARY_AUDIT_PURPOSE/.test(createAudit), 'J: a measurement (or any non-ordinary purpose) can never be adaptive, marker or not');
 
 // Report: the hook summary is attached by the builder and rendered by its own section.
 ok(report.includes('hook: buildHookReportSummary({') && report.includes('engineOrder: SCORED_ENGINES'), 'the report builder attaches the hook summary from the run state, scored engines only');

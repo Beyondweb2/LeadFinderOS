@@ -291,7 +291,8 @@ export async function reconcileFirstReplyAuditIntents(service: Service): Promise
         website,
         has_website: !!website,
         question_count: OUTREACH_HOOK_QUESTIONS,
-        fresh_audit: true,
+        fresh_audit: true,   // a NEW audit, never a run on an old one
+        hook_audit: true,    // the explicit hook marker: adaptive 1→3, hook report
       };
       const response = await fetch(`${Deno.env.get("SUPABASE_URL") ?? ""}/functions/v1/create-ai-audit`, {
         method: "POST",

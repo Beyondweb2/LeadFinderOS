@@ -1114,6 +1114,11 @@ const Inbox = () => {
         // default happening to be 3; one edit to that default would have silently multiplied the
         // cost of the highest-volume path in the system.
         question_count: OUTREACH_HOOK_QUESTIONS,
+        // The EXPLICIT hook marker (2026-09-20): adaptive 1→3 execution and the Quick AI Visibility
+        // Check report. fresh_audit is a separate fact — a re-run is a NEW hook that starts at Q1,
+        // never run 2 on the old audit. Neither is inferred from the question count.
+        hook_audit: true,
+        fresh_audit: true,
       },
     });
     if (error || !data?.ok) {

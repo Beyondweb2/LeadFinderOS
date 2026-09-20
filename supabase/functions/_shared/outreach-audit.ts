@@ -279,6 +279,10 @@ export async function fireOutreachAudit(
         website: lead.website ?? null,
         has_website: !!(lead.website ?? "").trim(),
         question_count: OUTREACH_AUDIT_QUESTIONS,
+        /* hook_audit: the EXPLICIT hook marker (2026-09-20). This is the genuine prospecting audit,
+           so it runs adaptively — Q1, stop on the first visibility gap, else Q2, else Q3 — and its
+           report is the Quick AI Visibility Check. Never inferred from the question count. */
+        hook_audit: true,
         /* skip_seo: the scan is the dearest call in an audit (~4p) and nothing in
            audit_result_hook renders a website grade. The email lane's audit_and_push has forced it
            since the day it was built, for the same reason. */
