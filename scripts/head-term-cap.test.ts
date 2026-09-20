@@ -100,10 +100,14 @@ ok((fn.match(/coverage, true,?\n?\s*\)?;?/g) ?? []).length >= 1 || /coverage, tr
    the day service-area coverage was threaded through, and again when the market context was, both
    times for reasons that have nothing to do with the head-term cap. What this guard is FOR is that
    the hook passes NO capHeads flag. Test the property, never the identifier (CLAUDE.md §4). */
-const hookCall = fn.match(/qs = await generateQuestions\([^;]*\);/);
-ok(!!hookCall, 'the outreach hook call site is still a direct generateQuestions call');
-ok(!!hookCall && /moneyQuestionCount/.test(hookCall[0]) && !/true/.test(hookCall[0]),
-   'and it is untouched by the cap — no capHeads flag, so the hook is never capped');
+/* ⚠️ ANCHORED ON THE ORDINARY PATH'S OWN ARGUMENT, not on a line number or a whole call list.
+   `moneyQuestionCount` is passed ONLY by the ordinary per-business calls — every other purpose
+   passes a literal — so "every call that carries it must pass false for capHeads" is the property,
+   and it keeps holding as new purposes with their own calls are added beside it. */
+const ordinaryCalls = fn.match(/generateQuestions\([^;]*moneyQuestionCount[^;]*\)/g) ?? [];
+ok(ordinaryCalls.length >= 1, `found the ordinary generateQuestions call site(s) (${ordinaryCalls.length})`);
+ok(ordinaryCalls.every((c) => !/,\s*true\s*,/.test(c)),
+   'and none of them passes capHeads — the outreach hook is never capped');
 ok(/pooled\.questions = spread\.questions;/.test(fn), 'the cap runs on the POOLED set, before the caller slices');
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);

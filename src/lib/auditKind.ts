@@ -50,6 +50,12 @@ export const MEASUREMENT_AUDIT_PURPOSE = 'measurement';
 export const REMEASURE_AUDIT_PURPOSE = 'remeasure';
 export const FREE_CHECK_AUDIT_PURPOSE = 'free_check';
 export const ORDINARY_AUDIT_PURPOSE = 'audit';
+/* DISCOVERY — the manual 40 x 1 breadth scan (2026-09-20). A RECORDED purpose, so auditKind grades
+   it 'ordinary': it is single-run, it is never a baseline and it can never hold one. It is NOT in
+   SEO_SCAN_PURPOSES, so it buys no website scan — absence is not permission (see seoScanAllowed).
+   ⚠️ `ai_audits.audit_purpose` is plain nullable text with NO check constraint (verified against
+   the live database 2026-09-20), so this value needs no migration. */
+export const DISCOVERY_AUDIT_PURPOSE = 'discovery';
 
 /** The audit kinds a reader can meet. */
 export type AuditKind =
@@ -59,7 +65,8 @@ export type AuditKind =
   | 'measurement'
   /** The free check: purpose 'free_check'. Multi-run, never a baseline, never ambiguous. */
   | 'free_check'
-  /** Any other RECORDED purpose ('audit', 'market', …): a hook, a wizard audit, a manual re-audit.
+  /** Any other RECORDED purpose ('audit', 'discovery', 'market', …): a hook, a wizard audit, a
+   *  discovery scan, a manual re-audit.
    *  Whatever its run count, it is neither a baseline nor a reason to hold one. */
   | 'ordinary'
   /** AMBIGUOUS — the one kind that refuses a spend: purpose 'baseline' with NO contract (a failed

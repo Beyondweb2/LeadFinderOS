@@ -350,6 +350,16 @@ shape (`auditQuestionContext.ts`) builds BOTH the preview and the confirm reques
 hand-written payload is how a field shapes the reviewed questions and never reaches the stored audit.
 `FULL_MEASURE_QUESTIONS` stays 20 — raising it is a spend decision, not a code one.
 
+**DISCOVERY is the third manual mode: 40 questions × ONE run** (`DISCOVERY_QUESTIONS`,
+`DISCOVERY_RUNS`, `audit_purpose = 'discovery'`, 2026-09-20). Breadth, not confidence — ⛔ **never
+present it as a measurement**; one ask per question is a single sample. ⛔ **The marker is the
+PURPOSE, never the count** (`GENERATOR_ABSOLUTE_MAX_QUESTIONS` is also 40, so a count-based marker
+would capture any caller asking for the maximum). ⛔ **Its single run is an ABSENCE from
+`baselineTargetRuns`** — keep `isDiscovery` out of that expression. No money split, no SEO scan
+(`seoScanAllowed` is baseline-only), no audit reuse, and it can never be a hook (`isHookAudit`
+requires `ORDINARY_AUDIT_PURPOSE`). `audit_purpose` is plain nullable text with no CHECK — no
+migration.
+
 **Absence is never an answer** — `serveGate` flags, never blocks, on a skipped question; `clientHeld`
 `heldValue()` is the only way the client sheet holds a value; `townVerdict` gates only on
 `unverifiable`; `firstReplyMode` resolves anything unknown to `audit_only`; `seoScanAllowed()` is a
@@ -467,7 +477,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Audit engine | fns `create-ai-audit`, `process-ai-audit-queue`, `extract-competitors`, `run-seo-scan`, `_shared/enrichment/*` |
 | Harness | `scripts/run-tests.mjs`, `check-typecheck-baseline.mjs`, `check-edge-syntax.mjs`, `check-edge-undefined.mjs`, `check-cross-repo-sync.mjs` |
 
-- Live operator app `https://leadfinderos.pages.dev`; Supabase ref `ruusxpkkmwtljxxulhbq`; public site
+- Live operator app **`https://leadfinderos-next.pages.dev`** — ⚠️ **`leadfinderos.pages.dev` is a
+  STALE Cloudflare project that still answers 200 with an old bundle.** A deploy check against it
+  reports "not live" forever (recorded 2026-09-20). Supabase ref `ruusxpkkmwtljxxulhbq`; public site
   `https://findable.live` (separate repo `../findable-site`, Astro, deploys by `npm run deploy`).
 - **Report URL has THREE resolving forms, all forever:** the SHORT `findable.live/r/<code>` (the one
   every template/email/Inbox now sends; `ai_audits.short_code`, unique, trigger-assigned + backfilled,

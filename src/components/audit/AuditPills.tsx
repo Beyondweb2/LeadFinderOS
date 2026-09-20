@@ -103,6 +103,10 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
      the separate `lead_paid` pill below is the one that reads the money. */
   const purpose = String(audit.audit_purpose ?? '').trim().toLowerCase();
   const isFreeCheck = purpose === 'free_check';
+  /* DISCOVERY (2026-09-20): the manual 40 x 1 breadth scan. Labelled because a 40-question
+     single-run audit sitting beside a 20 x 3 measurement is otherwise indistinguishable on the
+     row, and reading it as a measurement is the one mistake it invites. */
+  const isDiscovery = purpose === 'discovery';
   const isClientBaseline = purpose === 'baseline' || (!purpose && target > 1 && audit.is_measurement !== true);
   const isMeasurement = purpose === 'measurement' || purpose === 'remeasure' || (!purpose && target > 1 && audit.is_measurement === true);
   const runsComplete = audit.runs.filter((r) => r.status === 'complete').length;
@@ -114,6 +118,11 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
           count={audit.open_count ?? 1}
           title={`Report opened ${new Date(audit.first_opened_at).toLocaleString('en-GB')}${audit.open_count ? ` - ${audit.open_count} view${audit.open_count === 1 ? '' : 's'}` : ''}`}
         />
+      )}
+      {isDiscovery && (
+        <AssetPill title="Discovery scan — 40 questions asked once each. Breadth, not a measurement.">
+          discovery &middot; {audit.runs.length || 1} run
+        </AssetPill>
       )}
       {/* A FREE CHECK: multi-run, and NOT a client. Says what it is and how far it has got. */}
       {isFreeCheck && (

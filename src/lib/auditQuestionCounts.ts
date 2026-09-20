@@ -67,6 +67,29 @@ export const BASELINE_RUNS = 3;
 export const FULL_MEASURE_QUESTIONS = 20;
 
 /**
+ * DISCOVERY — the manual breadth scan. 40 questions x ONE run, operator-triggered from the AI
+ * Audit page and available nowhere else.
+ *
+ * WHAT IT IS FOR: finding where a business appears, where it is missing, which competitors and
+ * sources keep coming up, and which topics or intents deserve a closer look. Breadth, on purpose.
+ *
+ * ⛔ IT IS NOT A MEASUREMENT AND MUST NEVER BE READ AS ONE. One ask per question per engine is a
+ * single sample, and the variance in this database is brutal — one business swung 0 -> 0.5 -> 0 ->
+ * 0.5 -> 0.6 across five identical runs with no work done (see BASELINE_QUESTIONS). Discovery buys
+ * COVERAGE with the runs the baseline spends on CONFIDENCE. A gap it finds is a lead to follow,
+ * not a finding; validating one means measuring it properly afterwards.
+ *
+ * ⛔ AND IT DOES NOT CHANGE THE PAID BASELINE OR THE FULL MEASURE. Both stay at 20 x 3. Paul's
+ * decision 2026-09-20 was explicitly to add a third manual option rather than raise the global
+ * count, because raising it doubles the Apify bill on every paying client's measurement.
+ *
+ * ⛔ 40 IS THE GENERATOR'S ABSOLUTE CEILING, not a number above it. One model call, one set.
+ */
+export const DISCOVERY_QUESTIONS = 40;
+/** ONE. Stated as a constant so "40 x 1" is a fact a test can read, not a missing value. */
+export const DISCOVERY_RUNS = 1;
+
+/**
  * ⛔ THE GENERATOR'S ABSOLUTE CEILING — the most questions ONE model call may be asked for.
  *
  * WHY IT IS NAMED. create-ai-audit's generateQuestions re-clamped every call with the BASELINE

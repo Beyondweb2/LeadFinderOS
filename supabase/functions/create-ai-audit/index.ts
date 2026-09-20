@@ -16,7 +16,7 @@ import { fillToTarget, dedupeByIntent } from "../../../src/lib/questionFill.ts";
 import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
 import {
   measurementFlagFor,
-  BASELINE_AUDIT_PURPOSE, MEASUREMENT_AUDIT_PURPOSE, REMEASURE_AUDIT_PURPOSE,
+  BASELINE_AUDIT_PURPOSE, MEASUREMENT_AUDIT_PURPOSE, REMEASURE_AUDIT_PURPOSE, DISCOVERY_AUDIT_PURPOSE,
   FREE_CHECK_AUDIT_PURPOSE, ORDINARY_AUDIT_PURPOSE, seoScanAllowed,
 } from "../../../src/lib/auditKind.ts";
 import { moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
@@ -27,6 +27,7 @@ import {
   WIZARD_MAX_QUESTIONS,
   BASELINE_QUESTIONS,
   FULL_MEASURE_QUESTIONS,
+  DISCOVERY_QUESTIONS,
   GENERATOR_ABSOLUTE_MAX_QUESTIONS,
 } from "../../../src/lib/auditQuestionCounts.ts";
 import { initialHookState, planHookQuestions, type HookState } from "../../../src/lib/hookAudit.ts";
@@ -89,6 +90,19 @@ const MEASUREMENT_DEFAULT_QUESTION_COUNT = FULL_MEASURE_QUESTIONS;
    paid baseline uses; frequency ("named 4 of 6") not a single lucky ask. Paul tunes this. Cost
    scales ~linearly with it (more Apify runs). */
 const MEASUREMENT_RUNS = 3;
+
+/* DISCOVERY — the manual breadth scan, 40 questions x ONE run. Operator-callable (NOT internal-only,
+   same as the full measure): it is a button on the AI Audit page, and its ceiling is explicit here
+   so a public caller still cannot exceed it.
+   ⛔ MIN = MAX = DEFAULT, derived from the shared policy module, so nothing can ask for a different
+   size and the screen cannot offer one the generator will not honour — the same shape the full
+   measure took after the 10..75-vs-20 fault.
+   ⛔ AND THE RUNS ARE ONE, NAMED. baselineTargetRuns stays 0 for this purpose, which is what makes
+   it a single ordinary run; DISCOVERY_RUNS exists so "40 x 1" is a fact the tests read rather than
+   an absence they infer. */
+const DISCOVERY_MIN_QUESTION_COUNT = DISCOVERY_QUESTIONS;
+const DISCOVERY_MAX_QUESTION_COUNT = DISCOVERY_QUESTIONS;
+const DISCOVERY_DEFAULT_QUESTION_COUNT = DISCOVERY_QUESTIONS;
 
 /** Clamp an untrusted question-count into [min..max], defaulting to `def`. */
 function clampCount(
@@ -385,12 +399,21 @@ Deno.serve(async (req) => {
        It also forces the SEO skip on every run (see skipSeo), so runs 2 and 3 cannot buy the scan
        run 1 deliberately declined. */
     const isFreeCheck: boolean = isInternal && body.purpose === FREE_CHECK_AUDIT_PURPOSE;
+    /* DISCOVERY — operator-callable, like the full measure. 40 questions, ONE run, manual only.
+       ⛔ EXPLICIT, NEVER INFERRED FROM THE COUNT. `question_count === 40` is not the marker and
+       must not become one: the generator's absolute ceiling is also 40, so any caller that ever
+       asks for the maximum would silently become a discovery audit. The purpose is the marker,
+       exactly as it is for baseline, measurement, remeasure and free_check. */
+    const isDiscovery: boolean = body.purpose === DISCOVERY_AUDIT_PURPOSE;
     const questionCount = (isBaseline || isRemeasure)
       ? clampCount(body.question_count ?? body.questionCount,
           BASELINE_MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT, BASELINE_DEFAULT_QUESTION_COUNT)
       : isMeasurement
         ? clampCount(body.question_count ?? body.questionCount,
             MEASUREMENT_MIN_QUESTION_COUNT, MEASUREMENT_MAX_QUESTION_COUNT, MEASUREMENT_DEFAULT_QUESTION_COUNT)
+      : isDiscovery
+        ? clampCount(body.question_count ?? body.questionCount,
+            DISCOVERY_MIN_QUESTION_COUNT, DISCOVERY_MAX_QUESTION_COUNT, DISCOVERY_DEFAULT_QUESTION_COUNT)
       : clampCount(body.question_count ?? body.questionCount);
     // The provided-questions cap must match, or a baseline REPEAT run (which passes the first
     // run's questions verbatim so the three runs are like-for-like) would silently truncate
@@ -398,6 +421,7 @@ Deno.serve(async (req) => {
     const MAX_QUESTIONS = (isBaseline || isRemeasure)
       ? BASELINE_MAX_QUESTION_COUNT
       : isMeasurement ? MEASUREMENT_MAX_QUESTION_COUNT
+      : isDiscovery ? DISCOVERY_MAX_QUESTION_COUNT
       : MAX_QUESTION_COUNT;
     /* How many runs make up this audit. Stored as baseline_target_runs; the queue's completion hook
        (advanceBaseline) fires the remaining runs with the SAME questions and averages them. Absent/0
@@ -483,6 +507,7 @@ Deno.serve(async (req) => {
       : isRemeasure ? REMEASURE_AUDIT_PURPOSE
       : isMeasurement ? MEASUREMENT_AUDIT_PURPOSE
       : isFreeCheck ? FREE_CHECK_AUDIT_PURPOSE
+      : isDiscovery ? DISCOVERY_AUDIT_PURPOSE
       : ORDINARY_AUDIT_PURPOSE;
     const skipSeo: boolean = body.skip_seo === true || !seoScanAllowed(auditPurpose);
     /* ⛔ THE HOOK AUDIT IS ADAPTIVE, AND ONLY WHEN THE CALLER SAYS SO (Paul, 2026-09-20). A request
@@ -502,7 +527,7 @@ Deno.serve(async (req) => {
        mid-contract, and a full measure is the winnability read. The wizard previews with
        `preview: true` and then confirms by sending `questions` VERBATIM, so both ends reading this
        one value is what makes preview == run. */
-    const moneyQuestionCount = (!isBaseline && !isMeasurement && !isRemeasure) ? questionCount : 0;
+    const moneyQuestionCount = (!isBaseline && !isMeasurement && !isRemeasure && !isDiscovery) ? questionCount : 0;
     /* MULTI-TOWN FULL MEASURE. audit-baseline's startFullMeasure sends the allocation from
        fullMeasureAllocation: [{town, questions, isMain}]. The MAIN town keeps location_text; each
        extra area gets its own generated questions for the same services. Absent (every other
@@ -546,7 +571,9 @@ Deno.serve(async (req) => {
        bolted onto an old 3-question outreach audit. */
     /* !isHookAudit (2026-09-20): a hook re-run is a NEW hook that starts again at Q1. Adding a run to
        the old audit both broke the one-run rule and inherited a plan already spent on a gap. */
-    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isRemeasure && !freshAudit && !isHookAudit) {
+    /* !isDiscovery (2026-09-20): 40 questions bolted onto an old 3-question outreach audit is not
+       a discovery scan, and the run it would join is already spent. Same reason as !isMeasurement. */
+    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isDiscovery && !isRemeasure && !freshAudit && !isHookAudit) {
       const { data: candidates } = await service
         .from("ai_audits")
         .select("id, baseline_target_runs, created_at")
@@ -724,6 +751,15 @@ Deno.serve(async (req) => {
         );
         qs = mixed.questions;
         previewMoney = mixed.money;
+      } else if (isDiscovery) {
+        /* ⛔ THE PREVIEW MUST MIRROR THE RUN. Confirming sends the reviewed questions back VERBATIM,
+           so this preview IS discovery's generation step: money count 0 and capHeads true, the same
+           two arguments the run branch passes. A preview that promised a mix the run does not
+           produce is the fault this whole predicate-sharing pattern exists to prevent. */
+        qs = await generateQuestions(
+          businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
+          businessScope, country, serviceAreaCoverage, 0, null, true, marketContext,
+        );
       } else {
         qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount, null, false, marketContext);
       }
@@ -1032,6 +1068,25 @@ Deno.serve(async (req) => {
             { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
           const kept = new Set(questions);
           moneyGenerated.push(...mixed.money.filter((q) => kept.has(q)));
+        } else if (isDiscovery) {
+          /* DISCOVERY — breadth. One call, the market-model intent mix, capHeads ON.
+             ⛔ NO MONEY SPLIT (moneyQuestionCount is 0 for this purpose). The two-call generator
+             asks for a minority of buying-moment questions, and its directive fights the intent
+             mix: a national set is already told to produce an EXACT spread across seven intents,
+             and a second instruction demanding N of them be buying-moment phrasings is how a
+             counted spread stops being counted.
+             ⛔ capHeads = true. 40 questions is the count most able to fill itself with one
+             question wearing forty adjectives — the exact fault capHeadTerms exists for. Discovery
+             is not a judged set, but it IS the set Paul reads to decide where to build. */
+          const generated = await generateQuestions(
+            businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
+            businessScope, country, coverage, 0, null, true, marketContext,
+          );
+          /* FILL, DON'T SLICE. `baselineAsked` is empty for this purpose (no pointer is read), so
+             this dedupes by intent and tops up from the templates to the requested 40 — the count
+             the operator reviewed is the count that runs. */
+          questions = fillGenerated("discovery", generated, questionCount, baselineAsked,
+            { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
         } else {
           questions = await generateQuestions(
             businessName, businessType, locationText, hasWebsite, specialisms, questionCount,

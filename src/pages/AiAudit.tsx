@@ -23,7 +23,7 @@ import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, Globe, Map as MapIcon, Download, ChevronDown,
   Copy, Save, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2,
-  Archive, ShieldCheck, MoreHorizontal } from 'lucide-react';
+  Archive, ShieldCheck, MoreHorizontal, Compass } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
@@ -47,7 +47,7 @@ import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { shortReportUrl } from '@/lib/reportSlug';
 import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
-import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS } from '@/lib/auditQuestionCounts';
+import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS, DISCOVERY_QUESTIONS, DISCOVERY_RUNS } from '@/lib/auditQuestionCounts';
 import { MARKET_MODEL_OPTIONS, MARKET_MODEL_QUESTION, audienceUsefulFor, townRequiredFor, type MarketModel } from '@/lib/marketModel';
 /* The LLM "playbook" (playbookHtml.ts + the generate-playbook edge function) was DELETED
    2026-09-09. It recommended Bing Places — zero citations across 10,615 — and ICAEW to an ACCA
@@ -96,6 +96,20 @@ const clampQuestionCount = (n: number) =>
    the fixed value on read (clampFullCount), so the first press after this deploy cannot send 40. */
 const FULL_MEASURE_COUNT = FULL_MEASURE_QUESTIONS;
 const clampFullCount = (_n: number) => FULL_MEASURE_COUNT;
+/* DISCOVERY — 40 x 1, the manual breadth scan. Same shape as the full measure: one fixed number,
+   imported from the shared policy module the edge function clamps against, so the screen cannot
+   offer a size the server will not run. */
+const DISCOVERY_COUNT = DISCOVERY_QUESTIONS;
+const clampDiscoveryCount = (_n: number) => DISCOVERY_COUNT;
+/** The count each mode runs at. One function, so the persisted value, the reset and the mode
+ *  switch cannot disagree about what "full" or "discovery" means. */
+const countForMode = (m: AuditMode, raw: number) =>
+  m === 'full' ? clampFullCount(raw) : m === 'discovery' ? clampDiscoveryCount(raw) : clampQuestionCount(raw);
+const defaultCountForMode = (m: AuditMode) =>
+  m === 'full' ? FULL_MEASURE_COUNT : m === 'discovery' ? DISCOVERY_COUNT : DEFAULT_QUESTION_COUNT;
+
+/** Quick (3-5, x1) · Full measurement (20 x 3) · Discovery (40 x 1). */
+type AuditMode = 'quick' | 'full' | 'discovery';
 
 // value = the Country name stored/passed to the audit; the edge toCountryCode /
 // COUNTRY_TO_ISO2 map converts every name to lowercase ISO-2 uniformly. label = display.
@@ -198,7 +212,7 @@ interface PersistedWizard {
   targetAudience?: string;
   serviceAreasText?: string;
   sectorsText?: string;
-  auditMode?: 'quick' | 'full';
+  auditMode?: AuditMode;
   questionCount: number;
   questions: string[];
   previewMoney?: string[];
@@ -298,18 +312,18 @@ const AiAudit = () => {
   const [serviceAreasText, setServiceAreasText] = useState(persisted?.serviceAreasText ?? '');
   const [sectorsText, setSectorsText] = useState(persisted?.sectorsText ?? '');
   /* Quick audit (current, unchanged) vs Full measurement (deliberate bulk gather). Additive. */
-  const [auditMode, setAuditMode] = useState<'quick' | 'full'>(persisted?.auditMode ?? 'quick');
+  const [auditMode, setAuditMode] = useState<AuditMode>(persisted?.auditMode ?? 'quick');
   const fullMode = auditMode === 'full';
+  const discoveryMode = auditMode === 'discovery';
   const [questionCount, setQuestionCount] = useState<number>(() => {
-    const m = persisted?.auditMode ?? 'quick';
-    const raw = persisted?.questionCount ?? (m === 'full' ? FULL_MEASURE_COUNT : DEFAULT_QUESTION_COUNT);
-    return m === 'full' ? clampFullCount(raw) : clampQuestionCount(raw);
+    const m: AuditMode = persisted?.auditMode ?? 'quick';
+    return countForMode(m, persisted?.questionCount ?? defaultCountForMode(m));
   });
   /* Switch mode: reset the count to that mode's default and clear any previewed questions so the
      review step regenerates at the new count/purpose. Quick↔Full only; never touches a run in flight. */
-  const switchAuditMode = useCallback((next: 'quick' | 'full') => {
+  const switchAuditMode = useCallback((next: AuditMode) => {
     setAuditMode(next);
-    setQuestionCount(next === 'full' ? FULL_MEASURE_COUNT : DEFAULT_QUESTION_COUNT);
+    setQuestionCount(defaultCountForMode(next));
     setQuestions([]); setPreviewMoney([]);
   }, []);
 
@@ -992,7 +1006,7 @@ const AiAudit = () => {
     setMode(null); setLeadId(null); setBusinessName(''); setBusinessType('');
     setLocationText(''); setCountry(''); setHasWebsite(null); setWebsite(''); setSpecialisms('');
     setBusinessScope(null); setTargetAudience(''); setServiceAreasText(''); setSectorsText('');
-    setAuditMode('quick'); setQuestionCount(DEFAULT_QUESTION_COUNT);
+    setAuditMode('quick'); setQuestionCount(defaultCountForMode('quick'));
     setQuestions([]); setPreviewMoney([]); setUnitCost(0); setEngineCount(SCORED_ENGINES.length);
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
     setOpenRunId(null); setShowDetails(false);
@@ -1263,6 +1277,12 @@ const AiAudit = () => {
   /* ⛔ THE ONE CONTEXT. Preview and confirm both build their request from this object, so a field
      cannot shape the questions the operator reviews and then fail to reach the audit that is
      stored — which is what happened while confirm hand-wrote its own body. */
+  /* ⛔ THE PURPOSE THE SERVER KEYS ON, DERIVED FROM THE MODE IN ONE PLACE. The preview and the
+     confirm both read it, so the questions the operator reviews cannot be generated under one
+     purpose and run under another. Quick sends none — an ordinary wizard audit. */
+  const auditPurpose: 'measurement' | 'discovery' | null =
+    auditMode === 'full' ? 'measurement' : auditMode === 'discovery' ? 'discovery' : null;
+
   const auditContext = useMemo(() => ({
     business_name: businessName,
     business_category: businessType,
@@ -1286,7 +1306,7 @@ const AiAudit = () => {
         body: buildAuditPreviewRequest(auditContext, {
           questionCount,
           businessScope: businessScope || undefined,
-          ...(fullMode ? { purpose: 'measurement' as const } : {}),
+          ...(auditPurpose ? { purpose: auditPurpose } : {}),
         }),
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'preview failed');
@@ -1299,7 +1319,7 @@ const AiAudit = () => {
     } finally {
       setPreviewing(false);
     }
-  }, [auditContext, businessScope, questionCount, fullMode, toast]);
+  }, [auditContext, businessScope, questionCount, auditPurpose, toast]);
 
   // When the review step is first revealed with no questions yet, generate them.
   // Editing type/location later does NOT auto-wipe/regenerate (only reveal-fresh or the
@@ -1332,7 +1352,7 @@ const AiAudit = () => {
           questionCount,
           businessScope: businessScope || undefined,
           leadId: leadId || undefined,
-          ...(fullMode ? { purpose: 'measurement' as const } : {}),
+          ...(auditPurpose ? { purpose: auditPurpose } : {}),
           questions: clean,
           moneyQuestions: previewMoney,
           overrideDistance,
@@ -2626,37 +2646,48 @@ const AiAudit = () => {
                   </>
                 )}
 
-                {/* ── MODE TOGGLE: Quick audit (current) vs Full measurement (bulk gather) ────────
-                    Quick is unchanged (3–5 questions). Full is the deliberate before/after gather —
-                    a large DISTINCT question set × all engines, paced through the same queue. */}
+                {/* ── MODE: Quick check · Full measurement · Discovery ───────────────────────────
+                    Quick is unchanged (3–5 questions, one run). Full is the deliberate before/after
+                    gather, 20 × 3. Discovery (2026-09-20) is 40 × 1 — breadth, not confidence: it
+                    finds where a business appears and where it is missing, and a gap it turns up is
+                    a lead to follow rather than a measurement. Each hint states its own count and
+                    runs, because those two numbers ARE the difference between the three. */}
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Audit mode</Label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <ChoiceButton
-                      active={!fullMode}
+                      active={auditMode === 'quick'}
                       onClick={() => switchAuditMode('quick')}
                       icon={<Sparkles className="h-4 w-4" />}
-                      label="Quick audit"
-                      hint={`${MIN_QUESTION_COUNT}–${MAX_QUESTION_COUNT} questions · fast check`}
+                      label="Quick check"
+                      hint={`${MIN_QUESTION_COUNT}–${MAX_QUESTION_COUNT} questions × 1 · fast snapshot`}
                     />
                     <ChoiceButton
                       active={fullMode}
                       onClick={() => switchAuditMode('full')}
                       icon={<ListChecks className="h-4 w-4" />}
                       label="Full measurement"
-                      hint={`${FULL_MEASURE_COUNT} questions × 3 runs · where to build`}
+                      hint={`${FULL_MEASURE_COUNT} questions × 3 · more reliable`}
+                    />
+                    <ChoiceButton
+                      active={discoveryMode}
+                      onClick={() => switchAuditMode('discovery')}
+                      icon={<Compass className="h-4 w-4" />}
+                      label="Discovery"
+                      hint={`${DISCOVERY_COUNT} questions × ${DISCOVERY_RUNS} · broad opportunity scan`}
                     />
                   </div>
                 </div>
 
-                {/* Number of questions. Quick: WIZARD 3–5, operator's choice. Full: FIXED at
-                    FULL_MEASURE_QUESTIONS — no selector, the number is stated. The server derives
-                    its min, max and default from the same constant, so there is nothing to disagree. */}
+                {/* Number of questions. Quick: WIZARD 3–5, operator's choice. Full and Discovery:
+                    FIXED at their own constant — no selector, the number is stated. The server
+                    derives its min, max and default from the same constants, so there is nothing
+                    for the screen and the queue to disagree about. */}
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">How many questions?</Label>
                   <div className="flex items-center gap-3">
-                    {fullMode ? (
-                      <span className="inline-flex h-9 w-24 items-center justify-center rounded-md border bg-muted/40 text-sm font-medium">{FULL_MEASURE_COUNT}</span>
+                    {fullMode || discoveryMode ? (
+                      <span className="inline-flex h-9 w-24 items-center justify-center rounded-md border bg-muted/40 text-sm font-medium">{questionCount}</span>
                     ) : (
                       <Select
                         value={String(questionCount)}
@@ -2679,6 +2710,15 @@ const AiAudit = () => {
                       <strong> paced through the queue</strong> (max ~24 running at once). It finds which questions
                       and towns are winnable so we know where to build pages. It is never compared to anything —
                       the refund is judged on the frozen baseline, not this. SEO scan is skipped.
+                    </p>
+                  )}
+                  {discoveryMode && (
+                    <p className="text-[11px] text-muted-foreground/80">
+                      Discovery asks {DISCOVERY_COUNT} different questions across ChatGPT and Gemini, <strong>once each</strong>,
+                      to find where this business shows up, where it is missing, who keeps getting named instead
+                      and which sources the engines lean on. Breadth, not confidence — one ask per question is a
+                      single sample, so treat a gap as somewhere to look, not as a measurement. Anything important
+                      gets measured properly afterwards. Never compared to a baseline. SEO scan is skipped.
                     </p>
                   )}
                 </div>

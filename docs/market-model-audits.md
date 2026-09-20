@@ -125,11 +125,56 @@ stored, as the questions.
 - **The multi-town area loop** passes `null` for the market context and forces `"local"` per area: a
   per-area set is local by construction.
 
+## Discovery — the third manual mode (2026-09-20, follow-up)
+
+`DISCOVERY_QUESTIONS = 40`, `DISCOVERY_RUNS = 1`, `audit_purpose = 'discovery'`. A manual-only
+breadth scan: where a business appears, where it is missing, who keeps getting named instead, which
+sources the engines lean on. It uses the market-model context above, so national gets the seven-intent
+spread with no town and hybrid gets its split.
+
+**Why a third mode rather than raising the count.** Paul's decision: raising
+`FULL_MEASURE_QUESTIONS` to 40 doubles the Apify bill on every paying client's measurement, and a
+measurement is not what was wanted. Discovery buys **coverage** with the runs a baseline spends on
+**confidence**.
+
+⛔ **It is not a measurement and must never be read as one.** One ask per question per engine is a
+single sample, and the variance here is brutal — one business swung 0 → 0.5 → 0 → 0.5 → 0.6 across
+five identical runs with no work done. A gap discovery finds is somewhere to look, not a finding.
+The wizard's own explainer says so in those words.
+
+⛔ **The marker is the PURPOSE, never the count.** `GENERATOR_ABSOLUTE_MAX_QUESTIONS` is also 40, so
+a count-based marker would turn any caller asking for the maximum into a discovery audit. The test
+asserts no branch anywhere reads `question_count === 40`.
+
+⛔ **Exactly one `ai_audit_run`, and the mechanism is an ABSENCE.** `baselineTargetRuns` is what
+creates extra runs; `isDiscovery` does not appear in that expression, so it stays 0. The test
+asserts the absence from that one expression rather than asserting "runs === 1" somewhere else,
+because the absence is the mechanism. A provider failure retries queue work inside that run.
+
+What discovery does NOT do: no money-question split (its two-call directive fights the counted
+intent spread), no SEO scan (`seoScanAllowed` is a positive allowlist of `baseline`), no reuse of
+an existing audit on the lead (40 questions bolted onto an old 3-question hook run is not a
+discovery scan), and no hook logic — `isHookAudit` requires `ORDINARY_AUDIT_PURPOSE`, so a discovery
+report can never render the "Quick AI Visibility Check" eyebrow. `capHeads` IS on: 40 is the count
+most able to fill itself with one question wearing forty adjectives.
+
+**No migration.** `ai_audits.audit_purpose` is plain nullable `text` with no CHECK constraint —
+verified against the live database on 2026-09-20 before writing the new value.
+
+⚠️ **A placement lesson.** `!isDiscovery` was first added between `!isRemeasure` and `!freshAudit`
+in the per-lead reuse condition, which broke `first-reply-audit-reliability.test.ts` — it pins the
+tail `&& !isRemeasure && !freshAudit && !isHookAudit) {` literally, to prove `fresh_audit` touches
+that condition and nothing else. Moved to sit beside `!isMeasurement`, which is where it belongs
+anyway: same exemption, same reason.
+
 ## Files
 
 `src/lib/marketModel.ts` (new) · `src/lib/auditQuestionContext.ts` · `src/lib/seedGuard.ts` ·
 `src/pages/AiAudit.tsx` · `supabase/functions/create-ai-audit/index.ts` ·
 `scripts/market-model-audits.test.ts` (new) · `scripts/head-term-cap.test.ts`
+
+Discovery adds: `src/lib/auditQuestionCounts.ts` · `src/lib/auditKind.ts` ·
+`src/components/audit/AuditPills.tsx` · `scripts/discovery-audit.test.ts` (new).
 
 Deployed: `create-ai-audit`, `paid-baseline`, `process-ai-audit-queue`, `render-remeasure-results`,
 `stripe-webhook` — the last three because they reach `seedGuard.ts`.
