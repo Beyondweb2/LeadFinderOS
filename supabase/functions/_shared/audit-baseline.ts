@@ -218,8 +218,16 @@ export async function advanceBaseline(service: Client, auditId: string, source =
        applying to every run. Baselines and measurements are unchanged. */
     const storedPurpose = typeof (audit as { audit_purpose?: unknown } | null)?.audit_purpose === "string"
       ? String((audit as { audit_purpose?: string }).audit_purpose) : "";
-    const repeatPurpose = storedPurpose === FREE_CHECK_AUDIT_PURPOSE
-      ? FREE_CHECK_AUDIT_PURPOSE
+    /* 🔴 THE REPEAT NOW CARRIES WHATEVER PURPOSE IS STORED, NOT A LIST OF THE ONES THAT EXISTED
+       WHEN THIS WAS WRITTEN. It used to read `free_check ? free_check : is_measurement ?
+       measurement : baseline`, so a DISCOVERY audit — is_measurement false — would have had runs 2
+       and 3 posted as "baseline" and its 40 questions truncated to the baseline cap of 20. The
+       same shape as the fault measured on audit 9a0c2b79 the same day. A stored purpose is what
+       the writer said the audit was for; send it back.
+       ⚠️ The legacy fallback is unchanged and still needed: rows written before audit_purpose
+       existed have none, and for those the old two-column reading is all there is. */
+    const repeatPurpose = storedPurpose
+      ? storedPurpose
       : isMeasurementAudit ? "measurement" : "baseline";
     if (!audit || !(target > 1)) return;          // not a paid baseline audit
     if (audit.baseline) return;                    // already finalised

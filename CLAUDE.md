@@ -358,7 +358,16 @@ would capture any caller asking for the maximum). ⛔ **Its single run is an ABS
 `baselineTargetRuns`** — keep `isDiscovery` out of that expression. No money split, no SEO scan
 (`seoScanAllowed` is baseline-only), no audit reuse, and it can never be a hook (`isHookAudit`
 requires `ORDINARY_AUDIT_PURPOSE`). `audit_purpose` is plain nullable text with no CHECK — no
-migration.
+migration. Runs are operator-chosen 1-3 (`DISCOVERY_MAX_RUNS`), clamped server-side, replayed
+verbatim by `advanceBaseline`.
+
+🔴 **A REPEAT'S QUESTION CAP COMES FROM THE STORED AUDIT, NEVER FROM THE CALLER** — three recorded
+truncations (baseline 10→5, measurement 40→20, discovery 40→5, the last measured live on audit
+`9a0c2b79`). `create-ai-audit` reads `audit_purpose` for any explicit `audit_id` and raises
+`MAX_QUESTIONS` from it; it can only RAISE. ⛔ **Never re-teach a CALLER to declare what it is
+repeating** — that is the guard-keyed-to-today's-instances trap, and it has now expired three times.
+Same rule in `advanceBaseline`: a repeat sends the purpose that is STORED, with the two-column
+reading kept only for rows written before the column existed.
 
 **Absence is never an answer** — `serveGate` flags, never blocks, on a skipped question; `clientHeld`
 `heldValue()` is the only way the client sheet holds a value; `townVerdict` gates only on

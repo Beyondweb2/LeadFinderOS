@@ -56,6 +56,8 @@ type AuditRequestOptions = {
   businessScope?: MarketModel;
   userId?: string;
   leadId?: string;
+  /** DISCOVERY ONLY: how many times the approved set is asked. The server clamps and defaults it. */
+  runCount?: number;
 };
 
 /** The fields BOTH requests carry, derived from the context and nothing else. */
@@ -92,6 +94,9 @@ function baseRequest(context: AuditQuestionContext, options: AuditRequestOptions
     ...(audience ? { target_audience: audience } : {}),
     service_areas: areas,
     question_count: options.questionCount,
+    /* Sent only when a caller asked for it, so every request written before discovery had a run
+       count still means one run on the server's own default. */
+    ...(typeof options.runCount === 'number' && options.runCount > 1 ? { run_count: Math.round(options.runCount) } : {}),
     ...(options.purpose === 'measurement' ? { skip_seo: true } : {}),
   };
 }

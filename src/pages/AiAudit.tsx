@@ -47,7 +47,7 @@ import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { shortReportUrl } from '@/lib/reportSlug';
 import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
-import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS, DISCOVERY_QUESTIONS, DISCOVERY_RUNS } from '@/lib/auditQuestionCounts';
+import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS, DISCOVERY_QUESTIONS, DISCOVERY_RUNS, DISCOVERY_MAX_RUNS } from '@/lib/auditQuestionCounts';
 import { MARKET_MODEL_OPTIONS, MARKET_MODEL_QUESTION, audienceUsefulFor, townRequiredFor, type MarketModel } from '@/lib/marketModel';
 /* The LLM "playbook" (playbookHtml.ts + the generate-playbook edge function) was DELETED
    2026-09-09. It recommended Bing Places — zero citations across 10,615 — and ICAEW to an ACCA
@@ -108,8 +108,17 @@ const countForMode = (m: AuditMode, raw: number) =>
 const defaultCountForMode = (m: AuditMode) =>
   m === 'full' ? FULL_MEASURE_COUNT : m === 'discovery' ? DISCOVERY_COUNT : DEFAULT_QUESTION_COUNT;
 
-/** Quick (3-5, x1) · Full measurement (20 x 3) · Discovery (40 x 1). */
+/** Quick (3-5, x1) · Full measurement (20 x 3) · Discovery (40 x 1-3). */
 type AuditMode = 'quick' | 'full' | 'discovery';
+/** The run options a Discovery audit offers, and what each one buys. The server clamps to the same
+ *  ceiling, so the screen cannot offer a number the queue will not run. */
+const DISCOVERY_RUN_OPTIONS: ReadonlyArray<{ runs: number; note: string }> = [
+  { runs: 1, note: 'breadth only' },
+  { runs: 2, note: 'some consistency signal' },
+  { runs: 3, note: 'best for spotting fragmented visibility' },
+];
+const clampDiscoveryRuns = (n: unknown) =>
+  Math.min(DISCOVERY_MAX_RUNS, Math.max(1, Math.round(Number(n) || DISCOVERY_RUNS)));
 
 // value = the Country name stored/passed to the audit; the edge toCountryCode /
 // COUNTRY_TO_ISO2 map converts every name to lowercase ISO-2 uniformly. label = display.
@@ -210,6 +219,7 @@ interface PersistedWizard {
   businessScope: MarketModel | null;
   specialisms: string;
   targetAudience?: string;
+  discoveryRuns?: number;
   serviceAreasText?: string;
   sectorsText?: string;
   auditMode?: AuditMode;
@@ -311,6 +321,8 @@ const AiAudit = () => {
   const [targetAudience, setTargetAudience] = useState(persisted?.targetAudience ?? '');
   const [serviceAreasText, setServiceAreasText] = useState(persisted?.serviceAreasText ?? '');
   const [sectorsText, setSectorsText] = useState(persisted?.sectorsText ?? '');
+  /* Discovery only: how many times the SAME approved question set is asked. Default 1. */
+  const [discoveryRuns, setDiscoveryRuns] = useState<number>(clampDiscoveryRuns(persisted?.discoveryRuns));
   /* Quick audit (current, unchanged) vs Full measurement (deliberate bulk gather). Additive. */
   const [auditMode, setAuditMode] = useState<AuditMode>(persisted?.auditMode ?? 'quick');
   const fullMode = auditMode === 'full';
@@ -535,7 +547,7 @@ const AiAudit = () => {
   useEffect(() => {
     try {
       localStorage.setItem(wizardKey(user?.id), JSON.stringify({
-        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, targetAudience, serviceAreasText, sectorsText, auditMode, questionCount, questions, previewMoney, unitCost, engineCount,
+        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, targetAudience, serviceAreasText, sectorsText, auditMode, discoveryRuns, questionCount, questions, previewMoney, unitCost, engineCount,
       }));
       /* A draft now EXISTS on disk. Tracked in state (rather than re-reading storage at render time)
          so the "Resume draft" button below can appear and disappear truthfully. React bails out when
@@ -543,7 +555,7 @@ const AiAudit = () => {
       setDraftSaved(true);
     } catch { /* storage unavailable — persistence is best-effort */ }
     // `step` is deliberately NOT a dependency: this effect no longer branches on it (see above).
-  }, [revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, targetAudience, serviceAreasText, sectorsText, auditMode, questionCount, questions, previewMoney, unitCost, engineCount, user?.id]);
+  }, [revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, targetAudience, serviceAreasText, sectorsText, auditMode, discoveryRuns, questionCount, questions, previewMoney, unitCost, engineCount, user?.id]);
 
   /* SETTLED-QUESTION COUNTS for a set of runs — the ONE implementation of "2 of 3 done".
      The queue's terminal statuses are 'done' and 'failed' (NOT 'complete', which is a RUN
@@ -1006,6 +1018,7 @@ const AiAudit = () => {
     setMode(null); setLeadId(null); setBusinessName(''); setBusinessType('');
     setLocationText(''); setCountry(''); setHasWebsite(null); setWebsite(''); setSpecialisms('');
     setBusinessScope(null); setTargetAudience(''); setServiceAreasText(''); setSectorsText('');
+    setDiscoveryRuns(DISCOVERY_RUNS);
     setAuditMode('quick'); setQuestionCount(defaultCountForMode('quick'));
     setQuestions([]); setPreviewMoney([]); setUnitCost(0); setEngineCount(SCORED_ENGINES.length);
     setAuditId(null); setRunId(null); setRun(null); setQueueRows([]);
@@ -1353,6 +1366,9 @@ const AiAudit = () => {
           businessScope: businessScope || undefined,
           leadId: leadId || undefined,
           ...(auditPurpose ? { purpose: auditPurpose } : {}),
+          /* Discovery only. The server clamps it to the same 1..3 and defaults it to 1, so this is
+             a preference, not a permission. */
+          ...(discoveryMode ? { runCount: discoveryRuns } : {}),
           questions: clean,
           moneyQuestions: previewMoney,
           overrideDistance,
@@ -1528,18 +1544,17 @@ const AiAudit = () => {
     if (clean.length === 0) { toast({ title: 'Add at least one question', variant: 'destructive' }); return; }
     setRunning(true);
     try {
-      /* Re-run amends THIS audit. If it is a Full Measurement, send purpose:'measurement' so its
-         full question set isn't silently clamped to the 5-question wizard cap (the before/after
-         path is Re-audit, which mints a fresh copy). Read the flag fresh so it's right even if the
-         open audit changed. */
-      const curSelect: string = 'is_measurement, baseline_target_runs'; // non-literal: skip column type-validation (see confirmReAudit)
-      const { data: cur } = await supabase.from('ai_audits').select(curSelect).eq('id', auditId).maybeSingle();
-      const curMarkers = cur as unknown as { is_measurement?: boolean | null; baseline_target_runs?: number | null } | null;
-      // Same rule as confirmReAudit: a paid baseline (baseline_target_runs > 1) counts as a measurement
-      // even though is_measurement is false, so its full question set isn't clamped to 5.
-      const curIsMeasurement = curMarkers?.is_measurement === true || Number(curMarkers?.baseline_target_runs ?? 0) > 1;
+      /* 🔴 THE BROWSER NO LONGER DECIDES WHAT IT IS RE-RUNNING, AND THAT IS THE FIX FOR "0/5".
+         This used to read `is_measurement === true || baseline_target_runs > 1` and send
+         purpose:'measurement' to stop the set being clamped to the 5-question wizard cap. A
+         DISCOVERY audit is neither of those things, so on 2026-09-20 a re-run of Findable's
+         40-question discovery audit (9a0c2b79) posted 40 questions with no purpose and the server
+         sliced them to 5 — a real second run of five questions, which is what "0/5" was.
+         create-ai-audit now reads the STORED audit's own purpose and raises the cap from that, so
+         this request needs to say nothing: the audit row already knows what it is, and a list of
+         today's purposes in the browser is a guard that expires the next time one is added. */
       const { data, error } = await supabase.functions.invoke('create-ai-audit', {
-        body: { audit_id: auditId, questions: clean, ...(curIsMeasurement ? { purpose: 'measurement', skip_seo: true } : {}) },
+        body: { audit_id: auditId, questions: clean },
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 're-run failed');
       // Editor done → clear its persisted state so it doesn't reopen after the new run starts.
@@ -2711,6 +2726,27 @@ const AiAudit = () => {
                       and towns are winnable so we know where to build pages. It is never compared to anything —
                       the refund is judged on the frozen baseline, not this. SEO scan is skipped.
                     </p>
+                  )}
+                  {discoveryMode && (
+                    <div className="space-y-1.5 pt-1">
+                      <Label className="text-xs text-muted-foreground">Runs</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {DISCOVERY_RUN_OPTIONS.map((o) => (
+                          <ChoiceButton
+                            key={o.runs}
+                            active={discoveryRuns === o.runs}
+                            onClick={() => setDiscoveryRuns(o.runs)}
+                            label={`${o.runs} run${o.runs === 1 ? '' : 's'}`}
+                            hint={o.note}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        {DISCOVERY_COUNT} questions × {discoveryRuns} run{discoveryRuns === 1 ? '' : 's'}
+                        {unitCost > 0 ? ` · est. cost ~$${(DISCOVERY_COUNT * discoveryRuns * unitCost).toFixed(2)}` : ''}
+                        {discoveryRuns > 1 ? ' · the same questions each time, so you can see which ones the engines answer consistently.' : ''}
+                      </p>
+                    </div>
                   )}
                   {discoveryMode && (
                     <p className="text-[11px] text-muted-foreground/80">

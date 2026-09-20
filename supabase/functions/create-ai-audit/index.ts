@@ -28,6 +28,8 @@ import {
   BASELINE_QUESTIONS,
   FULL_MEASURE_QUESTIONS,
   DISCOVERY_QUESTIONS,
+  DISCOVERY_RUNS,
+  DISCOVERY_MAX_RUNS,
   GENERATOR_ABSOLUTE_MAX_QUESTIONS,
 } from "../../../src/lib/auditQuestionCounts.ts";
 import { initialHookState, planHookQuestions, type HookState } from "../../../src/lib/hookAudit.ts";
@@ -405,6 +407,36 @@ Deno.serve(async (req) => {
        asks for the maximum would silently become a discovery audit. The purpose is the marker,
        exactly as it is for baseline, measurement, remeasure and free_check. */
     const isDiscovery: boolean = body.purpose === DISCOVERY_AUDIT_PURPOSE;
+    /* 🔴 A REPEAT'S QUESTION CAP COMES FROM THE AUDIT IT IS REPEATING, NOT FROM THE CALLER.
+       MEASURED LIVE 2026-09-20, audit 9a0c2b79 (Findable, discovery): run 1 queued its 40 questions
+       and completed. A re-run from the audit screen posted the same 40 back with `audit_id` and NO
+       purpose — the wizard decided what to send from `is_measurement === true || baseline_target_runs
+       > 1`, and a discovery audit is neither — so MAX_QUESTIONS fell to the 5-question WIZARD cap and
+       the 40 were silently sliced to 5. That is what "0/5" was: a real second run of five questions.
+
+       ⛔ THIS IS THE THIRD TIME THIS EXACT FAULT HAS BEEN WRITTEN (baseline 10→5, measurement 40→20,
+       now discovery 40→5), because every previous fix taught a CALLER to declare itself. The caller
+       cannot be the source of truth: the audit row already knows what it is. So the ceiling is read
+       from the stored purpose here, and it can only ever RAISE the cap to what that audit was
+       created at — a caller that forgets, or a purpose invented next month, cannot truncate a set
+       again. CLAUDE.md §4: test the PROPERTY, never the identifier.
+       ⚠️ It reads ONLY the purpose, and changes ONLY the cap. isMeasurement/isBaseline still come
+       from the request, so no other per-purpose behaviour (runs, money share, SEO, the disjointness
+       filter, the town gates) can shift under a repeat. */
+    let storedPurpose = "";
+    if (reuseAuditId) {
+      const { data: prior } = await service
+        .from("ai_audits").select("audit_purpose").eq("id", reuseAuditId).maybeSingle();
+      const raw = (prior as { audit_purpose?: unknown } | null)?.audit_purpose;
+      storedPurpose = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    }
+    const storedCeiling = storedPurpose === DISCOVERY_AUDIT_PURPOSE ? DISCOVERY_MAX_QUESTION_COUNT
+      : storedPurpose === MEASUREMENT_AUDIT_PURPOSE ? MEASUREMENT_MAX_QUESTION_COUNT
+      : (storedPurpose === BASELINE_AUDIT_PURPOSE || storedPurpose === REMEASURE_AUDIT_PURPOSE) ? BASELINE_MAX_QUESTION_COUNT
+      : 0;
+    if (storedCeiling > 0) {
+      console.log(`[create-ai-audit] repeat of ${reuseAuditId} inherits its stored purpose "${storedPurpose}" — question cap ${storedCeiling}`);
+    }
     const questionCount = (isBaseline || isRemeasure)
       ? clampCount(body.question_count ?? body.questionCount,
           BASELINE_MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT, BASELINE_DEFAULT_QUESTION_COUNT)
@@ -418,11 +450,13 @@ Deno.serve(async (req) => {
     // The provided-questions cap must match, or a baseline REPEAT run (which passes the first
     // run's questions verbatim so the three runs are like-for-like) would silently truncate
     // 10 questions to 5 and average two different question sets.
-    const MAX_QUESTIONS = (isBaseline || isRemeasure)
+    const REQUESTED_MAX_QUESTIONS = (isBaseline || isRemeasure)
       ? BASELINE_MAX_QUESTION_COUNT
       : isMeasurement ? MEASUREMENT_MAX_QUESTION_COUNT
       : isDiscovery ? DISCOVERY_MAX_QUESTION_COUNT
       : MAX_QUESTION_COUNT;
+    /* The repeat's inherited cap can only RAISE it — never lower an explicitly-declared purpose. */
+    const MAX_QUESTIONS = Math.max(REQUESTED_MAX_QUESTIONS, storedCeiling);
     /* How many runs make up this audit. Stored as baseline_target_runs; the queue's completion hook
        (advanceBaseline) fires the remaining runs with the SAME questions and averages them. Absent/0
        → an ordinary single-run audit.
@@ -442,9 +476,22 @@ Deno.serve(async (req) => {
     const internalTargetRuns = isInternal && typeof body.target_runs === "number"
       ? Math.min(5, Math.max(1, Math.round(body.target_runs)))
       : 0;
+    /* ⛔ DISCOVERY'S RUN COUNT — OPERATOR-CHOSEN, 1 to 3, VALIDATED HERE (Paul, 2026-09-20).
+       One run is breadth. Two or three ask the SAME 40 questions again so a per-question
+       "named 2 of 3" becomes readable — which question the engines answer consistently and which
+       one they fragment on. The repeat is advanceBaseline, the mechanism the paid baseline and the
+       free check already use, so runs 2 and 3 replay the stored set verbatim and nothing is
+       regenerated.
+       ⛔ SERVER-VALIDATED AND NEVER INFERRED. Clamped to DISCOVERY_MAX_RUNS regardless of what the
+       browser sends, defaulted to 1 when absent (so every request written before this exists still
+       means one run), and read from its own field — never from the question count. */
+    const discoveryRuns = isDiscovery
+      ? Math.min(DISCOVERY_MAX_RUNS, Math.max(1, Math.round(Number(body.run_count ?? DISCOVERY_RUNS)) || DISCOVERY_RUNS))
+      : 0;
     const baselineTargetRuns = isBaseline
       ? Math.min(5, Math.max(1, typeof body.baseline_target_runs === "number" ? Math.round(body.baseline_target_runs) : 1))
       : (isMeasurement || isRemeasure) ? MEASUREMENT_RUNS
+      : isDiscovery ? discoveryRuns
       : internalTargetRuns;
     /* SILENT TRUNCATION WAS THE REAL BUG, not the number. The cap is a cost ceiling and stays, but
        quietly returning fewer questions than were asked for is how a before/after ends up built on a

@@ -167,6 +167,68 @@ tail `&& !isRemeasure && !freshAudit && !isHookAudit) {` literally, to prove `fr
 that condition and nothing else. Moved to sit beside `!isMeasurement`, which is where it belongs
 anyway: same exemption, same reason.
 
+## The 0/5 fault — measured, 2026-09-20
+
+Paul ran the first Findable discovery audit. It **worked**: audit `9a0c2b79`, run `5059b156`,
+40 questions queued, all 40 done, run `complete`. Eleven minutes later a second run appeared showing
+**0/5** and seeming to stall; he stopped it.
+
+What the database says:
+
+| run | created | rows | status |
+|---|---|---|---|
+| `5059b156` | 04:59:02 | **40**, all `done` | complete |
+| `a26bdfdd` | 05:10:50 | **5** (2 done, 3 cancelled) | cancelled |
+
+Run 2's five questions are a subset of run 1's forty. It was a **re-run** of the same audit, and
+`confirmReRun` in the wizard decided what to send like this:
+
+```
+const curIsMeasurement = is_measurement === true || baseline_target_runs > 1;
+body: { audit_id, questions: clean, ...(curIsMeasurement ? { purpose: 'measurement' } : {}) }
+```
+
+A discovery audit is **neither** of those things, so no purpose was sent, `MAX_QUESTIONS` fell to the
+5-question wizard cap, and `providedQuestions = supplied.slice(0, MAX_QUESTIONS)` silently cut 40 to
+5. The "0/5" was truthful — that run really did hold five rows. Nothing was wrong with the progress
+UI, the queue, the processor or the generator.
+
+⛔ **THIS WAS THE THIRD INSTANCE OF ONE FAULT.** Baseline 10→5, measurement 40→20, discovery 40→5 —
+and the comment sitting on the broken line *described the first two*. Every previous fix taught a
+CALLER to declare itself, which is a guard keyed to today's instances (CLAUDE.md §4). The caller
+cannot be the source of truth: **the audit row already knows what it is.**
+
+**The fix.** `create-ai-audit` reads the stored `audit_purpose` for any explicit `audit_id` and
+derives `storedCeiling` from it; `MAX_QUESTIONS = Math.max(REQUESTED_MAX_QUESTIONS, storedCeiling)`,
+so an inherited cap can only ever RAISE the limit to what that audit was created at, and only the
+CAP moves — `isMeasurement`/`isBaseline` still come from the request, so no other per-purpose
+behaviour can shift under a repeat. The browser now sends `{ audit_id, questions }` and nothing else.
+
+`advanceBaseline` carried the same shape (`free_check ? free_check : is_measurement ? measurement :
+baseline`), which would have posted a discovery repeat as `"baseline"` and capped its 40 at 20. It
+now sends whatever purpose is stored, with the two-column reading kept only as the legacy fallback
+for rows written before `audit_purpose` existed.
+
+**Provider spend on the incident:** 42 questions answered (40 + 2), about $0.44 of Apify. **Stop
+worked**: queue rows insert as `pending`, Stop cancels `['pending','running']`, and the processor's
+claim is atomic on `status = 'pending'`, so a cancelled row can never be picked up. The audit is left
+in place as evidence.
+
+## Discovery runs: 1, 2 or 3
+
+`DISCOVERY_MAX_RUNS = 3`, default `DISCOVERY_RUNS = 1`, chosen in the wizard and **clamped on the
+server** — the browser states a preference, it does not grant one. `run_count` is its own field and
+is never inferred from the question count.
+
+Runs 2 and 3 go through `advanceBaseline`, the same mechanism the paid baseline and the free check
+already use, so they replay the **stored** set: `providedQuestions` short-circuits generation
+entirely, which makes "no regeneration" structural rather than a promise. Three runs of the same 40
+is what turns a per-question result into "named 2 of 3" — fragmentation, which is what discovery is
+looking for.
+
+3 and not 5: cost is linear (40 × 3 = 120 Apify questions on one audit, against a shared monthly
+cap), and the paid baseline's own confidence number is 3.
+
 ## Files
 
 `src/lib/marketModel.ts` (new) · `src/lib/auditQuestionContext.ts` · `src/lib/seedGuard.ts` ·
@@ -175,6 +237,8 @@ anyway: same exemption, same reason.
 
 Discovery adds: `src/lib/auditQuestionCounts.ts` · `src/lib/auditKind.ts` ·
 `src/components/audit/AuditPills.tsx` · `scripts/discovery-audit.test.ts` (new).
+
+The 0/5 fix and the run selector add: `supabase/functions/_shared/audit-baseline.ts`.
 
 Deployed: `create-ai-audit`, `paid-baseline`, `process-ai-audit-queue`, `render-remeasure-results`,
 `stripe-webhook` — the last three because they reach `seedGuard.ts`.

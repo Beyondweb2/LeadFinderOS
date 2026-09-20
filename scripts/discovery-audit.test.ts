@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  DISCOVERY_QUESTIONS, DISCOVERY_RUNS, FULL_MEASURE_QUESTIONS, BASELINE_QUESTIONS, BASELINE_RUNS,
+  DISCOVERY_QUESTIONS, DISCOVERY_RUNS, DISCOVERY_MAX_RUNS, FULL_MEASURE_QUESTIONS, BASELINE_QUESTIONS, BASELINE_RUNS,
   OUTREACH_HOOK_QUESTIONS, WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS,
   GENERATOR_ABSOLUTE_MAX_QUESTIONS,
 } from '../src/lib/auditQuestionCounts.ts';
@@ -81,15 +81,22 @@ ok(/const DISCOVERY_MIN_QUESTION_COUNT = DISCOVERY_QUESTIONS;/.test(fn)
    && /const DISCOVERY_DEFAULT_QUESTION_COUNT = DISCOVERY_QUESTIONS;/.test(fn),
    'the server’s min, max and default all derive from the one shared constant');
 
-/* ⛔ THE RUN COUNT. baselineTargetRuns is what creates extra runs; discovery must not appear in it,
-   which is what leaves it at 0 — a single ordinary ai_audit_run. Asserted as an ABSENCE from that
-   one expression rather than as "runs === 1" somewhere, because the absence IS the mechanism. */
+/* ⛔ THE RUN COUNT. 1 by default, operator-selectable to DISCOVERY_MAX_RUNS, and CLAMPED ON THE
+   SERVER — the browser states a preference, it does not grant one. */
+ok(DISCOVERY_MAX_RUNS === 3, 'a discovery audit may ask for at most 3 runs');
 const runsExpr = (fn.match(/const baselineTargetRuns = [\s\S]*?;\n/) ?? [''])[0];
 ok(runsExpr.length > 0, 'found the run-count expression in source');
-ok(!/isDiscovery/.test(runsExpr),
-   'discovery is absent from the run-count expression, so it stays at 0 — exactly ONE ai_audit_run');
+ok(/isDiscovery \? discoveryRuns/.test(runsExpr), 'discovery contributes its own chosen run count');
 ok(/\(isMeasurement \|\| isRemeasure\) \? MEASUREMENT_RUNS/.test(runsExpr),
    'and the measurement/replay 3-run rule beside it is untouched');
+const clampExpr = (fn.match(/const discoveryRuns = isDiscovery[\s\S]*?;\n/) ?? [''])[0];
+ok(clampExpr.length > 0, 'found the run-count clamp in source');
+ok(/Math\.min\(DISCOVERY_MAX_RUNS/.test(clampExpr) && /Math\.max\(1/.test(clampExpr),
+   'the server clamps whatever arrives into 1..DISCOVERY_MAX_RUNS');
+ok(/DISCOVERY_RUNS/.test(clampExpr) && /body\.run_count/.test(clampExpr),
+   'it reads body.run_count and defaults to DISCOVERY_RUNS when absent');
+ok(!/question_count|questionCount/.test(clampExpr),
+   'and the run count is never inferred from the question count');
 
 /* ── THE MARKER IS THE PURPOSE, NEVER THE COUNT ───────────────────────────────────────────────── */
 console.log('\n-- discovery is explicit --');
@@ -142,6 +149,73 @@ ok(hybPrev.business_scope === 'hybrid' && hybPrev.location_text === 'Leeds', 'sc
 const split = hybridAllocation(40);
 ok(split.local === 20 && split.national === 20, '40 splits 20 local / 20 wider');
 ok(split.local + split.national === 40, 'and the halves still sum to the requested count');
+
+/* ── THE 0/5 FAULT ────────────────────────────────────────────────────────────────────────────── */
+console.log('\n-- the live 0/5 fault: a repeat inherits its own audit cap --');
+/* 🔴 MEASURED: audit 9a0c2b79 (Findable, discovery). Run 1 queued 40 and completed. A re-run posted
+   the same 40 back with audit_id and no purpose, the server fell to the 5-question wizard cap, and
+   the 40 were sliced to 5 — a real second run of five questions. That is what "0/5" was. */
+ok(/const storedCeiling =/.test(fn), 'the server derives a repeat cap from the STORED audit');
+const ceilingExpr = (fn.match(/const storedCeiling = [\s\S]*?;\n/) ?? [''])[0];
+ok(/storedPurpose === DISCOVERY_AUDIT_PURPOSE \? DISCOVERY_MAX_QUESTION_COUNT/.test(ceilingExpr),
+   'a repeat of a discovery audit is capped at 40, not at the wizard 5');
+ok(/MEASUREMENT_MAX_QUESTION_COUNT/.test(ceilingExpr) && /BASELINE_MAX_QUESTION_COUNT/.test(ceilingExpr),
+   'and measurement / baseline / remeasure repeats inherit their own ceilings too');
+ok(/const MAX_QUESTIONS = Math\.max\(REQUESTED_MAX_QUESTIONS, storedCeiling\);/.test(fn),
+   'the inherited cap can only RAISE the limit — it can never lower a declared purpose');
+ok(/audit_purpose"\)\.eq\("id", reuseAuditId\)/.test(fn),
+   'the purpose is read from the database, not taken from the caller');
+/* ⛔ AND THE BROWSER STOPS GUESSING. The old code sent purpose:"measurement" when
+   `is_measurement === true || baseline_target_runs > 1` — a list of the purposes that existed when
+   it was written, which is exactly what discovery fell outside of. */
+ok(!/curIsMeasurement/.test(ui), 'the wizard no longer infers a re-run purpose from two columns');
+ok(/body: \{ audit_id: auditId, questions: clean \}/.test(ui),
+   'a re-run just names the audit and its questions; the server knows the rest');
+
+/* ── MULTI-RUN: THE SAME QUESTIONS, NEVER REGENERATED ─────────────────────────────────────────── */
+console.log('\n-- B/C/D. 2 and 3 runs replay the SAME approved set, in order, with no regeneration --');
+const baseline = strip(read('supabase/functions/_shared/audit-baseline.ts'));
+ok(/const repeatPurpose = storedPurpose\s*\?\s*storedPurpose/.test(baseline),
+   'a repeat carries whatever purpose is STORED, not a hard-coded list of the purposes that existed');
+ok(!/storedPurpose === FREE_CHECK_AUDIT_PURPOSE\s*\?\s*FREE_CHECK_AUDIT_PURPOSE/.test(baseline),
+   'the old free_check/is_measurement/baseline ladder is gone — it would have sent discovery as "baseline", capping 40 to 20');
+ok(/isMeasurementAudit \? "measurement" : "baseline"/.test(baseline),
+   'and the legacy fallback for rows written before audit_purpose existed is kept');
+ok(/if \(providedQuestions && providedQuestions\.length\) \{[\s\S]{0,240}questions = providedQuestions;/.test(fn),
+   'supplied questions short-circuit generation entirely — run 2 and run 3 cannot regenerate');
+for (const n of [1, 2, 3]) {
+  const r = buildAuditRunRequest(FINDABLE, {
+    questionCount: DISCOVERY_QUESTIONS, purpose: 'discovery', runCount: n,
+    questions: nationalFallbackQuestions('AI visibility service', FINDABLE_CTX, 40),
+  });
+  ok((r.questions as string[]).length === 40, `${n} run(s): all 40 questions travel`);
+  ok(n === 1 ? r.run_count === undefined : r.run_count === n,
+     n === 1 ? '1 run sends no run_count — the server default IS one' : `${n} runs sends run_count ${n}`);
+}
+const set40 = nationalFallbackQuestions('AI visibility service', FINDABLE_CTX, 40);
+const shapes = [1, 2, 3].map((n) => (buildAuditRunRequest(FINDABLE, {
+  questionCount: DISCOVERY_QUESTIONS, purpose: 'discovery', runCount: n, questions: set40,
+}).questions as string[]).join('|'));
+ok(new Set(shapes).size === 1, 'the same 40 questions in the same order for 1, 2 and 3 runs');
+
+/* ── E. PROGRESS ──────────────────────────────────────────────────────────────────────────────── */
+console.log('\n-- E. progress counts the run own queue rows --');
+/* The "0/5" the operator saw was TRUTHFUL: that run really held five rows. The denominator is the
+   run's queue row count, so fixing the row count fixes the display — there is no second number to
+   keep in step, which is the property worth pinning. */
+const pills = read('src/components/audit/AuditPills.tsx');
+ok(/\{run\.done\}\/\{run\.total\}/.test(pills), 'the running chip shows done/total from the run itself');
+ok(!/questionCount/.test(strip(pills)),
+   'and never from a requested count that could disagree with what was actually queued');
+
+/* ── F. STOP ──────────────────────────────────────────────────────────────────────────────────── */
+console.log('\n-- F. a stopped discovery run cannot spend again --');
+ok(/status: 'cancelled' \}\)[\s\S]{0,40}\.eq\('run_id', runId\)[\s\S]{0,60}\.in\('status', \['pending', 'running'\]\)/.test(ui),
+   'Stop cancels every unsettled queue row of the run');
+ok(/status: 'cancelled' \}\)[\s\S]{0,40}\.eq\('id', runId\)/.test(ui), 'and the run itself');
+ok(/status: "pending"/.test(fn), 'queue rows are created "pending" — the exact status Stop targets');
+const queueFn = strip(read('supabase/functions/process-ai-audit-queue/index.ts'));
+ok(/"pending"/.test(queueFn), 'and the processor claims pending rows, so a cancelled row is never picked up');
 
 /* ── D. HOOK REGRESSION ───────────────────────────────────────────────────────────────────────── */
 console.log('\n-- D. the outreach hook is untouched: adaptive 1 to 3, one run --');

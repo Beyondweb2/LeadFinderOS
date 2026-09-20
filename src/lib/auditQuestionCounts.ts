@@ -86,8 +86,22 @@ export const FULL_MEASURE_QUESTIONS = 20;
  * ⛔ 40 IS THE GENERATOR'S ABSOLUTE CEILING, not a number above it. One model call, one set.
  */
 export const DISCOVERY_QUESTIONS = 40;
-/** ONE. Stated as a constant so "40 x 1" is a fact a test can read, not a missing value. */
+/** ONE, the DEFAULT. Stated as a constant so "40 x 1" is a fact a test can read, not a missing
+ *  value, and so a request that omits the run count still means one run. */
 export const DISCOVERY_RUNS = 1;
+/**
+ * ⛔ THE MOST RUNS A DISCOVERY AUDIT MAY ASK FOR — operator-chosen, 1 to 3 (Paul, 2026-09-20).
+ *
+ * WHY MORE THAN ONE IS WORTH OFFERING: asking the SAME 40 questions three times turns each one
+ * into "named 2 of 3" rather than a coin flip, which is the difference between "the engines do not
+ * know this business" and "the engines are inconsistent about it" — fragmentation, the thing
+ * discovery is looking for.
+ *
+ * ⛔ 3, NOT 5. Cost scales linearly: 40 x 3 is 120 questions of Apify against a single audit, and
+ * Apify is a single point of failure with a monthly cap shared by every question in the product.
+ * The paid baseline's own confidence number is 3; nothing here needs more than the guarantee does.
+ */
+export const DISCOVERY_MAX_RUNS = 3;
 
 /**
  * ⛔ THE GENERATOR'S ABSOLUTE CEILING — the most questions ONE model call may be asked for.
