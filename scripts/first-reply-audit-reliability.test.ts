@@ -6,7 +6,6 @@ import {
   auditIntentIsDue,
   auditIntentRetryStatus,
   decideQueuedAuditIntent,
-  nextAuditRequest,
   shouldArmFirstReplyAutomation,
 } from '../src/lib/firstReplyAutomation.ts';
 import { armStatusFor } from '../src/lib/firstReplyMode.ts';
@@ -58,8 +57,6 @@ ok(decideQueuedAuditIntent([]) === 'retry', 'an audit with no runs is recovered 
 ok(decideQueuedAuditIntent(['failed', 'running']) === 'wait', 'a retry run in flight is waited on');
 ok(decideQueuedAuditIntent(['failed', 'complete']) === 'complete', 'a retry run that completed completes the intent');
 ok(decideQueuedAuditIntent(['weird_new_status']) === 'wait', 'an unknown run status is treated as in flight, never as a failure that spends another audit');
-ok(nextAuditRequest(null) === 'fresh', 'an intent with no audit yet asks for a fresh audit');
-ok(nextAuditRequest('11111111-1111-1111-1111-111111111111') === 'rerun', 'an intent whose reply audit exists re-runs THAT audit, never a second one');
 
 /* ── 4. Source-shape guards: the wiring the pure functions cannot see ──────────────────────── */
 const root = resolve(import.meta.dirname, '..');
@@ -83,10 +80,11 @@ ok(/const masterEnabled = autoReplyEnvOn\(\);/.test(helper), 'the env kill-switc
 // Fresh audit association.
 ok(helper.includes('fresh_audit: true'), 'a new intent asks create-ai-audit for a FRESH audit');
 ok(!helper.includes('ai_audit_runs(status)') && !/\.eq\("lead_id", row\.lead_id\)\.order\("created_at"/.test(helper), 'an unrelated existing completed audit on the lead can no longer satisfy the intent');
-ok(/audit_id: row\.audit_id \?\? payload\.audit_id/.test(helper), 'the created audit id is persisted on the intent and reconciled against thereafter');
-ok(/audit_id: row\.audit_id \}/.test(helper) && helper.includes('nextAuditRequest(row.audit_id)'), 'an already-associated reply audit is re-run, never duplicated');
+ok(/audit_status: "queued", audit_id: payload\.audit_id/.test(helper), 'the created audit id is persisted on the intent and reconciled against thereafter');
+ok(!/audit_id: row\.audit_id/.test(helper) && !helper.includes('nextAuditRequest'), 'a retry after a failed run mints a fresh hook audit — a hook audit never gains run 2');
+ok(!auditIntentIsDue({ status: 'queued', nextAttemptAt: null, claimedAt: null, nowMs: now, staleClaimMs: 300000 }), 'an already-associated reply audit is not duplicated: a queued intent is never re-claimed');
 ok(/const freshAudit: boolean = isInternal && body\.fresh_audit === true;/.test(createAudit), 'create-ai-audit honours fresh_audit for internal callers only');
-ok(/&& !isRemeasure && !freshAudit\) \{/.test(createAudit), 'fresh_audit bypasses the per-lead reuse and nothing else');
+ok(/&& !isRemeasure && !freshAudit && !isHookAudit\) \{/.test(createAudit), 'fresh_audit bypasses the per-lead reuse and nothing else');
 ok((createAudit.match(/freshAudit/g) ?? []).length === 2, 'fresh_audit touches exactly the declaration and the reuse condition (paid baseline paths untouched)');
 
 // Queued recovery and completion live in the reconciler, on the intent's own audit.

@@ -99,13 +99,6 @@ export function auditIntentRetryStatus(
   return attempts >= maxAttempts ? 'failed' : 'retry_pending';
 }
 
-/**
- * The create-ai-audit request a claimed intent should make.
- *   fresh → no audit yet: mint a NEW hook audit, bypassing create-ai-audit's per-lead reuse so an
- *           unrelated earlier audit is never handed back as "the reply audit"
- *   rerun → the reply audit exists but its run failed: add another run to THAT audit (same
- *           questions), never a second audit
- */
-export function nextAuditRequest(auditId: string | null): 'fresh' | 'rerun' {
-  return auditId ? 'rerun' : 'fresh';
-}
+/* Every create-ai-audit request a claimed intent makes is a FRESH hook audit (2026-09-20). A retry
+   after a failed run does not add run 2 to the failed audit — a hook audit never accumulates runs
+   (src/lib/hookAudit.ts) — it mints a new one and the intent's audit_id is repointed at it. */

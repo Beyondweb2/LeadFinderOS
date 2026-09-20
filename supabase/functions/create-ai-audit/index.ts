@@ -25,6 +25,7 @@ import {
   FULL_MEASURE_QUESTIONS,
   GENERATOR_ABSOLUTE_MAX_QUESTIONS,
 } from "../../../src/lib/auditQuestionCounts.ts";
+import { initialHookState, planHookQuestions, type HookState } from "../../../src/lib/hookAudit.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
 // OpenAI (gpt-4o-mini, tool-calling, mirrors admin-ai-opener), creates the audit +
@@ -414,6 +415,15 @@ Deno.serve(async (req) => {
       : isFreeCheck ? FREE_CHECK_AUDIT_PURPOSE
       : ORDINARY_AUDIT_PURPOSE;
     const skipSeo: boolean = body.skip_seo === true || !seoScanAllowed(auditPurpose);
+    /* ⛔ THE HOOK AUDIT IS ADAPTIVE (Paul, 2026-09-20). An ORDINARY audit whose questions this
+       function GENERATES — the Inbox button, the reply chain, the drip's pre-send audit, the bulk
+       runner — plans up to HOOK_MAX_QUESTIONS in order, queues ONLY the first, and the queue
+       processor asks the next only while every scored engine keeps naming the business. It stops
+       on the first platform-specific gap. Never a second ai_audit_run.
+       NOT adaptive: a caller-supplied `questions[]` (the wizard's reviewed list), a re-run by
+       audit_id, a preview, and every purpose that is not ordinary (baseline, measurement, remeasure,
+       free_check) — those keep their full fan-out exactly as before. */
+    const isHookAudit: boolean = auditPurpose === ORDINARY_AUDIT_PURPOSE && !providedQuestions && !reuseAuditId && !preview;
     /* ⛔ ONE PREDICATE GOVERNS BOTH ENDS — the preview the operator reviews and the run that
        actually happens. Money questions are for the ordinary per-business audit only: a paid
        baseline is the guarantee's day-0 and must not change character under a client
@@ -462,7 +472,9 @@ Deno.serve(async (req) => {
     /* !isMeasurement, same reason as !isBaseline: a full measurement must be its OWN audit so the
        start and re-measure gathers are two distinct, comparable audits on the lead — not extra runs
        bolted onto an old 3-question outreach audit. */
-    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isRemeasure && !freshAudit) {
+    /* !isHookAudit (2026-09-20): a hook re-run is a NEW hook that starts again at Q1. Adding a run to
+       the old audit both broke the one-run rule and inherited a plan already spent on a gap. */
+    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isRemeasure && !freshAudit && !isHookAudit) {
       const { data: candidates } = await service
         .from("ai_audits")
         .select("id, baseline_target_runs, created_at")
@@ -1074,6 +1086,15 @@ Deno.serve(async (req) => {
       console.warn(`[create-ai-audit] ${finalQ.duplicates.length} case-duplicate question(s) dropped before queueing: ${finalQ.duplicates.join(" | ")}`);
     }
     questions = finalQ.questions;
+    /* THE HOOK PLAN: broadest commercial intent first, capped at HOOK_MAX_QUESTIONS. `questions`
+       becomes the ordered plan (it is what the response, the money flag and the cost estimate
+       describe); only planned[0] is queued below, the processor queues the rest one at a time. */
+    let hookState: HookState | null = null;
+    if (isHookAudit) {
+      questions = planHookQuestions(questions, { town: locationText });
+      hookState = initialHookState(questions);
+      console.log(`[create-ai-audit] adaptive hook: ${questions.length} planned, queueing Q1 only`);
+    }
     /* ⛔ THE MONEY FLAG, INTERSECTED WITH WHAT IS ACTUALLY QUEUED. dedupeQuestions above can drop a
        money question that collided with a standard one, and the guards can reject one earlier — so a
        flag taken straight from the generator could name a question that is not in this run. Matched
@@ -1100,6 +1121,8 @@ Deno.serve(async (req) => {
     /* Same schema-free mechanism as `measurement` above (results is jsonb — no migration). Inert
        downstream: the queue keys on results.seo and the report on results.seo.categories. */
     if (moneyQueued.length) runResults.money_questions = moneyQueued;
+    // The adaptive plan and its progress live on the run (results.hook); the processor advances it.
+    if (hookState) runResults.hook = hookState;
     const { data: run, error: runErr } = await service
       .from("ai_audit_runs")
       .insert({ audit_id: auditId, user_id: userId, run_number: runNumber, status: "pending", results: runResults })
@@ -1120,7 +1143,9 @@ Deno.serve(async (req) => {
     const runId = run.id;
 
     // ── Enqueue one row per question ──────────────────────────────────────────
-    const queueRows = questions.map((q) => ({
+    // Adaptive hook: ONLY the first planned question goes on the queue now; process-ai-audit-queue
+    // adds Q2/Q3 to this same run only if the business is still being named (src/lib/hookAudit.ts).
+    const queueRows = (hookState ? questions.slice(0, 1) : questions).map((q) => ({
       audit_id: auditId,
       run_id: runId,
       user_id: userId,

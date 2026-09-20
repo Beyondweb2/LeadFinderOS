@@ -18,6 +18,7 @@ import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/a
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
+import { advanceHookState, evaluateHookQuestion, isHookState } from "../../../src/lib/hookAudit.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. ASYNC start-and-poll: each tick (a) POLLs in-flight Apify runs and
@@ -862,7 +863,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     // A cancelled run is terminal — never resurrect it or flip it to 'complete'. Drop any
     // leftover pending/running rows (e.g. one in-flight when the user hit Stop) so they aren't
     // reprocessed, and leave the run marked 'cancelled'.
-    const { data: runRow } = await service.from("ai_audit_runs").select("status, audit_id").eq("id", runId).maybeSingle();
+    const { data: runRow } = await service.from("ai_audit_runs").select("status, audit_id, user_id").eq("id", runId).maybeSingle();
     const prevStatus = runRow?.status ?? null; // status BEFORE this finalise write — drives the once-per-run guard
     if (runRow?.status === "cancelled") {
       await service.from("ai_audit_queue")
@@ -971,6 +972,55 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     // first; both merge rather than overwrite).
     const { data: runNow } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
     const existingResults: Row = runNow?.results && typeof runNow.results === "object" ? (runNow.results as Row) : {};
+
+    /* ── ADAPTIVE HOOK STEP (2026-09-20, src/lib/hookAudit.ts) ──────────────────────────────────
+       A hook run reaches this point with every queued row settled. The question that just settled
+       is the LAST row (rows are ordered by created_at and the plan queues one at a time). Evaluate
+       it on the scored engines: a gap or a provider failure stops the hook and the run finalises
+       below; the business being named on every answering engine queues the NEXT planned question
+       on THIS run and skips finalisation this tick.
+       ⛔ EXACTLY-ONCE NEXT QUESTION. Two ticks can both see the run settled. The state write is
+       conditional on results->hook->>next_index still holding the value this tick read, so only
+       the tick that wins the update inserts the queue row; the loser sees a pending row next tick.
+       ⛔ Never a second ai_audit_run, never on a capped run (the cap stops spend). */
+    const hookPrev = existingResults.hook;
+    if (isHookState(hookPrev) && !hookPrev.stop_reason && !isCapped && rows.length > 0) {
+      const lastIdx = rows.length - 1;
+      const lastRow = rows[lastIdx] as Row;
+      const engineOrder: string[] = Array.isArray(lastRow.engines) && lastRow.engines.length ? lastRow.engines : DEFAULT_ENGINES;
+      const evaluation = evaluateHookQuestion(
+        lastRow.status === "done" && lastRow.result && typeof lastRow.result === "object" ? lastRow.result as Record<string, unknown> : null,
+        engineOrder.filter((e) => DEFAULT_ENGINES.includes(e)),
+      );
+      const step = advanceHookState(hookPrev, lastIdx, evaluation);
+      if (step.action === "next" && step.nextQuestion) {
+        const { data: claimed, error: claimErr } = await service.from("ai_audit_runs")
+          .update({ results: { ...existingResults, hook: step.state } })
+          .eq("id", runId)
+          .eq("results->hook->>next_index", String(hookPrev.next_index))
+          .in("status", ["pending", "running"])
+          .select("id");
+        if (claimErr) {
+          console.error(`[process-ai-audit-queue] hook step: could not record progress for run ${runId}: ${claimErr.message}`);
+          continue;
+        }
+        if (!Array.isArray(claimed) || claimed.length !== 1) continue; // another tick queued it
+        const { error: qErr } = await service.from("ai_audit_queue").insert({
+          audit_id: runRow?.audit_id, run_id: runId, user_id: runRow?.user_id ?? null,
+          question: step.nextQuestion, engines: engineOrder, status: "pending",
+        });
+        if (qErr) {
+          console.error(`[process-ai-audit-queue] hook step: could not queue Q${lastIdx + 2} for run ${runId}: ${qErr.message}`);
+          // Roll the state back so the next tick re-evaluates and retries the insert.
+          await service.from("ai_audit_runs").update({ results: { ...existingResults, hook: hookPrev } }).eq("id", runId);
+          continue;
+        }
+        console.log(`[process-ai-audit-queue] hook run ${runId}: Q${lastIdx + 1} named the business on ${engineOrder.join("+")} — queued Q${lastIdx + 2}`);
+        continue; // not finalised: the new row keeps the run open
+      }
+      existingResults.hook = step.state;
+      console.log(`[process-ai-audit-queue] hook run ${runId}: stopped after ${step.state.executed} question(s) — ${step.state.stop_reason}${step.state.gap ? ` on ${step.state.gap.engine}` : ""}`);
+    }
     const existingSeo = existingResults.seo;
 
     // MEASURED actor spend for this run: the sum of what Apify charged for each question,

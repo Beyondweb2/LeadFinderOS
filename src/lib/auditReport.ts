@@ -32,6 +32,7 @@ import { buildMatchContext, groupNames } from "../../supabase/functions/_shared/
 import { nameIsJudgeable } from "../../supabase/functions/_shared/derivable.ts";
 import { classifyKnownEntity } from './knownEntities.ts';
 import { cellNamed, hasModelNamedEvidence } from './namedSignal.ts';
+import { buildHookReportSummary } from './hookAudit.ts';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from './competitorCleaning.ts';
 import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
@@ -1226,6 +1227,17 @@ export function buildReportData(
     businessType: ctx.businessType || '',
     named,
     total,
+    /* ADAPTIVE HOOK SUMMARY (2026-09-20). Present only for a hook run that has stopped on a gap or
+       on its question ceiling (src/lib/hookAudit.ts); null on every baseline, measurement, wizard
+       and free-check run, and on a hook that failed at the provider — those render exactly as
+       before. Rival names go through the same cleanliness gate as the rest of this report. */
+    hook: buildHookReportSummary({
+      state: (run?.results as { hook?: unknown } | null | undefined)?.hook,
+      rows: queueRows,
+      engineOrder: SCORED_ENGINES,
+      engineLabel: (e) => ENGINE_LABELS[e] ?? e,
+      namedInstead: (gap) => rivalsSuppressed ? [] : gap.named_instead.filter((n) => !isProvableJunkName(n)).slice(0, 5),
+    }),
     questionBreakdown,
     questionsAsked: distinctQuestions, // DISTINCT questions (each asked runsCount times), not run-rows
     measurementRuns: runsCount,        // how many times each question was asked (per engine)

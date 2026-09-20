@@ -2,7 +2,6 @@ import {
   FIRST_REPLY_AUDIT_OPEN_STATUSES,
   auditIntentRetryStatus,
   decideQueuedAuditIntent,
-  nextAuditRequest,
   shouldArmFirstReplyAutomation,
   type FirstReplyAuditStatus,
 } from "../../../src/lib/firstReplyAutomation.ts";
@@ -277,26 +276,23 @@ export async function reconcileFirstReplyAuditIntents(service: Service): Promise
 
       /* ⛔ A FRESH REPLY AUDIT, NEVER AN INHERITED ONE (Paul, 2026-09-20). This used to look for any
          complete or active audit on the lead first, so the drip's pre-send hook audit satisfied the
-         reply's intent and no reply-triggered audit ran. Now:
-           · no audit_id yet → mint a NEW audit; `fresh_audit` tells create-ai-audit to bypass its
-             per-lead reuse, which would otherwise hand back the old audit with a run bolted on
-           · audit_id set (a retry after a failed run) → add a run to THAT audit, same questions */
+         reply's intent and no reply-triggered audit ran. Every attempt — the first AND a retry after
+         a failed run — mints a NEW adaptive hook audit (`fresh_audit` bypasses create-ai-audit's
+         per-lead reuse) and the intent is repointed at it. A hook audit never accumulates runs; a
+         failed one stays behind as the record of the failure, audit_last_error says why. */
       const website = ownWebsite(lead.website);
-      const request = nextAuditRequest(row.audit_id);
-      const body = request === "rerun"
-        ? { user_id: lead.user_id, lead_id: row.lead_id, audit_id: row.audit_id }
-        : {
-          user_id: lead.user_id,
-          lead_id: row.lead_id,
-          business_name: lead.business_name,
-          business_type: businessType,
-          location_text: locationText,
-          country: lead.country ?? null,
-          website,
-          has_website: !!website,
-          question_count: OUTREACH_HOOK_QUESTIONS,
-          fresh_audit: true,
-        };
+      const body = {
+        user_id: lead.user_id,
+        lead_id: row.lead_id,
+        business_name: lead.business_name,
+        business_type: businessType,
+        location_text: locationText,
+        country: lead.country ?? null,
+        website,
+        has_website: !!website,
+        question_count: OUTREACH_HOOK_QUESTIONS,
+        fresh_audit: true,
+      };
       const response = await fetch(`${Deno.env.get("SUPABASE_URL") ?? ""}/functions/v1/create-ai-audit`, {
         method: "POST",
         headers: {
@@ -314,7 +310,7 @@ export async function reconcileFirstReplyAuditIntents(service: Service): Promise
         retried++;
         continue;
       }
-      await mark(service, row.id, { audit_status: "queued", audit_id: row.audit_id ?? payload.audit_id, audit_last_error: null, audit_next_attempt_at: null, audit_claimed_at: null });
+      await mark(service, row.id, { audit_status: "queued", audit_id: payload.audit_id, audit_last_error: null, audit_next_attempt_at: null, audit_claimed_at: null });
       started++;
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e);

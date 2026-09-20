@@ -1,3 +1,4 @@
+import { hookReportCopy, type HookReportSummary } from './hookAudit.ts';
 // Client-facing AI Visibility Audit report — shared data shape + a standalone,
 // self-contained, PRINT-READY one-page HTML document for download (Findable-branded,
 // inline styles, no dependencies). Deliberately client-friendly: no engine keys, no
@@ -131,6 +132,12 @@ export interface AiAuditReportData {
    *  the website slot, the fix section that branches on the count — and shows a banner saying how
    *  many runs are done, because a number that will change must not appear at all. */
   measuring?: { runsDone: number; runsTarget: number } | null;
+  /* ADAPTIVE HOOK (2026-09-20). Set only for a quick/hook audit that stopped on a visibility gap or
+   *  on its question ceiling. The renderer then replaces the counted hero ("N times out of M
+   *  answers") with the gap itself — the exact question, the engine, who it named instead — because
+   *  a one-to-three-question snapshot must never read as a statistic. Everything else renders as
+   *  before. Built by src/lib/hookAudit.ts; the copy is hookReportCopy, tested directly. */
+  hook?: HookReportSummary | null;
   /* ⛔ HOW THE WEBSITE SLOT IS PRESENTED. 'graded' (the DEFAULT) is the original: grade circles,
      /100 scores and a lead sentence naming the grade. 'issues' drops all of that and prints the
      findings alone under a plain heading.
@@ -691,6 +698,56 @@ export function renderSiteFooter(opts: { businessName: string; metaHtml: string;
     </footer>`;
 }
 
+/** The adaptive hook hero: the missed search, verbatim, with who the engine named instead. Every
+ *  word comes from hookReportCopy so the test can read the copy without rendering. No percentage,
+ *  no "N of M answers" — a quick check is a snapshot, and this says so on its face. */
+export function renderHookSection(h: HookReportSummary, businessName: string): string {
+  const c = hookReportCopy(h, businessName);
+  const tested = h.tested.map((t) => {
+    const eng = t.perEngine.map((pe) => `${esc(pe.label)}: <b>${pe.named === null ? "no answer" : pe.named ? "named you" : "didn&rsquo;t name you"}</b>`).join(" &middot; ");
+    return `<li class="${t.isGap ? "gap" : ""}"><span>&ldquo;${esc(t.question)}&rdquo;</span><span class="hook-eng">${eng}</span></li>`;
+  }).join("");
+  if (!h.gap) {
+    return `
+    <!-- ADAPTIVE HOOK: no gap in the searches tested -->
+    <section class="hook">
+      <div class="hook-eyebrow">${esc(c.eyebrow)}</div>
+      <h1 class="hook-head ok">${esc(c.headline)}</h1>
+      <p class="hook-named">${esc(c.lede)}</p>
+      <p class="hook-count">${esc(c.count)}</p>
+      <ul class="hook-tested">${tested}</ul>
+    </section>`;
+  }
+  const g = h.gap;
+  const named = g.namedInstead.length
+    ? `<p class="hook-named">${esc(g.engineLabel)} recommended:</p><ul class="hook-list">${g.namedInstead.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`
+    : `<p class="hook-named">${esc(g.engineLabel)} answered with other suggestions.</p>`;
+  const qualifier = g.namedOnEngineLabels.length
+    ? `<p class="hook-earlier">${esc(g.namedOnEngineLabels.join(" and "))} did name ${esc(businessName)} for this search &mdash; this gap is specific to ${esc(g.engineLabel)}.</p>`
+    : "";
+  const cites = g.citations.length
+    ? `<p class="hook-cites">Sources ${esc(g.engineLabel)} drew on: ${g.citations.slice(0, 4).map((ci) => esc(ci.title || ci.url)).join("; ")}</p>`
+    : "";
+  return `
+    <!-- ADAPTIVE HOOK: the missed search is the result -->
+    <section class="hook">
+      <div class="hook-eyebrow">${esc(c.eyebrow)}</div>
+      <h1 class="hook-head">${esc(c.headline)}</h1>
+      <div class="hook-card">
+        <div class="hook-ask">We asked ${esc(g.engineLabel)}:</div>
+        <p class="hook-q">&ldquo;${esc(g.question)}&rdquo;</p>
+        ${named}
+        <p class="hook-miss">${esc(businessName)} wasn&rsquo;t named.</p>
+      </div>
+      ${c.earlier ? `<p class="hook-earlier">${esc(c.earlier)}</p>` : ""}
+      ${qualifier}
+      ${cites}
+      <p class="hook-count">${esc(c.count)}</p>
+      <p class="hook-caveat">${esc(c.caveat)}</p>
+      ${h.tested.length > 1 ? `<ul class="hook-tested">${tested}</ul>` : ""}
+    </section>`;
+}
+
 export function renderReportHtml(d: AiAuditReportData): string {
   const type = d.businessType.trim() || "business like yours";
   /* hasRivals gates every clause that mentions competitors: with no rival names measured, saying
@@ -1198,6 +1255,25 @@ ${REPORT_CHROME_CSS_CORE}
 
   /* GUT-PUNCH &mdash; a written summary of the worst answer (never the raw AI text) */
   .gutbox{ margin:0 28px 16px; padding:14px 18px; background:var(--red-tint); border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
+  /* Adaptive hook hero — the missed search IS the result, so it gets the size the number used to have. */
+  .hook{ padding:14px 28px 20px; }
+  .hook-eyebrow{ font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-weight:700; margin-bottom:8px; }
+  .hook-head{ font-size:30px; line-height:1.15; font-weight:800; letter-spacing:-.01em; margin:0 0 14px; }
+  .hook-head.ok{ color:var(--green, #1b7f4b); }
+  .hook-card{ padding:16px 20px; background:var(--red-tint); border-left:6px solid var(--red); border-radius:0 12px 12px 0; margin-bottom:12px; }
+  .hook-card .hook-ask{ font-size:13px; color:var(--muted); margin-bottom:4px; }
+  .hook-card .hook-q{ font-size:20px; line-height:1.3; font-weight:700; margin:0 0 12px; }
+  .hook-card .hook-named{ font-size:14px; margin:0 0 6px; }
+  .hook-card .hook-list{ margin:0 0 12px; padding-left:18px; font-size:15px; line-height:1.55; }
+  .hook-card .hook-miss{ font-size:16px; font-weight:700; margin:0; }
+  .hook-earlier, .hook-count{ font-size:13px; color:var(--muted); margin:0 0 4px; }
+  .hook-caveat{ font-size:13px; color:var(--muted); font-style:italic; margin:6px 0 0; }
+  .hook-tested{ margin:12px 0 0; padding:0; list-style:none; }
+  .hook-tested li{ display:flex; gap:10px; align-items:baseline; padding:8px 12px; border-radius:8px; font-size:14px; }
+  .hook-tested li.gap{ background:var(--red-tint); font-weight:700; }
+  .hook-tested .hook-eng{ font-size:12px; white-space:nowrap; color:var(--muted); }
+  .hook-tested .hook-eng b{ font-weight:700; }
+  .hook-cites{ font-size:12px; color:var(--muted); margin:4px 0 0; }
   .gb-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--red); font-weight:700; margin-bottom:7px; }
   .gb-sum{ margin:0 0 7px; font-size:14px; line-height:1.4; font-weight:400; color:var(--on-red-tint); }
   .gb-sum .gb-q{ color:var(--ink); font-weight:700; }
@@ -1549,6 +1625,8 @@ ${d.measuring ? `
       <p>AI gives different answers to the same question on different days, so we ask every question ${d.measuring.runsTarget === 1 ? "and check the answer" : `${inWords(d.measuring.runsTarget)} times`} before we show you a number &mdash; otherwise the figure would change under you between one visit and the next.</p>
       <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
     </section>` : d.nameNotJudgeable ? `${nameCheckSection}
+${seoSlot}
+` : d.hook ? `${renderHookSection(d.hook, d.businessName)}
 ${seoSlot}
 ` : `
     <!-- HERO -->
