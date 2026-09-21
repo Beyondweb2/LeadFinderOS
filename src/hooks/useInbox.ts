@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo } from 'react';
-import { conversationLeadId, groupInboxMessages, mergeInboxMessages, optionalInboxRows, patchInboxLead } from '@/lib/inboxCache';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { conversationLeadId, groupInboxMessages, mergeInboxMessages, mergeReconciledLeads, optionalInboxRows, patchInboxLead, upsertAuditById } from '@/lib/inboxCache';
+import { newestUsableAudit, resolveReportsByLead } from '@/lib/auditReportResolver';
+import { RUN_USABLE } from '@/lib/queueAuditStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,8 +23,12 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
  * the historically working projection if a deployed PostgREST schema rejects one of the optional
  * JSON projections. Without this fallback optionalInboxRows turns the error into an empty list,
  * making completed reports look missing and disabling every audit template. */
-const AUDIT_SELECT = 'id, short_code, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status, run_number, created_at, mention_rate, audit_summary:results->summary, crawl_check:results->crawl_check)';
-const AUDIT_SELECT_FALLBACK = 'id, short_code, lead_id, created_at, open_count, first_opened_at, ai_audit_runs(status, run_number, created_at, crawl_check:results->crawl_check)';
+/* audit_purpose (+ the three legacy columns auditKind.ts falls back to for pre-2026-09-12 rows)
+ * are what resolveLeadReportAudit/resolveReportsByLead need to exclude a Full Measurement / day-28
+ * replay from ever being resolved as "the report" — without them auditKind() cannot tell one from
+ * an ordinary audit and the resolver would (wrongly) treat every purpose as Inbox-eligible. */
+const AUDIT_SELECT = 'id, short_code, lead_id, created_at, open_count, first_opened_at, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(status, run_number, created_at, mention_rate, audit_summary:results->summary, crawl_check:results->crawl_check)';
+const AUDIT_SELECT_FALLBACK = 'id, short_code, lead_id, created_at, open_count, first_opened_at, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(status, run_number, created_at, crawl_check:results->crawl_check)';
 
 async function fetchInboxAudits(from: number, to: number) {
   const rich = await sb.from('ai_audits').select(AUDIT_SELECT)
@@ -31,6 +37,29 @@ async function fetchInboxAudits(from: number, to: number) {
   console.warn('Inbox (audits): rich projection failed; retrying report-ready projection', rich.error);
   return sb.from('ai_audits').select(AUDIT_SELECT_FALLBACK)
     .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
+}
+
+/** One audit row, freshly read by id — the SMALL targeted fetch a single `ai_audits`/`ai_audit_runs`
+ *  realtime event triggers, instead of re-running the whole paginated audits read. Falls back the
+ *  same way fetchInboxAudits does if the rich projection is rejected. */
+async function fetchOneInboxAudit(auditId: string): Promise<InboxData['audits'][number] | null> {
+  const rich = await sb.from('ai_audits').select(AUDIT_SELECT).eq('id', auditId).maybeSingle();
+  if (!rich.error) return rich.data ?? null;
+  const fallback = await sb.from('ai_audits').select(AUDIT_SELECT_FALLBACK).eq('id', auditId).maybeSingle();
+  return fallback.error ? null : (fallback.data ?? null);
+}
+
+/** Same columns `fetchInboxData`'s leads read selects, minus the `WHERE` filter — reused by the
+ *  targeted single-lead refresh below so the two never drift apart. */
+const LEAD_COLUMNS = 'id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work';
+
+/** One lead row, freshly read by id — used to close the gap between an inbound reply's message
+ *  (visible the instant its realtime INSERT lands) and its status flip to 'replied' (a second,
+ *  sequential DB write in whatsapp-inbound.ts). Includes `is_archived` so patchInboxLead's own rule
+ *  applies exactly as it does to the `outreach_leads` UPDATE subscription. */
+async function fetchOneInboxLead(leadId: string): Promise<(LeadLite & { is_archived?: boolean }) | null> {
+  const { data, error } = await sb.from('outreach_leads').select(`${LEAD_COLUMNS}, is_archived`).eq('id', leadId).maybeSingle();
+  return error ? null : (data ?? null);
 }
 
 /** Out-of-window reply templates (mirror the edge allowlist). */
@@ -133,7 +162,7 @@ export function windowFor(lastInboundAt: string | null): { open: boolean; hoursL
 interface InboxData {
   messages: WaMessage[];
   leads: LeadLite[];
-  audits: Array<{ id: string; short_code: string | null; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; ai_audit_runs: Array<{ status: string | null; run_number: number | null; created_at: string | null; mention_rate: number | null; audit_summary: { mention_rate?: number | null } | null; crawl_check: (CrawlStoredResult & { status?: string }) | null }> | null }>;
+  audits: Array<{ id: string; short_code: string | null; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; audit_purpose?: string | null; baseline_target_runs?: number | null; is_measurement?: boolean | null; baseline_contract?: unknown; ai_audit_runs: Array<{ status: string | null; run_number: number | null; created_at: string | null; mention_rate: number | null; audit_summary: { mention_rate?: number | null } | null; crawl_check: (CrawlStoredResult & { status?: string }) | null }> | null }>;
   /** Sign-up page landings (findable-onboarding's prefill hook) → the SITE pill. */
   pageHits: Array<{ lead_id: string | null; created_at: string }>;
   /** Per-audit Gemini named/answers, from the audit_gemini_signal view (aggregated server-side so the
@@ -182,14 +211,20 @@ async function fetchInboxData(previous?: InboxData, essentialOnly = false): Prom
        can be fetched twice and another missed at a page boundary — the same reasoning already
        written above the messages read. */
     fetchAllRows<LeadLite>('Inbox (leads)', (from, to) =>
-      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work')
+      sb.from('outreach_leads').select(LEAD_COLUMNS)
         .eq('is_archived', false).not('phone', 'is', null)
         .order('id', { ascending: true }).range(from, to)),
     // Per-lead audits + run statuses → the report-ready pill (/a/<auditId>, served live) + the
     // audit_reply guard + the running-audit spinner. Newest-first; RLS scopes to own audits.
     /* ⛔ PAGINATED — truncation here would silently drop the report-ready pill and the audit_reply
        guard for whichever leads fell outside the window. Same id tiebreaker. */
-    essentialOnly ? { rows: previous?.audits ?? NO_AUDITS } : optionalInboxRows<InboxData['audits'][number]>(fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', fetchInboxAudits)),
+    /* ⛔ NEVER essentialOnly-skipped, unlike the three reads below. A missed `ai_audit_runs`/
+       `ai_audits` realtime event (a backgrounded tab's websocket drops and reconnects; Realtime
+       does not replay what it missed) is exactly how "the report only shows up after a manual
+       refresh" recurs after an audit-logic change shifts completion timing. Focus/reconnect
+       reconciliation is the stated safety net for that gap (CLAUDE.md architecture rule), so it
+       must actually refresh audits rather than reusing the possibly-stale `previous` copy. */
+    optionalInboxRows<InboxData['audits'][number]>(fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', fetchInboxAudits)),
     /* Sign-up page hits → the SITE pill. The SAME table and the SAME paginated read the campaign
        card uses (id tiebreaker); the SITE_TRACKING_START cutoff is applied in leadSiteVisitedAt. A
        failed read degrades to no pill, never to a wrong one. */
@@ -241,11 +276,51 @@ export function useInbox() {
     enabled: !!user?.id,
   });
 
+  /* A local status/flag patch (patchLeadStatus, patchLeadPotentialWork) is optimistic — applied
+     before the write is confirmed by anything else. It stays HERE, keyed by lead id, until an
+     authoritative `outreach_leads` row is actually observed for that lead (the realtime UPDATE
+     subscription below, or the targeted single-lead fetch after an inbound reply) — at which point
+     that row is simply trusted and the entry clears. `reconcile()`'s own leads read is a stale
+     snapshot the moment a focus/reconnect event fires it, so it must never win against an entry
+     still pending here (mergeReconciledLeads applies exactly that precedence). A ref, not query-
+     cache state: it is ephemeral per-session bookkeeping, not data Inbox renders directly. */
+  const pendingLeadPatchesRef = useRef(new Map<string, Partial<LeadLite>>());
+
   const reconcile = useCallback(async () => {
     const fresh = await fetchInboxData(queryClient.getQueryData<InboxData>(queryKey), true);
     queryClient.setQueryData<InboxData>(queryKey, (current) => current
-      ? { ...current, messages: mergeInboxMessages(current.messages, fresh.messages), leads: fresh.leads }
+      ? {
+          ...current,
+          messages: mergeInboxMessages(current.messages, fresh.messages),
+          leads: mergeReconciledLeads(fresh.leads, pendingLeadPatchesRef.current),
+          audits: fresh.audits,
+        }
       : fresh);
+  }, [queryClient, queryKey]);
+
+  /* One audit id → a small single-row fetch → an idempotent patch of just that row. The targeted
+     reaction to every event that can make a report newly usable, instead of invalidating (and
+     re-fetching) the whole Inbox for one audit finishing. Safe to call twice for the same id (a
+     duplicate/replayed event): upsertAuditById replaces the same row with the same fresh data. */
+  const patchOneAudit = useCallback(async (auditId: string | undefined | null) => {
+    if (!auditId) return;
+    const fresh = await fetchOneInboxAudit(auditId);
+    if (!fresh) return;
+    queryClient.setQueryData<InboxData>(queryKey, (current) => current
+      ? { ...current, audits: upsertAuditById(current.audits, fresh) } : current);
+  }, [queryClient, queryKey]);
+
+  /* One lead id → a small single-row fetch → patched the same way the `outreach_leads` UPDATE
+     subscription patches one (same patchInboxLead rule, same "authoritative row observed" meaning
+     for pendingLeadPatchesRef). Used right after an inbound reply's message realtime event lands,
+     to close the gap before whatsapp-inbound.ts's own status-flip UPDATE broadcasts. */
+  const patchOneLead = useCallback(async (leadId: string | undefined | null) => {
+    if (!leadId) return;
+    const fresh = await fetchOneInboxLead(leadId);
+    if (!fresh) return;
+    pendingLeadPatchesRef.current.delete(leadId);
+    queryClient.setQueryData<InboxData>(queryKey, (current) => current
+      ? { ...current, leads: patchInboxLead(current.leads, fresh) } : current);
   }, [queryClient, queryKey]);
 
   /* Subscription only patches cache. It never calls the six-read loader on connect. */
@@ -259,10 +334,21 @@ export function useInbox() {
           if (!current) return current;
           return { ...current, messages: mergeInboxMessages(current.messages, [row]) };
         });
+        /* whatsapp-inbound.ts's status flip to 'replied' is a SECOND, sequential DB write that
+           lands moments after this message insert — by the time this realtime event reaches the
+           browser the server has almost always already made it. Refresh just this one lead rather
+           than waiting on its own separate UPDATE broadcast, so the pill does not visibly sit on
+           'queued' next to a reply that already rendered. Never done for an outbound send (no
+           status changes then) or a lead-less thread. */
+        if (payload.eventType === 'INSERT' && row.direction === 'inbound' && row.lead_id) {
+          void patchOneLead(row.lead_id);
+        }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'outreach_leads' }, (payload: any) => {
         const row = payload.new as LeadLite & { is_archived?: boolean } | undefined;
         if (!row?.id) return;
+        // The authoritative row has arrived — any optimistic guess for this lead is moot now.
+        pendingLeadPatchesRef.current.delete(row.id);
         queryClient.setQueryData<InboxData>(queryKey, (current) => current
           ? { ...current, leads: patchInboxLead(current.leads, row) } : current);
       })
@@ -272,8 +358,28 @@ export function useInbox() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lead_crawl_checks' }, () => {
         void queryClient.invalidateQueries({ queryKey });
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ai_audit_runs' }, () => {
-        void queryClient.invalidateQueries({ queryKey });
+      /* THE AUTHORITATIVE REPORT-AVAILABILITY EVENTS. A report can become newly usable four ways:
+         a brand-new audit row arrives (ai_audits INSERT — short_code is trigger-set at insert, so
+         nothing else needs to happen for it to be resolvable the instant a run on it settles), an
+         existing audit's own columns change (ai_audits UPDATE), a run is inserted already-settled
+         (ai_audit_runs INSERT — defensive: the ordinary path inserts pending/running and flips it
+         later, but nothing here should assume that stays true), or an existing run settles
+         (ai_audit_runs UPDATE — the ordinary finalisation path, `process-ai-audit-queue`'s pending/
+         running → processing → complete/capped/failed flip). Each does the SAME small thing: fetch
+         that one audit row, patch it into the cache. Nothing here inspects hook stop_reason, run
+         count or purpose — resolveReportsByLead/resolveLeadReportAudit do that, downstream, from
+         whatever this patches in. */
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_audits' }, (payload: any) => {
+        void patchOneAudit(payload.new?.id);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ai_audits' }, (payload: any) => {
+        void patchOneAudit(payload.new?.id);
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_audit_runs' }, (payload: any) => {
+        void patchOneAudit(payload.new?.audit_id);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ai_audit_runs' }, (payload: any) => {
+        void patchOneAudit(payload.new?.audit_id);
       })
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') void reconcile();
@@ -286,7 +392,7 @@ export function useInbox() {
       document.removeEventListener('visibilitychange', onFocus);
       void (supabase as any).removeChannel(channel);
     };
-  }, [user?.id, queryClient, queryKey, reconcile]);
+  }, [user?.id, queryClient, queryKey, reconcile, patchOneAudit, patchOneLead]);
 
   const messages = query.data?.messages ?? NO_MESSAGES;
   const leads = query.data?.leads ?? NO_LEADS;
@@ -328,18 +434,11 @@ export function useInbox() {
     return m;
   }, [leads]);
 
-  // Per-lead latest COMPLETED audit → its /a/<auditId> report (built live by render-audit-report;
+  // Per-lead current usable report → its /a/<auditId> report (built live by render-audit-report;
   // no stored report row). Keyed STRICTLY by lead_id (the lead's own audit) — never cross-leaks.
-  // Newest-first, so the first audit per lead that has a complete/capped run wins.
-  const auditByLeadId = useMemo(() => {
-    const m: Record<string, { auditId: string; shortCode: string | null }> = {};
-    for (const a of audits) {
-      if (!a.lead_id || m[a.lead_id]) continue;
-      const runs = Array.isArray(a.ai_audit_runs) ? a.ai_audit_runs : [];
-      if (runs.some((r) => r.status === 'complete' || r.status === 'capped')) m[a.lead_id] = { auditId: a.id, shortCode: a.short_code ?? null };
-    }
-    return m;
-  }, [audits]);
+  // THE resolver (auditReportResolver.ts): newest eligible usable audit, falling through to an
+  // older completed one when the newest hasn't settled — see that file for the full rule.
+  const auditByLeadId = useMemo(() => resolveReportsByLead(audits), [audits]);
 
   /* Lead ids whose site has a NAMEABLE fault — the picker gate for audit_followup_fault (its {{6}}
      names one; Meta rejects an empty parameter). Newest crawl check per lead, and the SAME freshness
@@ -362,7 +461,7 @@ export function useInbox() {
     for (const audit of audits) {
       if (!audit.lead_id || m.has(audit.lead_id)) continue;
       const run = (audit.ai_audit_runs ?? [])
-        .filter((r) => (r.status === 'complete' || r.status === 'capped') && r.crawl_check?.status === 'complete')
+        .filter((r) => RUN_USABLE.has(String(r.status)) && r.crawl_check?.status === 'complete')
         .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))[0];
       if (run?.crawl_check?.signals) {
         m.set(audit.lead_id, {
@@ -385,9 +484,11 @@ export function useInbox() {
     for (const l of leads) {
       const hasWebsite = !!(l.website ?? '').trim();
       const c = crawlByLeadId.get(l.id);
-      const audit = audits.find((a) => a.lead_id === l.id && (a.ai_audit_runs ?? []).some((r) => r.status === 'complete' || r.status === 'capped'));
+      // Deliberately NOT resolveLeadReportAudit — a measurement's crawl result is still real site
+      // data even though its report link must never be shown (see newestUsableAudit's own doc).
+      const audit = newestUsableAudit(audits, l.id);
       const runSources = (audit?.ai_audit_runs ?? [])
-        .filter((r) => r.status === 'complete' || r.status === 'capped')
+        .filter((r) => RUN_USABLE.has(String(r.status)))
         .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))
         .map((r) => ({ result: r.crawl_check, createdAtMs: r.crawl_check?.checked_at ? new Date(r.crawl_check.checked_at).getTime() : r.created_at ? new Date(r.created_at).getTime() : 0, complete: r.crawl_check?.status === 'complete' }));
       const visibilityGap = auditShowsVisibilityGap(audit?.ai_audit_runs ?? []);
@@ -602,15 +703,20 @@ export function useInbox() {
   /* Optimistic, no spinner — patches the QUERY CACHE (the only source of `leads` now), so the
      derived conversations/list recompute exactly as when this patched useState. The DB write
      happens at the call site; the next real refetch reconciles against the DB truth. */
-  const patchLeadStatus = useCallback((leadId: string, status: string) =>
+  const patchLeadStatus = useCallback((leadId: string, status: string) => {
+    // Record it as PENDING first: a focus/reconnect reconcile firing between this patch and the
+    // write's visibility to a subsequent read must keep showing this status, not a stale one
+    // (mergeReconciledLeads) — cleared once an authoritative outreach_leads row is next observed.
+    pendingLeadPatchesRef.current.set(leadId, { ...pendingLeadPatchesRef.current.get(leadId), status });
     queryClient.setQueryData<InboxData>(queryKey, (prev) =>
-      prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, status } : l)) } : prev),
-    [queryClient, queryKey]);
+      prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, status } : l)) } : prev);
+  }, [queryClient, queryKey]);
 
-  const patchLeadPotentialWork = useCallback((leadId: string, value = true) =>
+  const patchLeadPotentialWork = useCallback((leadId: string, value = true) => {
+    pendingLeadPatchesRef.current.set(leadId, { ...pendingLeadPatchesRef.current.get(leadId), is_potential_work: value });
     queryClient.setQueryData<InboxData>(queryKey, (prev) =>
-      prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, is_potential_work: value } : l)) } : prev),
-    [queryClient, queryKey]);
+      prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, is_potential_work: value } : l)) } : prev);
+  }, [queryClient, queryKey]);
 
   return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, preview, patchLeadStatus, patchLeadPotentialWork };
 }

@@ -19,8 +19,11 @@
 import { WA_TEMPLATE_REQS } from './whatsappTemplates';
 
 /** A run that means the audit produced something usable. `capped` counts: resolveAuditReplyVars
- *  accepts it, so a capped run can genuinely send. */
-const RUN_USABLE = new Set(['complete', 'capped']);
+ *  accepts it, so a capped run can genuinely send.
+ *  ⛔ THE ONE DEFINITION — exported so `auditReportResolver.ts` and every other "is this run done"
+ *  check reads the same two strings instead of re-typing the literal (CLAUDE.md §4, "one rule
+ *  written in N places"). */
+export const RUN_USABLE = new Set(['complete', 'capped']);
 /** Settled but produced nothing. */
 const RUN_DEAD = new Set(['failed', 'cancelled']);
 
