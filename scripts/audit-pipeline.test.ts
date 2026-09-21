@@ -21,6 +21,8 @@ const checks: Array<[string, boolean]> = [
   ["crawl failures are terminally distinguished from clean results", crawl.includes('status: signals.fetchFailed ? "unavailable" : "complete"')],
   ["Inbox refreshes when persisted crawl or audit-run state changes", inbox.includes("table: 'lead_crawl_checks'") && inbox.includes("table: 'ai_audit_runs'")],
   ["Inbox crawl control exposes running state and blocks duplicate clicks", crawlButton.includes("iconOnly") && crawlButton.includes("disabled={running}") && crawlButton.includes("animate-spin")],
+  ["auto-crawl trusts the audit's own (filtered) website before the raw lead row", queue.includes("const site = auditWebsite ||")],
+  ["auto-crawl never falls back to an aggregator/booking-platform URL", queue.includes("rawLeadWebsite && !isAggregatorUrl(rawLeadWebsite)")],
 ];
 
 let failures = 0;

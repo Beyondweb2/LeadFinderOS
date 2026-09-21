@@ -20,6 +20,7 @@ import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
 import { advanceHookState, evaluateHookQuestion, isHookState } from "../../../src/lib/hookAudit.ts";
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
+import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. ASYNC start-and-poll: each tick (a) POLLs in-flight Apify runs and
@@ -1138,8 +1139,19 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         const { data: lead } = cLeadId
           ? await service.from("outreach_leads").select("website").eq("id", cLeadId).maybeSingle()
           : { data: null };
-        const site = String((lead as { website?: string | null } | null)?.website ?? "").trim()
-          || String((aud as { website?: string | null } | null)?.website ?? "").trim();
+        /* ⛔ AUDIT'S OWN WEBSITE FIRST, NOT THE RAW LEAD ROW. ai_audits.website is what the audit's
+           creator (e.g. the whatsapp-inbound reply chain) already resolved via ownWebsite() —
+           aggregator/booking-platform URLs filtered out. outreach_leads.website is the RAW Maps
+           value and can be a Facebook/Fresha/etc. link even when the audit correctly recorded no
+           real website. The old order (raw lead value first) crawled that platform's page instead —
+           the same class of bug ownWebsite() exists to prevent, just missed here. Falling back to
+           the raw lead value only when the audit has none, and still filtering it, so this can never
+           point crawl-check at an aggregator. The SEO scan a few hundred lines up and the readyRuns
+           gate below both already trust audit.website first — this now matches them instead of
+           disagreeing. */
+        const auditWebsite = String((aud as { website?: string | null } | null)?.website ?? "").trim();
+        const rawLeadWebsite = String((lead as { website?: string | null } | null)?.website ?? "").trim();
+        const site = auditWebsite || (rawLeadWebsite && !isAggregatorUrl(rawLeadWebsite) ? rawLeadWebsite : "");
         if (!site) {
           // No website is a valid audit outcome, not a missing/failed crawl. Persist the explicit
           // terminal state so the run, report and Inbox can distinguish it from a crawl that never
