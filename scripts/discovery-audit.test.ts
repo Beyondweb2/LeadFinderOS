@@ -20,7 +20,7 @@ import {
 } from '../src/lib/auditQuestionCounts.ts';
 import {
   DISCOVERY_AUDIT_PURPOSE, MEASUREMENT_AUDIT_PURPOSE, BASELINE_AUDIT_PURPOSE,
-  auditKind, isInternalMeasurement, seoScanAllowed,
+  auditKind, isInternalMeasurement, seoScanAllowed, isClientBaseline, findPaidBaseline,
 } from '../src/lib/auditKind.ts';
 import { buildAuditPreviewRequest, buildAuditRunRequest } from '../src/lib/auditQuestionContext.ts';
 import { nationalIntentMix, nationalFallbackQuestions, hybridAllocation, type MarketContext } from '../src/lib/marketModel.ts';
@@ -113,8 +113,18 @@ ok(/const isDiscovery: boolean = body\.purpose === DISCOVERY_AUDIT_PURPOSE;/.tes
 ok(!/question_count === 40|questionCount === 40|questionCount === DISCOVERY/.test(fn),
    'no branch anywhere infers discovery from a question count');
 ok(/isDiscovery \? DISCOVERY_AUDIT_PURPOSE/.test(fn), 'and it is what gets written to audit_purpose');
-ok(auditKind({ audit_purpose: 'discovery', baseline_target_runs: 0 }) === 'ordinary',
-   'a discovery row grades "ordinary" — never a baseline, never a reason to hold one');
+/* ⛔ ITS OWN GRADE SINCE 2026-09-21, AND THAT IS A TIGHTENING, NOT A LOOSENING. It graded
+   'ordinary' until the Baseline screen announced MCLocksmiths' 80-question discovery scan as
+   "Client baseline · 80 questions · 3 runs" — because that screen asked the NEGATIVE question
+   ("not an internal measurement, so it must be the baseline") and 'ordinary' gave it nothing to
+   catch on. What this assertion has always meant — never a baseline, never a reason to hold one —
+   is now checked directly with isClientBaseline. See scripts/discovery-not-baseline.test.ts. */
+ok(auditKind({ audit_purpose: 'discovery', baseline_target_runs: 0 }) === 'discovery',
+   'a discovery row grades "discovery" — no screen has to infer it from a question count');
+ok(!isClientBaseline({ audit_purpose: 'discovery', baseline_target_runs: 3 }),
+   'and an 80 x 3 discovery scan is STILL never the client baseline');
+ok(findPaidBaseline([{ audit_purpose: 'discovery', baseline_target_runs: 3 }]) === null,
+   'nor a reason to hold one — startPaidBaseline cannot adopt it');
 ok(!isInternalMeasurement({ audit_purpose: 'discovery' }),
    'and it is NOT an internal measurement, so its report is not refused with 403');
 ok(!seoScanAllowed('discovery'), 'it buys no website SEO scan — the allowlist is baseline only');

@@ -14,7 +14,7 @@
 import { Link } from 'react-router-dom';
 import { Eye, Loader2 } from 'lucide-react';
 import type { AuditLite, RunLite } from '@/types/auditBook';
-import { INTERNAL_MEASUREMENT_LABEL } from '@/lib/auditKind';
+import { INTERNAL_MEASUREMENT_LABEL, isClientBaseline } from '@/lib/auditKind';
 
 export function RunningChip({ run }: { run: RunLite }) {
   return (
@@ -107,7 +107,15 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
      single-run audit sitting beside a 20 x 3 measurement is otherwise indistinguishable on the
      row, and reading it as a measurement is the one mistake it invites. */
   const isDiscovery = purpose === 'discovery';
-  const isClientBaseline = purpose === 'baseline' || (!purpose && target > 1 && audit.is_measurement !== true);
+  /* ⛔ THE SHARED RULE, NOT A SECOND COPY OF IT. This expression also existed, spelled differently,
+     as `!isInternalMeasurement(...)` on the Baseline screen — and that copy admitted discovery and
+     announced MCLocksmiths' 80-question scan as their client baseline (2026-09-21). One rule, in
+     src/lib/auditKind.ts, so the two cannot drift again. */
+  const clientBaseline = isClientBaseline({
+    audit_purpose: audit.audit_purpose ?? null,
+    baseline_target_runs: audit.baseline_target_runs ?? null,
+    is_measurement: audit.is_measurement ?? null,
+  });
   const isMeasurement = purpose === 'measurement' || purpose === 'remeasure' || (!purpose && target > 1 && audit.is_measurement === true);
   const runsComplete = audit.runs.filter((r) => r.status === 'complete').length;
   return (
@@ -149,7 +157,7 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
             </AssetPill>
       )}
       {/* PAID CLIENT'S BASELINE. Errors win: a stalled baseline is what needs attention. */}
-      {isClientBaseline && (
+      {clientBaseline && (
         audit.baseline_error
           ? <ClientPill bad title={audit.baseline_error}>baseline failed</ClientPill>
           /* A FINISHED baseline links to the operator view, because until now it was measured and

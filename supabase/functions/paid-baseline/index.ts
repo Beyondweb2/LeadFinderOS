@@ -187,7 +187,24 @@ Deno.serve(async (req) => {
     if (action === "approve") {
       next = cleanQuestions(body.questions);
       if (next.length === 0) return json({ ok: false, error: "questions_required" }, 400);
-      if (next.length > 40) return json({ ok: false, error: "questions_must_be_between_1_and_40" }, 400);
+      /* ⛔ APPROVAL IS WHERE THE METHODOLOGY IS ENFORCED, BECAUSE APPROVAL IS WHAT FREEZES.
+         The paid baseline is BASELINE_QUESTIONS questions x BASELINE_RUNS runs, and the day-28
+         replay must repeat the ASKED set verbatim — so whatever count is approved here is the
+         count the refund is settled on, forever. A draft may hold any number while the operator
+         works (save still allows 1..40, and a discovery scan may be 80); approving a different
+         number would quietly redefine the guarantee's measuring stick.
+         ⚠️ Stated exactly, never "at least": both directions are wrong. Deduping 21 pasted
+         questions down to 20 is fine; approving 19 is a shorter baseline than the one sold. */
+      if (next.length !== BASELINE_QUESTIONS) {
+        return json({
+          ok: false,
+          error: "baseline_question_count",
+          detail: `A paid baseline is exactly ${BASELINE_QUESTIONS} questions, and ${next.length} `
+            + `${next.length === 1 ? "was" : "were"} approved. Add or remove `
+            + `${Math.abs(BASELINE_QUESTIONS - next.length)} before approving — the approved set is `
+            + `frozen and replayed verbatim at day 28.`,
+        }, 400);
+      }
       const { data: updated, error } = await service.from("onboarding_responses").update({
         baseline_questions: next, baseline_status: "approved", baseline_approved_at: new Date().toISOString(), baseline_approved_by: user.id, updated_at: new Date().toISOString(),
       }).eq("id", row.id).eq("status", "paid").or(EDITABLE_BASELINE_STATUS_FILTER).select("id").maybeSingle();

@@ -22,7 +22,7 @@ import {
 import { DeliveryChecklistList } from '@/components/delivery/DeliveryChecklist';
 import { useClientPages } from '@/hooks/useClientPages';
 import type { OutreachLead } from '@/types/outreach';
-import { auditKind, isInternalMeasurement } from '@/lib/auditKind';
+import { auditKind, isInternalMeasurement, isClientBaseline } from '@/lib/auditKind';
 
 /* ============================================================
    THE CLIENT DELIVERY COCKPIT — everything I need on a client, at a glance (Paul's spec 2026-08-18).
@@ -74,16 +74,23 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
         .eq('lead_id', lead.id)
         .order('created_at', { ascending: false }) as unknown as { data: Row[] | null };
       if (!alive) return;
-      const rows = (data ?? []).filter((a) => a.is_market !== true && !isInternalMeasurement(a));
+      /* ⛔ A DISCOVERY SCAN IS EXCLUDED WITH THE INTERNAL MEASUREMENTS, AND FOR THE SAME REASON.
+         It is an 80-question operator breadth scan; it is not a client document and it is not a
+         baseline. On 2026-09-21 it was neither filtered out here nor recognised below, so it fell
+         into the `?? rows[0]` rung and MCLocksmiths' cockpit offered it as "Baseline report" —
+         which opened /baseline/<discovery id> and announced it as the client's baseline. */
+      const rows = (data ?? []).filter((a) =>
+        a.is_market !== true && !isInternalMeasurement(a) && auditKind(a) !== 'discovery');
       const pointer = lead.baseline_audit_id ?? null;
       const pointed = pointer ? rows.find((a) => a.id === pointer) ?? null : null;
       // No pointer (a lead paid before the trigger existed, or unpaid): a recognised baseline by
-      // kind, else the newest audit that is NOT an internal measurement.
-      const chosen = pointed
-        ?? rows.find((a) => auditKind(a) === 'paid_baseline' || auditKind(a) === 'multi_run_unmarked')
-        ?? rows[0]
-        ?? null;
-      setAudit(chosen ? { id: chosen.id, created_at: chosen.created_at, isBaseline: !!pointed || chosen.baseline_target_runs != null, completedAt: chosen.baseline_completed_at ?? null, shortCode: chosen.short_code ?? null } : null);
+      // kind, else the newest remaining audit — which is a report to open, NOT a baseline.
+      const recognised = pointed ?? rows.find((a) => isClientBaseline(a)) ?? null;
+      const chosen = recognised ?? rows[0] ?? null;
+      /* ⛔ AND THE FLAG IS COMPUTED FROM THE KIND, NOT FROM `baseline_target_runs != null`. That
+         column is a RUN COUNT: a discovery scan, a free check and a full measure all carry one, so
+         it answered "is this multi-run", never "is this the baseline". */
+      setAudit(chosen ? { id: chosen.id, created_at: chosen.created_at, isBaseline: chosen === recognised, completedAt: chosen.baseline_completed_at ?? null, shortCode: chosen.short_code ?? null } : null);
       setAuditLoading(false);
     })();
     return () => { alive = false; };
@@ -196,9 +203,12 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
         <div className="flex flex-wrap gap-2">
           {audit ? (
             <>
+              {/* ⛔ NAMED BY WHAT IT IS. The link used to say "Baseline report" for whatever audit
+                  the resolver landed on, so an unpaid prospect's outreach audit and (until the
+                  filter above) a discovery scan were both announced as a baseline. */}
               <Link to={`/baseline/${audit.id}`} state={{ from: context === 'inbox' ? '/inbox' : '/outreach', fromLabel: context === 'inbox' ? 'Inbox' : 'Outreach' }} onClick={onClose}
                 className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/20">
-                <FileText className="h-3.5 w-3.5" /> Baseline report
+                <FileText className="h-3.5 w-3.5" /> {audit.isBaseline ? 'Baseline report' : 'Latest audit'}
               </Link>
               <button onClick={() => void loadQuestions()}
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted/60">

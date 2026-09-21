@@ -31,6 +31,7 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   location_and_business_type_required: 'Add a primary location and business category before saving client context.',
   questions_must_be_between_1_and_40: 'Add between 1 and 40 questions before saving.',
   questions_required: 'Add at least one question before approving the baseline.',
+  baseline_question_count: 'A paid baseline is exactly 20 questions. Adjust the set before approving.',
   question_generation_failed: 'Question generation failed. Please retry.',
   no_questions_generated: 'No usable questions were generated. Please retry.',
   baseline_state_changed: 'Baseline setup changed in another session. Reload it and try again.',
@@ -53,14 +54,23 @@ export async function invokePaidBaseline(
   if (error) {
     const context = (error as { context?: Response }).context;
     let detail = '';
+    /* ⛔ THE SERVER'S OWN SENTENCE, KEPT SEPARATE FROM THE TOKEN. A refusal that can name the
+       specific number ("…exactly 20 questions, and 19 were approved") puts it in `detail`;
+       `error` is the machine token FRIENDLY_ERRORS keys on. Showing the token instead of the
+       sentence throws away the half that tells the operator what to do.
+       ⚠️ Assigned, never thrown from inside the try below — that catch exists to swallow a
+       non-JSON body and would swallow the throw with it. */
+    let sentence = '';
     if (context) {
       try {
-        const payload = await context.clone().json() as { error?: unknown; message?: unknown };
+        const payload = await context.clone().json() as { error?: unknown; detail?: unknown; message?: unknown };
+        if (typeof payload?.detail === 'string' && payload.detail.trim()) sentence = payload.detail.trim();
         detail = typeof payload?.error === 'string'
           ? payload.error
           : typeof payload?.message === 'string' ? payload.message : '';
       } catch { /* retain the SDK error when the response is not JSON */ }
     }
+    if (sentence) throw new Error(sentence);
     if (detail) throw new Error(FRIENDLY_ERRORS[detail] ?? detail);
     throw new Error(error.message || 'Could not update the baseline');
   }

@@ -332,3 +332,39 @@ including that the body is a stream and a second reader must degrade rather than
 
 ⚠️ Still unfixed on the same screen: `runPreview` throws `error?.message` the same way. Left alone
 deliberately — the brief was the Confirm & run path.
+
+## A discovery scan was shown as the paid client baseline (2026-09-21, MCLocksmiths centre)
+
+The Baseline screen said **"Client baseline · 80 questions · 3 runs · measured 21/09/2026"** and the
+lead cockpit offered the same audit as **"Baseline report"**. The audit was `50986aa3-…`, the
+client's 80-question **discovery** scan.
+
+⛔ **NOTHING HAD BEEN WRITTEN.** `outreach_leads.baseline_audit_id` was NULL throughout, and
+`claim_baseline_pointer` fires only on `audit_purpose = 'baseline'` — so a discovery audit is
+structurally incapable of being adopted, and `guard_baseline_pointer_immutable` would stop a
+real one being overwritten afterwards. `onBaselineFrozen` is gated on the same purpose, so nothing
+spent and no `remeasure_due_date` was filled. **Display only.**
+
+**What made it look frozen:** `advanceBaseline` freezes on `baseline_target_runs > 1` and nothing
+else — its own comment says "not a paid baseline audit", which is not what the line tests. A
+3-run discovery audit therefore gets `baseline_completed_at` and the `baseline` fold stamped on it.
+That is how discovery gets its multi-run summary and is correct; what is **not** correct is any
+reader treating `baseline_completed_at` as a baseline marker.
+
+⛔ **THE FAULT WAS THE NEGATIVE QUESTION, IN TWO PLACES.** Both screens computed
+`isInternalMeasurement(audit) ? 'internal' : 'Client baseline'` — so the `else` carried discovery,
+the free check and every ordinary outreach audit. `LeadDeliveryCockpit` compounded it with a
+`?? rows[0]` last rung that nominates *the newest audit* as the baseline, and an `isBaseline` flag
+computed from `baseline_target_runs != null`, which answers "is this multi-run", never "is this the
+baseline". The file's own header records fixing exactly this rung for full measures in 2026-09-13
+and leaving it open for everything else.
+
+**The rule is positive now and lives once** — `isClientBaseline` / `auditRoleLabel` in
+`src/lib/auditKind.ts`, asserted on `'baseline'`, with legacy multi-run rows (RG, Ronnie) included.
+`AuditPills` had a third hand-rolled copy of the same expression; it imports the shared one now.
+`auditKind` also grades `'discovery'` as its own kind so no screen infers it from a question count.
+
+⛔ **AND THE COUNT IS ENFORCED WHERE IT FREEZES.** `paid-baseline`'s `approve` action now demands
+exactly `BASELINE_QUESTIONS`; `save` still allows a 1–40 draft while the operator works. Approval
+is what the day-28 replay repeats verbatim, so approving 19 or 80 silently redefines the refund's
+measuring stick. `scripts/discovery-not-baseline.test.ts` drives all of it.
