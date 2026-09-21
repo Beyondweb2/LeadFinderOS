@@ -1056,3 +1056,19 @@
 
 ---
 
+## OpenAI 429 on every call (open since ~07:00 2026-09-20)
+
+`extract-competitors` gets `openai_http_429` on every batch (2-item and 120-item alike); `create-ai-audit`'s
+question generation has fallen back to template questions since the same hour (visible as capitalised
+plural trades — "best Driving instructors in Coventry UK"). The stored error begins `"You have `, cut at 160
+chars by the finaliser's receipt; the Management API's function-log store keeps under a minute, so the full
+sentence was not recoverable after the fact. A refusal that persists 20+ hours on two-item requests is a
+quota or spend-limit condition on the account/project behind `OPENAI_API_KEY` (set 2026-06-30), not a
+per-minute rate limit — **external to this repo; Paul checks OpenAI billing and usage limits.** Since
+2026-09-21 audits finalise regardless (rival names withheld with an honest receipt), the receipt keeps 400
+chars, and the drip/Inbox/first-reply hold on "competitor names haven't been extracted yet" — existing
+semantics — until cleaning works again. The all-named-hook guard (`hook_no_visibility_gap`,
+`_shared/audit-reply.ts`) landed in the same commit.
+
+---
+

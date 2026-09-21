@@ -19,6 +19,7 @@ import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
 import { advanceHookState, evaluateHookQuestion, isHookState } from "../../../src/lib/hookAudit.ts";
+import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. ASYNC start-and-poll: each tick (a) POLLs in-flight Apify runs and
@@ -763,7 +764,7 @@ async function stampCleaningFailure(service: any, runId: string, detail: string)
    that lead refused ("the cleaner hasn't run") for hours. A fresh invoke clears the flaky omission
    nearly always. This sweep re-invokes extract-competitors for complete-but-incomplete runs, BOUNDED
    so an unsalvageable run can't burn OpenAI for ever: attempts < RETRY_CAP, spaced, few per tick. */
-const RETRY_CLEAN_CAP = 4;                 // total attempts (1 at finalise + up to 3 retries) then give up
+// RETRY_CLEAN_CAP is imported from _shared/run-finalise.ts: ONE cap for this sweep AND the finaliser's hold.
 const RETRY_CLEAN_SPACING_MS = 4 * 60_000; // don't hammer the same run every 30s tick
 const RETRY_CLEAN_PER_TICK = 5;            // bound cost + tick time
 // deno-lint-ignore no-explicit-any
@@ -879,7 +880,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     if (!rows || rows.length === 0) continue;
 
     const isCapped = cappedRuns?.has(runId) ?? false;
-    const allSettled = rows.every((r: Row) => r.status === "done" || r.status === "failed");
+    const allSettled = runSettlement(rows.map((r: Row) => r.status), isCapped).allSettled;
 
     /* ── TARGETING AUDITS DO NOT WAIT FOR THEIR LAST QUESTION ──────────────────────────────────
        A market/area audit is the pass that decides which businesses to pitch, and its wall clock
@@ -1064,7 +1065,8 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     // real "you are invisible" result. It also poisons everything downstream: an empty public
     // report gets published, and a 3-run paid baseline would happily average three outages into
     // the measuring stick behind the money-back guarantee. Fail loudly instead.
-    const allFailed = rows.length > 0 && doneQuestions === 0 && failedQuestions === rows.length;
+    /* Re-derived AFTER the straggler/cap writes above flipped rows to 'failed' (_shared/run-finalise.ts). */
+    const { allFailed, runStatus } = runSettlement(rows.map((r: Row) => r.status), isCapped);
     // Surface WHY, so an operator sees "402" rather than an empty audit.
     const errorCounts = new Map<string, number>();
     if (allFailed) {
@@ -1078,7 +1080,6 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       (results as Record<string, unknown>).error = dominantError;
       console.error(`[process-ai-audit-queue] run ${runId}: ALL ${rows.length} questions failed — ${dominantError}`);
     }
-    const runStatus = isCapped ? "capped" : allFailed ? "failed" : "complete";
     // Claim the settled run as processing first. Required post-processing (crawl + competitor
     // cleanup) must finish before the run is exposed as terminal; retries return it to pending.
     // actor_cost_usd is written alongside; migration-tolerant retry below if the column is absent.
@@ -1203,7 +1204,17 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     // and rewrites. Fail-safe: never throws; a non-2xx is logged (a 401/403 misconfig is visible,
     // not a silent no-op) and can never flip the run back out of complete.
     // Nothing to extract from a run with no answers, so skip the call entirely.
-    if (!allFailed && (prevStatus === "pending" || prevStatus === "running" || prevStatus === "processing")) {
+    /* ⛔ CAPPED (2026-09-21, _shared/run-finalise.ts). A run held `pending` for its cleaning comes back
+       through here on the next tick with prevStatus "pending", so this used to re-invoke the cleaner
+       every 30 seconds for ever — thousands of attempts per run against an OpenAI 429, and a result
+       nothing downstream could use. The receipt on the results this tick already read decides: once
+       complete, or once RETRY_CLEAN_CAP attempts are spent, nothing is invoked and the readiness check
+       below releases the run with its honest receipt. */
+    const invokeCleaning = shouldInvokeCleaning(existingResults.competitor_cleaning, allFailed);
+    if (!invokeCleaning && !allFailed && (prevStatus === "pending" || prevStatus === "running" || prevStatus === "processing")) {
+      console.log(`[process-ai-audit-queue] run ${runId}: competitor cleaning not re-invoked (attempts ${Number((existingResults.competitor_cleaning as Row | undefined)?.attempts ?? 0)}, complete ${String((existingResults.competitor_cleaning as Row | undefined)?.complete)})`);
+    }
+    if (invokeCleaning && (prevStatus === "pending" || prevStatus === "running" || prevStatus === "processing")) {
       extractionInvokes.push((async () => {
         try {
           /* ⛔ NO Authorization HEADER, ON PURPOSE — and the load-bearing half of the 2026-08-14 fix
@@ -1228,7 +1239,9 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
           if (!res.ok) {
             const txt = await res.text().catch(() => "");
             console.error(`[process-ai-audit-queue] extract-competitors failed for run ${runId}: HTTP ${res.status} ${txt.slice(0, 300)}`);
-            await stampCleaningFailure(service, runId, `invoke HTTP ${res.status}: ${txt.slice(0, 160)}`);
+            /* 400 chars, not 160: the OpenAI error body inside extract-competitors' 502 is what says
+               WHICH 429 this is (quota vs rate limit), and 160 cut it off at "You have". */
+            await stampCleaningFailure(service, runId, `invoke HTTP ${res.status}: ${txt.slice(0, 400)}`);
           }
         } catch (e) {
           const why = e instanceof Error ? e.message : String(e);
@@ -1290,14 +1303,25 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       site = String(lead?.website ?? "").trim();
     }
     const crawl = current.crawl_check as Row | undefined;
-    const crawlReady = !site || crawl?.status === "complete" || crawl?.status === "unavailable";
-    const cleaningReady = p.allFailed || current.competitor_cleaning?.complete === true;
-    if (crawlReady && cleaningReady) {
+    const readiness = finaliseReadiness({ allFailed: p.allFailed, stamp: current.competitor_cleaning, crawlStatus: crawl?.status, hasSite: !!site });
+    /* ⛔ AN EXHAUSTED CLEANING IS RELEASED WITH ITS RECEIPT, NOT HELD (2026-09-21). The stamp keeps its
+       attempts and errors and gains `gave_up_at` exactly once; the report and resolveAuditReplyVars
+       already read `complete: false` as "rival names unavailable", so nothing is fabricated and the
+       AI answers themselves are exposed as measured. */
+    if (readiness.cleaning === "exhausted") {
+      const marked = markCleaningExhausted(current.competitor_cleaning, new Date().toISOString());
+      if (marked.changed) {
+        current = { ...current, competitor_cleaning: marked.stamp };
+        await service.from("ai_audit_runs").update({ results: current }).eq("id", p.runId).eq("status", "processing");
+        console.warn(`[process-ai-audit-queue] run ${p.runId}: competitor cleaning gave up at ${RETRY_CLEAN_CAP} attempts — released without cleaned rival names`);
+      }
+    }
+    if (readiness.ready) {
       const { error } = await service.from("ai_audit_runs").update({ status: p.finalStatus }).eq("id", p.runId).eq("status", "processing");
       if (!error) readyRuns.add(p.runId);
     } else {
       await service.from("ai_audit_runs").update({ status: "pending" }).eq("id", p.runId).eq("status", "processing");
-      console.warn(`[process-ai-audit-queue] run ${p.runId} held pending: crawlReady=${crawlReady}, cleaningReady=${cleaningReady}`);
+      console.warn(`[process-ai-audit-queue] run ${p.runId} held pending: crawlReady=${readiness.crawlReady}, cleaning=${readiness.cleaning}`);
     }
   }
   const auditReady = (auditId: string) => processingRuns.some((p) => p.auditId === auditId && readyRuns.has(p.runId));

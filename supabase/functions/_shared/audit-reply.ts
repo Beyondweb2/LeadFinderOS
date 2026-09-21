@@ -12,6 +12,26 @@ import { usableRivals, excludeSelfRivals } from "../../../src/lib/rivalHook.ts";
 import { nameMatches } from "../../../src/lib/nameMatch.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { auditShowsVisibilityGap, resolveSiteFault, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
+import { isHookState } from "../../../src/lib/hookAudit.ts";
+
+/* ── The all-named hook guard ──────────────────────────────────────────────────────────────────────
+   ⛔ A HOOK THAT NAMED THEM EVERYWHERE FORBIDS ABSENCE COPY (Paul, 2026-09-21). Several audit-class
+   templates carry a fixed, Meta-approved premise that the business was NOT recommended ("it's naming
+   X — not you", "you're not showing up as often as you should be"). When the adaptive hook reached its
+   ceiling with no gap that premise is false, and the report already says so ("Strong initial AI
+   visibility"). The message side must agree, so the refusal is made here — the one resolver every
+   audit-class sender (Inbox, drip, first-reply) goes through — and never per template.
+   ⚠️ It lives in THIS module rather than src/lib/hookAudit.ts on purpose: hookAudit.ts is reached by
+   twelve edge functions and this rule is only ever read by the two that send. The check is the
+   PROPERTY (a full run with no gap), never a template name. */
+export const HOOK_NO_GAP_REASON = "hook_no_visibility_gap";
+
+/** True when the hook ran to its ceiling and every answering scored engine named the business on
+ *  every tested question — there is no absence to claim. A gap, a still-running hook, a provider
+ *  failure or a non-hook run all return false: absence of the marker never decides. */
+export function hookForbidsAbsenceCopy(state: unknown): boolean {
+  return isHookState(state) && state.stop_reason === "max_questions_reached" && !state.gap;
+}
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
 /* ⛔ THE PROSPECT-FACING ORIGIN. findable.live/report/<auditId> — a Pages Function proxy that forces
@@ -100,6 +120,23 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     if (done) { audit = a; run = done; break; }
   }
   if (!audit || !run) return { ok: false, reason: "No completed audit for this lead yet — run an audit first." };
+
+  /* ⛔ THE ALL-NAMED HOOK SENDS NOTHING FROM HERE (2026-09-21, hookForbidsAbsenceCopy above). Every template
+     this resolver serves is built on the lead's audit, and several state as fact that the business was
+     not recommended. When the adaptive hook reached its ceiling with no visibility gap that statement
+     is false — so the refusal is made once, here, for every sender (Inbox, drip, first-reply), rather
+     than trusting each template's copy. The reason starts with HOOK_NO_GAP_REASON so a log or a lead
+     row can be searched for it. */
+  const hookState = (run.results as { hook?: unknown } | null | undefined)?.hook;
+  if (hookForbidsAbsenceCopy(hookState)) {
+    const tested = isHookState(hookState) ? hookState.executed : 0;
+    return {
+      ok: false,
+      reason: `${HOOK_NO_GAP_REASON}: the quick check named ${String(audit.business_name ?? "").trim() || "this business"} ` +
+        `on every answering engine in all ${tested} searches it tested, so there is no absence to message about. ` +
+        `No audit-based template can be sent from this check; the report shows the result honestly.`,
+    };
+  }
 
   // 2) Competitors via the SHARED aggregation (same list the report uses), from THIS run.
   const { data: qrows } = await service

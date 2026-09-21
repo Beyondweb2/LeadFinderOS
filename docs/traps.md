@@ -261,3 +261,37 @@ is correct, but whether the case it guards can reach it.**
 
 ---
 
+## The held-run retry storm (2026-09-20 → fixed 2026-09-21)
+
+**What was seen:** six audit runs showing "running 40/40", "running 3/3", "running 1/1" for a day — the
+Findable and "Quit your life and travel" discoveries, the Switched On Electrical, Spare car keys and Swift
+Learner hooks, Drive Rugby. Every provider row was `done` (exactly one Apify attempt each). Two first-reply
+pitches sat `awaiting_audit` behind them.
+
+**The mechanism:** `process-ai-audit-queue` finalises a settled run in two halves — flip to `processing`,
+fire the crawl and `extract-competitors`, then a readiness check that RELEASES the run only when cleaning is
+`complete:true`, else puts it back to `pending`. OpenAI had started answering **429** to `extract-competitors`,
+so cleaning never completed; the next 30-second tick found the run `pending` with all rows settled,
+re-finalised it — `prevStatus === "pending"` passes the invoke condition — and invoked the cleaner again.
+`RETRY_CLEAN_CAP = 4` existed but bounded only `retryStuckCleanings`, the separate sweep over `complete`
+runs; this path never reached `complete`. Attempts climbed to 3,280 on one run (two stamps per tick:
+extract-competitors' own and `stampCleaningFailure`).
+
+**Why it mattered beyond the badge:** nothing downstream reads a run that is not `complete`/`capped` —
+`readAuditStates`, `resolveAuditReplyVars`, the report's measuring gate, the first-reply reconciler. The
+measurement was finished and unusable.
+
+**The fix:** `_shared/run-finalise.ts` — `shouldInvokeCleaning` (never all-failed, never complete, never past
+the cap), `finaliseReadiness` (an exhausted cleaning is READY), `markCleaningExhausted` (`gave_up_at`,
+written once). The finaliser imports the ONE `RETRY_CLEAN_CAP`. The report and the resolver already read
+`complete:false` as "rival names unavailable", so an exhausted run is honest, not fabricated.
+`scripts/audit-finalise-lifecycle.test.ts` drives it. Recovery was the deploy alone: the next tick released
+all six with zero provider calls (runs 1885 → 1885, queue rows 7616 → 7616), and the Findable discovery
+froze over its three existing runs.
+
+**The rules it taught:** a secondary enrichment step must never hold a finished measurement; a cap that
+only bounds one of two call sites is not a cap; a 160-char error receipt can cut off the one word that
+classifies the fault ("You have …" — quota, rate limit or key? — now 400 chars).
+
+---
+

@@ -255,6 +255,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   and clearing state is not the same as not SENDING it (derive the payload from the show condition).
 - **Cutting question count saves money, not time** — questions run in parallel; the wall clock is one
   Apify scrape (~3–6 min). Never lower `MAX_RUN_AGE_MS` (12 min) — a retry storm is recorded.
+- 🔴 **A secondary step must never hold a settled run.** Competitor cleaning is optional to the
+  measurement; it is capped by `RETRY_CLEAN_CAP` on BOTH paths (`_shared/run-finalise.ts`) and an
+  exhausted receipt (`complete:false`, `gave_up_at`) RELEASES the run. The 2026-09-20 storm: the
+  finaliser held six runs `pending` for an OpenAI 429 and re-invoked the cleaner every tick — 3,000+
+  attempts per run, "running 40/40" for a day, three hooks and two pitches blocked (`docs/traps.md`).
 
 **Edge functions and the platform**
 - **The service-role-bearer branch in every function is DEAD** since the ~2026-08-11 key rotation and
@@ -264,8 +269,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   ⛔ Do not spend a session re-probing this.
 - **`sb_secret_…` keys are for `apikey` only; the legacy `service_role` JWT still works for
   `/rest/v1`** and is what scripts use. Say WHICH key.
-- **The CLI has no `functions logs`.** A refusal that is only `console.error`'d is undiagnosable —
-  write it to `client_error_reports` (`error_id` + `context`; ⚠️ **the table has no `message` column**
+- **The CLI has no `functions logs`, but the Management API does:** `GET /v1/projects/<ref>/analytics/
+  endpoints/logs.all?sql=select timestamp, event_message from function_logs …` (same bearer as §2)
+  — **retention is under a minute**, so read it WHILE the fault is happening. Otherwise a refusal that
+  is only `console.error`'d is undiagnosable — write it to `client_error_reports` (`error_id` + `context`; ⚠️ **the table has no `message` column**
   until `SQL_FOR_PAUL_client_error_message.sql` runs, so ten call sites currently record nothing).
 - **The non-2xx triage table (`send-whatsapp-message`):** 200 + `ok:false` = a designed refusal with
   its reason · "non-2xx status code" = the handler answered 4xx/500 · **"Failed to send a request"
@@ -516,6 +523,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 ## 8. Known open problems — the short list (`docs/open-problems.md` has the long record)
 
 - `client_error_reports` has no `message` column; ten writers record nothing until the SQL runs.
+- 🔴 **OpenAI answers 429 to this project since ~07:00 2026-09-20** (`OPENAI_API_KEY`, set 2026-06-30):
+  competitor cleaning fails on every run (rival names withheld, receipts `complete:false`) and
+  `create-ai-audit` falls back to template questions. A quota/spend-limit refusal, not a rate limit —
+  **external: Paul checks OpenAI billing/usage limits for that key.** Audits finalise regardless since
+  2026-09-21 (`_shared/run-finalise.ts`); the receipt now keeps 400 chars of the error for the next one.
 - `classifySource` grades every `.org` as authority (report accuracy).
 - A 3-run measurement repeats only 20 questions when the set is longer (`BASELINE_MAX_QUESTION_COUNT`
   clamp on repeats) — a spend decision, not a code one.
