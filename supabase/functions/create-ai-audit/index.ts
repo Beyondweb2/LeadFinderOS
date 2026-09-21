@@ -28,10 +28,17 @@ import {
   BASELINE_QUESTIONS,
   FULL_MEASURE_QUESTIONS,
   DISCOVERY_QUESTIONS,
-  DISCOVERY_RUNS,
+  DISCOVERY_MIN_QUESTIONS,
+  DISCOVERY_MAX_QUESTIONS,
+  DISCOVERY_DEFAULT_RUNS,
+  DISCOVERY_MIN_RUNS,
   DISCOVERY_MAX_RUNS,
   GENERATOR_ABSOLUTE_MAX_QUESTIONS,
 } from "../../../src/lib/auditQuestionCounts.ts";
+import {
+  clampDiscoveryRuns, isValidDiscoveryQuestionCount, isValidDiscoveryRuns,
+  expectedResponses, planGenerationBatches,
+} from "../../../src/lib/auditPlan.ts";
 import { initialHookState, planHookQuestions, type HookState } from "../../../src/lib/hookAudit.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
@@ -93,17 +100,21 @@ const MEASUREMENT_DEFAULT_QUESTION_COUNT = FULL_MEASURE_QUESTIONS;
    scales ~linearly with it (more Apify runs). */
 const MEASUREMENT_RUNS = 3;
 
-/* DISCOVERY — the manual breadth scan, 40 questions x ONE run. Operator-callable (NOT internal-only,
-   same as the full measure): it is a button on the AI Audit page, and its ceiling is explicit here
-   so a public caller still cannot exceed it.
-   ⛔ MIN = MAX = DEFAULT, derived from the shared policy module, so nothing can ask for a different
-   size and the screen cannot offer one the generator will not honour — the same shape the full
-   measure took after the 10..75-vs-20 fault.
-   ⛔ AND THE RUNS ARE ONE, NAMED. baselineTargetRuns stays 0 for this purpose, which is what makes
-   it a single ordinary run; DISCOVERY_RUNS exists so "40 x 1" is a fact the tests read rather than
-   an absence they infer. */
-const DISCOVERY_MIN_QUESTION_COUNT = DISCOVERY_QUESTIONS;
-const DISCOVERY_MAX_QUESTION_COUNT = DISCOVERY_QUESTIONS;
+/* DISCOVERY — the manual breadth scan and THE flexible opportunity/research audit (Paul,
+   2026-09-21): 1..80 questions, default 40, x 1..3 runs, default 3. Operator-callable (NOT
+   internal-only, same as the full measure): it is a button on the AI Audit page, and its ceiling
+   is explicit here so a public caller still cannot exceed it.
+   ⛔ THE CEILING IS ABOVE THE GENERATOR'S PER-CALL CAP, AND THAT IS HONEST ONLY BECAUSE THE
+   GENERATION IS BATCHED. `planGenerationBatches` splits a target over
+   GENERATOR_ABSOLUTE_MAX_QUESTIONS into calls that each sit under it, and fillGenerated tops the
+   pool up to the target — 80 means 80 queued rows or a LOGGED shortfall. Without that, this is the
+   10..75-vs-20 fault again: a size the screen offers and the queue never runs.
+   ⛔ AND AN OUT-OF-RANGE REQUEST IS REFUSED, NOT CLAMPED (see the discovery validation below).
+   ⛔ THE FULL MEASURE AND THE PAID BASELINE ARE NOT TOUCHED BY ANY OF THIS. Both stay at 20 x 3;
+   discovery is where the dials live, deliberately, because raising the measure's count raises the
+   Apify bill on every paying client. */
+const DISCOVERY_MIN_QUESTION_COUNT = DISCOVERY_MIN_QUESTIONS;
+const DISCOVERY_MAX_QUESTION_COUNT = DISCOVERY_MAX_QUESTIONS;
 const DISCOVERY_DEFAULT_QUESTION_COUNT = DISCOVERY_QUESTIONS;
 
 /** Clamp an untrusted question-count into [min..max], defaulting to `def`. */
@@ -407,6 +418,35 @@ Deno.serve(async (req) => {
        asks for the maximum would silently become a discovery audit. The purpose is the marker,
        exactly as it is for baseline, measurement, remeasure and free_check. */
     const isDiscovery: boolean = body.purpose === DISCOVERY_AUDIT_PURPOSE;
+    /* ⛔ DISCOVERY'S TWO DIALS ARE VALIDATED, NOT CLAMPED — INDEPENDENTLY OF THE SCREEN (2026-09-21).
+       A stated value outside the bounds is a request we cannot honour, and honouring three
+       quarters of it silently is the fault that produced a 40-question discovery re-run of five
+       questions and a comparison built on a subset. ONLY discovery refuses: every other purpose
+       keeps its existing clamp, because their callers are automations replaying a stored set and a
+       refusal there would turn a working lane into a dead one. Absent → the default, which is not
+       an invalid value. A numeric STRING is not a number: the body is untrusted JSON. */
+    if (isDiscovery) {
+      const statedCount = body.question_count ?? body.questionCount;
+      if (statedCount !== undefined && statedCount !== null
+          && !isValidDiscoveryQuestionCount(typeof statedCount === "number" ? statedCount : Number.NaN)) {
+        return json({
+          ok: false,
+          error: "question_count_out_of_range",
+          detail: `A discovery audit asks between ${DISCOVERY_MIN_QUESTIONS} and ${DISCOVERY_MAX_QUESTIONS} questions; ${String(statedCount)} was asked for. Nothing was started.`,
+          min: DISCOVERY_MIN_QUESTIONS, max: DISCOVERY_MAX_QUESTIONS,
+        }, 400);
+      }
+      const statedRuns = body.run_count;
+      if (statedRuns !== undefined && statedRuns !== null
+          && !isValidDiscoveryRuns(typeof statedRuns === "number" ? statedRuns : Number.NaN)) {
+        return json({
+          ok: false,
+          error: "runs_out_of_range",
+          detail: `A discovery audit runs each question between ${DISCOVERY_MIN_RUNS} and ${DISCOVERY_MAX_RUNS} times; ${String(statedRuns)} was asked for. Nothing was started.`,
+          min: DISCOVERY_MIN_RUNS, max: DISCOVERY_MAX_RUNS,
+        }, 400);
+      }
+    }
     /* 🔴 A REPEAT'S QUESTION CAP COMES FROM THE AUDIT IT IS REPEATING, NOT FROM THE CALLER.
        MEASURED LIVE 2026-09-20, audit 9a0c2b79 (Findable, discovery): run 1 queued its 40 questions
        and completed. A re-run from the audit screen posted the same 40 back with `audit_id` and NO
@@ -482,12 +522,12 @@ Deno.serve(async (req) => {
        one they fragment on. The repeat is advanceBaseline, the mechanism the paid baseline and the
        free check already use, so runs 2 and 3 replay the stored set verbatim and nothing is
        regenerated.
-       ⛔ SERVER-VALIDATED AND NEVER INFERRED. Clamped to DISCOVERY_MAX_RUNS regardless of what the
-       browser sends, defaulted to 1 when absent (so every request written before this exists still
-       means one run), and read from its own field — never from the question count. */
-    const discoveryRuns = isDiscovery
-      ? Math.min(DISCOVERY_MAX_RUNS, Math.max(1, Math.round(Number(body.run_count ?? DISCOVERY_RUNS)) || DISCOVERY_RUNS))
-      : 0;
+       ⛔ SERVER-VALIDATED AND NEVER INFERRED. An out-of-range value was already refused above; this
+       clamp is the belt to that braces, for a value that is merely junk rather than stated wrong.
+       Defaulted to DISCOVERY_DEFAULT_RUNS when absent, and read from its own field — never from
+       the question count (the count and the run count are independent dials, and inferring one
+       from the other is how `question_count === 40` nearly became the discovery marker). */
+    const discoveryRuns = isDiscovery ? clampDiscoveryRuns(body.run_count) : 0;
     const baselineTargetRuns = isBaseline
       ? Math.min(5, Math.max(1, typeof body.baseline_target_runs === "number" ? Math.round(body.baseline_target_runs) : 1))
       : (isMeasurement || isRemeasure) ? MEASUREMENT_RUNS
@@ -504,6 +544,19 @@ Deno.serve(async (req) => {
     const droppedQuestions: string[] = suppliedQuestions ? suppliedQuestions.slice(MAX_QUESTIONS) : [];
     if (droppedQuestions.length) {
       console.error(`[create-ai-audit] TRUNCATED: ${suppliedQuestions!.length} supplied, cap ${MAX_QUESTIONS}, DROPPED ${droppedQuestions.length}: ${droppedQuestions.join(" | ")}`);
+    }
+    /* ⛔ A DISCOVERY AUDIT REFUSES RATHER THAN TRUNCATES (2026-09-21). The report below is honest,
+       but an operator who selected 81 questions and got an audit of 80 has an audit that is not
+       the one they configured, and the truncation is a line in a response nobody reads. Every
+       other purpose keeps report-and-run: their callers are automations replaying a stored set,
+       where refusing would strand a paid deliverable over a cap it cannot control. */
+    if (isDiscovery && droppedQuestions.length) {
+      return json({
+        ok: false,
+        error: "too_many_questions",
+        detail: `${suppliedQuestions!.length} questions were sent and a discovery audit asks at most ${MAX_QUESTIONS}. Nothing was started — deselect ${droppedQuestions.length} and send again.`,
+        max: MAX_QUESTIONS, supplied_count: suppliedQuestions!.length,
+      }, 400);
     }
     /* Spread into both responses. Conditional so a clean call stays clean — the keys are absent
        entirely when nothing was dropped, rather than a truncated:false a caller learns to ignore. */
@@ -802,11 +855,16 @@ Deno.serve(async (req) => {
         /* ⛔ THE PREVIEW MUST MIRROR THE RUN. Confirming sends the reviewed questions back VERBATIM,
            so this preview IS discovery's generation step: money count 0 and capHeads true, the same
            two arguments the run branch passes. A preview that promised a mix the run does not
-           produce is the fault this whole predicate-sharing pattern exists to prevent. */
-        qs = await generateQuestions(
+           produce is the fault this whole predicate-sharing pattern exists to prevent.
+           ⚠️ BATCHED AND FILLED TO TARGET, exactly as the run branch is. An 80 that came back as
+           40 here would be an 80 the operator never got to choose from, and a pool that came back
+           short would be a short audit nobody was told about. */
+        const generated = await generateDiscoverySet(
           businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
-          businessScope, country, serviceAreaCoverage, 0, null, true, marketContext,
+          businessScope, country, serviceAreaCoverage, marketContext,
         );
+        qs = fillGenerated("discovery preview", generated, questionCount, [],
+          { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
       } else {
         qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount, null, false, marketContext);
       }
@@ -1125,9 +1183,9 @@ Deno.serve(async (req) => {
              ⛔ capHeads = true. 40 questions is the count most able to fill itself with one
              question wearing forty adjectives — the exact fault capHeadTerms exists for. Discovery
              is not a judged set, but it IS the set Paul reads to decide where to build. */
-          const generated = await generateQuestions(
+          const generated = await generateDiscoverySet(
             businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
-            businessScope, country, coverage, 0, null, true, marketContext,
+            businessScope, country, coverage, marketContext,
           );
           /* FILL, DON'T SLICE. `baselineAsked` is empty for this purpose (no pointer is read), so
              this dedupes by intent and tops up from the templates to the requested 40 — the count
@@ -1296,6 +1354,22 @@ Deno.serve(async (req) => {
        WITHOUT a schema change (results is jsonb). Inert to everything downstream: the queue's SEO
        step keys on results.seo and the report on results.seo.categories — neither reads this. */
     if (isMeasurement) runResults.measurement = true;
+    /* ⛔ THE CONFIGURATION THIS DISCOVERY RUN WAS STARTED WITH, IN ITS OWN ROW (2026-09-21). The
+       questions are in the queue rows and the run count is in ai_audits.baseline_target_runs, so
+       this is not the source of truth for either — it is the record of what was ASKED FOR, so a
+       run that ends up short of its target can be told apart from one that was configured small.
+       Same schema-free mechanism as `measurement` above (results is jsonb, no migration), and
+       inert downstream: the queue keys on results.seo and the report on results.seo.categories.
+       ⚠️ `questions` is the count AS QUEUED (after dedupe); `intended_questions` is the dial. */
+    if (isDiscovery) {
+      runResults.discovery_config = {
+        questions: questions.length,
+        intended_questions: questionCount,
+        runs: discoveryRuns,
+        engines: AUDIT_ENGINES,
+        expected_responses: expectedResponses(questions.length, discoveryRuns, AUDIT_ENGINES.length),
+      };
+    }
     /* Same schema-free mechanism (results is jsonb). A diagnostic carries counts:false so the
        comparison can refuse to COUNT it without refusing to run it. */
     if (remeasureNote) runResults.remeasure = remeasureNote;
@@ -1513,6 +1587,68 @@ async function generateWithMoney(
   }
   console.log(`[create-ai-audit] baseline mixed set: ${money.length} money + ${standard.length} standard of ${total} requested (share taken on ${moneySlots} slot(s)); ${pooled.questions.length} distinct`);
   return { questions: pooled.questions, money };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   DISCOVERY'S GENERATION — one call, or several when the target is above what one call may ask for.
+
+   ⛔ WHY IT CANNOT ALWAYS BE ONE CALL. generateQuestions clamps every call at
+   GENERATOR_ABSOLUTE_MAX_QUESTIONS (40) as its absurd-value guard. Asking it for 80 returns 40,
+   and fillGenerated would quietly top the other 40 up from the deterministic templates — a screen
+   saying 80 over a queue running half of them generated. That is the 10..75-vs-20 fault wearing a
+   new number, so a target above the per-call cap is asked for across several calls instead.
+
+   ⛔ THE BATCHES ARE NOT THE SAME CALL REPEATED. Each one is handed the questions produced so far
+   as a coverage directive — the same machinery the full measure's baseline exclusion uses — so
+   batch two is steered off batch one's intents rather than paraphrasing them into the dedupe.
+
+   ⛔ EVERY ARGUMENT IS THE ONE THE SINGLE-CALL BRANCH PASSED: money count 0 and capHeads true.
+   Discovery has no money split (its directive fights the market model's counted intent spread)
+   and 80 questions is even more able than 40 to fill itself with one question wearing eighty
+   adjectives, which is what capHeadTerms is for.
+
+   A target at or under the cap is ONE call, argument for argument — so every discovery audit at
+   the default 40 behaves exactly as it did before this existed.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+async function generateDiscoverySet(
+  businessName: string,
+  businessType: string,
+  locationText: string,
+  hasWebsite: boolean,
+  specialisms: string,
+  target: number,
+  scope: BusinessScope,
+  country: string | null,
+  coverage: string,
+  market: MarketContext,
+): Promise<string[]> {
+  const batches = planGenerationBatches(target, 0);
+  if (batches.length <= 1) {
+    return await generateQuestions(
+      businessName, businessType, locationText, hasWebsite, specialisms, batches[0] ?? 0,
+      scope, country, coverage, 0, null, true, market,
+    );
+  }
+  const out: string[] = [];
+  for (let i = 0; i < batches.length; i++) {
+    const cov = out.length
+      ? [coverage, coverageDirective(out, businessType)].filter(Boolean).join("\n\n")
+      : coverage;
+    const part = await generateQuestions(
+      businessName, businessType, locationText, hasWebsite, specialisms, batches[i],
+      scope, country, cov, 0, null, true, market,
+    );
+    out.push(...part);
+  }
+  /* Deduped ACROSS the batches before the caller fills to target, for the same reason
+     generateWithMoney dedupes across its own two calls: independent calls produce twins, and a
+     dedupe that runs after the slice is how a 20-question measure queued 18. */
+  const pooled = dedupeByIntent(out);
+  if (pooled.duplicates.length) {
+    console.warn(`[create-ai-audit] discovery: ${pooled.duplicates.length} intent-duplicate(s) across ${batches.length} batches dropped before filling: ${pooled.duplicates.join(" | ")}`);
+  }
+  console.log(`[create-ai-audit] discovery generation for ${target}: asked ${batches.join(" + ")} across ${batches.length} calls, ${pooled.questions.length} distinct`);
+  return pooled.questions;
 }
 
 /* THE FILL, at every site that slices a generated pool to a target: exclude the baseline's asked

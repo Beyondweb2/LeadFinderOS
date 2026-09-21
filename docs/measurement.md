@@ -557,3 +557,67 @@ dashboard's Full Reset button are still live.
 
 ---
 
+
+## 32. ✅ DISCOVERY IS THE FLEXIBLE AUDIT NOW — 1..80 QUESTIONS × 1..3 RUNS (2026-09-21)
+
+**Built, not deployed.** Paul asked for a configurable opportunity/research audit: pick how many
+questions, pick how many runs, pick which of the generated questions actually run, see the total
+before pressing the button. **It went on DISCOVERY, not on the full measure** — his decision, and
+the same reasoning as 2026-09-20: raising the full measure's count raises the Apify bill on every
+paying client's measurement, and a measurement is not what was wanted.
+
+⛔ **THE PAID METHODOLOGY DID NOT MOVE, AND THAT IS THE POINT.** The full measure is still 20 × 3
+with `MEASUREMENT_MIN/MAX/DEFAULT_QUESTION_COUNT` all deriving from `FULL_MEASURE_QUESTIONS`; the
+paid baseline is still `BASELINE_QUESTIONS` × `BASELINE_RUNS` with its operator-approved set frozen;
+the day-28 replay still carries that set verbatim and in order at `MEASUREMENT_RUNS`; the outreach
+hook is untouched. `scripts/discovery-dials.test.ts` asserts each of those as a property, so the
+next person to reach for the dial finds a test explaining why it is not there.
+
+### What the dials are
+
+- `DISCOVERY_QUESTIONS` 40 is now the DEFAULT, not the only value. `DISCOVERY_MIN_QUESTIONS` 1 ·
+  `DISCOVERY_MAX_QUESTIONS` 80.
+- `DISCOVERY_DEFAULT_RUNS` **3** (was `DISCOVERY_RUNS` = 1; renamed so every call site had to be
+  looked at) · `DISCOVERY_MIN_RUNS` 1 · `DISCOVERY_MAX_RUNS` 3, unchanged.
+- ⛔ **80 IS HONEST ONLY BECAUSE THE GENERATION IS BATCHED.** `planGenerationBatches`
+  (`src/lib/auditPlan.ts`) splits a target above `GENERATOR_ABSOLUTE_MAX_QUESTIONS` into calls that
+  each sit under it — 80 plans to 40+40 — and `generateDiscoverySet` feeds each batch the questions
+  produced so far as a `coverageDirective`, pools with `dedupeByIntent` and fills to target. 40 is
+  still ONE call, argument for argument, so every existing discovery audit is unchanged. Without
+  this the dial is the 2026-09-12 fault again: a size the screen offers and the queue never runs.
+- ⛔ **OUT OF RANGE IS REFUSED, NOT CLAMPED** — `question_count_out_of_range`, `runs_out_of_range`,
+  `too_many_questions`, all 400 with nothing started, all keyed on `isDiscovery` so no automation's
+  replay is refused for a cap it cannot control. The clamps are for a garbled persisted value only.
+- **The run count controls execution**: `discoveryRuns` → `baselineTargetRuns` → `advanceBaseline`
+  replays the stored set. It was already true for 1..3; the dial did not weaken it.
+- **Selection, not deletion** (`src/lib/questionSelection.ts`): indexes, never text, reconciled
+  across every edit, add, remove and paste; an unrecognised change selects all, the safe failure
+  being "more than you meant" — visible in the count and refused at 81.
+- **One total, one function**: `expectedResponses(questions × runs × engines)` is quoted by the
+  wizard and recorded as `results.discovery_config.expected_responses` on the run.
+
+### Ported from the abandoned `full-measure-dials` branch (`2646b390`)
+
+That branch put the same dials on the FULL MEASURE, against Paul's 2026-09-20 decision, and was
+built on a base 18 commits stale. **Do not merge it.** What was reused, rewritten for discovery:
+`planGenerationBatches`, `expectedResponses`, the clamp/validator pair, `questionSelection.ts`, the
+editor's optional checkbox column, and the review-step summary. What was deliberately left behind:
+every change to `FULL_MEASURE_*`, `MEASUREMENT_*_QUESTION_COUNT`, `fireDueRemeasures`'s run-count
+passthrough, the `BaselineContract` fields and the `sweepStalledBaselines` query filter — all of
+them on the paid path, none of them asked for here.
+
+**Run-level results** needed no work on either branch: one `ai_audit_queue` row per question per
+run, `poolRuns` folds them into named/answered counts per question per engine.
+
+### Deploy
+
+⚠️ **NOT DEPLOYED.** `create-ai-audit` is the only function whose behaviour changes, but
+`src/lib/auditPlan.ts` is new in its closure — walk it with
+`node scripts/check-import-graph.mjs --reached-by src/lib/auditPlan.ts` before deploying, and push
+the SPA in the same pass.
+
+**Tests:** `scripts/discovery-dials.test.ts` (new); `discovery-audit` and `audit-lifecycle` updated
+for the renamed default and the new bounds. `npm test` 134/143 — the nine failures all reproduce on
+clean `origin/main`.
+
+---

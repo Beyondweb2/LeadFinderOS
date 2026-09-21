@@ -357,16 +357,26 @@ shape (`auditQuestionContext.ts`) builds BOTH the preview and the confirm reques
 hand-written payload is how a field shapes the reviewed questions and never reaches the stored audit.
 `FULL_MEASURE_QUESTIONS` stays 20 — raising it is a spend decision, not a code one.
 
-**DISCOVERY is the third manual mode: 40 questions × ONE run** (`DISCOVERY_QUESTIONS`,
-`DISCOVERY_RUNS`, `audit_purpose = 'discovery'`, 2026-09-20). Breadth, not confidence — ⛔ **never
-present it as a measurement**; one ask per question is a single sample. ⛔ **The marker is the
-PURPOSE, never the count** (`GENERATOR_ABSOLUTE_MAX_QUESTIONS` is also 40, so a count-based marker
-would capture any caller asking for the maximum). ⛔ **Its single run is an ABSENCE from
-`baselineTargetRuns`** — keep `isDiscovery` out of that expression. No money split, no SEO scan
+**DISCOVERY is the third manual mode AND THE FLEXIBLE OPPORTUNITY/RESEARCH AUDIT: 1–80
+questions × 1–3 runs, default 40 × 3** (`DISCOVERY_MIN/MAX_QUESTIONS`, `DISCOVERY_QUESTIONS`,
+`DISCOVERY_MIN/MAX/DEFAULT_RUNS`, `audit_purpose = 'discovery'`; 2026-09-20, dials 2026-09-21).
+⛔ **THE DIALS LIVE HERE AND NOWHERE ELSE** — the full measure stays 20 × 3 and the paid baseline
+stays frozen, because raising the measure's count raises the Apify bill on every paying client.
+⛔ **Never present it as a measurement**, at any run count. ⛔ **The marker is the PURPOSE, never
+the count** (`GENERATOR_ABSOLUTE_MAX_QUESTIONS` is also 40, so a count-based marker would capture
+any caller asking for the maximum). ⛔ **80 is honest ONLY because generation is BATCHED**
+(`planGenerationBatches` in `src/lib/auditPlan.ts`, each call ≤ the per-call cap); a policy
+ceiling above what one call returns is the fault that killed the old 10..75 full-measure dial.
+⛔ **Out of range is REFUSED, not clamped** (`question_count_out_of_range`, `runs_out_of_range`,
+`too_many_questions` — 400, nothing started), and only for this purpose. The operator picks WHICH
+generated questions run (`src/lib/questionSelection.ts`, indexes not text) and the screen quotes
+`expectedResponses(q × runs × engines)`, the same function the run records. No money split, no SEO scan
 (`seoScanAllowed` is baseline-only), no audit reuse, and it can never be a hook (`isHookAudit`
 requires `ORDINARY_AUDIT_PURPOSE`). `audit_purpose` is plain nullable text with no CHECK — no
 migration. Runs are operator-chosen 1-3 (`DISCOVERY_MAX_RUNS`), clamped server-side, replayed
-verbatim by `advanceBaseline`.
+verbatim by `advanceBaseline` — the chosen number IS `baselineTargetRuns`, so it controls
+execution. `docs/measurement.md` §32. ⛔ Branch `full-measure-dials` (`2646b390`) put these
+dials on the FULL MEASURE instead — **do not merge it**.
 
 🔴 **A REPEAT'S QUESTION CAP COMES FROM THE STORED AUDIT, NEVER FROM THE CALLER** — three recorded
 truncations (baseline 10→5, measurement 40→20, discovery 40→5, the last measured live on audit
