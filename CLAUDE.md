@@ -533,11 +533,15 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 ## 8. Known open problems — the short list (`docs/open-problems.md` has the long record)
 
 - `client_error_reports` has no `message` column; ten writers record nothing until the SQL runs.
-- 🔴 **OpenAI answers 429 to this project since ~07:00 2026-09-20** (`OPENAI_API_KEY`, set 2026-06-30):
-  competitor cleaning fails on every run (rival names withheld, receipts `complete:false`) and
-  `create-ai-audit` falls back to template questions. A quota/spend-limit refusal, not a rate limit —
-  **external: Paul checks OpenAI billing/usage limits for that key.** Audits finalise regardless since
-  2026-09-21 (`_shared/run-finalise.ts`); the receipt now keeps 400 chars of the error for the next one.
+- ✅ **The OpenAI 429 is CLEARED** (was open 2026-09-20 → 2026-09-21; it was a billing/spend-limit
+  refusal, not a rate limit, fixed by Paul topping the key up). Verified live: competitor extraction
+  succeeded on 8/8 cells and question generation no longer falls back to templates
+  (`docs/measurement.md` §32). The hardening it prompted stays — audits finalise regardless
+  (`_shared/run-finalise.ts`) and the receipt keeps 400 chars of the error.
+- 🔴 **Apify has no headroom for a big discovery run**: $17.02 of $19.00 (89.6%) on 2026-09-21,
+  resets 16 Oct. An 80 × 3 is ~$1.74 at the measured ~$0.00725 per question-run — it fits on paper
+  and leaves ~20p for everything else, and **at 100% every audit question and SEO scan stops,
+  paying clients included** (§4). ⛔ Do not run MCLocksmiths at 80 × 3 until the cap is raised.
 - `classifySource` grades every `.org` as authority (report accuracy).
 - A 3-run measurement repeats only 20 questions when the set is longer (`BASELINE_MAX_QUESTION_COUNT`
   clamp on repeats) — a spend decision, not a code one.

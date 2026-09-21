@@ -560,7 +560,8 @@ dashboard's Full Reset button are still live.
 
 ## 32. ✅ DISCOVERY IS THE FLEXIBLE AUDIT NOW — 1..80 QUESTIONS × 1..3 RUNS (2026-09-21)
 
-**Built, not deployed.** Paul asked for a configurable opportunity/research audit: pick how many
+**LIVE AND VERIFIED IN PRODUCTION 2026-09-21** (deploy record at the end of this section). Paul
+asked for a configurable opportunity/research audit: pick how many
 questions, pick how many runs, pick which of the generated questions actually run, see the total
 before pressing the button. **It went on DISCOVERY, not on the full measure** — his decision, and
 the same reasoning as 2026-09-20: raising the full measure's count raises the Apify bill on every
@@ -609,15 +610,95 @@ them on the paid path, none of them asked for here.
 **Run-level results** needed no work on either branch: one `ai_audit_queue` row per question per
 run, `poolRuns` folds them into named/answered counts per question per engine.
 
-### Deploy
+### 🔴 THE BUG THE DIALS INTRODUCED, FOUND AT INTEGRATION: "1 RUN" WOULD HAVE RUN THREE TIMES
 
-⚠️ **NOT DEPLOYED.** `create-ai-audit` is the only function whose behaviour changes, but
-`src/lib/auditPlan.ts` is new in its closure — walk it with
-`node scripts/check-import-graph.mjs --reached-by src/lib/auditPlan.ts` before deploying, and push
-the SPA in the same pass.
+`buildAuditRunRequest` (`src/lib/auditQuestionContext.ts`) sent `run_count` **only when it was
+greater than 1**. That was exactly right while `create-ai-audit` defaulted an ABSENT run count to a
+single run: omitting the field and asking for one were the same request. Renaming `DISCOVERY_RUNS`
+(1) to `DISCOVERY_DEFAULT_RUNS` (3) made them different requests, and nothing on the sending side
+was revisited — so an operator who picked **1 run** sent nothing, and the server ran **3**. Three
+times the Apify bill, with the screen reading "1 run · 80 expected responses" over an audit of 240.
 
-**Tests:** `scripts/discovery-dials.test.ts` (new); `discovery-audit` and `audit-lifecycle` updated
-for the renamed default and the new bounds. `npm test` 134/143 — the nine failures all reproduce on
-clean `origin/main`.
+⛔ **This is the absent-value-as-a-real-one fault (CLAUDE.md §4) on a spending path**, where absent
+is supposed to mean "do not". The dial reached the wire for two of its three positions and silently
+dropped the cheapest one. The rule it re-teaches: **when you change what an ABSENT value means, grep
+every site that decides whether to SEND it.** A default is half a contract; the omission is the
+other half.
+
+⛔ **AND A TEST WAS ASSERTING THE BUG.** `discovery-audit.test.ts` pinned *"1 run sends no run_count
+— the server default IS one"*, a sentence that was true when written and stopped being true one
+commit before the integration. A test that states its own justification is how this was caught in
+seconds instead of on a bill; a test that had only asserted the value would have been "fixed" to
+match. Both suites now assert on the WIRE (`run_count === n` for every position) rather than on the
+screen's source text.
+
+### Deploy record — 2026-09-21
+
+| | |
+|---|---|
+| Merged | `42dfbcd2`, `--no-ff` onto `d920d0d7`. The branch was cut from that exact commit, so no rebase; nothing on main was displaced. |
+| Edge function | **`create-ai-audit` v141 → v143** — the ONLY function deployed, and the only one reading any `DISCOVERY_*` constant. |
+| Not deployed, deliberately | 14 other functions import `auditQuestionCounts.ts` but none of the changed exports; `paid-baseline` reaches the changed `auditQuestionContext.ts` but passes no `runCount`, so the change is a provable no-op there. |
+| Frontend | Live on **`leadfinderos-next.pages.dev`** (see the URL warning below). Verified by fetching the served `AiAudit` chunk and finding it byte-identical to the local build — the only differences are sibling chunk hashes inside its `import` statements. |
+
+⚠️ **THE OPERATOR APP IS `leadfinderos-next.pages.dev`, AND THIS WAS ALREADY WRITTEN DOWN.** The
+deploy check was run against the retired `leadfinderos.pages.dev`, which still answers 200 with a
+months-old bundle; twenty minutes went into "the Cloudflare pipeline is stalled, several commits
+behind" before Paul supplied the right host. **CLAUDE.md §7 already carried the correct host AND a
+warning naming this exact trap, added 2026-09-20.** It was missed because the URL was taken from a
+stale copy of CLAUDE.md in the session's own context rather than by reading the file — the §3 recon
+rule ("read the actual files before editing", and before asserting) applies to the map as much as to
+the code. `docs/code-map.md` genuinely was stale and is corrected in this commit.
+
+**The rule:** a deploy check against the wrong host proves nothing, and a retired Pages project
+serving an old build is indistinguishable from a broken pipeline. Before concluding a deploy has
+failed, confirm the HOST from the file on disk, then prove where live is by checking a marker from
+the PREVIOUS deploy.
+
+### Production verification, on the live UI
+
+Quick check `3–5 questions × 1` and Full measurement `20 questions × 3` both unchanged on screen.
+Discovery offers `up to 80 questions × up to 3`; the count input is `min=1 max=80`; a fresh wizard
+stores `discoveryRuns: 3`. The review step shows the live selected count (`2 / 80 questions
+selected`) beside `Expected AI responses 8 (2 × 2 × 2)`, and deselecting one question moved it to
+`4 (1 × 2 × 2)` — `expectedResponses(questions × runs × enabled engines)`, derived and never stored.
+
+⚠️ **A PRE-DIAL `discoveryRuns` CAN PERSIST AND BEAT THE DEFAULT.** `usePersistedState` had a
+stored `1` from when discovery was a fixed 40 × 1, so the screen opened on "1 run" while the product
+default was 3. It was not a preference — it was the only value that had ever existed. Cleared when
+the wizard reset after a run, and a fresh wizard is 3. Worth knowing before believing a default.
+
+### Smoke test — audit `dff25511`, MCLocksmiths centre (Canterbury), 2 × 2
+
+**8 AI responses, exactly `2 questions × 2 runs × 2 engines`.** Both runs completed
+(`mention_rate` 0.5 each, `actor_cost_usd` $0.0145 each), both questions executed in both runs,
+`baseline_target_runs = 2` on the row — the dial reached the server and `advanceBaseline` replayed
+the stored set. All 8 cells carry a `self_named` verdict and extracted rival names.
+
+**The OpenAI 429 is resolved.** The persistent quota error was a billing problem, cleared by Paul's
+top-up mid-session; the boundary was visible in the output. The generation before the top-up
+returned the deterministic template pair ("best Locksmiths in Canterbury UK", "top rated …") — the
+fallback, not the model. The regeneration after it returned service-specific questions
+("emergency locksmith services …", "lock installation …"), and **competitor extraction succeeded on
+all 8 cells** (AW Locks, LockFit Canterbury, Castle Locksmiths, Keytek). `extract-competitors` is an
+OpenAI call, so 8/8 extractions IS the proof the quota is clear — a stronger signal than the
+question wording, which template and model can both plausibly produce.
+
+### ⛔ DO NOT RUN THE 80 × 3 YET — APIFY, NOT THE CODE, IS THE BLOCKER
+
+At the time of this record Apify sat at **$17.02 of $19.00 (89.6%), resetting 16 Oct**. This audit
+measured **~$0.00725 per question-run**, so an 80 × 3 is roughly **$1.74** against about **$1.95**
+left — it fits on paper and leaves ~20p to cover every other audit and SEO scan for the following
+25 days. ⛔ **At 100% every audit question and every SEO scan in the product stops** (CLAUDE.md §4),
+including paying clients' work, so the ceiling is not a private budget. Raise the cap before running
+MCLocksmiths at 80 × 3. Recompute the percentage from used/cap at the time — never trust a stored
+`usage_pct`.
+
+**Tests:** `scripts/discovery-dials.test.ts` (new, plus the wire assertions above); `discovery-audit`
+and `audit-lifecycle` updated for the renamed default and the new bounds. `npm test` 134/143 — the
+nine failures byte-identical to clean `origin/main`. ⚠️ `check-edge-undefined` and the typecheck
+baseline both fail on `origin/main` for unrelated pre-existing reasons (`monthlyStartIso` in
+`_shared/remeasure-results.ts:207`, `user` in `page-generator`, a lucide `title` prop in `Inbox.tsx`
+and `OutreachTable.tsx`) — reproduce them on a clean checkout before blaming a change.
 
 ---

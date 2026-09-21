@@ -178,7 +178,10 @@
   town they become a prompt to find the local equivalent, never a task.
 - **`playbookDoc.ts` must never touch the `generate-playbook` LLM path.** That pipeline recommended ICAEW to an
   ACCA firm, ACCA's own zero-citation directory, and Bing Places. Styling is shared; the data path is not.
-- Live operator app: **`https://leadfinderos.pages.dev`**. Supabase ref **`ruusxpkkmwtljxxulhbq`**.
+- Live operator app: **`https://leadfinderos-next.pages.dev`**. Supabase ref **`ruusxpkkmwtljxxulhbq`**.
+  ⚠️ **`leadfinderos.pages.dev` is a STALE Cloudflare project that still answers 200 with an old
+  bundle** — a deploy check against it reports "not live" forever. This line named it until
+  2026-09-21; CLAUDE.md §7 carried the corrected host and the warning from 2026-09-20.
 
 ---
 

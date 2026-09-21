@@ -1056,7 +1056,21 @@
 
 ---
 
-## OpenAI 429 on every call (open since ~07:00 2026-09-20)
+## ✅ RESOLVED 2026-09-21 — OpenAI 429 on every call (was open from ~07:00 2026-09-20)
+
+**It was a billing/spend-limit condition, exactly as diagnosed, and Paul topping the key up cleared
+it.** Verified the same day on discovery audit `dff25511`: `extract-competitors` returned rival
+names on 8/8 cells, and question generation stopped falling back — the boundary was visible in one
+wizard, the generation before the top-up returning the template pair ("best Locksmiths in Canterbury
+UK") and the regeneration after it returning service-specific questions. ⚠️ **8/8 extractions is the
+proof, not the question wording**: template and model can both produce a plausible-looking question,
+but only a working OpenAI call produces competitor names. Record: `docs/measurement.md` §32.
+
+The hardening this prompted is kept and is not conditional on the outage: audits finalise regardless
+(`_shared/run-finalise.ts`), the receipt keeps 400 chars of the error, and the all-named-hook guard
+stands. The original record follows.
+
+### The original record
 
 `extract-competitors` gets `openai_http_429` on every batch (2-item and 120-item alike); `create-ai-audit`'s
 question generation has fallen back to template questions since the same hour (visible as capitalised
