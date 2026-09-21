@@ -267,6 +267,11 @@ export interface HookReportSummary {
     namedInstead: string[];
     citations: HookCitation[];
     namedOnEngineLabels: string[];
+    /** The engine's own answer, verbatim (as measured, truncated to 600 chars — see HookGap).
+     *  Restored 2026-09-21: the report's model/evidence box was dropped when the hook became
+     *  adaptive because this field never reached HookReportSummary, even though HookGap always
+     *  carried it. Empty string (never fabricated) when the stored gap predates this field. */
+    answerExcerpt: string;
   } | null;
   /** Every tested question, in order, with what each answering engine did. `named: null` = no answer. */
   tested: Array<{
@@ -317,6 +322,7 @@ export function buildHookReportSummary(input: {
       namedInstead: input.namedInstead(state.gap),
       citations: state.gap.citations,
       namedOnEngineLabels: state.gap.named_on_engines.map(input.engineLabel),
+      answerExcerpt: typeof state.gap.answer_excerpt === 'string' ? state.gap.answer_excerpt : '',
     } : null,
     tested,
   };

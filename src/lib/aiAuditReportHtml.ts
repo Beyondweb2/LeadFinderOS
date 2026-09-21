@@ -698,10 +698,57 @@ export function renderSiteFooter(opts: { businessName: string; metaHtml: string;
     </footer>`;
 }
 
+/* Official engine marks — compact inline SVG (not the 40KB base64 blob). OpenAI is monochrome
+   (white path on a black chip via .cc-*--oai); Gemini is its gradient spark. A gradient needs a
+   unique id per instance, so the header mark and the avatar pass different ids.
+   ⛔ MODULE SCOPE, not local to renderReportHtml: renderHookSection (below) needs the same marks for
+   its own restored model/evidence box, and this file has already paid once for "one rule in N
+   places" (CLAUDE.md §4) — a second copy of these SVGs would just be that again. */
+const OAI_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.1419.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.6813zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>`;
+const geminiSvg = (id: string) => `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4285f4"/><stop offset=".5" stop-color="#9b72cb"/><stop offset="1" stop-color="#d96570"/></linearGradient></defs><path fill="url(#${id})" d="M12 2c.45 5.1 3.4 8.05 8.5 8.5-5.1.45-8.05 3.4-8.5 8.5-.45-5.1-3.4-8.05-8.5-8.5 5.1-.45 8.05-3.4 8.5-8.5Z"/></svg>`;
+const isOai = (label: string) => /chatgpt|openai|gpt/i.test(label);
+const engineMark = (label: string) => isOai(label) ? `<span class="cc-mark cc-mark--oai">${OAI_SVG}</span>` : `<span class="cc-mark cc-mark--gem">${geminiSvg("gemMark")}</span>`;
+const engineAvatar = (label: string) => isOai(label) ? `<div class="cc-avatar cc-avatar--oai">${OAI_SVG}</div>` : `<div class="cc-avatar cc-avatar--gem">${geminiSvg("gemAvatar")}</div>`;
+
+/** THE MODEL/EVIDENCE BOX, restored for the adaptive hook report (2026-09-21 regression — see the
+ *  file header note by renderHookSection). This is the SAME "one real AI answer, recreated" chat
+ *  card the ordinary report shows via `chatCard` below (official engine mark, the real question, the
+ *  engine's own avatar, its actual stored answer text) — reusing its exact markup/CSS (.chatcard,
+ *  .cc-*) rather than a new approximation, fed from the hook's own gap (the engine Gemini decided
+ *  the hook on) instead of the generic cross-audit `gutPunch` picker, which could otherwise show a
+ *  DIFFERENT engine's answer than the one the hook narrative right above it is about.
+ *  ⛔ NEVER FABRICATED: renders only when the stored gap actually carries an answer excerpt — a gap
+ *  stored before this field existed renders nothing here rather than inventing a quote. The
+ *  named-instead firms are deliberately NOT relisted here — the hook-card immediately above already
+ *  shows them once. */
+function renderHookEvidenceBox(g: HookReportSummary['gap'], generatedAtLabel: string): string {
+  if (!g || !g.answerExcerpt.trim()) return "";
+  return `
+      <section class="chatcard">
+        <div class="cc-head">
+          <span class="cc-brand">${engineMark(g.engineLabel)}${esc(g.engineLabel)}</span>
+          <span class="cc-date">${esc(generatedAtLabel)}</span>
+        </div>
+        <div class="cc-body">
+          <div class="cc-q">${esc(g.question)}</div>
+          <div class="cc-arow">
+            ${engineAvatar(g.engineLabel)}
+            <div class="cc-a">
+              <p class="cc-atext">${esc(g.answerExcerpt)}</p>
+            </div>
+          </div>
+        </div>
+      </section>`;
+}
+
 /** The adaptive hook hero: the missed search, verbatim, with who the engine named instead. Every
  *  word comes from hookReportCopy so the test can read the copy without rendering. No percentage,
- *  no "N of M answers" — a quick check is a snapshot, and this says so on its face. */
-export function renderHookSection(h: HookReportSummary, businessName: string): string {
+ *  no "N of M answers" — a quick check is a snapshot, and this says so on its face.
+ *  🔴 REGRESSION, FOUND AND FIXED 2026-09-21: this section replaced the whole hero (including
+ *  `chatCard`, the AI model/evidence box) for every hook report the day the hook became adaptive
+ *  (commit 11129185), and nothing here ever grew an equivalent — renderHookEvidenceBox above is
+ *  that restoration, fed from the hook's own gap data. */
+export function renderHookSection(h: HookReportSummary, businessName: string, generatedAtLabel: string): string {
   const c = hookReportCopy(h, businessName);
   const tested = h.tested.map((t) => {
     const eng = t.perEngine.map((pe) => `${esc(pe.label)}: <b>${pe.named === null ? "no answer" : pe.named ? "named you" : "didn&rsquo;t name you"}</b>`).join(" &middot; ");
@@ -739,6 +786,7 @@ export function renderHookSection(h: HookReportSummary, businessName: string): s
         ${named}
         <p class="hook-miss">${esc(businessName)} wasn&rsquo;t named.</p>
       </div>
+      ${renderHookEvidenceBox(g, generatedAtLabel)}
       ${c.earlier ? `<p class="hook-earlier">${esc(c.earlier)}</p>` : ""}
       ${qualifier}
       ${cites}
@@ -828,14 +876,6 @@ export function renderReportHtml(d: AiAuditReportData): string {
     </section>`;
   }
 
-  /* Official engine marks — compact inline SVG (not the 40KB base64 blob). OpenAI is monochrome
-     (white path on a black chip via .cc-*--oai); Gemini is its gradient spark. A gradient needs a
-     unique id per instance, so the header mark and the avatar pass different ids. */
-  const OAI_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.1419.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.6813zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>`;
-  const geminiSvg = (id: string) => `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4285f4"/><stop offset=".5" stop-color="#9b72cb"/><stop offset="1" stop-color="#d96570"/></linearGradient></defs><path fill="url(#${id})" d="M12 2c.45 5.1 3.4 8.05 8.5 8.5-5.1.45-8.05 3.4-8.5 8.5-.45-5.1-3.4-8.05-8.5-8.5 5.1-.45 8.05-3.4 8.5-8.5Z"/></svg>`;
-  const isOai = (label: string) => /chatgpt|openai|gpt/i.test(label);
-  const engineMark = (label: string) => isOai(label) ? `<span class="cc-mark cc-mark--oai">${OAI_SVG}</span>` : `<span class="cc-mark cc-mark--gem">${geminiSvg("gemMark")}</span>`;
-  const engineAvatar = (label: string) => isOai(label) ? `<div class="cc-avatar cc-avatar--oai">${OAI_SVG}</div>` : `<div class="cc-avatar cc-avatar--gem">${geminiSvg("gemAvatar")}</div>`;
 
   /* "WHAT'S STOPPING AI READING YOUR SITE" — one line per real crawl-check fault (buildFaultLines),
      each carrying its own number; red dot for a real fault, amber for the structured-data gap.
@@ -1626,7 +1666,7 @@ ${d.measuring ? `
       <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
     </section>` : d.nameNotJudgeable ? `${nameCheckSection}
 ${seoSlot}
-` : d.hook ? `${renderHookSection(d.hook, d.businessName)}
+` : d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}
 ${seoSlot}
 ` : `
     <!-- HERO -->
